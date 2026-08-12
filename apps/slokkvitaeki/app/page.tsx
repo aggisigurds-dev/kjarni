@@ -1,4 +1,6 @@
 import { Logo } from "./Logo";
+import { Banner } from "./Banner";
+import { ContactForm } from "./ContactForm";
 
 const services = [
   {
@@ -33,6 +35,7 @@ const products = [
 export default function Home() {
   return (
     <main>
+      <Banner />
       <header className="site-header">
         <div className="container header-inner">
           <a className="brand" href="#top" aria-label="Forsíða">
@@ -135,6 +138,9 @@ export default function Home() {
           <p style={{ marginTop: 16, opacity: 0.85, fontSize: "0.95rem" }}>
             Helluhraun 10, 220 Hafnarfirði · Kt 600508-0400
           </p>
+          <div className="cta-form">
+            <ContactForm />
+          </div>
         </div>
       </section>
 

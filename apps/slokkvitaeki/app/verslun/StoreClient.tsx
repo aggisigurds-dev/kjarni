@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PRODUCTS, CATEGORIES, type Product } from "./products";
 import { Logo } from "../Logo";
+import { Banner } from "../Banner";
 
 const kr = (n: number) =>
   Math.round(n)
@@ -65,6 +66,7 @@ export default function StoreClient() {
 
   return (
     <div className="store">
+      <Banner />
       <header className="store-bar">
         <div className="container store-bar-inner">
           <a className="store-back" href="/" aria-label="Forsíða">
