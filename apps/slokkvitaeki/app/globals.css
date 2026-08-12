@@ -1371,13 +1371,25 @@ h3 {
 .rd-btn-dark { background: var(--rd-bg2); color: #fff; }
 .rd-btn-light { background: #fff; color: var(--rd-ink); }
 
-/* hero */
-.rd-hero { position: relative; overflow: hidden; background:
-    radial-gradient(1100px 520px at 82% 8%, rgba(232, 85, 31, 0.14), transparent 55%),
-    radial-gradient(900px 500px at 78% 108%, rgba(232, 85, 31, 0.16), transparent 60%),
-    var(--rd-bg); }
-.rd-hero::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(var(--rd-ld) 1px, transparent 1px), linear-gradient(90deg, var(--rd-ld) 1px, transparent 1px); background-size: 46px 46px; opacity: 0.35; mask-image: radial-gradient(70% 60% at 30% 20%, #000, transparent 75%); }
-.rd-hero-in { position: relative; display: grid; grid-template-columns: 1fr; gap: 44px; padding: clamp(48px, 7vw, 92px) 0 clamp(56px, 7vw, 96px); }
+/* hero — ember glow + masked grid net */
+.rd-hero { position: relative; overflow: hidden; background: #0C1526; }
+.rd-hero::before { content: ""; position: absolute; inset: -12%; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(50% 55% at 22% 30%, rgba(240, 78, 35, 0.42), transparent 70%),
+    radial-gradient(40% 45% at 78% 10%, rgba(255, 177, 60, 0.22), transparent 70%);
+  animation: emberDrift 14s ease-in-out infinite alternate; }
+.rd-hero::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 30%, #000, transparent);
+  mask-image: radial-gradient(70% 60% at 50% 30%, #000, transparent); }
+@keyframes emberDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -1.6%, 0) scale(1.06); }
+  100% { transform: translate3d(-2%, 1.4%, 0) scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) { .rd-hero::before { animation: none; } }
+.rd-hero-in { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; gap: 44px; padding: clamp(48px, 7vw, 92px) 0 clamp(56px, 7vw, 96px); }
 @media (min-width: 940px) { .rd-hero-in { grid-template-columns: 1.05fr 0.95fr; align-items: center; } }
 .rd-pill { display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--rd-ld); border-radius: 999px; padding: 7px 14px; font-family: var(--rd-mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rd-org); }
 .rd-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--rd-org); }
