@@ -1,6 +1,7 @@
 import { Logo } from "./Logo";
 import { Banner } from "./Banner";
 import { ContactForm } from "./ContactForm";
+import { SiteHeader } from "./SiteHeader";
 
 const services = [
   {
@@ -36,21 +37,7 @@ export default function Home() {
   return (
     <main>
       <Banner />
-      <header className="site-header">
-        <div className="container header-inner">
-          <a className="brand" href="#top" aria-label="Forsíða">
-            <Logo light />
-          </a>
-          <nav className="nav">
-            <span className="nav-links">
-              <a href="#thjonusta">Þjónusta</a>
-              <a href="/verslun">Verslun</a>
-              <a href="#afhverju">Af hverju við</a>
-            </span>
-            <a className="btn btn-sm" href="#hafa-samband">Hafðu samband</a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="hero" id="top">
         <div className="container hero-inner">

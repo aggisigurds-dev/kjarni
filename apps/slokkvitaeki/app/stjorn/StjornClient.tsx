@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { sbRpc, sbSelect } from "../lib/supabase";
+import { SidurEditor } from "../SidurEditor";
+import { ValmyndEditor } from "../ValmyndEditor";
 
 type Inquiry = {
   id: number;
@@ -165,6 +167,9 @@ export default function StjornClient() {
         </button>
         {saved && <span className="stj-saved">Vistað ✓</span>}
       </div>
+
+      <SidurEditor secret={secret} />
+      <ValmyndEditor secret={secret} />
 
       <section className="stj-card">
         <h2>Pantanir ({pantanir.length})</h2>
