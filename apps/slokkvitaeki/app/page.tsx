@@ -136,6 +136,36 @@ export default function Home() {
         </div>
       </section>
 
+      {/* products */}
+      <section className="rd-sec rd-navys" id="vorur">
+        <div className="rd-wrap">
+          <div className="rd-sec-head">
+            <p className="rd-ey">Vörur</p>
+            <h2 style={{ color: "#fff" }}>Rétt tæki fyrir hvern eld</h2>
+            <p className="rd-sub">Við aðstoðum þig að velja réttan búnað eftir rými og áhættu — og merkjum hann með QR svo eftirlitið sé einfalt.</p>
+          </div>
+          <div className="rd-grid4">
+            {PRODUCTS.map((p) => (
+              <article className="rd-prod" key={p.name}>
+                <div className="rd-prod-img" style={{ background: "#fff" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.img} alt={p.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: "14px" }} />
+                </div>
+                <div className="rd-prod-b">
+                  <span className="rd-prod-tag">{p.tag}</span>
+                  <h3>{p.name}</h3>
+                  <p>{p.desc}</p>
+                  <div className="rd-prod-foot">
+                    <span className="pr">{p.verd}</span>
+                    <a href="/verslun">Skoða →</a>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* qr system */}
       <section className="rd-sec rd-cream" id="qr">
         <div className="rd-wrap">
@@ -181,36 +211,6 @@ export default function Home() {
                 <h3>{t}</h3>
                 <p>{d}</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* products */}
-      <section className="rd-sec rd-navys" id="vorur">
-        <div className="rd-wrap">
-          <div className="rd-sec-head">
-            <p className="rd-ey">Vörur</p>
-            <h2 style={{ color: "#fff" }}>Rétt tæki fyrir hvern eld</h2>
-            <p className="rd-sub">Við aðstoðum þig að velja réttan búnað eftir rými og áhættu — og merkjum hann með QR svo eftirlitið sé einfalt.</p>
-          </div>
-          <div className="rd-grid4">
-            {PRODUCTS.map((p) => (
-              <article className="rd-prod" key={p.name}>
-                <div className="rd-prod-img" style={{ background: "#fff" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.img} alt={p.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: "14px" }} />
-                </div>
-                <div className="rd-prod-b">
-                  <span className="rd-prod-tag">{p.tag}</span>
-                  <h3>{p.name}</h3>
-                  <p>{p.desc}</p>
-                  <div className="rd-prod-foot">
-                    <span className="pr">{p.verd}</span>
-                    <a href="/verslun">Skoða →</a>
-                  </div>
-                </div>
-              </article>
             ))}
           </div>
         </div>

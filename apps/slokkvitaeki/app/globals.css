@@ -1532,3 +1532,135 @@ h3 {
 
 .rd-navlinks { display: flex; gap: 26px; align-items: center; }
 @media (max-width: 820px) { .rd-navlinks { display: none; } }
+
+/* ============================================================
+   Vefverslun (/verslun) — mockup-matched storefront
+   Palette literals mirror the .rd redesign tokens.
+   ============================================================ */
+.vs { --v-cream: #f6f2ea; --v-navy: #0f1626; --v-card: #16223d; --v-ink: #111a2b;
+  --v-ink-soft: #5c6b82; --v-line: #e7dfcf; --v-org: #e8551f; --v-org-d: #cf4715;
+  --v-green: #2fa56b; --v-gold: #b9810f; --v-cloud: #cad4e3; --v-cloud-soft: #8a99b3;
+  background: var(--v-cream); min-height: 100vh; color: var(--v-ink); }
+.vs a { color: inherit; text-decoration: none; }
+.vs *, .vs *::before, .vs *::after { box-sizing: border-box; }
+
+/* header bar */
+.vs-bar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: clamp(14px, 3vw, 34px);
+  background: var(--v-navy); color: #fff; padding: 13px clamp(16px, 4vw, 40px); }
+.vs-brand { display: flex; align-items: center; gap: 11px; flex: none; }
+.vs-badge { width: 36px; height: 36px; border-radius: 10px; background: var(--v-org); color: #fff;
+  font-weight: 800; font-size: 1.15rem; display: flex; align-items: center; justify-content: center; }
+.vs-brand-name { font-weight: 800; font-size: 1.14rem; line-height: 1; }
+.vs-brand-name small { display: block; font-family: var(--font-mono), monospace; font-weight: 500;
+  font-size: 0.56rem; letter-spacing: 0.16em; color: var(--v-cloud-soft); margin-top: 4px; }
+.vs-search { flex: 1; max-width: 560px; display: flex; align-items: center; gap: 9px;
+  background: #1b2740; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0 12px; }
+.vs-search:focus-within { border-color: var(--v-org); }
+.vs-search-ico { color: var(--v-cloud-soft); font-size: 1.1rem; }
+.vs-search input { flex: 1; background: none; border: 0; outline: 0; color: #fff; font-size: 0.94rem;
+  padding: 11px 0; font-family: inherit; }
+.vs-search input::placeholder { color: var(--v-cloud-soft); }
+.vs-search kbd { font-family: var(--font-mono), monospace; font-size: 0.66rem; color: var(--v-cloud-soft);
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 2px 6px; }
+.vs-nav { display: flex; align-items: center; gap: clamp(12px, 2vw, 22px); flex: none; }
+.vs-nav > a { font-weight: 600; font-size: 0.92rem; color: var(--v-cloud); }
+.vs-nav > a:hover { color: #fff; }
+.vs-cart-btn { display: inline-flex; align-items: center; gap: 9px; background: var(--v-org); color: #fff;
+  font-weight: 700; font-size: 0.92rem; padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; }
+.vs-cart-btn:hover { background: var(--v-org-d); }
+.vs-cart-n { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: rgba(0,0,0,0.28);
+  font-size: 0.76rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 720px) { .vs-search { display: none; } .vs-nav > a { display: none; } }
+
+/* layout */
+.vs-main { max-width: 1220px; margin: 0 auto; padding: clamp(22px, 3vw, 40px) clamp(16px, 4vw, 40px) 70px;
+  display: grid; grid-template-columns: 250px 1fr; gap: clamp(20px, 3vw, 34px); align-items: start; }
+@media (max-width: 900px) { .vs-main { grid-template-columns: 1fr; } }
+
+/* sidebar */
+.vs-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 84px; }
+@media (max-width: 900px) { .vs-side { position: static; } }
+.vs-card { background: #fff; border: 1px solid var(--v-line); border-radius: 16px; padding: 18px 18px 20px; }
+.vs-filter-h { font-family: var(--font-mono), monospace; font-size: 0.64rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--v-ink-soft); margin: 0 0 12px; }
+.vs-filter ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.vs-filter li button { width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: none; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit;
+  font-weight: 600; font-size: 0.95rem; color: var(--v-ink); text-align: left; }
+.vs-filter li button:hover { background: #f4efe6; }
+.vs-filter li button.on { background: var(--v-navy); color: #fff; }
+.vs-filter li button em { font-style: normal; font-family: var(--font-mono), monospace; font-size: 0.78rem;
+  color: var(--v-ink-soft); }
+.vs-filter li button.on em { color: var(--v-cloud); }
+.vs-fire { display: flex; flex-wrap: wrap; gap: 8px; }
+.vs-fire button { min-width: 40px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--v-line);
+  background: #fff; font: inherit; font-weight: 700; font-size: 0.88rem; color: var(--v-ink); cursor: pointer; }
+.vs-fire button:first-child { font-family: inherit; }
+.vs-fire button:not(:first-child) { font-family: var(--font-mono), monospace; }
+.vs-fire button:hover { border-color: var(--v-ink-soft); }
+.vs-fire button.on { background: var(--v-org); border-color: var(--v-org); color: #fff; }
+.vs-fire-legend { margin: 12px 0 0; font-size: 0.74rem; line-height: 1.7; color: var(--v-ink-soft); }
+.vs-fire-legend b { color: var(--v-gold); font-family: var(--font-mono), monospace; }
+.vs-advice { background: var(--v-navy); border-color: var(--v-navy); color: #fff; }
+.vs-advice b { display: block; font-size: 1rem; margin-bottom: 8px; }
+.vs-advice p { margin: 0 0 14px; font-size: 0.86rem; line-height: 1.5; color: var(--v-cloud); }
+.vs-advice a { display: inline-block; background: var(--v-org); color: #fff; font-weight: 700; font-size: 0.86rem;
+  padding: 9px 15px; border-radius: 9px; }
+.vs-advice a:hover { background: var(--v-org-d); }
+
+/* content */
+.vs-eyebrow { font-family: var(--font-mono), monospace; font-size: 0.7rem; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--v-org); font-weight: 600; margin: 0 0 12px; }
+.vs-title { font-size: clamp(1.9rem, 4vw, 2.85rem); font-weight: 820; letter-spacing: -0.03em; line-height: 1.05;
+  margin: 0 0 14px; color: var(--v-ink); }
+.vs-title span { display: block; }
+.vs-lede { margin: 0 0 26px; max-width: 52ch; color: var(--v-ink-soft); font-size: 1rem; line-height: 1.55; }
+.vs-tools { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--v-line); border-radius: 14px; padding: 12px 16px; margin-bottom: 22px; }
+.vs-tools-count { font-weight: 650; color: var(--v-ink-soft); font-size: 0.94rem; }
+.vs-tools-right { display: flex; align-items: center; gap: 10px; }
+.vs-toggle { background: #fff; border: 1px solid var(--v-line); border-radius: 9px; padding: 8px 14px;
+  font: inherit; font-weight: 600; font-size: 0.86rem; color: var(--v-ink); cursor: pointer; }
+.vs-toggle:hover { border-color: var(--v-ink-soft); }
+.vs-toggle.on { background: var(--v-navy); border-color: var(--v-navy); color: #fff; }
+.vs-seg { display: inline-flex; background: #efe9dd; border-radius: 9px; padding: 3px; gap: 2px; }
+.vs-seg button { background: none; border: 0; border-radius: 7px; padding: 7px 13px; font: inherit;
+  font-weight: 600; font-size: 0.84rem; color: var(--v-ink-soft); cursor: pointer; }
+.vs-seg button.on { background: #fff; color: var(--v-ink); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+.vs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 18px; }
+.vs-prod { background: #fff; border: 1px solid var(--v-line); border-radius: 16px; overflow: hidden;
+  display: flex; flex-direction: column; transition: transform 0.14s ease, box-shadow 0.14s ease; }
+.vs-prod:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(17, 26, 43, 0.12); }
+.vs-prod-img { position: relative; height: 190px; display: flex; align-items: center; justify-content: center;
+  border-bottom: 1px solid var(--v-line); }
+.vs-prod-img img { max-width: 100%; max-height: 100%; object-fit: contain; padding: 16px; }
+.vs-emoji { font-size: 3rem; }
+.vs-tag { position: absolute; top: 10px; left: 10px; font-family: var(--font-mono), monospace; font-size: 0.62rem;
+  font-weight: 700; letter-spacing: 0.06em; color: var(--v-gold); background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(185, 129, 15, 0.34); padding: 3px 8px; border-radius: 6px; }
+.vs-tag-muted { color: var(--v-ink-soft); border-color: var(--v-line); }
+.vs-pill { position: absolute; top: 10px; right: 10px; font-size: 0.68rem; font-weight: 700; padding: 3px 10px;
+  border-radius: 999px; }
+.vs-pill.in { color: var(--v-green); background: rgba(47, 165, 107, 0.13); border: 1px solid rgba(47,165,107,0.3); }
+.vs-pill.out { color: var(--v-ink-soft); background: #f1ede4; border: 1px solid var(--v-line); }
+.vs-prod-b { padding: 15px 16px 17px; display: flex; flex-direction: column; flex: 1; }
+.vs-prod-b h3 { font-size: 0.98rem; font-weight: 700; line-height: 1.3; margin: 0 0 12px; color: var(--v-ink); }
+.vs-price { margin-top: auto; display: flex; flex-direction: column; gap: 1px; margin-bottom: 13px; }
+.vs-price-big { font-weight: 800; font-size: 1.12rem; color: var(--v-ink); }
+.vs-price-small { font-family: var(--font-mono), monospace; font-size: 0.72rem; color: var(--v-ink-soft); }
+.vs-add { background: var(--v-navy); color: #fff; border: 0; border-radius: 10px; padding: 11px; font: inherit;
+  font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+.vs-add:hover { background: #1c2b49; }
+.vs-notify { display: block; text-align: center; background: #fff; border: 1px solid var(--v-line); border-radius: 10px;
+  padding: 11px; font-weight: 650; font-size: 0.88rem; color: var(--v-ink-soft); }
+.vs-notify:hover { border-color: var(--v-org); color: var(--v-org); }
+.vs-empty { padding: 50px; text-align: center; color: var(--v-ink-soft); background: #fff;
+  border: 1px solid var(--v-line); border-radius: 16px; }
+.vs-help { margin-top: 26px; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  flex-wrap: wrap; background: #fff; border: 1px solid var(--v-line); border-radius: 16px; padding: 20px 24px; }
+.vs-help b { display: block; font-size: 1.02rem; color: var(--v-ink); margin-bottom: 3px; }
+.vs-help span { color: var(--v-ink-soft); font-size: 0.9rem; }
+.vs-help a { flex: none; background: var(--v-navy); color: #fff; font-weight: 700; font-size: 0.9rem;
+  padding: 12px 20px; border-radius: 10px; }
+.vs-help a:hover { background: #1c2b49; }
