@@ -40,7 +40,7 @@ export default function Home() {
           <nav className="nav">
             <span className="nav-links">
               <a href="#thjonusta">Þjónusta</a>
-              <a href="#vorur">Vörur</a>
+              <a href="/verslun">Verslun</a>
               <a href="#afhverju">Af hverju við</a>
             </span>
             <a className="btn btn-sm" href="#hafa-samband">Hafðu samband</a>
@@ -57,8 +57,8 @@ export default function Home() {
             rekjanleika, QR-merkingum og þjónustu á vettvangi um allt land.
           </p>
           <div className="hero-cta">
-            <a className="btn" href="#hafa-samband">Hafðu samband</a>
-            <a className="btn btn-ghost" href="#thjonusta">Skoða þjónustu</a>
+            <a className="btn" href="/verslun">Skoða verslun</a>
+            <a className="btn btn-ghost" href="#hafa-samband">Hafðu samband</a>
           </div>
         </div>
       </section>
