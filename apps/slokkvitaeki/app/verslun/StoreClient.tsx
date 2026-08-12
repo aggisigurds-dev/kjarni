@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PRODUCTS, CATEGORIES, type Product } from "./products";
 import { Logo } from "../Logo";
 import { Banner } from "../Banner";
+import { sbInsert } from "../lib/supabase";
 
 const kr = (n: number) =>
   Math.round(n)
@@ -14,7 +15,11 @@ export default function StoreClient() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cat, setCat] = useState<string>("all");
   const [open, setOpen] = useState(false);
-  const [notice, setNotice] = useState(false);
+  const [checkout, setCheckout] = useState(false);
+  const [ord, setOrd] = useState({ nafn: "", netfang: "", simi: "", heimilisfang: "" });
+  const [ordState, setOrdState] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  const setOrdF = (k: keyof typeof ord, v: string) => setOrd((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
     try {
@@ -61,6 +66,24 @@ export default function StoreClient() {
   const totalVsk = lines.reduce((s, l) => s + l.p.price * l.qty, 0);
   const totalNoVsk = lines.reduce((s, l) => s + l.p.priceNoVsk * l.qty, 0);
   const vsk = totalVsk - totalNoVsk;
+
+  async function submitOrder(e: FormEvent) {
+    e.preventDefault();
+    setOrdState("sending");
+    try {
+      await sbInsert("kjarni_pantanir", {
+        ...ord,
+        karfa: lines.map((l) => ({ id: l.p.id, nafn: l.p.name, fjoldi: l.qty, verd: l.p.price })),
+        samtals: totalVsk,
+        uppruni: "slokkvitaeki-vefur",
+      });
+      setCart({});
+      setOrd({ nafn: "", netfang: "", simi: "", heimilisfang: "" });
+      setOrdState("done");
+    } catch {
+      setOrdState("error");
+    }
+  }
 
   const shown = cat === "all" ? PRODUCTS : PRODUCTS.filter((p) => p.category === cat);
 
@@ -191,14 +214,26 @@ export default function StoreClient() {
                 </div>
               </div>
 
-              <button className="checkout" onClick={() => setNotice(true)}>
-                Til kassa →
-              </button>
-              {notice && (
-                <p className="drawer-note">
-                  🔧 Þetta er prufuverslun — kassinn og greiðslur tengjast þegar gagnagrunnurinn er
-                  kominn.
-                </p>
+              {ordState === "done" ? (
+                <p className="order-done">✓ Pöntun móttekin! Við höfum samband og staðfestum hana.</p>
+              ) : checkout ? (
+                <form className="checkout-form" onSubmit={submitOrder}>
+                  <input required placeholder="Nafn" value={ord.nafn} onChange={(e) => setOrdF("nafn", e.target.value)} />
+                  <input required type="email" placeholder="Netfang" value={ord.netfang} onChange={(e) => setOrdF("netfang", e.target.value)} />
+                  <input placeholder="Sími" value={ord.simi} onChange={(e) => setOrdF("simi", e.target.value)} />
+                  <input placeholder="Heimilisfang / afhending" value={ord.heimilisfang} onChange={(e) => setOrdF("heimilisfang", e.target.value)} />
+                  <button className="checkout" type="submit" disabled={ordState === "sending"}>
+                    {ordState === "sending" ? "Sendi…" : "Senda pöntun"}
+                  </button>
+                  <button type="button" className="checkout-back" onClick={() => setCheckout(false)}>
+                    ← Til baka í körfu
+                  </button>
+                  {ordState === "error" && <p className="checkout-err">Villa — reyndu aftur.</p>}
+                </form>
+              ) : (
+                <button className="checkout" onClick={() => setCheckout(true)}>
+                  Til kassa →
+                </button>
               )}
             </>
           )}

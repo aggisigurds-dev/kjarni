@@ -11,15 +11,40 @@ type Inquiry = {
   simi: string;
   skilabod: string;
 };
+type Line = { id: string; nafn: string; fjoldi: number; verd: number };
+type Order = {
+  id: number;
+  buid_til: string;
+  nafn: string;
+  netfang: string;
+  simi: string;
+  heimilisfang: string;
+  karfa: Line[];
+  samtals: number;
+  stada: string;
+};
 type Setting = { lykill: string; gildi: string };
+
+const kr = (n: number) =>
+  Math.round(n || 0)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " kr";
 
 export default function StjornClient() {
   const [secret, setSecret] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [err, setErr] = useState("");
+
   const [bordiOn, setBordiOn] = useState(false);
   const [bordiText, setBordiText] = useState("");
+  const [analyticsOn, setAnalyticsOn] = useState(true);
+  const [pixelId, setPixelId] = useState("");
+  const [chatOn, setChatOn] = useState(false);
+  const [chatId, setChatId] = useState("");
+
   const [inq, setInq] = useState<Inquiry[]>([]);
+  const [pantanir, setPantanir] = useState<Order[]>([]);
+
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -37,10 +62,17 @@ export default function StjornClient() {
         return;
       }
       const rows = await sbSelect<Setting[]>("kjarni_stillingar?select=lykill,gildi");
-      setBordiOn(rows.find((x) => x.lykill === "bordi_virkur")?.gildi === "true");
-      setBordiText(rows.find((x) => x.lykill === "bordi_texti")?.gildi ?? "");
+      const g = (k: string) => rows.find((x) => x.lykill === k)?.gildi ?? "";
+      setBordiOn(g("bordi_virkur") === "true");
+      setBordiText(g("bordi_texti"));
+      setAnalyticsOn(g("analytics_virk") !== "false");
+      setPixelId(g("pixel_id"));
+      setChatOn(g("chat_virkt") === "true");
+      setChatId(g("chat_id"));
       const list = await sbRpc<Inquiry[]>("kjarni_get_fyrirspurnir", { p_leyni: secret });
       setInq(Array.isArray(list) ? list : []);
+      const orders = await sbRpc<Order[]>("kjarni_get_pantanir", { p_leyni: secret });
+      setPantanir(Array.isArray(orders) ? orders : []);
       setUnlocked(true);
     } catch {
       setErr("Villa við tengingu.");
@@ -50,17 +82,15 @@ export default function StjornClient() {
   async function save() {
     setSaving(true);
     setSaved(false);
+    const set = (k: string, v: string) =>
+      sbRpc("kjarni_set_stilling", { p_lykill: k, p_gildi: v, p_leyni: secret });
     try {
-      await sbRpc("kjarni_set_stilling", {
-        p_lykill: "bordi_virkur",
-        p_gildi: bordiOn ? "true" : "false",
-        p_leyni: secret,
-      });
-      await sbRpc("kjarni_set_stilling", {
-        p_lykill: "bordi_texti",
-        p_gildi: bordiText,
-        p_leyni: secret,
-      });
+      await set("bordi_virkur", bordiOn ? "true" : "false");
+      await set("bordi_texti", bordiText);
+      await set("analytics_virk", analyticsOn ? "true" : "false");
+      await set("pixel_id", pixelId.trim());
+      await set("chat_virkt", chatOn ? "true" : "false");
+      await set("chat_id", chatId.trim());
       setSaved(true);
     } finally {
       setSaving(false);
@@ -81,7 +111,7 @@ export default function StjornClient() {
           />
           <button className="btn" type="submit">Opna</button>
         </form>
-        {err && <p className="form-err">{err}</p>}
+        {err && <p className="form-err" style={{ color: "var(--red)" }}>{err}</p>}
       </div>
     );
   }
@@ -106,12 +136,64 @@ export default function StjornClient() {
           onChange={(e) => setBordiText(e.target.value)}
           placeholder="Texti borðans"
         />
-        <div className="stj-actions">
-          <button className="btn" onClick={save} disabled={saving}>
-            {saving ? "Vista…" : "Vista breytingar"}
-          </button>
-          {saved && <span className="stj-saved">Vistað ✓</span>}
-        </div>
+      </section>
+
+      <section className="stj-card">
+        <h2>Verkfæri</h2>
+        <p className="stj-sub">Kveiktu á tólum og límdu inn auðkenni frá þjónustunum.</p>
+        <label className="stj-toggle">
+          <input type="checkbox" checked={analyticsOn} onChange={(e) => setAnalyticsOn(e.target.checked)} />
+          <span>Vefmælingar · Vercel Analytics</span>
+        </label>
+        <label className="stj-field">
+          <span>Meta Pixel auðkenni (fyrir Facebook/Instagram auglýsingar)</span>
+          <input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="t.d. 123456789012345" />
+        </label>
+        <label className="stj-toggle">
+          <input type="checkbox" checked={chatOn} onChange={(e) => setChatOn(e.target.checked)} />
+          <span>Netspjall · Tawk.to</span>
+        </label>
+        <label className="stj-field">
+          <span>Tawk.to auðkenni</span>
+          <input value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="t.d. 65f1a.../1abcd2efg" />
+        </label>
+      </section>
+
+      <div className="stj-savebar">
+        <button className="btn" onClick={save} disabled={saving}>
+          {saving ? "Vista…" : "Vista breytingar"}
+        </button>
+        {saved && <span className="stj-saved">Vistað ✓</span>}
+      </div>
+
+      <section className="stj-card">
+        <h2>Pantanir ({pantanir.length})</h2>
+        {pantanir.length === 0 ? (
+          <p className="stj-sub">Engar pantanir enn.</p>
+        ) : (
+          <div className="stj-inq">
+            {pantanir.map((o) => (
+              <div className="inq" key={o.id}>
+                <div className="inq-head">
+                  <b>{o.nafn || "—"} · {kr(o.samtals)}</b>
+                  <span>{new Date(o.buid_til).toLocaleString("is-IS")}</span>
+                </div>
+                <div className="inq-meta">
+                  {o.netfang}
+                  {o.simi ? " · " + o.simi : ""}
+                  {o.heimilisfang ? " · " + o.heimilisfang : ""}
+                </div>
+                <ul className="ord-lines">
+                  {(o.karfa || []).map((l, i) => (
+                    <li key={i}>
+                      {l.fjoldi}× {l.nafn} — {kr(l.verd * l.fjoldi)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="stj-card">

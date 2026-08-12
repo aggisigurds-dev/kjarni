@@ -984,3 +984,74 @@ h3 {
   font-size: 0.94rem;
   color: var(--ink);
 }
+
+/* ===================== checkout (cart drawer) ===================== */
+.checkout-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.checkout-form input {
+  font: inherit;
+  padding: 11px 13px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+.checkout-back {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 4px;
+}
+.checkout-err {
+  color: var(--red);
+  font-size: 0.88rem;
+  margin: 0;
+}
+.order-done {
+  text-align: center;
+  font-weight: 650;
+  color: #1e7a52;
+  padding: 16px 4px;
+}
+
+/* ===================== stjórn: tools + orders ===================== */
+.stj-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+.stj-field span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.stj-field input {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.stj-savebar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.ord-lines {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.ord-lines li {
+  margin: 2px 0;
+}
