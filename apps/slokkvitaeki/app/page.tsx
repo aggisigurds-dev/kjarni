@@ -1,3 +1,5 @@
+import { Logo } from "./Logo";
+
 const services = [
   {
     ico: "🧯",
@@ -33,9 +35,8 @@ export default function Home() {
     <main>
       <header className="site-header">
         <div className="container header-inner">
-          <a className="brand" href="#top">
-            <span className="brand-mark" aria-hidden="true">🔥</span>
-            <span className="brand-name">Slökkvitæki<span className="brand-ehf"> ehf</span></span>
+          <a className="brand" href="#top" aria-label="Forsíða">
+            <Logo light />
           </a>
           <nav className="nav">
             <span className="nav-links">
@@ -130,15 +131,22 @@ export default function Home() {
         <div className="container">
           <h2>Tökum stöðuna á brunavörnunum þínum</h2>
           <p>Hafðu samband og við finnum réttu lausnina fyrir heimilið eða fyrirtækið.</p>
-          <a className="btn" href="mailto:aggisigurds@gmail.com">Hafðu samband</a>
+          <a className="btn" href="tel:5654080">Hringdu · 565-4080</a>
+          <p style={{ marginTop: 16, opacity: 0.85, fontSize: "0.95rem" }}>
+            Helluhraun 10, 220 Hafnarfirði · Kt 600508-0400
+          </p>
         </div>
       </section>
 
       <footer className="site-footer">
         <div className="container footer-inner">
-          <div>
-            <div className="footer-brand">Slökkvitæki ehf</div>
-            <div className="footer-meta">Brunavarnir · Skoðun · Sala · Þjónusta á vettvangi</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Logo light />
+            <div className="footer-meta">
+              Helluhraun 10, 220 Hafnarfirði · 565-4080
+              <br />
+              Kt 600508-0400 · Brunavarnir · Skoðun · Sala
+            </div>
           </div>
           <span className="footer-badge">Frumgerð · keyrt á kjarna</span>
         </div>

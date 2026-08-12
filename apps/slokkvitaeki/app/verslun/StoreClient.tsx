@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PRODUCTS, CATEGORIES, type Product } from "./products";
+import { Logo } from "../Logo";
 
 const kr = (n: number) =>
   Math.round(n)
@@ -66,8 +67,8 @@ export default function StoreClient() {
     <div className="store">
       <header className="store-bar">
         <div className="container store-bar-inner">
-          <a className="store-back" href="/">
-            <span aria-hidden="true">🔥</span> Slökkvitæki
+          <a className="store-back" href="/" aria-label="Forsíða">
+            <Logo light />
           </a>
           <span className="store-title">
             Verslun <span className="store-badge">prufa</span>
@@ -101,10 +102,15 @@ export default function StoreClient() {
             const sold = p.stock <= 0;
             return (
               <article className="prod" key={p.id}>
-                <div className="prod-img" style={{ background: c?.tint }}>
-                  <span className="prod-emoji" aria-hidden="true">
-                    {c?.icon}
-                  </span>
+                <div className="prod-img" style={{ background: p.img ? "#fff" : c?.tint }}>
+                  {p.img ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="prod-photo" src={p.img} alt={p.name} loading="lazy" />
+                  ) : (
+                    <span className="prod-emoji" aria-hidden="true">
+                      {c?.icon}
+                    </span>
+                  )}
                   <span className={`pill ${sold ? "pill-out" : "pill-in"}`}>
                     {sold ? "Uppselt" : "Á lager"}
                   </span>
