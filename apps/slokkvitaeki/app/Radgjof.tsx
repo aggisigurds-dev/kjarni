@@ -44,7 +44,7 @@ export function Radgjof() {
         ))}
       </div>
       <div className="rd-reco">
-        <span className="rd-ey">Mælt með fyrir {o.k.toLowerCase()}</span>
+        <span className="rd-ey">Mælt með fyrir <em>{o.k.toLowerCase()}</em></span>
         <h3>{o.title}</h3>
         <p>{o.desc}</p>
         <div className="rd-specs">
