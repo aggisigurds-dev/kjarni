@@ -93,3 +93,19 @@ create table if not exists kerfi_verkbeidnir (
 --   update kerfi_stillingar set gildi=
 --     '["vidskiptavinir","bunadur","skodanir","sala","verkstaedi","afgreidsla"]'
 --   where lykill='einingar';
+
+-- ---- Þrep 2 · Fyrirtæki í þjónustu + Útkeyrsla — migration kerfi_samningar --
+-- Service contracts. Útkeyrsla derives the route (grouped by staður, plotted
+-- on a Leaflet map) from the in-service customers.
+create table if not exists kerfi_samningar (
+  id bigint generated always as identity primary key,
+  vidskiptavinur_id bigint not null unique references kerfi_vidskiptavinir(id) on delete cascade,
+  tidni text not null default 'arlega',   -- manadarlega|arsfjordungslega|halfsarslega|arlega
+  naesta_thjonusta date,
+  virk boolean not null default true,
+  athugasemd text,
+  buid_til timestamptz not null default now()
+);
+-- RLS on; anon policy kerfi_sam_all. 5 customers seeded into service.
+-- Þrep 2 turned on, completing it:
+--   update kerfi_stillingar set gildi='[…,"thjonusta","utkeyrsla"]' where lykill='einingar';

@@ -1974,6 +1974,26 @@ h3 {
 .k-afg-form { padding:18px; }
 .k-btn.k-sm { padding:8px 14px; font-size:0.82rem; justify-self:end; }
 
+/* Fyrirtæki í þjónustu + Útkeyrsla */
+.k-actions { display:flex; gap:7px; justify-content:flex-end; }
+.k-mini { background:var(--k-navy); color:#fff; border:0; border-radius:8px; padding:7px 12px; font-weight:650; font-size:0.8rem; }
+.k-mini:hover { background:#1c2b49; }
+.k-mini.ghost { background:#fff; color:var(--k-soft); border:1px solid var(--k-line); }
+.k-mini.ghost:hover { border-color:var(--k-red); color:var(--k-red); }
+.k-utk { display:grid; grid-template-columns:minmax(300px,380px) 1fr; gap:18px; align-items:start; }
+@media (max-width:820px) { .k-utk { grid-template-columns:1fr; } }
+.k-utk-list { display:flex; flex-direction:column; gap:16px; }
+.k-map { height:560px; border-radius:16px; border:1px solid var(--k-line); overflow:hidden; background:#e9edf1; position:sticky; top:20px; z-index:0; }
+@media (max-width:820px) { .k-map { height:340px; position:static; } }
+.k-stop { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:11px; padding:12px 18px; border-bottom:1px solid var(--k-line); cursor:pointer; }
+.k-stop:last-child { border-bottom:0; }
+.k-stop input { width:18px; height:18px; accent-color:var(--k-green); }
+.k-stop-nafn { font-weight:650; font-size:0.9rem; }
+.k-stop-addr { color:var(--k-soft); font-size:0.82rem; grid-column:2; grid-row:2; }
+.k-stop-date { font-family:var(--font-mono),monospace; font-size:0.8rem; color:var(--k-soft); }
+.k-stop.done .k-stop-nafn { text-decoration:line-through; color:var(--k-soft); }
+.k-map .leaflet-container { font:inherit; }
+
 @media (max-width:760px) {
   .k { flex-direction:column; }
   .k-side { width:100%; height:auto; position:static; flex-direction:row; flex-wrap:wrap; align-items:center; padding:12px; gap:8px; }

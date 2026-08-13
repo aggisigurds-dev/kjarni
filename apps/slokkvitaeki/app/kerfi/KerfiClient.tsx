@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect } from "../lib/supabase";
+import { KerfiUtkeyrsla } from "./KerfiUtkeyrsla";
 
 type Kunni = {
   id: number;
@@ -50,6 +51,19 @@ type Verk = {
 const VERK_FLOW = ["ny", "i_vinnslu", "tilbuid", "sott"] as const;
 const VERK_LABEL: Record<string, string> = { ny: "Ný", i_vinnslu: "Í vinnslu", tilbuid: "Tilbúið", sott: "Sótt" };
 
+export type Samningur = {
+  id: number;
+  vidskiptavinur_id: number;
+  tidni: string;
+  naesta_thjonusta: string | null;
+  virk: boolean;
+  athugasemd: string | null;
+};
+export const TIDNI: Record<string, string> = {
+  manadarlega: "Mánaðarlega", arsfjordungslega: "Ársfjórðungslega", halfsarslega: "Hálfsárslega", arlega: "Árlega",
+};
+const TIDNI_DAGAR: Record<string, number> = { manadarlega: 30, arsfjordungslega: 91, halfsarslega: 182, arlega: 365 };
+
 type ModId =
   | "bunadur" | "skodanir"
   | "sala" | "verkstaedi" | "afgreidsla"
@@ -67,8 +81,8 @@ const MODULES: { id: ModId; stage: number; label: string; icon: string; desc: st
   { id: "sala", stage: 1, label: "Sala", icon: "🛒", desc: "Sölukerfi (POS) — afgreiðsla á vörum og þjónustu yfir borðið." },
   { id: "verkstaedi", stage: 1, label: "Verkstæði", icon: "🔧", desc: "Verkbeiðnir og viðgerðir á verkstæði með stöðuflæði." },
   { id: "afgreidsla", stage: 1, label: "Afgreiðsla", icon: "📥", desc: "Afgreiðsluborð — móttaka nýrra tækja og afhending tilbúinna." },
-  { id: "thjonusta", stage: 2, label: "Fyrirtæki í þjónustu", icon: "🏢", desc: "Fyrirtæki með þjónustusamning — reglubundin skoðun og eftirlit.", soon: true },
-  { id: "utkeyrsla", stage: 2, label: "Útkeyrsla", icon: "🚚", desc: "Vettvangsþjónusta og útkeyrslulistar með korti.", soon: true },
+  { id: "thjonusta", stage: 2, label: "Fyrirtæki í þjónustu", icon: "🏢", desc: "Fyrirtæki með þjónustusamning — reglubundin skoðun og eftirlit." },
+  { id: "utkeyrsla", stage: 2, label: "Útkeyrsla", icon: "🚚", desc: "Vettvangsþjónusta og útkeyrslulistar með korti." },
   { id: "brunakerfi", stage: 3, label: "Brunakerfi", icon: "🚨", desc: "Útkeyrsluþjónusta fyrir brunakerfi og viðvörunarkerfi.", soon: true },
   { id: "reikningar", stage: 3, label: "Reikningar & kröfur", icon: "💳", desc: "Payday-tenging og kröfuyfirlit — innheimta og staða reikninga.", soon: true },
 ];
@@ -111,23 +125,27 @@ export default function KerfiClient() {
 
   const [verk, setVerk] = useState<Verk[]>([]);
   const [verkOpen, setVerkOpen] = useState(false);
+  const [samningar, setSamningar] = useState<Samningur[]>([]);
+  const [thjOpen, setThjOpen] = useState(false);
 
   async function loadAll() {
     setLoading(true);
     try {
-      const [ks, ts, st, vs, ss, vk] = await Promise.all([
+      const [ks, ts, st, vs, ss, vk, sm] = await Promise.all([
         sbSelect<Kunni[]>("kerfi_vidskiptavinir?select=*&order=nafn"),
         sbSelect<Taeki[]>("kerfi_taeki?select=*"),
         sbSelect<{ lykill: string; gildi: string }[]>("kerfi_stillingar?select=lykill,gildi&lykill=eq.einingar"),
         sbSelect<Vara[]>("kerfi_vorur?select=*&virk=eq.true&order=rod"),
         sbSelect<SalaRec[]>("kerfi_solur?select=*&order=buid_til.desc&limit=50"),
         sbSelect<Verk[]>("kerfi_verkbeidnir?select=*&order=buid_til.desc"),
+        sbSelect<Samningur[]>("kerfi_samningar?select=*&virk=eq.true"),
       ]);
       setKunnar(ks);
       setTaeki(ts);
       setVorur(vs);
       setSolur(ss);
       setVerk(vk);
+      setSamningar(sm);
       try {
         const e = JSON.parse(st[0]?.gildi || "[]");
         if (Array.isArray(e) && e.length) setEnabled(e);
@@ -254,6 +272,45 @@ export default function KerfiClient() {
     setVerkOpen(false);
     await loadAll();
   }
+
+  async function addSamningur(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const kid = Number(f.get("kunni"));
+    const tidni = (f.get("tidni") as string) || "arlega";
+    if (!kid) return;
+    const d = new Date();
+    d.setDate(d.getDate() + (TIDNI_DAGAR[tidni] || 365));
+    await fetch(`${SUPABASE_URL}/rest/v1/kerfi_samningar`, {
+      method: "POST",
+      headers: { ...H, Prefer: "return=minimal,resolution=merge-duplicates" },
+      body: JSON.stringify({ vidskiptavinur_id: kid, tidni, naesta_thjonusta: d.toISOString().slice(0, 10) }),
+    }).catch(() => {});
+    setThjOpen(false);
+    await loadAll();
+  }
+  async function fjarlaegjaSamning(id: number) {
+    setSamningar((s) => s.filter((x) => x.id !== id));
+    await fetch(`${SUPABASE_URL}/rest/v1/kerfi_samningar?id=eq.${id}`, { method: "DELETE", headers: H }).catch(() => {});
+  }
+  async function thjonustad(s: Samningur) {
+    const d = new Date();
+    d.setDate(d.getDate() + (TIDNI_DAGAR[s.tidni] || 365));
+    const nyDate = d.toISOString().slice(0, 10);
+    setSamningar((xs) => xs.map((x) => (x.id === s.id ? { ...x, naesta_thjonusta: nyDate } : x)));
+    await fetch(`${SUPABASE_URL}/rest/v1/kerfi_samningar?id=eq.${s.id}`, {
+      method: "PATCH", headers: { ...H, Prefer: "return=minimal" },
+      body: JSON.stringify({ naesta_thjonusta: nyDate }),
+    }).catch(() => {});
+  }
+
+  const samByKunni = useMemo(() => Object.fromEntries(samningar.map((s) => [s.vidskiptavinur_id, s])) as Record<number, Samningur>, [samningar]);
+  const iThjonustu = useMemo(
+    () => samningar.map((s) => ({ s, k: kunnar.find((x) => x.id === s.vidskiptavinur_id) })).filter((x) => x.k)
+      .sort((a, b) => (a.s.naesta_thjonusta || "").localeCompare(b.s.naesta_thjonusta || "")),
+    [samningar, kunnar],
+  );
+  const ekkiIThjonustu = useMemo(() => kunnar.filter((k) => !samByKunni[k.id]), [kunnar, samByKunni]);
 
   const NAV = [
     { id: "yfirlit", label: "Yfirlit", icon: "📊", always: true },
@@ -552,6 +609,37 @@ export default function KerfiClient() {
               </div>
             </div>
           </>
+        ) : view === "thjonusta" ? (
+          <>
+            <div className="k-head">
+              <h1 className="k-h1">Fyrirtæki í þjónustu</h1>
+              <button className="k-btn" onClick={() => setThjOpen(true)}>+ Bæta í þjónustu</button>
+            </div>
+            <div className="k-card">
+              <table className="k-table">
+                <thead><tr><th>Fyrirtæki</th><th>Tíðni</th><th>Næsta þjónusta</th><th>Staða</th><th></th></tr></thead>
+                <tbody>
+                  {iThjonustu.map(({ s, k }) => (
+                    <tr key={s.id}>
+                      <td><b>{k!.nafn}</b><span className="k-te-loc">{k!.stadur}</span></td>
+                      <td>{TIDNI[s.tidni]}</td>
+                      <td>{fmtDate(s.naesta_thjonusta)}</td>
+                      <td><Pill s={status(s.naesta_thjonusta)} /></td>
+                      <td>
+                        <div className="k-actions">
+                          <button className="k-mini" onClick={() => thjonustad(s)}>Þjónustað ✓</button>
+                          <button className="k-mini ghost" onClick={() => fjarlaegjaSamning(s.id)}>Fjarlægja</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {iThjonustu.length === 0 && <tr><td colSpan={5} className="k-empty">Engin fyrirtæki í þjónustu enn.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : view === "utkeyrsla" ? (
+          <KerfiUtkeyrsla stops={iThjonustu} />
         ) : (MODULES.find((m) => m.id === view)?.soon) ? (
           <div className="k-soon-view">
             <span className="k-soon-ico">{MODULES.find((m) => m.id === view)?.icon}</span>
@@ -649,6 +737,32 @@ export default function KerfiClient() {
                 <label>Lýsing<input name="lysing" placeholder="Hvað þarf að gera?" /></label>
                 <button className="k-btn" type="submit">Stofna verkbeiðni</button>
               </form>
+            </aside>
+          </div>
+        )}
+
+        {thjOpen && (
+          <div className="k-drawer-wrap" onClick={() => setThjOpen(false)}>
+            <aside className="k-drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="k-drawer-h"><h2>Bæta fyrirtæki í þjónustu</h2><button className="k-x" onClick={() => setThjOpen(false)} aria-label="Loka">✕</button></div>
+              {ekkiIThjonustu.length === 0 ? (
+                <p className="k-empty">Öll fyrirtæki eru þegar í þjónustu.</p>
+              ) : (
+                <form className="k-form" onSubmit={addSamningur}>
+                  <label>Fyrirtæki
+                    <select name="kunni" required defaultValue="">
+                      <option value="" disabled>Veldu…</option>
+                      {ekkiIThjonustu.map((k) => <option key={k.id} value={k.id}>{k.nafn}</option>)}
+                    </select>
+                  </label>
+                  <label>Tíðni þjónustu
+                    <select name="tidni" defaultValue="arlega">
+                      {Object.entries(TIDNI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </label>
+                  <button className="k-btn" type="submit">Setja í þjónustu</button>
+                </form>
+              )}
             </aside>
           </div>
         )}
