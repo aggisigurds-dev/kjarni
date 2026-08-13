@@ -859,17 +859,35 @@ h3 {
 /* ===================== stjórnborð ===================== */
 .stjorn-gate,
 .stjorn {
-  max-width: 720px;
+  max-width: 980px;
   margin: 0 auto;
-  padding: 56px 20px 80px;
+  padding: 40px 20px 80px;
 }
 .stjorn-gate {
-  max-width: 400px;
+  max-width: 420px;
   text-align: center;
+  padding-top: 80px;
+}
+.stjorn-gate-badge,
+.stjorn-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: var(--red, #e8551f);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.4rem;
+  flex: none;
+}
+.stjorn-gate-badge {
+  margin-bottom: 16px;
 }
 .stjorn-gate h1,
 .stjorn h1 {
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   margin-bottom: 6px;
 }
 .stjorn-gate p {
@@ -891,15 +909,103 @@ h3 {
 }
 .stjorn-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.stjorn-top-l {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.stjorn-top-l h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+.stjorn-top-l p {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  margin: 2px 0 0;
+}
+.stjorn-badge {
+  width: 42px;
+  height: 42px;
+  font-size: 1.25rem;
+}
+.stjorn-top-r {
+  display: flex;
+  gap: 14px;
 }
 .stjorn-link {
   color: var(--red);
   font-weight: 600;
   font-size: 0.92rem;
+}
+.stj-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.stj-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.stj-tab:hover {
+  border-color: var(--ink-soft);
+}
+.stj-tab.on {
+  background: var(--ink, #111a2b);
+  border-color: var(--ink, #111a2b);
+  color: #fff;
+}
+.stj-tab em {
+  font-style: normal;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--red, #e8551f);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.stj-intro {
+  margin-bottom: 16px;
+}
+.stj-intro h2 {
+  font-size: 1.3rem;
+  margin: 0 0 6px;
+}
+.stj-intro p {
+  color: var(--ink-soft);
+  font-size: 0.94rem;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.stj-intro code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.86em;
+  background: #f1ede4;
+  padding: 1px 6px;
+  border-radius: 5px;
 }
 .stj-card {
   background: #fff;

@@ -32,10 +32,13 @@ const kr = (n: number) =>
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " kr";
 
+type TabId = "sidur" | "valmynd" | "verkfaeri" | "bordi" | "pantanir" | "fyrirspurnir";
+
 export default function StjornClient() {
   const [secret, setSecret] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [err, setErr] = useState("");
+  const [tab, setTab] = useState<TabId>("sidur");
 
   const [bordiOn, setBordiOn] = useState(false);
   const [bordiText, setBordiText] = useState("");
@@ -102,8 +105,9 @@ export default function StjornClient() {
   if (!unlocked) {
     return (
       <div className="stjorn-gate">
-        <h1>Stjórnborð</h1>
-        <p>Sláðu inn leyniorð til að stjórna versluninni.</p>
+        <span className="stjorn-gate-badge">B</span>
+        <h1>Kjarni · Stjórnborð</h1>
+        <p>Bakendi Brunahólf Slökkvitæki vefsins. Sláðu inn leyniorð til að stjórna síðum, valmynd, verkfærum og pöntunum.</p>
         <form onSubmit={openPanel}>
           <input
             type="password"
@@ -111,118 +115,188 @@ export default function StjornClient() {
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
           />
-          <button className="btn" type="submit">Opna</button>
+          <button className="btn" type="submit">Opna stjórnborð</button>
         </form>
         {err && <p className="form-err" style={{ color: "var(--red)" }}>{err}</p>}
       </div>
     );
   }
 
+  const TABS: { id: TabId; icon: string; label: string; badge?: number }[] = [
+    { id: "sidur", icon: "📄", label: "Síður" },
+    { id: "valmynd", icon: "🧭", label: "Valmynd" },
+    { id: "verkfaeri", icon: "🧰", label: "Verkfæri" },
+    { id: "bordi", icon: "🔔", label: "Tilkynningaborði" },
+    { id: "pantanir", icon: "📦", label: "Pantanir", badge: pantanir.length },
+    { id: "fyrirspurnir", icon: "✉️", label: "Fyrirspurnir", badge: inq.length },
+  ];
+
+  const settingsSaveBar = (
+    <div className="stj-savebar">
+      <button className="btn" onClick={save} disabled={saving}>
+        {saving ? "Vista…" : "Vista breytingar"}
+      </button>
+      {saved && <span className="stj-saved">Vistað ✓</span>}
+    </div>
+  );
+
   return (
     <div className="stjorn">
       <header className="stjorn-top">
-        <h1>Stjórnborð</h1>
-        <a className="stjorn-link" href="/verslun">Skoða verslun →</a>
+        <div className="stjorn-top-l">
+          <span className="stjorn-badge">B</span>
+          <div>
+            <h1>Kjarni · Stjórnborð</h1>
+            <p>Brunahólf Slökkvitæki — bakendi vefsins</p>
+          </div>
+        </div>
+        <div className="stjorn-top-r">
+          <a className="stjorn-link" href="/" target="_blank" rel="noreferrer">Forsíða ↗</a>
+          <a className="stjorn-link" href="/verslun" target="_blank" rel="noreferrer">Verslun ↗</a>
+        </div>
       </header>
 
-      <section className="stj-card">
-        <h2>Tilkynningaborði</h2>
-        <p className="stj-sub">Birtist efst á síðunni þegar kveikt er á honum.</p>
-        <label className="stj-toggle">
-          <input type="checkbox" checked={bordiOn} onChange={(e) => setBordiOn(e.target.checked)} />
-          <span>{bordiOn ? "Kveikt" : "Slökkt"}</span>
-        </label>
-        <textarea
-          rows={2}
-          value={bordiText}
-          onChange={(e) => setBordiText(e.target.value)}
-          placeholder="Texti borðans"
-        />
-      </section>
+      <nav className="stj-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`stj-tab ${tab === t.id ? "on" : ""}`}
+            onClick={() => setTab(t.id)}
+          >
+            <span aria-hidden="true">{t.icon}</span> {t.label}
+            {t.badge ? <em>{t.badge}</em> : null}
+          </button>
+        ))}
+      </nav>
 
-      <section className="stj-card">
-        <h2>Verkfæri</h2>
-        <p className="stj-sub">Kveiktu á tólum og límdu inn auðkenni frá þjónustunum.</p>
-        <label className="stj-toggle">
-          <input type="checkbox" checked={analyticsOn} onChange={(e) => setAnalyticsOn(e.target.checked)} />
-          <span>Vefmælingar · Vercel Analytics</span>
-        </label>
-        <label className="stj-field">
-          <span>Meta Pixel auðkenni (fyrir Facebook/Instagram auglýsingar)</span>
-          <input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="t.d. 123456789012345" />
-        </label>
-        <label className="stj-toggle">
-          <input type="checkbox" checked={chatOn} onChange={(e) => setChatOn(e.target.checked)} />
-          <span>Netspjall · Tawk.to</span>
-        </label>
-        <label className="stj-field">
-          <span>Tawk.to auðkenni</span>
-          <input value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="t.d. 65f1a.../1abcd2efg" />
-        </label>
-      </section>
+      <div className="stj-body">
+        {tab === "sidur" && (
+          <>
+            <div className="stj-intro">
+              <h2>Síður</h2>
+              <p>Búðu til nýjar síður og breyttu þeim sem til eru. Hver síða er byggð úr blokkum (hetja, texti, vörur, myndir, form …). Smelltu á <b>+ Ný síða</b>, dragðu til blokkir, og kveiktu á <b>Birt</b> þegar hún á að fara í loftið — hún birtist þá á <code>/slóð</code>.</p>
+            </div>
+            <SidurEditor secret={secret} />
+          </>
+        )}
 
-      <div className="stj-savebar">
-        <button className="btn" onClick={save} disabled={saving}>
-          {saving ? "Vista…" : "Vista breytingar"}
-        </button>
-        {saved && <span className="stj-saved">Vistað ✓</span>}
+        {tab === "valmynd" && (
+          <>
+            <div className="stj-intro">
+              <h2>Valmynd</h2>
+              <p>Stjórnaðu hlekkjunum efst á vefnum. Bættu við, endurraðaðu eða fjarlægðu — t.d. til að setja nýja síðu inn í efstu stikuna.</p>
+            </div>
+            <ValmyndEditor secret={secret} />
+          </>
+        )}
+
+        {tab === "verkfaeri" && (
+          <>
+            <div className="stj-intro">
+              <h2>Verkfæri</h2>
+              <p>Kveiktu á tólum og límdu inn auðkenni frá þjónustunum. Mundu að ýta á <b>Vista breytingar</b> neðst.</p>
+            </div>
+            <section className="stj-card">
+              <label className="stj-toggle">
+                <input type="checkbox" checked={analyticsOn} onChange={(e) => setAnalyticsOn(e.target.checked)} />
+                <span>Vefmælingar · Vercel Analytics</span>
+              </label>
+              <label className="stj-field">
+                <span>Meta Pixel auðkenni (fyrir Facebook/Instagram auglýsingar)</span>
+                <input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="t.d. 123456789012345" />
+              </label>
+              <label className="stj-toggle">
+                <input type="checkbox" checked={chatOn} onChange={(e) => setChatOn(e.target.checked)} />
+                <span>Netspjall · Tawk.to</span>
+              </label>
+              <label className="stj-field">
+                <span>Tawk.to auðkenni</span>
+                <input value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="t.d. 65f1a.../1abcd2efg" />
+              </label>
+            </section>
+            {settingsSaveBar}
+          </>
+        )}
+
+        {tab === "bordi" && (
+          <>
+            <div className="stj-intro">
+              <h2>Tilkynningaborði</h2>
+              <p>Skilaboð sem birtast efst á öllum síðum þegar kveikt er á honum — t.d. „Frí heimsending í þessari viku".</p>
+            </div>
+            <section className="stj-card">
+              <label className="stj-toggle">
+                <input type="checkbox" checked={bordiOn} onChange={(e) => setBordiOn(e.target.checked)} />
+                <span>{bordiOn ? "Kveikt" : "Slökkt"}</span>
+              </label>
+              <textarea
+                rows={2}
+                value={bordiText}
+                onChange={(e) => setBordiText(e.target.value)}
+                placeholder="Texti borðans"
+              />
+            </section>
+            {settingsSaveBar}
+          </>
+        )}
+
+        {tab === "pantanir" && (
+          <section className="stj-card">
+            <h2>Pantanir ({pantanir.length})</h2>
+            {pantanir.length === 0 ? (
+              <p className="stj-sub">Engar pantanir enn — þær birtast hér þegar viðskiptavinur klárar körfu í versluninni.</p>
+            ) : (
+              <div className="stj-inq">
+                {pantanir.map((o) => (
+                  <div className="inq" key={o.id}>
+                    <div className="inq-head">
+                      <b>{o.nafn || "—"} · {kr(o.samtals)}</b>
+                      <span>{new Date(o.buid_til).toLocaleString("is-IS")}</span>
+                    </div>
+                    <div className="inq-meta">
+                      {o.netfang}
+                      {o.simi ? " · " + o.simi : ""}
+                      {o.heimilisfang ? " · " + o.heimilisfang : ""}
+                    </div>
+                    <ul className="ord-lines">
+                      {(o.karfa || []).map((l, i) => (
+                        <li key={i}>
+                          {l.fjoldi}× {l.nafn} — {kr(l.verd * l.fjoldi)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === "fyrirspurnir" && (
+          <section className="stj-card">
+            <h2>Fyrirspurnir ({inq.length})</h2>
+            {inq.length === 0 ? (
+              <p className="stj-sub">Engar fyrirspurnir enn — skilaboð úr „Hafðu samband" forminu birtast hér.</p>
+            ) : (
+              <div className="stj-inq">
+                {inq.map((i) => (
+                  <div className="inq" key={i.id}>
+                    <div className="inq-head">
+                      <b>{i.nafn || "—"}</b>
+                      <span>{new Date(i.buid_til).toLocaleString("is-IS")}</span>
+                    </div>
+                    <div className="inq-meta">
+                      {i.netfang}
+                      {i.simi ? " · " + i.simi : ""}
+                    </div>
+                    {i.skilabod && <p className="inq-msg">{i.skilabod}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
-
-      <SidurEditor secret={secret} />
-      <ValmyndEditor secret={secret} />
-
-      <section className="stj-card">
-        <h2>Pantanir ({pantanir.length})</h2>
-        {pantanir.length === 0 ? (
-          <p className="stj-sub">Engar pantanir enn.</p>
-        ) : (
-          <div className="stj-inq">
-            {pantanir.map((o) => (
-              <div className="inq" key={o.id}>
-                <div className="inq-head">
-                  <b>{o.nafn || "—"} · {kr(o.samtals)}</b>
-                  <span>{new Date(o.buid_til).toLocaleString("is-IS")}</span>
-                </div>
-                <div className="inq-meta">
-                  {o.netfang}
-                  {o.simi ? " · " + o.simi : ""}
-                  {o.heimilisfang ? " · " + o.heimilisfang : ""}
-                </div>
-                <ul className="ord-lines">
-                  {(o.karfa || []).map((l, i) => (
-                    <li key={i}>
-                      {l.fjoldi}× {l.nafn} — {kr(l.verd * l.fjoldi)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="stj-card">
-        <h2>Fyrirspurnir ({inq.length})</h2>
-        {inq.length === 0 ? (
-          <p className="stj-sub">Engar fyrirspurnir enn.</p>
-        ) : (
-          <div className="stj-inq">
-            {inq.map((i) => (
-              <div className="inq" key={i.id}>
-                <div className="inq-head">
-                  <b>{i.nafn || "—"}</b>
-                  <span>{new Date(i.buid_til).toLocaleString("is-IS")}</span>
-                </div>
-                <div className="inq-meta">
-                  {i.netfang}
-                  {i.simi ? " · " + i.simi : ""}
-                </div>
-                {i.skilabod && <p className="inq-msg">{i.skilabod}</p>}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
