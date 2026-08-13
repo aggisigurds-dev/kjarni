@@ -1984,3 +1984,66 @@ h3 {
   .k-row { grid-template-columns:1fr auto; }
   .k-row-meta, .k-row-taeki { display:none; }
 }
+
+/* ============================================================
+   Kjarni master control (/kjarni) — the stjórnstöð over everything
+   ============================================================ */
+.ms { --m-navy:#0f1626; --m-bg:#f4f5f7; --m-ink:#111a2b; --m-soft:#5c6b82; --m-line:#e6e8ec;
+  --m-org:#e8551f; --m-green:#2fa56b; max-width:1080px; margin:0 auto; padding:clamp(22px,3vw,42px) 20px 80px;
+  background:var(--m-bg); min-height:100vh; color:var(--m-ink); }
+.ms *, .ms *::before { box-sizing:border-box; }
+.ms a { text-decoration:none; }
+
+.ms-gate { max-width:430px; margin:0 auto; padding:90px 20px; text-align:center; color:var(--m-ink); }
+.ms-gate-badge, .ms-badge { display:inline-flex; align-items:center; justify-content:center; width:52px; height:52px;
+  border-radius:14px; background:var(--m-navy); color:#fff; font-size:1.5rem; }
+.ms-gate-badge { margin-bottom:16px; }
+.ms-gate h1 { font-size:1.6rem; margin:0 0 6px; }
+.ms-gate p { color:var(--m-soft); margin:0 0 22px; line-height:1.5; }
+.ms-gate form { display:flex; gap:8px; }
+.ms-gate input { flex:1; font:inherit; padding:12px 14px; border:1px solid var(--m-line); border-radius:10px; background:#fff; color:var(--m-ink); }
+.ms-btn { background:var(--m-org); color:#fff; border:0; border-radius:10px; padding:12px 20px; font:inherit; font-weight:700; cursor:pointer; white-space:nowrap; }
+.ms-btn:hover { background:#cf4715; }
+.ms-err { color:#d8503a; margin-top:14px; }
+
+.ms-top { display:flex; align-items:center; gap:14px; margin-bottom:26px; }
+.ms-badge { width:46px; height:46px; font-size:1.3rem; }
+.ms-top-l { display:flex; align-items:center; gap:14px; }
+.ms-top-l h1 { font-size:1.5rem; margin:0; letter-spacing:-0.02em; }
+.ms-top-l p { color:var(--m-soft); font-size:0.9rem; margin:2px 0 0; }
+.ms-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:30px; }
+.ms-kpi { background:#fff; border:1px solid var(--m-line); border-radius:14px; padding:18px 20px; }
+.ms-kpi span { display:block; color:var(--m-soft); font-size:0.82rem; font-weight:600; margin-bottom:6px; }
+.ms-kpi b { font-size:2rem; font-weight:820; letter-spacing:-0.02em; }
+.ms-h2 { font-size:1.15rem; margin:0 0 14px; }
+.ms-props { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; margin-bottom:32px; }
+.ms-prop { background:#fff; border:1px solid var(--m-line); border-radius:16px; padding:20px; display:flex; flex-direction:column; }
+.ms-prop-h { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.ms-prop-ico { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex:none; }
+.ms-prop-h b { font-size:1.05rem; display:block; }
+.ms-prop-h small { color:var(--m-soft); font-size:0.82rem; }
+.ms-live { margin-left:auto; align-self:flex-start; font-size:0.72rem; font-weight:700; color:var(--m-green); background:rgba(47,165,107,0.12); padding:4px 10px; border-radius:999px; white-space:nowrap; }
+.ms-stats { display:flex; flex-wrap:wrap; gap:16px; padding:14px 0; border-top:1px solid var(--m-line); border-bottom:1px solid var(--m-line); margin-bottom:16px; }
+.ms-stats span { font-size:0.86rem; color:var(--m-soft); }
+.ms-stats b { color:var(--m-ink); font-size:1.05rem; }
+.ms-links { display:flex; flex-wrap:wrap; gap:9px; margin-top:auto; }
+.ms-links a { font-size:0.88rem; font-weight:650; color:var(--m-ink); border:1px solid var(--m-line); border-radius:9px; padding:9px 14px; }
+.ms-links a:hover { border-color:var(--m-soft); }
+.ms-links a.ms-primary { background:var(--m-navy); color:#fff; border-color:var(--m-navy); }
+.ms-links a.ms-primary:hover { background:#1c2b49; }
+.ms-add { align-items:center; justify-content:center; text-align:center; border-style:dashed; color:var(--m-soft); gap:6px; min-height:180px; }
+.ms-add-plus { font-size:2rem; color:var(--m-soft); }
+.ms-add b { color:var(--m-ink); }
+.ms-add small { color:var(--m-soft); font-size:0.84rem; max-width:26ch; }
+.ms-card { background:#fff; border:1px solid var(--m-line); border-radius:16px; overflow:hidden; }
+.ms-empty { padding:30px; text-align:center; color:var(--m-soft); }
+.ms-act { display:flex; flex-direction:column; }
+.ms-actrow { display:grid; grid-template-columns:auto 1.2fr 2fr auto; align-items:center; gap:14px; padding:13px 18px; border-bottom:1px solid var(--m-line); }
+.ms-actrow:last-child { border-bottom:0; }
+.ms-chip { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:3px 9px; border-radius:6px; }
+.ms-chip.ord { color:var(--m-org); background:rgba(232,85,31,0.1); }
+.ms-chip.inq { color:#3b6cb3; background:rgba(59,108,179,0.1); }
+.ms-act-nafn { font-weight:650; font-size:0.9rem; }
+.ms-act-sub { color:var(--m-soft); font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ms-act-when { color:var(--m-soft); font-size:0.8rem; font-family:var(--font-mono),monospace; }
+@media (max-width:620px) { .ms-actrow { grid-template-columns:auto 1fr auto; } .ms-act-sub { display:none; } }
