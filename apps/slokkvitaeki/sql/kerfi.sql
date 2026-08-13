@@ -74,3 +74,22 @@ create table if not exists kerfi_solur (
 -- RLS on; anon policies kerfi_vor_all / kerfi_sol_all (for all, using true).
 -- Sala seeded with 10 vörur/þjónusta and turned on by default:
 --   update kerfi_stillingar set gildi='["vidskiptavinir","bunadur","skodanir","sala"]' where lykill='einingar';
+
+-- ---- Þrep 1 · Verkstæði + Afgreiðsla — migration kerfi_verkbeidnir ---------
+-- Shared work-order pipeline used by both the Verkstæði board and the
+-- Afgreiðsla (reception) view.
+create table if not exists kerfi_verkbeidnir (
+  id bigint generated always as identity primary key,
+  vidskiptavinur_id bigint references kerfi_vidskiptavinir(id) on delete set null,
+  vidskiptavinur_nafn text,
+  taeki text,
+  lysing text,
+  stada text not null default 'ny',   -- ny -> i_vinnslu -> tilbuid -> sott
+  buid_til timestamptz not null default now(),
+  uppfaert timestamptz not null default now()
+);
+-- RLS on; anon policy kerfi_verk_all (for all, using true). Seeded with 6
+-- work orders. Verkstæði + Afgreiðsla turned on by default, completing Þrep 1:
+--   update kerfi_stillingar set gildi=
+--     '["vidskiptavinir","bunadur","skodanir","sala","verkstaedi","afgreidsla"]'
+--   where lykill='einingar';

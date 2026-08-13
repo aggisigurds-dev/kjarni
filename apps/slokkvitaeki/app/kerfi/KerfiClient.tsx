@@ -37,6 +37,19 @@ type SalaRec = {
   buid_til: string;
 };
 
+type Verk = {
+  id: number;
+  vidskiptavinur_id: number | null;
+  vidskiptavinur_nafn: string | null;
+  taeki: string | null;
+  lysing: string | null;
+  stada: string;
+  buid_til: string;
+  uppfaert: string;
+};
+const VERK_FLOW = ["ny", "i_vinnslu", "tilbuid", "sott"] as const;
+const VERK_LABEL: Record<string, string> = { ny: "Ný", i_vinnslu: "Í vinnslu", tilbuid: "Tilbúið", sott: "Sótt" };
+
 type ModId =
   | "bunadur" | "skodanir"
   | "sala" | "verkstaedi" | "afgreidsla"
@@ -52,8 +65,8 @@ const MODULES: { id: ModId; stage: number; label: string; icon: string; desc: st
   { id: "bunadur", stage: 0, label: "Búnaður", icon: "🧯", desc: "Halda utan um tæki og búnað hvers viðskiptavinar með staðsetningu og raðnúmeri." },
   { id: "skodanir", stage: 0, label: "Skoðanir", icon: "📋", desc: "Skoðunardagatal — sjáðu hvað er komið á tíma og hvað er framundan." },
   { id: "sala", stage: 1, label: "Sala", icon: "🛒", desc: "Sölukerfi (POS) — afgreiðsla á vörum og þjónustu yfir borðið." },
-  { id: "verkstaedi", stage: 1, label: "Verkstæði", icon: "🔧", desc: "Verkbeiðnir og viðgerðir á verkstæði.", soon: true },
-  { id: "afgreidsla", stage: 1, label: "Afgreiðsla", icon: "📥", desc: "Afgreiðsluborð — móttaka og afhending tækja.", soon: true },
+  { id: "verkstaedi", stage: 1, label: "Verkstæði", icon: "🔧", desc: "Verkbeiðnir og viðgerðir á verkstæði með stöðuflæði." },
+  { id: "afgreidsla", stage: 1, label: "Afgreiðsla", icon: "📥", desc: "Afgreiðsluborð — móttaka nýrra tækja og afhending tilbúinna." },
   { id: "thjonusta", stage: 2, label: "Fyrirtæki í þjónustu", icon: "🏢", desc: "Fyrirtæki með þjónustusamning — reglubundin skoðun og eftirlit.", soon: true },
   { id: "utkeyrsla", stage: 2, label: "Útkeyrsla", icon: "🚚", desc: "Vettvangsþjónusta og útkeyrslulistar með korti.", soon: true },
   { id: "brunakerfi", stage: 3, label: "Brunakerfi", icon: "🚨", desc: "Útkeyrsluþjónusta fyrir brunakerfi og viðvörunarkerfi.", soon: true },
@@ -96,20 +109,25 @@ export default function KerfiClient() {
   const [greidsla, setGreidsla] = useState("kort");
   const [salaDone, setSalaDone] = useState<SalaRec | null>(null);
 
+  const [verk, setVerk] = useState<Verk[]>([]);
+  const [verkOpen, setVerkOpen] = useState(false);
+
   async function loadAll() {
     setLoading(true);
     try {
-      const [ks, ts, st, vs, ss] = await Promise.all([
+      const [ks, ts, st, vs, ss, vk] = await Promise.all([
         sbSelect<Kunni[]>("kerfi_vidskiptavinir?select=*&order=nafn"),
         sbSelect<Taeki[]>("kerfi_taeki?select=*"),
         sbSelect<{ lykill: string; gildi: string }[]>("kerfi_stillingar?select=lykill,gildi&lykill=eq.einingar"),
         sbSelect<Vara[]>("kerfi_vorur?select=*&virk=eq.true&order=rod"),
         sbSelect<SalaRec[]>("kerfi_solur?select=*&order=buid_til.desc&limit=50"),
+        sbSelect<Verk[]>("kerfi_verkbeidnir?select=*&order=buid_til.desc"),
       ]);
       setKunnar(ks);
       setTaeki(ts);
       setVorur(vs);
       setSolur(ss);
+      setVerk(vk);
       try {
         const e = JSON.parse(st[0]?.gildi || "[]");
         if (Array.isArray(e) && e.length) setEnabled(e);
@@ -206,6 +224,35 @@ export default function KerfiClient() {
     setCart({});
     setSalaKunni("");
     setSolur((s) => [saved, ...s]);
+  }
+
+  async function setVerkStada(id: number, stada: string) {
+    setVerk((vs) => vs.map((v) => (v.id === id ? { ...v, stada } : v)));
+    await fetch(`${SUPABASE_URL}/rest/v1/kerfi_verkbeidnir?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { ...H, Prefer: "return=minimal" },
+      body: JSON.stringify({ stada, uppfaert: new Date().toISOString() }),
+    }).catch(() => {});
+  }
+  async function addVerk(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const kid = f.get("kunni") ? Number(f.get("kunni")) : null;
+    const k = kid ? kunnar.find((x) => x.id === kid) : null;
+    const row = {
+      vidskiptavinur_id: kid,
+      vidskiptavinur_nafn: k ? k.nafn : (f.get("nafn") as string) || "Laus afgreiðsla",
+      taeki: f.get("taeki") || "",
+      lysing: f.get("lysing") || "",
+      stada: "ny",
+    };
+    await fetch(`${SUPABASE_URL}/rest/v1/kerfi_verkbeidnir`, {
+      method: "POST",
+      headers: { ...H, Prefer: "return=minimal" },
+      body: JSON.stringify(row),
+    }).catch(() => {});
+    setVerkOpen(false);
+    await loadAll();
   }
 
   const NAV = [
@@ -445,6 +492,66 @@ export default function KerfiClient() {
               </div>
             )}
           </>
+        ) : view === "verkstaedi" ? (
+          <>
+            <div className="k-head">
+              <h1 className="k-h1">Verkstæði</h1>
+              <button className="k-btn" onClick={() => setVerkOpen(true)}>+ Ný verkbeiðni</button>
+            </div>
+            <div className="k-board">
+              {VERK_FLOW.map((col) => {
+                const cards = verk.filter((v) => v.stada === col);
+                const idx = VERK_FLOW.indexOf(col);
+                const nextLbl = col === "ny" ? "Hefja" : col === "i_vinnslu" ? "Klárað" : col === "tilbuid" ? "Afhent" : null;
+                return (
+                  <div className="k-col" key={col}>
+                    <div className="k-col-h"><span className={`k-dot ${col}`} />{VERK_LABEL[col]}<em>{cards.length}</em></div>
+                    <div className="k-col-body">
+                      {cards.map((v) => (
+                        <div className="k-vcard" key={v.id}>
+                          <b>{v.taeki}</b>
+                          <span className="k-vcard-kunni">{v.vidskiptavinur_nafn}</span>
+                          {v.lysing && <p>{v.lysing}</p>}
+                          {nextLbl && <button className="k-vadv" onClick={() => setVerkStada(v.id, VERK_FLOW[idx + 1])}>{nextLbl} →</button>}
+                        </div>
+                      ))}
+                      {cards.length === 0 && <p className="k-col-empty">—</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : view === "afgreidsla" ? (
+          <>
+            <h1 className="k-h1">Afgreiðsla</h1>
+            <div className="k-afg">
+              <div className="k-card">
+                <div className="k-card-h"><h2>Móttaka</h2></div>
+                <form className="k-form k-afg-form" onSubmit={addVerk}>
+                  <label>Viðskiptavinur
+                    <select name="kunni"><option value="">Laus afgreiðsla</option>{kunnar.map((k) => <option key={k.id} value={k.id}>{k.nafn}</option>)}</select>
+                  </label>
+                  <label>Tæki<input name="taeki" placeholder="t.d. Duft 6kg ABC" required /></label>
+                  <label>Lýsing<input name="lysing" placeholder="Hvað þarf að gera?" /></label>
+                  <button className="k-btn" type="submit">Skrá móttöku</button>
+                </form>
+              </div>
+              <div className="k-card">
+                <div className="k-card-h"><h2>Tilbúið til afhendingar</h2><span>{verk.filter((v) => v.stada === "tilbuid").length}</span></div>
+                <div className="k-list">
+                  {verk.filter((v) => v.stada === "tilbuid").map((v) => (
+                    <div className="k-row static" key={v.id}>
+                      <span className="k-row-nafn">{v.taeki} <em className="k-dim">· {v.vidskiptavinur_nafn}</em></span>
+                      <span className="k-row-meta">{v.lysing}</span>
+                      <button className="k-btn k-sm" onClick={() => setVerkStada(v.id, "sott")}>Afhent ✓</button>
+                    </div>
+                  ))}
+                  {verk.filter((v) => v.stada === "tilbuid").length === 0 && <p className="k-empty">Ekkert tilbúið til afhendingar.</p>}
+                </div>
+              </div>
+            </div>
+          </>
         ) : (MODULES.find((m) => m.id === view)?.soon) ? (
           <div className="k-soon-view">
             <span className="k-soon-ico">{MODULES.find((m) => m.id === view)?.icon}</span>
@@ -526,6 +633,22 @@ export default function KerfiClient() {
                 <div className="k-receipt-tot"><span>Samtals</span><span>{kr(salaDone.samtals)}</span></div>
                 <button className="k-btn" onClick={() => setSalaDone(null)}>Loka</button>
               </div>
+            </aside>
+          </div>
+        )}
+
+        {verkOpen && (
+          <div className="k-drawer-wrap" onClick={() => setVerkOpen(false)}>
+            <aside className="k-drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="k-drawer-h"><h2>Ný verkbeiðni</h2><button className="k-x" onClick={() => setVerkOpen(false)} aria-label="Loka">✕</button></div>
+              <form className="k-form" onSubmit={addVerk}>
+                <label>Viðskiptavinur
+                  <select name="kunni"><option value="">Laus afgreiðsla</option>{kunnar.map((k) => <option key={k.id} value={k.id}>{k.nafn}</option>)}</select>
+                </label>
+                <label>Tæki<input name="taeki" placeholder="t.d. Duft 6kg ABC" required /></label>
+                <label>Lýsing<input name="lysing" placeholder="Hvað þarf að gera?" /></label>
+                <button className="k-btn" type="submit">Stofna verkbeiðni</button>
+              </form>
             </aside>
           </div>
         )}
