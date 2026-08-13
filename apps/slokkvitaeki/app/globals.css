@@ -1905,6 +1905,50 @@ h3 {
 .k-form input:focus, .k-form select:focus { outline:0; border-color:var(--k-org); }
 .k-form .k-btn { margin-top:6px; }
 
+/* Sala (POS) */
+.k-subtabs { display:inline-flex; background:#eceef1; border-radius:10px; padding:3px; gap:2px; }
+.k-subtabs button { background:none; border:0; border-radius:8px; padding:8px 16px; font-weight:600; font-size:0.88rem; color:var(--k-soft); }
+.k-subtabs button.on { background:#fff; color:var(--k-ink); box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.k-pos { display:grid; grid-template-columns:1fr 340px; gap:18px; align-items:start; }
+@media (max-width:900px) { .k-pos { grid-template-columns:1fr; } }
+.k-pos-vorur { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+.k-vara { display:flex; flex-direction:column; gap:4px; text-align:left; background:#fff; border:1px solid var(--k-line);
+  border-radius:13px; padding:14px; min-height:104px; }
+.k-vara:hover { border-color:var(--k-org); box-shadow:0 8px 20px rgba(17,26,43,0.08); }
+.k-vara-teg { font-family:var(--font-mono),monospace; font-size:0.58rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--k-soft); }
+.k-vara b { font-size:0.92rem; flex:1; }
+.k-vara-verd { font-weight:800; color:var(--k-ink); }
+.k-pos-cart { background:#fff; border:1px solid var(--k-line); border-radius:16px; padding:18px; position:sticky; top:20px; }
+.k-cart-h { display:flex; align-items:center; gap:9px; font-weight:800; font-size:1.05rem; margin-bottom:13px; }
+.k-cart-h em { font-style:normal; min-width:22px; height:22px; padding:0 6px; border-radius:999px; background:var(--k-org);
+  color:#fff; font-size:0.76rem; display:inline-flex; align-items:center; justify-content:center; }
+.k-cart-kunni { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--k-line); border-radius:10px;
+  background:#fff; color:var(--k-ink); margin-bottom:14px; }
+.k-cart-lines { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+.k-cl { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; }
+.k-cl-nafn { font-size:0.88rem; font-weight:600; }
+.k-cl-qty { display:inline-flex; align-items:center; gap:8px; }
+.k-cl-qty button { width:26px; height:26px; border-radius:7px; border:1px solid var(--k-line); background:#fff; font-size:1rem; line-height:1; color:var(--k-ink); }
+.k-cl-qty button:hover { border-color:var(--k-org); color:var(--k-org); }
+.k-cl-qty span { min-width:16px; text-align:center; font-weight:700; font-size:0.9rem; }
+.k-cl-verd { font-weight:700; font-size:0.88rem; white-space:nowrap; }
+.k-cart-sum { border-top:1px solid var(--k-line); padding-top:12px; display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.k-cart-sum div { display:flex; justify-content:space-between; font-size:0.86rem; color:var(--k-soft); }
+.k-cart-sum .tot { font-size:1.1rem; font-weight:800; color:var(--k-ink); }
+.k-pay { display:flex; gap:7px; margin-bottom:13px; }
+.k-pay button { flex:1; background:#fff; border:1px solid var(--k-line); border-radius:9px; padding:9px 6px; font-weight:600; font-size:0.82rem; color:var(--k-ink); }
+.k-pay button.on { background:var(--k-navy); border-color:var(--k-navy); color:#fff; }
+.k-ljuka { width:100%; background:var(--k-green); }
+.k-ljuka:hover { background:#268a58; }
+.k-sol-tot { justify-self:end; font-size:0.98rem; }
+.k-receipt { text-align:center; padding:14px 4px; }
+.k-receipt-ok { display:inline-flex; align-items:center; justify-content:center; width:52px; height:52px; border-radius:50%;
+  background:rgba(47,165,107,0.15); color:var(--k-green); font-size:1.5rem; margin-bottom:12px; }
+.k-receipt h2 { font-size:1.4rem; margin:0 0 4px; }
+.k-receipt-lines { text-align:left; border-top:1px solid var(--k-line); margin-top:18px; padding-top:14px; display:flex; flex-direction:column; gap:8px; }
+.k-receipt-lines div { display:flex; justify-content:space-between; font-size:0.88rem; }
+.k-receipt-tot { display:flex; justify-content:space-between; font-weight:800; font-size:1.1rem; border-top:1px solid var(--k-line); margin-top:12px; padding:12px 0 18px; }
+
 @media (max-width:760px) {
   .k { flex-direction:column; }
   .k-side { width:100%; height:auto; position:static; flex-direction:row; flex-wrap:wrap; align-items:center; padding:12px; gap:8px; }

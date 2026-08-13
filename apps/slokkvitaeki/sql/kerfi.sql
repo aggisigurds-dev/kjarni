@@ -49,3 +49,28 @@ alter table kerfi_stillingar enable row level security;
 --   Þrep 3 · Framlengt:   brunakerfi, reikningar (Payday/kröfuyfirlit)
 -- insert into kerfi_stillingar (lykill, gildi)
 --   values ('einingar', '["vidskiptavinir","bunadur","skodanir"]');
+
+-- ---- Þrep 1 · Sala (POS) — migration kerfi_sala ----------------------------
+create table if not exists kerfi_vorur (
+  id bigint generated always as identity primary key,
+  heiti text not null,
+  tegund text not null default 'vara',   -- 'vara' | 'thjonusta'
+  verd integer not null,                 -- price WITH vsk, ISK
+  vsk integer not null default 24,
+  virk boolean not null default true,
+  rod integer not null default 0,
+  buid_til timestamptz not null default now()
+);
+create table if not exists kerfi_solur (
+  id bigint generated always as identity primary key,
+  vidskiptavinur_id bigint references kerfi_vidskiptavinir(id) on delete set null,
+  vidskiptavinur_nafn text,
+  linur jsonb not null default '[]',     -- [{heiti, verd, fjoldi}]
+  samtals integer not null default 0,
+  vsk integer not null default 0,
+  greidslumati text default 'kort',      -- 'kort' | 'reikningur' | 'reidufe'
+  buid_til timestamptz not null default now()
+);
+-- RLS on; anon policies kerfi_vor_all / kerfi_sol_all (for all, using true).
+-- Sala seeded with 10 vörur/þjónusta and turned on by default:
+--   update kerfi_stillingar set gildi='["vidskiptavinir","bunadur","skodanir","sala"]' where lykill='einingar';

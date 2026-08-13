@@ -25,6 +25,18 @@ type Taeki = {
   naesta_skodun: string | null;
 };
 
+type Vara = { id: number; heiti: string; tegund: string; verd: number; vsk: number; virk: boolean; rod: number };
+type SolLina = { heiti: string; verd: number; fjoldi: number };
+type SalaRec = {
+  id: number;
+  vidskiptavinur_nafn: string | null;
+  linur: SolLina[];
+  samtals: number;
+  vsk: number;
+  greidslumati: string;
+  buid_til: string;
+};
+
 type ModId =
   | "bunadur" | "skodanir"
   | "sala" | "verkstaedi" | "afgreidsla"
@@ -39,7 +51,7 @@ const STAGES: { n: number; label: string }[] = [
 const MODULES: { id: ModId; stage: number; label: string; icon: string; desc: string; soon?: boolean }[] = [
   { id: "bunadur", stage: 0, label: "Búnaður", icon: "🧯", desc: "Halda utan um tæki og búnað hvers viðskiptavinar með staðsetningu og raðnúmeri." },
   { id: "skodanir", stage: 0, label: "Skoðanir", icon: "📋", desc: "Skoðunardagatal — sjáðu hvað er komið á tíma og hvað er framundan." },
-  { id: "sala", stage: 1, label: "Sala", icon: "🛒", desc: "Sölukerfi (POS) — afgreiðsla á vörum og þjónustu yfir borðið.", soon: true },
+  { id: "sala", stage: 1, label: "Sala", icon: "🛒", desc: "Sölukerfi (POS) — afgreiðsla á vörum og þjónustu yfir borðið." },
   { id: "verkstaedi", stage: 1, label: "Verkstæði", icon: "🔧", desc: "Verkbeiðnir og viðgerðir á verkstæði.", soon: true },
   { id: "afgreidsla", stage: 1, label: "Afgreiðsla", icon: "📥", desc: "Afgreiðsluborð — móttaka og afhending tækja.", soon: true },
   { id: "thjonusta", stage: 2, label: "Fyrirtæki í þjónustu", icon: "🏢", desc: "Fyrirtæki með þjónustusamning — reglubundin skoðun og eftirlit.", soon: true },
@@ -50,8 +62,12 @@ const MODULES: { id: ModId; stage: number; label: string; icon: string; desc: st
 
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
+const kr = (n: number) => Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " kr";
+const GREIDSLA: Record<string, string> = { kort: "Kort", reikningur: "Reikningur", reidufe: "Reiðufé" };
+
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("is-IS", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+const fmtDateTime = (d: string) => new Date(d).toLocaleString("is-IS", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function status(naesta: string | null): "ok" | "warn" | "late" {
   if (!naesta) return "ok";
@@ -72,16 +88,28 @@ export default function KerfiClient() {
   const [loading, setLoading] = useState(true);
   const [nyrOpen, setNyrOpen] = useState(false);
 
+  const [vorur, setVorur] = useState<Vara[]>([]);
+  const [solur, setSolur] = useState<SalaRec[]>([]);
+  const [salaTab, setSalaTab] = useState<"afgreidsla" | "solur">("afgreidsla");
+  const [cart, setCart] = useState<Record<number, number>>({});
+  const [salaKunni, setSalaKunni] = useState<string>("");
+  const [greidsla, setGreidsla] = useState("kort");
+  const [salaDone, setSalaDone] = useState<SalaRec | null>(null);
+
   async function loadAll() {
     setLoading(true);
     try {
-      const [ks, ts, st] = await Promise.all([
+      const [ks, ts, st, vs, ss] = await Promise.all([
         sbSelect<Kunni[]>("kerfi_vidskiptavinir?select=*&order=nafn"),
         sbSelect<Taeki[]>("kerfi_taeki?select=*"),
         sbSelect<{ lykill: string; gildi: string }[]>("kerfi_stillingar?select=lykill,gildi&lykill=eq.einingar"),
+        sbSelect<Vara[]>("kerfi_vorur?select=*&virk=eq.true&order=rod"),
+        sbSelect<SalaRec[]>("kerfi_solur?select=*&order=buid_til.desc&limit=50"),
       ]);
       setKunnar(ks);
       setTaeki(ts);
+      setVorur(vs);
+      setSolur(ss);
       try {
         const e = JSON.parse(st[0]?.gildi || "[]");
         if (Array.isArray(e) && e.length) setEnabled(e);
@@ -144,6 +172,40 @@ export default function KerfiClient() {
     }).catch(() => {});
     setNyrOpen(false);
     await loadAll();
+  }
+
+  const voruById = useMemo(() => Object.fromEntries(vorur.map((v) => [v.id, v])) as Record<number, Vara>, [vorur]);
+  const cartLines = useMemo(
+    () => Object.entries(cart).map(([id, f]) => ({ v: voruById[Number(id)], f })).filter((l) => l.v),
+    [cart, voruById],
+  );
+  const cartTotal = cartLines.reduce((s, l) => s + l.v.verd * l.f, 0);
+  const cartVsk = cartLines.reduce((s, l) => s + Math.round((l.v.verd - l.v.verd / (1 + l.v.vsk / 100)) * l.f), 0);
+  const cartCount = cartLines.reduce((s, l) => s + l.f, 0);
+  const addToCart = (id: number) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
+  const decCart = (id: number) => setCart((c) => { const n = (c[id] || 0) - 1; const o = { ...c }; if (n <= 0) delete o[id]; else o[id] = n; return o; });
+
+  async function ljukaSolu() {
+    if (!cartLines.length) return;
+    const k = salaKunni ? kunnar.find((x) => x.id === Number(salaKunni)) : null;
+    const rec = {
+      vidskiptavinur_id: k ? k.id : null,
+      vidskiptavinur_nafn: k ? k.nafn : "Laus sala",
+      linur: cartLines.map((l) => ({ heiti: l.v.heiti, verd: l.v.verd, fjoldi: l.f })),
+      samtals: cartTotal,
+      vsk: cartVsk,
+      greidslumati: greidsla,
+    };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kerfi_solur`, {
+      method: "POST",
+      headers: { ...H, Prefer: "return=representation" },
+      body: JSON.stringify(rec),
+    }).then((r) => r.json()).catch(() => null);
+    const saved: SalaRec = Array.isArray(res) && res[0] ? res[0] : { ...rec, id: 0, buid_til: new Date().toISOString() } as SalaRec;
+    setSalaDone(saved);
+    setCart({});
+    setSalaKunni("");
+    setSolur((s) => [saved, ...s]);
   }
 
   const NAV = [
@@ -307,6 +369,82 @@ export default function KerfiClient() {
               </div>
             ))}
           </>
+        ) : view === "sala" ? (
+          <>
+            <div className="k-head">
+              <h1 className="k-h1">Sala</h1>
+              <div className="k-subtabs">
+                <button className={salaTab === "afgreidsla" ? "on" : ""} onClick={() => setSalaTab("afgreidsla")}>Afgreiðsla</button>
+                <button className={salaTab === "solur" ? "on" : ""} onClick={() => setSalaTab("solur")}>Sölur ({solur.length})</button>
+              </div>
+            </div>
+            {salaTab === "afgreidsla" ? (
+              <div className="k-pos">
+                <div className="k-pos-vorur">
+                  {vorur.map((v) => (
+                    <button className="k-vara" key={v.id} onClick={() => addToCart(v.id)}>
+                      <span className="k-vara-teg">{v.tegund === "thjonusta" ? "Þjónusta" : "Vara"}</span>
+                      <b>{v.heiti}</b>
+                      <span className="k-vara-verd">{kr(v.verd)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="k-pos-cart">
+                  <div className="k-cart-h">Karfa{cartCount ? <em>{cartCount}</em> : null}</div>
+                  <select className="k-cart-kunni" value={salaKunni} onChange={(e) => setSalaKunni(e.target.value)}>
+                    <option value="">Laus sala (enginn viðskiptavinur)</option>
+                    {kunnar.map((k) => <option key={k.id} value={k.id}>{k.nafn}</option>)}
+                  </select>
+                  {cartLines.length === 0 ? (
+                    <p className="k-empty">Smelltu á vöru til að bæta í körfu.</p>
+                  ) : (
+                    <>
+                      <div className="k-cart-lines">
+                        {cartLines.map((l) => (
+                          <div className="k-cl" key={l.v.id}>
+                            <span className="k-cl-nafn">{l.v.heiti}</span>
+                            <div className="k-cl-qty">
+                              <button onClick={() => decCart(l.v.id)} aria-label="Fækka">−</button>
+                              <span>{l.f}</span>
+                              <button onClick={() => addToCart(l.v.id)} aria-label="Fjölga">+</button>
+                            </div>
+                            <span className="k-cl-verd">{kr(l.v.verd * l.f)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="k-cart-sum">
+                        <div><span>VSK innifalið</span><span>{kr(cartVsk)}</span></div>
+                        <div className="tot"><span>Samtals</span><span>{kr(cartTotal)}</span></div>
+                      </div>
+                      <div className="k-pay">
+                        {["kort", "reidufe", "reikningur"].map((g) => (
+                          <button key={g} className={greidsla === g ? "on" : ""} onClick={() => setGreidsla(g)}>{GREIDSLA[g]}</button>
+                        ))}
+                      </div>
+                      <button className="k-btn k-ljuka" onClick={ljukaSolu}>Ljúka sölu · {kr(cartTotal)}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="k-card">
+                {solur.length === 0 ? (
+                  <p className="k-empty">Engin sala skráð enn.</p>
+                ) : (
+                  <div className="k-list">
+                    {solur.map((s) => (
+                      <div className="k-row static" key={s.id}>
+                        <span className="k-row-nafn">{s.vidskiptavinur_nafn || "Laus sala"}</span>
+                        <span className="k-row-meta">{(s.linur || []).reduce((a, l) => a + l.fjoldi, 0)} hlutir · {GREIDSLA[s.greidslumati] || s.greidslumati}</span>
+                        <span className="k-row-taeki">{fmtDateTime(s.buid_til)}</span>
+                        <b className="k-sol-tot">{kr(s.samtals)}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         ) : (MODULES.find((m) => m.id === view)?.soon) ? (
           <div className="k-soon-view">
             <span className="k-soon-ico">{MODULES.find((m) => m.id === view)?.icon}</span>
@@ -369,6 +507,25 @@ export default function KerfiClient() {
                 <label>Netfang<input name="netfang" type="email" /></label>
                 <button className="k-btn" type="submit">Vista viðskiptavin</button>
               </form>
+            </aside>
+          </div>
+        )}
+
+        {salaDone && (
+          <div className="k-drawer-wrap" onClick={() => setSalaDone(null)}>
+            <aside className="k-drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="k-receipt">
+                <span className="k-receipt-ok">✓</span>
+                <h2>Sala kláruð</h2>
+                <p className="k-dim">{salaDone.vidskiptavinur_nafn || "Laus sala"} · {GREIDSLA[salaDone.greidslumati] || salaDone.greidslumati}</p>
+                <div className="k-receipt-lines">
+                  {salaDone.linur.map((l, i) => (
+                    <div key={i}><span>{l.fjoldi}× {l.heiti}</span><span>{kr(l.verd * l.fjoldi)}</span></div>
+                  ))}
+                </div>
+                <div className="k-receipt-tot"><span>Samtals</span><span>{kr(salaDone.samtals)}</span></div>
+                <button className="k-btn" onClick={() => setSalaDone(null)}>Loka</button>
+              </div>
             </aside>
           </div>
         )}
