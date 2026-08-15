@@ -2150,3 +2150,71 @@ button.ms-add:hover { border-color:var(--m-org); }
 .site-steps div { background:#f6f7f9; border-radius:13px; padding:16px; }
 .site-steps b { display:block; margin-bottom:6px; }
 .site-steps span { color:#5c6b82; font-size:0.88rem; line-height:1.5; }
+
+/* ============================================================
+   Skjalarinn (/skjalarinn) — document/pdf/file organizer
+   ============================================================ */
+.sk { --s-navy:#0f1626; --s-bg:#f4f5f7; --s-ink:#111a2b; --s-soft:#5c6b82; --s-line:#e6e8ec; --s-org:#e8551f; --s-green:#2fa56b;
+  display:flex; flex-direction:column; min-height:100vh; background:var(--s-bg); color:var(--s-ink); }
+.sk *, .sk *::before { box-sizing:border-box; }
+.sk button { font:inherit; cursor:pointer; }
+.sk a { text-decoration:none; color:inherit; }
+.sk-top { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--s-navy); color:#fff; padding:13px clamp(16px,4vw,34px); }
+.sk-brand { display:flex; align-items:center; gap:11px; }
+.sk-logo { width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:center; font-size:1.15rem; }
+.sk-brand b { font-size:1.12rem; display:block; line-height:1; }
+.sk-brand small { color:#8a99b3; font-family:var(--font-mono),monospace; font-size:0.58rem; letter-spacing:0.14em; text-transform:uppercase; }
+.sk-home { color:#cad4e3; font-weight:600; font-size:0.9rem; }
+.sk-home:hover { color:#fff; }
+.sk-main { flex:1; display:grid; grid-template-columns:230px 1fr; gap:18px; max-width:1200px; width:100%; margin:0 auto; padding:clamp(18px,3vw,30px) clamp(16px,4vw,34px); align-items:start; }
+@media (max-width:800px) { .sk-main { grid-template-columns:1fr; } }
+.sk-side { display:flex; flex-direction:column; gap:14px; position:sticky; top:18px; }
+@media (max-width:800px) { .sk-side { position:static; } }
+.sk-up { background:var(--s-org); color:#fff; border:0; border-radius:11px; padding:13px; font-weight:700; font-size:0.94rem; }
+.sk-up:hover { background:#cf4715; }
+.sk-up:disabled { opacity:0.7; }
+.sk-folders { background:#fff; border:1px solid var(--s-line); border-radius:14px; padding:8px; display:flex; flex-direction:column; gap:2px; }
+.sk-folders button { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; text-align:left; background:none; border:0; border-radius:9px; padding:10px 12px; font-weight:600; font-size:0.9rem; color:var(--s-ink); }
+.sk-folders button:hover { background:#f4f0ea; }
+.sk-folders button.on { background:var(--s-navy); color:#fff; }
+.sk-folders em { font-style:normal; font-family:var(--font-mono),monospace; font-size:0.78rem; color:var(--s-soft); }
+.sk-folders button.on em { color:#cad4e3; }
+.sk-stat { color:var(--s-soft); font-size:0.82rem; padding:0 6px; }
+.sk-content { position:relative; min-height:400px; border-radius:16px; }
+.sk-content.drag { outline:2px dashed var(--s-org); outline-offset:6px; }
+.sk-tools { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.sk-search { flex:1; min-width:180px; font:inherit; padding:11px 14px; border:1px solid var(--s-line); border-radius:11px; background:#fff; }
+.sk-search:focus { outline:0; border-color:var(--s-org); }
+.sk-seg { display:inline-flex; background:#eceef1; border-radius:10px; padding:3px; gap:2px; }
+.sk-seg button { background:none; border:0; border-radius:8px; padding:8px 14px; font-weight:600; font-size:0.84rem; color:var(--s-soft); }
+.sk-seg button.on { background:#fff; color:var(--s-ink); box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.sk-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+.sk-file { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--s-line); border-radius:13px; padding:13px; }
+.sk-file:hover { border-color:#cfd4da; box-shadow:0 8px 22px rgba(17,26,43,0.07); }
+.sk-file-ico { font-size:1.9rem; flex:none; width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#f6f7f9; border-radius:10px; }
+.sk-file-b { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.sk-file-nafn { font-weight:650; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sk-file-nafn:hover { color:var(--s-org); }
+.sk-file-meta { color:var(--s-soft); font-size:0.76rem; }
+.sk-file-mappa { align-self:flex-start; font-size:0.66rem; font-weight:600; color:var(--s-soft); background:#f1f2f5; padding:2px 8px; border-radius:999px; margin-top:2px; }
+.sk-file-act { display:flex; flex-direction:column; gap:5px; flex:none; }
+.sk-file-act button { width:30px; height:30px; border-radius:8px; border:1px solid var(--s-line); background:#fff; font-size:0.82rem; }
+.sk-file-act button:hover { border-color:var(--s-org); }
+.sk-empty { text-align:center; padding:70px 20px; color:var(--s-soft); }
+.sk-empty span { font-size:3rem; }
+.sk-empty p { margin-top:12px; }
+.sk-drop { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(232,85,31,0.06); border-radius:16px; font-weight:700; color:var(--s-org); pointer-events:none; }
+.sk-modal-wrap { position:fixed; inset:0; background:rgba(15,22,38,0.45); display:flex; align-items:center; justify-content:center; z-index:70; padding:20px; }
+.sk-modal { background:#fff; border-radius:16px; width:min(420px,96vw); padding:22px; }
+.sk-modal-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.sk-modal-h h2 { font-size:1.15rem; margin:0; }
+.sk-x { background:#f1f2f5; border:0; width:32px; height:32px; border-radius:8px; color:var(--s-soft); }
+.sk-form { display:flex; flex-direction:column; gap:13px; }
+.sk-form label { display:flex; flex-direction:column; gap:5px; font-size:0.84rem; font-weight:600; color:var(--s-soft); }
+.sk-form input { font:inherit; padding:11px 13px; border:1px solid var(--s-line); border-radius:10px; color:var(--s-ink); background:#fff; }
+.sk-form input:focus { outline:0; border-color:var(--s-org); }
+.sk-form-btns { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:4px; }
+.sk-open { font-weight:650; font-size:0.86rem; color:var(--s-soft); }
+.sk-open:hover { color:var(--s-org); }
+.sk-btn { background:var(--s-navy); color:#fff; border:0; border-radius:10px; padding:11px 20px; font-weight:700; font-size:0.9rem; }
+.sk-btn:hover { background:#1c2b49; }
