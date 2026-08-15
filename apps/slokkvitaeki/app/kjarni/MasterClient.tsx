@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbRpc, sbSelect } from "../lib/supabase";
 
 type Order = { id: number; buid_til: string; nafn: string; samtals: number };
@@ -99,27 +99,46 @@ export default function MasterClient() {
     setSites(Array.isArray(s) ? s : []);
   }
 
+  // Innskráning TÍMABUNDIÐ óvirk (ósk Agnars — kveikir á síðar). Til að kveikja
+  // aftur: fjarlægðu booting/auto-load useEffect og skilaðu gate-inu til baka.
+  const [booting, setBooting] = useState(true);
+
+  async function loadData(sec: string) {
+    const [o, i, p, kk, ks, en] = await Promise.all([
+      sbRpc<Order[]>("kjarni_get_pantanir", { p_leyni: sec }).catch(() => []),
+      sbRpc<Inq[]>("kjarni_get_fyrirspurnir", { p_leyni: sec }).catch(() => []),
+      sbRpc<Page[]>("kjarni_sidur_admin", { p_leyni: sec }).catch(() => []),
+      sbSelect<{ id: number }[]>("kerfi_vidskiptavinir?select=id").catch(() => []),
+      sbSelect<{ samtals: number }[]>("kerfi_solur?select=samtals").catch(() => []),
+      sbSelect<{ gildi: string }[]>("kerfi_stillingar?select=gildi&lykill=eq.einingar").catch(() => []),
+    ]);
+    setOrders(Array.isArray(o) ? o : []);
+    setInq(Array.isArray(i) ? i : []);
+    setSidur(Array.isArray(p) ? p : []);
+    setKKunnar(Array.isArray(kk) ? kk.length : 0);
+    setKSolur(Array.isArray(ks) ? ks : []);
+    try { const e2 = JSON.parse(en[0]?.gildi || "[]"); setEiningar(Array.isArray(e2) ? e2.filter((x: string) => x !== "vidskiptavinir") : []); } catch {}
+    await loadSites();
+  }
+
+  useEffect(() => {
+    (async () => {
+      const sec = "BrunaStjorn2026";
+      setSecret(sec);
+      try { await loadData(sec); } catch {}
+      setUnlocked(true);
+      setBooting(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function openPanel(e: FormEvent) {
     e.preventDefault();
     setErr("");
     try {
       const ok = await sbRpc<string>("kjarni_set_stilling", { p_lykill: "master_innskrad", p_gildi: new Date().toISOString(), p_leyni: secret });
       if (ok !== "ok") { setErr("Rangt leyniorð."); return; }
-      const [o, i, p, kk, ks, en] = await Promise.all([
-        sbRpc<Order[]>("kjarni_get_pantanir", { p_leyni: secret }).catch(() => []),
-        sbRpc<Inq[]>("kjarni_get_fyrirspurnir", { p_leyni: secret }).catch(() => []),
-        sbRpc<Page[]>("kjarni_sidur_admin", { p_leyni: secret }).catch(() => []),
-        sbSelect<{ id: number }[]>("kerfi_vidskiptavinir?select=id").catch(() => []),
-        sbSelect<{ samtals: number }[]>("kerfi_solur?select=samtals").catch(() => []),
-        sbSelect<{ gildi: string }[]>("kerfi_stillingar?select=gildi&lykill=eq.einingar").catch(() => []),
-      ]);
-      setOrders(Array.isArray(o) ? o : []);
-      setInq(Array.isArray(i) ? i : []);
-      setSidur(Array.isArray(p) ? p : []);
-      setKKunnar(Array.isArray(kk) ? kk.length : 0);
-      setKSolur(Array.isArray(ks) ? ks : []);
-      try { const e2 = JSON.parse(en[0]?.gildi || "[]"); setEiningar(Array.isArray(e2) ? e2.filter((x: string) => x !== "vidskiptavinir") : []); } catch {}
-      await loadSites();
+      await loadData(secret);
       setUnlocked(true);
     } catch { setErr("Villa við tengingu."); }
   }
@@ -142,6 +161,16 @@ export default function MasterClient() {
   async function delSite(id: number) {
     setSites((s) => s.filter((x) => x.id !== id));
     await fetch(`${SUPABASE_URL}/rest/v1/kjarni_sites?id=eq.${id}`, { method: "DELETE", headers: H }).catch(() => {});
+  }
+
+  if (booting) {
+    return (
+      <div className="ms-gate">
+        <span className="ms-gate-badge">◉</span>
+        <h1>Kjarni · Stjórnstöð</h1>
+        <p>Hleð…</p>
+      </div>
+    );
   }
 
   if (!unlocked) {
