@@ -16,6 +16,7 @@ import {
   type PartMeasurement,
 } from '@/lib/3dwork/measure';
 import type { FixReport, SimplifyReport } from '@/lib/3dwork/mesh';
+import type { CylinderCut, SolidifyReport } from '@/lib/3dwork/solidify';
 import { inspect } from '@/lib/3dwork/mesh';
 import type { Part, Project, Transform } from '@/lib/3dwork/project';
 import {
@@ -46,6 +47,11 @@ interface InspectorProps {
   onDuplicate: (partId: string) => void;
   onAutoFix: (partId: string, options: { fillHoles: boolean; maxHoleEdges: number }) => void;
   onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
+  onMakeSolid: (
+    partId: string,
+    options: { resolution: number; sealMm: number; bore: CylinderCut | null }
+  ) => void;
+  solidReport: SolidifyReport | null;
   onRevert: (partId: string) => void;
   onSelectVersion: (partId: string, versionId: string) => void;
   onDeleteVersion: (partId: string, versionId: string) => void;
@@ -578,6 +584,8 @@ function RepairTab({
   part,
   onAutoFix,
   onSimplify,
+  onMakeSolid,
+  solidReport,
   onRevert,
   onSelectVersion,
   onDeleteVersion,
@@ -590,6 +598,8 @@ function RepairTab({
   part: Part;
   onAutoFix: InspectorProps['onAutoFix'];
   onSimplify: InspectorProps['onSimplify'];
+  onMakeSolid: InspectorProps['onMakeSolid'];
+  solidReport: SolidifyReport | null;
   onRevert: InspectorProps['onRevert'];
   onSelectVersion: InspectorProps['onSelectVersion'];
   onDeleteVersion: InspectorProps['onDeleteVersion'];
@@ -601,6 +611,11 @@ function RepairTab({
   const [fillHoles, setFillHoles] = useState(true);
   const [maxHoleEdges, setMaxHoleEdges] = useState(200);
   const [detail, setDetail] = useState('medium');
+  const [resolution, setResolution] = useState(200);
+  const [sealMm, setSealMm] = useState(0.8);
+  const [bore, setBore] = useState(false);
+  const [boreDiameter, setBoreDiameter] = useState(28);
+  const [boreAxis, setBoreAxis] = useState<'x' | 'y' | 'z'>('z');
   const topology = useMemo(() => inspect(soup), [soup]);
   const level = DETAIL_LEVELS.find((entry) => entry.id === detail) ?? DETAIL_LEVELS[1];
 
@@ -665,6 +680,120 @@ function RepairTab({
           {busy ? 'Working…' : 'Auto fix this part'}
         </button>
       </div>
+
+      <div className={`${PANEL} space-y-2 px-3 py-2`}>
+        <div className="flex items-center justify-between">
+          <span className={LABEL}>Make solid</span>
+          {!topology.watertight && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-amber-700">
+              suggested
+            </span>
+          )}
+        </div>
+
+        <p className="text-[0.65rem] text-slate-500">
+          Rebuilds the part from scratch through a voxel grid instead of patching its edges.
+          Missing faces, holes, doubled shells and surfaces crossing each other all stop mattering,
+          because none of the original triangles survive. Detail finer than one voxel is lost.
+        </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className={`${LABEL} mb-1 block`}>Detail (voxels)</span>
+            <select
+              className={FIELD}
+              value={resolution}
+              onChange={(event) => setResolution(Number(event.target.value))}
+            >
+              <option value={96}>96 · fastest</option>
+              <option value={144}>144 · quick</option>
+              <option value={200}>200 · balanced</option>
+              <option value={260}>260 · fine</option>
+            </select>
+          </label>
+          <NumberField label="Seal gaps up to (mm)" value={sealMm} step={0.2} onChange={setSealMm} />
+        </div>
+
+        <Row label="Voxel size">
+          {formatLength(Math.max(...topology.bounds.size) / resolution)}
+        </Row>
+
+        <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
+          <input
+            type="checkbox"
+            checked={bore}
+            onChange={(event) => setBore(event.target.checked)}
+            className="accent-emerald-600"
+          />
+          Bore a hole through it
+        </label>
+
+        {bore && (
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField label="Bore ⌀ (mm)" value={boreDiameter} onChange={setBoreDiameter} />
+            <label className="block">
+              <span className={`${LABEL} mb-1 block`}>Along axis</span>
+              <select
+                className={FIELD}
+                value={boreAxis}
+                onChange={(event) => setBoreAxis(event.target.value as 'x' | 'y' | 'z')}
+              >
+                <option value="x">X</option>
+                <option value="y">Y</option>
+                <option value="z">Z</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className={`${ACTION_PRIMARY} w-full`}
+          disabled={busy}
+          onClick={() => {
+            const centreOf = (axis: 'x' | 'y' | 'z'): [number, number] => {
+              const index = { x: 0, y: 1, z: 2 }[axis];
+              const others = [0, 1, 2].filter((i) => i !== index);
+              return [topology.bounds.center[others[0]], topology.bounds.center[others[1]]];
+            };
+            onMakeSolid(part.id, {
+              resolution,
+              sealMm,
+              bore: bore
+                ? { axis: boreAxis, diameter: boreDiameter, center: centreOf(boreAxis) }
+                : null,
+            });
+          }}
+        >
+          {busy ? 'Working…' : bore ? 'Make solid + bore' : 'Make solid'}
+        </button>
+      </div>
+
+      {solidReport && (
+        <div className={`${PANEL} px-3 py-2`}>
+          <span className={`${LABEL} mb-1 block`}>Last rebuild</span>
+          <Row label="Voxel size">{formatLength(solidReport.voxelSize)}</Row>
+          <Row label="Grid">{solidReport.grid.join(' × ')}</Row>
+          <Row label="Triangles">
+            {formatCount(solidReport.trianglesBefore)} →{' '}
+            <span className="text-emerald-600">{formatCount(solidReport.trianglesAfter)}</span>
+          </Row>
+          <Row label="Open edges">
+            <span
+              className={
+                solidReport.after.boundaryEdges === 0 ? 'text-emerald-600' : 'text-amber-600'
+              }
+            >
+              {formatCount(solidReport.after.boundaryEdges)}
+            </span>
+          </Row>
+          <Row label="Flipped faces">{formatCount(solidReport.after.inconsistentEdges)}</Row>
+          <Row label="Non-manifold">{formatCount(solidReport.after.nonManifoldEdges)}</Row>
+          {solidReport.cutVoxels > 0 && (
+            <Row label="Bored away">{formatVolume(solidReport.cutVoxels * solidReport.voxelSize ** 3)}</Row>
+          )}
+        </div>
+      )}
 
       <div className={`${PANEL} space-y-2 px-3 py-2`}>
         <span className={`${LABEL} block`}>Simplify for printing</span>
@@ -891,6 +1020,8 @@ export function Inspector(props: InspectorProps) {
             part={part}
             onAutoFix={props.onAutoFix}
             onSimplify={props.onSimplify}
+            onMakeSolid={props.onMakeSolid}
+            solidReport={props.solidReport}
             onRevert={props.onRevert}
             onSelectVersion={props.onSelectVersion}
             onDeleteVersion={props.onDeleteVersion}

@@ -21,6 +21,7 @@ import {
   Maximize,
   PanelLeft,
   PanelRight,
+  Combine,
   Save,
   Sparkles,
   Trash2,
@@ -75,6 +76,7 @@ import {
   type HardwareKind,
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
+import { makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
 import { createZip, safeFileName } from '@/lib/3dwork/zip';
 import { emptySketch, toSvg, type Sketch } from '@/lib/3dwork/sketch';
 import { silhouette, type Outline2D, type ViewPlane } from '@/lib/3dwork/silhouette';
@@ -87,7 +89,7 @@ import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
-import { LABEL, PANEL } from './ui';
+import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 
 type Mode = 'assembled' | 'scattered';
 type Workspace = 'bench' | 'sketch';
@@ -127,6 +129,9 @@ export function Workbench() {
   const [busy, setBusy] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [simplifyReport, setSimplifyReport] = useState<SimplifyReport | null>(null);
+  const [solidReport, setSolidReport] = useState<SolidifyReport | null>(null);
+  const [showWeld, setShowWeld] = useState(false);
+  const [weldBore, setWeldBore] = useState({ diameter: 28, axis: 'x' as 'x' | 'y' | 'z' });
   const [frameToken, setFrameToken] = useState(0);
   const [dragging, setDragging] = useState(false);
 
@@ -819,6 +824,53 @@ export function Workbench() {
     [soupOfPart, addVersion]
   );
 
+  /**
+   * Rebuild a part as a watertight solid, optionally boring a hole through it.
+   * This is the route for meshes too damaged for edge repair to touch.
+   */
+  const runMakeSolid = useCallback(
+    (
+      partId: string,
+      options: { resolution: number; sealMm: number; bore: CylinderCut | null }
+    ) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Rebuilding as a solid…');
+      setTimeout(() => {
+        try {
+          const result = makeSolid(soup, {
+            resolution: options.resolution,
+            sealMm: options.sealMm,
+            cuts: options.bore ? [options.bore] : [],
+          });
+
+          if (result.report.trianglesAfter === 0) {
+            toast.error('Nothing solid was found — try a larger seal distance.');
+            return;
+          }
+
+          addVersion(
+            partId,
+            result.soup,
+            options.bore ? 'solid + bore' : 'solid',
+            `${result.report.voxelSize.toFixed(2)} mm voxels`
+          );
+          setSolidReport(result.report);
+          toast.success(
+            `Rebuilt watertight · ${formatCount(result.report.trianglesAfter)} triangles · ` +
+              `${result.report.after.boundaryEdges} open edges`
+          );
+        } catch {
+          toast.error('Could not rebuild that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
   const revertPart = useCallback(
     (partId: string) => {
       const part = project.parts.find((candidate) => candidate.id === partId);
@@ -922,6 +974,20 @@ export function Workbench() {
     return baked;
   }, [project, geometries]);
 
+  /** Bounding box of the fitted assembly, used to centre a bore through it. */
+  const assemblyBounds = useCallback(() => {
+    const baked = bakedAssembly();
+    let total = 0;
+    for (const entry of baked) total += entry.soup.length;
+    const merged = new Float32Array(total);
+    let offset = 0;
+    for (const entry of baked) {
+      merged.set(entry.soup, offset);
+      offset += entry.soup.length;
+    }
+    return computeBounds(merged);
+  }, [bakedAssembly]);
+
   const exportCombined = useCallback(() => {
     const baked = bakedAssembly();
     if (baked.length === 0) {
@@ -977,6 +1043,59 @@ export function Workbench() {
       }
     }, 30);
   }, [bakedAssembly, project.name]);
+
+  /**
+   * Weld every fitted part into a single watertight solid, optionally with a
+   * bore through it. Voxelising several meshes at once *is* the union, so the
+   * parts fuse where they touch and the overlaps are absorbed rather than left
+   * as surfaces crossing each other.
+   */
+  const weldAssembly = useCallback(
+    (options: { resolution: number; sealMm: number; bore: CylinderCut | null }) => {
+      const baked = bakedAssembly();
+      if (baked.length === 0) {
+        toast.error('Nothing is fitted to the blaster yet.');
+        return;
+      }
+
+      setBusy(`Welding ${baked.length} parts into one solid…`);
+      setTimeout(() => {
+        try {
+          let total = 0;
+          for (const entry of baked) total += entry.soup.length;
+          const merged = new Float32Array(total);
+          let offset = 0;
+          for (const entry of baked) {
+            merged.set(entry.soup, offset);
+            offset += entry.soup.length;
+          }
+
+          const result = makeSolid(merged, {
+            resolution: options.resolution,
+            sealMm: options.sealMm,
+            cuts: options.bore ? [options.bore] : [],
+          });
+          setSolidReport(result.report);
+
+          download(
+            new Blob([exportBinaryStl([result.soup], `${project.name} welded`)], {
+              type: 'model/stl',
+            }),
+            `${project.name.replace(/\s+/g, '_')}_welded_solid.stl`
+          );
+          toast.success(
+            `Welded ${baked.length} parts · ${formatCount(result.report.trianglesAfter)} triangles · ` +
+              `${result.report.after.boundaryEdges} open edges`
+          );
+        } catch {
+          toast.error('Could not weld the assembly.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [bakedAssembly, project.name]
+  );
 
   const exportSplitZip = useCallback(() => {
     const parts = project.parts.filter((part) => geometries.has(part.activeVersionId));
@@ -1449,12 +1568,30 @@ export function Workbench() {
               Fix all parts
             </MenuItem>
             <MenuSeparator />
-            <MenuLabel>Not built yet</MenuLabel>
-            <MenuItem disabled hint="Needs the CSG kernel — next on the list">
-              Slice through…
+            <MenuLabel>Weld the build</MenuLabel>
+            <MenuItem
+              onClick={() =>
+                weldAssembly({ resolution: 200, sealMm: 0.8, bore: null })
+              }
+              disabled={Boolean(busy) || assemblyTotals.parts === 0}
+              icon={Combine}
+              tone="primary"
+              hint="Fuses every fitted part into one watertight solid"
+            >
+              Weld fitted parts into one solid
             </MenuItem>
-            <MenuItem disabled hint="Needs the CSG kernel — next on the list">
-              Subtract part…
+            <MenuItem
+              onClick={() => setShowWeld(true)}
+              disabled={Boolean(busy) || assemblyTotals.parts === 0}
+              icon={Combine}
+              hint="Same, with a pipe bore straight through"
+            >
+              Weld around a bore…
+            </MenuItem>
+            <MenuSeparator />
+            <MenuLabel>Not built yet</MenuLabel>
+            <MenuItem disabled hint="Cutting a part into printable pieces">
+              Slice through…
             </MenuItem>
             <MenuItem disabled hint="Needs multi-select first">
               Group / ungroup
@@ -1747,6 +1884,8 @@ export function Workbench() {
             onDuplicate={duplicatePart}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
+            onMakeSolid={runMakeSolid}
+            solidReport={solidReport}
             onRevert={revertPart}
             onSelectVersion={selectVersion}
             onDeleteVersion={deleteVersion}
@@ -1764,6 +1903,84 @@ export function Workbench() {
         </div>
         )}
       </div>
+      )}
+
+      {showWeld && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className={`${PANEL} w-full max-w-md p-4`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Weld the build around a bore</h2>
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              Every fitted part is fused into one watertight solid and the bore is cut straight
+              through it. The parts do not need to be valid meshes — they are rebuilt, not merged.
+            </p>
+
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Bore ⌀ (mm)</span>
+                <input
+                  type="number"
+                  className={FIELD}
+                  value={weldBore.diameter}
+                  onChange={(event) =>
+                    setWeldBore((current) => ({
+                      ...current,
+                      diameter: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Along axis</span>
+                <select
+                  className={FIELD}
+                  value={weldBore.axis}
+                  onChange={(event) =>
+                    setWeldBore((current) => ({
+                      ...current,
+                      axis: event.target.value as 'x' | 'y' | 'z',
+                    }))
+                  }
+                >
+                  <option value="x">X — along the barrel</option>
+                  <option value="y">Y — vertical</option>
+                  <option value="z">Z — across</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className={ACTION_GHOST}
+                onClick={() => setShowWeld(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={ACTION_PRIMARY}
+                onClick={() => {
+                  setShowWeld(false);
+                  // Bore through the centre of everything currently fitted.
+                  const index = { x: 0, y: 1, z: 2 }[weldBore.axis];
+                  const others = [0, 1, 2].filter((i) => i !== index);
+                  const box = assemblyBounds();
+                  weldAssembly({
+                    resolution: 200,
+                    sealMm: 0.8,
+                    bore: {
+                      axis: weldBore.axis,
+                      diameter: weldBore.diameter,
+                      center: [box.center[others[0]], box.center[others[1]]],
+                    },
+                  });
+                }}
+              >
+                Weld &amp; bore
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showSteel && (
