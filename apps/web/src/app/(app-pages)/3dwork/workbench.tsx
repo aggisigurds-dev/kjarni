@@ -25,6 +25,8 @@ import {
   Combine,
   Save,
   Scissors,
+  Layers,
+  Spline,
   Sparkles,
   Trash2,
   Upload,
@@ -48,6 +50,14 @@ import {
 } from '@/lib/3dwork/measure';
 import { exportBinaryStl, parseStl } from '@/lib/3dwork/stl';
 import { is3mf, parse3mf } from '@/lib/3dwork/threemf';
+import { DEFAULT_BEND, bendLabel, bendMesh, bendReport, type BendSpec } from '@/lib/3dwork/bend';
+import {
+  DEFAULT_SHELL,
+  SHELL_LABELS,
+  shellSurface,
+  type ShellDirection,
+  type ShellOptions,
+} from '@/lib/3dwork/shell';
 import {
   assembledPlacement,
   createProject,
@@ -139,6 +149,10 @@ export function Workbench() {
   const [showWeld, setShowWeld] = useState(false);
   const [showSlice, setShowSlice] = useState(false);
   const [showBore, setShowBore] = useState(false);
+  const [showBend, setShowBend] = useState(false);
+  const [showShell, setShowShell] = useState(false);
+  const [shellSpec, setShellSpec] = useState<ShellOptions>(DEFAULT_SHELL);
+  const [bendSpec, setBendSpec] = useState<BendSpec>(DEFAULT_BEND);
   const [sliceSpec, setSliceSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', position: 0, keepBoth: true });
   const [boreSpec, setBoreSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', diameter: 28, cu: 0, cv: 0 });
   const [weldBore, setWeldBore] = useState({ diameter: 28, axis: 'x' as 'x' | 'y' | 'z' });
@@ -1044,6 +1058,53 @@ export function Workbench() {
   );
 
   /**
+   * Give the selected part a wall of a set thickness.
+   *
+   * On a closed part this hollows it or pads it; on an open surface it
+   * thickens it into something printable. One of the two faces is always the
+   * part's own triangles, so that side keeps its detail exactly.
+   */
+  const runShell = useCallback(
+    (options: ShellOptions) => {
+      const part = selectedPart;
+      const soup = part ? soupOfPart(part.id) : undefined;
+      if (!part || !soup) return;
+
+      if (options.thickness <= 0) {
+        toast.error('Give the wall a thickness above zero.');
+        return;
+      }
+
+      setBusy('Building the wall…');
+      setTimeout(() => {
+        try {
+          const result = shellSurface(soup, options);
+          const mm3 = result.report.wallVolume;
+
+          addVersion(
+            part.id,
+            result.soup,
+            `${options.thickness} mm wall`,
+            `${options.direction} · ${result.report.wasClosed ? 'hollowed' : 'thickened'}`
+          );
+
+          toast.success(
+            `${options.thickness} mm wall ${options.direction} · ` +
+              `${(mm3 / 1000).toFixed(1)} cm³ of material · ` +
+              `${formatCount(result.report.trianglesAfter)} triangles`
+          );
+          for (const warning of result.report.warnings) toast.error(warning);
+        } catch {
+          toast.error('Could not build a wall on that part.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [selectedPart, soupOfPart, addVersion]
+  );
+
+  /**
    * Delete the geometry sealed inside the part, keeping the visible surface
    * exactly as it is. Useful before anything else, since buried walls are what
    * produce most non-manifold edges.
@@ -1505,6 +1566,72 @@ export function Workbench() {
     [project, patchProject]
   );
 
+  /**
+   * Add a bent length of pipe as a part of its own.
+   *
+   * It is not stored as hardware: the hardware editor only knows straight
+   * stock, and offering it a bend it cannot represent would silently
+   * straighten the part on the next edit.
+   */
+  const addBend = useCallback(
+    (spec: BendSpec) => {
+      const soup = bendMesh(spec);
+      const id = newPartId();
+      const versionId = newVersionId();
+      const color = nextColor(project);
+      const triangles = Math.floor(soup.length / 9);
+      const report = bendReport(spec);
+
+      setGeometries((current) => new Map(current).set(versionId, soup));
+      void saveGeometry(versionId, soup);
+
+      patchProject((current) => ({
+        ...current,
+        parts: [
+          ...current.parts,
+          {
+            id,
+            name: bendLabel(spec),
+            fileName: '',
+            slotId: '',
+            color,
+            visible: true,
+            transform: {
+              position: { x: 0, y: 0, z: 0 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+            },
+            triangles,
+            materialId: 'steel',
+            notes: [
+              `Cut ${spec.length.toFixed(1)} mm of stock.`,
+              `Bend ${spec.angle}° at R${spec.radius} starting ${report.legIn.toFixed(1)} mm from the end.`,
+              `Arc takes ${report.arcLength.toFixed(1)} mm; ${report.legOut.toFixed(1)} mm left after it.`,
+              `Finished span ${report.span.toFixed(1)} mm.`,
+            ].join('\n'),
+            versions: [
+              {
+                id: versionId,
+                label: 'v1 generated',
+                note: bendLabel(spec),
+                triangles,
+                createdAt: Date.now(),
+              },
+            ],
+            activeVersionId: versionId,
+            thumbnail: renderThumbnail(soup, color),
+            addedAt: Date.now(),
+          },
+        ],
+      }));
+
+      setSelectedId(id);
+      setFrameToken((token) => token + 1);
+      toast.success(`Added ${bendLabel(spec)}.`);
+    },
+    [project, patchProject]
+  );
+
   /** Re-generate a hardware part after its numbers change. */
   const updateHardware = useCallback(
     (partId: string, spec: HardwareSpec) => {
@@ -1726,6 +1853,11 @@ export function Workbench() {
               </MenuItem>
             ))}
             <MenuSeparator />
+            <MenuLabel>Bent stock</MenuLabel>
+            <MenuItem onClick={() => setShowBend(true)} icon={Spline} hint="Straight-arc-straight, on a die radius">
+              Bend a pipe…
+            </MenuItem>
+            <MenuSeparator />
             <MenuLabel>Threaded bolt</MenuLabel>
             <MenuScroll>
               {THREAD_STANDARDS.map((thread) => (
@@ -1848,6 +1980,14 @@ export function Workbench() {
               hint="Deletes walls sealed inside; opens the shell where they met it"
             >
               Strip buried geometry
+            </MenuItem>
+            <MenuItem
+              onClick={() => setShowShell(true)}
+              disabled={!selectedId || Boolean(busy)}
+              icon={Layers}
+              hint="Hollow a solid, or give an open surface thickness"
+            >
+              Wall thickness…
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Not built yet</MenuLabel>
@@ -2323,6 +2463,220 @@ export function Workbench() {
                 }}
               >
                 Bore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showShell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className={`${PANEL} w-full max-w-md p-4`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Give it a wall</h2>
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              On a closed part this leaves a wall of the thickness you set and hollows out behind
+              it. On an open surface it gives the surface thickness and walls the rim, so it comes
+              out printable. Whichever face ends up outermost is the part&rsquo;s own triangles,
+              unmoved.
+            </p>
+
+            <label className="mb-3 block">
+              <span className={`${LABEL} mb-1 block`}>Thickness (mm)</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                className={FIELD}
+                value={shellSpec.thickness}
+                onChange={(event) =>
+                  setShellSpec((current) => ({ ...current, thickness: Number(event.target.value) }))
+                }
+              />
+            </label>
+
+            <span className={`${LABEL} mb-1 block`}>Which way the material goes</span>
+            <div className="mb-3 space-y-1">
+              {(Object.keys(SHELL_LABELS) as ShellDirection[]).map((direction) => (
+                <label
+                  key={direction}
+                  className={`flex cursor-pointer items-start gap-2 rounded-md border p-2 text-[0.7rem] ${
+                    shellSpec.direction === direction
+                      ? 'border-slate-400 bg-slate-100'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="shell-direction"
+                    className="mt-0.5"
+                    checked={shellSpec.direction === direction}
+                    onChange={() => setShellSpec((current) => ({ ...current, direction }))}
+                  />
+                  <span className="text-slate-700">{SHELL_LABELS[direction]}</span>
+                </label>
+              ))}
+            </div>
+
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              Where the surface curves in tighter than the thickness, the two faces cross over each
+              other. Keep the wall under the smallest detail you want to survive.
+            </p>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ACTION_GHOST} onClick={() => setShowShell(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={ACTION_PRIMARY}
+                onClick={() => {
+                  setShowShell(false);
+                  runShell(shellSpec);
+                }}
+              >
+                Build the wall
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className={`${PANEL} w-full max-w-lg p-4`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Bend a pipe</h2>
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              The length is the straight stock you cut. Bending moves that material round the die
+              rather than adding to it, so the arc is taken out of what is left after the first leg.
+            </p>
+
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Stock length (mm)</span>
+                <input
+                  type="number"
+                  step="1"
+                  className={FIELD}
+                  value={bendSpec.length}
+                  onChange={(event) =>
+                    setBendSpec((current) => ({ ...current, length: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Outside ⌀ (mm)</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={FIELD}
+                  value={bendSpec.diameter}
+                  onChange={(event) =>
+                    setBendSpec((current) => ({ ...current, diameter: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Wall (mm)</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  className={FIELD}
+                  value={bendSpec.wall ?? 0}
+                  onChange={(event) =>
+                    setBendSpec((current) => ({ ...current, wall: Number(event.target.value) }))
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Angle (°)</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="180"
+                  className={FIELD}
+                  value={bendSpec.angle}
+                  onChange={(event) =>
+                    setBendSpec((current) => ({ ...current, angle: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Die radius (mm)</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  className={FIELD}
+                  value={bendSpec.radius}
+                  onChange={(event) =>
+                    setBendSpec((current) => ({ ...current, radius: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Bend starts at (mm)</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  className={FIELD}
+                  value={bendSpec.start}
+                  onChange={(event) =>
+                    setBendSpec((current) => ({ ...current, start: Number(event.target.value) }))
+                  }
+                />
+              </label>
+            </div>
+
+            {(() => {
+              const report = bendReport(bendSpec);
+              const rows: [string, string][] = [
+                ['Leg before the bend', `${report.legIn.toFixed(1)} mm`],
+                ['Arc', `${report.arcLength.toFixed(1)} mm`],
+                ['Leg after the bend', `${report.legOut.toFixed(1)} mm`],
+                ['Finished span, end to end', `${report.span.toFixed(1)} mm`],
+                ['Die reaches back', `${report.tangentOffset.toFixed(1)} mm each side`],
+                ['Radius / diameter', report.radiusToDiameter.toFixed(2)],
+              ];
+              return (
+                <>
+                  <dl className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-md bg-slate-100 p-3 text-[0.7rem]">
+                    {rows.map(([label, value]) => (
+                      <div key={label} className="flex justify-between gap-2">
+                        <dt className="text-slate-500">{label}</dt>
+                        <dd className="font-bold tabular-nums text-slate-900">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {report.warnings.length > 0 && (
+                    <ul className="mb-3 space-y-1 rounded-md bg-amber-50 p-3 text-[0.7rem] text-amber-900">
+                      {report.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              );
+            })()}
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ACTION_GHOST} onClick={() => setShowBend(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={ACTION_PRIMARY}
+                onClick={() => {
+                  setShowBend(false);
+                  addBend(bendSpec);
+                }}
+              >
+                Add bent pipe
               </button>
             </div>
           </div>
