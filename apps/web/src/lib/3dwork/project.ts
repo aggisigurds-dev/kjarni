@@ -4,6 +4,8 @@
  * table so alternatives for each slot sit side by side.
  */
 
+import type { HardwareSpec } from './hardware';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -18,6 +20,22 @@ export interface Transform {
   scale: Vec3;
 }
 
+/**
+ * One saved state of a part's geometry.
+ *
+ * Repairing is destructive and not always right, so a fix never overwrites: it
+ * adds a version and switches to it. The damaged original stays exactly as
+ * imported and you can flip back to compare at any time. Geometry is stored
+ * against the version id, not the part id.
+ */
+export interface PartVersion {
+  id: string;
+  label: string;
+  note: string;
+  triangles: number;
+  createdAt: number;
+}
+
 export interface Part {
   id: string;
   name: string;
@@ -30,9 +48,21 @@ export interface Part {
   triangles: number;
   materialId: string;
   notes: string;
+  versions: PartVersion[];
+  activeVersionId: string;
+  /** Set when the part is generated stock rather than an imported mesh. */
+  hardware?: HardwareSpec;
   /** Data-URL preview rendered when the part was loaded. */
   thumbnail?: string;
   addedAt: number;
+}
+
+export function activeVersion(part: Part): PartVersion | undefined {
+  return part.versions.find((version) => version.id === part.activeVersionId);
+}
+
+export function nextVersionLabel(part: Part): string {
+  return `v${part.versions.length + 1}`;
 }
 
 export interface Slot {

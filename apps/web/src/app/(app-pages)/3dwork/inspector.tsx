@@ -15,7 +15,7 @@ import {
   type Axis,
   type PartMeasurement,
 } from '@/lib/3dwork/measure';
-import type { FixReport } from '@/lib/3dwork/mesh';
+import type { FixReport, SimplifyReport } from '@/lib/3dwork/mesh';
 import { inspect } from '@/lib/3dwork/mesh';
 import type { Part, Project, Transform } from '@/lib/3dwork/project';
 import {
@@ -26,6 +26,7 @@ import {
   formatVolume,
   type Unit,
 } from '@/lib/3dwork/format';
+import { HARDWARE_LABELS, hardwareOverallLength, type HardwareSpec } from '@/lib/3dwork/hardware';
 import { scaleSoup } from './bake';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, VALUE } from './ui';
 
@@ -44,7 +45,14 @@ interface InspectorProps {
   onCenter: (partId: string) => void;
   onDuplicate: (partId: string) => void;
   onAutoFix: (partId: string, options: { fillHoles: boolean; maxHoleEdges: number }) => void;
+  onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
+  onRevert: (partId: string) => void;
+  onSelectVersion: (partId: string, versionId: string) => void;
+  onDeleteVersion: (partId: string, versionId: string) => void;
+  onUpdateHardware: (partId: string, spec: HardwareSpec) => void;
+  canRevert: boolean;
   fixReport: FixReport | null;
+  simplifyReport: SimplifyReport | null;
   busy: boolean;
   measurePoints: [number, number, number][];
   measuring: boolean;
@@ -105,8 +113,8 @@ function TabButton({
       onClick={onClick}
       className={`flex-1 px-2 py-2 text-[0.65rem] font-extrabold uppercase tracking-[0.05em] transition-colors ${
         active
-          ? 'border-b-2 border-emerald-500 text-emerald-400'
-          : 'border-b-2 border-transparent text-slate-500 hover:text-slate-300'
+          ? 'border-b-2 border-emerald-500 text-emerald-600'
+          : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
       }`}
     >
       {children}
@@ -122,6 +130,7 @@ function ModifyTab({
   onDropToTable,
   onCenter,
   onDuplicate,
+  onUpdateHardware,
   measurement,
 }: {
   project: Project;
@@ -131,6 +140,7 @@ function ModifyTab({
   onDropToTable: InspectorProps['onDropToTable'];
   onCenter: InspectorProps['onCenter'];
   onDuplicate: InspectorProps['onDuplicate'];
+  onUpdateHardware: InspectorProps['onUpdateHardware'];
   measurement: PartMeasurement | null;
 }) {
   const { transform } = part;
@@ -166,6 +176,72 @@ function ModifyTab({
 
   return (
     <div className="space-y-4">
+      {part.hardware && (
+        <div className={`${PANEL} space-y-2 px-3 py-2`}>
+          <span className={`${LABEL} block`}>
+            {HARDWARE_LABELS[part.hardware.kind]} — generated stock
+          </span>
+
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField
+              label="Length mm"
+              value={part.hardware.length}
+              onChange={(value) =>
+                onUpdateHardware(part.id, { ...part.hardware!, length: Math.max(1, value) })
+              }
+            />
+            <NumberField
+              label={part.hardware.kind === 'pipe' ? 'Outside Ø mm' : 'Ø mm'}
+              value={part.hardware.diameter}
+              onChange={(value) =>
+                onUpdateHardware(part.id, { ...part.hardware!, diameter: Math.max(0.5, value) })
+              }
+            />
+            {part.hardware.kind === 'pipe' && (
+              <NumberField
+                label="Wall mm"
+                step={0.1}
+                value={part.hardware.wall ?? 1}
+                onChange={(value) =>
+                  onUpdateHardware(part.id, { ...part.hardware!, wall: Math.max(0.05, value) })
+                }
+              />
+            )}
+            {(part.hardware.kind === 'bolt' || part.hardware.kind === 'screw') && (
+              <>
+                <NumberField
+                  label="Thread pitch"
+                  step={0.05}
+                  value={part.hardware.threadPitch ?? 1.5}
+                  onChange={(value) =>
+                    onUpdateHardware(part.id, { ...part.hardware!, threadPitch: value })
+                  }
+                />
+                <NumberField
+                  label="Head Ø mm"
+                  value={part.hardware.headDiameter ?? part.hardware.diameter * 1.5}
+                  onChange={(value) =>
+                    onUpdateHardware(part.id, { ...part.hardware!, headDiameter: value })
+                  }
+                />
+                <NumberField
+                  label="Head height"
+                  value={part.hardware.headHeight ?? part.hardware.diameter * 0.6}
+                  onChange={(value) =>
+                    onUpdateHardware(part.id, { ...part.hardware!, headHeight: value })
+                  }
+                />
+              </>
+            )}
+          </div>
+
+          <Row label="Overall length">{formatLength(hardwareOverallLength(part.hardware))}</Row>
+          <p className="text-[0.65rem] text-slate-500">
+            Change a number and the mesh is rebuilt in place. The measurements below follow.
+          </p>
+        </div>
+      )}
+
       <label className="block">
         <span className={`${LABEL} mb-1 block`}>Name</span>
         <input
@@ -214,7 +290,7 @@ function ModifyTab({
           type="color"
           value={part.color}
           onChange={(event) => onPatchPart(part.id, { color: event.target.value })}
-          className="h-7 w-14 cursor-pointer rounded border border-slate-700 bg-slate-950"
+          className="h-7 w-14 cursor-pointer rounded border border-slate-300 bg-slate-200"
         />
       </label>
 
@@ -241,7 +317,7 @@ function ModifyTab({
                 key={axis}
                 type="button"
                 onClick={() => spin(axis)}
-                className="flex items-center gap-0.5 rounded border border-slate-700 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-slate-400 hover:border-emerald-500 hover:text-emerald-400"
+                className="flex items-center gap-0.5 rounded border border-slate-300 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-slate-500 hover:border-emerald-500 hover:text-emerald-600"
                 title={`Rotate 90° about ${axis.toUpperCase()}`}
               >
                 <RotateCw className="h-2.5 w-2.5" />
@@ -272,7 +348,7 @@ function ModifyTab({
                 key={axis}
                 type="button"
                 onClick={() => mirror(axis)}
-                className="rounded border border-slate-700 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-slate-400 hover:border-emerald-500 hover:text-emerald-400"
+                className="rounded border border-slate-300 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-slate-500 hover:border-emerald-500 hover:text-emerald-600"
                 title={`Mirror along ${axis.toUpperCase()}`}
               >
                 ⇄ {axis}
@@ -397,7 +473,7 @@ function MeasureTab({
         <Row label={`Mass · ${materialById(part.materialId).name}`}>{formatMass(mass)}</Row>
         <Row label="Triangles">{formatCount(measurement.triangles)}</Row>
         <Row label="Watertight">
-          <span className={measurement.watertight ? 'text-emerald-400' : 'text-amber-400'}>
+          <span className={measurement.watertight ? 'text-emerald-600' : 'text-amber-600'}>
             {measurement.watertight ? 'yes' : 'no — volume is an estimate'}
           </span>
         </Row>
@@ -407,7 +483,7 @@ function MeasureTab({
         <div className="mb-1 flex items-center justify-between">
           <span className={LABEL}>Pipe / tube</span>
           <select
-            className="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[0.6rem] text-slate-300"
+            className="rounded border border-slate-300 bg-slate-200 px-1 py-0.5 text-[0.6rem] text-slate-700"
             value={axis}
             onChange={(event) => setAxis(event.target.value as Axis | 'auto')}
             aria-label="Measurement axis"
@@ -445,7 +521,7 @@ function MeasureTab({
             type="button"
             onClick={onToggleMeasuring}
             className={`flex items-center gap-1 rounded px-2 py-0.5 text-[0.6rem] font-extrabold uppercase ${
-              measuring ? 'bg-amber-400 text-slate-950' : 'border border-slate-700 text-slate-400'
+              measuring ? 'bg-amber-500 text-white' : 'border border-slate-300 text-slate-500'
             }`}
           >
             <Ruler className="h-3 w-3" />
@@ -489,22 +565,44 @@ function MeasureTab({
   );
 }
 
+/** Cluster cell as a fraction of the part's diagonal, coarsest first. */
+const DETAIL_LEVELS: { id: string; label: string; strength: number; note: string }[] = [
+  { id: 'light', label: 'Light', strength: 0.002, note: 'Barely visible. Trims dense curves.' },
+  { id: 'medium', label: 'Medium', strength: 0.004, note: 'Keeps shape and holes. Good default.' },
+  { id: 'strong', label: 'Strong', strength: 0.01, note: 'Softens small detail and lettering.' },
+  { id: 'brutal', label: 'Brutal', strength: 0.02, note: 'Blocky. For mock-ups and test fits.' },
+];
+
 function RepairTab({
   soup,
   part,
   onAutoFix,
+  onSimplify,
+  onRevert,
+  onSelectVersion,
+  onDeleteVersion,
+  canRevert,
   fixReport,
+  simplifyReport,
   busy,
 }: {
   soup: Float32Array;
   part: Part;
   onAutoFix: InspectorProps['onAutoFix'];
+  onSimplify: InspectorProps['onSimplify'];
+  onRevert: InspectorProps['onRevert'];
+  onSelectVersion: InspectorProps['onSelectVersion'];
+  onDeleteVersion: InspectorProps['onDeleteVersion'];
+  canRevert: boolean;
   fixReport: FixReport | null;
+  simplifyReport: SimplifyReport | null;
   busy: boolean;
 }) {
   const [fillHoles, setFillHoles] = useState(true);
   const [maxHoleEdges, setMaxHoleEdges] = useState(200);
+  const [detail, setDetail] = useState('medium');
   const topology = useMemo(() => inspect(soup), [soup]);
+  const level = DETAIL_LEVELS.find((entry) => entry.id === detail) ?? DETAIL_LEVELS[1];
 
   const problems = [
     topology.boundaryEdges > 0 && `${formatCount(topology.holes)} hole(s)`,
@@ -518,7 +616,7 @@ function RepairTab({
       <div className={`${PANEL} px-3 py-2`}>
         <span className={`${LABEL} mb-1 block`}>Health</span>
         <Row label="Status">
-          <span className={topology.watertight ? 'text-emerald-400' : 'text-amber-400'}>
+          <span className={topology.watertight ? 'text-emerald-600' : 'text-amber-600'}>
             {topology.watertight ? 'print ready' : 'needs repair'}
           </span>
         </Row>
@@ -530,13 +628,13 @@ function RepairTab({
         <Row label="Flipped faces">{formatCount(topology.inconsistentEdges)}</Row>
 
         {problems.length > 0 && (
-          <p className="mt-2 text-[0.7rem] text-amber-400/90">Found: {problems.join(', ')}.</p>
+          <p className="mt-2 text-[0.7rem] text-amber-600/90">Found: {problems.join(', ')}.</p>
         )}
       </div>
 
       <div className={`${PANEL} space-y-2 px-3 py-2`}>
         <span className={`${LABEL} block`}>Auto fix</span>
-        <label className="flex items-center gap-2 text-[0.7rem] text-slate-300">
+        <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
           <input
             type="checkbox"
             checked={fillHoles}
@@ -568,6 +666,136 @@ function RepairTab({
         </button>
       </div>
 
+      <div className={`${PANEL} space-y-2 px-3 py-2`}>
+        <span className={`${LABEL} block`}>Simplify for printing</span>
+
+        <div className="grid grid-cols-4 gap-1">
+          {DETAIL_LEVELS.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setDetail(entry.id)}
+              className={`rounded border px-1 py-1.5 text-[0.6rem] font-bold uppercase transition-colors ${
+                detail === entry.id
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
+                  : 'border-slate-300 text-slate-500 hover:border-slate-400'
+              }`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+
+        <p className="text-[0.65rem] text-slate-500">{level.note}</p>
+        <Row label="Cell size">
+          {formatLength(topology.bounds.diagonal * level.strength)}
+        </Row>
+
+        <p className="text-[0.65rem] text-slate-500">
+          Snaps vertices onto a grid and drops the triangles that collapse. It ignores topology
+          entirely, which is why it works on meshes an edge-collapse decimator refuses — but detail
+          finer than the cell disappears, and two walls closer than the cell merge into one. Keep
+          the cell under your thinnest wall.
+        </p>
+
+        <button
+          type="button"
+          className={`${ACTION_PRIMARY} w-full`}
+          disabled={busy}
+          onClick={() => onSimplify(part.id, { strength: level.strength, alsoFix: true })}
+        >
+          {busy ? 'Working…' : 'Simplify + fix'}
+        </button>
+        <button
+          type="button"
+          className={`${ACTION_GHOST} w-full`}
+          disabled={busy}
+          onClick={() => onSimplify(part.id, { strength: level.strength, alsoFix: false })}
+        >
+          Simplify only
+        </button>
+        {canRevert && (
+          <button
+            type="button"
+            className={`${ACTION_GHOST} w-full`}
+            disabled={busy}
+            onClick={() => onRevert(part.id)}
+          >
+            Revert to imported
+          </button>
+        )}
+      </div>
+
+      <div className={`${PANEL} px-3 py-2`}>
+        <div className="mb-1 flex items-center justify-between">
+          <span className={LABEL}>Versions</span>
+          <span className="font-mono text-[0.6rem] text-slate-500">{part.versions.length}</span>
+        </div>
+        <p className="mb-2 text-[0.65rem] text-slate-500">
+          Every repair saves a new version and keeps the old one. Switch back any time to compare.
+        </p>
+        <div className="space-y-1">
+          {part.versions.map((version) => {
+            const active = version.id === part.activeVersionId;
+            return (
+              <div
+                key={version.id}
+                className={`flex items-center gap-2 rounded border px-2 py-1.5 ${
+                  active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectVersion(part.id, version.id)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div
+                    className={`truncate text-[0.68rem] font-bold ${
+                      active ? 'text-emerald-600' : 'text-slate-700'
+                    }`}
+                  >
+                    {version.label}
+                  </div>
+                  <div className="truncate font-mono text-[0.6rem] text-slate-500">
+                    {formatCount(version.triangles)} tri · {version.note}
+                  </div>
+                </button>
+                {part.versions.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteVersion(part.id, version.id)}
+                    className="text-slate-400 hover:text-rose-600"
+                    aria-label={`Delete ${version.label}`}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {simplifyReport && (
+        <div className={`${PANEL} px-3 py-2`}>
+          <span className={`${LABEL} mb-1 block`}>Last simplify</span>
+          <Row label="Triangles">
+            {formatCount(simplifyReport.trianglesBefore)} →{' '}
+            <span className="text-emerald-600">{formatCount(simplifyReport.trianglesAfter)}</span>
+          </Row>
+          <Row label="Reduction">
+            <span className="text-emerald-600">
+              {Math.round(simplifyReport.reduction * 100)}%
+            </span>
+          </Row>
+          <Row label="Cell used">{formatLength(simplifyReport.cellSize)}</Row>
+          <Row label="Non-manifold">{formatCount(simplifyReport.after.nonManifoldEdges)}</Row>
+          <Row label="Size kept">
+            {simplifyReport.after.bounds.size.map((n) => n.toFixed(1)).join(' × ')} mm
+          </Row>
+        </div>
+      )}
+
       {fixReport && (
         <div className={`${PANEL} px-3 py-2`}>
           <span className={`${LABEL} mb-1 block`}>Last repair</span>
@@ -578,16 +806,16 @@ function RepairTab({
           <Row label="Filled holes">{formatCount(fixReport.filledHoles)}</Row>
           {fixReport.unfilledHoles > 0 && (
             <Row label="Left open">
-              <span className="text-amber-400">{formatCount(fixReport.unfilledHoles)}</span>
+              <span className="text-amber-600">{formatCount(fixReport.unfilledHoles)}</span>
             </Row>
           )}
           {fixReport.invertedSolid && (
             <Row label="Turned outside-in">
-              <span className="text-emerald-400">yes</span>
+              <span className="text-emerald-600">yes</span>
             </Row>
           )}
           <Row label="Now">
-            <span className={fixReport.after.watertight ? 'text-emerald-400' : 'text-amber-400'}>
+            <span className={fixReport.after.watertight ? 'text-emerald-600' : 'text-amber-600'}>
               {fixReport.after.watertight ? 'watertight' : 'still open'}
             </span>
           </Row>
@@ -616,7 +844,7 @@ export function Inspector(props: InspectorProps) {
 
   return (
     <div className={`${PANEL} flex h-full flex-col overflow-hidden`}>
-      <div className="flex border-b border-slate-700/60">
+      <div className="flex border-b border-slate-300">
         <TabButton active={tab === 'modify'} onClick={() => onTabChange('modify')}>
           Modify
         </TabButton>
@@ -642,6 +870,7 @@ export function Inspector(props: InspectorProps) {
             onDropToTable={props.onDropToTable}
             onCenter={props.onCenter}
             onDuplicate={props.onDuplicate}
+            onUpdateHardware={props.onUpdateHardware}
             measurement={measurement}
           />
         ) : tab === 'measure' && measurement && scaledSoup ? (
@@ -661,7 +890,13 @@ export function Inspector(props: InspectorProps) {
             soup={soup}
             part={part}
             onAutoFix={props.onAutoFix}
+            onSimplify={props.onSimplify}
+            onRevert={props.onRevert}
+            onSelectVersion={props.onSelectVersion}
+            onDeleteVersion={props.onDeleteVersion}
+            canRevert={props.canRevert}
             fixReport={props.fixReport}
+            simplifyReport={props.simplifyReport}
             busy={props.busy}
           />
         )}

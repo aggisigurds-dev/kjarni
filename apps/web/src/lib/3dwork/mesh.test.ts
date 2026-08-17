@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { autoFix, computeBounds, inspect, weld } from './mesh';
+import { autoFix, computeBounds, inspect, simplify, weld } from './mesh';
+
+/** A sphere-ish blob with far more triangles than its shape needs. */
+function denseSphere(radius = 20, rings = 40, segments = 60): Float32Array {
+  const at = (i: number, j: number): [number, number, number] => {
+    const phi = (i / rings) * Math.PI;
+    const theta = (j / segments) * Math.PI * 2;
+    return [
+      radius * Math.sin(phi) * Math.cos(theta),
+      radius * Math.cos(phi),
+      radius * Math.sin(phi) * Math.sin(theta),
+    ];
+  };
+
+  const out: number[] = [];
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segments; j++) {
+      const a = at(i, j);
+      const b = at(i + 1, j);
+      const c = at(i + 1, j + 1);
+      const d = at(i, j + 1);
+      out.push(...a, ...b, ...c, ...a, ...c, ...d);
+    }
+  }
+  return new Float32Array(out);
+}
 
 /** Reverse the winding of one triangle, leaving the rest alone. */
 function flipTriangle(soup: Float32Array, index: number): Float32Array {
@@ -118,6 +143,12 @@ describe('autoFix', () => {
     expect(report.after.triangles).toBe(12);
   });
 
+  it('reuses the welded result for the same array', () => {
+    const soup = cubeSoup(10);
+    // Second call must hit the cache and hand back the identical object.
+    expect(weld(soup)).toBe(weld(soup));
+  });
+
   it('sits the part on the table when asked', () => {
     const soup = cubeSoup(10);
     const lifted = Float32Array.from(soup, (value, i) => (i % 3 === 1 ? value + 55 : value));
@@ -125,5 +156,46 @@ describe('autoFix', () => {
     const fixed = autoFix(lifted, { dropToTable: true });
 
     expect(computeBounds(fixed.soup).min[1]).toBeCloseTo(0, 5);
+  });
+});
+
+describe('simplify', () => {
+  it('cuts triangle count on an over-dense mesh while keeping the shape', () => {
+    const dense = denseSphere(20, 40, 60);
+    const before = inspect(dense);
+    const { soup, report } = simplify(dense, { strength: 0.03 });
+
+    expect(report.trianglesBefore).toBe(before.triangles);
+    expect(report.reduction).toBeGreaterThan(0.5);
+    expect(report.trianglesAfter).toBeLessThan(report.trianglesBefore);
+
+    // The silhouette must survive: a 40 mm sphere stays roughly 40 mm.
+    const size = computeBounds(soup).size;
+    expect(size[0]).toBeGreaterThan(36);
+    expect(size[0]).toBeLessThanOrEqual(40.001);
+    expect(size[1]).toBeGreaterThan(36);
+  });
+
+  it('leaves a mesh that is already minimal essentially alone', () => {
+    const { report } = simplify(cubeSoup(10), { strength: 0.001 });
+
+    expect(report.trianglesAfter).toBe(12);
+    expect(report.reduction).toBe(0);
+  });
+
+  it('reduces more as strength goes up', () => {
+    const dense = denseSphere(20, 40, 60);
+    const light = simplify(dense, { strength: 0.01 }).report;
+    const heavy = simplify(dense, { strength: 0.06 }).report;
+
+    expect(heavy.trianglesAfter).toBeLessThan(light.trianglesAfter);
+    expect(heavy.cellSize).toBeGreaterThan(light.cellSize);
+  });
+
+  it('still produces a closed solid it can measure', () => {
+    const { report } = simplify(denseSphere(20, 40, 60), { strength: 0.02, fillHoles: true });
+
+    expect(report.after.triangles).toBeGreaterThan(0);
+    expect(Math.abs(report.after.signedVolume)).toBeGreaterThan(0);
   });
 });

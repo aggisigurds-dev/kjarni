@@ -21,10 +21,21 @@ import {
   Package,
   Ruler,
   Save,
+  ScanEye,
+  Sparkles,
+  Tags,
   Upload,
   Wrench,
 } from 'lucide-react';
-import { autoFix, computeBounds, recenter, zUpToYUp, type FixReport } from '@/lib/3dwork/mesh';
+import {
+  autoFix,
+  computeBounds,
+  recenter,
+  simplify,
+  zUpToYUp,
+  type FixReport,
+  type SimplifyReport,
+} from '@/lib/3dwork/mesh';
 import {
   PROFILE_LABELS,
   describePart,
@@ -54,20 +65,36 @@ import {
   saveGeometry,
   saveProject,
 } from '@/lib/3dwork/storage';
+import {
+  HARDWARE_PRESETS,
+  THREAD_STANDARDS,
+  defaultSpec,
+  hardwareLabel,
+  hardwareMesh,
+  type HardwareKind,
+  type HardwareSpec,
+} from '@/lib/3dwork/hardware';
 import { createZip, safeFileName } from '@/lib/3dwork/zip';
+import { emptySketch, toSvg, type Sketch } from '@/lib/3dwork/sketch';
+import { silhouette, type Outline2D, type ViewPlane } from '@/lib/3dwork/silhouette';
 import { formatCount, formatMass, type Unit } from '@/lib/3dwork/format';
-import { bakeTransform } from './bake';
+import { bakeTransform, scaleSoup } from './bake';
 import { Gallery } from './gallery';
 import { Inspector, type InspectorTab } from './inspector';
+import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
-import { Viewport, type ViewportPart } from './viewport';
+import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { ACTION_GHOST, ACTION_PRIMARY, LABEL, PANEL } from './ui';
 
 type Mode = 'assembled' | 'scattered';
+type Workspace = 'bench' | 'sketch';
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+const newVersionId = () =>
+  `ver_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 function download(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
@@ -101,8 +128,8 @@ function ToolbarToggle({
       title={title}
       className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
         active
-          ? 'bg-emerald-500 text-slate-950'
-          : 'border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+          ? 'bg-emerald-600 text-white'
+          : 'border border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-900'
       }`}
     >
       <Icon className="h-3.5 w-3.5" />
@@ -127,8 +154,17 @@ export function Workbench() {
   const [showSteel, setShowSteel] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
+  const [simplifyReport, setSimplifyReport] = useState<SimplifyReport | null>(null);
   const [frameToken, setFrameToken] = useState(0);
   const [dragging, setDragging] = useState(false);
+
+  const [workspace, setWorkspace] = useState<Workspace>('bench');
+  const [xray, setXray] = useState(false);
+  const [showCallouts, setShowCallouts] = useState(true);
+  const [sketch, setSketch] = useState<Sketch>(() => emptySketch());
+  const [sketchPlane, setSketchPlane] = useState<ViewPlane>('xy');
+  const [outline, setOutline] = useState<{ name: string; data: Outline2D } | null>(null);
+  const [outlineBusy, setOutlineBusy] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadedRef = useRef(false);
@@ -152,13 +188,20 @@ export function Workbench() {
       const restored = saved[0];
       const loaded = new Map<string, Float32Array>();
       for (const part of restored.parts) {
-        const soup = await loadGeometry(part.id);
-        if (soup) loaded.set(part.id, soup);
+        // Every version is restored, not just the active one, so the history
+        // survives a reload and you can still flip back to the damaged mesh.
+        for (const version of part.versions ?? []) {
+          const soup = await loadGeometry(version.id);
+          if (soup) loaded.set(version.id, soup);
+        }
       }
       if (cancelled) return;
 
       // A part whose geometry did not survive would render as nothing at all.
-      const usable = { ...restored, parts: restored.parts.filter((part) => loaded.has(part.id)) };
+      const usable = {
+        ...restored,
+        parts: restored.parts.filter((part) => loaded.has(part.activeVersionId)),
+      };
       setProject(usable);
       setGeometries(loaded);
       setFrameToken((token) => token + 1);
@@ -181,13 +224,13 @@ export function Workbench() {
     () => project.parts.find((part) => part.id === selectedId) ?? null,
     [project.parts, selectedId]
   );
-  const selectedSoup = selectedId ? (geometries.get(selectedId) ?? null) : null;
+  const selectedSoup = selectedPart ? (geometries.get(selectedPart.activeVersionId) ?? null) : null;
 
   /** Bounding sizes drive the scatter layout; cheap enough to redo on change. */
   const sizes = useMemo(() => {
     const map = new Map<string, PartSize>();
     for (const part of project.parts) {
-      const soup = geometries.get(part.id);
+      const soup = geometries.get(part.activeVersionId);
       if (!soup) continue;
       const bounds = computeBounds(soup);
       map.set(part.id, {
@@ -209,7 +252,7 @@ export function Workbench() {
     const parts: ViewportPart[] = [];
 
     for (const part of project.parts) {
-      const soup = geometries.get(part.id);
+      const soup = geometries.get(part.activeVersionId);
       const placement = byId.get(part.id);
       if (!soup || !placement || !part.visible) continue;
 
@@ -237,12 +280,12 @@ export function Workbench() {
 
     for (const slot of project.slots) {
       const part = project.parts.find((candidate) => candidate.id === slot.activePartId);
-      const soup = part ? geometries.get(part.id) : undefined;
+      const soup = part ? geometries.get(part.activeVersionId) : undefined;
       if (!part || !soup || !part.visible) continue;
 
       const scale =
         Math.abs(part.transform.scale.x * part.transform.scale.y * part.transform.scale.z) || 1;
-      const key = `${part.id}:${soup.length}`;
+      const key = `${part.activeVersionId}:${soup.length}`;
       let stats = statsCache.current.get(key);
       if (!stats) {
         const measured = describePart(soup);
@@ -258,6 +301,15 @@ export function Workbench() {
 
     return { parts: count, triangles, volume, mass };
   }, [project.slots, project.parts, geometries]);
+
+  /** The live mesh of a part, i.e. whichever version is currently selected. */
+  const soupOfPart = useCallback(
+    (partId: string): Float32Array | undefined => {
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      return part ? geometries.get(part.activeVersionId) : undefined;
+    },
+    [project.parts, geometries]
+  );
 
   const patchProject = useCallback((patch: (current: Project) => Project) => {
     setProject((current) => patch(current));
@@ -289,12 +341,13 @@ export function Workbench() {
           const soup = recenter(zUp ? zUpToYUp(raw.positions) : raw.positions);
 
           const id = newPartId();
+          const versionId = newVersionId();
           const color = nextColor({
             ...project,
             parts: [...project.parts, ...addedParts],
           } as Project);
 
-          addedGeometry.set(id, soup);
+          addedGeometry.set(versionId, soup);
           addedParts.push({
             id,
             name: file.name.replace(/\.stl$/i, ''),
@@ -310,6 +363,17 @@ export function Workbench() {
             triangles: raw.triangles,
             materialId: project.materialId,
             notes: '',
+            // The file as it arrived is v1 and is never written over.
+            versions: [
+              {
+                id: versionId,
+                label: 'v1 imported',
+                note: file.name,
+                triangles: raw.triangles,
+                createdAt: Date.now(),
+              },
+            ],
+            activeVersionId: versionId,
             thumbnail: renderThumbnail(soup, color),
             addedAt: Date.now(),
           });
@@ -403,28 +467,43 @@ export function Workbench() {
           slot.activePartId === partId ? { ...slot, activePartId: null } : slot
         ),
       }));
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      const versionIds = part?.versions.map((version) => version.id) ?? [];
+
       setGeometries((current) => {
         const next = new Map(current);
-        next.delete(partId);
+        for (const versionId of versionIds) next.delete(versionId);
         return next;
       });
-      void deleteGeometry(partId);
+      for (const versionId of versionIds) void deleteGeometry(versionId);
       setSelectedId((current) => (current === partId ? null : current));
     },
-    [patchProject]
+    [project.parts, patchProject]
   );
 
   const duplicatePart = useCallback(
     (partId: string) => {
       const source = project.parts.find((part) => part.id === partId);
-      const soup = geometries.get(partId);
+      const soup = soupOfPart(partId);
       if (!source || !soup) return;
 
       const id = newPartId();
+      // The copy starts from the mesh you can currently see, as its own v1.
+      const versionId = newVersionId();
       const copy: Part = {
         ...source,
         id,
-        name: `${source.name} v2`,
+        name: `${source.name} alt`,
+        versions: [
+          {
+            id: versionId,
+            label: 'v1 copied',
+            note: `Copied from ${source.name}`,
+            triangles: Math.floor(soup.length / 9),
+            createdAt: Date.now(),
+          },
+        ],
+        activeVersionId: versionId,
         transform: {
           position: { ...source.transform.position },
           rotation: { ...source.transform.rotation },
@@ -433,33 +512,125 @@ export function Workbench() {
         addedAt: Date.now(),
       };
 
-      setGeometries((current) => new Map(current).set(id, soup));
-      void saveGeometry(id, soup);
+      setGeometries((current) => new Map(current).set(versionId, soup));
+      void saveGeometry(versionId, soup);
       patchProject((current) => ({ ...current, parts: [...current.parts, copy] }));
       setSelectedId(id);
       toast.success('Duplicated as a new variant in the same slot.');
     },
-    [project.parts, geometries, patchProject]
+    [project.parts, soupOfPart, patchProject]
   );
 
-  const replaceGeometry = useCallback(
-    (partId: string, soup: Float32Array, triangles: number) => {
-      setGeometries((current) => new Map(current).set(partId, soup));
-      void saveGeometry(partId, soup);
-      statsCache.current.delete(`${partId}:${soup.length}`);
+  /**
+   * Add a new version of a part and switch to it. Nothing is ever overwritten:
+   * the previous geometry stays under its own version id, so a repair that goes
+   * wrong is one click away from being undone.
+   */
+  const addVersion = useCallback(
+    (partId: string, soup: Float32Array, kind: string, note: string) => {
+      const versionId = newVersionId();
+      setGeometries((current) => new Map(current).set(versionId, soup));
+      void saveGeometry(versionId, soup);
 
+      const triangles = Math.floor(soup.length / 9);
+      patchProject((current) => ({
+        ...current,
+        parts: current.parts.map((part) => {
+          if (part.id !== partId) return part;
+          return {
+            ...part,
+            triangles,
+            thumbnail: renderThumbnail(soup, part.color),
+            activeVersionId: versionId,
+            versions: [
+              ...part.versions,
+              {
+                id: versionId,
+                label: `v${part.versions.length + 1} ${kind}`,
+                note,
+                triangles,
+                createdAt: Date.now(),
+              },
+            ],
+          };
+        }),
+      }));
+
+      return versionId;
+    },
+    [patchProject]
+  );
+
+  /**
+   * Overwrite the active version's mesh. Used for origin moves — centring and
+   * dropping to the table — which are housekeeping rather than edits worth
+   * keeping a separate version of.
+   */
+  const updateActiveGeometry = useCallback(
+    (partId: string, soup: Float32Array) => {
       const part = project.parts.find((candidate) => candidate.id === partId);
-      patchPart(partId, {
-        triangles,
-        thumbnail: part ? renderThumbnail(soup, part.color) : undefined,
-      });
+      if (!part) return;
+      const versionId = part.activeVersionId;
+
+      setGeometries((current) => new Map(current).set(versionId, soup));
+      void saveGeometry(versionId, soup);
+      statsCache.current.delete(`${versionId}:${soup.length}`);
+      patchPart(partId, { thumbnail: renderThumbnail(soup, part.color) });
     },
     [project.parts, patchPart]
   );
 
+  /** Switch which saved version of a part is the live one. */
+  const selectVersion = useCallback(
+    (partId: string, versionId: string) => {
+      patchProject((current) => ({
+        ...current,
+        parts: current.parts.map((part) => {
+          if (part.id !== partId || !part.versions.some((v) => v.id === versionId)) return part;
+          const version = part.versions.find((v) => v.id === versionId);
+          return {
+            ...part,
+            activeVersionId: versionId,
+            triangles: version?.triangles ?? part.triangles,
+          };
+        }),
+      }));
+    },
+    [patchProject]
+  );
+
+  const deleteVersion = useCallback(
+    (partId: string, versionId: string) => {
+      patchProject((current) => ({
+        ...current,
+        parts: current.parts.map((part) => {
+          // Never drop the last version — that would leave a part with no mesh.
+          if (part.id !== partId || part.versions.length < 2) return part;
+          const remaining = part.versions.filter((v) => v.id !== versionId);
+          if (remaining.length === part.versions.length) return part;
+          const active =
+            part.activeVersionId === versionId ? remaining[remaining.length - 1] : undefined;
+          return {
+            ...part,
+            versions: remaining,
+            activeVersionId: active ? active.id : part.activeVersionId,
+            triangles: active ? active.triangles : part.triangles,
+          };
+        }),
+      }));
+      void deleteGeometry(versionId);
+      setGeometries((current) => {
+        const next = new Map(current);
+        next.delete(versionId);
+        return next;
+      });
+    },
+    [patchProject]
+  );
+
   const runAutoFix = useCallback(
     (partId: string, options: { fillHoles: boolean; maxHoleEdges: number }) => {
-      const soup = geometries.get(partId);
+      const soup = soupOfPart(partId);
       if (!soup) return;
 
       setBusy('Repairing mesh…');
@@ -470,7 +641,7 @@ export function Workbench() {
             fillHoles: options.fillHoles,
             maxHoleEdges: options.maxHoleEdges,
           });
-          replaceGeometry(partId, result.soup, result.report.after.triangles);
+          addVersion(partId, result.soup, 'repaired', 'Auto fix');
           setFixReport(result.report);
           toast.success(
             result.report.after.watertight
@@ -484,28 +655,194 @@ export function Workbench() {
         }
       }, 30);
     },
-    [geometries, replaceGeometry]
+    [soupOfPart, addVersion]
+  );
+
+  /** Slot callouts for the gunsmith overlay, anchored at each mount point. */
+  const callouts = useMemo<ViewportCallout[]>(() => {
+    if (!showCallouts || mode !== 'assembled') return [];
+
+    return project.slots.map((slot) => {
+      const variants = project.parts.filter((part) => part.slotId === slot.id);
+      const fitted = variants.find((part) => part.id === slot.activePartId);
+      return {
+        id: slot.id,
+        label: slot.name,
+        detail: fitted ? fitted.name : 'Empty',
+        anchor: slot.anchor,
+        filled: Boolean(fitted),
+        index: fitted ? variants.indexOf(fitted) : 0,
+        variants: variants.length,
+      };
+    });
+  }, [project.slots, project.parts, showCallouts, mode]);
+
+  const cycleSlot = useCallback(
+    (slotId: string, direction: 1 | -1) => {
+      const variants = project.parts.filter((part) => part.slotId === slotId);
+      if (variants.length === 0) return;
+
+      const slot = project.slots.find((candidate) => candidate.id === slotId);
+      const current = variants.findIndex((part) => part.id === slot?.activePartId);
+      // Wrap in both directions; an empty slot starts at the first variant.
+      const next = variants[(current + direction + variants.length) % variants.length];
+
+      fitPart(slotId, next.id);
+      setSelectedId(next.id);
+    },
+    [project.parts, project.slots, fitPart]
+  );
+
+  const selectSlot = useCallback(
+    (slotId: string) => {
+      const slot = project.slots.find((candidate) => candidate.id === slotId);
+      if (slot?.activePartId) setSelectedId(slot.activePartId);
+      else cycleSlot(slotId, 1);
+    },
+    [project.slots, cycleSlot]
   );
 
   const dropToTable = useCallback(
     (partId: string) => {
-      const soup = geometries.get(partId);
+      const soup = soupOfPart(partId);
       if (!soup) return;
-      replaceGeometry(partId, recenter(soup, true), Math.floor(soup.length / 9));
+      updateActiveGeometry(partId, recenter(soup, true));
       patchTransform(partId, { position: { x: 0, y: 0, z: 0 } });
     },
-    [geometries, replaceGeometry, patchTransform]
+    [soupOfPart, updateActiveGeometry, patchTransform]
   );
 
   const centerPart = useCallback(
     (partId: string) => {
-      const soup = geometries.get(partId);
+      const soup = soupOfPart(partId);
       if (!soup) return;
-      replaceGeometry(partId, recenter(soup), Math.floor(soup.length / 9));
+      updateActiveGeometry(partId, recenter(soup));
       patchTransform(partId, { position: { x: 0, y: 0, z: 0 } });
     },
-    [geometries, replaceGeometry, patchTransform]
+    [soupOfPart, updateActiveGeometry, patchTransform]
   );
+
+  const runSimplify = useCallback(
+    (partId: string, options: { strength: number; alsoFix: boolean }) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Simplifying mesh…');
+      setTimeout(() => {
+        try {
+          const result = simplify(soup, {
+            strength: options.strength,
+            fillHoles: options.alsoFix,
+          });
+          let next = result.soup;
+
+          if (options.alsoFix) {
+            // Clustering first means the repair pass works on a far smaller
+            // mesh, which is both quicker and more likely to close up.
+            const fixed = autoFix(next, { fillHoles: true, maxHoleEdges: 200 });
+            next = fixed.soup;
+            setFixReport(fixed.report);
+          }
+
+          addVersion(
+            partId,
+            next,
+            options.alsoFix ? 'simplified + fixed' : 'simplified',
+            `${Math.round(result.report.reduction * 100)}% fewer triangles`
+          );
+          setSimplifyReport(result.report);
+          toast.success(
+            `${formatCount(result.report.trianglesBefore)} → ${formatCount(
+              Math.floor(next.length / 9)
+            )} triangles (${Math.round(result.report.reduction * 100)}% off).`
+          );
+        } catch {
+          toast.error('Could not simplify that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
+  const revertPart = useCallback(
+    (partId: string) => {
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      if (!part || part.versions.length === 0) return;
+      selectVersion(partId, part.versions[0].id);
+      setSimplifyReport(null);
+      setFixReport(null);
+      toast.success('Back to the mesh as imported. Later versions are still saved.');
+    },
+    [project.parts, selectVersion]
+  );
+
+  /** Repair every loaded part in one pass — 50-part projects need this. */
+  const fixEveryPart = useCallback(() => {
+    const targets = project.parts.filter((part) => geometries.has(part.activeVersionId));
+    if (targets.length === 0) return;
+
+    setBusy(`Repairing ${targets.length} parts…`);
+    setTimeout(() => {
+      let repaired = 0;
+      let stillOpen = 0;
+
+      for (const part of targets) {
+        const soup = geometries.get(part.activeVersionId);
+        if (!soup) continue;
+        try {
+          const result = autoFix(soup, { fillHoles: true, maxHoleEdges: 200 });
+          addVersion(part.id, result.soup, 'repaired', 'Auto fix (batch)');
+          repaired++;
+          if (!result.report.after.watertight) stillOpen++;
+        } catch {
+          /* keep going; one bad part must not stop the batch */
+        }
+      }
+
+      setBusy(null);
+      toast.success(
+        `Repaired ${repaired} part(s).` +
+          (stillOpen > 0 ? ` ${stillOpen} still have open or non-manifold edges.` : '')
+      );
+    }, 30);
+  }, [project.parts, geometries, addVersion]);
+
+  const traceOutline = useCallback(() => {
+    if (!selectedPart || !selectedSoup) {
+      toast.error('Select a part on the bench first.');
+      return;
+    }
+
+    setOutlineBusy(true);
+    setTimeout(() => {
+      try {
+        const scaled = scaleSoup(
+          selectedSoup,
+          selectedPart.transform.scale.x,
+          selectedPart.transform.scale.y,
+          selectedPart.transform.scale.z
+        );
+        setOutline({ name: selectedPart.name, data: silhouette(scaled, sketchPlane) });
+      } catch {
+        toast.error('Could not trace that part.');
+      } finally {
+        setOutlineBusy(false);
+      }
+    }, 30);
+  }, [selectedPart, selectedSoup, sketchPlane]);
+
+  const exportSketchSvg = useCallback(() => {
+    const svg = toSvg(sketch, {
+      title: `${project.name} — ${outline?.name ?? 'sketch'}`,
+      outline: outline?.data.segments,
+    });
+    download(
+      new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }),
+      `${project.name.replace(/\s+/g, '_')}_sketch.svg`
+    );
+  }, [sketch, outline, project.name]);
 
   /** The fitted parts, baked into world space, ready to write out. */
   const bakedAssembly = useCallback((): { name: string; soup: Float32Array }[] => {
@@ -513,7 +850,7 @@ export function Workbench() {
 
     for (const slot of project.slots) {
       const part = project.parts.find((candidate) => candidate.id === slot.activePartId);
-      const soup = part ? geometries.get(part.id) : undefined;
+      const soup = part ? geometries.get(part.activeVersionId) : undefined;
       if (!part || !soup || !part.visible) continue;
 
       baked.push({
@@ -589,7 +926,7 @@ export function Workbench() {
   }, [bakedAssembly, project.name]);
 
   const exportSplitZip = useCallback(() => {
-    const parts = project.parts.filter((part) => geometries.has(part.id));
+    const parts = project.parts.filter((part) => geometries.has(part.activeVersionId));
     if (parts.length === 0) {
       toast.error('No parts to export.');
       return;
@@ -600,7 +937,7 @@ export function Workbench() {
       try {
         const taken = new Set<string>();
         const entries = parts.map((part) => {
-          const soup = geometries.get(part.id) as Float32Array;
+          const soup = geometries.get(part.activeVersionId) as Float32Array;
           // Each file is written at the origin, sitting on the bed, with only
           // rotation and scale baked in — position belongs to the assembly.
           const oriented = bakeTransform(soup, {
@@ -645,7 +982,7 @@ export function Workbench() {
     ];
 
     for (const part of project.parts) {
-      const soup = geometries.get(part.id);
+      const soup = geometries.get(part.activeVersionId);
       if (!soup) continue;
 
       const measured = describePart(soup);
@@ -722,6 +1059,74 @@ export function Workbench() {
     toast.success('Added a cut-list row from the selected part.');
   }, [selectedPart, selectedSoup]);
 
+  /**
+   * Add a length of pipe, rod or bolt as a real part. It is generated from the
+   * spec rather than a file, so its numbers stay editable afterwards.
+   */
+  const addHardware = useCallback(
+    (spec: HardwareSpec) => {
+      const soup = hardwareMesh(spec);
+      const id = newPartId();
+      const versionId = newVersionId();
+      const color = nextColor(project);
+
+      setGeometries((current) => new Map(current).set(versionId, soup));
+      void saveGeometry(versionId, soup);
+
+      patchProject((current) => ({
+        ...current,
+        parts: [
+          ...current.parts,
+          {
+            id,
+            name: hardwareLabel(spec),
+            fileName: '',
+            slotId: '',
+            color,
+            visible: true,
+            transform: {
+              position: { x: 0, y: 0, z: 0 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+            },
+            triangles: Math.floor(soup.length / 9),
+            materialId: 'steel',
+            notes: '',
+            versions: [
+              {
+                id: versionId,
+                label: 'v1 generated',
+                note: hardwareLabel(spec),
+                triangles: Math.floor(soup.length / 9),
+                createdAt: Date.now(),
+              },
+            ],
+            activeVersionId: versionId,
+            hardware: spec,
+            thumbnail: renderThumbnail(soup, color),
+            addedAt: Date.now(),
+          },
+        ],
+      }));
+
+      setSelectedId(id);
+      setFrameToken((token) => token + 1);
+      toast.success(`Added ${hardwareLabel(spec)}.`);
+    },
+    [project, patchProject]
+  );
+
+  /** Re-generate a hardware part after its numbers change. */
+  const updateHardware = useCallback(
+    (partId: string, spec: HardwareSpec) => {
+      const soup = hardwareMesh(spec);
+      patchPart(partId, { hardware: spec, name: hardwareLabel(spec) });
+      updateActiveGeometry(partId, soup);
+      patchPart(partId, { triangles: Math.floor(soup.length / 9) });
+    },
+    [patchPart, updateActiveGeometry]
+  );
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -732,7 +1137,7 @@ export function Workbench() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-2 bg-slate-950 p-2 text-slate-200">
+    <div className="flex h-[calc(100vh-4rem)] flex-col gap-2 bg-slate-200 p-2 text-slate-800">
       <input
         ref={fileInputRef}
         type="file"
@@ -747,11 +1152,11 @@ export function Workbench() {
 
       <div className={`${PANEL} flex flex-wrap items-center gap-2 px-3 py-2`}>
         <div className="flex items-center gap-2">
-          <Boxes className="h-5 w-5 text-emerald-400" />
+          <Boxes className="h-5 w-5 text-emerald-600" />
           <input
             value={project.name}
             onChange={(event) => patchProject((current) => ({ ...current, name: event.target.value }))}
-            className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-100 outline-none hover:border-slate-700 focus:border-emerald-500"
+            className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-900 outline-none hover:border-slate-300 focus:border-emerald-500"
             aria-label="Project name"
           />
         </div>
@@ -763,7 +1168,24 @@ export function Workbench() {
           Import STL
         </button>
 
-        <div className="flex overflow-hidden rounded border border-slate-700">
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          {(['bench', 'sketch'] as Workspace[]).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setWorkspace(option)}
+              className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
+                workspace === option
+                  ? 'bg-sky-600 text-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {option === 'bench' ? '3D bench' : '2D sketch'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex overflow-hidden rounded border border-slate-300">
           {(['assembled', 'scattered'] as Mode[]).map((option) => (
             <button
               key={option}
@@ -771,8 +1193,8 @@ export function Workbench() {
               onClick={() => setMode(option)}
               className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
                 mode === option
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-600 text-white'
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               {option}
@@ -790,6 +1212,22 @@ export function Workbench() {
           Wire
         </ToolbarToggle>
         <ToolbarToggle
+          active={xray}
+          onClick={() => setXray((v) => !v)}
+          icon={ScanEye}
+          title="Ghost every part except the selected one"
+        >
+          X-ray
+        </ToolbarToggle>
+        <ToolbarToggle
+          active={showCallouts}
+          onClick={() => setShowCallouts((v) => !v)}
+          icon={Tags}
+          title="Mount-point labels, shown on the assembled blaster"
+        >
+          Callouts
+        </ToolbarToggle>
+        <ToolbarToggle
           active={measuring}
           onClick={() => setMeasuring((v) => !v)}
           icon={Ruler}
@@ -800,6 +1238,63 @@ export function Workbench() {
         <ToolbarToggle active={showSteel} onClick={() => setShowSteel((v) => !v)} icon={Wrench}>
           Steel
         </ToolbarToggle>
+
+        <div className="relative">
+          <select
+            className="cursor-pointer rounded border border-slate-300 bg-slate-200 px-2 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-500 hover:border-slate-400"
+            value=""
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) return;
+              event.target.value = '';
+
+              const preset = HARDWARE_PRESETS.find((entry) => entry.name === value);
+              if (preset) {
+                addHardware(preset.spec);
+                return;
+              }
+              const thread = THREAD_STANDARDS.find((entry) => entry.id === value);
+              if (thread) {
+                addHardware({
+                  kind: 'bolt',
+                  length: 60,
+                  diameter: thread.majorDiameter,
+                  threadPitch: thread.pitch,
+                  threaded: true,
+                  threadStandardId: thread.id,
+                  headDiameter: thread.majorDiameter * 1.6,
+                  headHeight: thread.majorDiameter * 0.65,
+                });
+                return;
+              }
+              addHardware(defaultSpec(value as HardwareKind));
+            }}
+            aria-label="Add stock"
+          >
+            <option value="">+ Add stock</option>
+            <optgroup label="Presets">
+              {HARDWARE_PRESETS.map((preset) => (
+                <option key={preset.name} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Blank">
+              {(['pipe', 'rod', 'bolt', 'screw'] as HardwareKind[]).map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Threaded bolt">
+              {THREAD_STANDARDS.map((thread) => (
+                <option key={thread.id} value={thread.id}>
+                  {thread.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5" title="Rotate imported models from Z-up to Y-up">
@@ -815,13 +1310,23 @@ export function Workbench() {
           <select
             value={unit}
             onChange={(event) => setUnit(event.target.value as Unit)}
-            className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[0.65rem] font-bold uppercase text-slate-300"
+            className="rounded border border-slate-300 bg-slate-200 px-2 py-1 text-[0.65rem] font-bold uppercase text-slate-700"
             aria-label="Display unit"
           >
             <option value="mm">mm</option>
             <option value="in">inch</option>
           </select>
 
+          <button
+            type="button"
+            className={ACTION_GHOST}
+            onClick={fixEveryPart}
+            disabled={Boolean(busy) || project.parts.length === 0}
+            title="Run auto fix over every loaded part"
+          >
+            <Sparkles className="mr-1 inline h-3 w-3" />
+            Fix all parts
+          </button>
           <button type="button" className={ACTION_PRIMARY} onClick={mergeAndClean} disabled={Boolean(busy)}>
             Merge &amp; clean full assembly
           </button>
@@ -840,6 +1345,30 @@ export function Workbench() {
         </div>
       </div>
 
+      {workspace === 'sketch' ? (
+        <div className="min-h-0 flex-1">
+          <SketchBoard
+            sketch={sketch}
+            onChange={setSketch}
+            outline={outline?.data ?? null}
+            outlineBusy={outlineBusy}
+            plane={sketchPlane}
+            onPlaneChange={setSketchPlane}
+            traceName={outline?.name ?? null}
+            onTrace={traceOutline}
+            onClearTrace={() => setOutline(null)}
+            onExportSvg={exportSketchSvg}
+            onSendToCutList={(length) => {
+              setCutItems((current) => [
+                ...current,
+                makeCutItem({ label: 'From sketch', length: Math.round(length) }),
+              ]);
+              setShowSteel(true);
+              toast.success('Added the drawn length to the cut list.');
+            }}
+          />
+        </div>
+      ) : (
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-[300px_minmax(0,1fr)_330px]">
         <div className="hidden min-h-0 lg:block">
           <Gallery
@@ -873,24 +1402,28 @@ export function Workbench() {
             onSelect={selectPart}
             wireframe={wireframe}
             showGrid={showGrid}
+            xray={xray}
             measuring={measuring}
             measurePoints={measurePoints}
             onMeasurePoint={(point) => setMeasurePoints((current) => [...current, point])}
+            callouts={callouts}
+            onCalloutSelect={selectSlot}
+            onCalloutCycle={cycleSlot}
             frameToken={frameToken}
           />
 
           {project.parts.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
               <Upload className="h-8 w-8 text-slate-700" />
-              <p className="text-sm font-bold text-slate-400">Drop STL files here</p>
-              <p className="max-w-xs text-[0.75rem] text-slate-600">
+              <p className="text-sm font-bold text-slate-500">Drop STL files here</p>
+              <p className="max-w-xs text-[0.75rem] text-slate-400">
                 Load every part of your build. They land in lanes by name — barrel, grip, magazine —
                 and you swap between them by clicking.
               </p>
             </div>
           )}
 
-          <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-3 rounded bg-slate-950/80 px-2 py-1 font-mono text-[0.65rem] text-slate-400">
+          <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-3 rounded bg-white px-2 py-1 font-mono text-[0.65rem] text-slate-500">
             <span>
               <span className={LABEL}>fitted </span>
               {assemblyTotals.parts}/{project.slots.length}
@@ -906,9 +1439,9 @@ export function Workbench() {
           </div>
 
           {busy && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70">
-              <div className="flex items-center gap-2 rounded border border-slate-700 bg-slate-900 px-4 py-2 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+            <div className="absolute inset-0 flex items-center justify-center bg-white/90">
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white px-4 py-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
                 {busy}
               </div>
             </div>
@@ -929,7 +1462,14 @@ export function Workbench() {
             onCenter={centerPart}
             onDuplicate={duplicatePart}
             onAutoFix={runAutoFix}
+            onSimplify={runSimplify}
+            onRevert={revertPart}
+            onSelectVersion={selectVersion}
+            onDeleteVersion={deleteVersion}
+            onUpdateHardware={updateHardware}
+            canRevert={Boolean(selectedPart && selectedPart.versions.length > 1)}
             fixReport={fixReport}
+            simplifyReport={simplifyReport}
             busy={Boolean(busy)}
             measurePoints={measurePoints}
             measuring={measuring}
@@ -939,6 +1479,7 @@ export function Workbench() {
           />
         </div>
       </div>
+      )}
 
       {showSteel && (
         <div className="h-80 shrink-0">

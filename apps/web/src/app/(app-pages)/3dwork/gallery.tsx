@@ -43,10 +43,10 @@ function PartCard({
     <div
       className={`group relative shrink-0 rounded border p-1.5 transition-colors ${
         selected
-          ? 'border-amber-400 bg-amber-400/10'
+          ? 'border-amber-400 bg-amber-50'
           : fitted
-            ? 'border-emerald-500 bg-emerald-500/10'
-            : 'border-slate-700 bg-slate-950/60 hover:border-slate-500'
+            ? 'border-emerald-500 bg-emerald-50'
+            : 'border-slate-300 bg-slate-50 hover:border-slate-400'
       }`}
       style={{ width: 104 }}
     >
@@ -57,16 +57,16 @@ function PartCard({
         className="block w-full text-left"
         title={`${part.name} — click to select, double-click to fit`}
       >
-        <div className="flex h-[74px] w-full items-center justify-center overflow-hidden rounded bg-slate-950">
+        <div className="flex h-[74px] w-full items-center justify-center overflow-hidden rounded bg-slate-200">
           {part.thumbnail ? (
             // A data URL rendered in-browser; next/image would only add a hop.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={part.thumbnail} alt="" className="h-full w-full object-contain" />
           ) : (
-            <Layers className="h-6 w-6 text-slate-600" />
+            <Layers className="h-6 w-6 text-slate-400" />
           )}
         </div>
-        <div className="mt-1 truncate text-[0.7rem] font-bold text-slate-200">{part.name}</div>
+        <div className="mt-1 truncate text-[0.7rem] font-bold text-slate-800">{part.name}</div>
         <div className="font-mono text-[0.6rem] text-slate-500">
           {formatCount(part.triangles)} tri
         </div>
@@ -76,7 +76,7 @@ function PartCard({
         <button
           type="button"
           onClick={onToggleVisible}
-          className="rounded bg-slate-900/90 p-1 text-slate-400 hover:text-slate-100"
+          className="rounded bg-white/95 p-1 text-slate-500 hover:text-slate-900"
           title={part.visible ? 'Hide' : 'Show'}
         >
           {part.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -84,7 +84,7 @@ function PartCard({
         <button
           type="button"
           onClick={onDelete}
-          className="rounded bg-slate-900/90 p-1 text-slate-400 hover:text-rose-400"
+          className="rounded bg-white/95 p-1 text-slate-500 hover:text-rose-600"
           title="Remove part"
         >
           <Trash2 className="h-3 w-3" />
@@ -92,7 +92,7 @@ function PartCard({
       </div>
 
       {fitted && (
-        <span className={`${CHIP} absolute left-1 top-1 bg-emerald-500 text-slate-950`}>fitted</span>
+        <span className={`${CHIP} absolute left-1 top-1 bg-emerald-600 text-white`}>fitted</span>
       )}
     </div>
   );
@@ -116,16 +116,16 @@ function SlotLane({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="border-b border-slate-800 px-3 py-2 last:border-b-0">
+    <div className="border-b border-slate-200 px-3 py-2 last:border-b-0">
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className={LABEL}>{slot.name}</span>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[0.6rem] text-slate-600">{parts.length}</span>
+          <span className="font-mono text-[0.6rem] text-slate-400">{parts.length}</span>
           {slot.activePartId && (
             <button
               type="button"
               onClick={() => onFit(slot.id, null)}
-              className="text-[0.6rem] font-bold uppercase text-slate-500 hover:text-rose-400"
+              className="text-[0.6rem] font-bold uppercase text-slate-500 hover:text-rose-600"
             >
               clear
             </button>
@@ -134,7 +134,7 @@ function SlotLane({
       </div>
 
       {parts.length === 0 ? (
-        <p className="py-1 text-[0.7rem] text-slate-600">No parts yet.</p>
+        <p className="py-1 text-[0.7rem] text-slate-400">No parts yet.</p>
       ) : (
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {parts.map((part) => (
@@ -170,7 +170,7 @@ export function Gallery({
 
   return (
     <div className={`${PANEL} flex h-full flex-col overflow-hidden`}>
-      <div className="flex items-center justify-between border-b border-slate-700/60 px-3 py-2">
+      <div className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
         <span className={LABEL}>Parts gallery</span>
         <span className="font-mono text-[0.6rem] text-slate-500">
           {formatCount(project.parts.length)} loaded
@@ -192,10 +192,10 @@ export function Gallery({
         ))}
 
         {loose.length > 0 && (
-          <div className="border-t border-slate-800 px-3 py-2">
+          <div className="border-t border-slate-200 px-3 py-2">
             <div className="mb-1.5 flex items-center justify-between">
               <span className={LABEL}>Unassigned</span>
-              <span className="font-mono text-[0.6rem] text-slate-600">{loose.length}</span>
+              <span className="font-mono text-[0.6rem] text-slate-400">{loose.length}</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {loose.map((part) => (
@@ -212,7 +212,7 @@ export function Gallery({
                   <select
                     value=""
                     onChange={(event) => onAssignSlot(part.id, event.target.value)}
-                    className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-1 py-1 text-[0.6rem] text-slate-300"
+                    className="mt-1 w-full rounded border border-slate-300 bg-slate-200 px-1 py-1 text-[0.6rem] text-slate-700"
                     aria-label={`Assign ${part.name} to a slot`}
                   >
                     <option value="">Assign to…</option>

@@ -100,20 +100,46 @@ function defaultTolerance(bounds: Bounds): number {
 }
 
 /**
+ * Spatial hash for one grid cell.
+ *
+ * Integer mixing rather than a `"x,y,z"` string: welding a 190k-triangle part
+ * probes 27 cells per corner, and building 15 million short-lived strings was
+ * the single slowest thing in the app. Hash collisions are harmless because
+ * every candidate is still distance-checked below.
+ */
+function cellHash(x: number, y: number, z: number): number {
+  return ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
+}
+
+/** Welding the same geometry twice is common; the result is immutable. */
+const weldCache = new WeakMap<Float32Array, { mesh: IndexedMesh; welded: number }>();
+
+/**
  * Weld a triangle soup into an indexed mesh. Vertices are bucketed on a grid of
  * `tolerance` cells; each candidate also checks the 26 neighbouring cells so
  * that two points straddling a cell boundary still merge.
+ *
+ * Results for the default tolerance are memoised against the input array, since
+ * measurement, repair and the 2D outline all weld the same part.
  */
 export function weld(soup: Float32Array, tolerance?: number): { mesh: IndexedMesh; welded: number } {
+  if (tolerance === undefined) {
+    const cached = weldCache.get(soup);
+    if (cached) return cached;
+  }
+
   const bounds = computeBounds(soup);
   const tol = tolerance ?? defaultTolerance(bounds);
   const tolSq = tol * tol;
   const inv = 1 / tol;
 
-  const buckets = new Map<string, number[]>();
-  const positions: number[] = [];
+  const buckets = new Map<number, number[]>();
   const corners = Math.floor(soup.length / 3);
   const indices = new Uint32Array(corners);
+
+  // Grown by hand rather than via push() on a plain array: this is the hot loop.
+  let positions = new Float64Array(Math.max(3, corners * 3));
+  let vertexCount = 0;
 
   for (let c = 0; c < corners; c++) {
     const x = soup[c * 3];
@@ -127,9 +153,10 @@ export function weld(soup: Float32Array, tolerance?: number): { mesh: IndexedMes
     for (let dx = -1; dx <= 1 && found < 0; dx++) {
       for (let dy = -1; dy <= 1 && found < 0; dy++) {
         for (let dz = -1; dz <= 1 && found < 0; dz++) {
-          const bucket = buckets.get(`${gx + dx},${gy + dy},${gz + dz}`);
+          const bucket = buckets.get(cellHash(gx + dx, gy + dy, gz + dz));
           if (!bucket) continue;
-          for (const candidate of bucket) {
+          for (let i = 0; i < bucket.length; i++) {
+            const candidate = bucket[i];
             const ox = positions[candidate * 3] - x;
             const oy = positions[candidate * 3 + 1] - y;
             const oz = positions[candidate * 3 + 2] - z;
@@ -143,9 +170,12 @@ export function weld(soup: Float32Array, tolerance?: number): { mesh: IndexedMes
     }
 
     if (found < 0) {
-      found = positions.length / 3;
-      positions.push(x, y, z);
-      const key = `${gx},${gy},${gz}`;
+      found = vertexCount++;
+      positions[found * 3] = x;
+      positions[found * 3 + 1] = y;
+      positions[found * 3 + 2] = z;
+
+      const key = cellHash(gx, gy, gz);
       const bucket = buckets.get(key);
       if (bucket) bucket.push(found);
       else buckets.set(key, [found]);
@@ -153,10 +183,13 @@ export function weld(soup: Float32Array, tolerance?: number): { mesh: IndexedMes
     indices[c] = found;
   }
 
-  return {
-    mesh: { positions: new Float64Array(positions), indices },
-    welded: corners - positions.length / 3,
+  const result = {
+    mesh: { positions: positions.subarray(0, vertexCount * 3), indices },
+    welded: corners - vertexCount,
   };
+
+  if (tolerance === undefined) weldCache.set(soup, result);
+  return result;
 }
 
 export function toSoup(mesh: IndexedMesh): Float32Array {
@@ -510,6 +543,81 @@ export function autoFix(soup: Float32Array, options: FixOptions = {}): {
 /** Topology summary without repairing anything. */
 export function inspect(soup: Float32Array, weldTolerance?: number): Topology {
   return analyze(weld(soup, weldTolerance).mesh);
+}
+
+export interface SimplifyOptions {
+  /**
+   * Cluster cell size as a fraction of the bounding-box diagonal. Bigger means
+   * coarser: 0.002 barely shows, 0.02 is a heavy reduction.
+   */
+  strength: number;
+  fillHoles?: boolean;
+}
+
+export interface SimplifyReport {
+  trianglesBefore: number;
+  trianglesAfter: number;
+  verticesBefore: number;
+  verticesAfter: number;
+  /** 0-1 share of triangles removed. */
+  reduction: number;
+  cellSize: number;
+  after: Topology;
+}
+
+/**
+ * Reduce triangle count by vertex clustering.
+ *
+ * The mesh is snapped onto a grid, every vertex in a cell becomes one vertex,
+ * and the triangles that collapse to a line or point are dropped. It is
+ * deliberately not quadric edge collapse: the meshes this is for are already
+ * non-manifold and self-intersecting, which is exactly where edge-collapse
+ * decimators fall over, and clustering does not care about topology at all.
+ *
+ * Two consequences worth knowing: detail smaller than the cell disappears, and
+ * two surfaces closer together than the cell — thin walls, narrow gaps — merge
+ * into one. Keep the cell under the thinnest wall you need to survive.
+ */
+export function simplify(soup: Float32Array, options: SimplifyOptions): {
+  soup: Float32Array;
+  report: SimplifyReport;
+} {
+  const bounds = computeBounds(soup);
+  const cellSize = Math.max(bounds.diagonal * options.strength, 1e-6);
+
+  const before = weld(soup);
+  const clustered = weld(soup, cellSize);
+
+  const cleaned = dropDegenerate(clustered.mesh);
+  let mesh: IndexedMesh = { positions: clustered.mesh.positions, indices: cleaned.indices };
+
+  const oriented = orient(mesh);
+  mesh = { positions: mesh.positions, indices: oriented.indices };
+
+  if (options.fillHoles) {
+    const patched = fillHoles(mesh, 200);
+    mesh = { positions: mesh.positions, indices: patched.indices };
+    if (patched.filled > 0) {
+      const reoriented = orient(mesh);
+      mesh = { positions: mesh.positions, indices: reoriented.indices };
+    }
+  }
+
+  const trianglesBefore = before.mesh.indices.length / 3;
+  const trianglesAfter = mesh.indices.length / 3;
+
+  return {
+    soup: toSoup(mesh),
+    report: {
+      trianglesBefore,
+      trianglesAfter,
+      verticesBefore: before.mesh.positions.length / 3,
+      verticesAfter: mesh.positions.length / 3,
+      reduction: trianglesBefore > 0 ? 1 - trianglesAfter / trianglesBefore : 0,
+      cellSize,
+      after: analyze(mesh),
+    },
+  };
 }
 
 /**

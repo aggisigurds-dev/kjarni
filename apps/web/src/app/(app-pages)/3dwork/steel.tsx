@@ -60,7 +60,7 @@ function CutRow({
     onPatch({ profile: { ...item.profile, ...patch } });
 
   return (
-    <div className="border-b border-slate-800 px-3 py-2 last:border-b-0">
+    <div className="border-b border-slate-200 px-3 py-2 last:border-b-0">
       <div className="mb-2 flex items-center gap-2">
         <input
           className={`${FIELD} flex-1`}
@@ -71,7 +71,7 @@ function CutRow({
         <button
           type="button"
           onClick={onRemove}
-          className="rounded border border-slate-700 p-1.5 text-slate-500 hover:border-rose-500 hover:text-rose-400"
+          className="rounded border border-slate-300 p-1.5 text-slate-500 hover:border-rose-500 hover:text-rose-600"
           aria-label={`Remove ${item.label}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -166,7 +166,7 @@ function CutRow({
         </label>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[0.7rem] text-slate-400">
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[0.7rem] text-slate-500">
         {item.profile.kind !== 'plate' && (
           <span>
             <span className={LABEL}>kg/m </span>
@@ -179,7 +179,7 @@ function CutRow({
         </span>
         <span>
           <span className={LABEL}>total </span>
-          <span className="font-mono text-sm text-emerald-400">
+          <span className="font-mono text-sm text-emerald-600">
             {formatMass(result.massTotal * 1000)}
           </span>
         </span>
@@ -207,12 +207,12 @@ export function SteelPanel({ items, onChange, onExportCsv, onClose, onAddFromSel
 
   return (
     <div className={`${PANEL} flex h-full flex-col overflow-hidden`}>
-      <div className="flex items-center justify-between border-b border-slate-700/60 px-3 py-2">
+      <div className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
         <span className={LABEL}>Steel take-off · cut list</span>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-slate-500 hover:text-slate-200"
+          className="rounded p-1 text-slate-500 hover:text-slate-900"
           aria-label="Close cut list"
         >
           <X className="h-4 w-4" />
@@ -236,11 +236,11 @@ export function SteelPanel({ items, onChange, onExportCsv, onClose, onAddFromSel
         )}
       </div>
 
-      <div className="border-t border-slate-700/60 px-3 py-2">
+      <div className="border-t border-slate-300 px-3 py-2">
         <div className="mb-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <span>
             <span className={LABEL}>Total mass </span>
-            <span className="font-mono text-base font-bold text-emerald-400">
+            <span className="font-mono text-base font-bold text-emerald-600">
               {formatMass(totalMass * 1000)}
             </span>
           </span>
