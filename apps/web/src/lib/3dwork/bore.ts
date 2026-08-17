@@ -50,6 +50,8 @@ type Vertex = [number, number, number];
 
 export function boreCylinder(soup: Float32Array, options: BoreOptions): {
   soup: Float32Array;
+  /** False when material was removed but the hole could not be walled. */
+  walled: boolean;
   report: BoreReport;
 } {
   const axis = AXIS_INDEX[options.axis];
@@ -115,7 +117,10 @@ export function boreCylinder(soup: Float32Array, options: BoreOptions): {
    * Triangles away from the bore are never touched.
    */
   const prepared: number[] = [];
-  const limit = Math.max(radius / 3, 1e-3);
+  // Only faces bigger than the bore itself can swallow it whole, and those are
+  // the only ones worth splitting. A smaller limit subdivides ordinary mesh
+  // near the hole for no benefit and multiplies the triangle count.
+  const limit = Math.max(radius, 1e-3);
 
   const subdivide = (a: Vertex, b: Vertex, c: Vertex, depth: number): void => {
     const longest = Math.max(
@@ -124,12 +129,15 @@ export function boreCylinder(soup: Float32Array, options: BoreOptions): {
       Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2])
     );
 
-    // Only bother where the triangle could actually reach the cylinder.
-    const near =
-      Math.min(radial(a), radial(b), radial(c)) < (radius + longest) ** 2 &&
-      Math.max(radial(a), radial(b), radial(c)) > 0;
+    // Only split triangles that could actually straddle the cylinder wall.
+    // A triangle's closest approach to the axis need not be at a vertex, so the
+    // bracket is widened by the triangle's own size — but no further, or every
+    // face in the neighbourhood gets subdivided for nothing.
+    const near = Math.sqrt(Math.min(radial(a), radial(b), radial(c)));
+    const far = Math.sqrt(Math.max(radial(a), radial(b), radial(c)));
+    const straddles = near - longest <= radius && far + longest >= radius;
 
-    if (depth >= 6 || longest <= limit || !near) {
+    if (depth >= 3 || longest <= limit || !straddles) {
       prepared.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
       return;
     }
@@ -334,6 +342,13 @@ export function boreCylinder(soup: Float32Array, options: BoreOptions): {
 
   return {
     soup: new Float32Array(kept),
+    /**
+     * True when the bore removed material but no wall could be built — the rims
+     * did not close into loops that encircle the cylinder, which happens on a
+     * hollow or many-chambered part. The result then has an open hole rather
+     * than a bored one, so the caller should reject it rather than ship it.
+     */
+    walled: wallTriangles > 0 || removed === 0,
     report: {
       trianglesBefore: Math.floor(soup.length / 9),
       trianglesAfter: kept.length / 9,

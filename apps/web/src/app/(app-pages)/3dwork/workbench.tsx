@@ -21,8 +21,10 @@ import {
   Maximize,
   PanelLeft,
   PanelRight,
+  CircleDot,
   Combine,
   Save,
+  Scissors,
   Sparkles,
   Trash2,
   Upload,
@@ -77,6 +79,9 @@ import {
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
 import { makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { slicePlane } from '@/lib/3dwork/slice';
+import { boreCylinder } from '@/lib/3dwork/bore';
+import { outerHull } from '@/lib/3dwork/outerhull';
 import { createZip, safeFileName } from '@/lib/3dwork/zip';
 import { emptySketch, toSvg, type Sketch } from '@/lib/3dwork/sketch';
 import { silhouette, type Outline2D, type ViewPlane } from '@/lib/3dwork/silhouette';
@@ -131,6 +136,10 @@ export function Workbench() {
   const [simplifyReport, setSimplifyReport] = useState<SimplifyReport | null>(null);
   const [solidReport, setSolidReport] = useState<SolidifyReport | null>(null);
   const [showWeld, setShowWeld] = useState(false);
+  const [showSlice, setShowSlice] = useState(false);
+  const [showBore, setShowBore] = useState(false);
+  const [sliceSpec, setSliceSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', position: 0, keepBoth: true });
+  const [boreSpec, setBoreSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', diameter: 28, cu: 0, cv: 0 });
   const [weldBore, setWeldBore] = useState({ diameter: 28, axis: 'x' as 'x' | 'y' | 'z' });
   const [frameToken, setFrameToken] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -871,6 +880,172 @@ export function Workbench() {
     [soupOfPart, addVersion]
   );
 
+  /**
+   * Cut the selected part with a plane. Nothing is resampled: the half that is
+   * kept is made of the original triangles, and only the ones the plane crosses
+   * are split.
+   */
+  const runSlice = useCallback(
+    (spec: { axis: 'x' | 'y' | 'z'; position: number; keepBoth: boolean }) => {
+      const part = selectedPart;
+      const soup = part ? soupOfPart(part.id) : undefined;
+      if (!part || !soup) return;
+
+      setBusy('Cutting…');
+      setTimeout(() => {
+        try {
+          const result = slicePlane(soup, { axis: spec.axis, position: spec.position, cap: true });
+          if (result.keep.triangles === 0 || result.cut.triangles === 0) {
+            toast.error('The plane misses the part — nothing was cut.');
+            return;
+          }
+
+          // The half on the near side replaces the part; the other half becomes
+          // its own part so both can be printed or exported separately.
+          addVersion(part.id, result.cut.soup, 'cut', `Sliced on ${spec.axis.toUpperCase()}`);
+
+          if (spec.keepBoth) {
+            const id = newPartId();
+            const versionId = newVersionId();
+            setGeometries((current) => new Map(current).set(versionId, result.keep.soup));
+            void saveGeometry(versionId, result.keep.soup);
+            patchProject((current) => ({
+              ...current,
+              parts: [
+                ...current.parts,
+                {
+                  ...part,
+                  id,
+                  name: `${part.name} (other half)`,
+                  slotId: '',
+                  triangles: result.keep.triangles,
+                  versions: [
+                    {
+                      id: versionId,
+                      label: 'v1 cut',
+                      note: `Other half of ${part.name}`,
+                      triangles: result.keep.triangles,
+                      createdAt: Date.now(),
+                    },
+                  ],
+                  activeVersionId: versionId,
+                  thumbnail: renderThumbnail(result.keep.soup, part.color),
+                  addedAt: Date.now(),
+                },
+              ],
+            }));
+          }
+
+          toast.success(
+            `Cut · ${formatCount(result.report.trianglesSplit)} triangles split · ` +
+              `${result.report.capLoops} face(s) closed` +
+              (result.report.openLoops > 0 ? `, ${result.report.openLoops} left open` : '')
+          );
+        } catch {
+          toast.error('Could not cut that part.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [selectedPart, soupOfPart, addVersion, patchProject]
+  );
+
+  /**
+   * Bore a round hole through the selected part, cut against the original
+   * triangles rather than a voxel grid, so nothing else is touched.
+   */
+  const runBore = useCallback(
+    (spec: { axis: 'x' | 'y' | 'z'; diameter: number; cu: number; cv: number }) => {
+      const part = selectedPart;
+      const soup = part ? soupOfPart(part.id) : undefined;
+      if (!part || !soup) return;
+
+      setBusy('Boring…');
+      setTimeout(() => {
+        try {
+          const result = boreCylinder(soup, {
+            axis: spec.axis,
+            diameter: spec.diameter,
+            center: [spec.cu, spec.cv],
+          });
+
+          if (result.report.trianglesRemoved === 0 && result.report.trianglesSplit === 0) {
+            toast.error('The bore misses the part — nothing was cut.');
+            return;
+          }
+
+          if (!result.walled) {
+            // Material came out but the rims never closed around the cylinder,
+            // which happens on a hollow or many-chambered part. Saving that
+            // would just be a hole with no wall.
+            toast.error(
+              'Cut a path but could not wall the hole — the part is hollow along that axis. ' +
+                'Nothing was changed. Make Solid first, then bore.'
+            );
+            return;
+          }
+
+          addVersion(
+            part.id,
+            result.soup,
+            'bored',
+            `⌀${spec.diameter} mm through ${spec.axis.toUpperCase()}`
+          );
+          toast.success(
+            `Bored ⌀${spec.diameter} mm · ${formatCount(result.report.wallTriangles)} wall triangles` +
+              (result.report.openLoops > 0
+                ? ` · ${result.report.openLoops} rim(s) left open`
+                : '')
+          );
+        } catch {
+          toast.error('Could not bore that part.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [selectedPart, soupOfPart, addVersion]
+  );
+
+  /**
+   * Delete the geometry sealed inside the part, keeping the visible surface
+   * exactly as it is. Useful before anything else, since buried walls are what
+   * produce most non-manifold edges.
+   */
+  const runOuterHull = useCallback(
+    (partId: string) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Stripping buried geometry…');
+      setTimeout(() => {
+        try {
+          const result = outerHull(soup, { resolution: 220, sealMm: 0.6 });
+          if (result.report.trianglesAfter === 0) {
+            toast.error('Nothing visible was found — try a larger seal distance.');
+            return;
+          }
+          addVersion(
+            partId,
+            result.soup,
+            'hulled',
+            `${Math.round((100 * result.report.trianglesRemoved) / Math.max(1, result.report.trianglesBefore))}% buried geometry removed`
+          );
+          toast.success(
+            `Removed ${formatCount(result.report.trianglesRemoved)} buried triangles. ` +
+              'The visible surface is untouched, but this opens the shell where they met it.'
+          );
+        } catch {
+          toast.error('Could not process that part.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
   const revertPart = useCallback(
     (partId: string) => {
       const part = project.parts.find((candidate) => candidate.id === partId);
@@ -973,6 +1148,13 @@ export function Workbench() {
 
     return baked;
   }, [project, geometries]);
+
+  /** Bounding box of the selected part, for centring a cut or a bore. */
+  const selectedBounds = useCallback(() => {
+    if (!selectedPart) return null;
+    const soup = soupOfPart(selectedPart.id);
+    return soup ? computeBounds(soup) : null;
+  }, [selectedPart, soupOfPart]);
 
   /** Bounding box of the fitted assembly, used to centre a bore through it. */
   const assemblyBounds = useCallback(() => {
@@ -1589,10 +1771,51 @@ export function Workbench() {
               Weld around a bore…
             </MenuItem>
             <MenuSeparator />
-            <MenuLabel>Not built yet</MenuLabel>
-            <MenuItem disabled hint="Cutting a part into printable pieces">
+            <MenuLabel>Cut the selected part</MenuLabel>
+            <MenuItem
+              onClick={() => {
+                const box = selectedBounds();
+                if (box) {
+                  const index = { x: 0, y: 1, z: 2 }[sliceSpec.axis];
+                  setSliceSpec((current) => ({ ...current, position: box.center[index] }));
+                }
+                setShowSlice(true);
+              }}
+              disabled={!selectedId || Boolean(busy)}
+              icon={Scissors}
+              hint="Keeps the original triangles — nothing is resampled"
+            >
               Slice through…
             </MenuItem>
+            <MenuItem
+              onClick={() => {
+                const box = selectedBounds();
+                if (box) {
+                  const index = { x: 0, y: 1, z: 2 }[boreSpec.axis];
+                  const others = [0, 1, 2].filter((i) => i !== index);
+                  setBoreSpec((current) => ({
+                    ...current,
+                    cu: box.center[others[0]],
+                    cv: box.center[others[1]],
+                  }));
+                }
+                setShowBore(true);
+              }}
+              disabled={!selectedId || Boolean(busy)}
+              icon={CircleDot}
+              hint="Perfectly round hole, rest of the part untouched"
+            >
+              Bore a pipe hole…
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && runOuterHull(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              hint="Deletes walls sealed inside; opens the shell where they met it"
+            >
+              Strip buried geometry
+            </MenuItem>
+            <MenuSeparator />
+            <MenuLabel>Not built yet</MenuLabel>
             <MenuItem disabled hint="Needs multi-select first">
               Group / ungroup
             </MenuItem>
@@ -1903,6 +2126,172 @@ export function Workbench() {
         </div>
         )}
       </div>
+      )}
+
+      {showSlice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className={`${PANEL} w-full max-w-md p-4`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Slice through the part</h2>
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              Every triangle the plane misses is kept exactly as it is — only the ones it crosses
+              are split, and the cut face is closed flat. Nothing is resampled.
+            </p>
+
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Axis</span>
+                <select
+                  className={FIELD}
+                  value={sliceSpec.axis}
+                  onChange={(event) => {
+                    const axis = event.target.value as 'x' | 'y' | 'z';
+                    const box = selectedBounds();
+                    const index = { x: 0, y: 1, z: 2 }[axis];
+                    setSliceSpec((current) => ({
+                      ...current,
+                      axis,
+                      position: box ? box.center[index] : current.position,
+                    }));
+                  }}
+                >
+                  <option value="x">X</option>
+                  <option value="y">Y</option>
+                  <option value="z">Z</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Position (mm)</span>
+                <input
+                  type="number"
+                  className={FIELD}
+                  value={Number(sliceSpec.position.toFixed(3))}
+                  onChange={(event) =>
+                    setSliceSpec((current) => ({ ...current, position: Number(event.target.value) }))
+                  }
+                />
+              </label>
+            </div>
+
+            <label className="mb-3 flex items-center gap-2 text-[0.7rem] text-slate-700">
+              <input
+                type="checkbox"
+                checked={sliceSpec.keepBoth}
+                onChange={(event) =>
+                  setSliceSpec((current) => ({ ...current, keepBoth: event.target.checked }))
+                }
+                className="accent-emerald-600"
+              />
+              Keep both halves as separate parts
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ACTION_GHOST} onClick={() => setShowSlice(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={ACTION_PRIMARY}
+                onClick={() => {
+                  setShowSlice(false);
+                  runSlice(sliceSpec);
+                }}
+              >
+                Cut
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className={`${PANEL} w-full max-w-md p-4`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Bore a hole for a pipe</h2>
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              The hole is cut against the original triangles and its wall is generated
+              mathematically, so it comes out perfectly round however coarse the part is. Everything
+              the pipe does not touch is left alone.
+            </p>
+
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Diameter (mm)</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={FIELD}
+                  value={boreSpec.diameter}
+                  onChange={(event) =>
+                    setBoreSpec((current) => ({ ...current, diameter: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Along axis</span>
+                <select
+                  className={FIELD}
+                  value={boreSpec.axis}
+                  onChange={(event) => {
+                    const axis = event.target.value as 'x' | 'y' | 'z';
+                    const box = selectedBounds();
+                    const index = { x: 0, y: 1, z: 2 }[axis];
+                    const others = [0, 1, 2].filter((i) => i !== index);
+                    setBoreSpec((current) => ({
+                      ...current,
+                      axis,
+                      cu: box ? box.center[others[0]] : current.cu,
+                      cv: box ? box.center[others[1]] : current.cv,
+                    }));
+                  }}
+                >
+                  <option value="x">X</option>
+                  <option value="y">Y</option>
+                  <option value="z">Z</option>
+                </select>
+              </label>
+            </div>
+
+            <span className={`${LABEL} mb-1 block`}>
+              Centre on the other two axes (mm)
+            </span>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                step="0.1"
+                className={FIELD}
+                value={Number(boreSpec.cu.toFixed(3))}
+                onChange={(event) =>
+                  setBoreSpec((current) => ({ ...current, cu: Number(event.target.value) }))
+                }
+              />
+              <input
+                type="number"
+                step="0.1"
+                className={FIELD}
+                value={Number(boreSpec.cv.toFixed(3))}
+                onChange={(event) =>
+                  setBoreSpec((current) => ({ ...current, cv: Number(event.target.value) }))
+                }
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ACTION_GHOST} onClick={() => setShowBore(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={ACTION_PRIMARY}
+                onClick={() => {
+                  setShowBore(false);
+                  runBore(boreSpec);
+                }}
+              >
+                Bore
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showWeld && (
