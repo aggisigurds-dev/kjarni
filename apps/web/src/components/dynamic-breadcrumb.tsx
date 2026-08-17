@@ -18,6 +18,7 @@ const routeLabels: Record<string, string> = {
     'private-item': 'Private Item',
     item: 'Item',
     new: 'New',
+    '3dwork': '3dwork',
 };
 
 export function DynamicBreadcrumb() {
