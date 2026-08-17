@@ -12,7 +12,7 @@ import {
 import { SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar";
 import { signOutAction } from "@/data/auth/sign-out";
 import { User } from "@supabase/supabase-js";
-import { ChevronUp, Home, Lock, LogOut, Settings } from "lucide-react";
+import { Boxes, ChevronUp, Home, Lock, LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTransition } from "react";
@@ -26,6 +26,11 @@ const navigationItems: { title: string; url: string; icon: React.ElementType }[]
     title: 'Private Items',
     url: '/private-items',
     icon: Lock,
+  },
+  {
+    title: '3dwork',
+    url: '/3dwork',
+    icon: Boxes,
   },
 ];
 
