@@ -47,6 +47,7 @@ import {
   type CutItem,
 } from '@/lib/3dwork/measure';
 import { exportBinaryStl, parseStl } from '@/lib/3dwork/stl';
+import { is3mf, parse3mf } from '@/lib/3dwork/threemf';
 import {
   assembledPlacement,
   createProject,
@@ -384,28 +385,62 @@ export function Workbench() {
 
   const importFiles = useCallback(
     async (files: File[]) => {
-      const stls = files.filter((file) => /\.stl$/i.test(file.name));
-      if (stls.length === 0) {
-        toast.error('No STL files in that drop.');
+      const accepted = files.filter((file) => /\.stl$/i.test(file.name) || is3mf(file.name));
+      if (accepted.length === 0) {
+        toast.error('No STL or 3MF files in that drop.');
         return;
       }
 
-      setBusy(`Reading ${stls.length} file${stls.length > 1 ? 's' : ''}…`);
+      setBusy(`Reading ${accepted.length} file${accepted.length > 1 ? 's' : ''}…`);
       const addedParts: Part[] = [];
       const addedGeometry = new Map<string, Float32Array>();
       let failures = 0;
 
-      for (const file of stls) {
-        try {
-          const raw = parseStl(await file.arrayBuffer());
-          if (raw.triangles === 0) {
-            failures++;
-            continue;
-          }
+      // One file does not mean one part: a 3MF carries a whole build, so it is
+      // flattened to its meshes here and each becomes a part of its own.
+      const incoming: { name: string; fileName: string; positions: Float32Array; triangles: number }[] = [];
 
+      for (const file of accepted) {
+        try {
+          if (is3mf(file.name)) {
+            const meshes = await parse3mf(await file.arrayBuffer());
+            const base = file.name.replace(/\.3mf$/i, '');
+            for (const mesh of meshes) {
+              if (mesh.triangles === 0) continue;
+              incoming.push({
+                name: mesh.name || base,
+                fileName: file.name,
+                positions: mesh.soup,
+                triangles: mesh.triangles,
+              });
+            }
+          } else {
+            const raw = parseStl(await file.arrayBuffer());
+            if (raw.triangles > 0) {
+              incoming.push({
+                name: file.name.replace(/\.stl$/i, ''),
+                fileName: file.name,
+                positions: raw.positions,
+                triangles: raw.triangles,
+              });
+            }
+          }
+        } catch {
+          failures++;
+        }
+      }
+
+      if (incoming.length === 0) {
+        setBusy(null);
+        toast.error('Nothing readable in those files.');
+        return;
+      }
+
+      for (const mesh of incoming) {
+        try {
           // Land every part on its own origin so the slot anchors mean the
           // same thing regardless of where it sat in its source file.
-          const soup = recenter(zUp ? zUpToYUp(raw.positions) : raw.positions);
+          const soup = recenter(zUp ? zUpToYUp(mesh.positions) : mesh.positions);
 
           const id = newPartId();
           const versionId = newVersionId();
@@ -417,9 +452,9 @@ export function Workbench() {
           addedGeometry.set(versionId, soup);
           addedParts.push({
             id,
-            name: file.name.replace(/\.stl$/i, ''),
-            fileName: file.name,
-            slotId: guessSlot(file.name),
+            name: mesh.name,
+            fileName: mesh.fileName,
+            slotId: guessSlot(mesh.name),
             color,
             visible: true,
             transform: {
@@ -427,7 +462,7 @@ export function Workbench() {
               rotation: { x: 0, y: 0, z: 0 },
               scale: { x: 1, y: 1, z: 1 },
             },
-            triangles: raw.triangles,
+            triangles: mesh.triangles,
             materialId: project.materialId,
             notes: '',
             // The file as it arrived is v1 and is never written over.
@@ -435,8 +470,8 @@ export function Workbench() {
               {
                 id: versionId,
                 label: 'v1 imported',
-                note: file.name,
-                triangles: raw.triangles,
+                note: mesh.fileName,
+                triangles: mesh.triangles,
                 createdAt: Date.now(),
               },
             ],
@@ -473,7 +508,7 @@ export function Workbench() {
       }
 
       setBusy(null);
-      if (failures > 0) toast.error(`${failures} file(s) could not be read as STL.`);
+      if (failures > 0) toast.error(`${failures} file(s) could not be read.`);
       if (addedParts.length > 0) toast.success(`Added ${addedParts.length} part(s).`);
     },
     [project, patchProject, zUp]
@@ -1612,7 +1647,7 @@ export function Workbench() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".stl"
+        accept=".stl,.3mf"
         multiple
         className="hidden"
         onChange={(event) => {
@@ -1643,9 +1678,9 @@ export function Workbench() {
               onClick={() => fileInputRef.current?.click()}
               icon={Upload}
               shortcut="drop"
-              hint="Or drag STL files onto the table"
+              hint="Or drag STL and 3MF files onto the table"
             >
-              Import STL…
+              Import STL · 3MF…
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Open</MenuLabel>
@@ -2039,7 +2074,7 @@ export function Workbench() {
           {project.parts.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
               <Upload className="h-8 w-8 text-slate-700" />
-              <p className="text-sm font-bold text-slate-500">Drop STL files here</p>
+              <p className="text-sm font-bold text-slate-500">Drop STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
                 Load every part of your build. They land in lanes by name — barrel, grip, magazine —
                 and you swap between them by clicking.
