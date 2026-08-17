@@ -150,6 +150,12 @@ export function Workbench() {
   const [showSlice, setShowSlice] = useState(false);
   const [showBore, setShowBore] = useState(false);
   const [showBend, setShowBend] = useState(false);
+  /**
+   * Parts picked out alongside the selected one. The selected part is always
+   * part of the selection; this holds only the extras, so nothing that reads
+   * `selectedId` has to change.
+   */
+  const [marked, setMarked] = useState<Set<string>>(new Set());
   const [showShell, setShowShell] = useState(false);
   const [shellSpec, setShellSpec] = useState<ShellOptions>(DEFAULT_SHELL);
   const [bendSpec, setBendSpec] = useState<BendSpec>(DEFAULT_BEND);
@@ -250,11 +256,17 @@ export function Workbench() {
       }
 
       const loaded = new Map<string, Float32Array>();
-      for (const part of target.parts) {
+      // A group's members are nested inside it rather than sitting in the
+      // parts list, and their geometry has to come back too or ungrouping
+      // after a reload would hand back empty parts.
+      const pending = [...target.parts];
+      for (let i = 0; i < pending.length; i++) {
+        const part = pending[i];
         for (const version of part.versions ?? []) {
           const soup = await loadGeometry(version.id);
           if (soup) loaded.set(version.id, soup);
         }
+        if (part.group) pending.push(...part.group.members);
       }
 
       setProject({
@@ -263,6 +275,7 @@ export function Workbench() {
       });
       setGeometries(loaded);
       setSelectedId(null);
+      setMarked(new Set());
       setOutline(null);
       setFixReport(null);
       setSimplifyReport(null);
@@ -593,6 +606,165 @@ export function Workbench() {
       });
       for (const versionId of versionIds) void deleteGeometry(versionId);
       setSelectedId((current) => (current === partId ? null : current));
+    },
+    [project.parts, patchProject]
+  );
+
+  /** The selected part plus anything marked alongside it, in gallery order. */
+  const selection = useMemo(() => {
+    const ids = new Set(marked);
+    if (selectedId) ids.add(selectedId);
+    return project.parts.filter((part) => ids.has(part.id));
+  }, [project.parts, marked, selectedId]);
+
+  const toggleMarked = useCallback((partId: string) => {
+    setMarked((current) => {
+      const next = new Set(current);
+      if (next.has(partId)) next.delete(partId);
+      else next.add(partId);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Bundle the selected parts into one.
+   *
+   * Each member's transform is baked into its geometry first, so the bundle
+   * holds them exactly where they sat, and the members themselves are kept
+   * whole inside the group rather than merged away — ungrouping gives back
+   * what went in rather than an approximation of it.
+   */
+  const groupSelection = useCallback(() => {
+    const members = selection;
+    if (members.length < 2) {
+      toast.error('Pick two or more parts to group — hold ⌘ or Ctrl to add to the selection.');
+      return;
+    }
+    if (members.some((part) => part.group)) {
+      toast.error('Ungroup first — groups do not nest yet.');
+      return;
+    }
+
+    const pieces: Float32Array[] = [];
+    for (const member of members) {
+      const soup = soupOfPart(member.id);
+      if (!soup) continue;
+
+      // A fitted part sits at its slot's anchor plus its own offset, so baking
+      // the part transform alone would collapse the whole group onto one spot.
+      const anchor = project.slots.find((slot) => slot.activePartId === member.id)?.anchor;
+      pieces.push(
+        bakeTransform(soup, {
+          ...member.transform,
+          position: {
+            x: member.transform.position.x + (anchor?.x ?? 0),
+            y: member.transform.position.y + (anchor?.y ?? 0),
+            z: member.transform.position.z + (anchor?.z ?? 0),
+          },
+        })
+      );
+    }
+    if (pieces.length === 0) return;
+
+    let total = 0;
+    for (const piece of pieces) total += piece.length;
+    const combined = new Float32Array(total);
+    let at = 0;
+    for (const piece of pieces) {
+      combined.set(piece, at);
+      at += piece.length;
+    }
+
+    const memberIds = new Set(members.map((part) => part.id));
+    const fitted = project.slots
+      .filter((slot) => slot.activePartId && memberIds.has(slot.activePartId))
+      .map((slot) => ({ slotId: slot.id, partId: slot.activePartId as string }));
+
+    const id = newPartId();
+    const versionId = newVersionId();
+    const color = nextColor(project);
+    const triangles = Math.floor(combined.length / 9);
+
+    setGeometries((current) => new Map(current).set(versionId, combined));
+    void saveGeometry(versionId, combined);
+
+    patchProject((current) => ({
+      ...current,
+      slots: current.slots.map((slot) =>
+        slot.activePartId && memberIds.has(slot.activePartId)
+          ? { ...slot, activePartId: null }
+          : slot
+      ),
+      parts: [
+        ...current.parts.filter((part) => !memberIds.has(part.id)),
+        {
+          id,
+          name: `Group of ${members.length}`,
+          fileName: '',
+          slotId: '',
+          color,
+          visible: true,
+          transform: {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+          triangles,
+          materialId: members[0].materialId,
+          notes: members.map((part) => part.name).join('\n'),
+          versions: [
+            {
+              id: versionId,
+              label: 'v1 grouped',
+              note: members.map((part) => part.name).join(', '),
+              triangles,
+              createdAt: Date.now(),
+            },
+          ],
+          activeVersionId: versionId,
+          group: { members, fitted },
+          thumbnail: renderThumbnail(combined, color),
+          addedAt: Date.now(),
+        },
+      ],
+    }));
+
+    setMarked(new Set());
+    setSelectedId(id);
+    setFrameToken((token) => token + 1);
+    toast.success(`Grouped ${members.length} parts.`);
+  }, [selection, project, soupOfPart, patchProject]);
+
+  /** Put a group's members back exactly as they were, and drop the bundle. */
+  const ungroupPart = useCallback(
+    (partId: string) => {
+      const group = project.parts.find((part) => part.id === partId)?.group;
+      if (!group) {
+        toast.error('That part is not a group.');
+        return;
+      }
+
+      const restored = new Map(group.fitted.map((entry) => [entry.slotId, entry.partId]));
+
+      patchProject((current) => ({
+        ...current,
+        slots: current.slots.map((slot) =>
+          restored.has(slot.id) ? { ...slot, activePartId: restored.get(slot.id) as string } : slot
+        ),
+        parts: [...current.parts.filter((part) => part.id !== partId), ...group.members],
+      }));
+
+      // The bundle's own geometry is the only thing that goes; the members'
+      // was never touched, which is what makes this exact.
+      const bundle = project.parts.find((part) => part.id === partId);
+      for (const version of bundle?.versions ?? []) {
+        void deleteGeometry(version.id);
+      }
+
+      setMarked(new Set());
+      setSelectedId(group.members[0]?.id ?? null);
+      setFrameToken((token) => token + 1);
+      toast.success(`Ungrouped ${group.members.length} parts.`);
     },
     [project.parts, patchProject]
   );
@@ -1990,9 +2162,25 @@ export function Workbench() {
               Wall thickness…
             </MenuItem>
             <MenuSeparator />
-            <MenuLabel>Not built yet</MenuLabel>
-            <MenuItem disabled hint="Needs multi-select first">
-              Group / ungroup
+            <MenuLabel>Group</MenuLabel>
+            <MenuItem
+              onClick={groupSelection}
+              disabled={selection.length < 2 || Boolean(busy)}
+              icon={Boxes}
+              hint={
+                selection.length < 2
+                  ? 'Hold ⌘ or Ctrl and click parts in the gallery'
+                  : `${selection.length} parts selected`
+              }
+            >
+              Group selection
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && ungroupPart(selectedId)}
+              disabled={!selectedPart?.group || Boolean(busy)}
+              hint="Puts the members back exactly as they went in"
+            >
+              Ungroup
             </MenuItem>
           </Menu>
 
@@ -2172,7 +2360,9 @@ export function Workbench() {
           <Gallery
             project={project}
             selectedId={selectedId}
+            marked={marked}
             onSelect={setSelectedId}
+            onMark={toggleMarked}
             onFit={fitPart}
             onToggleVisible={(partId) => {
               const part = project.parts.find((candidate) => candidate.id === partId);

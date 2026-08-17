@@ -52,9 +52,21 @@ export interface Part {
   activeVersionId: string;
   /** Set when the part is generated stock rather than an imported mesh. */
   hardware?: HardwareSpec;
+  /**
+   * Set when the part is several parts bundled into one. The members are kept
+   * whole rather than merged away, so ungrouping restores exactly what went in
+   * — including which slots they were fitted to.
+   */
+  group?: PartGroup;
   /** Data-URL preview rendered when the part was loaded. */
   thumbnail?: string;
   addedAt: number;
+}
+
+export interface PartGroup {
+  members: Part[];
+  /** Slots the members were fitted to, so the build survives a round trip. */
+  fitted: { slotId: string; partId: string }[];
 }
 
 export function activeVersion(part: Part): PartVersion | undefined {
