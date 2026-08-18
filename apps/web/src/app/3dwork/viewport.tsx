@@ -59,10 +59,18 @@ interface ViewportProps {
   onCalloutCycle: (slotId: string, direction: 1 | -1) => void;
   /** Change this value to re-frame the camera on everything. */
   frameToken: number;
-  /** When true, dragging the selected part in the view moves it. */
+  /** When true, parts can be put into move mode and dragged. */
   dragEnabled: boolean;
+  /** The part currently in move mode — only it is grabbable in the view. */
+  moveModeId: string | null;
+  /** Whether a grab translates the part or spins it. */
+  manipMode: 'move' | 'rotate';
+  /** Double-tap on a part: put it into move mode. */
+  onEnterMoveMode: (id: string) => void;
   /** Commit a world-space move of a part (delta added to its offset). */
   onDragMove: (id: string, delta: { x: number; y: number; z: number }) => void;
+  /** Commit a rotation of a part (delta degrees added to its rotation). */
+  onDragRotate: (id: string, delta: { x: number; y: number; z: number }) => void;
 }
 
 const DEG = Math.PI / 180;
@@ -117,7 +125,11 @@ export function Viewport({
   onCalloutCycle,
   frameToken,
   dragEnabled,
+  moveModeId,
+  manipMode,
+  onEnterMoveMode,
   onDragMove,
+  onDragRotate,
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const refs = useRef<SceneRefs | null>(null);
@@ -130,8 +142,28 @@ export function Viewport({
   calloutData.current = callouts;
 
   // Handlers change every render; a ref keeps the pointer listener stable.
-  const handlers = useRef({ onSelect, onMeasurePoint, measuring, dragEnabled, onDragMove, selectedId });
-  handlers.current = { onSelect, onMeasurePoint, measuring, dragEnabled, onDragMove, selectedId };
+  const handlers = useRef({
+    onSelect,
+    onMeasurePoint,
+    measuring,
+    dragEnabled,
+    moveModeId,
+    manipMode,
+    onEnterMoveMode,
+    onDragMove,
+    onDragRotate,
+  });
+  handlers.current = {
+    onSelect,
+    onMeasurePoint,
+    measuring,
+    dragEnabled,
+    moveModeId,
+    manipMode,
+    onEnterMoveMode,
+    onDragMove,
+    onDragRotate,
+  };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -301,10 +333,21 @@ export function Viewport({
     const dragPlane = new THREE.Plane();
     const dragPoint = new THREE.Vector3();
     const camDir = new THREE.Vector3();
+    const ROT_PER_PX = 0.5; // degrees of rotation per pixel dragged
     let downAt: { x: number; y: number } | null = null;
-    // Set while a grab-to-move is in progress; null the rest of the time.
-    let drag: { id: string; startPoint: THREE.Vector3; startPos: THREE.Vector3; moved: boolean } | null =
-      null;
+    let lastTap: { id: string; t: number } = { id: '', t: 0 };
+    // Set while a move-mode grab is in progress; null the rest of the time.
+    let drag:
+      | {
+          id: string;
+          startClient: { x: number; y: number };
+          startPoint: THREE.Vector3;
+          startPos: THREE.Vector3;
+          startRot: THREE.Euler;
+          mode: 'move' | 'rotate';
+          moved: boolean;
+        }
+      | null = null;
 
     const setPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -316,22 +359,29 @@ export function Viewport({
       downAt = { x: event.clientX, y: event.clientY };
       drag = null;
       const h = handlers.current;
-      // Grab-to-move only when the arrangement has real positions, we are not
-      // measuring, and it is the first finger. Only the *selected* part is
-      // grabbable, so dragging anything else still orbits the camera.
-      if (!h.dragEnabled || h.measuring || !event.isPrimary || !h.selectedId) return;
+      // A grab moves or rotates only the part that is in move mode; everything
+      // else — including a merely-selected part — still orbits the camera.
+      if (!h.dragEnabled || h.measuring || !event.isPrimary || !h.moveModeId) return;
       setPointer(event);
       raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObjects([...state.meshes.values()], false);
       if (hits.length === 0) return;
       const id = (hits[0].object as THREE.Mesh).userData.partId as string | undefined;
       const mesh = id ? state.meshes.get(id) : undefined;
-      if (!id || id !== h.selectedId || !mesh) return;
+      if (!id || id !== h.moveModeId || !mesh) return;
 
       // Move within the plane that faces the camera, through the grab point.
       camera.getWorldDirection(camDir);
       dragPlane.setFromNormalAndCoplanarPoint(camDir, hits[0].point);
-      drag = { id, startPoint: hits[0].point.clone(), startPos: mesh.position.clone(), moved: false };
+      drag = {
+        id,
+        startClient: { x: event.clientX, y: event.clientY },
+        startPoint: hits[0].point.clone(),
+        startPos: mesh.position.clone(),
+        startRot: mesh.rotation.clone(),
+        mode: h.manipMode,
+        moved: false,
+      };
       // Stop the orbit for this gesture. OrbitControls already saw the down, but
       // its move handler bails while disabled, so the camera stays put.
       state.controls.enabled = false;
@@ -345,19 +395,25 @@ export function Viewport({
 
     const onPointerMove = (event: PointerEvent) => {
       if (!drag) return;
-      setPointer(event);
-      raycaster.setFromCamera(pointer, camera);
-      if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
       const mesh = state.meshes.get(drag.id);
       if (!mesh) return;
-      const x = drag.startPos.x + (dragPoint.x - drag.startPoint.x);
-      const y = drag.startPos.y + (dragPoint.y - drag.startPoint.y);
-      const z = drag.startPos.z + (dragPoint.z - drag.startPoint.z);
-      mesh.position.set(x, y, z);
-      // Keep the ease target in step so the part does not spring back.
-      const target = state.targets.get(drag.id);
-      if (target) target.set(x, y, z);
-      else state.targets.set(drag.id, new THREE.Vector3(x, y, z));
+      if (drag.mode === 'rotate') {
+        const yaw = (event.clientX - drag.startClient.x) * ROT_PER_PX * DEG;
+        const pitch = (event.clientY - drag.startClient.y) * ROT_PER_PX * DEG;
+        mesh.rotation.set(drag.startRot.x + pitch, drag.startRot.y + yaw, drag.startRot.z);
+      } else {
+        setPointer(event);
+        raycaster.setFromCamera(pointer, camera);
+        if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
+        const x = drag.startPos.x + (dragPoint.x - drag.startPoint.x);
+        const y = drag.startPos.y + (dragPoint.y - drag.startPoint.y);
+        const z = drag.startPos.z + (dragPoint.z - drag.startPoint.z);
+        mesh.position.set(x, y, z);
+        // Keep the ease target in step so the part does not spring back.
+        const target = state.targets.get(drag.id);
+        if (target) target.set(x, y, z);
+        else state.targets.set(drag.id, new THREE.Vector3(x, y, z));
+      }
       if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 4) drag.moved = true;
     };
 
@@ -372,17 +428,25 @@ export function Viewport({
         }
         const mesh = state.meshes.get(drag.id);
         if (drag.moved && mesh) {
-          handlers.current.onDragMove(drag.id, {
-            x: mesh.position.x - drag.startPos.x,
-            y: mesh.position.y - drag.startPos.y,
-            z: mesh.position.z - drag.startPos.z,
-          });
-        } else {
+          if (drag.mode === 'rotate') {
+            handlers.current.onDragRotate(drag.id, {
+              x: (mesh.rotation.x - drag.startRot.x) / DEG,
+              y: (mesh.rotation.y - drag.startRot.y) / DEG,
+              z: 0,
+            });
+          } else {
+            handlers.current.onDragMove(drag.id, {
+              x: mesh.position.x - drag.startPos.x,
+              y: mesh.position.y - drag.startPos.y,
+              z: mesh.position.z - drag.startPos.z,
+            });
+          }
+        } else if (mesh) {
           // A grab that never crossed the threshold is just a tap: undo any
-          // sub-threshold drift and keep the part selected.
-          if (mesh) mesh.position.copy(drag.startPos);
+          // sub-threshold drift and leave the part where it was.
+          mesh.position.copy(drag.startPos);
+          mesh.rotation.copy(drag.startRot);
           state.targets.get(drag.id)?.copy(drag.startPos);
-          handlers.current.onSelect(drag.id);
         }
         drag = null;
         downAt = null;
@@ -401,6 +465,7 @@ export function Viewport({
 
       const hits = raycaster.intersectObjects([...state.meshes.values()], false);
       if (hits.length === 0) {
+        // Tapping empty space clears the selection (and exits move mode).
         if (!handlers.current.measuring) handlers.current.onSelect(null);
         return;
       }
@@ -411,7 +476,16 @@ export function Viewport({
         return;
       }
       const id = (hit.object as THREE.Mesh).userData.partId as string | undefined;
-      if (id) handlers.current.onSelect(id);
+      if (!id) return;
+      // Double-tap puts a part into move mode; a single tap just selects it.
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (handlers.current.dragEnabled && lastTap.id === id && now - lastTap.t < 320) {
+        lastTap = { id: '', t: 0 };
+        handlers.current.onEnterMoveMode(id);
+      } else {
+        lastTap = { id, t: now };
+        handlers.current.onSelect(id);
+      }
     };
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown);

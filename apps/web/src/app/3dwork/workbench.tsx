@@ -174,6 +174,9 @@ export function Workbench() {
   const [weldBore, setWeldBore] = useState({ diameter: 28, axis: 'x' as 'x' | 'y' | 'z' });
   const [frameToken, setFrameToken] = useState(0);
   const [dragging, setDragging] = useState(false);
+  /** The part currently in move mode (double-tapped), and how a grab acts. */
+  const [moveModeId, setMoveModeId] = useState<string | null>(null);
+  const [manip, setManip] = useState<'move' | 'rotate'>('move');
 
   const [projectList, setProjectList] = useState<{ id: string; name: string; parts: number }[]>([]);
   const [showGallery, setShowGallery] = useState(true);
@@ -517,32 +520,33 @@ export function Workbench() {
       const addedGeometry = new Map<string, Float32Array>();
       let failures = 0;
 
-      // One file does not mean one part: a 3MF carries a whole build, so it is
-      // flattened to its meshes here and each becomes a part of its own.
-      const incoming: { name: string; fileName: string; positions: Float32Array; triangles: number }[] = [];
+      // A file that arrived as one built object stays one object: its meshes
+      // become a group so importing does not scatter it into loose parts
+      // (Ungroup splits it later). A single-mesh file stays a single part.
+      type Incoming = {
+        fileName: string;
+        base: string;
+        meshes: { name: string; positions: Float32Array; triangles: number }[];
+      };
+      const files: Incoming[] = [];
 
       for (const file of accepted) {
         try {
           if (is3mf(file.name)) {
             const meshes = await parse3mf(await file.arrayBuffer());
             const base = file.name.replace(/\.3mf$/i, '');
-            for (const mesh of meshes) {
-              if (mesh.triangles === 0) continue;
-              incoming.push({
-                name: mesh.name || base,
-                fileName: file.name,
-                positions: mesh.soup,
-                triangles: mesh.triangles,
-              });
-            }
+            const kept = meshes
+              .filter((mesh) => mesh.triangles > 0)
+              .map((mesh) => ({ name: mesh.name || base, positions: mesh.soup, triangles: mesh.triangles }));
+            if (kept.length > 0) files.push({ fileName: file.name, base, meshes: kept });
           } else {
             const raw = parseStl(await file.arrayBuffer());
             if (raw.triangles > 0) {
-              incoming.push({
-                name: file.name.replace(/\.stl$/i, ''),
+              const base = file.name.replace(/\.stl$/i, '');
+              files.push({
                 fileName: file.name,
-                positions: raw.positions,
-                triangles: raw.triangles,
+                base,
+                meshes: [{ name: base, positions: raw.positions, triangles: raw.triangles }],
               });
             }
           }
@@ -551,55 +555,143 @@ export function Workbench() {
         }
       }
 
-      if (incoming.length === 0) {
+      if (files.length === 0) {
         setBusy(null);
         toast.error('Nothing readable in those files.');
         return;
       }
 
-      for (const mesh of incoming) {
+      const centerOf = (soup: Float32Array): [number, number, number] => {
+        let minX = Infinity;
+        let minY = Infinity;
+        let minZ = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        let maxZ = -Infinity;
+        for (let i = 0; i + 2 < soup.length; i += 3) {
+          const x = soup[i];
+          const y = soup[i + 1];
+          const z = soup[i + 2];
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (z < minZ) minZ = z;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+          if (z > maxZ) maxZ = z;
+        }
+        return [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
+      };
+      const shift = (soup: Float32Array, dx: number, dy: number, dz: number) =>
+        bakeTransform(soup, {
+          position: { x: dx, y: dy, z: dz },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        });
+      const mkPart = (
+        name: string,
+        fileName: string,
+        soup: Float32Array,
+        position: { x: number; y: number; z: number },
+        slotId: string
+      ): Part => {
+        const versionId = newVersionId();
+        const color = nextColor({ ...project, parts: [...project.parts, ...addedParts] } as Project);
+        const triangles = Math.floor(soup.length / 9);
+        addedGeometry.set(versionId, soup);
+        return {
+          id: newPartId(),
+          name,
+          fileName,
+          slotId,
+          color,
+          visible: true,
+          transform: { position, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } },
+          triangles,
+          materialId: project.materialId,
+          notes: '',
+          // The file as it arrived is v1 and is never written over.
+          versions: [{ id: versionId, label: 'v1 imported', note: fileName, triangles, createdAt: Date.now() }],
+          activeVersionId: versionId,
+          thumbnail: renderThumbnail(soup, color),
+          addedAt: Date.now(),
+        };
+      };
+
+      for (const file of files) {
         try {
-          // Land every part on its own origin so the slot anchors mean the
-          // same thing regardless of where it sat in its source file.
-          const soup = recenter(zUp ? zUpToYUp(mesh.positions) : mesh.positions);
-
-          const id = newPartId();
-          const versionId = newVersionId();
-          const color = nextColor({
-            ...project,
-            parts: [...project.parts, ...addedParts],
-          } as Project);
-
-          addedGeometry.set(versionId, soup);
-          addedParts.push({
-            id,
+          const prepared = file.meshes.map((mesh) => ({
             name: mesh.name,
-            fileName: mesh.fileName,
-            slotId: guessSlot(mesh.name),
-            color,
-            visible: true,
-            transform: {
-              position: { x: 0, y: 0, z: 0 },
-              rotation: { x: 0, y: 0, z: 0 },
-              scale: { x: 1, y: 1, z: 1 },
-            },
-            triangles: mesh.triangles,
-            materialId: project.materialId,
-            notes: '',
-            // The file as it arrived is v1 and is never written over.
-            versions: [
-              {
-                id: versionId,
-                label: 'v1 imported',
-                note: mesh.fileName,
-                triangles: mesh.triangles,
-                createdAt: Date.now(),
-              },
-            ],
-            activeVersionId: versionId,
-            thumbnail: renderThumbnail(soup, color),
-            addedAt: Date.now(),
-          });
+            soup: zUp ? zUpToYUp(mesh.positions) : mesh.positions,
+          }));
+
+          if (prepared.length === 1) {
+            // Land a lone part on its own origin, as before.
+            addedParts.push(
+              mkPart(
+                prepared[0].name,
+                file.fileName,
+                recenter(prepared[0].soup),
+                { x: 0, y: 0, z: 0 },
+                guessSlot(prepared[0].name)
+              )
+            );
+            continue;
+          }
+
+          // Multi-mesh file → one grouped part; the meshes keep their relative
+          // placement (baked into member offsets and the group's own geometry).
+          let minX = Infinity;
+          let minY = Infinity;
+          let minZ = Infinity;
+          let maxX = -Infinity;
+          let maxY = -Infinity;
+          let maxZ = -Infinity;
+          for (const mesh of prepared) {
+            for (let i = 0; i + 2 < mesh.soup.length; i += 3) {
+              const x = mesh.soup[i];
+              const y = mesh.soup[i + 1];
+              const z = mesh.soup[i + 2];
+              if (x < minX) minX = x;
+              if (y < minY) minY = y;
+              if (z < minZ) minZ = z;
+              if (x > maxX) maxX = x;
+              if (y > maxY) maxY = y;
+              if (z > maxZ) maxZ = z;
+            }
+          }
+          const gcx = (minX + maxX) / 2;
+          const gcy = (minY + maxY) / 2;
+          const gcz = (minZ + maxZ) / 2;
+
+          const members: Part[] = [];
+          const pieces: Float32Array[] = [];
+          for (const mesh of prepared) {
+            const [mcx, mcy, mcz] = centerOf(mesh.soup);
+            members.push(
+              mkPart(
+                mesh.name,
+                file.fileName,
+                shift(mesh.soup, -mcx, -mcy, -mcz),
+                { x: mcx - gcx, y: mcy - gcy, z: mcz - gcz },
+                ''
+              )
+            );
+            pieces.push(shift(mesh.soup, -gcx, -gcy, -gcz));
+          }
+
+          let total = 0;
+          for (const piece of pieces) total += piece.length;
+          const combined = new Float32Array(total);
+          let at = 0;
+          for (const piece of pieces) {
+            combined.set(piece, at);
+            at += piece.length;
+          }
+
+          const groupPart = mkPart(file.base, file.fileName, combined, { x: 0, y: 0, z: 0 }, guessSlot(file.base));
+          groupPart.group = { members, fitted: [] };
+          groupPart.notes = members.map((part) => part.name).join('\n');
+          addedParts.push(groupPart);
         } catch {
           failures++;
         }
@@ -681,6 +773,37 @@ export function Workbench() {
     },
     [patchProject]
   );
+
+  /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
+  const spinPart = useCallback(
+    (id: string, delta: { x: number; y: number; z: number }) => {
+      patchProject((current) => ({
+        ...current,
+        parts: current.parts.map((part) =>
+          part.id === id
+            ? {
+                ...part,
+                transform: {
+                  ...part.transform,
+                  rotation: {
+                    x: part.transform.rotation.x + delta.x,
+                    y: part.transform.rotation.y + delta.y,
+                    z: part.transform.rotation.z + delta.z,
+                  },
+                },
+              }
+            : part
+        ),
+      }));
+    },
+    [patchProject]
+  );
+
+  /** Double-tap a part in the view: enter move mode on it (and select it). */
+  const enterMoveMode = useCallback((id: string) => {
+    setSelectedId(id);
+    setMoveModeId(id);
+  }, []);
 
   const fitPart = useCallback(
     (slotId: string, partId: string | null) => {
@@ -2555,7 +2678,12 @@ export function Workbench() {
           <Viewport
             parts={viewportParts}
             selectedId={selectedId}
-            onSelect={selectPart}
+            onSelect={(id) => {
+              // A plain tap drops out of move mode unless it landed on the part
+              // already in it (a tap on empty space clears both).
+              setMoveModeId((current) => (current && current === id ? current : null));
+              selectPart(id);
+            }}
             wireframe={wireframe}
             showGrid={showGrid}
             xray={xray}
@@ -2567,12 +2695,84 @@ export function Workbench() {
             onCalloutCycle={cycleSlot}
             frameToken={frameToken}
             dragEnabled={mode === 'assembled'}
+            moveModeId={moveModeId}
+            manipMode={manip}
+            onEnterMoveMode={enterMoveMode}
             onDragMove={nudgePart}
+            onDragRotate={spinPart}
           />
 
-          {mode === 'assembled' && selectedId && (
-            <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[0.7rem] font-medium text-slate-500 shadow-sm">
-              Drag the selected part to move it
+          {mode === 'assembled' &&
+            moveModeId &&
+            (() => {
+              const mm = moveModeId;
+              if (!mm) return null;
+              const mv = (a: 'x' | 'y' | 'z', s: number) =>
+                nudgePart(mm, { x: a === 'x' ? s : 0, y: a === 'y' ? s : 0, z: a === 'z' ? s : 0 });
+              const rt = (a: 'x' | 'y' | 'z', s: number) =>
+                spinPart(mm, { x: a === 'x' ? s : 0, y: a === 'y' ? s : 0, z: a === 'z' ? s : 0 });
+              const step = manip === 'move' ? 5 : 15;
+              const act = (a: 'x' | 'y' | 'z', dir: 1 | -1) =>
+                manip === 'move' ? mv(a, dir * step) : rt(a, dir * step);
+              const seg = (on: boolean) =>
+                `px-2.5 py-1 ${on ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`;
+              return (
+                <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-slate-300 bg-white/95 p-2 shadow-lg backdrop-blur-sm">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="flex overflow-hidden rounded border border-slate-300 text-[0.68rem] font-bold">
+                      <button type="button" className={seg(manip === 'move')} onClick={() => setManip('move')}>
+                        ✥ Move
+                      </button>
+                      <button type="button" className={seg(manip === 'rotate')} onClick={() => setManip('rotate')}>
+                        ⟳ Rotate
+                      </button>
+                    </div>
+                    <span className="max-w-[120px] truncate text-[0.68rem] font-semibold text-slate-500">
+                      {selectedPart?.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-1 rounded border border-slate-300 px-2 py-1 text-[0.68rem] font-bold text-slate-600 hover:bg-slate-100"
+                      onClick={() => setMoveModeId(null)}
+                    >
+                      Done
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-center gap-3">
+                    {(['x', 'y', 'z'] as const).map((a) => (
+                      <div key={a} className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="h-7 w-7 rounded border border-slate-300 font-mono text-sm text-slate-700 hover:bg-slate-100"
+                          onClick={() => act(a, -1)}
+                          aria-label={`${a.toUpperCase()} minus`}
+                        >
+                          −
+                        </button>
+                        <span className="w-3 text-center text-[0.7rem] font-bold text-slate-500">
+                          {a.toUpperCase()}
+                        </span>
+                        <button
+                          type="button"
+                          className="h-7 w-7 rounded border border-slate-300 font-mono text-sm text-slate-700 hover:bg-slate-100"
+                          onClick={() => act(a, 1)}
+                          aria-label={`${a.toUpperCase()} plus`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 text-center text-[0.6rem] text-slate-400">
+                    {manip === 'move' ? '±5 mm' : '±15°'} · drag the part too · tap away to exit
+                  </div>
+                </div>
+              );
+            })()}
+
+          {mode === 'assembled' && selectedId && !moveModeId && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[0.7rem] font-medium text-slate-500 shadow-sm">
+              Double-tap a part to move or rotate it
             </div>
           )}
 
