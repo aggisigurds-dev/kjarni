@@ -59,6 +59,10 @@ interface ViewportProps {
   onCalloutCycle: (slotId: string, direction: 1 | -1) => void;
   /** Change this value to re-frame the camera on everything. */
   frameToken: number;
+  /** When true, dragging the selected part in the view moves it. */
+  dragEnabled: boolean;
+  /** Commit a world-space move of a part (delta added to its offset). */
+  onDragMove: (id: string, delta: { x: number; y: number; z: number }) => void;
 }
 
 const DEG = Math.PI / 180;
@@ -112,6 +116,8 @@ export function Viewport({
   onCalloutSelect,
   onCalloutCycle,
   frameToken,
+  dragEnabled,
+  onDragMove,
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const refs = useRef<SceneRefs | null>(null);
@@ -124,8 +130,8 @@ export function Viewport({
   calloutData.current = callouts;
 
   // Handlers change every render; a ref keeps the pointer listener stable.
-  const handlers = useRef({ onSelect, onMeasurePoint, measuring });
-  handlers.current = { onSelect, onMeasurePoint, measuring };
+  const handlers = useRef({ onSelect, onMeasurePoint, measuring, dragEnabled, onDragMove, selectedId });
+  handlers.current = { onSelect, onMeasurePoint, measuring, dragEnabled, onDragMove, selectedId };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -292,13 +298,97 @@ export function Viewport({
 
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
+    const dragPlane = new THREE.Plane();
+    const dragPoint = new THREE.Vector3();
+    const camDir = new THREE.Vector3();
     let downAt: { x: number; y: number } | null = null;
+    // Set while a grab-to-move is in progress; null the rest of the time.
+    let drag: { id: string; startPoint: THREE.Vector3; startPos: THREE.Vector3; moved: boolean } | null =
+      null;
+
+    const setPointer = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    };
 
     const onPointerDown = (event: PointerEvent) => {
       downAt = { x: event.clientX, y: event.clientY };
+      drag = null;
+      const h = handlers.current;
+      // Grab-to-move only when the arrangement has real positions, we are not
+      // measuring, and it is the first finger. Only the *selected* part is
+      // grabbable, so dragging anything else still orbits the camera.
+      if (!h.dragEnabled || h.measuring || !event.isPrimary || !h.selectedId) return;
+      setPointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects([...state.meshes.values()], false);
+      if (hits.length === 0) return;
+      const id = (hits[0].object as THREE.Mesh).userData.partId as string | undefined;
+      const mesh = id ? state.meshes.get(id) : undefined;
+      if (!id || id !== h.selectedId || !mesh) return;
+
+      // Move within the plane that faces the camera, through the grab point.
+      camera.getWorldDirection(camDir);
+      dragPlane.setFromNormalAndCoplanarPoint(camDir, hits[0].point);
+      drag = { id, startPoint: hits[0].point.clone(), startPos: mesh.position.clone(), moved: false };
+      // Stop the orbit for this gesture. OrbitControls already saw the down, but
+      // its move handler bails while disabled, so the camera stays put.
+      state.controls.enabled = false;
+      renderer.domElement.style.cursor = 'grabbing';
+      try {
+        renderer.domElement.setPointerCapture(event.pointerId);
+      } catch {
+        /* capture is best-effort */
+      }
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!drag) return;
+      setPointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
+      const mesh = state.meshes.get(drag.id);
+      if (!mesh) return;
+      const x = drag.startPos.x + (dragPoint.x - drag.startPoint.x);
+      const y = drag.startPos.y + (dragPoint.y - drag.startPoint.y);
+      const z = drag.startPos.z + (dragPoint.z - drag.startPoint.z);
+      mesh.position.set(x, y, z);
+      // Keep the ease target in step so the part does not spring back.
+      const target = state.targets.get(drag.id);
+      if (target) target.set(x, y, z);
+      else state.targets.set(drag.id, new THREE.Vector3(x, y, z));
+      if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 4) drag.moved = true;
     };
 
     const onPointerUp = (event: PointerEvent) => {
+      if (drag) {
+        state.controls.enabled = true;
+        renderer.domElement.style.cursor = '';
+        try {
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        } catch {
+          /* nothing captured */
+        }
+        const mesh = state.meshes.get(drag.id);
+        if (drag.moved && mesh) {
+          handlers.current.onDragMove(drag.id, {
+            x: mesh.position.x - drag.startPos.x,
+            y: mesh.position.y - drag.startPos.y,
+            z: mesh.position.z - drag.startPos.z,
+          });
+        } else {
+          // A grab that never crossed the threshold is just a tap: undo any
+          // sub-threshold drift and keep the part selected.
+          if (mesh) mesh.position.copy(drag.startPos);
+          state.targets.get(drag.id)?.copy(drag.startPos);
+          handlers.current.onSelect(drag.id);
+        }
+        drag = null;
+        downAt = null;
+        return;
+      }
+
       // Ignore the pointer-up that ends an orbit drag.
       if (!downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 4) {
         downAt = null;
@@ -306,9 +396,7 @@ export function Viewport({
       }
       downAt = null;
 
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      setPointer(event);
       raycaster.setFromCamera(pointer, camera);
 
       const hits = raycaster.intersectObjects([...state.meshes.values()], false);
@@ -327,12 +415,14 @@ export function Viewport({
     };
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
     renderer.domElement.addEventListener('pointerup', onPointerUp);
 
     return () => {
       cancelAnimationFrame(state.raf);
       observer.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       for (const mesh of state.meshes.values()) {
         mesh.geometry.dispose();

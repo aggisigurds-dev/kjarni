@@ -657,6 +657,31 @@ export function Workbench() {
     [patchProject]
   );
 
+  /** Commit a viewport grab-to-move: add the world delta to the part's offset. */
+  const nudgePart = useCallback(
+    (id: string, delta: { x: number; y: number; z: number }) => {
+      patchProject((current) => ({
+        ...current,
+        parts: current.parts.map((part) =>
+          part.id === id
+            ? {
+                ...part,
+                transform: {
+                  ...part.transform,
+                  position: {
+                    x: part.transform.position.x + delta.x,
+                    y: part.transform.position.y + delta.y,
+                    z: part.transform.position.z + delta.z,
+                  },
+                },
+              }
+            : part
+        ),
+      }));
+    },
+    [patchProject]
+  );
+
   const fitPart = useCallback(
     (slotId: string, partId: string | null) => {
       patchProject((current) => ({
@@ -2541,7 +2566,15 @@ export function Workbench() {
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
             frameToken={frameToken}
+            dragEnabled={mode === 'assembled'}
+            onDragMove={nudgePart}
           />
+
+          {mode === 'assembled' && selectedId && (
+            <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[0.7rem] font-medium text-slate-500 shadow-sm">
+              Drag the selected part to move it
+            </div>
+          )}
 
           {project.parts.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
