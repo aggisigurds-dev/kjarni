@@ -18,6 +18,13 @@
  */
 
 import { analyze, computeBounds, weld, type Topology } from './mesh';
+import {
+  TriangleIndex,
+  nearestTriangle,
+  solveQEF,
+  triangleNormal,
+  type HermitePlane,
+} from './contour';
 
 /**
  * A shape to cut out of the solid — a bore for a pipe or a bolt.
@@ -44,6 +51,20 @@ export interface SolidifyOptions {
   sealMm: number;
   /** Bores to cut out of the finished solid. */
   cuts?: CylinderCut[];
+  /**
+   * How the surface is rebuilt from the grid.
+   *
+   * 'surface-nets' averages edge midpoints — fast, and it rounds everything
+   * off. 'dual-contour' asks the original triangles where the surface actually
+   * crosses each grid edge and which way it faces there, then fits each cell's
+   * vertex to those planes.
+   *
+   * Dual contouring is not yet the default: the distance field it reads is
+   * verified correct, but a half-voxel bias remains on the +axis faces, so it
+   * currently measures worse than surface nets overall. Defaults to
+   * 'surface-nets'.
+   */
+  extraction?: 'surface-nets' | 'dual-contour';
 }
 
 export interface SolidifyReport {
@@ -54,6 +75,9 @@ export interface SolidifyReport {
   trianglesAfter: number;
   /** Voxels removed by the bores. */
   cutVoxels: number;
+  extraction: 'surface-nets' | 'dual-contour';
+  /** Grid edges whose crossing was taken from the original triangles. */
+  hermiteEdges: number;
   /** Enclosed volume of the rebuilt solid, mm³. */
   volume: number;
   after: Topology;
@@ -389,6 +413,234 @@ function applyCuts(
   return removed;
 }
 
+/**
+ * Build a narrow-band signed distance field.
+ *
+ * The magnitude is the true distance to the nearest triangle, so the zero
+ * crossing sits exactly on the original surface rather than on a voxel wall —
+ * that is what removes the stair-stepping and the half-voxel size error.
+ *
+ * The sign comes from the flood fill wherever the flood is decisive, which
+ * keeps the robustness: holes and interior junk cannot flip a voxel that the
+ * flood already reached. Only voxels the surface actually passes through are
+ * ambiguous, and those are resolved against the nearest triangle's normal.
+ */
+function buildDistanceField(
+  soup: Float32Array,
+  index: TriangleIndex,
+  shell: Uint8Array,
+  outside: Uint8Array,
+  inside: Uint8Array,
+  dims: [number, number, number],
+  origin: [number, number, number],
+  voxelSize: number
+): Float32Array {
+  const [nx, ny, nz] = dims;
+  const field = new Float32Array(shell.length);
+  // Anything outside the band just needs a consistent sign, not a distance.
+  const far = voxelSize * 4;
+  const radius = voxelSize * 2.5;
+
+  for (let z = 0; z < nz; z++) {
+    for (let y = 0; y < ny; y++) {
+      for (let x = 0; x < nx; x++) {
+        const i = (z * ny + y) * nx + x;
+        // `outside` excludes shell voxels, and every shell voxel is inside the
+        // band, so this is the classification the band itself uses. Using
+        // `inside` here instead disagrees with it and puts a phantom crossing
+        // where the band meets the far field.
+        const solid = outside[i] !== 1;
+
+        // Only voxels near the surface need a real distance.
+        let nearSurface = shell[i] === 1;
+        if (!nearSurface) {
+          for (let dz = -1; dz <= 1 && !nearSurface; dz++) {
+            for (let dy = -1; dy <= 1 && !nearSurface; dy++) {
+              for (let dx = -1; dx <= 1 && !nearSurface; dx++) {
+                const jx = x + dx;
+                const jy = y + dy;
+                const jz = z + dz;
+                if (jx < 0 || jy < 0 || jz < 0 || jx >= nx || jy >= ny || jz >= nz) continue;
+                if (shell[(jz * ny + jy) * nx + jx] === 1) nearSurface = true;
+              }
+            }
+          }
+        }
+
+        if (!nearSurface) {
+          field[i] = solid ? -far : far;
+          continue;
+        }
+
+        const px = origin[0] + (x + 0.5) * voxelSize;
+        const py = origin[1] + (y + 0.5) * voxelSize;
+        const pz = origin[2] + (z + 0.5) * voxelSize;
+        const hit = nearestTriangle(soup, index, px, py, pz, radius);
+
+        if (hit.triangle < 0) {
+          field[i] = solid ? -far : far;
+          continue;
+        }
+
+        // Sign: trust the flood where it is decisive. A voxel the surface runs
+        // through was neither flooded nor enclosed, so ask the triangle which
+        // side of it we are on.
+        let negative: boolean;
+        if (outside[i] === 1) negative = false;
+        else if (shell[i] !== 1) negative = true;
+        else {
+          const [tnx, tny, tnz] = triangleNormal(soup, hit.triangle);
+          const at = hit.triangle * 9;
+          const toPoint =
+            (px - soup[at]) * tnx + (py - soup[at + 1]) * tny + (pz - soup[at + 2]) * tnz;
+          // Winding is unreliable, so a face pointing the wrong way would lie.
+          // Fall back to the flood's verdict for the voxel when the two
+          // disagree about a voxel that the flood did reach.
+          negative = toPoint < 0;
+        }
+
+        field[i] = negative ? -hit.distance : hit.distance;
+      }
+    }
+  }
+
+  return field;
+}
+
+/**
+ * Dual contouring over a distance field.
+ *
+ * Crossings are found by interpolating the field along each grid edge, which is
+ * sub-voxel accurate, and each crossing carries the nearest triangle's normal.
+ * Every cell then fits one vertex to all the planes touching it, so flats stay
+ * flat and corners come back as corners instead of bevels.
+ */
+function dualContour(
+  field: Float32Array,
+  dims: [number, number, number],
+  origin: [number, number, number],
+  voxelSize: number,
+  soup: Float32Array,
+  index: TriangleIndex
+): { soup: Float32Array; hermiteEdges: number } {
+  const [nx, ny, nz] = dims;
+  const solidAt = (x: number, y: number, z: number) => field[(z * ny + y) * nx + x] < 0;
+  const valueAt = (x: number, y: number, z: number) => field[(z * ny + y) * nx + x];
+  const pointAt = (x: number, y: number, z: number): [number, number, number] => [
+    origin[0] + (x + 0.5) * voxelSize,
+    origin[1] + (y + 0.5) * voxelSize,
+    origin[2] + (z + 0.5) * voxelSize,
+  ];
+
+  const crossing = (x: number, y: number, z: number, axis: 0 | 1 | 2): HermitePlane => {
+    const bx = x + (axis === 0 ? 1 : 0);
+    const by = y + (axis === 1 ? 1 : 0);
+    const bz = z + (axis === 2 ? 1 : 0);
+
+    const va = valueAt(x, y, z);
+    const vb = valueAt(bx, by, bz);
+    // Linear interpolation to the zero crossing — the sub-voxel bit.
+    const t = Math.min(0.999, Math.max(0.001, va / (va - vb)));
+
+    const a = pointAt(x, y, z);
+    const b = pointAt(bx, by, bz);
+    const px = a[0] + (b[0] - a[0]) * t;
+    const py = a[1] + (b[1] - a[1]) * t;
+    const pz = a[2] + (b[2] - a[2]) * t;
+
+    const hit = nearestTriangle(soup, index, px, py, pz, voxelSize * 2);
+    if (hit.triangle < 0) {
+      return {
+        px, py, pz,
+        nx: axis === 0 ? 1 : 0,
+        ny: axis === 1 ? 1 : 0,
+        nz: axis === 2 ? 1 : 0,
+      };
+    }
+
+    let [tnx, tny, tnz] = triangleNormal(soup, hit.triangle);
+    // Point the normal outward, using the field's gradient along this edge.
+    if ((vb - va) * (tnx * (b[0] - a[0]) + tny * (b[1] - a[1]) + tnz * (b[2] - a[2])) < 0) {
+      tnx = -tnx;
+      tny = -tny;
+      tnz = -tnz;
+    }
+    return { px, py, pz, nx: tnx, ny: tny, nz: tnz };
+  };
+
+  const [cx, cy, cz] = [nx - 1, ny - 1, nz - 1];
+  const cellVertex = new Int32Array(cx * cy * cz).fill(-1);
+  const vertices: number[] = [];
+  let hermiteEdges = 0;
+
+  for (let z = 0; z < cz; z++) {
+    for (let y = 0; y < cy; y++) {
+      for (let x = 0; x < cx; x++) {
+        let mask = 0;
+        for (let c = 0; c < 8; c++) {
+          if (solidAt(x + (c & 1), y + ((c >> 1) & 1), z + ((c >> 2) & 1))) mask |= 1 << c;
+        }
+        if (mask === 0 || mask === 255) continue;
+
+        const planes: HermitePlane[] = [];
+        for (let c = 0; c < 8; c++) {
+          for (const axis of [0, 1, 2] as const) {
+            const bit = 1 << axis;
+            if (c & bit) continue;
+            const other = c | bit;
+            if (((mask >> c) & 1) === ((mask >> other) & 1)) continue;
+
+            planes.push(crossing(x + (c & 1), y + ((c >> 1) & 1), z + ((c >> 2) & 1), axis));
+            hermiteEdges++;
+          }
+        }
+        if (planes.length === 0) continue;
+
+        const base = pointAt(x, y, z);
+        const [vx, vy, vz] = solveQEF(planes, base[0], base[1], base[2], voxelSize);
+        cellVertex[(z * cy + y) * cx + x] = vertices.length / 3;
+        vertices.push(vx, vy, vz);
+      }
+    }
+  }
+
+  const triangles: number[] = [];
+  const cellAt = (x: number, y: number, z: number) =>
+    x < 0 || y < 0 || z < 0 || x >= cx || y >= cy || z >= cz ? -1 : cellVertex[(z * cy + y) * cx + x];
+
+  const emitQuad = (a: number, b: number, c: number, d: number, flip: boolean) => {
+    if (a < 0 || b < 0 || c < 0 || d < 0) return;
+    const quad = flip ? [a, d, c, b] : [a, b, c, d];
+    for (const [i, j, k] of [
+      [0, 1, 2],
+      [0, 2, 3],
+    ]) {
+      for (const corner of [quad[i], quad[j], quad[k]]) {
+        triangles.push(vertices[corner * 3], vertices[corner * 3 + 1], vertices[corner * 3 + 2]);
+      }
+    }
+  };
+
+  for (let z = 1; z < nz - 1; z++) {
+    for (let y = 1; y < ny - 1; y++) {
+      for (let x = 1; x < nx - 1; x++) {
+        const here = solidAt(x, y, z);
+        if (x + 1 < nx && here !== solidAt(x + 1, y, z)) {
+          emitQuad(cellAt(x, y - 1, z - 1), cellAt(x, y, z - 1), cellAt(x, y, z), cellAt(x, y - 1, z), !here);
+        }
+        if (y + 1 < ny && here !== solidAt(x, y + 1, z)) {
+          emitQuad(cellAt(x - 1, y, z - 1), cellAt(x, y, z - 1), cellAt(x, y, z), cellAt(x - 1, y, z), here);
+        }
+        if (z + 1 < nz && here !== solidAt(x, y, z + 1)) {
+          emitQuad(cellAt(x - 1, y - 1, z), cellAt(x, y - 1, z), cellAt(x, y, z), cellAt(x - 1, y, z), !here);
+        }
+      }
+    }
+  }
+
+  return { soup: new Float32Array(triangles), hermiteEdges };
+}
+
 export function makeSolid(soup: Float32Array, options: SolidifyOptions): {
   soup: Float32Array;
   report: SolidifyReport;
@@ -437,7 +689,35 @@ export function makeSolid(soup: Float32Array, options: SolidifyOptions): {
   // stays a hole rather than being sealed shut again.
   const cutVoxels = applyCuts(inside, dims, origin, voxelSize, options.cuts ?? []);
 
-  const rebuilt = surfaceNets(inside, dims, origin, voxelSize);
+  // Surface nets remains the default. Dual contouring below reconstructs sharp
+  // features and places the surface sub-voxel, but still carries a half-voxel
+  // bias on the +axis faces (rasterisation rounds a surface-grazing point into
+  // the upper voxel), which makes it measurably worse overall until fixed:
+  // on a 20 mm cube it is exact on the min faces and a full voxel out on the
+  // max ones, against surface nets' symmetric half-voxel. Opt in explicitly.
+  const extraction = options.extraction ?? 'surface-nets';
+  let rebuilt: Float32Array;
+  let hermiteEdges = 0;
+
+  if (extraction === 'dual-contour' && soup.length > 0) {
+    // Bucket at two voxels: big enough that the index stays small, small
+    // enough that a query only sees a handful of triangles.
+    const index = new TriangleIndex(soup, origin, bounds.size, voxelSize * 2);
+    const field = buildDistanceField(
+      soup, index, shell, outside, inside, dims, origin, voxelSize
+    );
+    // `inside` already has the bores cleared; carry that into the field, or
+    // dual contouring would rebuild the part with the hole filled back in.
+    for (let i = 0; i < field.length; i++) {
+      if (inside[i] === 0 && field[i] < 0) field[i] = voxelSize;
+    }
+    const result = dualContour(field, dims, origin, voxelSize, soup, index);
+    rebuilt = result.soup;
+    hermiteEdges = result.hermiteEdges;
+  } else {
+    rebuilt = surfaceNets(inside, dims, origin, voxelSize);
+  }
+
   const topology = analyze(weld(rebuilt).mesh);
 
   // Surface nets can come out inside-out depending on the quad winding; the
@@ -465,6 +745,8 @@ export function makeSolid(soup: Float32Array, options: SolidifyOptions): {
       trianglesBefore: Math.floor(soup.length / 9),
       trianglesAfter: Math.floor(finished.length / 9),
       cutVoxels,
+      extraction,
+      hermiteEdges,
       volume: Math.abs(after.signedVolume),
       after,
     },

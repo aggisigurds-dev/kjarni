@@ -15,7 +15,10 @@ import { CHIP, LABEL, PANEL } from './ui';
 interface GalleryProps {
   project: Project;
   selectedId: string | null;
+  /** Parts picked out alongside the selected one, for group operations. */
+  marked: Set<string>;
   onSelect: (partId: string) => void;
+  onMark: (partId: string) => void;
   onFit: (slotId: string, partId: string | null) => void;
   onToggleVisible: (partId: string) => void;
   onDelete: (partId: string) => void;
@@ -26,7 +29,9 @@ function PartCard({
   part,
   fitted,
   selected,
+  marked,
   onSelect,
+  onMark,
   onFit,
   onToggleVisible,
   onDelete,
@@ -34,7 +39,9 @@ function PartCard({
   part: Part;
   fitted: boolean;
   selected: boolean;
+  marked: boolean;
   onSelect: () => void;
+  onMark: () => void;
   onFit: () => void;
   onToggleVisible: () => void;
   onDelete: () => void;
@@ -44,18 +51,22 @@ function PartCard({
       className={`group relative shrink-0 rounded border p-1.5 transition-colors ${
         selected
           ? 'border-amber-400 bg-amber-50'
-          : fitted
-            ? 'border-emerald-500 bg-emerald-50'
-            : 'border-slate-300 bg-slate-50 hover:border-slate-400'
+          : marked
+            ? 'border-sky-500 bg-sky-50'
+            : fitted
+              ? 'border-emerald-500 bg-emerald-50'
+              : 'border-slate-300 bg-slate-50 hover:border-slate-400'
       }`}
       style={{ width: 104 }}
     >
       <button
         type="button"
-        onClick={onSelect}
+        // A modified click adds to the selection instead of replacing it,
+        // which is what every other parts list works like.
+        onClick={(event) => (event.metaKey || event.ctrlKey ? onMark() : onSelect())}
         onDoubleClick={onFit}
         className="block w-full text-left"
-        title={`${part.name} — click to select, double-click to fit`}
+        title={`${part.name} — click to select, ⌘/Ctrl-click to add to the selection, double-click to fit`}
       >
         <div className="flex h-[74px] w-full items-center justify-center overflow-hidden rounded bg-slate-200">
           {part.thumbnail ? (
@@ -102,7 +113,9 @@ function SlotLane({
   slot,
   parts,
   selectedId,
+  marked,
   onSelect,
+  onMark,
   onFit,
   onToggleVisible,
   onDelete,
@@ -110,7 +123,9 @@ function SlotLane({
   slot: Slot;
   parts: Part[];
   selectedId: string | null;
+  marked: Set<string>;
   onSelect: (id: string) => void;
+  onMark: (id: string) => void;
   onFit: (slotId: string, partId: string | null) => void;
   onToggleVisible: (id: string) => void;
   onDelete: (id: string) => void;
@@ -143,7 +158,9 @@ function SlotLane({
               part={part}
               fitted={slot.activePartId === part.id}
               selected={selectedId === part.id}
+              marked={marked.has(part.id)}
               onSelect={() => onSelect(part.id)}
+              onMark={() => onMark(part.id)}
               onFit={() => onFit(slot.id, part.id)}
               onToggleVisible={() => onToggleVisible(part.id)}
               onDelete={() => onDelete(part.id)}
@@ -158,7 +175,9 @@ function SlotLane({
 export function Gallery({
   project,
   selectedId,
+  marked,
   onSelect,
+  onMark,
   onFit,
   onToggleVisible,
   onDelete,
@@ -184,7 +203,9 @@ export function Gallery({
             slot={slot}
             parts={partsForSlot(project, slot.id)}
             selectedId={selectedId}
+            marked={marked}
             onSelect={onSelect}
+            onMark={onMark}
             onFit={onFit}
             onToggleVisible={onToggleVisible}
             onDelete={onDelete}
@@ -204,7 +225,9 @@ export function Gallery({
                     part={part}
                     fitted={false}
                     selected={selectedId === part.id}
+                    marked={marked.has(part.id)}
                     onSelect={() => onSelect(part.id)}
+                    onMark={() => onMark(part.id)}
                     onFit={() => onSelect(part.id)}
                     onToggleVisible={() => onToggleVisible(part.id)}
                     onDelete={() => onDelete(part.id)}
