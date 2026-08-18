@@ -1,0 +1,2329 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#20242c">
+<title>Skjalarinn — skjöl · pdf · lestur</title>
+<link rel="manifest" href='data:application/json,{"name":"Verkfæri Skjalalesari","short_name":"Verkfæri","start_url":".","display":"standalone","background_color":"%23161a20","theme_color":"%2320242c","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%23c0271c%22/%3E%3Ctext x=%2232%22 y=%2244%22 font-size=%2238%22 font-family=%22Arial%22 font-weight=%22bold%22 fill=%22white%22 text-anchor=%22middle%22%3EV%3C/text%3E%3C/svg%3E","sizes":"64x64","type":"image/svg+xml"}]}'>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  /* dark metal — gunmetal/grafít með málmáferð og djúprauðum "metallic" hreim */
+  --bg:#1c212a; --panel:#282e38; --panel2:#313843; --line:#424a57;
+  --txt:#e9edf3; --muted:#9ba5b5; --accent:#d9463a; --accent2:#9c2018;
+  --good:#3fbf83; --warn:#e6a23c; --bad:#e05561; --chip:#343c48;
+  --line2:#4d5563; --panel3:#39414d;
+  --metal:linear-gradient(180deg,#3a414d 0%,#313842 55%,#2a313b 100%);
+  --metalRed:linear-gradient(180deg,#e04a3c 0%,#c0271c 52%,#991911 100%);
+  --canvas:#15191f; --thumb:#171b21; --overlay:rgba(0,0,0,.64);
+  --stageShadow:0 8px 34px rgba(0,0,0,.5); --edge:#0c0e12;
+}
+/* ---- LJÓST / HVÍTT ÞEMA (innihald verður ljóst, stikan helst dökk-metal) ---- */
+body.theme-light{
+  --bg:#eef1f7; --panel:#ffffff; --panel2:#f1f4fa; --line:#dce1ec;
+  --txt:#1c2333; --muted:#647089; --accent:#c0271c; --accent2:#991911;
+  --good:#12a56f; --warn:#c9820a; --bad:#e0384a; --chip:#eef1f7;
+  --line2:#c7cfe0; --panel3:#e6ebf5;
+  --metal:linear-gradient(180deg,#ffffff,#eef1f7);
+  --canvas:#dfe4ee; --thumb:#eef1f7; --overlay:rgba(28,35,51,.42);
+  --stageShadow:0 6px 22px rgba(30,40,70,.18); --edge:#d5dbe6;
+}
+body.theme-light .b-new{background:#e3e8f2;color:#55617d}
+body.theme-light .b-ok{background:rgba(18,165,111,.14);color:var(--good)}
+body.theme-light .b-rev{background:rgba(201,130,10,.16);color:var(--warn)}
+body.theme-light .b-app{background:rgba(59,111,224,.14);color:#2f6fe0}
+body.theme-light ::-webkit-scrollbar-thumb{background:#c7cfe0}
+body.theme-light ::-webkit-scrollbar-thumb:hover{background:#aeb8cf}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+button{font-family:inherit;cursor:pointer}
+.btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--metalRed);border:1px solid #7d160f;color:#fff;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 1px 2px rgba(0,0,0,.35)}
+.btn.pri:hover{filter:brightness(1.09)}
+.btn.sm{padding:4px 8px;font-size:12px}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+label.fld{display:block;font-size:11px;color:var(--muted);margin:8px 0 3px;text-transform:uppercase;letter-spacing:.04em}
+.hide{display:none!important}
+.row{display:flex;gap:8px;align-items:center}
+.grow{flex:1}
+.chip{background:var(--chip);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:12px;display:inline-flex;gap:5px;align-items:center}
+.badge{border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600}
+.b-new{background:#2b3340;color:#aeb8c8}
+.b-ok{background:rgba(63,191,131,.18);color:var(--good)}
+.b-rev{background:rgba(230,162,60,.18);color:var(--warn)}
+.b-app{background:rgba(90,130,200,.20);color:#9dbbe8}
+.scroll{overflow:auto}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#3a414d;border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:#4a5261}
+
+/* layout */
+#app{display:flex;flex-direction:row;height:100%}
+.mainwrap{flex:1;display:flex;flex-direction:column;min-width:0}
+header{display:flex;align-items:center;gap:12px;padding:9px 14px;background:var(--metal);border-bottom:1px solid var(--edge)}
+
+/* left banner */
+.banner{width:214px;flex:none;display:flex;flex-direction:column;padding:16px 12px;color:#e7ebf2;background:linear-gradient(180deg,#242a33 0%,#1a1e25 55%,#131519 100%);border-right:1px solid #0c0e12;box-shadow:inset -1px 0 0 rgba(255,255,255,.03)}
+.brand{display:flex;align-items:center;gap:11px;margin:2px 4px 22px}
+.bmark{width:36px;height:36px;border-radius:10px;background:var(--metalRed);border:1px solid #7d160f;box-shadow:inset 0 1px 0 rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;flex:none}
+.btxt{display:flex;flex-direction:column;line-height:1.15;font-weight:800;letter-spacing:.5px;font-size:16px}
+.btxt small{font-weight:500;letter-spacing:.2px;font-size:11px;opacity:.6}
+.vnav{display:flex;flex-direction:column;gap:4px}
+.banner .tab{display:flex;align-items:center;gap:11px;justify-content:flex-start;text-align:left;width:100%;background:transparent;border:none;color:rgba(231,235,242,.72);padding:11px 12px;border-radius:10px;font-size:14px;font-weight:600}
+.banner .tab .ic{font-size:16px;filter:grayscale(.15)}
+.banner .tab:hover{background:rgba(255,255,255,.06);color:#fff}
+.banner .tab.active{background:rgba(211,68,54,.16);color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
+.bspacer{flex:1}
+.bactions{display:flex;flex-direction:column;gap:6px}
+.bactions .btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);color:#dfe4ec;justify-content:flex-start;font-size:12.5px}
+.bactions .btn:hover{background:rgba(255,255,255,.10);border-color:rgba(211,68,54,.55)}
+.bfoot{margin:14px 4px 2px;opacity:.5;font-size:11px}
+.tab{background:transparent;border:none;color:var(--muted);padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600}
+.tab.active{background:var(--panel2);color:var(--txt)}
+.spacer{flex:1}
+main{flex:1;min-height:0;position:relative}
+/* ================= view toggles (útlit) ================= */
+.mob-only{display:none!important}
+.mob-subnav{display:none}
+.mob-brand{display:none;align-items:center;gap:8px;font-weight:800;letter-spacing:.5px;font-size:15px}
+.bmark2{width:28px;height:28px;border-radius:8px;background:var(--metalRed);border:1px solid #7d160f;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;flex:none}
+
+/* ---------- MOBILE VIEW (símaútlit) ---------- */
+body.view-mobile .mob-only{display:inline-flex!important}
+body.view-mobile .mob-brand{display:flex}
+body.view-mobile .ldtxt{display:none}
+body.view-mobile #engineState{display:none}
+body.view-mobile #btnLoad{font-size:18px;padding:7px 12px}
+body.view-mobile #app{flex-direction:column}
+/* banner -> bottom nav */
+body.view-mobile .banner{position:fixed;bottom:0;left:0;right:0;top:auto;width:auto;height:58px;flex-direction:row;padding:0 4px;z-index:65;border-right:none;border-top:1px solid var(--edge)}
+body.view-mobile .banner .brand,body.view-mobile .banner .bactions,body.view-mobile .banner .bfoot,body.view-mobile .banner .bspacer{display:none}
+body.view-mobile .vnav{flex-direction:row;flex:1;gap:0;justify-content:space-around;align-items:center}
+body.view-mobile .banner .tab{flex-direction:column;gap:3px;font-size:10.5px;padding:6px 4px;justify-content:center;text-align:center;border-radius:8px}
+body.view-mobile .banner .tab .ic{font-size:20px}
+body.view-mobile .banner .tab.active{background:transparent;box-shadow:none;color:var(--accent)}
+body.view-mobile .mainwrap{padding-bottom:58px}
+/* workspace: one panel at a time via top segmented control */
+body.view-mobile #vw-work{flex-direction:column}
+body.view-mobile .mob-subnav{display:flex;gap:6px;padding:6px 8px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+body.view-mobile .mob-subnav button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 4px;font-size:12px;font-weight:600}
+body.view-mobile .mob-subnav button.active{background:rgba(217,70,58,.16);color:var(--txt);border-color:var(--accent)}
+body.view-mobile .sidebar,body.view-mobile .center,body.view-mobile .rightbar{width:auto;flex:none;border-left:none;border-right:none;display:none}
+body.view-mobile #vw-work.mob-list .sidebar{display:flex;flex:1}
+body.view-mobile #vw-work.mob-doc .center{display:flex;flex:1}
+body.view-mobile #vw-work.mob-fields .rightbar{display:flex;flex:1}
+body.view-mobile .toolbar{gap:6px;padding:6px 8px}
+body.view-mobile .review-bar{max-width:94%;bottom:10px;gap:11px;padding:7px 12px}
+body.view-mobile .swipe-btn{width:38px;height:58px;font-size:24px}
+body.view-mobile .lib-filters input,body.view-mobile .lib-filters select{width:100%!important}
+body.view-mobile #vw-lib,body.view-mobile #vw-dash{padding:12px}
+body.view-mobile #vw-dash .row select{flex:1;min-width:120px}
+body.view-mobile .rightbar{min-width:0}
+/* narrow desktop fallback keeps 3 cols but tighter */
+@media(max-width:900px){ body.view-desktop .sidebar{width:230px} body.view-desktop .rightbar{width:260px} }
+.view{position:absolute;inset:0;display:none}
+.view.active{display:flex}
+
+/* WORKSPACE (vinnusvæði) */
+#vw-work{flex-direction:row}
+.sidebar{width:290px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+.side-h{padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)}
+.doclist{flex:1;overflow:auto;padding:6px}
+.doc-item{padding:8px 9px;border-radius:8px;border:1px solid transparent;margin-bottom:4px;cursor:pointer}
+.doc-item:hover{background:var(--panel2)}
+.doc-item.sel{background:var(--panel2);border-color:var(--accent)}
+.doc-item .nm{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-item .mt{display:flex;justify-content:space-between;margin-top:4px;align-items:center}
+
+.center{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--canvas);position:relative}
+.swipe-btn{position:absolute;top:calc(50% + 10px);transform:translateY(-50%);z-index:25;width:46px;height:72px;border:1px solid #7d160f;border-radius:12px;background:var(--metalRed);color:#fff;font-size:30px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 18px rgba(0,0,0,.45);opacity:.92;user-select:none}
+.swipe-btn:hover{opacity:1;filter:brightness(1.08)}
+.swipe-btn.left{left:12px}
+.swipe-btn.right{right:12px}
+.swipe-btn:disabled{opacity:.3;cursor:default;background:#3a414d;border-color:#2a2f38;box-shadow:none}
+.review-bar{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:24;display:flex;gap:16px;background:var(--metal);border:1px solid var(--edge);border-radius:12px;padding:8px 16px;box-shadow:0 8px 26px rgba(0,0,0,.35);max-width:82%;overflow-x:auto;align-items:center}
+.review-bar .ri{display:flex;flex-direction:column;line-height:1.25;flex:none}
+.review-bar .ri .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.review-bar .ri .v{font-size:13px;font-weight:700;white-space:nowrap}
+.review-bar .ri .v.warn{color:var(--warn)}
+.review-bar .ri .v.bad{color:var(--bad)}
+.review-bar .pos{font-weight:800;color:var(--accent);font-size:13px;padding-right:4px;border-right:1px solid var(--line)}
+.toolbar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--metal);border-bottom:1px solid var(--edge);flex-wrap:wrap}
+.canvas-wrap{flex:1;overflow:auto;position:relative;display:flex;justify-content:center;padding:18px}
+#stage{position:relative;align-self:flex-start;box-shadow:var(--stageShadow);background:#fff}
+#pdfCanvas{display:block}
+#overlay{position:absolute;inset:0;cursor:crosshair;touch-action:none}
+.box{position:absolute;border:2px solid var(--accent);background:rgba(79,140,255,.12);border-radius:2px}
+.box .lbl{position:absolute;top:-19px;left:-2px;font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px 5px 0 0;white-space:nowrap;color:#08111f}
+.box .del{position:absolute;top:-19px;right:-2px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:4px;font-size:11px;padding:0 5px;cursor:pointer}
+
+.rightbar{width:320px;flex:none;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column}
+.rb-tabs{display:flex;border-bottom:1px solid var(--line)}
+.rb-tab{flex:1;background:transparent;border:none;color:var(--muted);padding:9px;font-size:12px;font-weight:600;border-bottom:2px solid transparent}
+.rb-tab.active{color:var(--txt);border-bottom-color:var(--accent)}
+.rb-body{flex:1;overflow:auto;padding:12px}
+
+.field-row{display:flex;align-items:center;gap:7px;padding:6px;border-radius:8px;margin-bottom:5px;background:var(--panel2);border:1px solid var(--line)}
+.field-row.active{border-color:var(--accent)}
+.swatch{width:14px;height:14px;border-radius:4px;flex:none}
+.field-row .fn{flex:1;font-size:12.5px}
+.field-row .val{font-size:11px;color:var(--muted);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.kv{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:600;text-align:right;max-width:60%;overflow-wrap:anywhere}
+
+/* modal */
+.modal-bg{position:absolute;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:70;padding:20px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:640px;width:100%;max-height:88%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.modal-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.modal-h b{font-size:15px}
+.modal-body{padding:16px 18px;overflow:auto}
+.modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.mut{color:var(--muted)}
+.small{font-size:12px}
+h4{margin:0 0 8px}
+.tokens{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tok{cursor:pointer}
+.tok:hover{border-color:var(--accent)}
+
+/* library */
+#vw-lib{padding:16px;flex-direction:column;overflow:auto}
+.lib-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.lib-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer}
+.lib-card:hover{border-color:var(--accent)}
+.lib-thumb{height:130px;background:var(--thumb) center/cover no-repeat;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.lib-meta{padding:9px}
+.lib-meta .t{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* dashboard */
+#vw-dash{padding:16px;flex-direction:column;overflow:auto}
+.dash-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat .lab{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.stat .num{font-size:24px;font-weight:800;margin-top:5px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.bar-row .nm{width:150px;font-size:12.5px;text-align:right;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none}
+.bar-track{flex:1;background:var(--panel2);border-radius:6px;height:22px;position:relative;overflow:hidden}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px}
+.bar-row .amt{width:120px;font-size:12px;text-align:right;font-weight:600;flex:none}
+details.grp{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;padding:4px 12px}
+details.grp summary{cursor:pointer;padding:8px 0;font-weight:600;display:flex;justify-content:space-between}
+details.grp table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0}
+details.grp td{padding:5px 4px;border-top:1px solid var(--line)}
+
+.progress{height:5px;background:var(--panel2);border-radius:5px;overflow:hidden;flex:1}
+.progress > div{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .2s}
+.toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 16px;z-index:80;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+.empty{margin:auto;text-align:center;color:var(--muted);padding:40px}
+.pill-type{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--chip);border:1px solid var(--line)}
+.rule-line{font-size:11px;color:var(--muted)}
+a.link{color:var(--accent);cursor:pointer;text-decoration:underline}
+/* ===== PDF-verkfæri (workbench) ===== */
+#vw-pdf{overflow:auto}
+.pw-wrap{display:flex;flex-direction:column;height:100%;padding:16px;gap:8px;min-height:0}
+.pw-body{display:flex;gap:14px;flex:1;min-height:0;margin-top:6px}
+.pw-files{width:290px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;overflow:auto;padding-right:4px}
+.pw-file{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:var(--panel)}
+.pw-file.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.pw-file-main{display:flex;flex-direction:column;min-width:0;gap:2px}
+.pw-file-main b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.pw-file-act{display:flex;gap:3px;flex-shrink:0}
+.pw-editor{flex:1;overflow:auto;min-width:0;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)}
+.pw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;margin-top:12px}
+.pw-cell{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg)}
+.pw-cell.sel{outline:2px solid var(--accent);outline-offset:-1px}
+.pw-thumb{height:158px;display:flex;align-items:center;justify-content:center;background:#fff;cursor:pointer;overflow:hidden}
+.pw-thumb img{max-width:100%;max-height:100%;transition:transform .2s}
+.pw-ph{color:#aaa;font-size:20px}
+.pw-cell-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 6px;gap:4px;background:var(--panel)}
+.pw-pg{font-size:12px;color:var(--muted);min-width:20px;text-align:center}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="banner">
+    <div class="brand"><span class="bmark">S</span><span class="btxt">SKJALARINN<small>skjala-verkfæri</small></span></div>
+    <nav class="vnav">
+      <button class="tab active" data-view="work"><span class="ic">🗂️</span> Vinnusvæði</button>
+      <button class="tab" data-view="lib"><span class="ic">📁</span> Skjalasafn</button>
+      <button class="tab" data-view="dash"><span class="ic">📊</span> Mælaborð</button>
+      <button class="tab" data-view="pdf"><span class="ic">🛠️</span> PDF-verkfæri</button>
+    </nav>
+    <div class="bspacer"></div>
+    <div class="bactions">
+      <button class="btn sm" id="btnTypes">Skjalategundir</button>
+      <button class="btn sm" id="btnSources">☁ Tengingar</button>
+      <button class="btn sm" id="btnSettings">Stillingar</button>
+    </div>
+    <div class="bfoot small">Skjöl unnin á tækinu þínu · <span id="buildTag" title="Byggingarnúmer — ef þetta stemmir ekki, ýttu Ctrl+Shift+R">bygging 2026-08-15·6</span></div>
+  </aside>
+
+  <div class="mainwrap">
+  <header>
+    <span class="mob-brand"><span class="bmark2">V</span>SKJALARINN</span>
+    <div class="spacer"></div>
+    <span id="engineState" class="chip" title="Staða OCR-vélar">OCR: sofandi</span>
+    <button class="btn sm" id="btnTheme" title="Dökkt / hvítt þema">🌙</button>
+    <button class="btn sm" id="btnViewToggle" title="Tölvu- / símaútlit">🖥️</button>
+    <button class="btn sm mob-only" id="btnMobMenu" title="Meira">⋯</button>
+    <button class="btn pri" id="btnLoad">＋<span class="ldtxt"> Hlaða inn skjölum</span></button>
+  </header>
+
+  <main>
+    <!-- ============ WORKSPACE ============ -->
+    <section id="vw-work" class="view active mob-doc">
+      <div class="mob-subnav">
+        <button data-mob="list">🗂 Skjöl</button>
+        <button data-mob="doc" class="active">📄 Skjal</button>
+        <button data-mob="fields">🏷 Reitir</button>
+      </div>
+      <aside class="sidebar">
+        <div class="side-h"><span>Skjöl í vinnslu</span><span id="docCount" class="mut"></span></div>
+        <div style="padding:8px 10px">
+          <div class="small mut" style="margin-bottom:5px">Vinna næstu:</div>
+          <div class="row" style="gap:6px">
+            <button class="btn sm grow" id="btnProcess10">10</button>
+            <button class="btn sm grow" id="btnProcess100">100</button>
+            <button class="btn sm grow pri" id="btnProcessAll">Öll</button>
+            <button class="btn sm" id="btnClearDocs" title="Hreinsa lista">🗑</button>
+          </div>
+          <button id="btnStopBatch" style="display:none;width:100%;margin-top:6px;padding:8px;background:#c0392b;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer">⛔ STÖÐVA vinnslu</button>
+          <label class="row small mut" style="margin-top:6px;gap:5px;align-items:center"><input type="checkbox" id="chkBatchAi" style="width:auto"> 🤖 Nota AI-lestur í fjöldavinnslu (kostar smá per skjal)</label>
+        </div>
+        <div class="row" style="padding:0 10px 6px;gap:6px">
+          <button class="btn sm grow" id="btnDedupe">🔎 Finna tvítök</button>
+          <button class="btn sm grow" id="btnEater">🍽️ Ætinn</button>
+        </div>
+        <div class="row" style="padding:0 10px 8px">
+          <div class="progress"><div id="batchBar"></div></div>
+          <span id="batchTxt" class="small mut" style="width:60px;text-align:right"></span>
+        </div>
+        <div id="docList" class="doclist"></div>
+      </aside>
+
+      <div class="center">
+        <div class="toolbar">
+          <span class="small mut">Tegund:</span>
+          <select id="docTypeSel" style="width:150px"></select>
+          <button class="btn sm" id="btnPrev">◀</button>
+          <span id="pageInfo" class="small mut">–</span>
+          <button class="btn sm" id="btnNext">▶</button>
+          <button class="btn sm" id="btnZoomOut">－</button>
+          <button class="btn sm" id="btnZoomIn">＋</button>
+          <button class="btn sm" id="btnFit">Passa</button>
+          <div class="spacer"></div>
+          <button class="btn sm" id="btnOcrPage" title="Lesa alla síðuna með OCR">OCR síða</button>
+          <button class="btn pri sm" id="btnExtract">⚡ Lesa reiti</button>
+          <button class="btn sm" id="btnLearn" title="Vista reitastaðsetningu sem sniðmát fyrir þennan seljanda">💾 Læra snið</button>
+          <button class="btn sm b-app" id="btnApprove">✓ Samþykkja</button>
+          <button class="btn sm" id="btnSheet" title="Skrá þetta skjal í Google Sheet (aggisigurds@gmail.com)">📊 Í Sheet</button>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <div id="stage" class="hide">
+            <canvas id="pdfCanvas"></canvas>
+            <div id="overlay"></div>
+          </div>
+          <div id="workEmpty" class="empty">
+            <div style="font-size:40px">📄</div>
+            <h3>Engin skjöl hlaðin inn</h3>
+            <p>Smelltu á „Hlaða inn skjölum“ til að byrja. Þú getur valið marga PDF-a eða heila möppu.<br>
+            Dragðu svo kassa yfir reitina (upphæð, kennitala, VSK…) og forritið lærir hvar þeir eru.</p>
+            <button class="btn pri" id="btnLoad2">Velja PDF skjöl</button>
+          </div>
+        </div>
+        <button class="swipe-btn left hide" id="swLeft" title="Fyrra skjal (fletta)">‹</button>
+        <button class="swipe-btn right hide" id="swRight" title="Næsta skjal (fletta)">›</button>
+        <div class="review-bar hide" id="reviewBar"></div>
+      </div>
+
+      <aside class="rightbar">
+        <div class="rb-tabs">
+          <button class="rb-tab active" data-rb="fields">Reitir</button>
+          <button class="rb-tab" data-rb="values">Gildi</button>
+          <button class="rb-tab" data-rb="bok">Bókhald</button>
+          <button class="rb-tab" data-rb="rename">Endurnefna</button>
+        </div>
+        <div class="rb-body" id="rbFields">
+          <div class="small mut" style="margin-bottom:8px">Veldu reit og dragðu kassa á skjalið. Smelltu á ⚙ til að stilla reglu.</div>
+          <div id="fieldList"></div>
+          <button class="btn sm ghost" id="btnAddField" style="margin-top:8px;width:100%">＋ Nýr reitur</button>
+        </div>
+        <div class="rb-body hide" id="rbValues">
+          <div id="valueList"></div>
+        </div>
+        <div class="rb-body hide" id="rbBok"></div>
+        <div class="rb-body hide" id="rbRename">
+          <label class="fld">Skráarnafn-snið</label>
+          <input id="renamePattern" placeholder="{fyrirtaeki}_{ar}-{manudur}_{reikningsnr}">
+          <div class="tokens" id="tokenList"></div>
+          <label class="fld">Forskoðun</label>
+          <div class="card small" id="renamePreview" style="overflow-wrap:anywhere">–</div>
+          <div class="small mut">Notað þegar þú flytur út eða hleður niður endurnefndum skjölum.</div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ============ LIBRARY ============ -->
+    <section id="vw-lib" class="view">
+      <div class="lib-filters">
+        <input id="libSearch" placeholder="Leita…" style="width:200px">
+        <select id="libType" style="width:150px"><option value="">Allar tegundir</option></select>
+        <select id="libSeller" style="width:170px"><option value="">Allir seljendur</option></select>
+        <select id="libCat" style="width:170px"><option value="">Allir flokkar</option></select>
+        <div class="spacer"></div>
+        <span id="libCount" class="small mut"></span>
+        <button class="btn sm" id="btnExportCsv">⬇ CSV</button>
+        <button class="btn sm pri" id="btnExportDk">📒 DK-færslur</button>
+        <button class="btn sm" id="btnExportZip">⬇ Endurnefnd skjöl (ZIP)</button>
+      </div>
+      <div id="libGrid" class="lib-grid"></div>
+      <div id="libEmpty" class="empty"><div style="font-size:40px">🗂</div><h3>Skjalasafnið er tómt</h3><p>Unnin skjöl birtast hér og þú getur síað þau eftir tegund, seljanda og flokki.</p></div>
+    </section>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section id="vw-dash" class="view">
+      <div class="row" style="margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <h3 style="margin:0">Mælaborð</h3>
+        <div class="spacer"></div>
+        <span class="small mut">Reikna út frá:</span>
+        <select id="dashAmount" style="width:150px"></select>
+        <span class="small mut">Flokka eftir:</span>
+        <select id="dashGroup" style="width:150px">
+          <option value="seller">Seljanda</option>
+          <option value="type">Tegund</option>
+          <option value="category">Vöruflokki</option>
+          <option value="month">Mánuði</option>
+        </select>
+        <button class="btn sm" id="btnDashCfg">⚙ Kort</button>
+      </div>
+      <div id="dashCards" class="dash-cards"></div>
+      <div class="card">
+        <h4 id="chartTitle">Sundurliðun</h4>
+        <div id="chart"></div>
+      </div>
+      <h4>Flokkar — smelltu til að opna</h4>
+      <div id="groupBreak"></div>
+    </section>
+
+    <!-- ============ PDF-VERKFÆRI (workbench) ============ -->
+    <section id="vw-pdf" class="view">
+      <div class="pw-wrap">
+        <div class="pw-head">
+          <h3 style="margin:0 0 4px">🛠️ PDF-verkfæri</h3>
+          <p class="small mut" style="margin:0 0 10px">Sameina, kljúfa, snúa, endurraða og draga út síður. Allt gerist í vafranum — engin skrá fer neitt.</p>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <button class="btn pri" id="pwLoad">＋ Hlaða PDF</button>
+            <input type="file" id="pwInput" accept="application/pdf" multiple style="display:none">
+            <button class="btn" id="pwMerge" title="Sameina allar PDF í listanum í eina">⬇ Sameina allar (<span id="pwCount">0</span>)</button>
+            <button class="btn ghost" id="pwClear">🗑 Hreinsa</button>
+          </div>
+        </div>
+        <div class="pw-body">
+          <div class="pw-files" id="pwFiles"></div>
+          <div class="pw-editor" id="pwEditor"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  </div>
+</div>
+
+<!-- modal host -->
+<div id="modalHost"></div>
+<div id="toast" class="toast"></div>
+
+<input type="file" id="fileInput" accept="application/pdf" multiple class="hide">
+<input type="file" id="folderInput" webkitdirectory directory multiple class="hide">
+<input type="file" id="cfgInput" accept="application/json,.json" class="hide">
+
+<script>
+"use strict";
+/* ================= pdf.js worker (guarded so a blocked CDN can't white-screen the app) ================= */
+if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }
+function libsOk(){ return !!window.pdfjsLib; }
+window.addEventListener('load',()=>{ if(!window.pdfjsLib){ toast('Aðvörun: PDF-eining hlóðst ekki — athugaðu nettengingu og endurhlaðið.'); } });
+
+/* ================= tiny helpers ================= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const el = (t, c, txt) => { const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e; };
+const uid = () => 'id'+Math.random().toString(36).slice(2,9)+(idCounter++);
+let idCounter = 0;
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600); }
+
+/* Icelandic number / date parsing */
+function parseAmount(raw){
+  if(raw==null) return null;
+  let s = String(raw).replace(/[^\d.,\-]/g,'');
+  if(!s) return null;
+  const hasComma=s.includes(','), hasDot=s.includes('.');
+  if(hasComma && hasDot){
+    // both present: whichever is last is the decimal separator
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',', '.'); // 1.234.567,89 (IS/EU)
+    else s=s.replace(/,/g,''); // 1,234,567.89 (EN)
+  } else if(hasComma){
+    s=s.replace(',', '.'); // Icelandic decimal comma: 1234,56
+  } else if(hasDot){
+    // Icelandic dot is a THOUSANDS separator (124.000 = 124000). Only keep as decimal
+    // when it looks like one: a single dot with a non-3-digit tail (e.g. 12.5, 1234.56).
+    const parts=s.split('.'); const tail=parts[parts.length-1];
+    if(parts.length>2 || tail.length===3) s=s.replace(/\./g,'');
+  }
+  const n=parseFloat(s);
+  return isNaN(n)?null:n;
+}
+function fmtISK(n){ if(n==null||isNaN(n)) return '–'; return new Intl.NumberFormat('is-IS',{maximumFractionDigits:0}).format(Math.round(n))+' kr'; }
+function fmtNum(n){ if(n==null||isNaN(n)) return '–'; return new Intl.NumberFormat('is-IS',{maximumFractionDigits:2}).format(n); }
+function findKennitala(text){ const m=String(text||'').match(/\b(\d{6})[-\s]?(\d{4})\b/); return m?m[1]+'-'+m[2]:''; }
+function parseDateParts(raw){
+  if(!raw) return null;
+  const s=String(raw);
+  let m=s.match(/\b(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})\b/); // dd.mm.yyyy
+  if(m){ let y=m[3]; if(y.length===2)y='20'+y; return {y, m:m[2].padStart(2,'0'), d:m[1].padStart(2,'0')}; }
+  m=s.match(/\b(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})\b/); // yyyy-mm-dd
+  if(m){ return {y:m[1], m:m[2].padStart(2,'0'), d:m[3].padStart(2,'0')}; }
+  m=s.match(/\b(20\d{2})\b/); if(m) return {y:m[1],m:'',d:''};
+  return null;
+}
+function sanitizeFile(s){ return String(s||'').replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,' ').trim().replace(/\s/g,'_').slice(0,80); }
+
+/* ================= persistence (IndexedDB + memory fallback) ================= */
+const DB = (function(){
+  let db=null, mem={config:{}, docs:{}}, useMem=false;
+  function open(){
+    return new Promise(res=>{
+      if(!('indexedDB' in window)){ useMem=true; return res(); }
+      let rq;
+      try{ rq=indexedDB.open('verkfaeri',1); }catch(e){ useMem=true; return res(); }
+      rq.onupgradeneeded=e=>{ const d=e.target.result;
+        if(!d.objectStoreNames.contains('config')) d.createObjectStore('config');
+        if(!d.objectStoreNames.contains('docs')) d.createObjectStore('docs',{keyPath:'id'});
+      };
+      rq.onsuccess=e=>{ db=e.target.result; res(); };
+      rq.onerror=()=>{ useMem=true; res(); };
+    });
+  }
+  function cfgGet(k){ return new Promise(res=>{ if(useMem)return res(mem.config[k]); const t=db.transaction('config').objectStore('config').get(k); t.onsuccess=()=>res(t.result); t.onerror=()=>res(undefined); }); }
+  function cfgSet(k,v){ if(useMem){mem.config[k]=v;return Promise.resolve();} return new Promise(res=>{ const t=db.transaction('config','readwrite').objectStore('config').put(v,k); t.onsuccess=()=>res(); t.onerror=()=>res(); }); }
+  function docPut(d){ if(useMem){mem.docs[d.id]=d;return Promise.resolve();} return new Promise(res=>{ const t=db.transaction('docs','readwrite').objectStore('docs').put(d); t.onsuccess=()=>res(); t.onerror=()=>res(); }); }
+  function docDel(id){ if(useMem){delete mem.docs[id];return Promise.resolve();} return new Promise(res=>{ const t=db.transaction('docs','readwrite').objectStore('docs').delete(id); t.onsuccess=()=>res(); t.onerror=()=>res(); }); }
+  function docAll(){ if(useMem)return Promise.resolve(Object.values(mem.docs)); return new Promise(res=>{ const out=[]; const t=db.transaction('docs').objectStore('docs').openCursor(); t.onsuccess=e=>{const c=e.target.result; if(c){out.push(c.value);c.continue();}else res(out);}; t.onerror=()=>res([]); }); }
+  return {open,cfgGet,cfgSet,docPut,docDel,docAll,get isMem(){return useMem;}};
+})();
+
+/* ================= application state ================= */
+const state = {
+  docTypes: [],        // {id,name,keywords:[],fields:[{id,name,color,role,rule}]}
+  templates: {},       // key "typeId::issuer" -> {fieldId:{box,rule}}
+  productCats: {},      // productNameLower -> category
+  categories: ['Aðföng','Aðkeypt þjónusta','Rekstrarvörur','Húsnæði','Húsaleiga','Smááhöld og búnaður','Viðhald og viðgerðir','Skrifstofukostnaður','Sími og póstur','Auglýsingar og sölukostnaður','Ferðakostnaður','Bifreiðakostnaður','Tölvur og hugbúnaður','Laun','Annar kostnaður'],
+  // Sjálfgefið lyklaborð (byggt á RSK rekstrarliðum) — RITSTÝRANLEGT, settu þína eigin DK-lykla
+  accounts:[
+    {num:'4010',name:'Vörunotkun / aðföng',type:'gjold',þrep:24},
+    {num:'4020',name:'Aðkeypt þjónusta til endursölu',type:'gjold',þrep:24},
+    {num:'4110',name:'Laun',type:'gjold',þrep:0},
+    {num:'4120',name:'Launatengd gjöld',type:'gjold',þrep:0},
+    {num:'4210',name:'Rekstrarvörur',type:'gjold',þrep:24},
+    {num:'4310',name:'Rekstrarkostnaður húsnæðis',type:'gjold',þrep:24},
+    {num:'4320',name:'Húsaleiga',type:'gjold',þrep:24},
+    {num:'4410',name:'Smááhöld og búnaður',type:'gjold',þrep:24},
+    {num:'4420',name:'Viðhald og viðgerðir',type:'gjold',þrep:24},
+    {num:'4510',name:'Ýmis aðkeypt þjónusta',type:'gjold',þrep:24},
+    {num:'4610',name:'Skrifstofukostnaður',type:'gjold',þrep:24},
+    {num:'4620',name:'Sími og burðargjöld',type:'gjold',þrep:11},
+    {num:'4710',name:'Auglýsingar og sölukostnaður',type:'gjold',þrep:24},
+    {num:'4720',name:'Ferðakostnaður',type:'gjold',þrep:11},
+    {num:'4730',name:'Bifreiðakostnaður',type:'gjold',þrep:24},
+    {num:'4810',name:'Tölvu- og hugbúnaðarkostnaður',type:'gjold',þrep:24},
+    {num:'4990',name:'Ýmis annar kostnaður',type:'gjold',þrep:24},
+    {num:'3120',name:'Innskattur 24%',type:'vsk',þrep:24},
+    {num:'3121',name:'Innskattur 11%',type:'vsk',þrep:11},
+    {num:'2010',name:'Lánardrottnar (viðskiptaskuldir)',type:'skuldir',þrep:0},
+    {num:'1100',name:'Bankareikningur',type:'eignir',þrep:0},
+  ],
+  catAccount:{ 'Aðföng':'4010','Aðkeypt þjónusta':'4510','Rekstrarvörur':'4210','Húsnæði':'4310','Húsaleiga':'4320','Smááhöld og búnaður':'4410','Viðhald og viðgerðir':'4420','Skrifstofukostnaður':'4610','Sími og póstur':'4620','Auglýsingar og sölukostnaður':'4710','Ferðakostnaður':'4720','Bifreiðakostnaður':'4730','Tölvur og hugbúnaður':'4810','Laun':'4110','Annar kostnaður':'4990' },
+  vendorAccount:{},   // kennitala seljanda -> sjálfgefinn gjaldalykill (lærist eins og í DK/Konto)
+  dk:{ innskattur:{24:'3120',11:'3121',0:''}, kreditor:'2010', bank:'1100', useBank:false, sep:';', decComma:true },
+  renamePattern: '{fyrirtaeki}_{ar}-{manudur}_{reikningsnr}',
+  routing:{ pattern:'{ar}/{tegund}/{fyrirtaeki}', rules:[], driveRootId:'' },
+  settings:{ aiEnabled:false, aiKey:'', aiModel:'claude-haiku-4-5-20251001', aiBase:'https://api.openai.com/v1', ocrConf:70, googleClientId:'', googleApiKey:'', sheetId:'1M5OjLDMLvyOuyMH7LYfSR8y1G8YcV6eOIENaTORo5Xg' },
+  dash:{ amountRole:'upphaed', groupBy:'seller', cards:['total','count','vsk','docs'] },
+  theme:'dark', viewMode:null,
+  eater:{ mode:'invoices', action:'import', auto:false, intervalMin:15, seenKeys:[] },   // mode: 'all'|'invoices'; action: 'import'|'copy'|'move'
+};
+const RUN = { docs:[], curId:null, page:1, pdf:null, scale:1, fitScale:1, viewport:null, textItems:[], activeFieldId:null, ocrWorker:null };
+
+const ROLES = [
+  {id:'fyrirtaeki',name:'Fyrirtæki / Seljandi'},
+  {id:'kennitala',name:'Kennitala'},
+  {id:'heimilisfang',name:'Heimilisfang'},
+  {id:'reikningsnr',name:'Reikningsnr.'},
+  {id:'dagsetning',name:'Dagsetning'},
+  {id:'upphaed',name:'Heildarupphæð'},
+  {id:'netto',name:'Upphæð án VSK'},
+  {id:'vsk',name:'VSK'},
+  {id:'vorulinur',name:'Vörulínur'},
+  {id:'annad',name:'Annað'},
+];
+const PALETTE=['#4f8cff','#37d39b','#ffb443','#ff5d6c','#7c5cff','#22c1c3','#f56cd0','#9ad34b','#ff8a5c','#5ce1e6'];
+
+function defaultTypes(){
+  const c=i=>PALETTE[i%PALETTE.length];
+  const F=(name,role,ruleType,extra)=>({id:uid(),name,color:c(role.length+name.length),role,rule:Object.assign({type:ruleType||'whole',datatype:role==='upphaed'||role==='vsk'||role==='netto'?'amount':(role==='kennitala'?'kennitala':(role==='dagsetning'?'date':'text')),chars:0,anchor:'',regex:''},extra||{})});
+  return [
+    {id:uid(),name:'Reikningur',keywords:['reikningur','invoice','vsk','kennitala','greiðsla','samtals'],fields:[
+      F('Seljandi','fyrirtaeki'),F('Kennitala','kennitala'),F('Reikningsnr.','reikningsnr'),
+      F('Dagsetning','dagsetning'),F('Upphæð án VSK','netto'),F('VSK','vsk'),F('Heildarupphæð','upphaed'),F('Vörulínur','vorulinur')
+    ]},
+    {id:uid(),name:'Skýrsla',keywords:['skýrsla','report','yfirlit','tímabil'],fields:[
+      F('Titill','annad'),F('Fyrirtæki','fyrirtaeki'),F('Kennitala','kennitala'),F('Dagsetning','dagsetning'),F('Niðurstaða','annad')
+    ]},
+    {id:uid(),name:'Samningur',keywords:['samningur','contract','aðilar','undirskrift','gildistími'],fields:[
+      F('Aðili 1','fyrirtaeki'),F('Kennitala','kennitala'),F('Aðili 2','annad'),F('Dagsetning','dagsetning'),F('Fjárhæð','upphaed'),F('Gildistími','annad')
+    ]},
+  ];
+}
+
+/* ================= boot ================= */
+(async function boot(){
+  await DB.open();
+  const saved = await DB.cfgGet('state');
+  if(saved){ Object.assign(state, saved); }
+  if(!state.docTypes || !state.docTypes.length){ state.docTypes = defaultTypes(); }
+  // load persisted docs (library)
+  const docs = await DB.docAll();
+  RUN.docs = docs.sort((a,b)=>(a.order||0)-(b.order||0));
+  if(DB.isMem) toast('Athugið: vafrinn leyfir ekki varanlega geymslu — gögn hverfa við lokun.');
+  buildTypeSelectors(); renderFieldList(); renderDocList(); renderTokens(); renderDashSelectors();
+  $('#renamePattern').value = state.renamePattern;
+  refreshLibrary(); renderDashboard();
+  updateRenamePreview();
+  applyTheme(state.theme||'dark');
+  applyView(state.viewMode || (window.innerWidth<820?'mobile':'desktop'));
+  await loadEaterHandles();
+  RUN.eaterSeen=new Set(state.eater&&state.eater.seenKeys||[]);
+  startEaterAuto();
+  if(RUN.docs.length) selectDoc(RUN.docs[0].id);
+})();
+
+async function persistState(){
+  const {docTypes,templates,productCats,categories,accounts,catAccount,vendorAccount,dk,renamePattern,routing,settings,dash,theme,viewMode,eater}=state;
+  await DB.cfgSet('state',{docTypes,templates,productCats,categories,accounts,catAccount,vendorAccount,dk,renamePattern,routing,settings,dash,theme,viewMode,eater});
+}
+
+/* ================= navigation tabs ================= */
+$$('.tab').forEach(t=>t.onclick=()=>{
+  $$('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  $$('.view').forEach(v=>v.classList.remove('active'));
+  $('#vw-'+t.dataset.view).classList.add('active');
+  if(t.dataset.view==='lib') refreshLibrary();
+  if(t.dataset.view==='dash') renderDashboard();
+  if(t.dataset.view==='pdf') renderPdfTools();
+});
+/* ===== þema (dökkt/hvítt) & útlit (tölva/sími) rofar ===== */
+function applyTheme(t){ document.body.classList.toggle('theme-light',t==='light'); document.body.classList.toggle('theme-dark',t!=='light'); const b=$('#btnTheme'); if(b){ b.textContent=t==='light'?'☀️':'🌙'; b.title=t==='light'?'Skipta í dökkt þema':'Skipta í hvítt þema'; } state.theme=t; }
+function setMobPanel(p){ const w=$('#vw-work'); if(!w)return; w.classList.remove('mob-list','mob-doc','mob-fields'); w.classList.add('mob-'+p); $$('.mob-subnav button').forEach(x=>x.classList.toggle('active',x.dataset.mob===p)); }
+function ensureMobPanel(){ const w=$('#vw-work'); if(!w)return; if(!/mob-(list|doc|fields)/.test(w.className)) setMobPanel(RUN.curId?'doc':'list'); }
+function applyView(v){ document.body.classList.toggle('view-mobile',v==='mobile'); document.body.classList.toggle('view-desktop',v!=='mobile'); const b=$('#btnViewToggle'); if(b){ b.textContent=v==='mobile'?'🖥️':'📱'; b.title=v==='mobile'?'Skipta í tölvuútlit':'Skipta í símaútlit'; } state.viewMode=v; if(v==='mobile') ensureMobPanel(); }
+$('#btnTheme').onclick=()=>{ applyTheme(document.body.classList.contains('theme-light')?'dark':'light'); persistState(); };
+$('#btnViewToggle').onclick=()=>{ applyView(document.body.classList.contains('view-mobile')?'desktop':'mobile'); persistState(); };
+$$('.mob-subnav button').forEach(b=>b.onclick=()=>setMobPanel(b.dataset.mob));
+$('#btnMobMenu').onclick=()=>{
+  modal('Valmynd', `<div style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn" id="mmTypes">Skjalategundir</button>
+    <button class="btn" id="mmSources">☁ Tengingar</button>
+    <button class="btn" id="mmSettings">Stillingar</button></div>`, []);
+  $('#mmTypes').onclick=()=>{ closeModal(); $('#btnTypes').onclick(); };
+  $('#mmSources').onclick=()=>{ closeModal(); openSources(); };
+  $('#mmSettings').onclick=()=>{ closeModal(); $('#btnSettings').onclick(); };
+};
+
+$$('.rb-tab').forEach(t=>t.onclick=()=>{
+  $$('.rb-tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  $('#rbFields').classList.toggle('hide',t.dataset.rb!=='fields');
+  $('#rbValues').classList.toggle('hide',t.dataset.rb!=='values');
+  $('#rbBok').classList.toggle('hide',t.dataset.rb!=='bok');
+  $('#rbRename').classList.toggle('hide',t.dataset.rb!=='rename');
+  if(t.dataset.rb==='bok') renderBokhald();
+});
+
+/* ================= loading files ================= */
+$('#btnLoad').onclick = ()=> openLoadMenu();
+$('#btnLoad2').onclick = ()=> $('#fileInput').click();
+function openLoadMenu(){
+  modal('Hlaða inn skjölum', `
+    <p class="small mut">Veldu staka PDF-a eða heila möppu af skönnuðum skjölum.</p>
+    <div class="row" style="gap:10px">
+      <button class="btn pri grow" id="mLoadFiles">📄 Velja PDF skrár</button>
+      <button class="btn grow" id="mLoadFolder">📁 Velja möppu</button>
+    </div>
+    <div class="row" style="gap:10px;margin-top:10px">
+      <button class="btn grow" id="mLoadDrive">🟢 Google Drive</button>
+      <button class="btn grow" id="mLoadGmail">✉️ Tölvupóstur (Gmail)</button>
+    </div>
+    <p class="small mut" style="margin-top:14px">Skrár eru lesnar beint í vafranum þínum. Google Drive og Gmail krefjast þess að þú tengir eigin Google-aðgang (sjá „Tengingar“).</p>
+  `, []);
+  $('#mLoadFiles').onclick=()=>{ closeModal(); $('#fileInput').click(); };
+  $('#mLoadFolder').onclick=()=>{ closeModal(); $('#folderInput').click(); };
+  $('#mLoadDrive').onclick=()=>{ closeModal(); openSources('drive'); };
+  $('#mLoadGmail').onclick=()=>{ closeModal(); openSources('gmail'); };
+}
+$('#fileInput').onchange = e => addFiles(e.target.files);
+$('#folderInput').onchange = e => addFiles(e.target.files);
+
+async function addFiles(fileList){
+  const files = Array.from(fileList).filter(f=>/\.pdf$/i.test(f.name));
+  if(!files.length){ toast('Engar PDF skrár fundust.'); return; }
+  let order = RUN.docs.length;
+  for(const f of files){
+    const buf = await f.arrayBuffer();
+    const doc = {
+      id: uid(), name: f.name, order: order++, blob: new Blob([buf],{type:'application/pdf'}),
+      status:'nytt', typeId:null, seller:'', kennitala:'', category:'', pages:0,
+      boxes:{}, values:{}, confidence:1, newName:'', thumb:'', hash: await hashBuf(buf)
+    };
+    RUN.docs.push(doc);
+    await DB.docPut(doc);
+  }
+  renderDocList();
+  toast(files.length+' skjöl hlaðin inn.');
+  if(!RUN.curId) selectDoc(RUN.docs[0].id);
+}
+
+$('#btnClearDocs').onclick=async()=>{
+  if(!confirm('Fjarlægja öll skjöl úr listanum? (Sniðmát og reglur haldast.)')) return;
+  for(const d of RUN.docs) await DB.docDel(d.id);
+  RUN.docs=[]; RUN.curId=null; RUN.pdf=null;
+  $('#stage').classList.add('hide'); $('#workEmpty').classList.remove('hide');
+  renderDocList(); refreshLibrary(); renderDashboard(); updateSwipers(); updateReviewBar();
+};
+
+/* ================= doc list ================= */
+const STATUS = {nytt:['Nýtt','b-new'], unnid:['Lesið','b-ok'], yfirferd:['Yfirferð','b-rev'], samthykkt:['Samþykkt','b-app']};
+function renderDocList(){
+  const list=$('#docList'); list.innerHTML='';
+  $('#docCount').textContent = RUN.docs.length;
+  RUN.docs.forEach(d=>{
+    const it=el('div','doc-item'+(d.id===RUN.curId?' sel':''));
+    const st=STATUS[d.status]||STATUS.nytt;
+    const tp = state.docTypes.find(t=>t.id===d.typeId);
+    it.innerHTML=`<div class="nm">${esc(d.name)}</div>
+      <div class="mt"><span class="badge ${st[1]}">${st[0]}</span>
+      <span class="small mut">${tp?esc(tp.name):'—'}${d.seller?' · '+esc(d.seller):''}</span></div>`;
+    it.onclick=()=>selectDoc(d.id);
+    list.appendChild(it);
+  });
+}
+
+/* ================= type selectors ================= */
+function buildTypeSelectors(){
+  const s=$('#docTypeSel'); s.innerHTML='';
+  state.docTypes.forEach(t=>{ const o=el('option',null,t.name); o.value=t.id; s.appendChild(o); });
+  const auto=el('option',null,'⟳ Giska sjálfkrafa'); auto.value='auto'; s.appendChild(auto);
+  // library filter
+  const lt=$('#libType'); lt.innerHTML='<option value="">Allar tegundir</option>';
+  state.docTypes.forEach(t=>{const o=el('option',null,t.name);o.value=t.id;lt.appendChild(o);});
+}
+$('#docTypeSel').onchange = ()=>{
+  const d=curDoc(); if(!d) return;
+  d.typeId = $('#docTypeSel').value==='auto'? guessType(d.fullText||''):$('#docTypeSel').value;
+  DB.docPut(d); renderFieldList(); renderDocList();
+};
+function curType(){ const d=curDoc(); return state.docTypes.find(t=>t.id===(d&&d.typeId)) || state.docTypes[0]; }
+
+/* ================= field list (right sidebar) ================= */
+function renderFieldList(){
+  const t=curType(); const wrap=$('#fieldList'); wrap.innerHTML='';
+  if(!t) return;
+  $('#docTypeSel').value = (curDoc()&&curDoc().typeId)||t.id;
+  t.fields.forEach(f=>{
+    const d=curDoc(); const v=d&&d.values&&d.values[f.id];
+    const row=el('div','field-row'+(f.id===RUN.activeFieldId?' active':''));
+    row.innerHTML=`<span class="swatch" style="background:${f.color}"></span>
+      <span class="fn">${esc(f.name)}</span>
+      <span class="val">${v?esc(String(v.value)):''}</span>`;
+    const gear=el('button','btn sm ghost','⚙'); gear.title='Regla'; gear.onclick=e=>{e.stopPropagation();editFieldRule(f);};
+    row.appendChild(gear);
+    row.onclick=()=>{ RUN.activeFieldId=f.id; renderFieldList(); toast('Dragðu kassa fyrir „'+f.name+'“'); };
+    wrap.appendChild(row);
+  });
+  renderTokens();
+}
+$('#btnAddField').onclick=()=>{
+  const t=curType(); const f={id:uid(),name:'Nýr reitur',color:PALETTE[t.fields.length%PALETTE.length],role:'annad',rule:{type:'whole',datatype:'text',chars:0,anchor:'',regex:''}};
+  t.fields.push(f); persistState(); renderFieldList(); editFieldRule(f);
+};
+
+/* rule editor */
+function editFieldRule(f){
+  const roleOpts=ROLES.map(r=>`<option value="${r.id}" ${f.role===r.id?'selected':''}>${r.name}</option>`).join('');
+  modal('Reitur & regla', `
+    <label class="fld">Heiti reits</label><input id="rfName" value="${esc(f.name)}">
+    <label class="fld">Hlutverk (fyrir endurnefningu & mælaborð)</label>
+    <select id="rfRole">${roleOpts}</select>
+    <label class="fld">Litur</label>
+    <div class="row" id="rfColors"></div>
+    <hr style="border-color:var(--line);margin:14px 0">
+    <label class="fld">Hvernig á að lesa úr kassanum</label>
+    <select id="rfType">
+      <option value="whole">Allur textinn í kassanum</option>
+      <option value="left">Fyrstu N stafi frá vinstri</option>
+      <option value="right">Síðustu N stafi frá hægri</option>
+      <option value="anchor">Textinn á eftir kjölfestu-orði</option>
+      <option value="regex">Regla (regex)</option>
+    </select>
+    <div id="rfExtra"></div>
+    <label class="fld">Gagnategund</label>
+    <select id="rfData">
+      <option value="text">Texti</option><option value="amount">Upphæð</option>
+      <option value="date">Dagsetning</option><option value="kennitala">Kennitala</option>
+      <option value="lines">Vörulínur (margar línur)</option>
+    </select>
+  `, [
+    {label:'Eyða reit',cls:'ghost',fn:()=>{ const t=curType(); t.fields=t.fields.filter(x=>x.id!==f.id); persistState(); renderFieldList(); closeModal(); }},
+    {label:'Vista',cls:'pri',fn:saveRule}
+  ]);
+  // colour swatches
+  const cw=$('#rfColors'); PALETTE.forEach(c=>{ const b=el('button','swatch'); b.style.cssText=`background:${c};width:22px;height:22px;border:2px solid ${c===f.color?'#fff':'transparent'}`; b.onclick=()=>{f.color=c; $$('#rfColors .swatch').forEach(s=>s.style.borderColor='transparent'); b.style.borderColor='#fff';}; cw.appendChild(b); });
+  $('#rfType').value=f.rule.type; $('#rfData').value=f.rule.datatype;
+  function drawExtra(){
+    const ty=$('#rfType').value; const x=$('#rfExtra'); x.innerHTML='';
+    if(ty==='left'||ty==='right'){ x.innerHTML=`<label class="fld">Fjöldi stafa (N)</label><input id="rfChars" type="number" value="${f.rule.chars||8}">`; }
+    else if(ty==='anchor'){ x.innerHTML=`<label class="fld">Kjölfestu-orð (les það sem kemur á eftir)</label><input id="rfAnchor" value="${esc(f.rule.anchor||'')}" placeholder="t.d. Samtals">`; }
+    else if(ty==='regex'){ x.innerHTML=`<label class="fld">Regex (fyrsti hópur ef til staðar)</label><input id="rfRegex" value="${esc(f.rule.regex||'')}" placeholder="\\d[\\d.,]+">`; }
+  }
+  $('#rfType').onchange=drawExtra; drawExtra();
+  function saveRule(){
+    f.name=$('#rfName').value.trim()||f.name; f.role=$('#rfRole').value;
+    f.rule.type=$('#rfType').value; f.rule.datatype=$('#rfData').value;
+    if($('#rfChars')) f.rule.chars=parseInt($('#rfChars').value)||0;
+    if($('#rfAnchor')) f.rule.anchor=$('#rfAnchor').value;
+    if($('#rfRegex')) f.rule.regex=$('#rfRegex').value;
+    persistState(); renderFieldList(); renderDashSelectors(); closeModal();
+  }
+}
+
+/* ================= PDF rendering ================= */
+function curDoc(){ return RUN.docs.find(d=>d.id===RUN.curId); }
+async function selectDoc(id){
+  const d=RUN.docs.find(x=>x.id===id); if(!d) return;
+  if(!libsOk()){ toast('PDF-eining ekki tiltæk (CDN blokkað?). Endurhlaðið síðuna.'); return; }
+  RUN.curId=id; RUN.page=1; renderDocList();
+  $('#workEmpty').classList.add('hide'); $('#stage').classList.remove('hide');
+  const buf=await d.blob.arrayBuffer();
+  RUN.pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  d.pages=RUN.pdf.numPages;
+  if(!d.typeId){ /* guess after first text read */ }
+  RUN.fitScale=0; await renderPage(true);
+  renderFieldList(); renderValues(); renderDocList();
+  updateRenamePreview(); updateSwipers(); updateReviewBar();
+  if($('#rbBok') && !$('#rbBok').classList.contains('hide')) renderBokhald();
+  if(document.body.classList.contains('view-mobile')) setMobPanel('doc');
+}
+async function renderPage(fit){
+  if(!RUN.pdf) return;
+  const page=await RUN.pdf.getPage(RUN.page);
+  const wrap=$('#canvasWrap');
+  if(fit || !RUN.scale){
+    const base=page.getViewport({scale:1});
+    RUN.fitScale=Math.min((wrap.clientWidth-40)/base.width, (wrap.clientHeight-40)/base.height);
+    RUN.scale=RUN.fitScale;
+  }
+  const viewport=page.getViewport({scale:RUN.scale});
+  RUN.viewport=viewport;
+  const canvas=$('#pdfCanvas'), ctx=canvas.getContext('2d');
+  canvas.width=viewport.width; canvas.height=viewport.height;
+  $('#stage').style.width=viewport.width+'px'; $('#stage').style.height=viewport.height+'px';
+  await page.render({canvasContext:ctx,viewport}).promise;
+  // text items in canvas px
+  RUN.textItems=[];
+  try{
+    const tc=await page.getTextContent();
+    tc.items.forEach(it=>{
+      const tr=pdfjsLib.Util.transform(viewport.transform, it.transform);
+      const x=tr[4], y=tr[5]; const h=Math.hypot(tr[2],tr[3]); const w=it.width*RUN.scale;
+      if(it.str.trim()) RUN.textItems.push({str:it.str, x, y:y-h, w, h});
+    });
+  }catch(e){}
+  // full page text + type guess
+  const d=curDoc();
+  if(RUN.page===1){
+    d.fullText = RUN.textItems.map(t=>t.str).join('\n');
+    if(!d.typeId){ d.typeId=guessType(d.fullText); DB.docPut(d); }
+    if(!d.thumb){ d.thumb=canvas.toDataURL('image/jpeg',0.5); DB.docPut(d); }
+  }
+  $('#pageInfo').textContent=`Síða ${RUN.page}/${RUN.pdf.numPages}`;
+  drawBoxes();
+}
+$('#btnPrev').onclick=()=>{ if(RUN.page>1){RUN.page--; renderPage(false);} };
+$('#btnNext').onclick=()=>{ if(RUN.pdf&&RUN.page<RUN.pdf.numPages){RUN.page++; renderPage(false);} };
+$('#btnZoomIn').onclick=()=>{ RUN.scale*=1.2; renderPage(false); };
+$('#btnZoomOut').onclick=()=>{ RUN.scale/=1.2; renderPage(false); };
+$('#btnFit').onclick=()=>renderPage(true);
+
+/* ================= boxes ================= */
+function boxKey(){ return RUN.page; }
+function drawBoxes(){
+  const ov=$('#overlay'); ov.innerHTML='';
+  const d=curDoc(); if(!d) return;
+  const boxes=(d.boxes&&d.boxes[boxKey()])||[];
+  const t=curType();
+  boxes.forEach((b,i)=>{
+    const f=t.fields.find(x=>x.id===b.fieldId);
+    const div=el('div','box');
+    div.style.cssText=`left:${b.x*RUN.viewport.width}px;top:${b.y*RUN.viewport.height}px;width:${b.w*RUN.viewport.width}px;height:${b.h*RUN.viewport.height}px;border-color:${f?f.color:'#fff'};background:${(f?f.color:'#fff')}22`;
+    const lbl=el('span','lbl',f?f.name:'?'); lbl.style.background=f?f.color:'#fff';
+    const del=el('button','del','×'); del.onclick=e=>{e.stopPropagation(); boxes.splice(i,1); DB.docPut(d); drawBoxes();};
+    div.appendChild(lbl); div.appendChild(del);
+    ov.appendChild(div);
+  });
+}
+(function boxDrawing(){
+  const ov=$('#overlay'); let drawing=false,sx=0,sy=0,ghost=null;
+  ov.addEventListener('pointerdown',e=>{
+    if(!RUN.activeFieldId){ toast('Veldu fyrst reit í hægri stiku.'); return; }
+    const r=ov.getBoundingClientRect(); sx=e.clientX-r.left; sy=e.clientY-r.top;
+    drawing=true; ghost=el('div','box'); ghost.style.left=sx+'px'; ghost.style.top=sy+'px';
+    const f=curType().fields.find(x=>x.id===RUN.activeFieldId); if(f){ghost.style.borderColor=f.color;ghost.style.background=f.color+'22';}
+    ov.appendChild(ghost); ov.setPointerCapture(e.pointerId);
+  });
+  ov.addEventListener('pointermove',e=>{
+    if(!drawing)return; const r=ov.getBoundingClientRect(); const cx=e.clientX-r.left, cy=e.clientY-r.top;
+    ghost.style.left=Math.min(sx,cx)+'px'; ghost.style.top=Math.min(sy,cy)+'px';
+    ghost.style.width=Math.abs(cx-sx)+'px'; ghost.style.height=Math.abs(cy-sy)+'px';
+  });
+  ov.addEventListener('pointerup',e=>{
+    if(!drawing)return; drawing=false; const r=ov.getBoundingClientRect();
+    const cx=e.clientX-r.left, cy=e.clientY-r.top;
+    const x=Math.min(sx,cx), y=Math.min(sy,cy), w=Math.abs(cx-sx), h=Math.abs(cy-sy);
+    ghost.remove();
+    if(w<8||h<8) return;
+    const d=curDoc(); if(!d.boxes)d.boxes={}; if(!d.boxes[boxKey()])d.boxes[boxKey()]=[];
+    // remove existing box for same field on page (one box per field per page)
+    d.boxes[boxKey()]=d.boxes[boxKey()].filter(b=>b.fieldId!==RUN.activeFieldId);
+    d.boxes[boxKey()].push({fieldId:RUN.activeFieldId, x:x/RUN.viewport.width, y:y/RUN.viewport.height, w:w/RUN.viewport.width, h:h/RUN.viewport.height, page:RUN.page});
+    DB.docPut(d); drawBoxes();
+    extractField(d, RUN.activeFieldId); // instant read
+  });
+})();
+
+/* ================= extraction ================= */
+function boxTextLayer(b){
+  const vw=RUN.viewport.width, vh=RUN.viewport.height;
+  const bx=b.x*vw, by=b.y*vh, bw=b.w*vw, bh=b.h*vh;
+  const hits=RUN.textItems.filter(t=>{ const cx=t.x+t.w/2, cy=t.y+t.h/2; return cx>=bx&&cx<=bx+bw&&cy>=by&&cy<=by+bh; });
+  hits.sort((a,b)=> Math.abs(a.y-b.y)>4? a.y-b.y : a.x-b.x);
+  // group into lines
+  const lines=[]; let cur=null;
+  hits.forEach(t=>{ if(!cur||Math.abs(t.y-cur.y)>6){cur={y:t.y,parts:[t.str]};lines.push(cur);} else cur.parts.push(t.str); });
+  return lines.map(l=>l.parts.join(' ')).join('\n').trim();
+}
+async function ocrBox(b){
+  await ensureOcr();
+  const canvas=$('#pdfCanvas'); const vw=RUN.viewport.width, vh=RUN.viewport.height;
+  const bx=Math.round(b.x*vw), by=Math.round(b.y*vh), bw=Math.round(b.w*vw), bh=Math.round(b.h*vh);
+  const tmp=el('canvas'); const scale=2; tmp.width=bw*scale; tmp.height=bh*scale;
+  const tctx=tmp.getContext('2d'); tctx.fillStyle='#fff'; tctx.fillRect(0,0,tmp.width,tmp.height);
+  tctx.drawImage(canvas,bx,by,bw,bh,0,0,tmp.width,tmp.height);
+  const {data}=await RUN.ocrWorker.recognize(tmp);
+  return {text:(data.text||'').trim(), conf:(data.confidence||0)/100};
+}
+function applyRule(raw, rule){
+  let s=(raw||'').replace(/\r/g,'');
+  if(rule.datatype!=='lines') s=s.replace(/\n/g,' ').trim();
+  switch(rule.type){
+    case 'left': s=s.slice(0,rule.chars||8); break;
+    case 'right': s=s.slice(-(rule.chars||8)); break;
+    case 'anchor': { const i=s.toLowerCase().indexOf((rule.anchor||'').toLowerCase()); if(i>=0) s=s.slice(i+(rule.anchor||'').length).trim(); break; }
+    case 'regex': { try{ const m=s.match(new RegExp(rule.regex)); if(m) s=(m[1]!==undefined?m[1]:m[0]); }catch(e){} break; }
+  }
+  s=s.trim();
+  let value=s, display=s;
+  if(rule.datatype==='amount'){ const n=parseAmount(s); value=n; display=fmtISK(n); }
+  else if(rule.datatype==='kennitala'){ value=findKennitala(s)||s; display=value; }
+  else if(rule.datatype==='date'){ const p=parseDateParts(s); value=p?`${p.y}-${p.m||'01'}-${p.d||'01'}`:s; display=value; }
+  return {raw:s, value, display};
+}
+async function extractField(d, fieldId, silent){
+  const t=state.docTypes.find(x=>x.id===d.typeId)||curType();
+  const f=t.fields.find(x=>x.id===fieldId); if(!f) return null;
+  // find box on any page (prefer current page)
+  let box=null;
+  for(const pg of Object.keys(d.boxes||{})){ const arr=d.boxes[pg]; const found=arr.find(b=>b.fieldId===fieldId); if(found){box=found;break;} }
+  if(!box){ return null; }
+  // need to be on the right page & rendered
+  let raw='', conf=1;
+  if(box.page===RUN.page && RUN.viewport){
+    raw=boxTextLayer(box);
+    if(!raw){ const r=await ocrBox(box); raw=r.text; conf=r.conf; }
+  } else {
+    // render that page offscreen quickly via text layer
+    raw = await offscreenBoxText(d, box);
+    if(raw===null){ raw=''; }
+  }
+  const out=applyRule(raw, f.rule);
+  if(!d.values)d.values={};
+  d.values[fieldId]={value:out.value, display:out.display, raw:out.raw, conf};
+  if(f.role==='kennitala'&&out.value){ d.kennitala=String(out.value); }
+  if(f.role==='fyrirtaeki'&&out.raw){ d.seller=out.raw.split('\n')[0].slice(0,50); }
+  DB.docPut(d);
+  if(!silent){ renderFieldList(); renderValues(); }
+  return d.values[fieldId];
+}
+async function offscreenBoxText(d, box){
+  try{
+    const buf=await d.blob.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    const page=await pdf.getPage(box.page);
+    const vp=page.getViewport({scale:2});
+    const tc=await page.getTextContent();
+    const items=tc.items.map(it=>{ const tr=pdfjsLib.Util.transform(vp.transform,it.transform); const h=Math.hypot(tr[2],tr[3]); return {str:it.str,x:tr[4],y:tr[5]-h,w:it.width*2,h}; }).filter(t=>t.str.trim());
+    const bx=box.x*vp.width, by=box.y*vp.height, bw=box.w*vp.width, bh=box.h*vp.height;
+    const hits=items.filter(t=>{const cx=t.x+t.w/2,cy=t.y+t.h/2;return cx>=bx&&cx<=bx+bw&&cy>=by&&cy<=by+bh;});
+    hits.sort((a,b)=>Math.abs(a.y-b.y)>4?a.y-b.y:a.x-b.x);
+    return hits.map(t=>t.str).join(' ').trim();
+  }catch(e){ return null; }
+}
+
+$('#btnExtract').onclick=async()=>{
+  const d=curDoc(); if(!d){ toast('Opnaðu skjal fyrst.'); return; }
+  const t=curType(); const btn=$('#btnExtract'); const old=btn.textContent;
+  btn.disabled=true; btn.textContent='Les…';
+  let any=false;
+  // 1) reitir sem notandinn hefur dregið kassa á (nákvæmt, virðir leiðréttingar)
+  for(const f of t.fields){ const r=await extractField(d,f.id,true); if(r&&r.value!=null&&r.value!=='') any=true; }
+  // 2) AI les skjalið sjálft af myndinni og fyllir það sem eftir er
+  const ai=await aiReadVision(d);
+  finalizeDoc(d);
+  renderFieldList(); renderValues(); renderDocList(); updateRenamePreview(); updateReviewBar();
+  btn.disabled=false; btn.textContent=old;
+  // Sýna raun-villu frá AI-lestri ALLTAF — ekki fela hana þótt kassar hafi lesið eitthvað.
+  const aiErr = (!ai.ok && ai.msg && /lestur:|claude|lykil|credit|billing|balance|api|4\d\d|5\d\d/i.test(ai.msg));
+  toast(ai.ok ? ('🤖 AI las skjalið — '+ai.n+' reitir fylltir.')
+        : aiErr ? ('⚠️ '+ai.msg)
+        : (any ? 'Reitir lesnir úr kössum.' : (ai.msg||'Ekkert lesið — dragðu kassa eða reyndu aftur.')));
+};
+
+/* AI-lestur af mynd (Claude vision). Tvær leiðir:
+   1) Ef Claude-lykill er í Stillingum → beint úr vafra (anthropic direct browser access).
+   2) Annars → server-fall /api/ocr-read (þarf ANTHROPIC_API_KEY í Netlify-umhverfi). */
+const AI_ROLE_HINT={ fyrirtaeki:'nafn seljanda/fyrirtækis (oftast efst)', kennitala:'kennitala seljanda á sniði 000000-0000', reikningsnr:'reikningsnúmer', dagsetning:'dagsetning skjalsins', netto:'upphæð án VSK', vsk:'VSK-upphæð', upphaed:'heildarupphæð til greiðslu', vorulinur:'vörulínur — ein lína per vöru: „fjöldi × heiti — upphæð"', annad:'' };
+function aiInstruction(fields){
+  const list=fields.map(f=>`- ${f.name}${AI_ROLE_HINT[f.role]?(' — '+AI_ROLE_HINT[f.role]):''}`).join('\n');
+  return 'Þú ert nákvæmur skjala-lesari fyrir íslenska reikninga og skjöl. Lestu myndina vandlega og '+
+    'skilaðu AÐEINS JSON-hlut með gildum fyrir eftirfarandi reiti. Lyklar JSON = nöfn reitanna NÁKVÆMLEGA '+
+    'eins og þau standa hér. Skildu eftir tóman streng ("") ef reitur finnst ekki.\n\nReitir:\n'+list+
+    '\n\nReglur: kennitala 000000-0000; upphæðir sem tölur; engar skýringar, engin ```-merki — aðeins hrátt JSON.';
+}
+async function aiReadVals(image, fields){
+  const b64=image.replace(/^data:image\/[a-z]+;base64,/i,'');
+  const key=(state.settings.aiKey||'').trim();
+  const instruction=aiInstruction(fields);
+  if(key){
+    const model=(state.settings.aiModel&&/claude/i.test(state.settings.aiModel))?state.settings.aiModel:'claude-haiku-4-5-20251001';
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+      body:JSON.stringify({model,max_tokens:1024,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:instruction}]}]})});
+    const j=await r.json();
+    if(!r.ok) throw new Error((j&&j.error&&j.error.message)||('Claude '+r.status));
+    const txt=(j.content&&j.content[0]&&j.content[0].text)||''; const m=txt.match(/\{[\s\S]*\}/); return m?JSON.parse(m[0]):{};
+  }
+  // Server-fall — virkar aðeins á hýsingu með /api/ocr-read + ANTHROPIC_API_KEY.
+  // Á þessari útgáfu (Vercel) er hann ekki til, svo bendum notandanum á Claude-lykilinn.
+  let res;
+  try{ res=await fetch('/api/ocr-read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image, fields})}); }
+  catch(_){ throw new Error('Settu Claude-lykil í Stillingar → 🤖 AI-lestur (sk-ant-…).'); }
+  const ct=res.headers.get('content-type')||'';
+  if(!res.ok || !/json/i.test(ct)) throw new Error('AI-lestur þarf Claude-lykil — settu hann í Stillingar → 🤖 AI-lestur.');
+  const jj=await res.json();
+  if(jj.error){ const m=(jj.error==='API_KEY_MISSING')?'Settu Claude-lykil í Stillingar → 🤖 AI-lestur.':(jj.message||jj.error); throw new Error(m); }
+  return jj.values||{};
+}
+async function aiReadVision(d){
+  const canvas=$('#pdfCanvas');
+  if(!canvas||!canvas.width){ return {ok:false,n:0,msg:'Engin síða opin.'}; }
+  const t=curType();
+  $('#engineState').textContent='🤖 AI les skjal…';
+  let image;
+  try{ image=canvas.toDataURL('image/jpeg',0.85); }
+  catch(e){ $('#engineState').textContent='OCR: villa'; return {ok:false,n:0,msg:'Gat ekki lesið síðumynd.'}; }
+  const fields=t.fields.map(f=>({name:f.name, role:(f.rule&&f.rule.datatype)||''}));
+  try{
+    const obj=await aiReadVals(image, fields); let n=0;
+    t.fields.forEach(f=>{
+      const cur=d.values&&d.values[f.id]; const has=cur&&cur.value!=null&&cur.value!=='';
+      const raw=obj[f.name];
+      if(!has && raw!=null && String(raw).trim()!==''){
+        const out=applyRule(String(raw), f.rule);
+        if(!d.values)d.values={};
+        d.values[f.id]={value:out.value,display:out.display,raw:out.raw,conf:0.9,ai:true};
+        n++;
+      }
+    });
+    DB.docPut(d);
+    $('#engineState').textContent='OCR: tilbúin';
+    return {ok:n>0,n,msg:n?'':'AI fann engin ný gildi.'};
+  }catch(e){ $('#engineState').textContent='OCR: villa'; return {ok:false,n:0,msg:'AI-lestur: '+((e&&e.message)||e)}; }
+}
+
+/* AI helper (optional) */
+async function aiAssist(d){
+  if(!state.settings.aiEnabled||!state.settings.aiKey) return;
+  const t=curType();
+  const need=t.fields.filter(f=>{const v=d.values&&d.values[f.id];return !v||v.value==null||v.value==='';}).map(f=>f.name);
+  if(!need.length) return;
+  const prompt=`Þú ert að lesa skjal af tegund "${t.name}". Hér er textinn:\n"""${(d.fullText||'').slice(0,4000)}"""\nSkilaðu JSON með gildum fyrir þessa reiti (skildu eftir tómt ef finnst ekki): ${need.join(', ')}. Aðeins JSON.`;
+  try{
+    const res=await fetch(state.settings.aiBase.replace(/\/$/,'')+'/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+state.settings.aiKey},body:JSON.stringify({model:state.settings.aiModel,messages:[{role:'user',content:prompt}],temperature:0})});
+    const j=await res.json(); const txt=j.choices?.[0]?.message?.content||''; const m=txt.match(/\{[\s\S]*\}/); if(!m)return;
+    const obj=JSON.parse(m[0]);
+    t.fields.forEach(f=>{ if(obj[f.name]!=null&&obj[f.name]!==''){ const out=applyRule(String(obj[f.name]),f.rule); if(!d.values)d.values={}; if(!d.values[f.id]||d.values[f.id].value==null||d.values[f.id].value===''){ d.values[f.id]={value:out.value,display:out.display,raw:out.raw,conf:0.75,ai:true}; } } });
+    DB.docPut(d);
+  }catch(e){ /* silent */ }
+}
+
+function finalizeDoc(d){
+  const t=state.docTypes.find(x=>x.id===d.typeId)||curType();
+  // required = all fields with a box; check confidence & completeness
+  let confs=[], missing=false;
+  const boxedFields=new Set(); Object.values(d.boxes||{}).forEach(arr=>arr.forEach(b=>boxedFields.add(b.fieldId)));
+  boxedFields.forEach(fid=>{ const v=d.values&&d.values[fid]; if(!v||v.value==null||v.value===''){missing=true;} else confs.push(v.conf==null?1:v.conf); });
+  if(!boxedFields.size) missing=true;
+  d.confidence = confs.length? confs.reduce((a,b)=>a+b,0)/confs.length : 0;
+  d.status = (missing||d.confidence<(state.settings.ocrConf/100))?'yfirferd':'unnid';
+  // seller/category
+  const vsk=fieldByRole(t,'vsk'), up=fieldByRole(t,'upphaed'), net=fieldByRole(t,'netto');
+  d.amount = up&&d.values[up.id]? numOr(d.values[up.id].value) : null;
+  d.vsk = vsk&&d.values[vsk.id]? numOr(d.values[vsk.id].value) : null;
+  d.netto = net&&d.values[net.id]? numOr(d.values[net.id].value) : null;
+  computeBokhald(d);
+  // date
+  const dt=fieldByRole(t,'dagsetning'); const p=dt&&d.values[dt.id]?parseDateParts(d.values[dt.id].value||d.values[dt.id].raw):null;
+  d.year=p?p.y:''; d.month=p?p.m:'';
+  computeName(d);
+  DB.docPut(d);
+}
+function fieldByRole(t,role){ return t.fields.find(f=>f.role===role); }
+
+/* ================= learning: templates ================= */
+$('#btnLearn').onclick=()=>{
+  const d=curDoc(); if(!d) return;
+  const issuer=d.kennitala||d.seller||'almennt';
+  const key=d.typeId+'::'+issuer;
+  const t=curType();
+  const tmpl={fields:{}};
+  Object.values(d.boxes||{}).forEach(arr=>arr.forEach(b=>{
+    const f=t.fields.find(x=>x.id===b.fieldId);
+    tmpl.fields[b.fieldId]={box:{x:b.x,y:b.y,w:b.w,h:b.h,page:b.page}, rule:f?JSON.parse(JSON.stringify(f.rule)):null, name:f?f.name:'', role:f?f.role:'annad'};
+  }));
+  state.templates[key]=tmpl; persistState();
+  toast('Snið lært fyrir '+issuer+' — næstu skjöl frá sama aðila lesast sjálfkrafa.');
+};
+function findTemplate(d){
+  const issuer=d.kennitala||d.seller;
+  if(issuer){ const k=d.typeId+'::'+issuer; if(state.templates[k]) return state.templates[k]; }
+  // any template for this type
+  const k2=Object.keys(state.templates).find(k=>k.startsWith(d.typeId+'::'));
+  return k2?state.templates[k2]:null;
+}
+async function applyTemplate(d){
+  // need type + fulltext to find issuer first — render page1 offscreen text if needed
+  if(!d.fullText){ await primeDocText(d); }
+  if(!d.typeId){ d.typeId=guessType(d.fullText||''); }
+  d.kennitala = d.kennitala||findKennitala(d.fullText||'');
+  const tmpl=findTemplate(d);
+  if(!tmpl) return false;
+  const t=state.docTypes.find(x=>x.id===d.typeId); if(!t) return false;
+  d.boxes={};
+  Object.keys(tmpl.fields).forEach(fid=>{
+    const tf=tmpl.fields[fid];
+    // match by field id, else by role
+    let f=t.fields.find(x=>x.id===fid) || t.fields.find(x=>x.role===tf.role&&tf.role!=='annad');
+    if(!f) return;
+    const pg=tf.box.page||1; if(!d.boxes[pg])d.boxes[pg]=[];
+    d.boxes[pg].push({fieldId:f.id, x:tf.box.x, y:tf.box.y, w:tf.box.w, h:tf.box.h, page:pg});
+  });
+  return true;
+}
+async function primeDocText(d){
+  try{
+    const buf=await d.blob.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    d.pages=pdf.numPages; const page=await pdf.getPage(1); const tc=await page.getTextContent();
+    d.fullText=tc.items.map(i=>i.str).join('\n');
+    if(!d.thumb){ const vp=page.getViewport({scale:0.5}); const c=el('canvas'); c.width=vp.width;c.height=vp.height; await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; d.thumb=c.toDataURL('image/jpeg',0.5); }
+  }catch(e){ d.fullText=d.fullText||''; }
+}
+function guessType(text){
+  const low=(text||'').toLowerCase(); let best=state.docTypes[0]?.id, score=-1;
+  state.docTypes.forEach(t=>{ let s=0; (t.keywords||[]).forEach(k=>{ if(low.includes(k.toLowerCase()))s++; }); if(s>score){score=s;best=t.id;} });
+  return best;
+}
+
+/* ================= batch process all ================= */
+$('#btnProcess10').onclick=()=>processDocs(10);
+$('#btnProcess100').onclick=()=>processDocs(100);
+$('#btnProcessAll').onclick=()=>processDocs(Infinity);
+// Render skjal-síðu á offscreen striga (fyrir AI-lestur í fjöldavinnslu, þar sem ekkert er opið á skjánum)
+async function renderDocImage(d, pageNum){
+  const buf=await d.blob.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const page=await pdf.getPage(pageNum||1);
+  const vp=page.getViewport({scale:1.6});
+  const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+  await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+  return c.toDataURL('image/jpeg',0.85);
+}
+// AI-lestur á TILTEKNU skjali (ekki bara því opna) — fyllir aðeins reiti sem eru enn tómir
+async function aiReadDoc(d, image){
+  const t=state.docTypes.find(x=>x.id===d.typeId)||curType();
+  if(!image){ try{ image=await renderDocImage(d,1); }catch(e){ return {ok:false,n:0,msg:'Render villa: '+((e&&e.message)||e)}; } }
+  const fields=t.fields.map(f=>({name:f.name, role:f.role||''}));
+  try{
+    const obj=await aiReadVals(image, fields); let n=0;
+    t.fields.forEach(f=>{
+      const cur=d.values&&d.values[f.id]; const has=cur&&cur.value!=null&&cur.value!=='';
+      const raw=obj[f.name];
+      if(!has && raw!=null && String(raw).trim()!==''){
+        const out=applyRule(String(raw), f.rule);
+        if(!d.values)d.values={};
+        d.values[f.id]={value:out.value,display:out.display,raw:out.raw,conf:0.9,ai:true};
+        n++;
+      }
+    });
+    DB.docPut(d);
+    return {ok:n>0,n,msg:n?'':'AI fann engin ný gildi.'};
+  }catch(e){ return {ok:false,n:0,msg:'AI-lestur: '+((e&&e.message)||e)}; }
+}
+
+let processing=false, cancelBatch=false;
+function setBatchRunningUI(on){
+  const stop=$('#btnStopBatch'); if(stop){ stop.style.display=on?'block':'none'; if(on){ stop.disabled=false; stop.textContent='⛔ STÖÐVA vinnslu'; } }
+  ['btnProcess10','btnProcess100','btnProcessAll'].forEach(id=>{ const el=$('#'+id); if(el) el.disabled=on; });
+}
+if($('#btnStopBatch')) $('#btnStopBatch').onclick=()=>{ cancelBatch=true; const b=$('#btnStopBatch'); b.textContent='Stöðva…'; b.disabled=true; };
+async function processDocs(limit){
+  if(processing){ toast('Vinnsla í gangi…'); return; }
+  const todo=RUN.docs.filter(d=>d.status==='nytt'||d.status==='yfirferd').slice(0, limit===Infinity?undefined:limit);
+  if(!todo.length){ toast('Ekkert nýtt skjal til að vinna.'); return; }
+  const useAi = !!($('#chkBatchAi') && $('#chkBatchAi').checked);
+  processing=true; cancelBatch=false; setBatchRunningUI(true); toast('Vinn '+todo.length+' skjöl…'+(useAi?' (með AI)':''));
+  let done=0, aiErrShown=false; setBatch(0,todo.length);
+  for(const d of todo){
+    if(cancelBatch) break;
+    await primeDocText(d);
+    if(!d.typeId) d.typeId=guessType(d.fullText||'');
+    d.kennitala=d.kennitala||findKennitala(d.fullText||'');
+    const applied=await applyTemplate(d);
+    if(applied){
+      // extract each boxed field using offscreen text (or OCR fallback handled when opened)
+      const t=state.docTypes.find(x=>x.id===d.typeId);
+      const boxed=new Set(); Object.values(d.boxes).forEach(a=>a.forEach(b=>boxed.add(b.fieldId)));
+      for(const fid of boxed){
+        const box=findBoxForField(d,fid);
+        let raw=await offscreenBoxText(d,box);
+        const f=t.fields.find(x=>x.id===fid);
+        if(raw!==null&&raw!==''){ const out=applyRule(raw,f.rule); if(!d.values)d.values={}; d.values[fid]={value:out.value,display:out.display,raw:out.raw,conf:1}; }
+        else { if(!d.values)d.values={}; d.values[fid]=d.values[fid]||{value:'',display:'',raw:'',conf:0}; }
+      }
+      if(state.settings.aiEnabled){ const prev=RUN.curId; RUN.curId=d.id; await aiAssist(d); RUN.curId=prev; }
+      finalizeDoc(d);
+    } else {
+      d.status='yfirferd'; // no template yet — needs a human box
+      computeName(d); DB.docPut(d);
+    }
+    // AI-lestur í fjöldavinnslu (valfrjálst) — fyllir reiti sem eru enn tómir
+    if(useAi && !cancelBatch){
+      const r=await aiReadDoc(d);
+      if(r.ok){ finalizeDoc(d); }
+      else if(r.msg && /lykil|claude|credit|billing|balance|api|4\d\d|5\d\d/i.test(r.msg) && !aiErrShown){
+        aiErrShown=true; cancelBatch=true; toast('⚠️ AI stöðvað: '+r.msg);
+      }
+    }
+    done++; setBatch(done,todo.length);
+    renderDocList();
+  }
+  setBatchRunningUI(false); setBatch(0,0); processing=false;
+  const wasCancelled=cancelBatch; cancelBatch=false;
+  const rev=RUN.docs.filter(d=>d.status==='yfirferd').length;
+  toast((wasCancelled?'⛔ Stöðvað — ':'Lokið. ')+ (RUN.docs.filter(d=>d.status==='unnid').length) +' tilbúin, '+rev+' þurfa yfirferð.');
+  refreshLibrary(); renderDashboard();
+  // open first processed doc so you can start swiping through to check the rules
+  const first=todo.find(d=>d.status==='yfirferd')||todo.find(d=>d.status==='unnid')||todo[0];
+  if(first) selectDoc(first.id);
+}
+function findBoxForField(d,fid){ for(const pg of Object.keys(d.boxes||{})){ const f=d.boxes[pg].find(b=>b.fieldId===fid); if(f)return f; } return null; }
+function setBatch(done,total){ const p=total?Math.round(done/total*100):0; $('#batchBar').style.width=p+'%'; $('#batchTxt').textContent=total?done+'/'+total:''; }
+
+/* ============ document swiper (fletta milli skjala til að yfirfara reglur) ============ */
+function docIndex(){ return RUN.docs.findIndex(d=>d.id===RUN.curId); }
+function gotoDoc(delta){ const i=docIndex(); if(i<0)return; const j=i+delta; if(j<0||j>=RUN.docs.length)return; selectDoc(RUN.docs[j].id); }
+function updateSwipers(){
+  const i=docIndex(), n=RUN.docs.length, on=(i>=0&&n>0);
+  $('#swLeft').classList.toggle('hide',!on); $('#swRight').classList.toggle('hide',!on);
+  $('#swLeft').disabled=(i<=0); $('#swRight').disabled=(i>=n-1);
+}
+$('#swLeft').onclick=()=>gotoDoc(-1);
+$('#swRight').onclick=()=>gotoDoc(1);
+// keyboard: örvar fletta milli skjala á vinnusvæði
+window.addEventListener('keydown',e=>{
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.target.isContentEditable) return;
+  if(!$('#vw-work').classList.contains('active')||!RUN.curId) return;
+  if(e.key==='ArrowLeft'){ gotoDoc(-1); e.preventDefault(); }
+  else if(e.key==='ArrowRight'){ gotoDoc(1); e.preventDefault(); }
+});
+// touch swipe (only in review mode — when no field is selected for drawing)
+(function(){ let sx=0,sy=0,st=0;
+  const cw=$('#canvasWrap');
+  cw.addEventListener('touchstart',e=>{ if(e.touches.length!==1)return; sx=e.touches[0].clientX; sy=e.touches[0].clientY; st=Date.now(); },{passive:true});
+  cw.addEventListener('touchend',e=>{ const t=e.changedTouches[0]; const dx=t.clientX-sx, dy=t.clientY-sy;
+    if(RUN.activeFieldId) return; // drawing mode -> ignore swipe
+    if(Date.now()-st<700 && Math.abs(dx)>70 && Math.abs(dx)>2*Math.abs(dy)) gotoDoc(dx<0?1:-1);
+  },{passive:true});
+})();
+
+/* review bar — sýnir lesnu gildin svo hægt sé að staðfesta að reglurnar séu réttar */
+function updateReviewBar(){
+  const bar=$('#reviewBar'); const d=curDoc();
+  if(!d){ bar.classList.add('hide'); return; }
+  bar.classList.remove('hide');
+  const t=state.docTypes.find(x=>x.id===d.typeId);
+  const gv=role=>{ const f=t&&fieldByRole(t,role); const v=f&&d.values&&d.values[f.id]; return v?String(v.display??v.value??''):''; };
+  const conf=Math.round((d.confidence||0)*100);
+  const acc=d.account?d.account:'';
+  const items=[
+    ['Seljandi', d.seller||'—', !d.seller],
+    ['Kennitala', d.kennitala||'—', false],
+    ['Dags.', gv('dagsetning')||'—', false],
+    ['Upphæð', d.amount!=null?fmtISK(d.amount):'—', d.amount==null],
+    ['VSK', d.vsk!=null?fmtISK(d.vsk):'—', false],
+    ['Lykill', acc||'—', !acc],
+    ['Öryggi', conf+'%', conf<70],
+  ];
+  const i=docIndex();
+  bar.innerHTML=`<span class="pos">${i+1}/${RUN.docs.length}</span>`+
+    items.map(([k,v,warn])=>`<div class="ri"><span class="k">${esc(k)}</span><span class="v ${warn?'warn':''}">${esc(v)}</span></div>`).join('')+
+    `<div class="ri"><span class="k">Staða</span><span class="v ${d.status==='yfirferd'?'bad':''}">${(STATUS[d.status]||STATUS.nytt)[0]}</span></div>`;
+}
+
+$('#btnApprove').onclick=async()=>{
+  const d=curDoc(); if(!d) return; finalizeDoc(d); d.status='samthykkt'; DB.docPut(d);
+  renderDocList(); refreshLibrary(); renderDashboard(); updateReviewBar(); toast('Samþykkt.');
+  // best-effort sjálfvirk skráning í Google Sheet þegar tengt
+  if(state.settings.sheetId && state.settings.googleClientId){ exportToSheet(d,true); }
+};
+
+/* ================= Google Sheet útflutningur (bókhald) ================= */
+// Ein lína per skjal: dags, seljandi, kt, reikningsnr, án vsk, vsk, heild, vörulínur, skjal, tegund, skráð
+function docRow(d){
+  const t=state.docTypes.find(x=>x.id===d.typeId);
+  const gv=role=>{ const f=t&&fieldByRole(t,role); const v=f&&d.values&&d.values[f.id]; return v?String(v.display??v.value??''):''; };
+  return [
+    gv('dagsetning')||'',
+    d.seller||gv('fyrirtaeki')||'',
+    d.kennitala||gv('kennitala')||'',
+    gv('reikningsnr')||'',
+    (d.netto!=null?d.netto:gv('netto'))||'',
+    (d.vsk!=null?d.vsk:'')||'',
+    (d.amount!=null?d.amount:gv('upphaed'))||'',
+    gv('vorulinur')||'',
+    (d.newName||d.name||d.file||''),
+    (t&&t.name)||'',
+    new Date().toLocaleString('is-IS'),
+  ];
+}
+async function exportToSheet(d,silent){
+  const sid=(state.settings.sheetId||'').trim();
+  if(!sid){ if(!silent) toast('Enginn Google Sheet-lykill — settu hann í Tengingar.'); return false; }
+  if(!state.settings.googleClientId){ if(!silent) toast('Tengstu Google fyrst (Tengingar → Tengjast Google).'); return false; }
+  try{
+    const tok=await gGetToken();
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sid)}/values/A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const r=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({values:[docRow(d)]})});
+    if(!r.ok){ let m=r.status; try{const e=await r.json(); m=(e.error&&e.error.message)||m;}catch(_){} if(!silent) toast('Google Sheet villa: '+m); return false; }
+    if(!silent) toast('📊 Skráð í Google Sheet.');
+    return true;
+  }catch(e){ if(!silent) toast('Sheet mistókst: '+((e&&e.message)||e)); return false; }
+}
+(function(){ const b=$('#btnSheet'); if(b) b.onclick=async()=>{ const d=curDoc(); if(!d){toast('Ekkert skjal valið.');return;} finalizeDoc(d); await exportToSheet(d,false); }; })();
+
+/* ================= values panel ================= */
+function renderValues(){
+  const d=curDoc(); const wrap=$('#valueList'); wrap.innerHTML='';
+  if(!d){ wrap.innerHTML='<div class="empty small">Ekkert skjal valið.</div>'; return; }
+  const t=state.docTypes.find(x=>x.id===d.typeId)||curType();
+  const cf=el('div','card'); cf.innerHTML=`<div class="kv"><span class="k">Öryggi lesturs</span><span class="v">${Math.round((d.confidence||0)*100)}%</span></div>
+    <div class="kv"><span class="k">Staða</span><span class="v">${(STATUS[d.status]||STATUS.nytt)[0]}</span></div>`;
+  wrap.appendChild(cf);
+  t.fields.forEach(f=>{
+    const v=d.values&&d.values[f.id];
+    const row=el('div','kv');
+    row.innerHTML=`<span class="k">${esc(f.name)}${v&&v.ai?' 🤖':''}</span><span class="v" contenteditable="true" data-fid="${f.id}">${v?esc(String(v.display??v.value??'')):''}</span>`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('[contenteditable]').forEach(c=>{
+    c.onblur=()=>{ const d2=curDoc(); const fid=c.dataset.fid; const f=t.fields.find(x=>x.id===fid);
+      const out=applyRule(c.textContent, {type:'whole',datatype:f.rule.datatype});
+      if(!d2.values)d2.values={}; d2.values[fid]={value:out.value,display:out.display,raw:c.textContent,conf:1,manual:true};
+      finalizeDoc(d2); renderFieldList(); renderDocList(); updateRenamePreview();
+    };
+  });
+  // product categories
+  const vor=fieldByRole(t,'vorulinur'); const v=vor&&d.values&&d.values[vor.id];
+  if(v&&v.raw){
+    const box=el('div','card'); box.innerHTML='<h4>Vörulínur → flokkur</h4>';
+    v.raw.split('\n').map(s=>s.trim()).filter(Boolean).forEach(line=>{
+      const name=line.slice(0,40); const cat=state.productCats[name.toLowerCase()]||'';
+      const r=el('div','row'); r.style.margin='4px 0';
+      const sel=el('select'); sel.innerHTML='<option value="">— óflokkað —</option>'+state.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('');
+      sel.onchange=()=>{ state.productCats[name.toLowerCase()]=sel.value; persistState(); toast('Lært: '+name+' → '+sel.value); };
+      const lab=el('div',null,name); lab.className='grow small'; lab.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      r.appendChild(lab); r.appendChild(sel); box.appendChild(r);
+    });
+    wrap.appendChild(box);
+  }
+}
+
+/* ================= OCR worker ================= */
+async function ensureOcr(){
+  if(RUN.ocrWorker) return;
+  $('#engineState').textContent='OCR: ræsi…';
+  RUN.ocrWorker=await Tesseract.createWorker('isl+eng',1,{
+    langPath:'https://tessdata.projectnaptha.com/4.0.0',
+    logger:m=>{ if(m.status) $('#engineState').textContent='OCR: '+m.status+(m.progress?` ${Math.round(m.progress*100)}%`:''); }
+  });
+  $('#engineState').textContent='OCR: tilbúin';
+}
+$('#btnOcrPage').onclick=async()=>{
+  const d=curDoc(); if(!d)return; await ensureOcr();
+  toast('Les alla síðuna með OCR…');
+  const {data}=await RUN.ocrWorker.recognize($('#pdfCanvas'));
+  d.fullText=(data.text||''); DB.docPut(d);
+  toast('OCR búið — '+(d.fullText.length)+' stafir lesnir.');
+};
+
+/* ================= rename ================= */
+$('#renamePattern').oninput=()=>{ state.renamePattern=$('#renamePattern').value; persistState(); updateRenamePreview(); };
+function renderTokens(){
+  const wrap=$('#tokenList'); wrap.innerHTML=''; const toks=['fyrirtaeki','kennitala','ar','manudur','reikningsnr','upphaed','tegund','flokkur'];
+  toks.forEach(tk=>{ const c=el('span','chip tok','{'+tk+'}'); c.onclick=()=>{ const inp=$('#renamePattern'); inp.value+= '{'+tk+'}'; state.renamePattern=inp.value; persistState(); updateRenamePreview(); }; wrap.appendChild(c); });
+}
+function tokenValues(d){
+  const t=state.docTypes.find(x=>x.id===d.typeId)||curType();
+  const get=role=>{ const f=fieldByRole(t,role); const v=f&&d.values&&d.values[f.id]; return v?String(v.raw||v.value||''):''; };
+  return {
+    fyrirtaeki:sanitizeFile(d.seller||get('fyrirtaeki')),
+    kennitala:(d.kennitala||get('kennitala')).replace(/\D/g,''),
+    ar:d.year||'', manudur:d.month||'',
+    reikningsnr:sanitizeFile(get('reikningsnr')),
+    upphaed:(d.amount!=null?Math.round(d.amount):''),
+    tegund:sanitizeFile(t?t.name:''), flokkur:sanitizeFile(d.category||'')
+  };
+}
+function computeName(d){
+  const vals=tokenValues(d);
+  let n=state.renamePattern.replace(/\{(\w+)\}/g,(_,k)=> vals[k]!=null&&vals[k]!==''?vals[k]:'');
+  n=n.replace(/_{2,}/g,'_').replace(/^[_\-]+|[_\-]+$/g,'');
+  d.newName=(n||d.name.replace(/\.pdf$/i,''))+'.pdf';
+  return d.newName;
+}
+function updateRenamePreview(){ const d=curDoc(); if(!d){$('#renamePreview').textContent='–';return;} $('#renamePreview').textContent=computeName(d); }
+
+/* ================= library ================= */
+function processedDocs(){ return RUN.docs.filter(d=>d.status==='unnid'||d.status==='samthykkt'||d.status==='yfirferd'); }
+function refreshLibrary(){
+  // rebuild seller & category filters
+  const sellers=[...new Set(RUN.docs.map(d=>d.seller).filter(Boolean))];
+  const ls=$('#libSeller'); const cur=ls.value; ls.innerHTML='<option value="">Allir seljendur</option>'+sellers.map(s=>`<option>${esc(s)}</option>`).join(''); ls.value=cur;
+  const lc=$('#libCat'); const curc=lc.value; lc.innerHTML='<option value="">Allir flokkar</option>'+state.categories.map(c=>`<option>${esc(c)}</option>`).join(''); lc.value=curc;
+  const q=$('#libSearch').value.toLowerCase(), ft=$('#libType').value, fs=ls.value, fc=lc.value;
+  const grid=$('#libGrid'); grid.innerHTML='';
+  let docs=RUN.docs.filter(d=>{
+    if(ft&&d.typeId!==ft)return false; if(fs&&d.seller!==fs)return false; if(fc&&d.category!==fc)return false;
+    if(q&&!(d.name+d.seller+(d.newName||'')).toLowerCase().includes(q))return false; return true;
+  });
+  $('#libCount').textContent=docs.length+' skjöl';
+  $('#libEmpty').classList.toggle('hide',docs.length>0);
+  docs.forEach(d=>{
+    const t=state.docTypes.find(x=>x.id===d.typeId);
+    const card=el('div','lib-card');
+    const st=STATUS[d.status]||STATUS.nytt;
+    card.innerHTML=`<div class="lib-thumb" style="${d.thumb?`background-image:url(${d.thumb})`:''}">${d.thumb?'':'📄'}</div>
+      <div class="lib-meta"><div class="t" title="${esc(d.newName||d.name)}">${esc(d.newName||d.name)}</div>
+      <div class="row" style="justify-content:space-between;margin-top:5px">
+        <span class="pill-type">${t?esc(t.name):'—'}</span><span class="badge ${st[1]}">${st[0]}</span></div>
+      <div class="small mut" style="margin-top:5px">${esc(d.seller||'—')} · ${d.amount!=null?fmtISK(d.amount):'—'}</div></div>`;
+    card.onclick=()=>{ $$('.tab').forEach(x=>x.classList.remove('active')); $('.tab[data-view="work"]').classList.add('active'); $$('.view').forEach(v=>v.classList.remove('active')); $('#vw-work').classList.add('active'); selectDoc(d.id); };
+    grid.appendChild(card);
+  });
+}
+['input','change'].forEach(ev=>{ ['#libSearch','#libType','#libSeller','#libCat'].forEach(s=>$(s).addEventListener(ev,refreshLibrary)); });
+
+/* export CSV */
+$('#btnExportCsv').onclick=()=>{
+  const docs=processedDocs(); if(!docs.length){toast('Ekkert til að flytja út.');return;}
+  const rolesCols=['fyrirtaeki','kennitala','reikningsnr','dagsetning','netto','vsk','upphaed'];
+  const head=['Skra','Nytt nafn','Tegund','Flokkur',...rolesCols];
+  const rows=[head];
+  docs.forEach(d=>{
+    const t=state.docTypes.find(x=>x.id===d.typeId);
+    const getv=role=>{const f=t&&fieldByRole(t,role);const v=f&&d.values&&d.values[f.id];return v?String(v.value??v.display??''):'';};
+    rows.push([d.name,d.newName||'',t?t.name:'',d.category||'',...rolesCols.map(getv)]);
+  });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  download(new Blob(['﻿'+csv],{type:'text/csv'}),'skjol_yfirlit.csv');
+};
+$('#btnExportZip').onclick=async()=>{
+  const docs=processedDocs(); if(!docs.length){toast('Ekkert til að flytja út.');return;}
+  toast('Bý til ZIP…'); const zip=new JSZip();
+  const used={};
+  for(const d of docs){ let nm=d.newName||computeName(d); if(used[nm]){used[nm]++;nm=nm.replace(/\.pdf$/i,'')+'_'+used[nm]+'.pdf';}else used[nm]=1; zip.file(nm, await d.blob.arrayBuffer()); }
+  const blob=await zip.generateAsync({type:'blob'}); download(blob,'endurnefnd_skjol.zip');
+};
+function download(blob,name){ const a=el('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
+
+/* ================= PDF-verkfæri (PDF workbench) — merge / split / rotate / reorder / extract ================= */
+const PW = { files:[], curId:null, seq:0 };
+(function pwInit(){
+  const L=$('#pwLoad'), I=$('#pwInput'), M=$('#pwMerge'), C=$('#pwClear');
+  if(L) L.onclick=()=>I&&I.click();
+  if(I) I.onchange=async e=>{ for(const f of [...e.target.files]){ await pwAddFile(f); } e.target.value=''; if(!PW.curId&&PW.files[0]) PW.curId=PW.files[0].id; pwRenderFiles(); pwRenderEditor(); };
+  if(M) M.onclick=pwMergeAll;
+  if(C) C.onclick=()=>{ PW.files=[]; PW.curId=null; pwRenderFiles(); pwRenderEditor(); };
+})();
+function renderPdfTools(){ pwRenderFiles(); pwRenderEditor(); }
+async function pwAddFile(file){
+  try{
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    let n=0; try{ const d=await pdfjsLib.getDocument({data:bytes.slice()}).promise; n=d.numPages; }catch(_){}
+    PW.files.push({ id:'pw'+(++PW.seq), name:file.name||'skjal.pdf', bytes, pages:Array.from({length:n},(_,i)=>({src:i,rot:0})), sel:new Set(), thumbs:{}, _pdf:null });
+  }catch(e){ toast('Gat ekki lesið '+(file.name||'PDF')); }
+}
+function pwRenderFiles(){
+  const box=$('#pwFiles'); if(!box) return;
+  const cEl=$('#pwCount'); if(cEl) cEl.textContent=PW.files.length;
+  if(!PW.files.length){ box.innerHTML='<div class="empty small" style="padding:24px">Engar PDF hlaðnar.<br>„＋ Hlaða PDF" til að byrja.</div>'; return; }
+  box.innerHTML='';
+  PW.files.forEach((f,i)=>{
+    const row=el('div','pw-file'+(f.id===PW.curId?' active':''));
+    row.innerHTML=`<div class="pw-file-main"><b>${esc(f.name)}</b><span class="small mut">${f.pages.length} síður</span></div>
+      <div class="pw-file-act">
+        <button class="btn sm" data-up title="Færa upp">↑</button>
+        <button class="btn sm" data-dn title="Færa niður">↓</button>
+        <button class="btn sm" data-rm title="Fjarlægja">✕</button></div>`;
+    row.querySelector('[data-up]').onclick=e=>{e.stopPropagation(); if(i>0){ [PW.files[i-1],PW.files[i]]=[PW.files[i],PW.files[i-1]]; pwRenderFiles(); }};
+    row.querySelector('[data-dn]').onclick=e=>{e.stopPropagation(); if(i<PW.files.length-1){ [PW.files[i+1],PW.files[i]]=[PW.files[i],PW.files[i+1]]; pwRenderFiles(); }};
+    row.querySelector('[data-rm]').onclick=e=>{e.stopPropagation(); PW.files.splice(i,1); if(PW.curId===f.id) PW.curId=(PW.files[0]&&PW.files[0].id)||null; pwRenderFiles(); pwRenderEditor(); };
+    row.onclick=()=>{ PW.curId=f.id; pwRenderFiles(); pwRenderEditor(); };
+    box.appendChild(row);
+  });
+}
+function pwRenderEditor(){
+  const box=$('#pwEditor'); if(!box) return;
+  const f=PW.files.find(x=>x.id===PW.curId);
+  if(!f){ box.innerHTML='<div class="empty small" style="padding:40px">Veldu PDF vinstra megin til að breyta síðum,<br>eða sameinaðu allar með „⬇ Sameina allar".</div>'; return; }
+  box.innerHTML=`<div class="row" style="justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px">
+        <b style="font-size:15px">${esc(f.name)}</b><span class="small mut">${f.pages.length} síður${f.sel.size?(' · '+f.sel.size+' valdar'):''}</span></div>
+      <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
+        <button class="btn sm" id="pwSelAll">Velja allar</button>
+        <button class="btn sm" id="pwSelNone">Hreinsa val</button>
+        <button class="btn sm" id="pwRotSel">⟳ Snúa völdum</button>
+        <button class="btn sm" id="pwDelSel">🗑 Eyða völdum</button>
+        <button class="btn sm pri" id="pwExtract">⬇ Draga út valdar</button>
+        <button class="btn sm pri" id="pwSave">⬇ Vista PDF</button>
+        <button class="btn sm" id="pwSplitAll" title="Ein PDF per síðu, í ZIP">⬇ Í stakar (ZIP)</button></div>
+      <div class="pw-grid" id="pwGrid"></div>`;
+  $('#pwSelAll').onclick=()=>{ f.pages.forEach((_,i)=>f.sel.add(i)); pwRenderEditor(); };
+  $('#pwSelNone').onclick=()=>{ f.sel.clear(); pwRenderEditor(); };
+  $('#pwRotSel').onclick=()=>{ const idx=f.sel.size?[...f.sel]:f.pages.map((_,i)=>i); idx.forEach(i=>{ if(f.pages[i]) f.pages[i].rot=((f.pages[i].rot||0)+90)%360; }); pwRenderEditor(); };
+  $('#pwDelSel').onclick=()=>{ if(!f.sel.size){ toast('Veldu síður fyrst (smelltu á þær).'); return; } f.pages=f.pages.filter((_,i)=>!f.sel.has(i)); f.sel.clear(); pwRenderEditor(); };
+  $('#pwExtract').onclick=()=>{ const idx=[...f.sel].sort((a,b)=>a-b); if(!idx.length){ toast('Veldu síður til að draga út.'); return; } pwExport(f, idx, 'valdar'); };
+  $('#pwSave').onclick=()=>pwExport(f, null, 'breytt');
+  $('#pwSplitAll').onclick=()=>pwSplitZip(f);
+  const grid=$('#pwGrid');
+  f.pages.forEach((p,i)=>{
+    const cell=el('div','pw-cell'+(f.sel.has(i)?' sel':''));
+    cell.innerHTML=`<div class="pw-thumb"><div class="pw-ph">…</div></div>
+      <div class="pw-cell-bar">
+        <button class="btn sm" data-rot title="Snúa 90°">⟳</button>
+        <span style="display:inline-flex;align-items:center;gap:2px"><button class="btn sm" data-mvl title="Færa fyrr">◀</button><span class="pw-pg">${i+1}</span><button class="btn sm" data-mvr title="Færa seinna">▶</button></span>
+        <button class="btn sm" data-del title="Eyða síðu">🗑</button></div>`;
+    cell.querySelector('[data-rot]').onclick=e=>{ e.stopPropagation(); p.rot=((p.rot||0)+90)%360; pwRenderEditor(); };
+    cell.querySelector('[data-del]').onclick=e=>{ e.stopPropagation(); f.pages.splice(i,1); f.sel.clear(); pwRenderEditor(); };
+    cell.querySelector('[data-mvl]').onclick=e=>{ e.stopPropagation(); if(i>0){ [f.pages[i-1],f.pages[i]]=[f.pages[i],f.pages[i-1]]; f.sel.clear(); pwRenderEditor(); } };
+    cell.querySelector('[data-mvr]').onclick=e=>{ e.stopPropagation(); if(i<f.pages.length-1){ [f.pages[i+1],f.pages[i]]=[f.pages[i],f.pages[i+1]]; f.sel.clear(); pwRenderEditor(); } };
+    cell.querySelector('.pw-thumb').onclick=()=>{ if(f.sel.has(i)) f.sel.delete(i); else f.sel.add(i); pwRenderEditor(); };
+    grid.appendChild(cell);
+    pwThumb(f,p,cell.querySelector('.pw-thumb'));
+  });
+}
+async function pwThumb(f,p,host){
+  try{
+    if(!f.thumbs[p.src]){
+      if(!f._pdf) f._pdf=await pdfjsLib.getDocument({data:f.bytes.slice()}).promise;
+      const page=await f._pdf.getPage(p.src+1);
+      const vp=page.getViewport({scale:0.4});
+      const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+      await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+      f.thumbs[p.src]=c.toDataURL('image/jpeg',0.7);
+    }
+    if(host) host.innerHTML=`<img src="${f.thumbs[p.src]}" style="transform:rotate(${p.rot||0}deg)">`;
+  }catch(_){ if(host) host.innerHTML='<div class="pw-ph">?</div>'; }
+}
+async function pwExport(f, indices, tag){
+  if(typeof PDFLib==='undefined'){ toast('PDF-vél ekki hlaðin — reyndu aftur eftir augnablik.'); return; }
+  try{
+    const { PDFDocument, degrees } = PDFLib;
+    const src=await PDFDocument.load(f.bytes);
+    const out=await PDFDocument.create();
+    const order = indices!=null ? indices.map(i=>f.pages[i]) : f.pages.slice();
+    if(!order.length){ toast('Engar síður til að vista.'); return; }
+    const copied=await out.copyPages(src, order.map(p=>p.src));
+    copied.forEach((pg,k)=>{ const r=order[k].rot||0; if(r){ const cur=(pg.getRotation&&pg.getRotation().angle)||0; pg.setRotation(degrees((cur+r)%360)); } out.addPage(pg); });
+    const bytes=await out.save();
+    download(new Blob([bytes],{type:'application/pdf'}), f.name.replace(/\.pdf$/i,'')+'_'+tag+'.pdf');
+    toast('✅ PDF vistuð ('+order.length+' síður).');
+  }catch(e){ toast('Villa við vistun: '+((e&&e.message)||e)); }
+}
+async function pwSplitZip(f){
+  if(typeof PDFLib==='undefined'){ toast('PDF-vél ekki hlaðin.'); return; }
+  try{
+    const { PDFDocument } = PDFLib;
+    const src=await PDFDocument.load(f.bytes);
+    const zip=new JSZip(); const base=f.name.replace(/\.pdf$/i,'');
+    for(let k=0;k<f.pages.length;k++){
+      const out=await PDFDocument.create();
+      const [pg]=await out.copyPages(src,[f.pages[k].src]); out.addPage(pg);
+      zip.file(base+'_bls'+String(k+1).padStart(2,'0')+'.pdf', await out.save());
+    }
+    download(await zip.generateAsync({type:'blob'}), base+'_stakar.zip');
+    toast('✅ Skipt í '+f.pages.length+' stakar síður.');
+  }catch(e){ toast('Villa: '+((e&&e.message)||e)); }
+}
+async function pwMergeAll(){
+  if(typeof PDFLib==='undefined'){ toast('PDF-vél ekki hlaðin.'); return; }
+  if(!PW.files.length){ toast('Hladdu inn PDF fyrst.'); return; }
+  try{
+    const { PDFDocument, degrees } = PDFLib;
+    const out=await PDFDocument.create(); let total=0;
+    for(const f of PW.files){
+      const src=await PDFDocument.load(f.bytes);
+      const copied=await out.copyPages(src, f.pages.map(p=>p.src));
+      copied.forEach((pg,k)=>{ const r=f.pages[k].rot||0; if(r){ const cur=(pg.getRotation&&pg.getRotation().angle)||0; pg.setRotation(degrees((cur+r)%360)); } out.addPage(pg); total++; });
+    }
+    const bytes=await out.save();
+    download(new Blob([bytes],{type:'application/pdf'}), 'sameinad.pdf');
+    toast('✅ Sameinað — '+PW.files.length+' skjöl, '+total+' síður.');
+  }catch(e){ toast('Villa við sameiningu: '+((e&&e.message)||e)); }
+}
+$('#btnExportDk').onclick=()=>openBokhaldSetup();
+
+/* ================= dashboard ================= */
+function renderDashSelectors(){
+  const amt=$('#dashAmount'); amt.innerHTML='';
+  const roles=[['upphaed','Heildarupphæð'],['netto','Upphæð án VSK'],['vsk','VSK']];
+  roles.forEach(([r,n])=>{const o=el('option',null,n);o.value=r;amt.appendChild(o);});
+  amt.value=state.dash.amountRole; $('#dashGroup').value=state.dash.groupBy;
+}
+$('#dashAmount').onchange=()=>{state.dash.amountRole=$('#dashAmount').value;persistState();renderDashboard();};
+$('#dashGroup').onchange=()=>{state.dash.groupBy=$('#dashGroup').value;persistState();renderDashboard();};
+function docAmount(d){
+  const t=state.docTypes.find(x=>x.id===d.typeId); if(!t)return 0;
+  const f=fieldByRole(t,state.dash.amountRole); const v=f&&d.values&&d.values[f.id];
+  const n=v?(typeof v.value==='number'?v.value:parseAmount(v.value)):0; return n||0;
+}
+function docGroupKey(d){
+  switch(state.dash.groupBy){
+    case 'type':{const t=state.docTypes.find(x=>x.id===d.typeId);return t?t.name:'—';}
+    case 'category':return d.category||'Óflokkað';
+    case 'month':return (d.year&&d.month)?d.year+'-'+d.month:'—';
+    default:return d.seller||'—';
+  }
+}
+function renderDashboard(){
+  const docs=processedDocs();
+  const total=docs.reduce((a,d)=>a+docAmount(d),0);
+  const vskTotal=docs.reduce((a,d)=>a+(d.vsk||0),0);
+  const cards=[
+    ['total','Heildarupphæð',fmtISK(total)],
+    ['count','Fjöldi skjala',String(docs.length)],
+    ['vsk','VSK samtals',fmtISK(vskTotal)],
+    ['docs','Þurfa yfirferð',String(RUN.docs.filter(d=>d.status==='yfirferd').length)],
+    ['avg','Meðalupphæð',fmtISK(docs.length?total/docs.length:0)],
+    ['sellers','Seljendur',String(new Set(docs.map(d=>d.seller).filter(Boolean)).size)],
+  ].filter(c=>state.dash.cards.includes(c[0]));
+  const cc=$('#dashCards'); cc.innerHTML='';
+  cards.forEach(c=>{ const s=el('div','stat'); s.innerHTML=`<div class="lab">${c[1]}</div><div class="num">${c[2]}</div>`; cc.appendChild(s); });
+  // grouping
+  const groups={};
+  docs.forEach(d=>{ const k=docGroupKey(d); (groups[k]=groups[k]||[]).push(d); });
+  const entries=Object.entries(groups).map(([k,ds])=>[k,ds,ds.reduce((a,d)=>a+docAmount(d),0)]).sort((a,b)=>b[2]-a[2]);
+  const max=Math.max(1,...entries.map(e=>e[2]));
+  const chart=$('#chart'); chart.innerHTML='';
+  $('#chartTitle').textContent='Sundurliðun eftir '+({seller:'seljanda',type:'tegund',category:'vöruflokki',month:'mánuði'}[state.dash.groupBy]);
+  entries.forEach(([k,ds,sum])=>{ const r=el('div','bar-row'); r.innerHTML=`<span class="nm" title="${esc(k)}">${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${sum/max*100}%"></div></div><span class="amt">${fmtISK(sum)}</span>`; chart.appendChild(r); });
+  if(!entries.length) chart.innerHTML='<div class="empty small">Engin unnin skjöl enn. Vinnið skjöl á Vinnusvæði.</div>';
+  // breakdown details
+  const gb=$('#groupBreak'); gb.innerHTML='';
+  entries.forEach(([k,ds,sum])=>{
+    const det=el('details','grp'); det.innerHTML=`<summary><span>${esc(k)} <span class="mut small">(${ds.length})</span></span><span>${fmtISK(sum)}</span></summary>`;
+    const tbl=el('table');
+    ds.forEach(d=>{ const tr=el('tr'); tr.innerHTML=`<td>${esc(d.newName||d.name)}</td><td class="mut">${esc(d.seller||'')}</td><td style="text-align:right">${fmtISK(docAmount(d))}</td>`; tr.style.cursor='pointer'; tr.onclick=()=>{$('.tab[data-view="work"]').click();selectDoc(d.id);}; tbl.appendChild(tr); });
+    det.appendChild(tbl); gb.appendChild(det);
+  });
+}
+$('#btnDashCfg').onclick=()=>{
+  const all=[['total','Heildarupphæð'],['count','Fjöldi skjala'],['vsk','VSK samtals'],['docs','Þurfa yfirferð'],['avg','Meðalupphæð'],['sellers','Seljendur']];
+  modal('Veldu kort á mælaborði', all.map(c=>`<label class="row" style="margin:6px 0"><input type="checkbox" style="width:auto" value="${c[0]}" ${state.dash.cards.includes(c[0])?'checked':''}> ${c[1]}</label>`).join(''), [
+    {label:'Vista',cls:'pri',fn:()=>{ state.dash.cards=$$('#modalHost input:checked').map(i=>i.value); persistState(); renderDashboard(); closeModal(); }}
+  ]);
+};
+
+/* ================= document types manager ================= */
+$('#btnTypes').onclick=()=>{
+  const body=state.docTypes.map(t=>`<div class="card"><div class="row"><b class="grow">${esc(t.name)}</b>
+    <button class="btn sm" data-edit="${t.id}">Reitir (${t.fields.length})</button>
+    <button class="btn sm ghost" data-deltype="${t.id}">🗑</button></div>
+    <div class="small mut" style="margin-top:6px">Kjölfestu-orð: ${esc((t.keywords||[]).join(', '))||'—'}</div></div>`).join('');
+  modal('Skjalategundir', body+'<button class="btn sm" id="addType" style="margin-top:8px">＋ Ný tegund</button>', []);
+  $('#addType').onclick=()=>{ state.docTypes.push({id:uid(),name:'Ný tegund',keywords:[],fields:[]}); persistState(); buildTypeSelectors(); $('#btnTypes').click(); };
+  $$('#modalHost [data-edit]').forEach(b=>b.onclick=()=>{ editType(state.docTypes.find(t=>t.id===b.dataset.edit)); });
+  $$('#modalHost [data-deltype]').forEach(b=>b.onclick=()=>{ if(state.docTypes.length<=1){toast('Þarf a.m.k. eina tegund.');return;} if(confirm('Eyða tegund?')){ state.docTypes=state.docTypes.filter(t=>t.id!==b.dataset.deltype); persistState(); buildTypeSelectors(); renderFieldList(); $('#btnTypes').click(); } });
+};
+function editType(t){
+  modal('Tegund: '+esc(t.name), `
+    <label class="fld">Heiti</label><input id="etName" value="${esc(t.name)}">
+    <label class="fld">Kjölfestu-orð (til að giska á tegund) — aðskilin með kommu</label>
+    <input id="etKw" value="${esc((t.keywords||[]).join(', '))}">
+    <label class="fld">Reitir</label>
+    <div id="etFields">${t.fields.map(f=>`<div class="row" style="margin:4px 0"><span class="swatch" style="background:${f.color}"></span><span class="grow small">${esc(f.name)} <span class="mut">· ${esc(f.role)} · ${esc(f.rule.type)}</span></span></div>`).join('')||'<span class="small mut">Engir reitir enn — bættu við á vinnusvæðinu.</span>'}</div>
+  `,[{label:'Vista',cls:'pri',fn:()=>{ t.name=$('#etName').value.trim()||t.name; t.keywords=$('#etKw').value.split(',').map(s=>s.trim()).filter(Boolean); persistState(); buildTypeSelectors(); renderFieldList(); closeModal(); toast('Vistað.'); }}]);
+}
+
+/* ================= settings ================= */
+$('#btnSettings').onclick=()=>{
+  const s=state.settings;
+  modal('Stillingar', `
+    <div class="card"><h4>🤖 AI-lestur (Claude vision)</h4>
+    <p class="small mut">Límdu Claude (Anthropic) API-lykil hér — þá les tólið skjölin <b>sjálft</b> af myndinni þegar þú ýtir á „⚡ Lesa reiti", og þú lagfærir svo með því að draga kassa. Lykillinn geymist AÐEINS í þínum vafra og fer beint til Anthropic. Sæktu lykil á console.anthropic.com → API Keys.</p>
+    <label class="fld">Claude API-lykill</label><input id="stKey" type="password" value="${esc(s.aiKey)}" placeholder="sk-ant-…">
+    <label class="fld">Líkan (valfrjálst)</label><input id="stModel" value="${esc(s.aiModel)}" placeholder="claude-haiku-4-5-20251001">
+    <input id="stAi" type="checkbox" style="display:none" ${s.aiEnabled?'checked':''}><input id="stBase" type="hidden" value="${esc(s.aiBase)}"></div>
+    <div class="card"><h4>Lestur</h4>
+    <label class="fld">Lágmarks öryggi áður en skjal fer í yfirferð (%)</label>
+    <input id="stConf" type="number" value="${s.ocrConf}"></div>
+    <div class="card"><h4>Vöruflokkar</h4>
+    <input id="stCats" value="${esc(state.categories.join(', '))}"><div class="small mut">Aðskilið með kommu.</div></div>
+    <div class="card"><h4>🔄 Samstilling milli tölva</h4>
+    <p class="small mut">Þjálfaðu sniðin á einni tölvu, fluttu svo stillingarnar út og inn á hinar 4 — þá vinna allar vélarnar eins.</p>
+    <div class="row"><button class="btn sm grow" id="stExport">⬇ Flytja út stillingar</button><button class="btn sm grow" id="stImport">⬆ Flytja inn stillingar</button></div>
+    <div class="small mut" style="margin-top:6px">Inniheldur tegundir, reiti, reglur, lærð snið, lyklaborð og flokka (ekki skjölin sjálf).</div></div>
+    <div class="card"><h4>Gögn</h4><button class="btn sm" id="stReset">Núllstilla snið & reglur</button>
+    <span class="small mut"> Geymsla: ${DB.isMem?'minni (hverfur)':'varanleg (IndexedDB)'}</span></div>
+  `,[{label:'Vista',cls:'pri',fn:()=>{
+    s.aiEnabled=$('#stAi').checked; s.aiBase=$('#stBase').value.trim(); s.aiModel=$('#stModel').value.trim(); s.aiKey=$('#stKey').value.trim();
+    s.ocrConf=parseInt($('#stConf').value)||70; state.categories=$('#stCats').value.split(',').map(x=>x.trim()).filter(Boolean);
+    persistState(); renderValues(); closeModal(); toast('Stillingar vistaðar.');
+  }}]);
+  $('#stExport').onclick=exportConfig;
+  $('#stImport').onclick=()=>$('#cfgInput').click();
+  $('#stReset').onclick=()=>{ if(confirm('Núllstilla allar tegundir, reiti og lærð snið?')){ state.docTypes=defaultTypes(); state.templates={}; persistState(); buildTypeSelectors(); renderFieldList(); closeModal(); toast('Núllstillt.'); } };
+};
+
+/* ================= import helper ================= */
+async function importPdfBlob(name, blob){
+  const buf=await blob.arrayBuffer();
+  const doc={ id:uid(), name, order:RUN.docs.length, blob, status:'nytt', typeId:null, seller:'', kennitala:'',
+    category:'', pages:0, boxes:{}, values:{}, confidence:1, newName:'', thumb:'', hash:await hashBuf(buf) };
+  RUN.docs.push(doc); await DB.docPut(doc); return doc;
+}
+async function hashBuf(buf){ try{ const h=await crypto.subtle.digest('SHA-256',buf); return Array.from(new Uint8Array(h,0,8)).map(b=>b.toString(16).padStart(2,'0')).join(''); }catch(e){ return 'sz'+(buf.byteLength||0); } }
+
+/* ================= Google (Drive + Gmail) ================= */
+const G={ token:null, tokenClient:null, expires:0 };
+function gEnsureClient(){
+  if(!state.settings.googleClientId){ toast('Settu Google Client ID í Tengingum fyrst.'); return false; }
+  if(!(window.google&&google.accounts&&google.accounts.oauth2)){ toast('Google-einingar hlóðust ekki (athuga nettengingu).'); return false; }
+  if(!G.tokenClient || G.tokenClient._cid!==state.settings.googleClientId){
+    G.tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:state.settings.googleClientId,
+      scope:'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/gmail.readonly',
+      callback:(resp)=>{ if(resp.access_token){ G.token=resp.access_token; G.expires=Date.now()+3500*1000; } if(G._resolve){G._resolve(G.token); G._resolve=null;} if(G._reject&&!resp.access_token){G._reject('no token');G._reject=null;} }
+    });
+    G.tokenClient._cid=state.settings.googleClientId;
+  }
+  return true;
+}
+function gGetToken(){
+  return new Promise((res,rej)=>{
+    if(!gEnsureClient()) return rej('no client');
+    if(G.token && Date.now()<G.expires) return res(G.token);
+    G._resolve=res; G._reject=rej; try{ G.tokenClient.requestAccessToken({prompt:G.token?'':'consent'}); }catch(e){ rej(e); }
+  });
+}
+async function gFetchJson(url,opt){ const t=await gGetToken(); const r=await fetch(url,Object.assign({headers:{Authorization:'Bearer '+t}},opt||{})); if(!r.ok) throw new Error('Google API '+r.status); return r.json(); }
+
+async function driveListPdfs(folderId){
+  let files=[], pageToken='';
+  do{
+    const q=encodeURIComponent(`'${folderId}' in parents and mimeType='application/pdf' and trashed=false`);
+    const url=`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name)&pageSize=100`+(pageToken?`&pageToken=${pageToken}`:'');
+    const j=await gFetchJson(url); files=files.concat(j.files||[]); pageToken=j.nextPageToken||'';
+  }while(pageToken);
+  return files;
+}
+async function driveDownload(id){ const t=await gGetToken(); const r=await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`,{headers:{Authorization:'Bearer '+t}}); return r.blob(); }
+function parseFolderId(s){ s=(s||'').trim(); const m=s.match(/[-\w]{25,}/); return m?m[0]:s; }
+async function importFromDrive(folderId){
+  const fid=parseFolderId(folderId); if(!fid){ toast('Sláðu inn möppu-ID eða slóð.'); return; }
+  toast('Sæki lista úr Drive…');
+  const files=await driveListPdfs(fid);
+  if(!files.length){ toast('Engin PDF í þessari möppu.'); return; }
+  let n=0; for(const f of files){ try{ const b=await driveDownload(f.id); await importPdfBlob(f.name,b); n++; setBatch(n,files.length);}catch(e){} }
+  setBatch(0,0); renderDocList(); if(!RUN.curId&&RUN.docs[0]) selectDoc(RUN.docs[0].id);
+  toast(n+' skjöl sótt úr Google Drive.'); closeModal();
+}
+async function drivePickFolder(){
+  const t=await gGetToken();
+  if(!(window.gapi)){ toast('Picker ekki tiltækur — notaðu möppu-ID.'); return; }
+  await new Promise(r=>gapi.load('picker',{callback:r}));
+  const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS).setSelectFolderEnabled(true).setMimeTypes('application/vnd.google-apps.folder');
+  const b=new google.picker.PickerBuilder().setOAuthToken(t).addView(view);
+  if(state.settings.googleApiKey) b.setDeveloperKey(state.settings.googleApiKey);
+  b.setCallback(data=>{ if(data.action===google.picker.Action.PICKED){ const el2=$('#drvFolder'); if(el2) el2.value=data.docs[0].id; toast('Mappa valin: '+data.docs[0].name); } });
+  b.build().setVisible(true);
+}
+
+async function gmailImport(query,max){
+  toast('Leita í Gmail…');
+  const lj=await gFetchJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${max||25}`);
+  const ids=(lj.messages||[]).map(m=>m.id); let count=0, i=0;
+  for(const id of ids){
+    i++; setBatch(i,ids.length);
+    const mj=await gFetchJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`);
+    const parts=[]; (function walk(p){ if(!p)return; if(p.parts)p.parts.forEach(walk); if(p.filename&&/\.pdf$/i.test(p.filename)&&p.body&&p.body.attachmentId) parts.push(p); })(mj.payload);
+    for(const p of parts){
+      const aj=await gFetchJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/attachments/${p.body.attachmentId}`);
+      const bin=atob((aj.data||'').replace(/-/g,'+').replace(/_/g,'/')); const arr=new Uint8Array(bin.length); for(let k=0;k<bin.length;k++)arr[k]=bin.charCodeAt(k);
+      await importPdfBlob(p.filename,new Blob([arr],{type:'application/pdf'})); count++;
+    }
+  }
+  setBatch(0,0); renderDocList(); if(!RUN.curId&&RUN.docs[0]) selectDoc(RUN.docs[0].id);
+  toast(count+' viðhengi sótt úr Gmail.'); closeModal();
+}
+
+/* ================= output routing ================= */
+function sanitizeSeg(s){ return String(s||'').replace(/[\\:*?"<>|]+/g,'').replace(/\//g,'-').trim()||'Óflokkað'; }
+function matchRule(d,rule){
+  const v=tokenValues(d); let val=String(v[rule.field]!=null?v[rule.field]:'').toLowerCase(); const target=String(rule.val||'').toLowerCase();
+  if(rule.field==='tegund'){ const t=state.docTypes.find(x=>x.id===d.typeId); val=(t?t.name:'').toLowerCase(); }
+  if(rule.op==='eq') return val===target;
+  if(rule.op==='contains') return val.includes(target);
+  if(rule.op==='ne') return val!==target;
+  return false;
+}
+function computeFolder(d){
+  for(const rule of (state.routing.rules||[])){ if(matchRule(d,rule)) return applyFolderPattern(d,rule.folder); }
+  return applyFolderPattern(d,state.routing.pattern);
+}
+function applyFolderPattern(d,pat){
+  const v=tokenValues(d);
+  return (pat||'').replace(/\{(\w+)\}/g,(_,k)=> sanitizeSeg(v[k]!=null&&v[k]!==''?String(v[k]):'Óflokkað'))
+    .split('/').map(s=>s.trim()).filter(Boolean).join('/');
+}
+async function driveEnsurePath(rootId,segs){
+  const t=await gGetToken(); let parent=rootId||'root';
+  for(const seg of segs){
+    const q=encodeURIComponent(`name='${seg.replace(/'/g,"\\'")}' and '${parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const j=await gFetchJson(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`);
+    if(j.files&&j.files.length){ parent=j.files[0].id; continue; }
+    const cj=await (await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({name:seg,mimeType:'application/vnd.google-apps.folder',parents:[parent]})})).json();
+    parent=cj.id;
+  }
+  return parent;
+}
+async function driveUpload(folderId,name,blob){
+  const t=await gGetToken(); const boundary='vkf'+idCounter++;
+  const meta={name,parents:[folderId]};
+  const body=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,JSON.stringify(meta),`\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`,blob,`\r\n--${boundary}--`]);
+  await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'multipart/related; boundary='+boundary},body});
+}
+async function exportToDrive(){
+  const docs=processedDocs(); if(!docs.length){ toast('Ekkert til að flytja út.'); return; }
+  const root=parseFolderId(state.routing.driveRootId)||'root';
+  let n=0; for(const d of docs){ try{ const folder=computeFolder(d); const fid=await driveEnsurePath(root,folder.split('/').filter(Boolean)); await driveUpload(fid,d.newName||computeName(d),d.blob); n++; setBatch(n,docs.length);}catch(e){} }
+  setBatch(0,0); toast(n+' skjöl vistuð í Google Drive í réttar möppur.'); closeModal();
+}
+
+/* override ZIP export to use routing folders */
+$('#btnExportZip').onclick=async()=>{
+  const docs=processedDocs(); if(!docs.length){toast('Ekkert til að flytja út.');return;}
+  toast('Bý til ZIP með möppum…'); const zip=new JSZip(); const used={};
+  for(const d of docs){ let nm=d.newName||computeName(d); const folder=computeFolder(d); const full=(folder?folder+'/':'')+nm;
+    let key=full; if(used[key]){used[key]++; key=full.replace(/\.pdf$/i,'')+'_'+used[key]+'.pdf';}else used[key]=1;
+    zip.file(key, await d.blob.arrayBuffer()); }
+  const blob=await zip.generateAsync({type:'blob'}); download(blob,'skjalasafn_moppur.zip');
+};
+
+/* ================= Tengingar (connections) modal ================= */
+function openSources(tab){
+  const s=state.settings, r=state.routing;
+  modal('Tengingar & útflutningur', `
+    <div class="card"><h4>🟢 Google-aðgangur</h4>
+    <p class="small mut">Til að lesa úr Google Drive eða Gmail þarftu að búa til OAuth Client ID í Google Cloud (leyfa uppruna <b>${esc(location.origin||'https://verkfaeri.netlify.app')}</b>) og setja hann hér. Lykillinn geymist aðeins í vafranum þínum.</p>
+    <label class="fld">OAuth Client ID</label><input id="gCid" value="${esc(s.googleClientId)}" placeholder="…apps.googleusercontent.com">
+    <label class="fld">API lykill (valfrjálst, fyrir möppuveljara)</label><input id="gKey" value="${esc(s.googleApiKey)}">
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="gSave">Vista lykla</button><button class="btn sm pri" id="gConnect">Tengjast Google</button><span id="gStatus" class="small mut"></span></div>
+    </div>
+
+    <div class="card"><h4>📊 Google Sheet — bókhaldsgrunnur</h4>
+    <p class="small mut">Samþykkt skjöl skrást sjálfkrafa sem ný lína hér (dags., seljandi, kt., reikningsnr., upphæð án VSK, VSK, heild, vörulínur, skjal, tegund). Tengt <b>aggisigurds@gmail.com</b> — nýttu fyrir bókhald og ársuppgjör.</p>
+    <label class="fld">Sheet ID</label><input id="gSheet" value="${esc(s.sheetId||'')}" placeholder="1M5Oj…">
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="gSheetSave">Vista</button><a class="btn sm pri" id="gSheetOpen" href="https://docs.google.com/spreadsheets/d/${esc(s.sheetId||'')}/edit" target="_blank" rel="noopener">Opna Google Sheet-ið ↗</a><button class="btn sm" id="gSheetTest">Prófa: skrá núverandi skjal</button></div>
+    </div>
+
+    <div class="card"><h4>📁 Sækja úr Google Drive</h4>
+    <label class="fld">Mappa (ID eða slóð)</label>
+    <div class="row"><input id="drvFolder" placeholder="1AbC… eða drive.google.com/…/folders/1AbC…"><button class="btn sm" id="drvPick">Velja…</button></div>
+    <button class="btn sm pri" id="drvImport" style="margin-top:8px">⬇ Sækja öll PDF úr möppu</button>
+    </div>
+
+    <div class="card"><h4>✉️ Sækja úr Gmail</h4>
+    <label class="fld">Leitarskilyrði</label><input id="gmQ" value="has:attachment filename:pdf (reikningur OR invoice)">
+    <div class="row" style="margin-top:8px"><span class="small mut">Hámark:</span><input id="gmMax" type="number" value="25" style="width:80px"><button class="btn sm pri" id="gmGo">⬇ Sækja viðhengi</button></div>
+    </div>
+
+    <div class="card"><h4>📤 Útflutningsmöppur (leiðarreglur)</h4>
+    <p class="small mut">Skjöl flokkast sjálfkrafa í möppur eftir reitum/reglum við útflutning. Tákn: {ar} {manudur} {fyrirtaeki} {tegund} {flokkur} {kennitala}.</p>
+    <label class="fld">Sjálfgefið möppusnið</label><input id="rtPat" value="${esc(r.pattern)}">
+    <label class="fld">Sértækar reglur (fyrst sem passar ræður)</label>
+    <div id="rtRules"></div>
+    <button class="btn sm ghost" id="rtAdd" style="margin-top:6px">＋ Regla</button>
+    <label class="fld" style="margin-top:12px">Rót í Google Drive fyrir útflutning (ID, valfrjálst)</label><input id="rtDrive" value="${esc(r.driveRootId)}">
+    <div class="row" style="margin-top:10px"><button class="btn sm" id="rtZip">⬇ ZIP með möppum</button><button class="btn sm pri" id="rtDriveGo">☁ Vista í Drive-möppur</button></div>
+    </div>
+
+    <div class="card"><h4>🏢 Fyrirtækjaútgáfa</h4>
+    <p class="small mut">Þessi vafraútgáfa keyrir allt á tækinu þínu. Fyrir tugi/hundruð bókara þarf miðlæga útgáfu — smelltu til að sjá leiðina.</p>
+    <button class="btn sm" id="entInfo">Sjá arkitektúr fyrirtækjaútgáfu</button>
+    </div>
+  `, []);
+
+  function drawRules(){
+    const box=$('#rtRules'); box.innerHTML='';
+    (r.rules||[]).forEach((rule,i)=>{
+      const row=el('div','row'); row.style.margin='4px 0';
+      row.innerHTML=`<select data-i="${i}" data-k="field" style="width:110px">
+        ${['fyrirtaeki','tegund','flokkur','kennitala','ar'].map(f=>`<option value="${f}" ${rule.field===f?'selected':''}>${f}</option>`).join('')}</select>
+        <select data-i="${i}" data-k="op" style="width:90px">${[['eq','er'],['contains','inniheldur'],['ne','er ekki']].map(o=>`<option value="${o[0]}" ${rule.op===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
+        <input data-i="${i}" data-k="val" value="${esc(rule.val||'')}" placeholder="gildi" style="width:110px">
+        <span class="small mut">→</span><input data-i="${i}" data-k="folder" value="${esc(rule.folder||'')}" placeholder="{ar}/Samningar" class="grow">
+        <button class="btn sm ghost" data-del="${i}">🗑</button>`;
+      box.appendChild(row);
+    });
+    box.querySelectorAll('select,input').forEach(inp=>inp.onchange=()=>{ r.rules[inp.dataset.i][inp.dataset.k]=inp.value; });
+    box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ r.rules.splice(+b.dataset.del,1); drawRules(); });
+  }
+  drawRules();
+  $('#rtAdd').onclick=()=>{ r.rules=r.rules||[]; r.rules.push({field:'tegund',op:'eq',val:'Samningur',folder:'{ar}/Samningar/{fyrirtaeki}'}); drawRules(); };
+
+  $('#gSave').onclick=()=>{ s.googleClientId=$('#gCid').value.trim(); s.googleApiKey=$('#gKey').value.trim(); persistState(); toast('Lyklar vistaðir.'); };
+  $('#gConnect').onclick=async()=>{ s.googleClientId=$('#gCid').value.trim(); persistState(); try{ await gGetToken(); $('#gStatus').textContent='✓ Tengt'; toast('Tengt við Google.'); }catch(e){ $('#gStatus').textContent='✗ mistókst'; } };
+  $('#gSheetSave').onclick=()=>{ s.sheetId=$('#gSheet').value.trim(); persistState(); const a=$('#gSheetOpen'); if(a) a.href='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(s.sheetId)+'/edit'; toast('Sheet-lykill vistaður.'); };
+  $('#gSheetTest').onclick=async()=>{ s.sheetId=$('#gSheet').value.trim(); persistState(); const d=curDoc(); if(!d){toast('Opnaðu skjal fyrst.');return;} finalizeDoc(d); await exportToSheet(d,false); };
+  $('#drvPick').onclick=()=>drivePickFolder();
+  $('#drvImport').onclick=()=>importFromDrive($('#drvFolder').value);
+  $('#gmGo').onclick=()=>gmailImport($('#gmQ').value, parseInt($('#gmMax').value)||25);
+  $('#rtZip').onclick=()=>{ r.pattern=$('#rtPat').value; persistState(); closeModal(); $('#btnExportZip').onclick(); };
+  $('#rtDriveGo').onclick=()=>{ r.pattern=$('#rtPat').value; r.driveRootId=$('#rtDrive').value; persistState(); exportToDrive(); };
+  $('#rtPat').onchange=()=>{ r.pattern=$('#rtPat').value; persistState(); };
+  $('#rtDrive').onchange=()=>{ r.driveRootId=$('#rtDrive').value; persistState(); };
+  $('#entInfo').onclick=showEnterprise;
+  if(tab==='gmail'){ setTimeout(()=>$('#gmQ')&&$('#gmQ').scrollIntoView({behavior:'smooth'}),100); }
+}
+$('#btnSources').onclick=()=>openSources();
+
+function showEnterprise(){
+  modal('Fyrirtækjaútgáfa — leiðin áfram', `
+    <p class="small">Vafraútgáfan er fullkomin fyrir einn notanda eða litla stofu. Til að þjóna hundruðum bókara þarf þessa uppbyggingu:</p>
+    <div class="card small"><b>1. Bakendi & gagnagrunnur.</b> Færa sniðmát, reglur, flokka og skjala-lýsigögn úr vafranum í miðlægan gagnagrunn (t.d. Postgres/Supabase) svo öll teymið deili sömu þjálfun.</div>
+    <div class="card small"><b>2. Auðkenning & fjölnotenda.</b> Innskráning (SSO/Google Workspace), aðgangsstýring eftir fyrirtæki/deild, og aðskilin gögn milli viðskiptavina.</div>
+    <div class="card small"><b>3. Miðlægt OCR í skýi.</b> Keyra þung OCR/AI-verk á miðlara (t.d. Tesseract/gervigreind) í biðröð svo hægt sé að vinna hundruð skjala samhliða án þess að hlaða tækið notandans.</div>
+    <div class="card small"><b>4. Sjálfvirk söfnun.</b> Þjónustuaðgangur að Google Drive/Gmail/tölvupóstþjónum sem sækir ný fylgiskjöl sjálfkrafa á nóttunni.</div>
+    <div class="card small"><b>5. Samþætting við bókhald.</b> Útflutningur beint í DK, Regló, Payday, Uniconta o.fl., og skattframtalsskrár.</div>
+    <div class="card small"><b>6. Endurskoðunarslóð.</b> Hver breyting skráð (hver samþykkti hvaða reit) — nauðsynlegt fyrir endurskoðendur.</div>
+    <p class="small mut">Vafraútgáfan sem þú ert með núna notar sömu reiti, reglur og leiðarmöppur — svo þjálfunin flyst beint yfir þegar bakendinn kemur.</p>
+  `, [{label:'Loka',cls:'pri',fn:closeModal}]);
+}
+
+/* ================= bókhald / DK ================= */
+function numOr(v){ if(typeof v==='number')return v; const n=parseAmount(v); return n; }
+function accByNum(num){ return state.accounts.find(a=>a.num===num); }
+function gjaldAccounts(){ return state.accounts.filter(a=>a.type==='gjold'); }
+
+// decompose amounts + detect VSK þrep + resolve gjaldalykill
+function computeBokhald(d){
+  let total=d.amount, vsk=d.vsk, netto=d.netto, þrep=d.vskÞrep;
+  // detect þrep from ratio if we have two of the three
+  if(vsk!=null && netto!=null && netto>0){ const r=vsk/netto; þrep = Math.abs(r-0.24)<0.03?24:Math.abs(r-0.11)<0.03?11:(vsk===0?0:þrep); }
+  else if(vsk!=null && total!=null && total>0){ const base=total-vsk; if(base>0){ const r=vsk/base; þrep=Math.abs(r-0.24)<0.03?24:Math.abs(r-0.11)<0.03?11:(vsk===0?0:þrep);} }
+  if(þrep==null) þrep = (vsk===0?0:24);
+  // fill missing pieces from þrep
+  if(total!=null){
+    if(netto==null||vsk==null){
+      if(vsk!=null){ netto=total-vsk; }
+      else if(þrep>0){ netto=total/(1+þrep/100); vsk=total-netto; }
+      else { netto=total; vsk=0; }
+    }
+  }
+  d.vskÞrep=þrep; d.netto=netto!=null?Math.round(netto):null; d.vsk=vsk!=null?Math.round(vsk):d.vsk;
+  // resolve gjaldalykill: manual override > vendor default > category default
+  const kt=(d.kennitala||'').replace(/\D/g,'');
+  d.account = d.accountManual || (kt&&state.vendorAccount[kt]) || state.catAccount[d.category] || d.account || '';
+}
+function dkVoucher(d){
+  const total=d.amount, vsk=d.vsk||0, netto=(d.netto!=null?d.netto:(total!=null?total-vsk:null));
+  const gj=d.account||'', innsk=state.dk.innskattur[d.vskÞrep||0]||'';
+  const kred = state.dk.useBank? state.dk.bank : state.dk.kreditor;
+  const t=state.docTypes.find(x=>x.id===d.typeId);
+  const rn = (()=>{ const f=fieldByRole(t,'reikningsnr'); const v=f&&d.values&&d.values[f.id]; return v?String(v.value||v.raw||''):''; })();
+  const dags = (d.year&&d.month)? `${d.year}-${d.month}-${'01'}` : '';
+  const skyr = (d.seller||'').slice(0,30)+(rn?(' rnr '+rn):'');
+  const fs = rn || d.id.slice(-6);
+  const lines=[];
+  if(netto!=null && netto!==0) lines.push({dags,fs,lykill:gj,skyr,debet:Math.round(netto),kredit:0,þrep:d.vskÞrep||0,kt:(d.kennitala||''),rn});
+  if(vsk>0 && innsk) lines.push({dags,fs,lykill:innsk,skyr:'Innskattur '+(d.vskÞrep)+'%',debet:Math.round(vsk),kredit:0,þrep:d.vskÞrep,kt:(d.kennitala||''),rn});
+  if(total!=null) lines.push({dags,fs,lykill:kred,skyr,debet:0,kredit:Math.round(total),þrep:0,kt:(d.kennitala||''),rn});
+  return lines;
+}
+
+function renderBokhald(){
+  const wrap=$('#rbBok'); const d=curDoc();
+  if(!d){ wrap.innerHTML='<div class="empty small">Ekkert skjal valið.</div>'; return; }
+  computeBokhald(d);
+  const gopts = gjaldAccounts().map(a=>`<option value="${a.num}" ${d.account===a.num?'selected':''}>${a.num} · ${esc(a.name)}</option>`).join('');
+  const kt=(d.kennitala||'').replace(/\D/g,'');
+  wrap.innerHTML=`
+    <div class="small mut" style="margin-bottom:8px">Settu vörukaup/kostnað í réttan bókhaldslykil. Val þitt lærist fyrir seljandann (${esc(d.seller||'—')}).</div>
+    <label class="fld">VSK þrep</label>
+    <select id="bkVsk"><option value="24" ${d.vskÞrep==24?'selected':''}>24%</option><option value="11" ${d.vskÞrep==11?'selected':''}>11%</option><option value="0" ${d.vskÞrep==0?'selected':''}>0% / undanþegið</option></select>
+    <label class="fld">Gjaldalykill (kostnaðarlykill)</label>
+    <select id="bkAcc"><option value="">— veldu —</option>${gopts}</select>
+    <label class="row small" style="margin:8px 0"><input type="checkbox" id="bkLearn" style="width:auto" checked> Muna þennan lykil fyrir ${esc(d.seller||'seljanda')}</label>
+    <div class="card">
+      <div class="kv"><span class="k">Upphæð án VSK</span><span class="v">${fmtISK(d.netto)}</span></div>
+      <div class="kv"><span class="k">VSK (innskattur)</span><span class="v">${fmtISK(d.vsk)}</span></div>
+      <div class="kv"><span class="k">Heildarupphæð</span><span class="v">${fmtISK(d.amount)}</span></div>
+    </div>
+    <h4 style="margin:10px 0 4px">Bókhaldsfærsla (DK)</h4>
+    <table style="width:100%;border-collapse:collapse;font-size:12px" id="bkVoucher"></table>
+    <button class="btn sm" id="bkOpenDk" style="margin-top:10px;width:100%">📒 Lyklaborð & DK útflutningur</button>
+  `;
+  const tbl=$('#bkVoucher');
+  tbl.innerHTML=`<tr class="mut"><td>Lykill</td><td>Skýring</td><td style="text-align:right">Debet</td><td style="text-align:right">Kredit</td></tr>`+
+    dkVoucher(d).map(l=>{ const a=accByNum(l.lykill); return `<tr><td>${esc(l.lykill||'?')}</td><td class="small">${esc(a?a.name:l.skyr)}</td><td style="text-align:right">${l.debet?fmtNum(l.debet):''}</td><td style="text-align:right">${l.kredit?fmtNum(l.kredit):''}</td></tr>`; }).join('');
+  $('#bkVsk').onchange=()=>{ d.vskÞrep=parseInt($('#bkVsk').value); d.netto=null; d.vsk=(d.vskÞrep===0?0:d.vsk); computeBokhald(d); DB.docPut(d); renderBokhald(); };
+  $('#bkAcc').onchange=()=>{ d.accountManual=$('#bkAcc').value; d.account=d.accountManual;
+    if($('#bkLearn').checked && kt){ state.vendorAccount[kt]=d.accountManual; persistState(); }
+    // set category to match account name if mapped
+    const a=accByNum(d.account); if(a){ d.category=Object.keys(state.catAccount).find(c=>state.catAccount[c]===a.num)||d.category; }
+    DB.docPut(d); renderBokhald(); renderValues(); refreshLibrary();
+  };
+  $('#bkOpenDk').onclick=()=>openBokhaldSetup();
+}
+
+function dkExportCsv(){
+  const docs=processedDocs(); if(!docs.length){ toast('Ekkert til að flytja út.'); return; }
+  const sep=state.dk.sep||';'; const dec=v=>{ let s=String(v==null?'':v); return state.dk.decComma? s.replace('.',','):s; };
+  const head=['Dagsetning','Fylgiskjal','Lykill','Skýring','Debet','Kredit','VSKþrep','Kennitala','Reikningsnr'];
+  const rows=[head];
+  docs.forEach(d=>{ computeBokhald(d); dkVoucher(d).forEach(l=>rows.push([l.dags,l.fs,l.lykill,l.skyr,dec(l.debet||''),dec(l.kredit||''),l.þrep||'',l.kt,l.rn])); });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(sep)).join('\r\n');
+  download(new Blob(['﻿'+csv],{type:'text/csv'}),'dk_faerslur.csv');
+  toast(docs.length+' skjöl flutt út sem DK-færsluskrá.');
+}
+
+function openBokhaldSetup(){
+  const s=state.dk;
+  const chartRows=()=>state.accounts.map((a,i)=>`<tr>
+    <td><input data-i="${i}" data-k="num" value="${esc(a.num)}" style="width:70px"></td>
+    <td><input data-i="${i}" data-k="name" value="${esc(a.name)}"></td>
+    <td><select data-i="${i}" data-k="type" style="width:100px">${['gjold','vsk','skuldir','eignir','tekjur'].map(x=>`<option ${a.type===x?'selected':''}>${x}</option>`).join('')}</select></td>
+    <td><button class="btn sm ghost" data-delacc="${i}">🗑</button></td></tr>`).join('');
+  modal('Lyklaborð & DK útflutningur', `
+    <div class="card"><h4>📒 Lyklaborð (bókhaldslyklar)</h4>
+    <p class="small mut">Sjálfgefið sniðmát byggt á RSK-rekstrarliðum. <b>Breyttu í þína eigin DK-lykla</b> (sérðu þá í DK undir Fjárhagur → Lyklaborð). Þú getur líka límt inn allt lyklaborðið.</p>
+    <div class="scroll" style="max-height:220px"><table style="width:100%;font-size:12px;border-collapse:collapse" id="chartTbl">
+      <tr class="mut"><td>Nr.</td><td>Heiti</td><td>Tegund</td><td></td></tr>${chartRows()}</table></div>
+    <button class="btn sm ghost" id="accAdd" style="margin-top:6px">＋ Lykill</button>
+    <button class="btn sm ghost" id="accImport">⬇ Flytja inn lyklaborð (CSV)</button>
+    </div>
+    <div class="card"><h4>Sjálfgefnir flokkar → lyklar</h4>
+    <div id="catMap"></div></div>
+    <div class="card"><h4>VSK & mótlyklar</h4>
+    <div class="row"><div class="grow"><label class="fld">Innskattur 24%</label><input id="dkI24" value="${esc(s.innskattur[24]||'')}"></div>
+    <div class="grow"><label class="fld">Innskattur 11%</label><input id="dkI11" value="${esc(s.innskattur[11]||'')}"></div></div>
+    <label class="fld">Mótlykill (lánardrottnar/viðskiptaskuldir)</label><input id="dkKred" value="${esc(s.kreditor)}">
+    <label class="row small" style="margin-top:8px"><input type="checkbox" id="dkBankChk" style="width:auto" ${s.useBank?'checked':''}> Bóka á móti bankareikningi í staðinn</label>
+    <input id="dkBank" value="${esc(s.bank)}" placeholder="Bankalykill">
+    </div>
+    <div class="card"><h4>Útflutningur</h4>
+    <label class="row small" style="margin:4px 0"><input type="checkbox" id="dkComma" style="width:auto" ${s.decComma?'checked':''}> Nota kommu fyrir aukastafi (íslenskt)</label>
+    <label class="fld">Aðgreinir</label><select id="dkSep" style="width:120px"><option value=";" ${s.sep===';'?'selected':''}>Semíkomma ;</option><option value="," ${s.sep===','?'selected':''}>Komma ,</option><option value="\t" ${s.sep==='\t'?'selected':''}>Tab</option></select>
+    <div class="row" style="margin-top:10px"><button class="btn sm pri grow" id="dkExport">⬇ DK-færsluskrá (CSV)</button></div>
+    <p class="small mut" style="margin-top:6px">Skráin inniheldur tvíhliða færslur (gjaldalykil + innskatt í debet, mótlykil í kredit) sem bókari les inn í DK.</p>
+    </div>
+  `, [{label:'Vista',cls:'pri',fn:()=>{ saveDk(); closeModal(); }}]);
+
+  function drawCatMap(){
+    const box=$('#catMap'); box.innerHTML='';
+    state.categories.forEach(c=>{ const r=el('div','row'); r.style.margin='3px 0';
+      const lab=el('div','grow small',c); lab.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      const sel=el('select'); sel.style.width='150px'; sel.innerHTML='<option value="">—</option>'+gjaldAccounts().map(a=>`<option value="${a.num}" ${state.catAccount[c]===a.num?'selected':''}>${a.num} · ${esc(a.name)}</option>`).join('');
+      sel.onchange=()=>{ state.catAccount[c]=sel.value; };
+      r.appendChild(lab); r.appendChild(sel); box.appendChild(r);
+    });
+  }
+  drawCatMap();
+  function bindChart(){
+    $$('#chartTbl input,#chartTbl select').forEach(inp=>inp.onchange=()=>{ const a=state.accounts[inp.dataset.i]; if(a) a[inp.dataset.k]=inp.value; });
+    $$('#chartTbl [data-delacc]').forEach(b=>b.onclick=()=>{ state.accounts.splice(+b.dataset.delacc,1); refreshChart(); });
+  }
+  function refreshChart(){ $('#chartTbl').innerHTML=`<tr class="mut"><td>Nr.</td><td>Heiti</td><td>Tegund</td><td></td></tr>`+chartRows(); bindChart(); drawCatMap(); }
+  bindChart();
+  $('#accAdd').onclick=()=>{ state.accounts.push({num:'',name:'Nýr lykill',type:'gjold',þrep:24}); refreshChart(); };
+  $('#accImport').onclick=()=>{
+    modal('Flytja inn lyklaborð', `<p class="small mut">Límdu lyklaborð úr DK/Excel. Ein lína á lykil: <b>númer;heiti;tegund</b> (tegund valfrjáls: gjold/vsk/skuldir/eignir/tekjur).</p><textarea id="impTxt" rows="10" placeholder="4010;Vörunotkun;gjold&#10;3120;Innskattur 24%;vsk"></textarea>`,
+    [{label:'Flytja inn',cls:'pri',fn:()=>{ const lines=$('#impTxt').value.split('\n').map(l=>l.trim()).filter(Boolean);
+      const acc=[]; lines.forEach(l=>{ const p=l.split(/[;,\t]/); if(p[0]) acc.push({num:p[0].trim(),name:(p[1]||'').trim()||p[0].trim(),type:(p[2]||'gjold').trim(),þrep:24}); });
+      if(acc.length){ state.accounts=acc; persistState(); toast(acc.length+' lyklar fluttir inn.'); } closeModal(); openBokhaldSetup(); }}]);
+  };
+  $('#dkExport').onclick=()=>{ saveDk(); dkExportCsv(); };
+  function saveDk(){
+    s.innskattur[24]=$('#dkI24').value.trim(); s.innskattur[11]=$('#dkI11').value.trim();
+    s.kreditor=$('#dkKred').value.trim(); s.useBank=$('#dkBankChk').checked; s.bank=$('#dkBank').value.trim();
+    s.decComma=$('#dkComma').checked; s.sep=$('#dkSep').value; persistState();
+  }
+}
+
+/* ================= samstilling: flytja stillingar út/inn ================= */
+const CONFIG_KEYS=['docTypes','templates','productCats','categories','accounts','catAccount','vendorAccount','dk','renamePattern','routing','dash','settings','eater'];
+function exportConfig(){
+  const cfg={_verkfaeri:'config-v1'}; CONFIG_KEYS.forEach(k=>cfg[k]=state[k]);
+  download(new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'}),'verkfaeri_stillingar.json');
+  toast('Stillingar fluttar út — opnaðu þessa skrá á hinum tölvunum.');
+}
+function importConfig(text){
+  let cfg; try{ cfg=JSON.parse(text); }catch(e){ toast('Ógild stillingaskrá.'); return; }
+  if(!cfg || cfg._verkfaeri!=='config-v1'){ if(!confirm('Þetta lítur ekki út eins og Verkfæri-stillingaskrá. Halda samt áfram?')) return; }
+  CONFIG_KEYS.forEach(k=>{ if(cfg[k]!==undefined) state[k]=cfg[k]; });
+  persistState();
+  buildTypeSelectors(); renderFieldList(); renderTokens(); renderDashSelectors(); renderDocList(); refreshLibrary(); renderDashboard();
+  $('#renamePattern').value=state.renamePattern||''; updateRenamePreview();
+  closeModal(); toast('Stillingar fluttar inn — þessi tölva vinnur nú eins og hinar.');
+}
+$('#cfgInput').onchange=async e=>{ const f=e.target.files[0]; if(f) importConfig(await f.text()); e.target.value=''; };
+
+/* ================= tvítök (duplicate removal) ================= */
+function invIdentity(d){
+  const kt=(d.kennitala||'').replace(/\D/g,'');
+  const t=state.docTypes.find(x=>x.id===d.typeId);
+  const rnf=t&&fieldByRole(t,'reikningsnr'); const rn=rnf&&d.values&&d.values[rnf.id]?String(d.values[rnf.id].value||d.values[rnf.id].raw||'').replace(/\s/g,''):'';
+  if(kt&&rn) return 'inv:'+kt+':'+rn;
+  if(kt&&d.amount!=null) return 'inv:'+kt+':'+Math.round(d.amount);
+  return null;
+}
+function findDupGroups(){
+  const byKey={};
+  RUN.docs.forEach(d=>{ const keys=[]; if(d.hash)keys.push('file:'+d.hash); const ik=invIdentity(d); if(ik)keys.push(ik);
+    keys.forEach(k=>{ (byKey[k]=byKey[k]||[]).push(d); }); });
+  const seen=new Set(), groups=[];
+  // file-hash groups first (strongest), then invoice-identity
+  Object.keys(byKey).sort((a,b)=>(a.startsWith('file')?-1:1)-(b.startsWith('file')?-1:1)).forEach(k=>{
+    const g=byKey[k].filter(d=>!seen.has(d.id));
+    if(g.length>1){ g.forEach(d=>seen.add(d.id)); groups.push({key:k, kind:k.startsWith('file')?'Sama skrá':'Sami reikningur', docs:g}); }
+  });
+  return groups;
+}
+$('#btnDedupe').onclick=()=>{
+  const groups=findDupGroups();
+  if(!groups.length){ modal('Tvítök', '<p class="small">Engin tvítök fundust 🎉<br><span class="mut">Leitað eftir sömu skrá (hash) og sama reikningi (kennitala + reikningsnr./upphæð).</span></p>', [{label:'Loka',cls:'pri',fn:closeModal}]); return; }
+  let dup=0; groups.forEach(g=>dup+=g.docs.length-1);
+  const body=groups.map((g,gi)=>`<div class="card"><div class="small mut" style="margin-bottom:6px">${g.kind} · ${g.docs.length} eintök</div>`+
+    g.docs.map((d,i)=>`<label class="row" style="margin:3px 0;gap:8px"><input type="checkbox" style="width:auto" data-id="${d.id}" ${i===0?'':'checked'} ${i===0?'disabled':''}>
+      <span class="grow small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i===0?'✅ ':''}${esc(d.name)} <span class="mut">${esc(d.seller||'')} ${d.amount!=null?'· '+fmtISK(d.amount):''}</span></span></label>`).join('')+
+    `</div>`).join('');
+  modal('Tvítök — '+dup+' til að fjarlægja', `<p class="small mut">Fyrsta eintak í hverjum hópi er haldið. Hakaðu við þau sem á að fjarlægja.</p>`+body,
+    [{label:'Fjarlægja valin',cls:'pri',fn:async()=>{
+      const ids=$$('#modalHost input:checked').map(i=>i.dataset.id);
+      for(const id of ids){ await DB.docDel(id); const i=RUN.docs.findIndex(d=>d.id===id); if(i>=0)RUN.docs.splice(i,1); if(RUN.curId===id)RUN.curId=null; }
+      closeModal(); renderDocList(); refreshLibrary(); renderDashboard(); toast(ids.length+' tvítök fjarlægð.');
+      if(!RUN.curId&&RUN.docs[0]) selectDoc(RUN.docs[0].id); else if(!RUN.docs.length){$('#stage').classList.add('hide');$('#workEmpty').classList.remove('hide');updateSwipers();updateReviewBar();}
+    }}]);
+};
+
+/* ================= Ætinn (Eater) — File System Access API ================= */
+const FS = { ok: (typeof window!=='undefined' && 'showDirectoryPicker' in window) };
+async function fsPerm(h, rw){ try{ const o={mode:rw?'readwrite':'read'}; if(await h.queryPermission(o)==='granted')return true; return (await h.requestPermission(o))==='granted'; }catch(e){ return false; } }
+async function loadEaterHandles(){ RUN.eater={sources:[],dest:null}; try{ const e=await DB.cfgGet('eaterFS'); if(e){ RUN.eater.sources=e.sources||[]; RUN.eater.dest=e.dest||null; } }catch(e){} }
+async function saveEaterHandles(){ try{ await DB.cfgSet('eaterFS',{sources:RUN.eater.sources,dest:RUN.eater.dest}); }catch(e){} }
+
+function isInvoiceDoc(d){ const t=state.docTypes.find(x=>x.id===d.typeId); if(t&&/reikning|invoice|krafa/i.test(t.name))return true; return !!(d.kennitala && d.amount!=null); }
+
+async function collectPdfHandles(dir, out){
+  for await (const entry of dir.values()){
+    if(entry.kind==='file'){ if(/\.pdf$/i.test(entry.name)) out.push({fh:entry, parent:dir, name:entry.name}); }
+    else if(entry.kind==='directory'){ try{ await collectPdfHandles(entry, out); }catch(e){} }
+  }
+}
+async function ensureDestPath(root, segs){ let d=root; for(const s of segs){ const seg=sanitizeSeg(s); if(!seg)continue; d=await d.getDirectoryHandle(seg,{create:true}); } return d; }
+async function writeToDir(dir, name, blob){ let nm=name, n=1; // avoid overwrite
+  const existing=new Set(); try{ for await (const e of dir.values()) existing.add(e.name.toLowerCase()); }catch(e){}
+  while(existing.has(nm.toLowerCase())){ n++; nm=name.replace(/\.pdf$/i,'')+'_'+n+'.pdf'; }
+  const fh=await dir.getFileHandle(nm,{create:true}); const w=await fh.createWritable(); await w.write(blob); await w.close(); return nm;
+}
+
+let eaterTimer=null, eaterBusy=false;
+function stopEaterAuto(){ if(eaterTimer){ clearInterval(eaterTimer); eaterTimer=null; } }
+function startEaterAuto(){
+  stopEaterAuto();
+  if(state.eater.auto && FS.ok && RUN.eater && RUN.eater.sources && RUN.eater.sources.length){
+    eaterTimer=setInterval(()=>{ if(!document.hidden && !eaterBusy) runEater(true); }, Math.max(1,state.eater.intervalMin||15)*60000);
+  }
+}
+async function runEater(auto){
+  if(!FS.ok){ if(!auto) toast('Ætinn virkar í Chrome eða Edge á tölvu.'); return; }
+  const cfg=RUN.eater; const act=state.eater.action;
+  if(!cfg.sources.length){ if(!auto) toast('Veldu upprunamöppu fyrst.'); return; }
+  if(act!=='import'){
+    if(!cfg.dest){ if(!auto) toast('Veldu áfangamöppu fyrst.'); return; }
+    if(!await fsPerm(cfg.dest,true)){ if(!auto) toast('Vantar skrifheimild í áfangamöppu.'); return; }
+  }
+  if(eaterBusy) return; eaterBusy=true;
+  if(!RUN.eaterSeen) RUN.eaterSeen=new Set(state.eater.seenKeys||[]);
+  const seen=RUN.eaterSeen;
+  // gather
+  const items=[]; for(const s of cfg.sources){ if(await fsPerm(s, act==='move')) { try{ await collectPdfHandles(s, items); }catch(e){} } }
+  if(!items.length){ eaterBusy=false; if(!auto) toast('Engin PDF í völdum möppum.'); return; }
+  if(!auto) closeModal();
+  let done=0, moved=0, skipped=0, fresh=0; setBatch(0,items.length); if(!auto) toast('Ætinn les '+items.length+' skrár…');
+  for(const it of items){
+    try{
+      const file=await it.fh.getFile();
+      const seenKey=it.name+':'+file.size+':'+file.lastModified;
+      if(act!=='move' && seen.has(seenKey)){ done++; setBatch(done,items.length); continue; } // þegar étið — sleppa
+      const blob=new Blob([await file.arrayBuffer()],{type:'application/pdf'});
+      if(act!=='move') seen.add(seenKey);
+      fresh++;
+      const d=await importPdfBlob(it.name, blob);
+      await primeDocText(d);
+      d.typeId=guessType(d.fullText||''); d.kennitala=findKennitala(d.fullText||'');
+      const applied=await applyTemplate(d);
+      if(applied){ const t=state.docTypes.find(x=>x.id===d.typeId); const boxed=new Set(); Object.values(d.boxes||{}).forEach(a=>a.forEach(b=>boxed.add(b.fieldId)));
+        for(const fid of boxed){ const box=findBoxForField(d,fid); const raw=await offscreenBoxText(d,box); const f=t.fields.find(x=>x.id===fid); if(raw){ const o=applyRule(raw,f.rule); if(!d.values)d.values={}; d.values[fid]={value:o.value,display:o.display,raw:o.raw,conf:1}; } }
+      }
+      finalizeDoc(d);
+      const invoice=isInvoiceDoc(d);
+      if(state.eater.mode==='invoices' && !invoice){ skipped++; // leave it, remove from library
+        const i=RUN.docs.findIndex(x=>x.id===d.id); if(i>=0)RUN.docs.splice(i,1); await DB.docDel(d.id);
+        done++; setBatch(done,items.length); continue;
+      }
+      computeName(d);
+      if(act==='import'){ // bara sækja inn í forritið, skilja frumrit eftir — ekkert skrifað
+        DB.docPut(d); done++; setBatch(done,items.length); renderDocList(); continue;
+      }
+      // route + write to destination folder
+      const folder=computeFolder(d);
+      const destDir=await ensureDestPath(cfg.dest, folder.split('/').filter(Boolean));
+      const written=await writeToDir(destDir, d.newName, blob);
+      d.newName=written; d.status='samthykkt'; DB.docPut(d);
+      if(act==='move'){ try{ await it.parent.removeEntry(it.name); moved++; }catch(e){} }
+      done++; setBatch(done,items.length); renderDocList();
+    }catch(e){ skipped++; done++; setBatch(done,items.length); }
+  }
+  setBatch(0,0); state.eater.seenKeys=[...seen].slice(-5000); persistState();
+  renderDocList(); refreshLibrary(); renderDashboard();
+  if(!RUN.curId && RUN.docs[0]) selectDoc(RUN.docs[0].id);
+  eaterBusy=false;
+  const verb = act==='import'?'sótt inn':(act==='move'?'færð':'afrituð');
+  if(auto){ if(fresh) toast(`Ætinn (sjálfvirkt): ${fresh-skipped} ný skjöl ${verb}.`); }
+  else toast(`Ætinn kláraði: ${fresh-skipped} skjöl ${verb}${skipped?', '+skipped+' sleppt':''}.`);
+}
+
+$('#btnEater').onclick=openEater;
+async function openEater(){
+  if(!RUN.eater) await loadEaterHandles();
+  const e=state.eater;
+  const srcList=()=> (RUN.eater.sources||[]).map((h,i)=>`<div class="row" style="margin:3px 0"><span class="grow small">📁 ${esc(h.name||'mappa')}</span><button class="btn sm ghost" data-delsrc="${i}">🗑</button></div>`).join('')||'<span class="small mut">Engin mappa valin.</span>';
+  modal('🍽️ Ætinn — sækja, lesa, endurnefna & raða', `
+    ${FS.ok?'':'<div class="card" style="border-color:var(--warn)"><b>⚠️ Ætinn krefst Chrome eða Edge á tölvu.</b><div class="small mut">Á síma/öðrum vöfrum geturðu notað Google Drive eða handvirkan innflutning í staðinn.</div></div>'}
+    <div class="card"><h4>1. Upprunamöppur (þar sem skrár eru vistaðar)</h4>
+    <div id="eSrc">${srcList()}</div>
+    <button class="btn sm" id="eAddSrc" style="margin-top:6px" ${FS.ok?'':'disabled'}>＋ Bæta við möppu</button></div>
+
+    <div class="card" id="eDestCard"><h4>2. Áfangamappa (þangað sem raðað er)</h4>
+    <div class="row"><span class="grow small" id="eDest">${RUN.eater.dest?('📂 '+esc(RUN.eater.dest.name)):'<span class="mut">Engin valin.</span>'}</span>
+    <button class="btn sm" id="ePickDest" ${FS.ok?'':'disabled'}>Velja…</button></div>
+    <label class="fld">Möppusnið (sömu reglur og útflutningur)</label>
+    <input id="eFolder" value="${esc(state.routing.pattern)}">
+    <div class="small mut">Tákn: {ar} {manudur} {fyrirtaeki} {tegund} {flokkur} {kennitala}</div>
+    <div class="small mut" id="eDestNote" style="margin-top:6px"></div></div>
+
+    <div class="card"><h4>3. Hvað á að éta?</h4>
+    <label class="row" style="margin:4px 0"><input type="radio" name="eMode" value="invoices" style="width:auto" ${e.mode==='invoices'?'checked':''}> Bara reikninga — hitt látið vera</label>
+    <label class="row" style="margin:4px 0"><input type="radio" name="eMode" value="all" style="width:auto" ${e.mode==='all'?'checked':''}> Öll skjöl</label>
+    <hr style="border-color:var(--line);margin:10px 0">
+    <label class="row" style="margin:4px 0"><input type="radio" name="eAct" value="import" style="width:auto" ${e.action==='import'?'checked':''}> 📥 Sækja bara inn í forritið — skilja frumrit eftir (ekkert skrifað á disk)</label>
+    <label class="row" style="margin:4px 0"><input type="radio" name="eAct" value="copy" style="width:auto" ${e.action==='copy'?'checked':''}> 📄 Afrita í áfangamöppu (halda frumriti líka)</label>
+    <label class="row" style="margin:4px 0"><input type="radio" name="eAct" value="move" style="width:auto" ${e.action==='move'?'checked':''}> 📦 Færa í áfangamöppu (fjarlægja úr upprunamöppu)</label></div>
+
+    <div class="card"><h4>4. Sjálfvirk skönnun</h4>
+    <label class="row" style="margin:4px 0"><input type="checkbox" id="eAuto" style="width:auto" ${e.auto?'checked':''}> Skanna möppurnar sjálfkrafa og éta nýjar skrár</label>
+    <div class="row"><span class="small mut">Á fresti:</span><input id="eInterval" type="number" min="1" value="${e.intervalMin||15}" style="width:80px"><span class="small mut">mín</span>
+    <button class="btn sm ghost" id="eResetSeen" title="Gleyma hvaða skrár hafa verið étnar">Núllstilla minni</button></div>
+    <div class="small mut" style="margin-top:6px">Virkar á meðan forritið er opið (best sem uppsett forrit). Ætinn étur aðeins <b>nýjar</b> skrár — man hverjar hann hefur unnið.</div></div>
+
+    <div class="card small mut">Ætinn les hverja PDF, giskar á tegund, beitir lærðum reglum/kössum, endurnefnir og skrifar í rétta möppu (eða bara inn í forritið). Fyrst er gott að þjálfa a.m.k. eitt snið á vinnusvæðinu svo lesturinn sé réttur.</div>
+  `, [ {label:'🍽️ Éta núna',cls:'pri',fn:()=>{ saveE(); runEater(); }}, {label:'Vista sjálfvirkni',cls:'',fn:()=>{ saveE(); startEaterAuto(); closeModal(); toast(state.eater.auto?('Sjálfvirk skönnun virk — á '+state.eater.intervalMin+' mín fresti.'):'Sjálfvirk skönnun óvirk.'); }} ]);
+
+  function reflectAction(){ const a=($$('#modalHost input[name=eAct]:checked')[0]||{}).value||e.action;
+    const imp=a==='import'; const card=$('#eDestCard'); if(card){ card.style.opacity=imp?'.5':'1'; }
+    const note=$('#eDestNote'); if(note) note.textContent=imp?'Ekki notað í „sækja inn í forritið“ — engin áfangamappa nauðsynleg.':(a==='move'?'Skrár verða fjarlægðar úr upprunamöppu eftir röðun.':'Frumrit haldast í upprunamöppu.'); }
+  $$('#modalHost input[name=eAct]').forEach(r=>r.onchange=reflectAction); reflectAction();
+  function saveE(){ e.mode=($$('#modalHost input[name=eMode]:checked')[0]||{}).value||e.mode; e.action=($$('#modalHost input[name=eAct]:checked')[0]||{}).value||e.action; state.routing.pattern=$('#eFolder').value||state.routing.pattern;
+    if($('#eAuto')) e.auto=$('#eAuto').checked; if($('#eInterval')) e.intervalMin=Math.max(1,parseInt($('#eInterval').value)||15); persistState(); }
+  if($('#eResetSeen')) $('#eResetSeen').onclick=()=>{ state.eater.seenKeys=[]; RUN.eaterSeen=new Set(); persistState(); toast('Minni Ætsins núllstillt — hann étur allt aftur næst.'); };
+  $('#eAddSrc').onclick=async()=>{ try{ const h=await window.showDirectoryPicker({mode:state.eater.action==='move'?'readwrite':'read'}); RUN.eater.sources=RUN.eater.sources||[]; if(!RUN.eater.sources.some(x=>x.name===h.name)) RUN.eater.sources.push(h); await saveEaterHandles(); openEater(); }catch(e){} };
+  $('#ePickDest').onclick=async()=>{ try{ const h=await window.showDirectoryPicker({mode:'readwrite'}); RUN.eater.dest=h; await saveEaterHandles(); saveE(); openEater(); }catch(e){} };
+  $$('#modalHost [data-delsrc]').forEach(b=>b.onclick=async()=>{ RUN.eater.sources.splice(+b.dataset.delsrc,1); await saveEaterHandles(); openEater(); });
+}
+
+/* ================= modal plumbing ================= */
+function modal(title, bodyHtml, buttons){
+  const host=$('#modalHost');
+  host.innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-h"><b>${esc(title)}</b><button class="btn sm ghost" id="mClose">✕</button></div><div class="modal-body">${bodyHtml}</div><div class="modal-f" id="mFoot"></div></div></div>`;
+  const foot=$('#mFoot');
+  (buttons||[]).forEach(b=>{ const btn=el('button','btn '+(b.cls||''),b.label); btn.onclick=b.fn; foot.appendChild(btn); });
+  if(!buttons||!buttons.length) foot.style.display='none';
+  $('#mClose').onclick=closeModal;
+  host.querySelector('.modal-bg').onclick=e=>{ if(e.target.classList.contains('modal-bg')) closeModal(); };
+}
+function closeModal(){ $('#modalHost').innerHTML=''; }
+window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+</script>
+</body>
+</html>
