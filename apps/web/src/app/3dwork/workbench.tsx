@@ -528,7 +528,7 @@ export function Workbench() {
         base: string;
         meshes: { name: string; positions: Float32Array; triangles: number }[];
       };
-      const files: Incoming[] = [];
+      const sources: Incoming[] = [];
 
       for (const file of accepted) {
         try {
@@ -538,12 +538,12 @@ export function Workbench() {
             const kept = meshes
               .filter((mesh) => mesh.triangles > 0)
               .map((mesh) => ({ name: mesh.name || base, positions: mesh.soup, triangles: mesh.triangles }));
-            if (kept.length > 0) files.push({ fileName: file.name, base, meshes: kept });
+            if (kept.length > 0) sources.push({ fileName: file.name, base, meshes: kept });
           } else {
             const raw = parseStl(await file.arrayBuffer());
             if (raw.triangles > 0) {
               const base = file.name.replace(/\.stl$/i, '');
-              files.push({
+              sources.push({
                 fileName: file.name,
                 base,
                 meshes: [{ name: base, positions: raw.positions, triangles: raw.triangles }],
@@ -555,7 +555,7 @@ export function Workbench() {
         }
       }
 
-      if (files.length === 0) {
+      if (sources.length === 0) {
         setBusy(null);
         toast.error('Nothing readable in those files.');
         return;
@@ -617,7 +617,7 @@ export function Workbench() {
         };
       };
 
-      for (const file of files) {
+      for (const file of sources) {
         try {
           const prepared = file.meshes.map((mesh) => ({
             name: mesh.name,
