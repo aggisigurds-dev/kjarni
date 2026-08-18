@@ -25,6 +25,8 @@ import {
   Combine,
   Save,
   Scissors,
+  Undo2,
+  Redo2,
   Layers,
   Spline,
   Sparkles,
@@ -126,6 +128,12 @@ function download(blob: Blob, fileName: string): void {
   anchor.remove();
   // Revoke on the next tick so the download has definitely started.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** One point on the undo timeline: the project, and the meshes it referred to. */
+interface HistoryStep {
+  project: Project;
+  geometries: Map<string, Float32Array>;
 }
 
 export function Workbench() {
@@ -406,9 +414,93 @@ export function Workbench() {
     [project.parts, geometries]
   );
 
+  /**
+   * Undo depth, each way. Every step holds one project snapshot and a shallow
+   * copy of the geometry map — the meshes themselves are shared, not copied,
+   * so twenty steps costs a few thousand pointers rather than a few hundred
+   * megabytes of triangles.
+   */
+  const UNDO_DEPTH = 20;
+
+  const past = useRef<HistoryStep[]>([]);
+  const futureSteps = useRef<HistoryStep[]>([]);
+  // Bumped whenever the stacks change, purely so the menu can grey the items
+  // out; the stacks themselves live in refs so recording never re-renders.
+  const [historyToken, setHistoryToken] = useState(0);
+
+  /**
+   * The geometry map as it was before the current patch.
+   *
+   * The effect runs after render, so during a patch this still holds the map
+   * from before it — which is exactly the snapshot undo needs, whether the
+   * caller wrote geometry before calling patchProject (an import) or after
+   * (a delete).
+   */
+  const geometriesRef = useRef(geometries);
+  useEffect(() => {
+    geometriesRef.current = geometries;
+  }, [geometries]);
+
   const patchProject = useCallback((patch: (current: Project) => Project) => {
-    setProject((current) => patch(current));
+    setProject((current) => {
+      const next = patch(current);
+      // A patch that changed nothing is not a step worth undoing.
+      if (next === current) return current;
+
+      past.current.push({ project: current, geometries: geometriesRef.current });
+      if (past.current.length > UNDO_DEPTH) past.current.shift();
+      // Any new edit abandons the redo branch, as everywhere else.
+      futureSteps.current = [];
+      setHistoryToken((token) => token + 1);
+      return next;
+    });
   }, []);
+
+  /**
+   * Move one step along the history in either direction.
+   *
+   * Geometry is re-saved on the way: deleting a part removes its mesh from
+   * storage, so stepping back over a delete has to put it back or the part
+   * would return as an empty shell after a reload.
+   */
+  const step = useCallback(
+    (from: React.RefObject<HistoryStep[]>, to: React.RefObject<HistoryStep[]>, label: string) => {
+      const entry = from.current.pop();
+      if (!entry) {
+        toast.error(`Nothing to ${label}.`);
+        return;
+      }
+
+      setProject((current) => {
+        to.current.push({ project: current, geometries: geometriesRef.current });
+        if (to.current.length > UNDO_DEPTH) to.current.shift();
+        return entry.project;
+      });
+      setGeometries(entry.geometries);
+
+      for (const part of entry.project.parts) {
+        for (const version of part.versions) {
+          const soup = entry.geometries.get(version.id);
+          if (soup) void saveGeometry(version.id, soup);
+        }
+      }
+
+      setSelectedId((current) =>
+        entry.project.parts.some((part) => part.id === current) ? current : null
+      );
+      setMarked(new Set());
+      setHistoryToken((token) => token + 1);
+    },
+    []
+  );
+
+  const undo = useCallback(() => step(past, futureSteps, 'undo'), [step]);
+  const redo = useCallback(() => step(futureSteps, past, 'redo'), [step]);
+
+  const canUndo = past.current.length > 0;
+  const canRedo = futureSteps.current.length > 0;
+  // historyToken only exists to make the two flags above recompute.
+  void historyToken;
 
   const importFiles = useCallback(
     async (files: File[]) => {
@@ -1884,6 +1976,17 @@ export function Workbench() {
 
       const meta = event.metaKey || event.ctrlKey;
 
+      if (meta && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (meta && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redo();
+        return;
+      }
       if (meta && event.key.toLowerCase() === 'c') {
         copySelected();
         return;
@@ -1930,7 +2033,7 @@ export function Workbench() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [copySelected, pasteClipboard, duplicatePart, removePart, selectedId]);
+  }, [copySelected, pasteClipboard, duplicatePart, removePart, selectedId, undo, redo]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -2056,6 +2159,13 @@ export function Workbench() {
           </Menu>
 
           <Menu label="Edit">
+            <MenuItem onClick={undo} disabled={!canUndo} icon={Undo2} shortcut="⌘Z">
+              Undo
+            </MenuItem>
+            <MenuItem onClick={redo} disabled={!canRedo} icon={Redo2} shortcut="⌘⇧Z">
+              Redo
+            </MenuItem>
+            <MenuSeparator />
             <MenuItem
               onClick={() => selectedId && duplicatePart(selectedId)}
               disabled={!selectedId}
@@ -2264,6 +2374,29 @@ export function Workbench() {
         </MenuBar>
 
         <div className="mx-1 h-5 w-px bg-slate-300" />
+
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            title={canUndo ? `Undo (${past.current.length} step(s) back) — ⌘Z` : 'Nothing to undo'}
+            aria-label="Undo"
+            className="px-2 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            title={canRedo ? `Redo (${futureSteps.current.length} step(s) forward) — ⌘⇧Z` : 'Nothing to redo'}
+            aria-label="Redo"
+            className="border-l border-slate-300 px-2 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
         <div className="flex overflow-hidden rounded border border-slate-300">
           {(['bench', 'sketch'] as Workspace[]).map((option) => (

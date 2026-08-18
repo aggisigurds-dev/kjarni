@@ -118,6 +118,10 @@ export const DEFAULT_SLOTS: Omit<Slot, 'activePartId'>[] = [
   { id: 'internals', name: 'Internals', anchor: { x: -40, y: 5, z: 0 } },
 ];
 
+/**
+ * Auto-assigned to parts as they arrive. Bright and well separated, because
+ * their job is to tell one part from the next on a crowded table.
+ */
 export const PART_COLORS = [
   '#f97316',
   '#38bdf8',
@@ -127,6 +131,22 @@ export const PART_COLORS = [
   '#c084fc',
   '#2dd4bf',
   '#fb7185',
+];
+
+/**
+ * Quick picks in the inspector. The neutrals are the point of the second row —
+ * a build is mostly black plastic and grey steel, and telling parts apart
+ * matters less than seeing what the thing will actually look like once you are
+ * past sorting them.
+ */
+export const PART_SWATCHES = [
+  ...PART_COLORS,
+  '#000000',
+  '#1f2937',
+  '#4b5563',
+  '#9ca3af',
+  '#d4d4d8',
+  '#f4f4f5',
 ];
 
 /**

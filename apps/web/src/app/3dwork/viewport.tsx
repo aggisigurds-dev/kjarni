@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+import { smoothNormals } from '@/lib/3dwork/normals';
+
 export interface ViewportPart {
   id: string;
   color: string;
@@ -86,7 +88,11 @@ interface SceneRefs {
 function buildGeometry(soup: Float32Array): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(soup, 3));
-  geometry.computeVertexNormals();
+  // Not computeVertexNormals: on a soup with no shared vertices that gives
+  // every triangle its own face normal, so a pipe renders as a ring of hard
+  // strips however finely it is tessellated. Smoothing within a crease angle
+  // makes round surfaces read as round while leaving real edges sharp.
+  geometry.setAttribute('normal', new THREE.BufferAttribute(smoothNormals(soup), 3));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;

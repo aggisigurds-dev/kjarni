@@ -98,14 +98,43 @@ export function threadById(id: string): ThreadStandard | undefined {
   return THREAD_STANDARDS.find((entry) => entry.id === id);
 }
 
-const SEGMENTS = 48;
 /**
- * Threads are tessellated far more coarsely than plain stock. A 60 mm M16 bolt
- * at full resolution is 30k triangles, and a build carries twenty of them —
- * that is a quarter of a million triangles of fastener nobody prints. 24 facets
- * and 6 steps per turn still reads as a thread and costs a third as much.
+ * How round the stock is drawn.
+ *
+ * A fixed facet count makes a 6 mm screw wasteful and a 40 mm pipe visibly
+ * faceted, so the count is chosen from the radius instead: enough segments
+ * that the flats never sit further than SAGITTA from the true circle. For a
+ * circle of radius r that deviation is r(1 - cos(pi/n)), which inverts to
+ * n = pi * sqrt(r / 2e).
+ *
+ * At 0.005 mm a 28 mm pipe takes 118 segments and costs about 1,400 triangles
+ * — nothing next to an imported part, and it holds up under a close zoom.
  */
-const THREAD_SEGMENTS = 24;
+const SAGITTA = 0.005;
+const MIN_SEGMENTS = 96;
+const MAX_SEGMENTS = 256;
+
+function segmentsFor(diameter: number): number {
+  const radius = Math.max(diameter, 0.01) / 2;
+  const ideal = Math.PI * Math.sqrt(radius / (2 * SAGITTA));
+  // Even, so the facets stay symmetric about the axes.
+  const even = Math.ceil(ideal / 2) * 2;
+  return Math.min(Math.max(even, MIN_SEGMENTS), MAX_SEGMENTS);
+}
+
+/**
+ * Kept as the resolution the ring helpers work at. Every mesh sets it from its
+ * own diameter before building, which is why it is not a constant.
+ */
+let SEGMENTS = MIN_SEGMENTS;
+/**
+ * Threads stay far coarser than plain stock. A helix costs a full ring of
+ * triangles per step rather than per end, so matching the pipe count here
+ * would put a 60 mm M16 bolt near 30k triangles — and a build carries twenty
+ * of them. 40 facets is the point where smooth shading carries the rest of the
+ * roundness, at two thirds the cost of doing it with geometry alone.
+ */
+const THREAD_SEGMENTS = 40;
 const THREAD_STEPS_PER_TURN = 6;
 /** Hard ceiling for very long fine threads, which would otherwise run away. */
 const THREAD_MAX_STEPS = 400;
@@ -232,6 +261,11 @@ export function hardwareMesh(spec: HardwareSpec): Float32Array {
   const out: number[] = [];
   const radius = Math.max(spec.diameter, 0.1) / 2;
   const length = Math.max(spec.length, 0.1);
+
+  // A bolt head is wider than its shaft, so the head is what sets the count —
+  // picking it from the shaft would leave the head the visibly faceted part.
+  const widest = Math.max(spec.diameter, spec.headDiameter ?? 0);
+  SEGMENTS = segmentsFor(widest);
 
   if (spec.kind === 'pipe') {
     const wall = Math.min(Math.max(spec.wall ?? 1, 0.05), radius - 0.05);
