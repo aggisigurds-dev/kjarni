@@ -106,6 +106,7 @@ import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
+import { RevivePanel } from './revive';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 
@@ -158,6 +159,7 @@ export function Workbench() {
   const [showSlice, setShowSlice] = useState(false);
   const [showBore, setShowBore] = useState(false);
   const [showBend, setShowBend] = useState(false);
+  const [showRevive, setShowRevive] = useState(false);
   /**
    * Parts picked out alongside the selected one. The selected part is always
    * part of the selection; this holds only the extras, so nothing that reads
@@ -2271,6 +2273,13 @@ export function Workbench() {
             >
               Wall thickness…
             </MenuItem>
+            <MenuItem
+              onClick={() => setShowRevive(true)}
+              disabled={!selectedId || Boolean(busy)}
+              hint="AI: reverse-engineer the old mesh into editable parametric OpenSCAD"
+            >
+              🤖 Revive → OpenSCAD…
+            </MenuItem>
             <MenuSeparator />
             <MenuLabel>Group</MenuLabel>
             <MenuItem
@@ -2862,6 +2871,15 @@ export function Workbench() {
             </div>
           </div>
         </div>
+      )}
+
+      {showRevive && (
+        <RevivePanel
+          soup={selectedSoup}
+          name={selectedPart?.name ?? ''}
+          unit={unit}
+          onClose={() => setShowRevive(false)}
+        />
       )}
 
       {showBend && (
