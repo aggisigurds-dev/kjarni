@@ -51,9 +51,29 @@ export interface BendReport {
   warnings: string[];
 }
 
-const SEGMENTS = 48;
-/** Degrees of arc per sampled ring. Finer than the facets, so arcs read round. */
-const ARC_STEP_DEGREES = 3;
+/**
+ * How round the pipe is drawn, chosen from its radius so the flats never sit
+ * further than SAGITTA from the true circle — the same rule the straight stock
+ * uses, so a bend and the pipe it was bent from match.
+ */
+const SAGITTA = 0.005;
+const MIN_SEGMENTS = 96;
+const MAX_SEGMENTS = 256;
+
+function segmentsFor(diameter: number): number {
+  const radius = Math.max(diameter, 0.01) / 2;
+  const even = Math.ceil((Math.PI * Math.sqrt(radius / (2 * SAGITTA))) / 2) * 2;
+  return Math.min(Math.max(even, MIN_SEGMENTS), MAX_SEGMENTS);
+}
+
+let SEGMENTS = MIN_SEGMENTS;
+
+/**
+ * Degrees of arc per sampled ring. The bend's own curve is far gentler than
+ * the pipe's section, so this can stay coarse relative to the facet count and
+ * still read as a smooth sweep.
+ */
+const ARC_STEP_DEGREES = 1.5;
 
 type Point = [number, number, number];
 
@@ -216,6 +236,7 @@ export function bendReport(spec: BendSpec): BendReport {
  * is not treated as an error.
  */
 export function bendMesh(spec: BendSpec): Float32Array {
+  SEGMENTS = segmentsFor(spec.diameter);
   const report = bendReport(spec);
   const stations = centreline(report, { ...spec, angle: Math.max(0, Math.min(180, spec.angle)) });
 

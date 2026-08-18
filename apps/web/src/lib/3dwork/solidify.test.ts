@@ -101,12 +101,14 @@ describe('makeSolid', () => {
     expect(report.voxelSize).toBeGreaterThan(0);
   });
 
+  // Deliberately builds the largest grid the clamp allows, so it is slow by
+  // design and needs more than the default five seconds on a modest machine.
   it('does not blow past its memory ceiling on a silly resolution', () => {
     const { report } = makeSolid(cubeSoup(20), { resolution: 4000, sealMm: 0 });
     const cells = report.grid[0] * report.grid[1] * report.grid[2];
 
     expect(cells).toBeLessThanOrEqual(12_000_000);
-  });
+  }, 30_000);
 
   it('survives an empty mesh rather than throwing', () => {
     const { report } = makeSolid(new Float32Array(0), { resolution: 32, sealMm: 0 });

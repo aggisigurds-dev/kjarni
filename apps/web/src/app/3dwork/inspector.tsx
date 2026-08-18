@@ -18,6 +18,7 @@ import {
 import type { FixReport, SimplifyReport } from '@/lib/3dwork/mesh';
 import type { CylinderCut, SolidifyReport } from '@/lib/3dwork/solidify';
 import { inspect } from '@/lib/3dwork/mesh';
+import { PART_SWATCHES } from '@/lib/3dwork/project';
 import type { Part, Project, Transform } from '@/lib/3dwork/project';
 import {
   formatArea,
@@ -290,15 +291,34 @@ function ModifyTab({
         </label>
       </div>
 
-      <label className="flex items-center gap-2">
-        <span className={LABEL}>Colour</span>
-        <input
-          type="color"
-          value={part.color}
-          onChange={(event) => onPatchPart(part.id, { color: event.target.value })}
-          className="h-7 w-14 cursor-pointer rounded border border-slate-300 bg-slate-200"
-        />
-      </label>
+      <div>
+        <div className="flex items-center gap-2">
+          <span className={LABEL}>Colour</span>
+          <input
+            type="color"
+            value={part.color}
+            onChange={(event) => onPatchPart(part.id, { color: event.target.value })}
+            className="h-7 w-14 cursor-pointer rounded border border-slate-300 bg-slate-200"
+          />
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {PART_SWATCHES.map((swatch) => (
+            <button
+              key={swatch}
+              type="button"
+              title={swatch}
+              aria-label={`Set colour to ${swatch}`}
+              onClick={() => onPatchPart(part.id, { color: swatch })}
+              className={`h-5 w-5 rounded border transition-transform hover:scale-110 ${
+                part.color.toLowerCase() === swatch.toLowerCase()
+                  ? 'border-slate-900 ring-1 ring-slate-900'
+                  : 'border-slate-300'
+              }`}
+              style={{ backgroundColor: swatch }}
+            />
+          ))}
+        </div>
+      </div>
 
       <div>
         <span className={`${LABEL} mb-1 block`}>Offset from mount point (mm)</span>
