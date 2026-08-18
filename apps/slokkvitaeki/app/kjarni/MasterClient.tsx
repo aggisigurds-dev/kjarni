@@ -65,12 +65,18 @@ const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
 ];
 
 const QUICK: { icon: string; label: string; href: string; ext?: boolean }[] = [
-  { icon: "🛠", label: "Stjórnborð", href: "/stjorn" },
+  // Kjarni-síður
+  { icon: "🏠", label: "Forsíða", href: "/" },
+  { icon: "🎛️", label: "Stjórnborð", href: "/stjorn" },
   { icon: "🧩", label: "Kerfi", href: "/kerfi" },
   { icon: "🛒", label: "Verslun", href: "/verslun" },
   { icon: "🗂️", label: "Skjalarinn", href: "/skjalarinn" },
   { icon: "🧊", label: "3dwork", href: "/3dwork" },
-  { icon: "🧰", label: "Verkfæri", href: "/stjorn" },
+  // Tól & vefir
+  { icon: "🛠️", label: "Verkfæri (skjalalesari)", href: "https://verkfaeri.vercel.app", ext: true },
+  { icon: "🧯", label: "Slökkvitæki appið", href: "https://slokkvitaeki.netlify.app", ext: true },
+  { icon: "🔥", label: "Brunahólf hub", href: "https://brunaholf.netlify.app", ext: true },
+  // Þróun
   { icon: "💻", label: "GitHub", href: "https://github.com/aggisigurds-dev/kjarni", ext: true },
   { icon: "▲", label: "Vercel", href: "https://vercel.com/kjarni", ext: true },
 ];
@@ -215,6 +221,15 @@ export default function MasterClient() {
         <div className="ms-kpi"><span>Kerfi-viðskiptavinir</span><b>{kKunnar}</b></div>
       </div>
 
+      <h2 className="ms-h2">Allt á einum stað</h2>
+      <div className="ms-launch">
+        {QUICK.map((q) => (
+          <a key={q.label} href={q.href} {...(q.ext ? { target: "_blank", rel: "noreferrer" } : {})}>
+            <span aria-hidden="true">{q.icon}</span> {q.label}{q.ext ? " ↗" : ""}
+          </a>
+        ))}
+      </div>
+
       <div className="ms-h2row"><h2 className="ms-h2">Vefir & kerfi</h2><button className="ms-add-btn" onClick={() => setAddOpen(true)}>+ Nýr vefur</button></div>
       <div className="ms-props">
         <div className="ms-prop">
@@ -288,16 +303,6 @@ export default function MasterClient() {
 
       <h2 className="ms-h2">Aðstoðarborð</h2>
       <div className="ms-help2">
-        <div className="ms-hcard">
-          <h3>Flýtileiðir</h3>
-          <div className="ms-quick">
-            {QUICK.map((q) => (
-              <a key={q.label} href={q.href} {...(q.ext ? { target: "_blank", rel: "noreferrer" } : {})}>
-                <span aria-hidden="true">{q.icon}</span> {q.label}
-              </a>
-            ))}
-          </div>
-        </div>
         <div className="ms-conns">
           {CONNS.map((c) => (
             <div className="ms-conn" key={c.nafn}>
