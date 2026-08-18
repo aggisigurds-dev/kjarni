@@ -58,6 +58,7 @@ const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "🔔", nafn: "Tilkynningaborði", desc: "Borði efst", tag: "Vefur", ready: true },
       { icon: "🗂️", nafn: "Skjalarinn", desc: "Skjöl · pdf · skrár", tag: "Tól", ready: true },
       { icon: "🧊", nafn: "3dwork", desc: "STL/mesh vinnustöð", tag: "Tól", ready: true },
+      { icon: "✎", nafn: "Prufusvæði", desc: "Blokkir · þemu · skikt", tag: "Tól", ready: true },
       { icon: "💳", nafn: "Payday", desc: "Reikningar", tag: "Verkfæri", ready: false },
       { icon: "📘", nafn: "Facebook", desc: "Tenging", tag: "Verkfæri", ready: false },
     ],
@@ -72,6 +73,7 @@ const QUICK: { icon: string; label: string; href: string; ext?: boolean }[] = [
   { icon: "🛒", label: "Verslun", href: "/verslun" },
   { icon: "🗂️", label: "Skjalarinn", href: "/skjalarinn" },
   { icon: "🧊", label: "3dwork", href: "/3dwork" },
+  { icon: "✎", label: "Prufusvæði", href: "/draft" },
   // Tól & vefir
   { icon: "🛠️", label: "Verkfæri (skjalalesari)", href: "https://verkfaeri.vercel.app", ext: true },
   { icon: "🧯", label: "Slökkvitæki appið", href: "https://slokkvitaeki.netlify.app", ext: true },

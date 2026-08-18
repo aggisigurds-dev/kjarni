@@ -2221,3 +2221,53 @@ button.ms-add:hover { border-color:var(--m-org); }
 .sk-open:hover { color:var(--s-org); }
 .sk-btn { background:var(--s-navy); color:#fff; border:0; border-radius:10px; padding:11px 20px; font-weight:700; font-size:0.9rem; }
 .sk-btn:hover { background:#1c2b49; }
+
+/* ===== Prufusvæði (draft workspace) ===== */
+.dw { display:flex; min-height:100vh; background:#0e1116; color:#e7ecf1; }
+.dw-side { width:340px; flex-shrink:0; height:100vh; overflow:auto; padding:18px; border-right:1px solid #1e242c; background:#12161c; display:flex; flex-direction:column; gap:18px; }
+.dw-brand { display:flex; align-items:center; gap:11px; }
+.dw-badge { width:38px; height:38px; border-radius:11px; display:grid; place-items:center; background:linear-gradient(135deg,#ef5a24,#f7a934); color:#fff; font-size:19px; }
+.dw-brand h1 { font-size:1.05rem; margin:0; }
+.dw-brand p { font-size:0.72rem; margin:2px 0 0; color:#8592a0; }
+.dw-grp h2 { font-size:0.8rem; text-transform:uppercase; letter-spacing:.04em; color:#8592a0; margin:0 0 9px; }
+.dw-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.dw-chip { padding:7px 11px; border-radius:20px; border:1px solid #2a323d; background:#1a2028; color:#cfd6de; font-size:0.82rem; font-weight:600; cursor:pointer; }
+.dw-chip.on { background:#ef5a24; border-color:#ef5a24; color:#fff; }
+.dw-chip.add { border-style:dashed; }
+.dw-chip:hover { border-color:#3a4551; }
+.dw-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.dw-lbl { font-size:0.78rem; color:#8592a0; width:48px; flex-shrink:0; }
+.dw-seg { display:flex; border:1px solid #2a323d; border-radius:9px; overflow:hidden; flex:1; }
+.dw-seg button { flex:1; padding:7px 4px; background:#1a2028; color:#cfd6de; border:none; font-size:0.78rem; font-weight:600; cursor:pointer; }
+.dw-seg button.on { background:#ef5a24; color:#fff; }
+.dw-empty, .dw-hint { font-size:0.78rem; color:#8592a0; line-height:1.5; }
+.dw-layers { display:flex; flex-direction:column; gap:6px; }
+.dw-layer { border:1px solid #232a33; border-radius:10px; background:#161b22; overflow:hidden; }
+.dw-layer.open { border-color:#ef5a24; }
+.dw-layer-h { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.dw-layer-name { flex:1; text-align:left; padding:10px 12px; background:none; border:none; color:#e7ecf1; font-weight:600; font-size:0.87rem; cursor:pointer; }
+.dw-layer-btns { display:flex; gap:2px; padding-right:6px; }
+.dw-layer-btns button { width:26px; height:26px; border-radius:7px; border:none; background:#232a33; color:#cfd6de; cursor:pointer; font-size:0.8rem; }
+.dw-layer-btns button:hover:not(:disabled) { background:#2f3844; }
+.dw-layer-btns button:disabled { opacity:.35; cursor:default; }
+.dw-fields { padding:4px 12px 12px; display:flex; flex-direction:column; gap:9px; border-top:1px solid #232a33; }
+.dw-field { display:flex; flex-direction:column; gap:4px; }
+.dw-field span { font-size:0.74rem; color:#8592a0; }
+.dw-field input, .dw-field textarea { background:#0e1116; border:1px solid #2a323d; border-radius:8px; padding:8px 10px; color:#e7ecf1; font-size:0.85rem; font-family:inherit; resize:vertical; }
+.dw-field input:focus, .dw-field textarea:focus { outline:none; border-color:#ef5a24; }
+.dw-actions { display:flex; gap:8px; }
+.dw-act { flex:1; padding:10px; border-radius:9px; border:1px solid #2a323d; background:#1a2028; color:#e7ecf1; font-weight:600; font-size:0.83rem; cursor:pointer; }
+.dw-act.danger { color:#ff8a6a; }
+.dw-act:hover { border-color:#3a4551; }
+.dw-stage { flex:1; height:100vh; overflow:auto; padding:22px; background:#0e1116; }
+.dw-preview { border-radius:16px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.4); min-height:calc(100vh - 44px); }
+.dw-blank { padding:80px 20px; text-align:center; color:#8592a0; background:#fff; }
+.draft-preview { background:var(--bg); color:var(--ink); }
+.draft-preview.sp-thett .section { padding-top:34px; padding-bottom:34px; }
+.draft-preview.sp-rumt .section { padding-top:96px; padding-bottom:96px; }
+@media (max-width:900px) {
+  .dw { flex-direction:column; }
+  .dw-side { width:auto; height:auto; max-height:54vh; border-right:none; border-bottom:1px solid #1e242c; }
+  .dw-stage { height:auto; }
+  .dw-preview { min-height:60vh; }
+}

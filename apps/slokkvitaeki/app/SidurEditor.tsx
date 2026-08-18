@@ -7,7 +7,7 @@ import { PageBlocks } from "./PageBlocks";
 type Block = { gerd: string; [k: string]: string };
 type Page = { id: number; slod: string; titill: string; blokkir: Block[]; birt: boolean; rod: number };
 
-const BLOCK_TYPES: { gerd: string; label: string; fields: [string, string, boolean?][] }[] = [
+export const BLOCK_TYPES: { gerd: string; label: string; fields: [string, string, boolean?][] }[] = [
   { gerd: "hero", label: "Hetja", fields: [["fyrirsogn", "Fyrirsögn"], ["undir", "Undirtexti", true], ["hnapp_texti", "Hnappur"], ["hnapp_href", "Hlekkur hnapps"]] },
   { gerd: "texti", label: "Texti", fields: [["fyrirsogn", "Fyrirsögn"], ["texti", "Texti", true]] },
   { gerd: "vorur", label: "Vörur", fields: [["fyrirsogn", "Fyrirsögn"], ["flokkur", "Flokkur (t.d. slokkvitaeki, skynjarar — tómt = allt)"], ["fjoldi", "Fjöldi (t.d. 3)"]] },
