@@ -91,15 +91,16 @@ import {
   type HardwareKind,
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
-import { makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { makeSolid, subtractMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
+import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
 import { outerHull } from '@/lib/3dwork/outerhull';
 import { createZip, safeFileName } from '@/lib/3dwork/zip';
 import { emptySketch, toSvg, type Sketch } from '@/lib/3dwork/sketch';
 import { silhouette, type Outline2D, type ViewPlane } from '@/lib/3dwork/silhouette';
 import { formatCount, formatMass, type Unit } from '@/lib/3dwork/format';
-import { bakeTransform, scaleSoup } from './bake';
+import { applyMatrix, bakeTransform, scaleSoup, transformMatrix } from './bake';
 import { Gallery } from './gallery';
 import { Inspector, type InspectorTab } from './inspector';
 import { SketchBoard } from './sketch-board';
@@ -160,6 +161,7 @@ export function Workbench() {
   const [showBore, setShowBore] = useState(false);
   const [showBend, setShowBend] = useState(false);
   const [showRevive, setShowRevive] = useState(false);
+  const [showSubtract, setShowSubtract] = useState(false);
   /**
    * Parts picked out alongside the selected one. The selected part is always
    * part of the selection; this holds only the extras, so nothing that reads
@@ -1980,6 +1982,118 @@ export function Workbench() {
     [project, patchProject]
   );
 
+  /** Drop in a primitive shape (box / cylinder / sphere / cone) as a part. */
+  const addPrimitive = useCallback(
+    (soup: Float32Array, name: string) => {
+      const id = newPartId();
+      const versionId = newVersionId();
+      const color = nextColor(project);
+
+      setGeometries((current) => new Map(current).set(versionId, soup));
+      void saveGeometry(versionId, soup);
+
+      patchProject((current) => ({
+        ...current,
+        parts: [
+          ...current.parts,
+          {
+            id,
+            name,
+            fileName: '',
+            slotId: '',
+            color,
+            visible: true,
+            transform: {
+              position: { x: 0, y: 0, z: 0 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+            },
+            triangles: Math.floor(soup.length / 9),
+            materialId: project.materialId,
+            notes: '',
+            versions: [
+              {
+                id: versionId,
+                label: 'v1 primitive',
+                note: name,
+                triangles: Math.floor(soup.length / 9),
+                createdAt: Date.now(),
+              },
+            ],
+            activeVersionId: versionId,
+            thumbnail: renderThumbnail(soup, color),
+            addedAt: Date.now(),
+          },
+        ],
+      }));
+
+      setSelectedId(id);
+      setFrameToken((token) => token + 1);
+      toast.success(`Added ${name}.`);
+    },
+    [project, patchProject]
+  );
+
+  /** Boolean-subtract another part from the selected one, as a new version. */
+  const subtractInto = useCallback(
+    (targetId: string, toolId: string) => {
+      const target = project.parts.find((part) => part.id === targetId);
+      const tool = project.parts.find((part) => part.id === toolId);
+      if (!target || !tool) return;
+      const soupA = soupOfPart(targetId);
+      const soupB = soupOfPart(toolId);
+      if (!soupA || !soupB) return;
+
+      setShowSubtract(false);
+      setBusy(`Subtracting ${tool.name}…`);
+      // Let the busy state paint before the synchronous voxel work.
+      setTimeout(() => {
+        try {
+          const anchorA = project.slots.find((slot) => slot.activePartId === targetId)?.anchor;
+          const anchorB = project.slots.find((slot) => slot.activePartId === toolId)?.anchor;
+          const fullA: Transform = {
+            position: {
+              x: target.transform.position.x + (anchorA?.x ?? 0),
+              y: target.transform.position.y + (anchorA?.y ?? 0),
+              z: target.transform.position.z + (anchorA?.z ?? 0),
+            },
+            rotation: target.transform.rotation,
+            scale: target.transform.scale,
+          };
+          const fullB: Transform = {
+            position: {
+              x: tool.transform.position.x + (anchorB?.x ?? 0),
+              y: tool.transform.position.y + (anchorB?.y ?? 0),
+              z: tool.transform.position.z + (anchorB?.z ?? 0),
+            },
+            rotation: tool.transform.rotation,
+            scale: tool.transform.scale,
+          };
+
+          const result = subtractMesh(bakeTransform(soupA, fullA), bakeTransform(soupB, fullB), {
+            resolution: 180,
+            sealMm: 0.6,
+          });
+          if (result.soup.length === 0) {
+            toast.error('Nothing left after the cut — do the two parts actually overlap?');
+            return;
+          }
+          // The cut happened in world space; bring it back into the target's own
+          // frame so the part keeps its slot placement and transform.
+          const local = applyMatrix(result.soup, transformMatrix(fullA).invert());
+          addVersion(targetId, local, 'subtract', `− ${tool.name}`);
+          setSelectedId(targetId);
+          toast.success(`Cut ${tool.name} out of ${target.name}.`);
+        } catch {
+          toast.error('Subtract failed — try a lower resolution or simpler parts.');
+        } finally {
+          setBusy(null);
+        }
+      }, 20);
+    },
+    [project, soupOfPart, addVersion]
+  );
+
   /**
    * Add a bent length of pipe as a part of its own.
    *
@@ -2264,6 +2378,24 @@ export function Workbench() {
           </Menu>
 
           <Menu label="Add">
+            <MenuLabel>Primitives</MenuLabel>
+            <MenuItem onClick={() => addPrimitive(boxSoup(), 'Box 30 mm')} icon={Boxes} hint="Cut pockets and flats">
+              Box
+            </MenuItem>
+            <MenuItem
+              onClick={() => addPrimitive(cylinderSoup(), 'Cylinder ⌀24 × 40')}
+              icon={Cylinder}
+              hint="Cut round holes"
+            >
+              Cylinder
+            </MenuItem>
+            <MenuItem onClick={() => addPrimitive(sphereSoup(), 'Sphere ⌀30')} icon={CircleDot}>
+              Sphere
+            </MenuItem>
+            <MenuItem onClick={() => addPrimitive(coneSoup(), 'Cone ⌀30 × 40')} icon={CircleDot}>
+              Cone
+            </MenuItem>
+            <MenuSeparator />
             <MenuLabel>Stock presets</MenuLabel>
             {HARDWARE_PRESETS.map((preset) => (
               <MenuItem key={preset.name} onClick={() => addHardware(preset.spec)} icon={Cylinder}>
@@ -2420,6 +2552,14 @@ export function Workbench() {
               hint="Hollow a solid, or give an open surface thickness"
             >
               Wall thickness…
+            </MenuItem>
+            <MenuItem
+              onClick={() => setShowSubtract(true)}
+              disabled={!selectedId || project.parts.length < 2 || Boolean(busy)}
+              icon={Scissors}
+              hint="Cut another part's shape out of this one (boolean subtract)"
+            >
+              ✂️ Subtract a part…
             </MenuItem>
             <MenuItem
               onClick={() => setShowRevive(true)}
@@ -3113,6 +3253,63 @@ export function Workbench() {
           unit={unit}
           onClose={() => setShowRevive(false)}
         />
+      )}
+
+      {showSubtract && selectedPart && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => setShowSubtract(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-lg border border-slate-300 bg-white p-4 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-sm font-bold text-slate-900">✂️ Subtract from “{selectedPart.name}”</h2>
+            <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
+              Pick the part to cut OUT of it. Overlap the two first (double-tap → move mode). The cut
+              is watertight — good for a pocket, hole or slot.
+            </p>
+            <div className="min-h-0 flex-1 overflow-auto">
+              {project.parts.filter((part) => part.id !== selectedId).length === 0 ? (
+                <p className="text-[0.8rem] text-slate-400">Add another part to cut with.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {project.parts
+                    .filter((part) => part.id !== selectedId)
+                    .map((part) => (
+                      <button
+                        key={part.id}
+                        type="button"
+                        onClick={() => selectedId && subtractInto(selectedId, part.id)}
+                        className="flex items-center gap-2 rounded border border-slate-300 p-2 text-left transition-colors hover:border-rose-400 hover:bg-rose-50"
+                      >
+                        <span
+                          className="h-8 w-8 shrink-0 rounded bg-slate-100 bg-cover bg-center"
+                          style={
+                            part.thumbnail
+                              ? { backgroundImage: `url(${part.thumbnail})` }
+                              : { background: part.color }
+                          }
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[0.75rem] font-semibold text-slate-700">
+                          {part.name}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                className="rounded border border-slate-300 px-3 py-1.5 text-[0.75rem] font-bold text-slate-600 hover:bg-slate-100"
+                onClick={() => setShowSubtract(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showBend && (

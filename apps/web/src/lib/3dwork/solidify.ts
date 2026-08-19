@@ -752,3 +752,107 @@ export function makeSolid(soup: Float32Array, options: SolidifyOptions): {
     },
   };
 }
+
+export interface SubtractOptions {
+  resolution: number;
+  sealMm: number;
+}
+
+export interface SubtractReport {
+  voxelSize: number;
+  grid: [number, number, number];
+  trianglesBefore: number;
+  trianglesAfter: number;
+}
+
+/**
+ * Cut one mesh out of another — a boolean difference done in the voxel world,
+ * not on the triangles. Both meshes are rasterised onto a shared grid, and the
+ * result is the target's interior minus the tool's. Like Make Solid it does not
+ * care whether either input is a clean manifold, and the output is watertight by
+ * construction. The trade is the same too: detail finer than a voxel is lost, so
+ * turn the resolution up for a crisp cut.
+ */
+export function subtractMesh(
+  target: Float32Array,
+  tool: Float32Array,
+  options: SubtractOptions
+): { soup: Float32Array; report: SubtractReport } {
+  const bt = computeBounds(target);
+  const bo = computeBounds(tool);
+  // The grid spans both so the tool is fully enclosed for its own flood fill.
+  const min: [number, number, number] = [
+    Math.min(bt.min[0], bo.min[0]),
+    Math.min(bt.min[1], bo.min[1]),
+    Math.min(bt.min[2], bo.min[2]),
+  ];
+  const max: [number, number, number] = [
+    Math.max(bt.max[0], bo.max[0]),
+    Math.max(bt.max[1], bo.max[1]),
+    Math.max(bt.max[2], bo.max[2]),
+  ];
+  const size: [number, number, number] = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+  const longest = Math.max(size[0], size[1], size[2], 1e-6);
+
+  let voxelSize = longest / Math.max(16, options.resolution);
+  const sealVoxels = Math.max(0, Math.round(options.sealMm / voxelSize));
+  const pad = sealVoxels + 3;
+
+  let dims: [number, number, number] = [0, 0, 0];
+  for (;;) {
+    dims = [
+      Math.ceil(size[0] / voxelSize) + pad * 2,
+      Math.ceil(size[1] / voxelSize) + pad * 2,
+      Math.ceil(size[2] / voxelSize) + pad * 2,
+    ];
+    if (dims[0] * dims[1] * dims[2] <= MAX_CELLS) break;
+    voxelSize *= 1.25;
+  }
+
+  const origin: [number, number, number] = [
+    min[0] - pad * voxelSize,
+    min[1] - pad * voxelSize,
+    min[2] - pad * voxelSize,
+  ];
+
+  const interiorOf = (soup: Float32Array): Uint8Array => {
+    let shell = new Uint8Array(dims[0] * dims[1] * dims[2]);
+    rasterize(soup, shell, dims, origin, voxelSize);
+    for (let i = 0; i < sealVoxels; i++) shell = dilate(shell, dims);
+    const outside = floodExterior(shell, dims);
+    let inside = new Uint8Array(shell.length);
+    for (let i = 0; i < inside.length; i++) inside[i] = outside[i] ? 0 : 1;
+    for (let i = 0; i < sealVoxels; i++) inside = erode(inside, dims);
+    return inside;
+  };
+
+  const inside = interiorOf(target);
+  const cutter = interiorOf(tool);
+  for (let i = 0; i < inside.length; i++) if (cutter[i]) inside[i] = 0;
+
+  const rebuilt = surfaceNets(inside, dims, origin, voxelSize);
+  const topology = analyze(weld(rebuilt).mesh);
+
+  // Surface nets can come out inside-out; the enclosed volume says which way.
+  let finished = rebuilt;
+  if (topology.signedVolume < 0) {
+    finished = new Float32Array(rebuilt.length);
+    for (let t = 0; t + 8 < rebuilt.length; t += 9) {
+      for (let c = 0; c < 3; c++) {
+        finished[t + c] = rebuilt[t + c];
+        finished[t + 3 + c] = rebuilt[t + 6 + c];
+        finished[t + 6 + c] = rebuilt[t + 3 + c];
+      }
+    }
+  }
+
+  return {
+    soup: finished,
+    report: {
+      voxelSize,
+      grid: dims,
+      trianglesBefore: Math.floor(target.length / 9),
+      trianglesAfter: Math.floor(finished.length / 9),
+    },
+  };
+}

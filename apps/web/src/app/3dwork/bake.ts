@@ -15,6 +15,19 @@ import type { Transform } from '@/lib/3dwork/project';
 
 const DEG = Math.PI / 180;
 
+/** Apply an arbitrary matrix to every vertex of a soup, returning a new soup. */
+export function applyMatrix(soup: Float32Array, matrix: THREE.Matrix4): Float32Array {
+  const out = new Float32Array(soup.length);
+  const v = new THREE.Vector3();
+  for (let i = 0; i + 2 < soup.length; i += 3) {
+    v.set(soup[i], soup[i + 1], soup[i + 2]).applyMatrix4(matrix);
+    out[i] = v.x;
+    out[i + 1] = v.y;
+    out[i + 2] = v.z;
+  }
+  return out;
+}
+
 export function transformMatrix(transform: Transform): THREE.Matrix4 {
   return new THREE.Matrix4().compose(
     new THREE.Vector3(transform.position.x, transform.position.y, transform.position.z),
