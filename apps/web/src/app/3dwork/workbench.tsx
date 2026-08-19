@@ -67,6 +67,7 @@ import {
   newProjectId,
   nextColor,
   scatterPlacement,
+  freePlacement,
   type Part,
   type PartSize,
   type Placement,
@@ -111,7 +112,7 @@ import { RevivePanel } from './revive';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 
-type Mode = 'assembled' | 'scattered';
+type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'bench' | 'sketch';
 
 const newPartId = () =>
@@ -353,7 +354,12 @@ export function Workbench() {
   }, [project.parts, geometries]);
 
   const placements = useMemo<Placement[]>(
-    () => (mode === 'assembled' ? assembledPlacement(project) : scatterPlacement(project, sizes)),
+    () =>
+      mode === 'assembled'
+        ? assembledPlacement(project)
+        : mode === 'free'
+          ? freePlacement(project)
+          : scatterPlacement(project, sizes),
     [mode, project, sizes]
   );
 
@@ -751,29 +757,36 @@ export function Workbench() {
     [patchProject]
   );
 
-  /** Commit a viewport grab-to-move: add the world delta to the part's offset. */
+  /**
+   * Commit a viewport grab-to-move. In free mode the part carries an absolute
+   * position of its own; everywhere else the delta lands on its offset from the
+   * mount.
+   */
   const nudgePart = useCallback(
     (id: string, delta: { x: number; y: number; z: number }) => {
       patchProject((current) => ({
         ...current,
-        parts: current.parts.map((part) =>
-          part.id === id
-            ? {
-                ...part,
-                transform: {
-                  ...part.transform,
-                  position: {
-                    x: part.transform.position.x + delta.x,
-                    y: part.transform.position.y + delta.y,
-                    z: part.transform.position.z + delta.z,
-                  },
-                },
-              }
-            : part
-        ),
+        parts: current.parts.map((part) => {
+          if (part.id !== id) return part;
+          if (mode === 'free') {
+            const fp = part.freePos ?? { x: 0, y: 0, z: 0 };
+            return { ...part, freePos: { x: fp.x + delta.x, y: fp.y + delta.y, z: fp.z + delta.z } };
+          }
+          return {
+            ...part,
+            transform: {
+              ...part.transform,
+              position: {
+                x: part.transform.position.x + delta.x,
+                y: part.transform.position.y + delta.y,
+                z: part.transform.position.z + delta.z,
+              },
+            },
+          };
+        }),
       }));
     },
-    [patchProject]
+    [patchProject, mode]
   );
 
   /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
@@ -806,6 +819,26 @@ export function Workbench() {
     setSelectedId(id);
     setMoveModeId(id);
   }, []);
+
+  /** Open the free-arrange workspace, seeding positions from the current layout. */
+  const goFree = useCallback(() => {
+    patchProject((current) => {
+      // Nothing to seed if every part already has a free position.
+      if (!current.parts.some((part) => !part.freePos)) return current;
+      const placements =
+        mode === 'assembled' ? assembledPlacement(current) : scatterPlacement(current, sizes);
+      const posById = new Map(placements.map((placement) => [placement.partId, placement.position]));
+      return {
+        ...current,
+        parts: current.parts.map((part) =>
+          part.freePos
+            ? part
+            : { ...part, freePos: posById.get(part.id) ?? { ...part.transform.position } }
+        ),
+      };
+    });
+    setMode('free');
+  }, [mode, sizes, patchProject]);
 
   const fitPart = useCallback(
     (slotId: string, partId: string | null) => {
@@ -894,19 +927,22 @@ export function Workbench() {
       const soup = soupOfPart(member.id);
       if (!soup) continue;
 
-      // A fitted part sits at its slot's anchor plus its own offset, so baking
-      // the part transform alone would collapse the whole group onto one spot.
-      const anchor = project.slots.find((slot) => slot.activePartId === member.id)?.anchor;
-      pieces.push(
-        bakeTransform(soup, {
-          ...member.transform,
-          position: {
-            x: member.transform.position.x + (anchor?.x ?? 0),
-            y: member.transform.position.y + (anchor?.y ?? 0),
-            z: member.transform.position.z + (anchor?.z ?? 0),
-          },
-        })
-      );
+      // Bake each part at its world placement so the group keeps its shape. In
+      // free mode that is the part's own hand-placed position; otherwise it is
+      // the slot anchor plus the part's offset. Baking the transform alone would
+      // collapse the whole group onto one spot.
+      let position: { x: number; y: number; z: number };
+      if (mode === 'free') {
+        position = member.freePos ?? { x: 0, y: 0, z: 0 };
+      } else {
+        const anchor = project.slots.find((slot) => slot.activePartId === member.id)?.anchor;
+        position = {
+          x: member.transform.position.x + (anchor?.x ?? 0),
+          y: member.transform.position.y + (anchor?.y ?? 0),
+          z: member.transform.position.z + (anchor?.z ?? 0),
+        };
+      }
+      pieces.push(bakeTransform(soup, { ...member.transform, position }));
     }
     if (pieces.length === 0) return;
 
@@ -977,7 +1013,7 @@ export function Workbench() {
     setSelectedId(id);
     setFrameToken((token) => token + 1);
     toast.success(`Grouped ${members.length} parts.`);
-  }, [selection, project, soupOfPart, patchProject]);
+  }, [selection, project, soupOfPart, patchProject, mode]);
 
   /** Put a group's members back exactly as they were, and drop the bundle. */
   const ungroupPart = useCallback(
@@ -2714,12 +2750,12 @@ export function Workbench() {
 
         {workspace === 'bench' && (
           <div className="flex overflow-hidden rounded border border-slate-300">
-            {(['assembled', 'scattered'] as Mode[]).map((option) => (
+            {(['assembled', 'scattered', 'free'] as Mode[]).map((option) => (
               <button
                 key={option}
                 type="button"
-                onClick={() => setMode(option)}
-                title="Toggle with A"
+                onClick={() => (option === 'free' ? goFree() : setMode(option))}
+                title={option === 'free' ? 'Place every part by hand' : 'Toggle with A'}
                 className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
                   mode === option
                     ? 'bg-emerald-600 text-white'
@@ -2834,7 +2870,7 @@ export function Workbench() {
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
             frameToken={frameToken}
-            dragEnabled={mode === 'assembled'}
+            dragEnabled={mode === 'assembled' || mode === 'free'}
             moveModeId={moveModeId}
             manipMode={manip}
             onEnterMoveMode={enterMoveMode}
@@ -2842,7 +2878,7 @@ export function Workbench() {
             onDragRotate={spinPart}
           />
 
-          {mode === 'assembled' &&
+          {(mode === 'assembled' || mode === 'free') &&
             moveModeId &&
             (() => {
               const mm = moveModeId;
@@ -2910,7 +2946,7 @@ export function Workbench() {
               );
             })()}
 
-          {mode === 'assembled' && selectedId && !moveModeId && (
+          {(mode === 'assembled' || mode === 'free') && selectedId && !moveModeId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[0.7rem] font-medium text-slate-500 shadow-sm">
               Double-tap a part to move or rotate it
             </div>

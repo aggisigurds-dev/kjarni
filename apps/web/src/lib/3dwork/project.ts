@@ -60,6 +60,12 @@ export interface Part {
   group?: PartGroup;
   /** Data-URL preview rendered when the part was loaded. */
   thumbnail?: string;
+  /**
+   * Absolute position in the free-arrange workspace, mm. Independent of slots
+   * and the scatter layout, so a part hand-placed there stays put. Seeded from
+   * wherever the part sat when free mode was first entered.
+   */
+  freePos?: Vec3;
   addedAt: number;
 }
 
@@ -264,6 +270,21 @@ export function scatterPlacement(project: Project, sizes: Map<string, PartSize>)
   });
 
   return placements;
+}
+
+/**
+ * Free arrangement: every visible part sits exactly where it was hand-placed,
+ * with no slot or lane logic in between. This is the workspace for building a
+ * sub-assembly — an inner engine, a cluster of internals — piece by piece.
+ */
+export function freePlacement(project: Project): Placement[] {
+  return project.parts
+    .filter((part) => part.visible)
+    .map((part) => ({
+      partId: part.id,
+      position: part.freePos ?? { x: 0, y: 0, z: 0 },
+      dimmed: false,
+    }));
 }
 
 export function nextColor(project: Project): string {
