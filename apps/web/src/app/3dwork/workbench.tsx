@@ -2085,23 +2085,25 @@ export function Workbench() {
       // Let the busy state paint before the synchronous voxel work.
       setTimeout(() => {
         try {
-          const anchorA = project.slots.find((slot) => slot.activePartId === targetId)?.anchor;
-          const anchorB = project.slots.find((slot) => slot.activePartId === toolId)?.anchor;
+          // Where each part actually sits on the table right now — free mode
+          // carries its own position, everywhere else it is anchor + offset — so
+          // what overlaps on screen is what gets cut.
+          const worldPos = (part: Part) => {
+            if (mode === 'free') return part.freePos ?? { x: 0, y: 0, z: 0 };
+            const anchor = project.slots.find((slot) => slot.activePartId === part.id)?.anchor;
+            return {
+              x: part.transform.position.x + (anchor?.x ?? 0),
+              y: part.transform.position.y + (anchor?.y ?? 0),
+              z: part.transform.position.z + (anchor?.z ?? 0),
+            };
+          };
           const fullA: Transform = {
-            position: {
-              x: target.transform.position.x + (anchorA?.x ?? 0),
-              y: target.transform.position.y + (anchorA?.y ?? 0),
-              z: target.transform.position.z + (anchorA?.z ?? 0),
-            },
+            position: worldPos(target),
             rotation: target.transform.rotation,
             scale: target.transform.scale,
           };
           const fullB: Transform = {
-            position: {
-              x: tool.transform.position.x + (anchorB?.x ?? 0),
-              y: tool.transform.position.y + (anchorB?.y ?? 0),
-              z: tool.transform.position.z + (anchorB?.z ?? 0),
-            },
+            position: worldPos(tool),
             rotation: tool.transform.rotation,
             scale: tool.transform.scale,
           };
@@ -2127,7 +2129,7 @@ export function Workbench() {
         }
       }, 20);
     },
-    [project, soupOfPart, addVersion]
+    [project, soupOfPart, addVersion, mode]
   );
 
   /**
