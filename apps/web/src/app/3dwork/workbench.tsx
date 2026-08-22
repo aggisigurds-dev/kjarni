@@ -814,12 +814,6 @@ export function Workbench() {
     [patchProject]
   );
 
-  /** Double-tap a part in the view: enter move mode on it (and select it). */
-  const enterMoveMode = useCallback((id: string) => {
-    setSelectedId(id);
-    setMoveModeId(id);
-  }, []);
-
   /** Open the free-arrange workspace, seeding positions from the current layout. */
   const goFree = useCallback(() => {
     patchProject((current) => {
@@ -839,6 +833,18 @@ export function Workbench() {
     });
     setMode('free');
   }, [mode, sizes, patchProject]);
+
+  /**
+   * Double-tap a part in the view: select it and arm move mode on it. From the
+   * auto-arranged "scattered" mode this also drops into free-placement — goFree
+   * seeds every part's position from the current layout, so nothing jumps; the
+   * part just becomes hand-movable. In assembled/free it only arms move mode.
+   */
+  const enterMoveMode = useCallback((id: string) => {
+    setSelectedId(id);
+    setMoveModeId(id);
+    if (mode === 'scattered') goFree();
+  }, [mode, goFree]);
 
   const fitPart = useCallback(
     (slotId: string, partId: string | null) => {
@@ -2872,7 +2878,7 @@ export function Workbench() {
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
             frameToken={frameToken}
-            dragEnabled={mode === 'assembled' || mode === 'free'}
+            dragEnabled={project.parts.length > 0}
             moveModeId={moveModeId}
             manipMode={manip}
             onEnterMoveMode={enterMoveMode}
@@ -2880,7 +2886,7 @@ export function Workbench() {
             onDragRotate={spinPart}
           />
 
-          {(mode === 'assembled' || mode === 'free') &&
+          {project.parts.length > 0 &&
             moveModeId &&
             (() => {
               const mm = moveModeId;
@@ -2948,7 +2954,7 @@ export function Workbench() {
               );
             })()}
 
-          {(mode === 'assembled' || mode === 'free') && selectedId && !moveModeId && (
+          {project.parts.length > 0 && selectedId && !moveModeId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[0.7rem] font-medium text-slate-500 shadow-sm">
               Double-tap a part to move or rotate it
             </div>
