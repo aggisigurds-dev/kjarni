@@ -196,6 +196,10 @@ export function Workbench() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadedRef = useRef(false);
+  // Always points at the latest project, so a flush save (tab hidden/closed or
+  // unmount) writes the current state without waiting on the debounce timer.
+  const projectRef = useRef(project);
+  projectRef.current = project;
 
   const refreshProjectList = useCallback(async () => {
     const saved = await listProjects();
@@ -233,12 +237,12 @@ export function Workbench() {
       }
       if (cancelled) return;
 
-      // A part whose geometry did not survive would render as nothing at all.
-      const usable = {
-        ...restored,
-        parts: restored.parts.filter((part) => loaded.has(part.activeVersionId)),
-      };
-      setProject(usable);
+      // Keep EVERY part, even if its geometry did not come back on this load.
+      // The viewport already skips a part with no mesh (see viewportParts), so a
+      // transient IndexedDB miss just hides it for now — whereas dropping it here
+      // would let the next autosave delete it from storage for good. Restore is
+      // non-destructive so the build always comes back whole.
+      setProject(restored);
       setGeometries(loaded);
       setFrameToken((token) => token + 1);
       loadedRef.current = true;
@@ -256,6 +260,32 @@ export function Workbench() {
     const timer = setTimeout(() => void saveProject(project), 800);
     return () => clearTimeout(timer);
   }, [project]);
+
+  // Belt-and-braces persistence so the bench always comes back exactly as you
+  // left it. The debounce above is cancelled on unmount and never fires if you
+  // close within its window, so we also:
+  //   · flush immediately when the tab is hidden or the page is being closed
+  //     (visibilitychange/pagehide — the reliable "app is going away" signals,
+  //     pagehide covering the mobile/bfcache case beforeunload misses), and
+  //   · save on a slow 15s interval as a periodic backstop, and on unmount.
+  // projectRef keeps this reading the latest state without re-registering.
+  useEffect(() => {
+    const flush = () => {
+      if (loadedRef.current) void saveProject(projectRef.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    const interval = window.setInterval(flush, 15000);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
 
   /** Load a saved project and every version of every part it references. */
   const openProject = useCallback(
@@ -285,10 +315,9 @@ export function Workbench() {
         if (part.group) pending.push(...part.group.members);
       }
 
-      setProject({
-        ...target,
-        parts: target.parts.filter((part) => loaded.has(part.activeVersionId)),
-      });
+      // Keep every part (see the restore-on-mount note) — a geometry that did
+      // not load back is hidden by the viewport, never deleted from the build.
+      setProject(target);
       setGeometries(loaded);
       setSelectedId(null);
       setMarked(new Set());
