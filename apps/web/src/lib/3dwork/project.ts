@@ -75,6 +75,26 @@ export interface PartGroup {
   fitted: { slotId: string; partId: string }[];
 }
 
+/**
+ * Walk groups into a flat list of real parts. Grouping a group plus a loose
+ * part should produce one bundle of the inner members, not a nested wrapper.
+ */
+export function flattenGroupMembers(parts: Part[]): Part[] {
+  const out: Part[] = [];
+  const seen = new Set<string>();
+  const walk = (list: Part[]) => {
+    for (const part of list) {
+      if (part.group && part.group.members.length > 0) walk(part.group.members);
+      else if (!seen.has(part.id)) {
+        seen.add(part.id);
+        out.push(part);
+      }
+    }
+  };
+  walk(parts);
+  return out;
+}
+
 export function activeVersion(part: Part): PartVersion | undefined {
   return part.versions.find((version) => version.id === part.activeVersionId);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
 import { computeBounds, inspect } from './mesh';
-import { makeSolid } from './solidify';
+import { makeSolid, subtractMesh, unionMesh } from './solidify';
 
 /** Punch a chunk out of a cube: several missing faces, not just one triangle. */
 function shatteredCube(size = 20): Float32Array {
@@ -113,5 +113,56 @@ describe('makeSolid', () => {
   it('survives an empty mesh rather than throwing', () => {
     const { report } = makeSolid(new Float32Array(0), { resolution: 32, sealMm: 0 });
     expect(report.trianglesAfter).toBe(0);
+  });
+});
+
+describe('subtractMesh', () => {
+  it('cuts a chunk out of a cube and reports the overlap', () => {
+    const target = cubeSoup(20);
+    const tool = Float32Array.from(cubeSoup(20), (v, i) => (i % 3 === 0 ? v + 10 : v));
+    const { soup, report } = subtractMesh(target, tool, { resolution: 48, sealMm: 0, clearanceMm: 0 });
+
+    expect(report.missed).toBe(false);
+    expect(report.overlapVoxels).toBeGreaterThan(0);
+    expect(report.trianglesAfter).toBeGreaterThan(0);
+    expect(soup.length).toBeGreaterThan(0);
+
+    const size = computeBounds(soup).size;
+    // The remaining block is roughly 10 × 20 × 20, not a 20 mm cube.
+    expect(size[0]).toBeLessThan(16);
+    expect(size[1]).toBeGreaterThan(16);
+  });
+
+  it('returns an empty mesh when the parts do not overlap', () => {
+    const target = cubeSoup(20);
+    const tool = Float32Array.from(cubeSoup(10), (v, i) => (i % 3 === 0 ? v + 40 : v));
+    const { soup, report } = subtractMesh(target, tool, { resolution: 32, sealMm: 0, clearanceMm: 0 });
+
+    expect(report.missed).toBe(true);
+    expect(report.overlapVoxels).toBe(0);
+    expect(soup.length).toBe(0);
+  });
+
+  it('does not grow the cutter when clearance is 0 mm', () => {
+    const target = cubeSoup(20);
+    const tool = Float32Array.from(cubeSoup(20), (v, i) => (i % 3 === 0 ? v + 10 : v));
+    const exact = subtractMesh(target, tool, { resolution: 48, sealMm: 0, clearanceMm: 0 });
+    const loose = subtractMesh(target, tool, { resolution: 48, sealMm: 0, clearanceMm: 2 });
+
+    expect(exact.report.clearanceVoxels).toBe(0);
+    expect(loose.report.clearanceVoxels).toBeGreaterThan(0);
+    expect(computeBounds(exact.soup).size[0]).toBeGreaterThan(computeBounds(loose.soup).size[0]);
+  });
+});
+
+describe('unionMesh', () => {
+  it('fuses overlapping cubes into one solid', () => {
+    const a = cubeSoup(20);
+    const b = Float32Array.from(cubeSoup(20), (v, i) => (i % 3 === 0 ? v + 12 : v));
+    const { report } = unionMesh([a, b], { resolution: 64, sealMm: 0 });
+
+    expect(report.after.boundaryEdges).toBe(0);
+    expect(report.volume).toBeGreaterThan(11000);
+    expect(report.volume).toBeLessThan(16000);
   });
 });
