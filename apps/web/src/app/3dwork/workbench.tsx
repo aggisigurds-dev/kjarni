@@ -3309,7 +3309,7 @@ export function Workbench() {
         }}
       />
 
-      <div className={`${PANEL} flex flex-nowrap items-center gap-x-2 gap-y-1 overflow-x-auto px-2 py-1.5`}>
+      <div className={`${PANEL} relative z-40 flex flex-nowrap items-center gap-x-2 gap-y-1 overflow-visible px-2 py-1.5`}>
         <div className="flex items-center gap-2 pr-1">
           <Boxes className="h-5 w-5 text-emerald-600" />
           <input
@@ -3787,6 +3787,7 @@ export function Workbench() {
           </Menu>
         </MenuBar>
 
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-2 overflow-x-auto">
         <div className="mx-1 h-5 w-px bg-slate-300" />
 
         <div className="flex overflow-hidden rounded border border-slate-300">
@@ -4037,6 +4038,7 @@ export function Workbench() {
             {formatMass(assemblyTotals.mass)}
           </span>
         </div>
+        </div>
       </div>
 
 
@@ -4101,7 +4103,7 @@ export function Workbench() {
         )}
 
         <div
-          className={`${PANEL} relative min-h-0 overflow-hidden md:min-h-[420px] ${
+          className={`${PANEL} relative z-0 min-h-0 overflow-hidden md:min-h-[420px] ${
             dragging ? 'border-emerald-500' : ''
           }`}
           onDragOver={(event) => {
