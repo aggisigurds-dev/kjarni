@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { RotateCw, Ruler } from 'lucide-react';
+import { Eye, EyeOff, RotateCw, Ruler } from 'lucide-react';
 import {
   MATERIALS,
   analyzeTube,
@@ -46,6 +46,7 @@ interface InspectorProps {
   onDropToTable: (partId: string) => void;
   onCenter: (partId: string) => void;
   onDuplicate: (partId: string) => void;
+  onToggleVisible: (partId: string) => void;
   onAutoFix: (partId: string, options: { fillHoles: boolean; maxHoleEdges: number }) => void;
   onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
   onMakeSolid: (
@@ -1006,6 +1007,19 @@ export function Inspector(props: InspectorProps) {
           Repair
         </TabButton>
       </div>
+
+      {part && (
+        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+          <button
+            type="button"
+            className={`${ACTION_GHOST} flex min-h-11 flex-1 items-center justify-center gap-2`}
+            onClick={() => props.onToggleVisible(part.id)}
+          >
+            {part.visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {part.visible ? 'Hide from table' : 'Show on table'}
+          </button>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {!part || !soup ? (

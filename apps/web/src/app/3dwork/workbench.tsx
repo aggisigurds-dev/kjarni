@@ -15,6 +15,8 @@ import {
   Boxes,
   Cylinder,
   Download,
+  Eye,
+  EyeOff,
   FileDown,
   FolderPlus,
   Group,
@@ -849,6 +851,53 @@ export function Workbench() {
         ...current,
         parts: current.parts.map((part) => (part.id === partId ? { ...part, ...patch } : part)),
       }));
+    },
+    [patchProject]
+  );
+
+  const togglePartVisible = useCallback(
+    (partId: string) => {
+      patchProject((current) => ({
+        ...current,
+        parts: current.parts.map((part) =>
+          part.id === partId ? { ...part, visible: !part.visible } : part
+        ),
+      }));
+      setMoveModeId((current) => {
+        if (current !== partId) return current;
+        const part = project.parts.find((candidate) => candidate.id === partId);
+        // Visible now means the toggle just hid it — drop the grab handles.
+        return part?.visible ? null : current;
+      });
+    },
+    [patchProject, project.parts]
+  );
+
+  const showAllParts = useCallback(() => {
+    patchProject((current) => {
+      if (current.parts.every((part) => part.visible)) return current;
+      return {
+        ...current,
+        parts: current.parts.map((part) => (part.visible ? part : { ...part, visible: true })),
+      };
+    });
+  }, [patchProject]);
+
+  /** Hide every other part. A second isolate on the same part brings them all back. */
+  const isolatePart = useCallback(
+    (partId: string) => {
+      patchProject((current) => {
+        const already =
+          current.parts.length > 0 &&
+          current.parts.every((part) => (part.id === partId ? part.visible : !part.visible));
+        return {
+          ...current,
+          parts: current.parts.map((part) => ({
+            ...part,
+            visible: already ? true : part.id === partId,
+          })),
+        };
+      });
     },
     [patchProject]
   );
@@ -2611,6 +2660,12 @@ export function Workbench() {
         case 'f':
           setFrameToken((token) => token + 1);
           break;
+        case 'h':
+        case 'H':
+          event.preventDefault();
+          if (event.shiftKey) showAllParts();
+          else if (selectedId) togglePartVisible(selectedId);
+          break;
         case 'g':
           setShowGrid((value) => !value);
           break;
@@ -2646,6 +2701,8 @@ export function Workbench() {
     rotateStep,
     nudgePart,
     spinPart,
+    togglePartVisible,
+    showAllParts,
   ]);
 
   const onDrop = useCallback(
@@ -2811,6 +2868,35 @@ export function Workbench() {
             </MenuItem>
             <MenuItem onClick={pasteClipboard} disabled={!clipboard} shortcut="⌘V">
               Paste
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              onClick={() => selectedId && togglePartVisible(selectedId)}
+              disabled={!selectedId}
+              icon={selectedPart?.visible === false ? Eye : EyeOff}
+              shortcut="H"
+              hint={
+                selectedPart?.visible === false
+                  ? 'Brings it back on the table'
+                  : 'Stays in the gallery so you can switch it back on'
+              }
+            >
+              {selectedPart?.visible === false ? 'Show on table' : 'Hide from table'}
+            </MenuItem>
+            <MenuItem
+              onClick={showAllParts}
+              disabled={project.parts.every((part) => part.visible)}
+              icon={Eye}
+              shortcut="⇧H"
+            >
+              Show all parts
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && isolatePart(selectedId)}
+              disabled={!selectedId || project.parts.length < 2}
+              hint="Alt-click the eye in the gallery"
+            >
+              Isolate selected
             </MenuItem>
             <MenuItem
               tone="danger"
@@ -3103,6 +3189,29 @@ export function Workbench() {
 
         <button
           type="button"
+          onClick={() => selectedId && togglePartVisible(selectedId)}
+          disabled={!selectedId}
+          title={
+            selectedPart?.visible === false
+              ? 'Show on the table — H'
+              : 'Hide from the table — H. Stays in the gallery.'
+          }
+          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
+            selectedPart?.visible === false
+              ? 'border-amber-400 bg-amber-50 text-amber-700'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-100 disabled:text-slate-300'
+          }`}
+        >
+          {selectedPart?.visible === false ? (
+            <Eye className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          ) : (
+            <EyeOff className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          )}
+          {selectedPart?.visible === false ? 'Show' : 'Hide'}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setMultiSelect((value) => !value)}
           title="Tap extra parts to add them to the selection"
           className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
@@ -3216,10 +3325,9 @@ export function Workbench() {
             onSelect={setSelectedId}
             onMark={toggleMarked}
             onFit={fitPart}
-            onToggleVisible={(partId) => {
-              const part = project.parts.find((candidate) => candidate.id === partId);
-              if (part) patchPart(partId, { visible: !part.visible });
-            }}
+            onToggleVisible={togglePartVisible}
+            onIsolate={isolatePart}
+            onShowAll={showAllParts}
             onDelete={removePart}
             onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
           />
@@ -3410,10 +3518,9 @@ export function Workbench() {
                   onSelect={setSelectedId}
                   onMark={toggleMarked}
                   onFit={fitPart}
-                  onToggleVisible={(partId) => {
-                    const part = project.parts.find((candidate) => candidate.id === partId);
-                    if (part) patchPart(partId, { visible: !part.visible });
-                  }}
+                  onToggleVisible={togglePartVisible}
+                  onIsolate={isolatePart}
+                  onShowAll={showAllParts}
                   onDelete={removePart}
                   onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
                 />
@@ -3454,6 +3561,7 @@ export function Workbench() {
             onDropToTable={dropToTable}
             onCenter={centerPart}
             onDuplicate={duplicatePart}
+            onToggleVisible={togglePartVisible}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
             onMakeSolid={runMakeSolid}

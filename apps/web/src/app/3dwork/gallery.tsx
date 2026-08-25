@@ -23,6 +23,8 @@ interface GalleryProps {
   onMark: (partId: string) => void;
   onFit: (slotId: string, partId: string | null) => void;
   onToggleVisible: (partId: string) => void;
+  onIsolate: (partId: string) => void;
+  onShowAll: () => void;
   onDelete: (partId: string) => void;
   onAssignSlot: (partId: string, slotId: string) => void;
 }
@@ -53,13 +55,15 @@ function PartCard({
   return (
     <div
       className={`group relative shrink-0 rounded border p-1.5 transition-colors ${
-        selected
-          ? 'border-amber-400 bg-amber-50'
-          : marked
-            ? 'border-sky-500 bg-sky-50'
-            : fitted
-              ? 'border-emerald-500 bg-emerald-50'
-              : 'border-slate-300 bg-slate-50 hover:border-slate-400'
+        !part.visible
+          ? 'border-slate-200 bg-slate-100 opacity-70'
+          : selected
+            ? 'border-amber-400 bg-amber-50'
+            : marked
+              ? 'border-sky-500 bg-sky-50'
+              : fitted
+                ? 'border-emerald-500 bg-emerald-50'
+                : 'border-slate-300 bg-slate-50 hover:border-slate-400'
       }`}
       style={{ width: 104 }}
     >
@@ -94,26 +98,42 @@ function PartCard({
         </div>
       </button>
 
-      <div className="absolute right-1 top-1 flex gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+      <div className="absolute right-1 top-1 flex gap-0.5">
         <button
           type="button"
-          onClick={onToggleVisible}
-          className="rounded bg-white/95 p-1 text-slate-500 hover:text-slate-900"
-          title={part.visible ? 'Hide' : 'Show'}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleVisible();
+          }}
+          className={`flex h-8 w-8 items-center justify-center rounded border bg-white/95 ${
+            part.visible
+              ? 'border-slate-300 text-slate-600 hover:text-slate-900'
+              : 'border-amber-400 text-amber-600'
+          }`}
+          title={part.visible ? 'Hide on the table' : 'Show on the table'}
+          aria-pressed={!part.visible}
+          aria-label={part.visible ? `Hide ${part.name}` : `Show ${part.name}`}
         >
-          {part.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          {part.visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
         </button>
         <button
           type="button"
-          onClick={onDelete}
-          className="rounded bg-white/95 p-1 text-slate-500 hover:text-rose-600"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white/95 text-slate-500 hover:text-rose-600"
           title="Remove part"
+          aria-label={`Remove ${part.name}`}
         >
-          <Trash2 className="h-3 w-3" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {fitted && (
+      {!part.visible && (
+        <span className={`${CHIP} absolute left-1 top-1 bg-slate-600 text-white`}>hidden</span>
+      )}
+      {fitted && part.visible && (
         <span className={`${CHIP} absolute left-1 top-1 bg-emerald-600 text-white`}>fitted</span>
       )}
     </div>
@@ -195,23 +215,102 @@ export function Gallery({
   onMark,
   onFit,
   onToggleVisible,
+  onIsolate,
+  onShowAll,
   onDelete,
   onAssignSlot,
 }: GalleryProps) {
   const loose = project.parts.filter(
     (part) => !project.slots.some((slot) => slot.id === part.slotId)
   );
+  const hiddenCount = project.parts.filter((part) => !part.visible).length;
 
   return (
     <div className={`${PANEL} flex h-full flex-col overflow-hidden`}>
-      <div className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-300 px-3 py-2">
         <span className={LABEL}>Parts gallery</span>
         <span className="font-mono text-[0.6rem] text-slate-500">
           {formatCount(project.parts.length)} loaded
+          {hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ''}
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {project.parts.length > 0 && (
+          <div className="border-b border-slate-200">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <span className={LABEL}>On the table</span>
+              <button
+                type="button"
+                onClick={onShowAll}
+                disabled={hiddenCount === 0}
+                className="min-h-8 rounded px-2 text-[0.6rem] font-extrabold uppercase tracking-wide text-slate-500 hover:text-slate-900 disabled:opacity-30"
+              >
+                Show all
+              </button>
+            </div>
+            <p className="px-3 pb-1.5 text-[0.62rem] leading-snug text-slate-400">
+              Eye hides a part — it stays in this list so you can switch it back on. Alt-click isolates.
+            </p>
+            <ul className="pb-1">
+              {project.parts.map((part) => {
+                const selected = selectedId === part.id;
+                return (
+                  <li key={part.id}>
+                    <div
+                      className={`flex items-center gap-1 px-2 py-0.5 ${
+                        selected ? 'bg-amber-50' : ''
+                      } ${!part.visible ? 'opacity-70' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded ${
+                          part.visible
+                            ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            : 'text-amber-600 hover:bg-amber-50'
+                        }`}
+                        title={
+                          part.visible
+                            ? 'Hide on the table — Alt-click to isolate'
+                            : 'Show on the table'
+                        }
+                        aria-pressed={!part.visible}
+                        aria-label={part.visible ? `Hide ${part.name}` : `Show ${part.name}`}
+                        onClick={(event) => {
+                          if (event.altKey) onIsolate(part.id);
+                          else onToggleVisible(part.id);
+                        }}
+                      >
+                        {part.visible ? (
+                          <Eye className="h-4 w-4" />
+                        ) : (
+                          <EyeOff className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 min-w-0 flex-1 truncate rounded px-1 text-left text-[0.75rem] font-semibold text-slate-800 hover:bg-slate-100"
+                        onClick={(event) => {
+                          if (event.metaKey || event.ctrlKey || event.shiftKey || multiSelect) {
+                            onMark(part.id);
+                          }
+                          onSelect(part.id);
+                        }}
+                      >
+                        {part.name}
+                        {!part.visible ? (
+                          <span className="ml-1 text-[0.6rem] font-bold uppercase tracking-wide text-amber-600">
+                            hidden
+                          </span>
+                        ) : null}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         {project.slots.map((slot) => (
           <SlotLane
             key={slot.id}
