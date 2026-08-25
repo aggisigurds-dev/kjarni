@@ -7,9 +7,22 @@
  * the app's light/dark theme, and the bench deliberately keeps its own fixed
  * workshop palette. Behaviour is the bit that matters: only one menu open at a
  * time, closes on outside click, Escape, or picking an item.
+ *
+ * Panels are portaled to document.body. The WebGL canvas is a later sibling of
+ * the toolbar, so an in-toolbar `absolute` dropdown paints behind the table.
  */
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 
 interface MenuBarState {
@@ -25,7 +38,13 @@ export function MenuBar({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!openId) return;
 
-    const close = () => setOpenId(null);
+    const close = (event: MouseEvent) => {
+      const path = event.composedPath();
+      if (path.some((node) => node instanceof HTMLElement && node.hasAttribute('data-3dwork-menu'))) {
+        return;
+      }
+      setOpenId(null);
+    };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpenId(null);
     };
@@ -41,7 +60,7 @@ export function MenuBar({ children }: { children: React.ReactNode }) {
 
   return (
     <MenuBarContext.Provider value={{ openId, setOpenId }}>
-      <div className="flex items-center gap-0.5">{children}</div>
+      <div className="relative z-50 flex shrink-0 items-center gap-0.5">{children}</div>
     </MenuBarContext.Provider>
   );
 }
@@ -58,11 +77,35 @@ export function Menu({
   const id = useId();
   const { openId, setOpenId } = useContext(MenuBarContext);
   const open = openId === id;
-  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0, maxHeight: 480 });
+
+  const place = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+    const top = rect.bottom + 4;
+    const maxHeight = Math.max(160, window.innerHeight - top - margin);
+    setCoords({ top, left, maxHeight });
+  }, [width]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={(event) => {
           event.stopPropagation();
@@ -81,15 +124,19 @@ export function Menu({
         <ChevronDown className="h-3 w-3 opacity-60" />
       </button>
 
-      {open && (
-        <div
-          className="absolute left-0 top-full z-50 mt-1 overflow-hidden rounded border border-slate-300 bg-white py-1 shadow-lg"
-          style={{ width }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {children}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            data-3dwork-menu=""
+            role="menu"
+            className="fixed z-[200] overflow-y-auto rounded border border-slate-300 bg-white py-1 shadow-lg"
+            style={{ top: coords.top, left: coords.left, width, maxHeight: coords.maxHeight }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {children}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
