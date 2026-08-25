@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
-import { snapHint, snapNumber, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
+import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
 
 export interface ViewportPart {
   id: string;
@@ -68,6 +68,8 @@ interface ViewportProps {
   manipMode: 'move' | 'rotate';
   /** When rotating, lock to one world axis or spin freely. */
   rotateAxis: 'free' | 'x' | 'y' | 'z';
+  /** When moving, lock to one world axis or slide freely. */
+  moveAxis: 'xyz' | 'x' | 'y' | 'z';
   /** Millimetre grid a drag snaps onto. */
   moveStep: number;
   /** Degree grid a rotate-drag snaps onto. */
@@ -142,6 +144,7 @@ export function Viewport({
   moveModeId,
   manipMode,
   rotateAxis,
+  moveAxis,
   moveStep,
   rotateStep,
   magnetMm,
@@ -171,6 +174,7 @@ export function Viewport({
     moveModeId,
     manipMode,
     rotateAxis,
+    moveAxis,
     moveStep,
     rotateStep,
     magnetMm,
@@ -189,6 +193,7 @@ export function Viewport({
     moveModeId,
     manipMode,
     rotateAxis,
+    moveAxis,
     moveStep,
     rotateStep,
     magnetMm,
@@ -443,13 +448,14 @@ export function Viewport({
         if (axis === 'x' || axis === 'y' || axis === 'z') {
           // Dominant screen axis drives a single world axis — the CAD way to
           // get a rotation to land where you meant it.
-          const amount = snapNumber(Math.abs(yawPx) >= Math.abs(pitchPx) ? yawPx : -pitchPx, step);
-          next[axis] = drag.startRot[axis] + amount * DEG;
+          const raw = Math.abs(yawPx) >= Math.abs(pitchPx) ? yawPx : -pitchPx;
+          const abs = drag.startRot[axis] / DEG + raw;
+          next[axis] = snapAngle(abs, step) * DEG;
         } else if (event.shiftKey) {
-          next.z = drag.startRot.z + snapNumber(yawPx, step) * DEG;
+          next.z = snapAngle(drag.startRot.z / DEG + yawPx, step) * DEG;
         } else {
-          next.x = drag.startRot.x + snapNumber(pitchPx, step) * DEG;
-          next.y = drag.startRot.y + snapNumber(yawPx, step) * DEG;
+          next.x = snapAngle(drag.startRot.x / DEG + pitchPx, step) * DEG;
+          next.y = snapAngle(drag.startRot.y / DEG + yawPx, step) * DEG;
         }
         mesh.rotation.copy(next);
       } else {
@@ -459,7 +465,12 @@ export function Viewport({
         const x = drag.startPos.x + (dragPoint.x - drag.startPoint.x);
         const y = drag.startPos.y + (dragPoint.y - drag.startPoint.y);
         const z = drag.startPos.z + (dragPoint.z - drag.startPoint.z);
-        mesh.position.set(x, y, z);
+        const lock = h.moveAxis;
+        mesh.position.set(
+          lock === 'y' || lock === 'z' ? drag.startPos.x : x,
+          lock === 'x' || lock === 'z' ? drag.startPos.y : y,
+          lock === 'x' || lock === 'y' ? drag.startPos.z : z
+        );
         mesh.updateMatrixWorld();
 
         worldBox.setFromObject(mesh);
@@ -473,7 +484,12 @@ export function Viewport({
               max: [worldBox.max.x, worldBox.max.y, worldBox.max.z],
             },
             neighbors,
-            { grid: h.moveStep, magnet: h.magnetMm, anchors: h.snapAnchors }
+            {
+              grid: h.moveStep,
+              magnet: h.magnetMm,
+              anchors: h.snapAnchors,
+              axes: lock === 'xyz' ? undefined : [lock],
+            }
           );
           mesh.position.x += snap.delta.x;
           mesh.position.y += snap.delta.y;

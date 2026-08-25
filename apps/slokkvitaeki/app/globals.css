@@ -2014,11 +2014,15 @@ h3 {
   background:var(--m-bg); min-height:100vh; min-height:100dvh; color:var(--m-ink); overflow-x:clip; }
 .ms *, .ms *::before { box-sizing:border-box; }
 .ms a { text-decoration:none; }
-.ms-section { scroll-margin-top:72px; }
+.ms-section { scroll-margin-top:118px; }
 
+.ms-head {
+  position:sticky; top:0; z-index:30; margin:0 -4px 18px; padding:4px 4px 10px;
+  background:var(--m-bg); box-shadow:0 10px 18px -12px rgba(15,22,38,0.28);
+}
 .ms-nav {
-  position:sticky; top:0; z-index:30; display:flex; gap:8px; overflow-x:auto;
-  margin:0 -4px 22px; padding:8px 4px 12px; background:var(--m-bg);
+  display:flex; gap:8px; overflow-x:auto;
+  margin:0; padding:0;
   -webkit-overflow-scrolling:touch; scrollbar-width:none;
 }
 .ms-nav::-webkit-scrollbar { display:none; }
@@ -2083,14 +2087,19 @@ h3 {
 .ms-card { background:#fff; border:1px solid var(--m-line); border-radius:16px; overflow:hidden; }
 .ms-empty { padding:30px; text-align:center; color:var(--m-soft); }
 .ms-act { display:flex; flex-direction:column; }
-.ms-actrow { display:grid; grid-template-columns:auto 1.2fr 2fr auto; align-items:center; gap:14px; padding:13px 18px; border-bottom:1px solid var(--m-line); }
+.ms-actrow {
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  grid-template-areas:"chip name when" ". sub .";
+  align-items:center; gap:6px 14px; padding:13px 18px; border-bottom:1px solid var(--m-line);
+}
 .ms-actrow:last-child { border-bottom:0; }
-.ms-chip { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:3px 9px; border-radius:6px; }
+.ms-chip { grid-area:chip; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:3px 9px; border-radius:6px; }
 .ms-chip.ord { color:var(--m-org); background:rgba(232,85,31,0.1); }
 .ms-chip.inq { color:#3b6cb3; background:rgba(59,108,179,0.1); }
-.ms-act-nafn { font-weight:650; font-size:0.9rem; }
-.ms-act-sub { color:var(--m-soft); font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.ms-act-when { color:var(--m-soft); font-size:0.8rem; font-family:var(--font-mono),monospace; }
+.ms-act-nafn { grid-area:name; font-weight:650; font-size:0.9rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ms-act-sub { grid-area:sub; color:var(--m-soft); font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ms-act-when { grid-area:when; color:var(--m-soft); font-size:0.8rem; font-family:var(--font-mono),monospace; }
 
 /* master v2 — add button, gallery, help desk, modal, user sites */
 .ms button { font:inherit; cursor:pointer; }
@@ -2107,11 +2116,13 @@ button.ms-add:hover { border-color:var(--m-org); }
 /* gallery */
 .ms-galsub { color:var(--m-soft); margin:-6px 0 18px; }
 .ms-gal { margin-bottom:22px; }
-.ms-gal-h { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.ms-gal-h { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; width:100%; background:none; border:0; padding:0; font:inherit; color:inherit; text-align:left; cursor:pointer; min-height:44px; }
 .ms-gal-h h3 { font-size:1rem; margin:0; }
 .ms-gal-h span { color:var(--m-soft); font-size:0.84rem; }
+.ms-gal-count { margin-left:auto; font-family:var(--font-mono),monospace; font-size:0.78rem; color:var(--m-soft); background:#fff; border:1px solid var(--m-line); border-radius:999px; padding:4px 10px; }
 .ms-gal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr)); gap:12px; }
-.ms-gitem { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--m-line); border-radius:12px; padding:13px 15px; min-height:56px; }
+.ms-gitem { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--m-line); border-radius:12px; padding:13px 15px; min-height:56px; color:inherit; }
+a.ms-gitem:hover { border-color:var(--m-navy); }
 .ms-gitem.soon { background:#fafbfc; }
 .ms-gitem-ico { font-size:1.4rem; flex:none; }
 .ms-gitem-b { flex:1; min-width:0; }
@@ -2130,9 +2141,16 @@ button.ms-add:hover { border-color:var(--m-org); }
   .ms-gate form { flex-direction:column; }
   .ms-prop-h { align-items:flex-start; }
   .ms-live { margin-left:0; }
+  .ms-section { scroll-margin-top:132px; }
+}
+@media (max-width:767px) {
+  .ms-gal:not(.is-open) .ms-gal-grid { display:none; }
+  .ms-gal-h::after { content:"▾"; margin-left:auto; color:var(--m-soft); }
+  .ms-gal:not(.is-open) .ms-gal-h::after { content:"▸"; }
+  .ms-gal-count { display:none; }
 }
 @media (max-width:620px) {
-  .ms-actrow { grid-template-columns:auto 1fr auto; }
+  .ms-actrow { grid-template-areas:"chip name when"; }
   .ms-act-sub { display:none; }
   .ms-top-l p { display:none; }
 }

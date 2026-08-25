@@ -90,7 +90,7 @@ function PartCard({
         </div>
         <div className="mt-1 truncate text-[0.7rem] font-bold text-slate-800">{part.name}</div>
         <div className="font-mono text-[0.6rem] text-slate-500">
-          {formatCount(part.triangles)} tri
+          {part.group ? `group · ${part.group.members.length}` : `${formatCount(part.triangles)} tri`}
         </div>
       </button>
 

@@ -75,6 +75,7 @@ import {
   type Placement,
   type Project,
   type Transform,
+  flattenGroupMembers,
 } from '@/lib/3dwork/project';
 import {
   deleteGeometry,
@@ -118,7 +119,7 @@ import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { RevivePanel } from './revive';
-import { ManipBar, type RotateAxis } from './manip-bar';
+import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -191,7 +192,8 @@ export function Workbench() {
   /** The part currently in move mode (double-tapped), and how a grab acts. */
   const [moveModeId, setMoveModeId] = useState<string | null>(null);
   const [manip, setManip] = useState<'move' | 'rotate'>('move');
-  const [rotateAxis, setRotateAxis] = useState<RotateAxis>('free');
+  const [rotateAxis, setRotateAxis] = useState<RotateAxis>('y');
+  const [moveAxis, setMoveAxis] = useState<MoveAxis>('xyz');
   const [moveStep, setMoveStep] = useState(DEFAULT_MOVE_STEP);
   const [rotateStep, setRotateStep] = useState(DEFAULT_ROTATE_STEP);
   const [snapHint, setSnapHint] = useState<string | null>(null);
@@ -204,8 +206,8 @@ export function Workbench() {
   const isMobile = useIsMobile();
 
   const [projectList, setProjectList] = useState<{ id: string; name: string; parts: number }[]>([]);
-  const [showGallery, setShowGallery] = useState(true);
-  const [showInspector, setShowInspector] = useState(true);
+  const [showGallery, setShowGallery] = useState(false);
+  const [showInspector, setShowInspector] = useState(false);
   const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part } | null>(null);
 
   const [workspace, setWorkspace] = useState<Workspace>('bench');
@@ -222,6 +224,14 @@ export function Workbench() {
   // unmount) writes the current state without waiting on the debounce timer.
   const projectRef = useRef(project);
   projectRef.current = project;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth >= 768) {
+      setShowGallery(true);
+      setShowInspector(true);
+    }
+  }, []);
 
   const refreshProjectList = useCallback(async () => {
     const saved = await listProjects();
@@ -1016,24 +1026,44 @@ export function Workbench() {
    * what went in rather than an approximation of it.
    */
   const groupSelection = useCallback(() => {
-    const members = selection;
+    if (selection.length < 2) {
+      toast.error('Pick two or more parts to group — turn on Multi or hold ⌘/Ctrl.');
+      return;
+    }
+    const members = flattenGroupMembers(selection);
     if (members.length < 2) {
-      toast.error('Pick two or more parts to group — hold ⌘ or Ctrl to add to the selection.');
-      return;
-    }
-    if (members.some((part) => part.group)) {
-      toast.error('Ungroup first — groups do not nest yet.');
+      toast.error('Need two real parts after unwrapping groups.');
       return;
     }
 
+    const selectedIds = new Set(selection.map((part) => part.id));
     const pieces: Float32Array[] = [];
-    for (const member of members) {
-      const soup = soupOfPart(member.id);
-      if (!soup) continue;
-
-      // Bake each part at its world placement so the group keeps its shape.
-      const position = partWorldPos(member);
-      pieces.push(bakeTransform(soup, { ...member.transform, position }));
+    for (const selected of selection) {
+      if (selected.group && selected.group.members.length > 0) {
+        const parentXform: Transform = {
+          ...selected.transform,
+          position: partWorldPos(selected),
+        };
+        for (const member of flattenGroupMembers([selected])) {
+          const soup = geometries.get(member.activeVersionId);
+          if (!soup) continue;
+          const fitted = selected.group.fitted.find((entry) => entry.partId === member.id);
+          const anchor = fitted
+            ? project.slots.find((slot) => slot.id === fitted.slotId)?.anchor
+            : undefined;
+          const innerPos = {
+            x: member.transform.position.x + (anchor?.x ?? 0),
+            y: member.transform.position.y + (anchor?.y ?? 0),
+            z: member.transform.position.z + (anchor?.z ?? 0),
+          };
+          const inner = bakeTransform(soup, { ...member.transform, position: innerPos });
+          pieces.push(bakeTransform(inner, parentXform));
+        }
+      } else {
+        const soup = soupOfPart(selected.id);
+        if (!soup) continue;
+        pieces.push(bakeTransform(soup, { ...selected.transform, position: partWorldPos(selected) }));
+      }
     }
     if (pieces.length === 0) return;
 
@@ -1046,10 +1076,16 @@ export function Workbench() {
       at += piece.length;
     }
 
-    const memberIds = new Set(members.map((part) => part.id));
-    const fitted = project.slots
-      .filter((slot) => slot.activePartId && memberIds.has(slot.activePartId))
-      .map((slot) => ({ slotId: slot.id, partId: slot.activePartId as string }));
+    const fittedBySlot = new Map<string, string>();
+    for (const part of selection) {
+      for (const entry of part.group?.fitted ?? []) fittedBySlot.set(entry.slotId, entry.partId);
+    }
+    for (const slot of project.slots) {
+      if (slot.activePartId && selectedIds.has(slot.activePartId)) {
+        fittedBySlot.set(slot.id, slot.activePartId);
+      }
+    }
+    const fitted = [...fittedBySlot.entries()].map(([slotId, partId]) => ({ slotId, partId }));
 
     const id = newPartId();
     const versionId = newVersionId();
@@ -1062,12 +1098,12 @@ export function Workbench() {
     patchProject((current) => ({
       ...current,
       slots: current.slots.map((slot) =>
-        slot.activePartId && memberIds.has(slot.activePartId)
+        slot.activePartId && selectedIds.has(slot.activePartId)
           ? { ...slot, activePartId: null }
           : slot
       ),
       parts: [
-        ...current.parts.filter((part) => !memberIds.has(part.id)),
+        ...current.parts.filter((part) => !selectedIds.has(part.id)),
         {
           id,
           name: `Group of ${members.length}`,
@@ -1100,11 +1136,17 @@ export function Workbench() {
       ],
     }));
 
+    for (const part of selection) {
+      if (part.group) {
+        for (const version of part.versions) void deleteGeometry(version.id);
+      }
+    }
+
     setMarked(new Set());
     setSelectedId(id);
     setFrameToken((token) => token + 1);
     toast.success(`Grouped ${members.length} parts.`);
-  }, [selection, project, soupOfPart, patchProject, partWorldPos]);
+  }, [selection, project, soupOfPart, patchProject, partWorldPos, geometries]);
 
   /** Put a group's members back exactly as they were, and drop the bundle. */
   const ungroupPart = useCallback(
@@ -2629,7 +2671,7 @@ export function Workbench() {
         }}
       />
 
-      <div className={`${PANEL} flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5`}>
+      <div className={`${PANEL} flex flex-nowrap items-center gap-x-2 gap-y-1 overflow-x-auto px-2 py-1.5`}>
         <div className="flex items-center gap-2 pr-1">
           <Boxes className="h-5 w-5 text-emerald-600" />
           <input
@@ -2897,8 +2939,8 @@ export function Workbench() {
               icon={Boxes}
               hint={
                 selection.length < 2
-                  ? 'Hold ⌘ or Ctrl and click parts in the gallery'
-                  : `${selection.length} parts selected`
+                  ? 'Select two or more parts first'
+                  : `${selection.length} parts selected — groups flatten into one bundle`
               }
             >
               Group selection
@@ -3227,6 +3269,7 @@ export function Workbench() {
             moveModeId={moveModeId}
             manipMode={manip}
             rotateAxis={rotateAxis}
+            moveAxis={moveAxis}
             moveStep={moveStep}
             rotateStep={rotateStep}
             magnetMm={DEFAULT_MAGNET_MM}
@@ -3245,6 +3288,8 @@ export function Workbench() {
               onMode={setManip}
               rotateAxis={rotateAxis}
               onRotateAxis={setRotateAxis}
+              moveAxis={moveAxis}
+              onMoveAxis={setMoveAxis}
               moveStep={moveStep}
               rotateStep={rotateStep}
               onMoveStep={setMoveStep}
@@ -3266,7 +3311,7 @@ export function Workbench() {
 
           {project.parts.length > 0 && selectedId && !moveModeId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
-              Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours
+              Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours · Y-axis rotate by default
             </div>
           )}
 
@@ -3284,7 +3329,17 @@ export function Workbench() {
           <div className="absolute left-2 top-2 z-10 flex gap-1">
             <button
               type="button"
-              onClick={() => setShowGallery((v) => !v)}
+              onClick={() => {
+                if (isMobile) {
+                  setShowGallery((open) => {
+                    const next = !open;
+                    if (next) setShowInspector(false);
+                    return next;
+                  });
+                } else {
+                  setShowGallery((open) => !open);
+                }
+              }}
               title={showGallery ? 'Hide parts gallery' : 'Show parts gallery'}
               className="flex h-11 w-11 items-center justify-center rounded border border-slate-300 bg-white/90 text-slate-500 transition-colors hover:text-slate-900"
             >
@@ -3292,7 +3347,17 @@ export function Workbench() {
             </button>
             <button
               type="button"
-              onClick={() => setShowInspector((v) => !v)}
+              onClick={() => {
+                if (isMobile) {
+                  setShowInspector((open) => {
+                    const next = !open;
+                    if (next) setShowGallery(false);
+                    return next;
+                  });
+                } else {
+                  setShowInspector((open) => !open);
+                }
+              }}
               title={showInspector ? 'Hide inspector' : 'Show inspector'}
               className="flex h-11 w-11 items-center justify-center rounded border border-slate-300 bg-white/90 text-slate-500 transition-colors hover:text-slate-900"
             >
@@ -3325,22 +3390,34 @@ export function Workbench() {
           )}
 
           {isMobile && showGallery && (
-            <div className="absolute inset-x-0 bottom-0 top-[28%] z-20 border-t border-slate-300 bg-white shadow-xl">
-              <Gallery
-                project={project}
-                selectedId={selectedId}
-                marked={marked}
-                multiSelect={multiSelect}
-                onSelect={setSelectedId}
-                onMark={toggleMarked}
-                onFit={fitPart}
-                onToggleVisible={(partId) => {
-                  const part = project.parts.find((candidate) => candidate.id === partId);
-                  if (part) patchPart(partId, { visible: !part.visible });
-                }}
-                onDelete={removePart}
-                onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
-              />
+            <div className="absolute inset-x-0 bottom-0 top-[28%] z-20 flex flex-col border-t border-slate-300 bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+                <span className="text-[0.72rem] font-bold text-slate-600">Parts</span>
+                <button
+                  type="button"
+                  className="min-h-10 rounded border border-slate-300 px-3 text-[0.7rem] font-bold text-slate-600"
+                  onClick={() => setShowGallery(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <Gallery
+                  project={project}
+                  selectedId={selectedId}
+                  marked={marked}
+                  multiSelect={multiSelect}
+                  onSelect={setSelectedId}
+                  onMark={toggleMarked}
+                  onFit={fitPart}
+                  onToggleVisible={(partId) => {
+                    const part = project.parts.find((candidate) => candidate.id === partId);
+                    if (part) patchPart(partId, { visible: !part.visible });
+                  }}
+                  onDelete={removePart}
+                  onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -3349,10 +3426,22 @@ export function Workbench() {
         <div
           className={
             isMobile
-              ? 'absolute inset-x-0 bottom-0 top-[22%] z-30 min-h-0'
+              ? 'absolute inset-x-0 bottom-0 top-[22%] z-30 flex min-h-0 flex-col bg-white shadow-xl'
               : 'min-h-0'
           }
         >
+          {isMobile && (
+            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+              <span className="text-[0.72rem] font-bold text-slate-600">Inspector</span>
+              <button
+                type="button"
+                className="min-h-10 rounded border border-slate-300 px-3 text-[0.7rem] font-bold text-slate-600"
+                onClick={() => setShowInspector(false)}
+              >
+                Close
+              </button>
+            </div>
+          )}
           <Inspector
             project={project}
             part={selectedPart}
@@ -3647,7 +3736,7 @@ export function Workbench() {
             <h2 className="text-sm font-bold text-slate-900">Subtract from “{selectedPart.name}”</h2>
             <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
               Pick the cutter. Overlap the two first (double-tap → move). Parts that currently overlap
-              are marked so the cut is not a guess.
+              are marked. Clearance 0 mm is an exact voxel cut; 0.2–0.4 mm helps mating parts slide.
             </p>
             <div className="mb-3 grid grid-cols-2 gap-2">
               <label className="block">

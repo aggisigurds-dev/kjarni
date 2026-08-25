@@ -330,7 +330,7 @@ function ModifyTab({
               label={axis.toUpperCase()}
               value={transform.position[axis]}
               onChange={(value) => patchVec('position', axis, value)}
-              step={1}
+              step={0.1}
             />
           ))}
         </div>

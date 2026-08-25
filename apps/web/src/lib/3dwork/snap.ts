@@ -20,7 +20,7 @@ export const ROTATE_STEP_PRESETS = [1, 5, 15, 90] as const;
 
 export const DEFAULT_MOVE_STEP = 1;
 export const DEFAULT_ROTATE_STEP = 1;
-export const DEFAULT_MAGNET_MM = 8;
+export const DEFAULT_MAGNET_MM = 12;
 
 const AXES = ['x', 'y', 'z'] as const;
 type Axis = (typeof AXES)[number];
@@ -29,6 +29,19 @@ const AXIS_INDEX: Record<Axis, 0 | 1 | 2> = { x: 0, y: 1, z: 2 };
 export function snapNumber(value: number, step: number): number {
   if (!(step > 0) || !Number.isFinite(value)) return value;
   return Math.round(value / step) * step;
+}
+
+/**
+ * Snap a rotation in degrees to the step grid, with a magnetic pull onto
+ * 90° / 180° / 270° so a part that is almost square actually lands square.
+ */
+export function snapAngle(degrees: number, step: number, magnet = 3): number {
+  if (!Number.isFinite(degrees)) return degrees;
+  const cardinals = [0, 90, 180, 270, 360, -90, -180, -270, -360];
+  for (const card of cardinals) {
+    if (Math.abs(degrees - card) <= magnet) return card;
+  }
+  return snapNumber(degrees, step);
 }
 
 export function snapVec(value: Vec3, step: number): Vec3 {
@@ -108,16 +121,18 @@ function bestCandidate(candidates: Candidate[], magnet: number): Candidate | nul
 export function snapTranslation(
   moving: Aabb,
   neighbors: Aabb[],
-  options: { grid?: number; magnet?: number; anchors?: Vec3[] } = {}
+  options: { grid?: number; magnet?: number; anchors?: Vec3[]; axes?: Axis[] } = {}
 ): SnapResult {
   const grid = options.grid ?? DEFAULT_MOVE_STEP;
   const magnet = options.magnet ?? DEFAULT_MAGNET_MM;
   const anchors = options.anchors ?? [];
+  const locked = new Set(options.axes ?? AXES);
   const center = aabbCenter(moving);
   const delta: Vec3 = { x: 0, y: 0, z: 0 };
   const hits: SnapHit[] = [];
 
   for (const axis of AXES) {
+    if (!locked.has(axis)) continue;
     const i = AXIS_INDEX[axis];
     const candidates: Candidate[] = [];
 

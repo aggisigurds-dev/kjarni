@@ -3,6 +3,7 @@ import {
   aabbOverlap,
   applySnap,
   orientedAabb,
+  snapAngle,
   snapHint,
   snapNumber,
   snapTranslation,
@@ -28,6 +29,22 @@ describe('snapNumber', () => {
 
   it('leaves the value alone when the step is not positive', () => {
     expect(snapNumber(3.2, 0)).toBe(3.2);
+  });
+});
+
+describe('snapAngle', () => {
+  it('snaps to the degree step', () => {
+    expect(snapAngle(14.4, 1, 0)).toBe(14);
+    expect(snapAngle(14.6, 1, 0)).toBe(15);
+  });
+
+  it('pulls onto 90° when close', () => {
+    expect(snapAngle(88.5, 1, 3)).toBe(90);
+    expect(snapAngle(-2, 1, 3)).toBe(0);
+  });
+
+  it('leaves a 45° turn on the 1° grid when it is not near a cardinal', () => {
+    expect(snapAngle(45, 1, 3)).toBe(45);
   });
 });
 
@@ -94,6 +111,15 @@ describe('snapTranslation', () => {
     const snap = snapTranslation(moving, [cube(0, 0, 0)], { grid: 1, magnet: 8 });
 
     expect(snap.hits.some((hit) => hit.kind === 'face')).toBe(false);
+  });
+
+  it('can lock to a single axis', () => {
+    const moving = cube(20.4, 3.2, 1.6);
+    const snap = snapTranslation(moving, [cube(0, 0, 0)], { grid: 1, magnet: 8, axes: ['x'] });
+
+    expect(snap.delta.x).toBeCloseTo(-0.4, 6);
+    expect(snap.delta.y).toBe(0);
+    expect(snap.delta.z).toBe(0);
   });
 });
 

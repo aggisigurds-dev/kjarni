@@ -142,6 +142,17 @@ describe('subtractMesh', () => {
     expect(report.overlapVoxels).toBe(0);
     expect(soup.length).toBe(0);
   });
+
+  it('does not grow the cutter when clearance is 0 mm', () => {
+    const target = cubeSoup(20);
+    const tool = Float32Array.from(cubeSoup(20), (v, i) => (i % 3 === 0 ? v + 10 : v));
+    const exact = subtractMesh(target, tool, { resolution: 48, sealMm: 0, clearanceMm: 0 });
+    const loose = subtractMesh(target, tool, { resolution: 48, sealMm: 0, clearanceMm: 2 });
+
+    expect(exact.report.clearanceVoxels).toBe(0);
+    expect(loose.report.clearanceVoxels).toBeGreaterThan(0);
+    expect(computeBounds(exact.soup).size[0]).toBeGreaterThan(computeBounds(loose.soup).size[0]);
+  });
 });
 
 describe('unionMesh', () => {

@@ -772,6 +772,8 @@ export interface SubtractReport {
   overlapVoxels: number;
   /** True when the cutter never met the target. */
   missed: boolean;
+  /** Extra voxels grown on the cutter. 0 when clearance is 0 mm. */
+  clearanceVoxels: number;
 }
 
 /** Concatenate triangle soups into one. */
@@ -863,10 +865,11 @@ export function subtractMesh(
   let cutter = interiorOf(tool);
 
   // Grow the cutter by the requested clearance so the pocket is not a press-fit
-  // against voxel rounding. One extra voxel is always applied — that is what
-  // used to make thin overlaps vanish into a "nothing left" miss.
+  // against voxel rounding. 0 mm is an exact voxel cut; any positive clearance
+  // rounds to at least one voxel so a 0.1 mm request still does something.
   const clearanceMm = Math.max(0, options.clearanceMm ?? 0.25);
-  const clearanceVoxels = Math.max(1, Math.round(clearanceMm / voxelSize));
+  const clearanceVoxels =
+    clearanceMm <= 0 ? 0 : Math.max(1, Math.round(clearanceMm / voxelSize));
   for (let i = 0; i < clearanceVoxels; i++) cutter = dilate(cutter, dims);
 
   let overlapVoxels = 0;
@@ -879,6 +882,7 @@ export function subtractMesh(
     trianglesAfter: Math.floor(soup.length / 9),
     overlapVoxels,
     missed,
+    clearanceVoxels,
   });
 
   if (overlapVoxels === 0) {

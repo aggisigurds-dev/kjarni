@@ -14,6 +14,7 @@ import {
 
 export type ManipMode = 'move' | 'rotate';
 export type RotateAxis = 'free' | 'x' | 'y' | 'z';
+export type MoveAxis = 'xyz' | 'x' | 'y' | 'z';
 
 interface ManipBarProps {
   name: string;
@@ -21,6 +22,8 @@ interface ManipBarProps {
   onMode: (mode: ManipMode) => void;
   rotateAxis: RotateAxis;
   onRotateAxis: (axis: RotateAxis) => void;
+  moveAxis: MoveAxis;
+  onMoveAxis: (axis: MoveAxis) => void;
   moveStep: number;
   rotateStep: number;
   onMoveStep: (step: number) => void;
@@ -31,7 +34,7 @@ interface ManipBarProps {
 }
 
 const SEG = (on: boolean) =>
-  `min-h-11 min-w-11 px-3 text-[0.72rem] font-bold ${
+  `min-h-10 min-w-10 px-2.5 text-[0.7rem] font-bold ${
     on ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'
   }`;
 
@@ -52,7 +55,7 @@ function StepPicker({
         <button
           key={step}
           type="button"
-          className={`min-h-11 px-2 font-mono text-[0.68rem] ${
+          className={`min-h-10 px-2 font-mono text-[0.68rem] ${
             value === step ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'
           }`}
           onClick={() => onChange(step)}
@@ -71,6 +74,8 @@ export function ManipBar({
   onMode,
   rotateAxis,
   onRotateAxis,
+  moveAxis,
+  onMoveAxis,
   moveStep,
   rotateStep,
   onMoveStep,
@@ -83,8 +88,8 @@ export function ManipBar({
   const unit = mode === 'move' ? 'mm' : '°';
 
   return (
-    <div className="absolute bottom-3 left-1/2 z-10 w-[min(100%-1rem,34rem)] -translate-x-1/2 rounded-lg border border-slate-300 bg-white/95 p-2 shadow-lg backdrop-blur-sm">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div className="absolute bottom-2 left-1/2 z-10 max-h-[46%] w-[min(100%-0.75rem,34rem)] -translate-x-1/2 overflow-y-auto rounded-lg border border-slate-300 bg-white/95 p-2 shadow-lg backdrop-blur-sm">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <div className="flex overflow-hidden rounded border border-slate-300">
           <button type="button" className={SEG(mode === 'move')} onClick={() => onMode('move')}>
             ✥ Move
@@ -94,25 +99,25 @@ export function ManipBar({
           </button>
         </div>
 
-        <span className="max-w-[140px] truncate text-[0.72rem] font-semibold text-slate-500">{name}</span>
+        <span className="max-w-[120px] truncate text-[0.7rem] font-semibold text-slate-500">{name}</span>
 
         <button
           type="button"
-          className="ml-auto min-h-11 rounded border border-slate-300 px-3 text-[0.72rem] font-bold text-slate-600 hover:bg-slate-100"
+          className="ml-auto min-h-10 rounded border border-slate-300 px-3 text-[0.7rem] font-bold text-slate-600 hover:bg-slate-100"
           onClick={onDone}
         >
           Done
         </button>
       </div>
 
-      {mode === 'rotate' && (
-        <div className="mb-2 flex flex-wrap items-center gap-1">
+      {mode === 'rotate' ? (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1">
           <span className="text-[0.62rem] font-extrabold uppercase tracking-wide text-slate-400">Axis</span>
-          {(['free', 'x', 'y', 'z'] as const).map((axis) => (
+          {(['y', 'x', 'z', 'free'] as const).map((axis) => (
             <button
               key={axis}
               type="button"
-              className={`min-h-11 min-w-11 rounded border border-slate-300 px-2 font-mono text-[0.72rem] font-bold uppercase ${
+              className={`min-h-10 min-w-10 rounded border border-slate-300 px-2 font-mono text-[0.7rem] font-bold uppercase ${
                 rotateAxis === axis
                   ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                   : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -123,9 +128,27 @@ export function ManipBar({
             </button>
           ))}
         </div>
+      ) : (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1">
+          <span className="text-[0.62rem] font-extrabold uppercase tracking-wide text-slate-400">Lock</span>
+          {(['xyz', 'x', 'y', 'z'] as const).map((axis) => (
+            <button
+              key={axis}
+              type="button"
+              className={`min-h-10 min-w-10 rounded border border-slate-300 px-2 font-mono text-[0.7rem] font-bold uppercase ${
+                moveAxis === axis
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                  : 'bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+              onClick={() => onMoveAxis(axis)}
+            >
+              {axis === 'xyz' ? 'all' : axis}
+            </button>
+          ))}
+        </div>
       )}
 
-      <div className="mb-2">
+      <div className="mb-1.5">
         <StepPicker
           value={mode === 'move' ? moveStep : rotateStep}
           options={mode === 'move' ? MOVE_STEP_PRESETS : ROTATE_STEP_PRESETS}
@@ -134,12 +157,12 @@ export function ManipBar({
         />
       </div>
 
-      <div className="flex items-center justify-center gap-3">
+      <div className="flex items-center justify-center gap-2">
         {(['x', 'y', 'z'] as const).map((axis) => (
           <div key={axis} className="flex items-center gap-1">
             <button
               type="button"
-              className="h-11 w-11 rounded border border-slate-300 font-mono text-lg text-slate-700 hover:bg-slate-100"
+              className="h-10 w-10 rounded border border-slate-300 font-mono text-lg text-slate-700 hover:bg-slate-100"
               onClick={() => onNudge(axis, -1)}
               aria-label={`${axis.toUpperCase()} minus ${step} ${unit}`}
             >
@@ -148,7 +171,7 @@ export function ManipBar({
             <span className="w-4 text-center text-[0.75rem] font-bold text-slate-500">{axis.toUpperCase()}</span>
             <button
               type="button"
-              className="h-11 w-11 rounded border border-slate-300 font-mono text-lg text-slate-700 hover:bg-slate-100"
+              className="h-10 w-10 rounded border border-slate-300 font-mono text-lg text-slate-700 hover:bg-slate-100"
               onClick={() => onNudge(axis, 1)}
               aria-label={`${axis.toUpperCase()} plus ${step} ${unit}`}
             >
@@ -158,11 +181,12 @@ export function ManipBar({
         ))}
       </div>
 
-      <div className="mt-1.5 text-center text-[0.65rem] text-slate-400">
+      <div className="mt-1.5 text-center text-[0.62rem] leading-snug text-slate-400">
         ±{step} {unit}
         {mode === 'rotate' && rotateAxis !== 'free' ? ` · ${rotateAxis.toUpperCase()} only` : ''}
+        {mode === 'move' && moveAxis !== 'xyz' ? ` · ${moveAxis.toUpperCase()} only` : ''}
         {' · '}
-        drag the part · arrows nudge · Esc to exit
+        drag · arrows · Esc
         {snapHint ? <span className="ml-1 font-semibold text-emerald-600">· snap {snapHint}</span> : null}
       </div>
     </div>
