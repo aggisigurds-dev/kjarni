@@ -15,7 +15,7 @@ import {
   type Axis,
   type PartMeasurement,
 } from '@/lib/3dwork/measure';
-import type { FixReport, SimplifyReport } from '@/lib/3dwork/mesh';
+import type { Diagnosis, FixReport, MisalignReport, SimplifyReport } from '@/lib/3dwork/mesh';
 import type { CylinderCut, SolidifyReport } from '@/lib/3dwork/solidify';
 import { inspect } from '@/lib/3dwork/mesh';
 import { PART_SWATCHES } from '@/lib/3dwork/project';
@@ -44,6 +44,7 @@ interface InspectorProps {
   onPatchPart: (partId: string, patch: Partial<Part>) => void;
   onPatchTransform: (partId: string, patch: Partial<Transform>) => void;
   onDropToTable: (partId: string) => void;
+  onSettle: (partId: string) => void;
   onCenter: (partId: string) => void;
   onDuplicate: (partId: string) => void;
   onToggleVisible: (partId: string) => void;
@@ -57,6 +58,10 @@ interface InspectorProps {
     }
   ) => void;
   onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
+  onFixMisalignment: (partId: string, options: { toleranceMm: number; snapToGrid: boolean }) => void;
+  onAnalyze: (partId: string) => void;
+  onFillSolid: (partId: string) => void;
+  diagnosis: Diagnosis | null;
   onMakeSolid: (
     partId: string,
     options: { resolution: number; sealMm: number; bore: CylinderCut | null }
@@ -69,6 +74,7 @@ interface InspectorProps {
   canRevert: boolean;
   fixReport: FixReport | null;
   simplifyReport: SimplifyReport | null;
+  misalignReport: MisalignReport | null;
   busy: boolean;
   measurePoints: [number, number, number][];
   measuring: boolean;
@@ -145,6 +151,7 @@ function ModifyTab({
   onPatchPart,
   onPatchTransform,
   onDropToTable,
+  onSettle,
   onCenter,
   onDuplicate,
   onUpdateHardware,
@@ -155,6 +162,7 @@ function ModifyTab({
   onPatchPart: InspectorProps['onPatchPart'];
   onPatchTransform: InspectorProps['onPatchTransform'];
   onDropToTable: InspectorProps['onDropToTable'];
+  onSettle: InspectorProps['onSettle'];
   onCenter: InspectorProps['onCenter'];
   onDuplicate: InspectorProps['onDuplicate'];
   onUpdateHardware: InspectorProps['onUpdateHardware'];
@@ -426,11 +434,14 @@ function ModifyTab({
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className={ACTION_GHOST} onClick={() => onCenter(part.id)}>
-          Centre on mount
+        <button type="button" className={ACTION_GHOST} onClick={() => onSettle(part.id)}>
+          Settle on the floor
         </button>
         <button type="button" className={ACTION_GHOST} onClick={() => onDropToTable(part.id)}>
           Drop to table
+        </button>
+        <button type="button" className={ACTION_GHOST} onClick={() => onCenter(part.id)}>
+          Centre on mount
         </button>
         <button type="button" className={ACTION_GHOST} onClick={() => onDuplicate(part.id)}>
           Duplicate as variant
@@ -615,7 +626,11 @@ function RepairTab({
   part,
   onAutoFix,
   onSimplify,
+  onFixMisalignment,
   onMakeSolid,
+  onAnalyze,
+  onFillSolid,
+  diagnosis,
   solidReport,
   onRevert,
   onSelectVersion,
@@ -623,13 +638,18 @@ function RepairTab({
   canRevert,
   fixReport,
   simplifyReport,
+  misalignReport,
   busy,
 }: {
   soup: Float32Array;
   part: Part;
   onAutoFix: InspectorProps['onAutoFix'];
   onSimplify: InspectorProps['onSimplify'];
+  onFixMisalignment: InspectorProps['onFixMisalignment'];
   onMakeSolid: InspectorProps['onMakeSolid'];
+  onAnalyze: InspectorProps['onAnalyze'];
+  onFillSolid: InspectorProps['onFillSolid'];
+  diagnosis: Diagnosis | null;
   solidReport: SolidifyReport | null;
   onRevert: InspectorProps['onRevert'];
   onSelectVersion: InspectorProps['onSelectVersion'];
@@ -637,12 +657,15 @@ function RepairTab({
   canRevert: boolean;
   fixReport: FixReport | null;
   simplifyReport: SimplifyReport | null;
+  misalignReport: MisalignReport | null;
   busy: boolean;
 }) {
   const [fillHoles, setFillHoles] = useState(true);
   const [maxHoleEdges, setMaxHoleEdges] = useState(200);
   const [dropToTable, setDropToTable] = useState(false);
   const [fallbackSolid, setFallbackSolid] = useState(true);
+  const [alignMm, setAlignMm] = useState(0.2);
+  const [alignGrid, setAlignGrid] = useState(false);
   const [detail, setDetail] = useState('medium');
   const [resolution, setResolution] = useState(200);
   const [sealMm, setSealMm] = useState(0.8);
@@ -652,40 +675,99 @@ function RepairTab({
   const topology = useMemo(() => inspect(soup), [soup]);
   const level = DETAIL_LEVELS.find((entry) => entry.id === detail) ?? DETAIL_LEVELS[1];
 
-  const problems = [
-    topology.boundaryEdges > 0 && `${formatCount(topology.holes)} hole(s)`,
-    topology.nonManifoldEdges > 0 && `${formatCount(topology.nonManifoldEdges)} non-manifold edges`,
-    topology.inconsistentEdges > 0 && `${formatCount(topology.inconsistentEdges)} flipped faces`,
-    topology.signedVolume < 0 && 'solid is inside-out',
-  ].filter(Boolean) as string[];
-
   return (
     <div className="space-y-4">
-      <div className={`${PANEL} px-3 py-2`}>
-        <span className={`${LABEL} mb-1 block`}>Health</span>
-        <Row label="Status">
-          <span className={topology.watertight ? 'text-emerald-600' : 'text-amber-600'}>
-            {topology.watertight ? 'print ready' : 'needs repair'}
-          </span>
-        </Row>
-        <Row label="Triangles">{formatCount(topology.triangles)}</Row>
-        <Row label="Vertices">{formatCount(topology.vertices)}</Row>
-        <Row label="Open edges">{formatCount(topology.boundaryEdges)}</Row>
-        <Row label="Holes">{formatCount(topology.holes)}</Row>
-        <Row label="Non-manifold">{formatCount(topology.nonManifoldEdges)}</Row>
-        <Row label="Flipped faces">{formatCount(topology.inconsistentEdges)}</Row>
+      <div className={`${PANEL} space-y-2 px-3 py-2`}>
+        <span className={`${LABEL} block`}>Analyze</span>
+        <p className="text-[0.65rem] text-slate-500">
+          Looks for corners that missed each other, missing faces, and faces that fight — then Fill
+          makes it a solid volume so Slice and Subtract cut through material, not a paper-thin shell.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className={ACTION_GHOST}
+            disabled={busy}
+            onClick={() => onAnalyze(part.id)}
+          >
+            {busy ? 'Working…' : 'Analyze'}
+          </button>
+          <button
+            type="button"
+            className={ACTION_PRIMARY}
+            disabled={busy}
+            onClick={() => onFillSolid(part.id)}
+          >
+            {busy ? 'Working…' : 'Fill'}
+          </button>
+        </div>
 
-        {problems.length > 0 && (
-          <p className="mt-2 text-[0.7rem] text-amber-600/90">Found: {problems.join(', ')}.</p>
+        {diagnosis ? (
+          <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
+            <Row label="Status">
+              <span
+                className={
+                  diagnosis.watertight && !diagnosis.thinShellRisk
+                    ? 'text-emerald-600'
+                    : 'text-amber-600'
+                }
+              >
+                {diagnosis.watertight && !diagnosis.thinShellRisk
+                  ? 'solid — ready to slice'
+                  : 'needs Fill before slice / subtract'}
+              </span>
+            </Row>
+            <Row label="Misalignment">
+              {diagnosis.misalignedClusters === 0
+                ? 'none'
+                : `${formatCount(diagnosis.misalignedClusters)} near-miss corner group(s)`}
+            </Row>
+            <Row label="Missing faces">
+              {diagnosis.missingFaces === 0
+                ? 'none'
+                : `${formatCount(diagnosis.missingFaces)} hole(s) · ${formatCount(diagnosis.openEdges)} open edges`}
+            </Row>
+            <Row label="Face trouble">
+              {diagnosis.flippedFaces + diagnosis.disturbedEdges + diagnosis.junkFaces === 0
+                ? 'none'
+                : [
+                    diagnosis.flippedFaces > 0 && `${formatCount(diagnosis.flippedFaces)} flipped`,
+                    diagnosis.disturbedEdges > 0 &&
+                      `${formatCount(diagnosis.disturbedEdges)} fighting`,
+                    diagnosis.junkFaces > 0 && `${formatCount(diagnosis.junkFaces)} junk`,
+                    diagnosis.insideOut && 'inside-out',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+            </Row>
+            {diagnosis.thinShellRisk && (
+              <p className="pt-1 text-[0.65rem] text-amber-700">
+                Open or hollow here — Slice and Subtract would come out as a paper-thin shell. Press
+                Fill first.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
+            <Row label="Status">
+              <span className={topology.watertight ? 'text-emerald-600' : 'text-amber-600'}>
+                {topology.watertight ? 'print ready' : 'needs repair'}
+              </span>
+            </Row>
+            <Row label="Open edges">{formatCount(topology.boundaryEdges)}</Row>
+            <Row label="Holes">{formatCount(topology.holes)}</Row>
+            <p className="pt-1 text-[0.65rem] text-slate-400">Press Analyze for a full diagnosis.</p>
+          </div>
         )}
       </div>
 
       <div className={`${PANEL} space-y-2 px-3 py-2`}>
         <span className={`${LABEL} block`}>Fix this part</span>
         <p className="text-[0.65rem] text-slate-500">
-          Welds hairline cracks, drops junk faces and scan dust, makes every face wind the same
-          way, then patches holes. Openings bigger than the edge limit stay open — tick rebuild
-          below to voxelise those instead of inventing a flat cap.
+          Only this part — the rest of the bench is left alone. Welds hairline cracks, drops junk
+          faces and scan dust, makes every face wind the same way, then patches holes. Openings
+          bigger than the edge limit stay open — tick rebuild below to voxelise those instead of
+          inventing a flat cap.
         </p>
         <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
           <input
@@ -731,6 +813,49 @@ function RepairTab({
           }
         >
           {busy ? 'Working…' : 'Fix this part'}
+        </button>
+      </div>
+
+      <div className={`${PANEL} space-y-2 px-3 py-2`}>
+        <span className={`${LABEL} block`}>Fix misalignment</span>
+        <p className="text-[0.65rem] text-slate-500">
+          For parts you merged that sat a hair off — corners that should have met, but did not.
+          Snaps unconnected corners that are this close together. Real edges of that length are
+          left alone, so a dense mesh is not crushed. Or use Paint on the table: brush the break
+          and press Align, or brush a hole and press Fill hole — it packs up to the highest point
+          the brush covered.
+        </p>
+        <label className="block">
+          <span className={`${LABEL} mb-1 block`}>Snap corners closer than</span>
+          <select
+            className={FIELD}
+            value={alignMm}
+            onChange={(event) => setAlignMm(Number(event.target.value))}
+          >
+            <option value={0.1}>0.1 mm</option>
+            <option value={0.2}>0.2 mm · usual leftover</option>
+            <option value={0.5}>0.5 mm</option>
+            <option value={1}>1.0 mm · heavy</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
+          <input
+            type="checkbox"
+            checked={alignGrid}
+            onChange={(event) => setAlignGrid(event.target.checked)}
+            className="accent-emerald-500"
+          />
+          Also snap onto a {alignMm} mm grid (flush faces)
+        </label>
+        <button
+          type="button"
+          className={`${ACTION_PRIMARY} w-full`}
+          disabled={busy}
+          onClick={() =>
+            onFixMisalignment(part.id, { toleranceMm: alignMm, snapToGrid: alignGrid })
+          }
+        >
+          {busy ? 'Working…' : 'Fix misalignment'}
         </button>
       </div>
 
@@ -1014,6 +1139,36 @@ function RepairTab({
           </Row>
         </div>
       )}
+
+      {misalignReport && (
+        <div className={`${PANEL} px-3 py-2`}>
+          <span className={`${LABEL} mb-1 block`}>Last misalignment fix</span>
+          {!misalignReport.changed && (
+            <p className="mb-1 text-[0.65rem] text-slate-500">Nothing that close to snap.</p>
+          )}
+          <Row label="Tolerance">{misalignReport.toleranceMm} mm</Row>
+          <Row label="Snapped clusters">{formatCount(misalignReport.snappedClusters)}</Row>
+          {misalignReport.snapToGrid && (
+            <Row label="Grid-snapped corners">{formatCount(misalignReport.quantizedVertices)}</Row>
+          )}
+          <Row label="Vertices">
+            {formatCount(misalignReport.verticesBefore)} →{' '}
+            <span className="text-emerald-600">{formatCount(misalignReport.verticesAfter)}</span>
+          </Row>
+          <Row label="Triangles">
+            {formatCount(misalignReport.trianglesBefore)} →{' '}
+            {formatCount(misalignReport.trianglesAfter)}
+          </Row>
+          {misalignReport.filledHoles > 0 && (
+            <Row label="Filled holes">{formatCount(misalignReport.filledHoles)}</Row>
+          )}
+          <Row label="Now">
+            <span className={misalignReport.after.watertight ? 'text-emerald-600' : 'text-amber-600'}>
+              {misalignReport.after.watertight ? 'watertight' : 'still open'}
+            </span>
+          </Row>
+        </div>
+      )}
     </div>
   );
 }
@@ -1074,6 +1229,7 @@ export function Inspector(props: InspectorProps) {
             onPatchPart={props.onPatchPart}
             onPatchTransform={props.onPatchTransform}
             onDropToTable={props.onDropToTable}
+            onSettle={props.onSettle}
             onCenter={props.onCenter}
             onDuplicate={props.onDuplicate}
             onUpdateHardware={props.onUpdateHardware}
@@ -1097,7 +1253,11 @@ export function Inspector(props: InspectorProps) {
             part={part}
             onAutoFix={props.onAutoFix}
             onSimplify={props.onSimplify}
+            onFixMisalignment={props.onFixMisalignment}
             onMakeSolid={props.onMakeSolid}
+            onAnalyze={props.onAnalyze}
+            onFillSolid={props.onFillSolid}
+            diagnosis={props.diagnosis}
             solidReport={props.solidReport}
             onRevert={props.onRevert}
             onSelectVersion={props.onSelectVersion}
@@ -1105,6 +1265,7 @@ export function Inspector(props: InspectorProps) {
             canRevert={props.canRevert}
             fixReport={props.fixReport}
             simplifyReport={props.simplifyReport}
+            misalignReport={props.misalignReport}
             busy={props.busy}
           />
         )}

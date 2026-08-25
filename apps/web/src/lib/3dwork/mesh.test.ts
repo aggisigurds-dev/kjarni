@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { autoFix, computeBounds, inspect, simplify, weld } from './mesh';
+import { alignPaintedVertices, autoFix, computeBounds, diagnose, fillPaintedHoles, fixMisalignment, inspect, simplify, toSoup, weld } from './mesh';
 
 /** A sphere-ish blob with far more triangles than its shape needs. */
 function denseSphere(radius = 20, rings = 40, segments = 60): Float32Array {
@@ -82,6 +82,72 @@ function openLPrism(): Float32Array {
     tri(bottom[i], top[j], bottom[j]);
   }
 
+  return new Float32Array(tris);
+}
+
+/**
+ * 12×12 plate at Y=0 with a 4×4 hole, plus a 5 mm lip on one outer edge.
+ * Painting the hole and the lip should fill the opening up to Y=5, not leave
+ * it flush with the floor.
+ */
+function plateWithLipHoleSoup(): Float32Array {
+  const outer: [number, number, number][] = [
+    [0, 0, 0],
+    [12, 0, 0],
+    [12, 0, 12],
+    [0, 0, 12],
+  ];
+  const inner: [number, number, number][] = [
+    [4, 0, 4],
+    [8, 0, 4],
+    [8, 0, 8],
+    [4, 0, 8],
+  ];
+  const tris: number[] = [];
+  const tri = (
+    p: [number, number, number],
+    q: [number, number, number],
+    r: [number, number, number]
+  ) => {
+    tris.push(...p, ...q, ...r);
+  };
+  tri(outer[0], outer[1], inner[1]);
+  tri(outer[1], outer[2], inner[2]);
+  tri(outer[1], inner[2], inner[1]);
+  tri(outer[2], outer[3], inner[3]);
+  tri(outer[2], inner[3], inner[2]);
+  tri(outer[3], outer[0], inner[0]);
+  tri(outer[3], inner[0], inner[3]);
+  // Bump on the remaining frame corner so the brush has a high point
+  // that is not on either boundary loop.
+  const apex: [number, number, number] = [2, 5, 2];
+  tri(outer[0], inner[1], apex);
+  tri(inner[1], inner[0], apex);
+  tri(inner[0], outer[0], apex);
+  return new Float32Array(tris);
+}
+
+/** Square base on Y=0 with an apex at Y=4 — a bump the align brush should flatten. */
+function pyramidSoup(): Float32Array {
+  const base: [number, number, number][] = [
+    [0, 0, 0],
+    [10, 0, 0],
+    [10, 0, 10],
+    [0, 0, 10],
+  ];
+  const apex: [number, number, number] = [5, 4, 5];
+  const tris: number[] = [];
+  const tri = (
+    p: [number, number, number],
+    q: [number, number, number],
+    r: [number, number, number]
+  ) => {
+    tris.push(...p, ...q, ...r);
+  };
+  tri(base[0], base[1], apex);
+  tri(base[1], base[2], apex);
+  tri(base[2], base[3], apex);
+  tri(base[3], base[0], apex);
   return new Float32Array(tris);
 }
 
@@ -255,6 +321,159 @@ describe('autoFix', () => {
   });
 });
 
+describe('fixMisalignment', () => {
+  it('leaves a healthy mesh alone', () => {
+    const { report } = fixMisalignment(cubeSoup(10), { toleranceMm: 0.2 });
+
+    expect(report.changed).toBe(false);
+    expect(report.snappedClusters).toBe(0);
+    expect(report.after.vertices).toBe(8);
+    expect(report.after.watertight).toBe(true);
+  });
+
+  it('snaps two copies that sat 0.1 mm apart after a merge', () => {
+    const a = cubeSoup(10);
+    const b = Float32Array.from(a, (value, i) => (i % 3 === 0 ? value + 0.1 : value));
+    const merged = new Float32Array(a.length + b.length);
+    merged.set(a, 0);
+    merged.set(b, a.length);
+
+    const { report } = fixMisalignment(merged, { toleranceMm: 0.2 });
+
+    expect(report.snappedClusters).toBe(8);
+    expect(report.after.vertices).toBe(8);
+    expect(report.after.triangles).toBe(12);
+    expect(report.after.watertight).toBe(true);
+    expect(report.changed).toBe(true);
+  });
+
+  it('does not crush a mesh whose real edges are around the tolerance', () => {
+    // A 0.3 mm cube has 0.3 mm edges — those must survive a 0.2 mm snap.
+    const { report } = fixMisalignment(cubeSoup(0.3), { toleranceMm: 0.2 });
+
+    expect(report.snappedClusters).toBe(0);
+    expect(report.after.triangles).toBe(12);
+    expect(report.after.vertices).toBe(8);
+  });
+
+  it('grid-snaps a part that was shifted off the millimetre lattice', () => {
+    const shifted = Float32Array.from(cubeSoup(10), (value, i) =>
+      i % 3 === 0 ? value + 0.19 : value
+    );
+
+    const { soup, report } = fixMisalignment(shifted, { toleranceMm: 0.2, snapToGrid: true });
+
+    expect(report.quantizedVertices).toBeGreaterThan(0);
+    expect(report.changed).toBe(true);
+    expect(computeBounds(soup).min[0]).toBeCloseTo(0.2, 5);
+  });
+});
+
+describe('paint align and fill', () => {
+  it('flattens a painted bump onto the surrounding plane', () => {
+    const { mesh } = weld(pyramidSoup());
+    const ids = [...Array(mesh.positions.length / 3).keys()];
+    const { mesh: aligned, moved } = alignPaintedVertices(mesh, ids);
+
+    expect(moved).toBeGreaterThan(0);
+    let maxY = -Infinity;
+    for (let i = 1; i < aligned.positions.length; i += 3) {
+      if (aligned.positions[i] > maxY) maxY = aligned.positions[i];
+    }
+    expect(maxY).toBeLessThan(1.5);
+  });
+
+  it('does not move unpainted vertices', () => {
+    const { mesh } = weld(cubeSoup(10));
+    const positions = Float64Array.from(mesh.positions);
+    const painted: number[] = [];
+    for (let i = 0; i < positions.length / 3; i++) {
+      if (positions[i * 3 + 1] > 9) {
+        painted.push(i);
+        positions[i * 3 + 1] = 10 + (positions[i * 3] + positions[i * 3 + 2]) * 0.08;
+      }
+    }
+    const bumpy = { positions, indices: mesh.indices };
+    const before = Float64Array.from(positions);
+    const paintedSet = new Set(painted);
+    const { mesh: aligned, moved } = alignPaintedVertices(bumpy, painted);
+
+    expect(painted.length).toBe(4);
+    expect(moved).toBeGreaterThan(0);
+    for (let i = 0; i < before.length / 3; i++) {
+      if (paintedSet.has(i)) continue;
+      expect(aligned.positions[i * 3]).toBe(before[i * 3]);
+      expect(aligned.positions[i * 3 + 1]).toBe(before[i * 3 + 1]);
+      expect(aligned.positions[i * 3 + 2]).toBe(before[i * 3 + 2]);
+    }
+  });
+
+  it('closes a painted hole', () => {
+    const { mesh } = weld(removeTriangle(cubeSoup(10), 0));
+    const rim: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      if (Math.abs(mesh.positions[i * 3 + 2]) < 1e-9) rim.push(i);
+    }
+    const { mesh: filled, filled: count } = fillPaintedHoles(mesh, rim);
+
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(inspect(toSoup(filled)).watertight).toBe(true);
+  });
+
+  it('does not fill a hole above the highest painted point', () => {
+    const { mesh } = weld(removeTriangle(cubeSoup(10), 0));
+    let maxY = -Infinity;
+    const ids: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      ids.push(i);
+      if (mesh.positions[i * 3 + 1] > maxY) maxY = mesh.positions[i * 3 + 1];
+    }
+    const { mesh: filled, capHeight } = fillPaintedHoles(mesh, ids);
+    expect(capHeight).toBeLessThanOrEqual(maxY + 1e-9);
+    for (let i = 1; i < filled.positions.length; i += 3) {
+      expect(filled.positions[i]).toBeLessThanOrEqual(maxY + 1e-6);
+    }
+  });
+
+  it('does not fill a hole the brush never touched', () => {
+    const { mesh } = weld(removeTriangle(cubeSoup(10), 0));
+    const far: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      if (mesh.positions[i * 3 + 2] > 9) far.push(i);
+    }
+    const { filled } = fillPaintedHoles(mesh, far);
+    expect(filled).toBe(0);
+    expect(inspect(toSoup(mesh)).watertight).toBe(false);
+  });
+
+  it('fills a painted hole up to the highest point the brush covered', () => {
+    const { mesh } = weld(plateWithLipHoleSoup());
+    const painted: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      const x = mesh.positions[i * 3];
+      const y = mesh.positions[i * 3 + 1];
+      const z = mesh.positions[i * 3 + 2];
+      if (y > 4) painted.push(i);
+      if (y < 0.1 && x >= 4 && x <= 8 && z >= 4 && z <= 8) painted.push(i);
+    }
+
+    const before = inspect(toSoup(mesh));
+    const { mesh: filled, filled: count, capHeight } = fillPaintedHoles(mesh, painted);
+
+    expect(painted.length).toBeGreaterThanOrEqual(5);
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(capHeight).toBeCloseTo(5, 5);
+    const after = inspect(toSoup(filled));
+    expect(after.holes).toBeLessThan(before.holes);
+    let maxY = -Infinity;
+    for (let i = 1; i < filled.positions.length; i += 3) {
+      if (filled.positions[i] > maxY) maxY = filled.positions[i];
+    }
+    expect(maxY).toBeLessThanOrEqual(5 + 1e-6);
+    expect(maxY).toBeGreaterThan(4.5);
+  });
+});
+
 describe('simplify', () => {
   it('cuts triangle count on an over-dense mesh while keeping the shape', () => {
     const dense = denseSphere(20, 40, 60);
@@ -293,5 +512,46 @@ describe('simplify', () => {
 
     expect(report.after.triangles).toBeGreaterThan(0);
     expect(Math.abs(report.after.signedVolume)).toBeGreaterThan(0);
+  });
+});
+
+describe('diagnose', () => {
+  it('reports a cube as a solid with no faults', () => {
+    const report = diagnose(cubeSoup(10));
+
+    expect(report.watertight).toBe(true);
+    expect(report.missingFaces).toBe(0);
+    expect(report.misalignedClusters).toBe(0);
+    expect(report.flippedFaces).toBe(0);
+    expect(report.disturbedEdges).toBe(0);
+    expect(report.thinShellRisk).toBe(false);
+  });
+
+  it('flags a missing face as a hole that would slice into a thin shell', () => {
+    const report = diagnose(removeTriangle(cubeSoup(10), 0));
+
+    expect(report.watertight).toBe(false);
+    expect(report.missingFaces).toBeGreaterThanOrEqual(1);
+    expect(report.openEdges).toBeGreaterThanOrEqual(3);
+    expect(report.thinShellRisk).toBe(true);
+  });
+
+  it('counts near-miss corners after a merge that sat a hair off', () => {
+    const a = cubeSoup(10);
+    const b = Float32Array.from(a, (value, i) => (i % 3 === 0 ? value + 0.1 : value));
+    const merged = new Float32Array(a.length + b.length);
+    merged.set(a, 0);
+    merged.set(b, a.length);
+
+    const report = diagnose(merged);
+
+    expect(report.misalignedClusters).toBe(8);
+  });
+
+  it('flags a reversed triangle as face trouble', () => {
+    const report = diagnose(flipTriangle(cubeSoup(10), 0));
+
+    expect(report.flippedFaces).toBeGreaterThan(0);
+    expect(report.watertight).toBe(false);
   });
 });

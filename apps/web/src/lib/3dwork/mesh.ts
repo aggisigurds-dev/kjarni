@@ -643,6 +643,64 @@ function centroidFan(
   return { positions: next, indices };
 }
 
+/**
+ * Close a rim with a flat lid at `capHeight` (Y-up) and walls from the original
+ * edge up to that lid. Vertices already at the cap are reused so a hole that
+ * already sits at that height just triangulates in place.
+ */
+function capLoopAtHeight(
+  positions: Float64Array,
+  rim: number[],
+  capHeight: number
+): { positions: Float64Array; indices: number[] } {
+  const n = rim.length;
+  const lifted = Array.from({ length: n }, () => -1);
+  const appended: number[] = [];
+  let nextIndex = positions.length / 3;
+  for (let k = 0; k < n; k++) {
+    const i = rim[k];
+    if (i === undefined) continue;
+    const y = positions[i * 3 + 1];
+    if (Math.abs(y - capHeight) <= 1e-6) {
+      lifted[k] = i;
+      continue;
+    }
+    lifted[k] = nextIndex++;
+    appended.push(positions[i * 3], capHeight, positions[i * 3 + 2]);
+  }
+
+  const next = new Float64Array(positions.length + appended.length);
+  next.set(positions);
+  if (appended.length > 0) next.set(appended, positions.length);
+
+  const extra: number[] = [];
+  for (let k = 0; k < n; k++) {
+    const a = rim[k];
+    const b = rim[(k + 1) % n];
+    const a2 = lifted[k];
+    const b2 = lifted[(k + 1) % n];
+    if (a === undefined || b === undefined || a2 === undefined || b2 === undefined) continue;
+    if (a === a2 && b === b2) continue;
+    if (a === a2) extra.push(a, b, b2);
+    else if (b === b2) extra.push(a, b, a2);
+    else {
+      extra.push(a, b, b2);
+      extra.push(a, b2, a2);
+    }
+  }
+
+  const cap = triangulateLoop(next, lifted);
+  if (cap && cap.length >= 3) {
+    extra.push(...cap);
+    return { positions: next, indices: extra };
+  }
+
+  const fan = centroidFan(next, lifted);
+  fan.positions[fan.positions.length - 2] = capHeight;
+  extra.push(...fan.indices);
+  return { positions: fan.positions, indices: extra };
+}
+
 function countTinyHoles(mesh: IndexedMesh): number {
   const loops = boundaryLoops(mesh.indices, buildEdges(mesh.indices));
   return loops.filter((loop) => loop.length <= 6).length;
@@ -759,6 +817,284 @@ function fillHoles(
   merged.set(mesh.indices, 0);
   merged.set(extra, mesh.indices.length);
   return { positions, indices: merged, filled, unfilled };
+}
+
+export function verticesInRadius(
+  positions: Float64Array,
+  point: [number, number, number],
+  radiusMm: number
+): number[] {
+  const r2 = radiusMm * radiusMm;
+  const found: number[] = [];
+  const vertexCount = positions.length / 3;
+  for (let i = 0; i < vertexCount; i++) {
+    const dx = positions[i * 3] - point[0];
+    const dy = positions[i * 3 + 1] - point[1];
+    const dz = positions[i * 3 + 2] - point[2];
+    if (dx * dx + dy * dy + dz * dz <= r2) found.push(i);
+  }
+  return found;
+}
+
+function vertexNeighbours(indices: Uint32Array, vertexCount: number): number[][] {
+  const nbr: number[][] = Array.from({ length: vertexCount }, () => []);
+  const seen = new Set<string>();
+  for (let t = 0; t < indices.length; t += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = indices[t + e];
+      const b = indices[t + ((e + 1) % 3)];
+      const key = edgeKey(a, b);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      nbr[a].push(b);
+      nbr[b].push(a);
+    }
+  }
+  return nbr;
+}
+
+/** Smallest-eigenvalue normal of a 3×3 covariance via Jacobi rotations. */
+function planeNormalFromCovariance(
+  xx: number,
+  xy: number,
+  xz: number,
+  yy: number,
+  yz: number,
+  zz: number
+): [number, number, number] {
+  const a = [
+    [xx, xy, xz],
+    [xy, yy, yz],
+    [xz, yz, zz],
+  ];
+  const v = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
+
+  for (let iter = 0; iter < 12; iter++) {
+    let p = 0;
+    let q = 1;
+    let max = Math.abs(a[0][1]);
+    const a02 = Math.abs(a[0][2]);
+    const a12 = Math.abs(a[1][2]);
+    if (a02 > max) {
+      max = a02;
+      p = 0;
+      q = 2;
+    }
+    if (a12 > max) {
+      max = a12;
+      p = 1;
+      q = 2;
+    }
+    if (max < 1e-18) break;
+    const app = a[p][p];
+    const aqq = a[q][q];
+    const apq = a[p][q];
+    const tau = (aqq - app) / (2 * apq);
+    const t = Math.sign(tau) / (Math.abs(tau) + Math.sqrt(1 + tau * tau));
+    const c = 1 / Math.sqrt(1 + t * t);
+    const s = t * c;
+
+    for (let k = 0; k < 3; k++) {
+      if (k === p || k === q) continue;
+      const akp = a[k][p];
+      const akq = a[k][q];
+      a[k][p] = a[p][k] = c * akp - s * akq;
+      a[k][q] = a[q][k] = s * akp + c * akq;
+    }
+    a[p][p] = c * c * app - 2 * s * c * apq + s * s * aqq;
+    a[q][q] = s * s * app + 2 * s * c * apq + c * c * aqq;
+    a[p][q] = a[q][p] = 0;
+
+    for (let k = 0; k < 3; k++) {
+      const vkp = v[k][p];
+      const vkq = v[k][q];
+      v[k][p] = c * vkp - s * vkq;
+      v[k][q] = s * vkp + c * vkq;
+    }
+  }
+
+  const e0 = a[0][0];
+  const e1 = a[1][1];
+  const e2 = a[2][2];
+  const col = e0 <= e1 && e0 <= e2 ? 0 : e1 <= e2 ? 1 : 2;
+  return [v[0][col], v[1][col], v[2][col]];
+}
+
+/**
+ * Flatten a painted patch onto its best-fit plane, then relax it so the edge
+ * reads even. Unpainted vertices stay put and hold the rest of the part.
+ */
+export function alignPaintedVertices(
+  mesh: IndexedMesh,
+  painted: Iterable<number>
+): { mesh: IndexedMesh; moved: number } {
+  const ids = [...new Set(painted)].filter(
+    (i) => i >= 0 && i < mesh.positions.length / 3
+  );
+  if (ids.length < 3) return { mesh, moved: 0 };
+
+  let cx = 0,
+    cy = 0,
+    cz = 0;
+  for (const i of ids) {
+    cx += mesh.positions[i * 3];
+    cy += mesh.positions[i * 3 + 1];
+    cz += mesh.positions[i * 3 + 2];
+  }
+  cx /= ids.length;
+  cy /= ids.length;
+  cz /= ids.length;
+
+  let xx = 0,
+    xy = 0,
+    xz = 0,
+    yy = 0,
+    yz = 0,
+    zz = 0;
+  for (const i of ids) {
+    const dx = mesh.positions[i * 3] - cx;
+    const dy = mesh.positions[i * 3 + 1] - cy;
+    const dz = mesh.positions[i * 3 + 2] - cz;
+    xx += dx * dx;
+    xy += dx * dy;
+    xz += dx * dz;
+    yy += dy * dy;
+    yz += dy * dz;
+    zz += dz * dz;
+  }
+
+  let [nx, ny, nz] = planeNormalFromCovariance(xx, xy, xz, yy, yz, zz);
+  const nlen = Math.hypot(nx, ny, nz);
+  if (nlen < 1e-12) return { mesh, moved: 0 };
+  nx /= nlen;
+  ny /= nlen;
+  nz /= nlen;
+
+  const positions = Float64Array.from(mesh.positions);
+  const mask = new Uint8Array(positions.length / 3);
+  for (const i of ids) mask[i] = 1;
+
+  for (const i of ids) {
+    const dx = positions[i * 3] - cx;
+    const dy = positions[i * 3 + 1] - cy;
+    const dz = positions[i * 3 + 2] - cz;
+    const d = dx * nx + dy * ny + dz * nz;
+    positions[i * 3] -= d * nx;
+    positions[i * 3 + 1] -= d * ny;
+    positions[i * 3 + 2] -= d * nz;
+  }
+
+  const nbr = vertexNeighbours(mesh.indices, mask.length);
+  const scratch = new Float64Array(positions.length);
+  for (let iter = 0; iter < 6; iter++) {
+    scratch.set(positions);
+    for (const i of ids) {
+      const neighbours = nbr[i];
+      if (neighbours.length === 0) continue;
+      let ax = 0,
+        ay = 0,
+        az = 0;
+      for (const j of neighbours) {
+        ax += scratch[j * 3];
+        ay += scratch[j * 3 + 1];
+        az += scratch[j * 3 + 2];
+      }
+      ax /= neighbours.length;
+      ay /= neighbours.length;
+      az /= neighbours.length;
+      positions[i * 3] = scratch[i * 3] * 0.55 + ax * 0.45;
+      positions[i * 3 + 1] = scratch[i * 3 + 1] * 0.55 + ay * 0.45;
+      positions[i * 3 + 2] = scratch[i * 3 + 2] * 0.55 + az * 0.45;
+    }
+  }
+
+  let moved = 0;
+  for (const i of ids) {
+    const dx = positions[i * 3] - mesh.positions[i * 3];
+    const dy = positions[i * 3 + 1] - mesh.positions[i * 3 + 1];
+    const dz = positions[i * 3 + 2] - mesh.positions[i * 3 + 2];
+    if (dx * dx + dy * dy + dz * dz > 1e-12) moved++;
+  }
+
+  return { mesh: { positions, indices: mesh.indices }, moved };
+}
+
+/**
+ * Close holes whose rim was painted. New fill sits at most at the highest
+ * painted Y — and rises up to that height when the rim is lower, so a pit
+ * can be packed flush with the lip the brush covered.
+ */
+export function fillPaintedHoles(
+  mesh: IndexedMesh,
+  painted: Iterable<number>
+): { mesh: IndexedMesh; filled: number; capHeight: number } {
+  const paintedSet = new Set(
+    [...painted].filter((i) => i >= 0 && i < mesh.positions.length / 3)
+  );
+  if (paintedSet.size === 0) return { mesh, filled: 0, capHeight: 0 };
+
+  let capHeight = -Infinity;
+  for (const i of paintedSet) {
+    const y = mesh.positions[i * 3 + 1];
+    if (y > capHeight) capHeight = y;
+  }
+
+  const edges = buildEdges(mesh.indices);
+  const loops = boundaryLoops(mesh.indices, edges);
+  let nextPositions = mesh.positions;
+  const extra: number[] = [];
+  let filled = 0;
+
+  for (const loop of loops) {
+    if (!loop.some((i) => paintedSet.has(i))) continue;
+    if (loop.length < 3) continue;
+    const rim = [...loop].reverse();
+    let rimHigh = -Infinity;
+    for (const i of rim) {
+      const y = nextPositions[i * 3 + 1];
+      if (y > rimHigh) rimHigh = y;
+    }
+
+    if (capHeight > rimHigh + 1e-6) {
+      const plug = capLoopAtHeight(nextPositions, rim, capHeight);
+      nextPositions = plug.positions;
+      extra.push(...plug.indices);
+      filled++;
+      continue;
+    }
+
+    const clipped = triangulateLoop(nextPositions, rim);
+    if (clipped && clipped.length >= 3) {
+      extra.push(...clipped);
+      filled++;
+      continue;
+    }
+    const fan = centroidFan(nextPositions, rim);
+    const ci = fan.positions.length / 3 - 1;
+    if (fan.positions[ci * 3 + 1] > capHeight) fan.positions[ci * 3 + 1] = capHeight;
+    nextPositions = fan.positions;
+    extra.push(...fan.indices);
+    filled++;
+  }
+
+  let indices = mesh.indices;
+  if (extra.length > 0) {
+    const merged = new Uint32Array(mesh.indices.length + extra.length);
+    merged.set(mesh.indices, 0);
+    merged.set(extra, mesh.indices.length);
+    indices = merged;
+  }
+
+  let out: IndexedMesh = { positions: nextPositions, indices };
+  const cleaned = dropDegenerate(out);
+  out = compact({ positions: out.positions, indices: cleaned.indices });
+  const oriented = orient(out);
+  out = { positions: out.positions, indices: oriented.indices };
+  return { mesh: out, filled, capHeight };
 }
 
 function translate(positions: Float64Array, dx: number, dy: number, dz: number): void {
@@ -878,9 +1214,270 @@ export function autoFix(soup: Float32Array, options: FixOptions = {}): {
   };
 }
 
+export interface MisalignOptions {
+  /** Corners closer than this (mm) that do not already share an edge collapse together. */
+  toleranceMm: number;
+  /**
+   * Also round onto a millimetre grid of the same size, so faces that should be
+   * flush actually become flush. Off by default — it will flatten tiny bevels.
+   */
+  snapToGrid?: boolean;
+  fillHoles?: boolean;
+}
+
+export interface MisalignReport {
+  toleranceMm: number;
+  snapToGrid: boolean;
+  verticesBefore: number;
+  verticesAfter: number;
+  trianglesBefore: number;
+  trianglesAfter: number;
+  /** Groups of unconnected corners that were averaged together. */
+  snappedClusters: number;
+  quantizedVertices: number;
+  filledHoles: number;
+  changed: boolean;
+  after: Topology;
+}
+
+function findRoot(parent: Int32Array, i: number): number {
+  let root = i;
+  while (parent[root] !== root) root = parent[root];
+  let cursor = i;
+  while (cursor !== root) {
+    const next = parent[cursor];
+    parent[cursor] = root;
+    cursor = next;
+  }
+  return root;
+}
+
+/**
+ * Collapse corners that sit a hair apart but do not already share an edge —
+ * the usual leftover after merging two parts that were 0.1–0.5 mm out.
+ *
+ * Neighbours that *do* share an edge are left alone, so a dense tessellation
+ * whose edges are themselves ~0.2 mm is not crushed into a blob.
+ */
+function snapUnconnected(mesh: IndexedMesh, toleranceMm: number): {
+  mesh: IndexedMesh;
+  snappedClusters: number;
+} {
+  const vertexCount = mesh.positions.length / 3;
+  if (vertexCount < 2 || toleranceMm <= 0) return { mesh, snappedClusters: 0 };
+
+  const connected = new Set<string>();
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const a = mesh.indices[t];
+    const b = mesh.indices[t + 1];
+    const c = mesh.indices[t + 2];
+    connected.add(edgeKey(a, b));
+    connected.add(edgeKey(b, c));
+    connected.add(edgeKey(c, a));
+  }
+
+  const inv = 1 / toleranceMm;
+  const buckets = new Map<number, number[]>();
+  for (let i = 0; i < vertexCount; i++) {
+    const gx = Math.floor(mesh.positions[i * 3] * inv);
+    const gy = Math.floor(mesh.positions[i * 3 + 1] * inv);
+    const gz = Math.floor(mesh.positions[i * 3 + 2] * inv);
+    const key = cellHash(gx, gy, gz);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(i);
+    else buckets.set(key, [i]);
+  }
+
+  const parent = new Int32Array(vertexCount);
+  for (let i = 0; i < vertexCount; i++) parent[i] = i;
+
+  const tolSq = toleranceMm * toleranceMm;
+  for (let i = 0; i < vertexCount; i++) {
+    const x = mesh.positions[i * 3];
+    const y = mesh.positions[i * 3 + 1];
+    const z = mesh.positions[i * 3 + 2];
+    const gx = Math.floor(x * inv);
+    const gy = Math.floor(y * inv);
+    const gz = Math.floor(z * inv);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = buckets.get(cellHash(gx + dx, gy + dy, gz + dz));
+          if (!bucket) continue;
+          for (let b = 0; b < bucket.length; b++) {
+            const j = bucket[b];
+            if (j <= i) continue;
+            const ox = mesh.positions[j * 3] - x;
+            const oy = mesh.positions[j * 3 + 1] - y;
+            const oz = mesh.positions[j * 3 + 2] - z;
+            if (ox * ox + oy * oy + oz * oz > tolSq) continue;
+            if (connected.has(edgeKey(i, j))) continue;
+            const ri = findRoot(parent, i);
+            const rj = findRoot(parent, j);
+            if (ri !== rj) parent[rj] = ri;
+          }
+        }
+      }
+    }
+  }
+
+  const count = new Uint32Array(vertexCount);
+  const sum = new Float64Array(vertexCount * 3);
+  for (let i = 0; i < vertexCount; i++) {
+    const root = findRoot(parent, i);
+    count[root]++;
+    sum[root * 3] += mesh.positions[i * 3];
+    sum[root * 3 + 1] += mesh.positions[i * 3 + 1];
+    sum[root * 3 + 2] += mesh.positions[i * 3 + 2];
+  }
+
+  let snappedClusters = 0;
+  const positions = Float64Array.from(mesh.positions);
+  for (let root = 0; root < vertexCount; root++) {
+    if (count[root] < 2) continue;
+    snappedClusters++;
+    const n = count[root];
+    positions[root * 3] = sum[root * 3] / n;
+    positions[root * 3 + 1] = sum[root * 3 + 1] / n;
+    positions[root * 3 + 2] = sum[root * 3 + 2] / n;
+  }
+
+  if (snappedClusters === 0) return { mesh, snappedClusters: 0 };
+
+  const indices = new Uint32Array(mesh.indices.length);
+  for (let k = 0; k < mesh.indices.length; k++) indices[k] = findRoot(parent, mesh.indices[k]);
+  return { mesh: compact({ positions, indices }), snappedClusters };
+}
+
+/**
+ * Snap corners that ended up a hair apart after a merge, then tidy the mesh
+ * the same way auto-fix does so leftover pinholes close.
+ */
+export function fixMisalignment(soup: Float32Array, options: MisalignOptions): {
+  soup: Float32Array;
+  report: MisalignReport;
+} {
+  const toleranceMm = Math.max(1e-6, options.toleranceMm);
+  const snapToGrid = Boolean(options.snapToGrid);
+  const shouldFill = options.fillHoles !== false;
+
+  const initial = weld(soup);
+  const verticesBefore = initial.mesh.positions.length / 3;
+  const trianglesBefore = initial.mesh.indices.length / 3;
+
+  let mesh: IndexedMesh = initial.mesh;
+  let quantizedVertices = 0;
+
+  if (snapToGrid) {
+    const positions = Float64Array.from(mesh.positions);
+    for (let i = 0; i < positions.length; i++) {
+      const snapped = Math.round(positions[i] / toleranceMm) * toleranceMm;
+      if (Math.abs(snapped - positions[i]) > 1e-9) quantizedVertices++;
+      positions[i] = snapped;
+    }
+    mesh = weld(toSoup({ positions, indices: mesh.indices }), toleranceMm * 0.51).mesh;
+  }
+
+  const snapped = snapUnconnected(mesh, toleranceMm);
+  mesh = snapped.mesh;
+
+  const cleaned = dropDegenerate(mesh);
+  mesh = compact({ positions: mesh.positions, indices: cleaned.indices });
+
+  const oriented = orient(mesh);
+  mesh = { positions: mesh.positions, indices: oriented.indices };
+
+  let filled = 0;
+  if (shouldFill) {
+    const patched = fillHoles(mesh, 80);
+    mesh = { positions: patched.positions, indices: patched.indices };
+    filled = patched.filled;
+    if (filled > 0) {
+      const afterFill = dropDegenerate(mesh);
+      mesh = compact({ positions: mesh.positions, indices: afterFill.indices });
+      const reoriented = orient(mesh);
+      mesh = { positions: mesh.positions, indices: reoriented.indices };
+    }
+  }
+
+  const after = analyze(mesh);
+  const changed =
+    snapped.snappedClusters > 0 ||
+    quantizedVertices > 0 ||
+    cleaned.degenerate > 0 ||
+    cleaned.duplicates > 0 ||
+    filled > 0 ||
+    after.vertices !== verticesBefore;
+
+  return {
+    soup: toSoup(mesh),
+    report: {
+      toleranceMm,
+      snapToGrid,
+      verticesBefore,
+      verticesAfter: after.vertices,
+      trianglesBefore,
+      trianglesAfter: after.triangles,
+      snappedClusters: snapped.snappedClusters,
+      quantizedVertices,
+      filledHoles: filled,
+      changed,
+      after,
+    },
+  };
+}
+
 /** Topology summary without repairing anything. */
 export function inspect(soup: Float32Array, weldTolerance?: number): Topology {
   return analyze(weld(soup, weldTolerance).mesh);
+}
+
+export interface Diagnosis {
+  watertight: boolean;
+  /** Boundary loops — missing faces / holes. */
+  missingFaces: number;
+  openEdges: number;
+  /** Unconnected corners closer than `alignMm`. */
+  misalignedClusters: number;
+  /** Edges whose two triangles wind the same way. */
+  flippedFaces: number;
+  /** Edges shared by three or more triangles — faces fighting each other. */
+  disturbedEdges: number;
+  junkFaces: number;
+  insideOut: boolean;
+  /**
+   * Slice and Subtract need a volume. An open surface, or a shell whose
+   * enclosed volume is a tiny fraction of its bounding box, comes out as a
+   * paper-thin crust instead.
+   */
+  thinShellRisk: boolean;
+  volumeMm3: number;
+}
+
+/**
+ * Read-only look at a part: near-miss corners, missing faces, and face trouble.
+ * Does not write a version.
+ */
+export function diagnose(soup: Float32Array, alignMm = 0.2): Diagnosis {
+  const { mesh } = weld(soup);
+  const topology = analyze(mesh);
+  const junk = dropDegenerate(mesh);
+  const { snappedClusters } = snapUnconnected(mesh, Math.max(1e-6, alignMm));
+  const size = topology.bounds.size;
+  const boxVolume = Math.max(size[0] * size[1] * size[2], 1e-12);
+  const volumeMm3 = Math.abs(topology.signedVolume);
+  return {
+    watertight: topology.watertight,
+    missingFaces: topology.holes,
+    openEdges: topology.boundaryEdges,
+    misalignedClusters: snappedClusters,
+    flippedFaces: topology.inconsistentEdges,
+    disturbedEdges: topology.nonManifoldEdges,
+    junkFaces: junk.degenerate + junk.duplicates,
+    insideOut: topology.signedVolume < 0,
+    thinShellRisk: !topology.watertight || volumeMm3 / boxVolume < 0.08,
+    volumeMm3,
+  };
 }
 
 export interface SimplifyOptions {

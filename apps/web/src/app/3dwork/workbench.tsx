@@ -21,6 +21,8 @@ import {
   FolderPlus,
   Group,
   Loader2,
+  Magnet,
+  ArrowDownToLine,
   Maximize,
   PanelLeft,
   PanelRight,
@@ -36,15 +38,26 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Paintbrush,
+  ScanSearch,
 } from 'lucide-react';
 import {
+  alignPaintedVertices,
   autoFix,
   computeBounds,
+  diagnose,
+  fillPaintedHoles,
+  fixMisalignment,
   inspect,
   recenter,
   simplify,
+  toSoup,
+  verticesInRadius,
+  weld,
   zUpToYUp,
+  type Diagnosis,
   type FixReport,
+  type MisalignReport,
   type SimplifyReport,
 } from '@/lib/3dwork/mesh';
 import {
@@ -99,6 +112,8 @@ import {
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
 import { makeSolid, subtractMesh, unionMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { fitTogether } from '@/lib/3dwork/fit';
+import { settleOnFloor } from '@/lib/3dwork/settle';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -123,6 +138,7 @@ import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
+import { PaintBar } from './paint-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -164,6 +180,9 @@ export function Workbench() {
   const [showGrid, setShowGrid] = useState(true);
   const [measuring, setMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number, number][]>([]);
+  const [painting, setPainting] = useState(false);
+  const [paintRadiusMm, setPaintRadiusMm] = useState(2);
+  const [painted, setPainted] = useState<Set<number>>(() => new Set());
   const [zUp, setZUp] = useState(true);
   const [unit, setUnit] = useState<Unit>('mm');
   const [cutItems, setCutItems] = useState<CutItem[]>([]);
@@ -171,6 +190,8 @@ export function Workbench() {
   const [busy, setBusy] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [simplifyReport, setSimplifyReport] = useState<SimplifyReport | null>(null);
+  const [misalignReport, setMisalignReport] = useState<MisalignReport | null>(null);
+  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [solidReport, setSolidReport] = useState<SolidifyReport | null>(null);
   const [showWeld, setShowWeld] = useState(false);
   const [showSlice, setShowSlice] = useState(false);
@@ -215,6 +236,8 @@ export function Workbench() {
 
   const [workspace, setWorkspace] = useState<Workspace>('bench');
   const [xray, setXray] = useState(false);
+  /** When set, the table shows only this part. Uncheck View → Focus to restore the rest. */
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [showCallouts, setShowCallouts] = useState(true);
   const [sketch, setSketch] = useState<Sketch>(() => emptySketch());
   const [sketchPlane, setSketchPlane] = useState<ViewPlane>('xy');
@@ -400,6 +423,40 @@ export function Workbench() {
     [project.parts, selectedId]
   );
   const selectedSoup = selectedPart ? (geometries.get(selectedPart.activeVersionId) ?? null) : null;
+  const paintMesh = useMemo(
+    () => (selectedSoup ? weld(selectedSoup).mesh : null),
+    [selectedSoup]
+  );
+  const paintLocal = useMemo(() => {
+    if (!paintMesh || painted.size === 0) return new Float32Array(0);
+    const out = new Float32Array(painted.size * 3);
+    let offset = 0;
+    for (const index of painted) {
+      out[offset] = paintMesh.positions[index * 3];
+      out[offset + 1] = paintMesh.positions[index * 3 + 1];
+      out[offset + 2] = paintMesh.positions[index * 3 + 2];
+      offset += 3;
+    }
+    return out;
+  }, [paintMesh, painted]);
+
+  useEffect(() => {
+    setPainted(new Set());
+  }, [selectedId, selectedSoup]);
+
+  useEffect(() => {
+    setDiagnosis(null);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (focusId && !project.parts.some((part) => part.id === focusId)) setFocusId(null);
+  }, [focusId, project.parts]);
+
+  useEffect(() => {
+    if (!focusId || !selectedId || selectedId === focusId) return;
+    setFocusId(selectedId);
+    setFrameToken((token) => token + 1);
+  }, [selectedId, focusId]);
 
   /** Bounding sizes drive the scatter layout; cheap enough to redo on change. */
   const sizes = useMemo(() => {
@@ -434,7 +491,8 @@ export function Workbench() {
     for (const part of project.parts) {
       const soup = geometries.get(part.activeVersionId);
       const placement = byId.get(part.id);
-      if (!soup || !placement || !part.visible) continue;
+      if (!soup || !placement) continue;
+      if (focusId ? part.id !== focusId : !part.visible) continue;
 
       parts.push({
         id: part.id,
@@ -447,7 +505,7 @@ export function Workbench() {
       });
     }
     return parts;
-  }, [project.parts, geometries, placements]);
+  }, [project.parts, geometries, placements, focusId]);
 
   const partWorldPos = useCallback(
     (part: Part) => {
@@ -467,7 +525,7 @@ export function Workbench() {
   const snapNeighbors = useMemo(
     () =>
       project.parts.flatMap((part) => {
-        if (!part.visible) return [];
+        if (focusId ? part.id !== focusId : !part.visible) return [];
         const soup = geometries.get(part.activeVersionId);
         if (!soup) return [];
         const local = computeBounds(soup);
@@ -483,7 +541,7 @@ export function Workbench() {
           },
         ];
       }),
-    [project.parts, geometries, partWorldPos]
+    [project.parts, geometries, partWorldPos, focusId]
   );
 
   const snapAnchors = useMemo(
@@ -884,24 +942,26 @@ export function Workbench() {
     });
   }, [patchProject]);
 
-  /** Hide every other part. A second isolate on the same part brings them all back. */
-  const isolatePart = useCallback(
-    (partId: string) => {
-      patchProject((current) => {
-        const already =
-          current.parts.length > 0 &&
-          current.parts.every((part) => (part.id === partId ? part.visible : !part.visible));
-        return {
-          ...current,
-          parts: current.parts.map((part) => ({
-            ...part,
-            visible: already ? true : part.id === partId,
-          })),
-        };
-      });
-    },
-    [patchProject]
-  );
+  /** Hide every other part on the table. A second click on the same part restores them. */
+  const isolatePart = useCallback((partId: string) => {
+    setSelectedId(partId);
+    setFocusId((current) => (current === partId ? null : partId));
+    setFrameToken((token) => token + 1);
+  }, []);
+
+  const toggleFocus = useCallback(() => {
+    if (focusId) {
+      setFocusId(null);
+      setFrameToken((token) => token + 1);
+      return;
+    }
+    if (!selectedId) {
+      toast.error('Select a part first.');
+      return;
+    }
+    setFocusId(selectedId);
+    setFrameToken((token) => token + 1);
+  }, [focusId, selectedId]);
 
   const patchTransform = useCallback(
     (partId: string, patch: Partial<Transform>) => {
@@ -1320,7 +1380,7 @@ export function Workbench() {
         setSelectedId(id);
         setFrameToken((token) => token + 1);
         toast.success(
-          `Merged ${members.length} parts · ${formatCount(result.report.trianglesAfter)} triangles`
+          `Merged ${members.length} parts · ${formatCount(result.report.trianglesAfter)} triangles. If a seam still steps, Repair → Fix misalignment.`
         );
       } catch {
         toast.error('Could not merge those parts.');
@@ -1329,6 +1389,176 @@ export function Workbench() {
       }
     }, 20);
   }, [selection, soupOfPart, partWorldPos, project, patchProject]);
+
+  /**
+   * Slide the other selected part onto this one so their facing faces sit
+   * flush with as much overlap as possible. A later Merge then has no
+   * hairline gap to turn into extra seam edges.
+   */
+  const runFitTogether = useCallback(() => {
+    if (selection.length !== 2) {
+      toast.error('Select exactly two parts — turn on Multi or hold ⌘/Ctrl.');
+      return;
+    }
+    const fixedPart = selection.find((part) => part.id === selectedId) ?? selection[0];
+    if (!fixedPart) return;
+    const movingPart = selection.find((part) => part.id !== fixedPart.id);
+    if (!movingPart) return;
+
+    const fixedSoup = soupOfPart(fixedPart.id);
+    const movingSoup = soupOfPart(movingPart.id);
+    if (!fixedSoup || !movingSoup) {
+      toast.error('Need geometry on both selected parts.');
+      return;
+    }
+
+    const fixedWorld = bakeTransform(fixedSoup, {
+      ...fixedPart.transform,
+      position: partWorldPos(fixedPart),
+    });
+    const movingWorld = bakeTransform(movingSoup, {
+      ...movingPart.transform,
+      position: partWorldPos(movingPart),
+    });
+    const result = fitTogether(fixedWorld, movingWorld);
+    const contact = `${Math.round(result.contactPercent)}% contact`;
+    const moved = Math.hypot(result.delta.x, result.delta.y, result.delta.z);
+
+    if (moved < 0.02) {
+      toast.success(`Already flush · ${contact}`);
+      return;
+    }
+
+    const applyDelta = (pos: { x: number; y: number; z: number }) => ({
+      x: pos.x + result.delta.x,
+      y: pos.y + result.delta.y,
+      z: pos.z + result.delta.z,
+    });
+
+    if (mode === 'assembled') {
+      nudgePart(movingPart.id, result.delta);
+    } else {
+      // Scatter layout ignores transform.position, so seed Free arrange from
+      // wherever the parts sit now and apply the slide there.
+      patchProject((current) => {
+        const layout =
+          mode === 'free' ? freePlacement(current) : scatterPlacement(current, sizes);
+        const posById = new Map(layout.map((entry) => [entry.partId, entry.position]));
+        return {
+          ...current,
+          parts: current.parts.map((part) => {
+            const seated = part.freePos ?? posById.get(part.id) ?? { x: 0, y: 0, z: 0 };
+            if (part.id !== movingPart.id) {
+              return part.freePos ? part : { ...part, freePos: seated };
+            }
+            return { ...part, freePos: applyDelta(seated) };
+          }),
+        };
+      });
+      if (mode !== 'free') setMode('free');
+    }
+
+    const gap =
+      result.gapClosedMm < 1
+        ? `${result.gapClosedMm.toFixed(2)} mm`
+        : `${result.gapClosedMm.toFixed(1)} mm`;
+    const summary = `Fitted together · ${contact} · closed ${gap}`;
+    if (result.contactPercent < 35) {
+      toast.warning(`${summary}. Faces may not match — rotate one half and try again.`);
+    } else {
+      toast.success(summary);
+    }
+  }, [selection, selectedId, soupOfPart, partWorldPos, nudgePart, mode, sizes, patchProject]);
+
+  /**
+   * Drop the selected part onto the table: rotate a face flat onto Y=0, then
+   * lower it until it sits. Lands in Free arrange so it can be dragged after.
+   */
+  const runSettle = useCallback(
+    (partId?: string) => {
+      const id = partId ?? selectedId;
+      const part = project.parts.find((candidate) => candidate.id === id) ?? null;
+      if (!part) {
+        toast.error('Select a part first.');
+        return;
+      }
+      const soup = soupOfPart(part.id);
+      if (!soup) {
+        toast.error('That part has no geometry.');
+        return;
+      }
+
+      const worldPos = partWorldPos(part);
+      const result = settleOnFloor(soup, part.transform, worldPos);
+      const already = Math.abs(result.droppedMm) < 0.05 && Math.abs(result.tiltedDeg) < 0.5;
+
+      if (mode === 'assembled') {
+        const anchor = project.slots.find((slot) => slot.activePartId === part.id)?.anchor ?? {
+          x: 0,
+          y: 0,
+          z: 0,
+        };
+        patchProject((current) => ({
+          ...current,
+          parts: current.parts.map((entry) =>
+            entry.id !== part.id
+              ? entry
+              : {
+                  ...entry,
+                  transform: {
+                    ...entry.transform,
+                    rotation: result.rotation,
+                    position: {
+                      x: result.position.x - anchor.x,
+                      y: result.position.y - anchor.y,
+                      z: result.position.z - anchor.z,
+                    },
+                  },
+                }
+          ),
+        }));
+      } else {
+        patchProject((current) => {
+          const layout =
+            mode === 'free' ? freePlacement(current) : scatterPlacement(current, sizes);
+          const posById = new Map(layout.map((entry) => [entry.partId, entry.position]));
+          return {
+            ...current,
+            parts: current.parts.map((entry) => {
+              if (entry.id === part.id) {
+                return {
+                  ...entry,
+                  transform: { ...entry.transform, rotation: result.rotation },
+                  freePos: result.position,
+                };
+              }
+              return entry.freePos
+                ? entry
+                : { ...entry, freePos: posById.get(entry.id) ?? { x: 0, y: 0, z: 0 } };
+            }),
+          };
+        });
+        if (mode !== 'free') setMode('free');
+      }
+
+      setPainting(false);
+      setMoveModeId(part.id);
+
+      if (already) {
+        toast.success('Already on the floor.');
+        return;
+      }
+      const bits = ['Settled on the floor'];
+      if (Math.abs(result.tiltedDeg) >= 0.5) bits.push('stood upright');
+      const travel = Math.abs(result.droppedMm);
+      if (travel >= 0.05) {
+        const mm = travel < 1 ? travel.toFixed(1) : String(Math.round(travel));
+        bits.push(result.droppedMm >= 0 ? `dropped ${mm} mm` : `lifted ${mm} mm`);
+      }
+      toast.success(bits.join(' · '));
+    },
+    [selectedId, project.parts, project.slots, soupOfPart, partWorldPos, mode, sizes, patchProject]
+  );
 
   const duplicatePart = useCallback(
     (partId: string) => {
@@ -1556,11 +1786,113 @@ export function Workbench() {
     [soupOfPart, addVersion]
   );
 
+  const runAnalyze = useCallback(
+    (partId: string) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+      setBusy('Analyzing…');
+      setShowInspector(true);
+      setTab('repair');
+      setTimeout(() => {
+        try {
+          const report = diagnose(soup);
+          setDiagnosis(report);
+          if (report.watertight && !report.thinShellRisk && report.misalignedClusters === 0) {
+            toast.success('Solid — ready to slice or subtract.');
+          } else {
+            const bits = [
+              report.misalignedClusters > 0 &&
+                `${report.misalignedClusters} misaligned corner group(s)`,
+              report.missingFaces > 0 && `${report.missingFaces} missing face(s)`,
+              report.flippedFaces + report.disturbedEdges + report.junkFaces > 0 && 'face trouble',
+            ].filter(Boolean);
+            toast.message(
+              bits.length > 0 ? `Found ${bits.join(', ')}.` : 'See Repair for the diagnosis.'
+            );
+          }
+        } catch {
+          toast.error('Could not analyze that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart]
+  );
+
+  /**
+   * Close holes, snap near-miss corners, and rebuild as a solid if it stays
+   * open — so Slice and Subtract cut a volume instead of a paper-thin shell.
+   */
+  const runFillSolid = useCallback(
+    (partId: string) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Filling to a solid…');
+      setShowInspector(true);
+      setTab('repair');
+      setTimeout(() => {
+        try {
+          const aligned = fixMisalignment(soup, { toleranceMm: 0.2, fillHoles: true });
+          const repaired = autoFix(aligned.soup, { fillHoles: true, maxHoleEdges: 200 });
+          let next = repaired.soup;
+          let usedSolid = false;
+
+          if (!repaired.report.after.watertight) {
+            const solid = makeSolid(next, { resolution: 220, sealMm: 0.8 });
+            if (solid.report.trianglesAfter > 0) {
+              next = solid.soup;
+              usedSolid = true;
+              setSolidReport(solid.report);
+            }
+          }
+
+          const after = diagnose(next);
+          setDiagnosis(after);
+          setFixReport(repaired.report);
+
+          if (!aligned.report.changed && !repaired.report.changed && !usedSolid) {
+            toast.success(
+              after.watertight
+                ? 'Already a solid — nothing to fill.'
+                : 'Could not close it. Try Make solid.'
+            );
+            return;
+          }
+
+          addVersion(
+            partId,
+            next,
+            usedSolid ? 'filled + solid' : 'filled',
+            usedSolid ? 'Fill, then rebuilt as solid' : 'Fill holes + snap'
+          );
+          toast.success(
+            after.watertight && !after.thinShellRisk
+              ? 'Filled — watertight. Slice and Subtract will keep volume.'
+              : usedSolid
+                ? 'Rebuilt as a solid.'
+                : 'Filled what we could — some openings remain.'
+          );
+        } catch {
+          toast.error('Could not fill that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
   /** Slot callouts for the gunsmith overlay, anchored at each mount point. */
   const callouts = useMemo<ViewportCallout[]>(() => {
     if (!showCallouts || mode !== 'assembled') return [];
 
-    return project.slots.map((slot) => {
+    return project.slots.flatMap((slot) => {
+      if (focusId) {
+        const focused = project.parts.find((part) => part.id === focusId);
+        if (!focused || focused.slotId !== slot.id) return [];
+      }
       const variants = project.parts.filter((part) => part.slotId === slot.id);
       const fitted = variants.find((part) => part.id === slot.activePartId);
       return {
@@ -1573,7 +1905,7 @@ export function Workbench() {
         variants: variants.length,
       };
     });
-  }, [project.slots, project.parts, showCallouts, mode]);
+  }, [project.slots, project.parts, showCallouts, mode, focusId]);
 
   const cycleSlot = useCallback(
     (slotId: string, direction: 1 | -1) => {
@@ -1664,6 +1996,113 @@ export function Workbench() {
     [soupOfPart, addVersion]
   );
 
+  const runFixMisalignment = useCallback(
+    (partId: string, options: { toleranceMm: number; snapToGrid: boolean }) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Snapping misaligned corners…');
+      setTimeout(() => {
+        try {
+          const result = fixMisalignment(soup, {
+            toleranceMm: options.toleranceMm,
+            snapToGrid: options.snapToGrid,
+            fillHoles: true,
+          });
+          setMisalignReport(result.report);
+
+          if (!result.report.changed) {
+            toast.success('No corners that close to snap.');
+            return;
+          }
+
+          addVersion(
+            partId,
+            result.soup,
+            'aligned',
+            `${options.toleranceMm} mm snap${options.snapToGrid ? ' + grid' : ''}`
+          );
+          toast.success(
+            result.report.after.watertight
+              ? `Snapped ${formatCount(result.report.snappedClusters)} corner group(s) — watertight.`
+              : `Snapped ${formatCount(result.report.snappedClusters)} corner group(s). Some openings remain.`
+          );
+        } catch {
+          toast.error('Could not snap that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
+  const onPaintAt = useCallback(
+    (partId: string, localPoint: [number, number, number], erase: boolean) => {
+      if (!selectedId || partId !== selectedId || !paintMesh) return;
+      const hits = verticesInRadius(paintMesh.positions, localPoint, paintRadiusMm);
+      if (hits.length === 0) return;
+      setPainted((current) => {
+        const next = new Set(current);
+        for (const index of hits) {
+          if (erase) next.delete(index);
+          else next.add(index);
+        }
+        return next;
+      });
+    },
+    [selectedId, paintMesh, paintRadiusMm]
+  );
+
+  const runPaintAlign = useCallback(() => {
+    if (!selectedId || !paintMesh || painted.size < 3) {
+      toast.error('Paint over the broken edge first.');
+      return;
+    }
+    setBusy('Aligning painted edge…');
+    setTimeout(() => {
+      try {
+        const result = alignPaintedVertices(paintMesh, painted);
+        if (result.moved === 0) {
+          toast.success('That patch was already even.');
+          return;
+        }
+        addVersion(selectedId, toSoup(result.mesh), 'aligned', 'Painted edge align');
+        toast.success(`Evened ${result.moved} corner(s).`);
+      } catch {
+        toast.error('Could not align that patch.');
+      } finally {
+        setBusy(null);
+      }
+    }, 30);
+  }, [selectedId, paintMesh, painted, addVersion]);
+
+  const runPaintFill = useCallback(() => {
+    if (!selectedId || !paintMesh || painted.size < 3) {
+      toast.error('Paint over the hole first.');
+      return;
+    }
+    setBusy('Filling painted hole…');
+    setTimeout(() => {
+      try {
+        const result = fillPaintedHoles(paintMesh, painted);
+        if (result.filled === 0) {
+          toast.success('No painted hole to close.');
+          return;
+        }
+        addVersion(selectedId, toSoup(result.mesh), 'filled', 'Painted hole fill');
+        setPainted(new Set());
+        toast.success(
+          `Closed ${result.filled} hole(s), filled up to ${result.capHeight.toFixed(1)} mm.`
+        );
+      } catch {
+        toast.error('Could not fill that hole.');
+      } finally {
+        setBusy(null);
+      }
+    }, 30);
+  }, [selectedId, paintMesh, painted, addVersion]);
+
   /**
    * Rebuild a part as a watertight solid, optionally boring a hole through it.
    * This is the route for meshes too damaged for edge repair to touch.
@@ -1721,6 +2160,17 @@ export function Workbench() {
       const part = selectedPart;
       const soup = part ? soupOfPart(part.id) : undefined;
       if (!part || !soup) return;
+
+      const health = diagnose(soup);
+      if (health.thinShellRisk) {
+        setDiagnosis(health);
+        setShowInspector(true);
+        setTab('repair');
+        toast.error(
+          'This part is open. Analyze → Fill first, or the slice will be a paper-thin shell.'
+        );
+        return;
+      }
 
       setBusy('Cutting…');
       setTimeout(() => {
@@ -1936,44 +2386,89 @@ export function Workbench() {
     [project.parts, selectVersion]
   );
 
-  /** Repair every loaded part in one pass — 50-part projects need this. */
-  const fixEveryPart = useCallback(() => {
-    const targets = project.parts.filter((part) => geometries.has(part.activeVersionId));
-    if (targets.length === 0) return;
-
-    setBusy(`Repairing ${targets.length} parts…`);
-    setTimeout(() => {
-      let repaired = 0;
-      let skipped = 0;
-      let stillOpen = 0;
-
-      for (const part of targets) {
-        const soup = geometries.get(part.activeVersionId);
-        if (!soup) continue;
-        try {
-          const result = autoFix(soup, { fillHoles: true, maxHoleEdges: 200 });
-          if (!result.report.changed) {
-            skipped++;
-            if (!result.report.after.watertight) stillOpen++;
-            continue;
-          }
-          addVersion(part.id, result.soup, 'repaired', 'Auto fix (batch)');
-          repaired++;
-          if (!result.report.after.watertight) stillOpen++;
-        } catch {
-          /* keep going; one bad part must not stop the batch */
-        }
+  /**
+   * Repair a chosen set of parts. One part gets the full fix (including a
+   * solid rebuild if the shell stays open). Several parts get edge repair
+   * only — voxelising a whole bench would freeze the tab.
+   */
+  const fixParts = useCallback(
+    (partIds: string[], options?: { fallbackSolid?: boolean }) => {
+      const ids = [...new Set(partIds)].filter((id) => {
+        const part = project.parts.find((candidate) => candidate.id === id);
+        return Boolean(part && geometries.has(part.activeVersionId));
+      });
+      if (ids.length === 0) {
+        toast.error('Nothing selected to repair.');
+        return;
+      }
+      if (ids.length === 1) {
+        runAutoFix(ids[0], {
+          fillHoles: true,
+          maxHoleEdges: 200,
+          fallbackSolid: options?.fallbackSolid ?? true,
+        });
+        return;
       }
 
-      setBusy(null);
-      const bits = [`Fixed ${repaired} part(s)`];
-      if (skipped > 0) bits.push(`${skipped} already clean`);
-      toast.success(
-        `${bits.join(', ')}.` +
-          (stillOpen > 0 ? ` ${stillOpen} still have open or non-manifold edges.` : '')
-      );
-    }, 30);
-  }, [project.parts, geometries, addVersion]);
+      setBusy(`Repairing ${ids.length} selected parts…`);
+      setTimeout(() => {
+        let repaired = 0;
+        let skipped = 0;
+        let stillOpen = 0;
+
+        for (const id of ids) {
+          const part = project.parts.find((candidate) => candidate.id === id);
+          if (!part) continue;
+          const soup = geometries.get(part.activeVersionId);
+          if (!soup) continue;
+          try {
+            const result = autoFix(soup, { fillHoles: true, maxHoleEdges: 200 });
+            if (!result.report.changed) {
+              skipped++;
+              if (!result.report.after.watertight) stillOpen++;
+              continue;
+            }
+            addVersion(part.id, result.soup, 'repaired', 'Auto fix (selection)');
+            repaired++;
+            if (!result.report.after.watertight) stillOpen++;
+          } catch {
+            /* keep going; one bad part must not stop the rest */
+          }
+        }
+
+        setBusy(null);
+        const bits = [`Fixed ${repaired} of ${ids.length}`];
+        if (skipped > 0) bits.push(`${skipped} already clean`);
+        toast.success(
+          `${bits.join(', ')}.` +
+            (stillOpen > 0 ? ` ${stillOpen} still have open or non-manifold edges.` : '')
+        );
+      }, 30);
+    },
+    [project.parts, geometries, runAutoFix, addVersion]
+  );
+
+  const fixSelection = useCallback(() => {
+    fixParts(selection.map((part) => part.id));
+  }, [fixParts, selection]);
+
+  /** Repair every loaded part in one pass — 50-part projects need this. */
+  const fixEveryPart = useCallback(() => {
+    const n = project.parts.length;
+    if (n === 0) return;
+    if (
+      n >= 6 &&
+      !window.confirm(
+        `Repair all ${n} parts? That can freeze the tab for a while.\n\nTo repair one, click the sparkles next to it in the gallery.`
+      )
+    ) {
+      return;
+    }
+    fixParts(
+      project.parts.map((part) => part.id),
+      { fallbackSolid: false }
+    );
+  }, [project.parts, fixParts]);
 
   const traceOutline = useCallback(() => {
     if (!selectedPart || !selectedSoup) {
@@ -2418,6 +2913,18 @@ export function Workbench() {
       const soupB = soupOfPart(toolId);
       if (!soupA || !soupB) return;
 
+      const healthA = diagnose(soupA);
+      if (healthA.thinShellRisk) {
+        setDiagnosis(healthA);
+        setSelectedId(targetId);
+        setShowInspector(true);
+        setTab('repair');
+        toast.error(
+          `${target.name} is open. Analyze → Fill first, or Subtract will leave a paper-thin shell.`
+        );
+        return;
+      }
+
       const boxA = snapNeighbors.find((entry) => entry.id === targetId)?.box;
       const boxB = snapNeighbors.find((entry) => entry.id === toolId)?.box;
       if (boxA && boxB && !aabbOverlap(boxA, boxB, 0.5)) {
@@ -2711,6 +3218,15 @@ export function Workbench() {
           if (selectedId) removePart(selectedId);
           break;
         case 'Escape':
+          if (painting) {
+            setPainting(false);
+            break;
+          }
+          if (focusId) {
+            setFocusId(null);
+            setFrameToken((token) => token + 1);
+            break;
+          }
           setMoveModeId(null);
           setSelectedId(null);
           setMeasuring(false);
@@ -2735,6 +3251,10 @@ export function Workbench() {
           break;
         case 'a':
           setMode((current) => (current === 'assembled' ? 'scattered' : 'assembled'));
+          break;
+        case '/':
+          event.preventDefault();
+          toggleFocus();
           break;
         default:
           break;
@@ -2761,6 +3281,9 @@ export function Workbench() {
     spinPart,
     togglePartVisible,
     showAllParts,
+    painting,
+    focusId,
+    toggleFocus,
   ]);
 
   const onDrop = useCallback(
@@ -2952,9 +3475,9 @@ export function Workbench() {
             <MenuItem
               onClick={() => selectedId && isolatePart(selectedId)}
               disabled={!selectedId || project.parts.length < 2}
-              hint="Alt-click the eye in the gallery"
+              hint="Hides every other part. Same as View → Focus. Uncheck Focus to bring them back."
             >
-              Isolate selected
+              {focusId && selectedId === focusId ? 'Exit focus' : 'Focus this part'}
             </MenuItem>
             <MenuItem
               tone="danger"
@@ -2967,26 +3490,52 @@ export function Workbench() {
             <MenuSeparator />
             <MenuLabel>Repair</MenuLabel>
             <MenuItem
-              onClick={() =>
-                selectedId &&
-                runAutoFix(selectedId, {
-                  fillHoles: true,
-                  maxHoleEdges: 200,
-                  fallbackSolid: true,
-                })
-              }
+              onClick={() => selectedId && runAnalyze(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              icon={ScanSearch}
+              hint="Misalignment, missing faces, face trouble"
+            >
+              Analyze this part
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && runFillSolid(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              hint="Close holes and make a solid volume — needed before Slice / Subtract"
+            >
+              Fill to solid
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && fixParts([selectedId])}
               disabled={!selectedId || Boolean(busy)}
               icon={Sparkles}
-              hint="Weld, fill holes, drop dust; rebuild as solid if still open"
+              hint="This part only — not the rest of the bench"
             >
-              Fix selected part
+              Fix this part
             </MenuItem>
+            {selection.length > 1 && (
+              <MenuItem
+                onClick={fixSelection}
+                disabled={Boolean(busy)}
+                hint="Only the parts you have marked, not the whole bench"
+              >
+                Fix {selection.length} selected parts
+              </MenuItem>
+            )}
             <MenuItem
               onClick={fixEveryPart}
               disabled={Boolean(busy) || project.parts.length === 0}
-              hint="Edge repair over every loaded part — skips ones that are already clean"
+              hint="Every loaded part. Heavy on a full bench — pick one in the gallery instead."
             >
               Fix all parts
+            </MenuItem>
+            <MenuItem
+              onClick={() =>
+                selectedId && runFixMisalignment(selectedId, { toleranceMm: 0.2, snapToGrid: false })
+              }
+              disabled={!selectedId || Boolean(busy)}
+              hint="Snap corners that sat a hair apart after a merge. 0.2 mm. This part only."
+            >
+              Fix misalignment
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Weld the build</MenuLabel>
@@ -3077,7 +3626,28 @@ export function Workbench() {
               🤖 Revive → OpenSCAD…
             </MenuItem>
             <MenuSeparator />
+            <MenuLabel>Place</MenuLabel>
+            <MenuItem
+              onClick={() => runSettle()}
+              disabled={!selectedId || Boolean(busy)}
+              icon={ArrowDownToLine}
+              hint="Drop it onto the table standing upright, then you can drag it"
+            >
+              Settle on the floor
+            </MenuItem>
             <MenuLabel>Group</MenuLabel>
+            <MenuItem
+              onClick={runFitTogether}
+              disabled={selection.length !== 2 || Boolean(busy)}
+              icon={Magnet}
+              hint={
+                selection.length !== 2
+                  ? 'Select exactly two parts first'
+                  : 'Slide the other part flush onto this one — maximise face contact before Merge'
+              }
+            >
+              Fit together
+            </MenuItem>
             <MenuItem
               onClick={mergeSelection}
               disabled={selection.length < 2 || Boolean(busy)}
@@ -3125,10 +3695,37 @@ export function Workbench() {
             <MenuCheckItem checked={xray} onClick={() => setXray((v) => !v)} shortcut="X">
               X-ray isolate
             </MenuCheckItem>
+            <MenuCheckItem
+              checked={Boolean(focusId)}
+              onClick={toggleFocus}
+              shortcut="/"
+            >
+              Focus
+            </MenuCheckItem>
             <MenuCheckItem checked={showCallouts} onClick={() => setShowCallouts((v) => !v)}>
               Mount-point callouts
             </MenuCheckItem>
-            <MenuCheckItem checked={measuring} onClick={() => setMeasuring((v) => !v)}>
+            <MenuCheckItem
+              checked={painting}
+              onClick={() => {
+                if (!selectedId) {
+                  toast.error('Select a part first.');
+                  return;
+                }
+                setPainting((value) => !value);
+                setMeasuring(false);
+                setMoveModeId(null);
+              }}
+            >
+              Paint brush
+            </MenuCheckItem>
+            <MenuCheckItem
+              checked={measuring}
+              onClick={() => {
+                setMeasuring((v) => !v);
+                setPainting(false);
+              }}
+            >
               Ruler
             </MenuCheckItem>
             <MenuSeparator />
@@ -3238,6 +3835,30 @@ export function Workbench() {
           </button>
           <button
             type="button"
+            onClick={() => runSettle()}
+            disabled={!selectedId || Boolean(busy)}
+            title="Drop the selected part onto the table standing upright, then drag it"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <ArrowDownToLine className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Settle
+          </button>
+          <button
+            type="button"
+            onClick={runFitTogether}
+            disabled={selection.length !== 2 || Boolean(busy)}
+            title={
+              selection.length !== 2
+                ? 'Select exactly two parts to fit together'
+                : 'Slide the other part flush onto this one — maximise face contact before Merge'
+            }
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Magnet className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Fit
+          </button>
+          <button
+            type="button"
             onClick={mergeSelection}
             disabled={selection.length < 2 || Boolean(busy)}
             title="Boolean-union the selection into one solid"
@@ -3260,16 +3881,73 @@ export function Workbench() {
 
         <button
           type="button"
-          onClick={() =>
-            selectedId &&
-            runAutoFix(selectedId, { fillHoles: true, maxHoleEdges: 200, fallbackSolid: true })
-          }
+          onClick={() => {
+            if (!selectedId) {
+              toast.error('Select a part first.');
+              return;
+            }
+            setPainting((value) => !value);
+            setMeasuring(false);
+            setMoveModeId(null);
+          }}
+          disabled={!selectedId}
+          title="Paint a broken edge or hole, then Align or Fill"
+          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
+            painting
+              ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-100 disabled:text-slate-300'
+          }`}
+        >
+          <Paintbrush className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          Paint
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedId) {
+              toast.error('Select a part first.');
+              return;
+            }
+            runAnalyze(selectedId);
+          }}
           disabled={!selectedId || Boolean(busy)}
-          title="Fix this part — weld cracks, fill holes, drop dust. Rebuilds as a solid if it stays open."
+          title="Find misalignment, missing faces, and face trouble"
+          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+        >
+          <ScanSearch className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          Analyze
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedId) {
+              toast.error('Select a part first.');
+              return;
+            }
+            runFillSolid(selectedId);
+          }}
+          disabled={!selectedId || Boolean(busy)}
+          title="Fill holes and rebuild as a solid so Slice / Subtract keep volume"
+          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+        >
+          Fill
+        </button>
+
+        <button
+          type="button"
+          onClick={fixSelection}
+          disabled={selection.length === 0 || Boolean(busy)}
+          title={
+            selection.length > 1
+              ? `Repair the ${selection.length} selected parts only — not the whole bench`
+              : 'Fix this part only — weld cracks, fill holes, drop dust. Rebuilds as a solid if it stays open.'
+          }
           className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
         >
           <Sparkles className="mx-auto mb-0.5 h-3.5 w-3.5" />
-          Fix
+          {selection.length > 1 ? `Fix ${selection.length}` : 'Fix'}
         </button>
 
         <button
@@ -3414,7 +4092,10 @@ export function Workbench() {
             onIsolate={isolatePart}
             onShowAll={showAllParts}
             onDelete={removePart}
+            onFix={(partId) => fixParts([partId])}
+            fixBusy={Boolean(busy)}
             onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
+            focusId={focusId}
           />
         </div>
         )}
@@ -3454,6 +4135,11 @@ export function Workbench() {
             measuring={measuring}
             measurePoints={measurePoints}
             onMeasurePoint={(point) => setMeasurePoints((current) => [...current, point])}
+            painting={painting}
+            paintRadiusMm={paintRadiusMm}
+            paintPartId={painting ? selectedId : null}
+            paintLocal={paintLocal}
+            onPaintAt={onPaintAt}
             callouts={showCallouts && !isMobile ? callouts : []}
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
@@ -3502,7 +4188,31 @@ export function Workbench() {
             />
           )}
 
-          {project.parts.length > 0 && selectedId && !moveModeId && (
+          {project.parts.length > 0 && painting && selectedPart && (
+            <PaintBar
+              name={selectedPart.name}
+              painted={painted.size}
+              radiusMm={paintRadiusMm}
+              onRadius={setPaintRadiusMm}
+              onAlign={runPaintAlign}
+              onFill={runPaintFill}
+              onClear={() => setPainted(new Set())}
+              onDone={() => {
+                setPainting(false);
+                setPainted(new Set());
+              }}
+              busy={Boolean(busy)}
+            />
+          )}
+
+          {project.parts.length > 0 && focusId && !painting && !moveModeId && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-emerald-400 bg-white/95 px-3 py-2 text-center text-[0.7rem] font-medium text-emerald-800 shadow-sm">
+              Focus · {project.parts.find((part) => part.id === focusId)?.name ?? 'part'} · View →
+              uncheck Focus to show the rest
+            </div>
+          )}
+
+          {project.parts.length > 0 && selectedId && !moveModeId && !painting && !focusId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
               Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours · Y-axis rotate by default
             </div>
@@ -3607,7 +4317,10 @@ export function Workbench() {
                   onIsolate={isolatePart}
                   onShowAll={showAllParts}
                   onDelete={removePart}
+                  onFix={(partId) => fixParts([partId])}
+                  fixBusy={Boolean(busy)}
                   onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
+                  focusId={focusId}
                 />
               </div>
             </div>
@@ -3644,11 +4357,16 @@ export function Workbench() {
             onPatchPart={patchPart}
             onPatchTransform={patchTransform}
             onDropToTable={dropToTable}
+            onSettle={runSettle}
             onCenter={centerPart}
             onDuplicate={duplicatePart}
             onToggleVisible={togglePartVisible}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
+            onFixMisalignment={runFixMisalignment}
+            onAnalyze={runAnalyze}
+            onFillSolid={runFillSolid}
+            diagnosis={diagnosis}
             onMakeSolid={runMakeSolid}
             solidReport={solidReport}
             onRevert={revertPart}
@@ -3658,10 +4376,14 @@ export function Workbench() {
             canRevert={Boolean(selectedPart && selectedPart.versions.length > 1)}
             fixReport={fixReport}
             simplifyReport={simplifyReport}
+            misalignReport={misalignReport}
             busy={Boolean(busy)}
             measurePoints={measurePoints}
             measuring={measuring}
-            onToggleMeasuring={() => setMeasuring((v) => !v)}
+            onToggleMeasuring={() => {
+              setMeasuring((v) => !v);
+              setPainting(false);
+            }}
             onClearMeasure={() => setMeasurePoints([])}
             assemblyTotals={assemblyTotals}
           />
@@ -3676,7 +4398,8 @@ export function Workbench() {
             <h2 className="mb-1 text-sm font-bold text-slate-900">Slice through the part</h2>
             <p className="mb-3 text-[0.7rem] text-slate-500">
               Every triangle the plane misses is kept exactly as it is — only the ones it crosses
-              are split, and the cut face is closed flat. Nothing is resampled.
+              are split, and the cut face is closed flat. The part must be a solid (Analyze → Fill)
+              or the slice comes out as a paper-thin shell.
             </p>
 
             <div className="mb-3 grid grid-cols-2 gap-2">
@@ -3928,8 +4651,9 @@ export function Workbench() {
           >
             <h2 className="text-sm font-bold text-slate-900">Subtract from “{selectedPart.name}”</h2>
             <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
-              Pick the cutter. Overlap the two first (double-tap → move). Parts that currently overlap
-              are marked. Clearance 0 mm is an exact voxel cut; 0.2–0.4 mm helps mating parts slide.
+              Pick the cutter. Overlap the two first (double-tap → move). The target must be a solid
+              (Analyze → Fill) or the cut will be a paper-thin shell. Clearance 0 mm is an exact voxel
+              cut; 0.2–0.4 mm helps mating parts slide.
             </p>
             <div className="mb-3 grid grid-cols-2 gap-2">
               <label className="block">

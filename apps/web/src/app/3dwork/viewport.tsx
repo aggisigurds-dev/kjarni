@@ -55,6 +55,13 @@ interface ViewportProps {
   measuring: boolean;
   measurePoints: [number, number, number][];
   onMeasurePoint: (point: [number, number, number]) => void;
+  /** Paint vertices on the selected part (edge-align / hole-fill). */
+  painting: boolean;
+  paintRadiusMm: number;
+  paintPartId: string | null;
+  /** Local-space XYZ triples of already-painted vertices. */
+  paintLocal: Float32Array;
+  onPaintAt: (partId: string, localPoint: [number, number, number], erase: boolean) => void;
   callouts: ViewportCallout[];
   onCalloutSelect: (slotId: string) => void;
   onCalloutCycle: (slotId: string, direction: 1 | -1) => void;
@@ -106,6 +113,7 @@ interface SceneRefs {
   controls: OrbitControls;
   meshRoot: THREE.Group;
   overlay: THREE.Group;
+  paintMarks: THREE.Group;
   grid: THREE.GridHelper;
   selection: THREE.BoxHelper;
   meshes: Map<string, THREE.Mesh>;
@@ -136,6 +144,11 @@ export function Viewport({
   measuring,
   measurePoints,
   onMeasurePoint,
+  painting,
+  paintRadiusMm,
+  paintPartId,
+  paintLocal,
+  onPaintAt,
   callouts,
   onCalloutSelect,
   onCalloutCycle,
@@ -170,6 +183,10 @@ export function Viewport({
     onSelect,
     onMeasurePoint,
     measuring,
+    painting,
+    paintRadiusMm,
+    paintPartId,
+    onPaintAt,
     dragEnabled,
     moveModeId,
     manipMode,
@@ -189,6 +206,10 @@ export function Viewport({
     onSelect,
     onMeasurePoint,
     measuring,
+    painting,
+    paintRadiusMm,
+    paintPartId,
+    onPaintAt,
     dragEnabled,
     moveModeId,
     manipMode,
@@ -246,6 +267,8 @@ export function Viewport({
     scene.add(meshRoot);
     const overlay = new THREE.Group();
     scene.add(overlay);
+    const paintMarks = new THREE.Group();
+    scene.add(paintMarks);
 
     const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xd97706);
     selection.visible = false;
@@ -258,6 +281,7 @@ export function Viewport({
       controls,
       meshRoot,
       overlay,
+      paintMarks,
       grid,
       selection,
       meshes: new Map(),
@@ -389,6 +413,23 @@ export function Viewport({
           moved: boolean;
         }
       | null = null;
+    let paintStroke = false;
+    const localHit = new THREE.Vector3();
+
+    const paintAtEvent = (event: PointerEvent) => {
+      const h = handlers.current;
+      if (!h.painting) return;
+      setPointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects([...state.meshes.values()], false);
+      if (hits.length === 0) return;
+      const mesh = hits[0].object as THREE.Mesh;
+      const id = mesh.userData.partId as string | undefined;
+      if (!id || (h.paintPartId && id !== h.paintPartId)) return;
+      localHit.copy(hits[0].point);
+      mesh.worldToLocal(localHit);
+      h.onPaintAt(id, [localHit.x, localHit.y, localHit.z], event.shiftKey);
+    };
 
     const setPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -400,6 +441,18 @@ export function Viewport({
       downAt = { x: event.clientX, y: event.clientY };
       drag = null;
       const h = handlers.current;
+      if (h.painting && event.isPrimary) {
+        paintStroke = true;
+        state.controls.enabled = false;
+        renderer.domElement.style.cursor = 'crosshair';
+        try {
+          renderer.domElement.setPointerCapture(event.pointerId);
+        } catch {
+          /* capture is best-effort */
+        }
+        paintAtEvent(event);
+        return;
+      }
       // A grab moves or rotates only the part that is in move mode; everything
       // else — including a merely-selected part — still orbits the camera.
       if (!h.dragEnabled || h.measuring || !event.isPrimary || !h.moveModeId) return;
@@ -435,6 +488,10 @@ export function Viewport({
     };
 
     const onPointerMove = (event: PointerEvent) => {
+      if (paintStroke) {
+        paintAtEvent(event);
+        return;
+      }
       if (!drag) return;
       const mesh = state.meshes.get(drag.id);
       if (!mesh) return;
@@ -506,6 +563,18 @@ export function Viewport({
     };
 
     const onPointerUp = (event: PointerEvent) => {
+      if (paintStroke) {
+        paintStroke = false;
+        state.controls.enabled = true;
+        renderer.domElement.style.cursor = handlers.current.painting ? 'crosshair' : '';
+        try {
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        } catch {
+          /* nothing captured */
+        }
+        downAt = null;
+        return;
+      }
       if (drag) {
         state.controls.enabled = true;
         renderer.domElement.style.cursor = '';
@@ -743,6 +812,38 @@ export function Viewport({
   }, [measurePoints]);
 
   useEffect(() => {
+    const state = refs.current;
+    if (!state) return;
+    const previous = state.paintMarks.children.slice();
+    state.paintMarks.clear();
+    for (const child of previous) {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    if (!paintPartId || paintLocal.length < 3) return;
+    const mesh = state.meshes.get(paintPartId);
+    if (!mesh) return;
+    const dotGeometry = new THREE.SphereGeometry(1, 10, 8);
+    const scale = Math.max(1.4, state.camera.position.length() / 160);
+    const world = new THREE.Vector3();
+    for (let i = 0; i + 2 < paintLocal.length; i += 3) {
+      world.set(paintLocal[i], paintLocal[i + 1], paintLocal[i + 2]);
+      mesh.localToWorld(world);
+      const dot = new THREE.Mesh(
+        dotGeometry.clone(),
+        new THREE.MeshBasicMaterial({ color: 0x10b981, depthTest: false })
+      );
+      dot.position.copy(world);
+      dot.scale.setScalar(scale);
+      dot.renderOrder = 12;
+      state.paintMarks.add(dot);
+    }
+    dotGeometry.dispose();
+  }, [paintPartId, paintLocal]);
+
+  useEffect(() => {
     if (frameToken === 0) return;
     // Wait a frame: on the first import the meshes have only just been added,
     // and the canvas may not have its final size yet.
@@ -750,7 +851,10 @@ export function Viewport({
     return () => cancelAnimationFrame(handle);
   }, [frameToken, frameAll]);
 
-  const cursor = useMemo(() => (measuring ? 'crosshair' : 'grab'), [measuring]);
+  const cursor = useMemo(
+    () => (painting || measuring ? 'crosshair' : 'grab'),
+    [painting, measuring]
+  );
 
   return (
     <div ref={hostRef} className="relative h-full w-full" style={{ cursor }}>

@@ -6,7 +6,7 @@
  * is the same action as clicking the part out on the table.
  */
 
-import { Eye, EyeOff, Layers, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Layers, Sparkles, Trash2 } from 'lucide-react';
 import type { Part, Project, Slot } from '@/lib/3dwork/project';
 import { partsForSlot } from '@/lib/3dwork/project';
 import { formatCount } from '@/lib/3dwork/format';
@@ -26,7 +26,12 @@ interface GalleryProps {
   onIsolate: (partId: string) => void;
   onShowAll: () => void;
   onDelete: (partId: string) => void;
+  /** Repair this part only — never the rest of the bench. */
+  onFix: (partId: string) => void;
+  fixBusy?: boolean;
   onAssignSlot: (partId: string, slotId: string) => void;
+  /** Part currently soloed on the table (View → Focus). */
+  focusId?: string | null;
 }
 
 function PartCard({
@@ -218,7 +223,10 @@ export function Gallery({
   onIsolate,
   onShowAll,
   onDelete,
+  onFix,
+  fixBusy,
   onAssignSlot,
+  focusId = null,
 }: GalleryProps) {
   const loose = project.parts.filter(
     (part) => !project.slots.some((slot) => slot.id === part.slotId)
@@ -250,17 +258,21 @@ export function Gallery({
               </button>
             </div>
             <p className="px-3 pb-1.5 text-[0.62rem] leading-snug text-slate-400">
-              Eye hides a part — it stays in this list so you can switch it back on. Alt-click isolates.
+              Eye hides a part. Sparkles repairs that one part only. View → Focus (or Alt-click the
+              eye) looks at one part; uncheck Focus to bring the others back.
             </p>
             <ul className="pb-1">
               {project.parts.map((part) => {
                 const selected = selectedId === part.id;
+                const isMarked = marked.has(part.id);
                 return (
                   <li key={part.id}>
                     <div
-                      className={`flex items-center gap-1 px-2 py-0.5 ${
-                        selected ? 'bg-amber-50' : ''
-                      } ${!part.visible ? 'opacity-70' : ''}`}
+                      className={`flex items-center gap-0.5 px-2 py-0.5 ${
+                        selected ? 'bg-amber-50' : isMarked ? 'bg-sky-50' : ''
+                      } ${!part.visible ? 'opacity-70' : ''} ${
+                        focusId && part.id !== focusId ? 'opacity-40' : ''
+                      }`}
                     >
                       <button
                         type="button"
@@ -271,7 +283,7 @@ export function Gallery({
                         }`}
                         title={
                           part.visible
-                            ? 'Hide on the table — Alt-click to isolate'
+                            ? 'Hide on the table — Alt-click to focus this part'
                             : 'Show on the table'
                         }
                         aria-pressed={!part.visible}
@@ -298,11 +310,30 @@ export function Gallery({
                         }}
                       >
                         {part.name}
+                        {focusId === part.id ? (
+                          <span className="ml-1 text-[0.6rem] font-bold uppercase tracking-wide text-emerald-700">
+                            focus
+                          </span>
+                        ) : null}
                         {!part.visible ? (
                           <span className="ml-1 text-[0.6rem] font-bold uppercase tracking-wide text-amber-600">
                             hidden
                           </span>
                         ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50 disabled:text-slate-300"
+                        title={`Repair ${part.name} only`}
+                        aria-label={`Repair ${part.name} only`}
+                        disabled={fixBusy}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelect(part.id);
+                          onFix(part.id);
+                        }}
+                      >
+                        <Sparkles className="h-4 w-4" />
                       </button>
                     </div>
                   </li>
