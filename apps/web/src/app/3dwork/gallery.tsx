@@ -30,6 +30,8 @@ interface GalleryProps {
   onFix: (partId: string) => void;
   fixBusy?: boolean;
   onAssignSlot: (partId: string, slotId: string) => void;
+  /** Part currently soloed on the table (View → Focus). */
+  focusId?: string | null;
 }
 
 function PartCard({
@@ -224,6 +226,7 @@ export function Gallery({
   onFix,
   fixBusy,
   onAssignSlot,
+  focusId = null,
 }: GalleryProps) {
   const loose = project.parts.filter(
     (part) => !project.slots.some((slot) => slot.id === part.slotId)
@@ -255,8 +258,8 @@ export function Gallery({
               </button>
             </div>
             <p className="px-3 pb-1.5 text-[0.62rem] leading-snug text-slate-400">
-              Eye hides a part. Sparkles repairs that one part only — the rest of the bench stays
-              put. Alt-click the eye isolates.
+              Eye hides a part. Sparkles repairs that one part only. View → Focus (or Alt-click the
+              eye) looks at one part; uncheck Focus to bring the others back.
             </p>
             <ul className="pb-1">
               {project.parts.map((part) => {
@@ -267,7 +270,9 @@ export function Gallery({
                     <div
                       className={`flex items-center gap-0.5 px-2 py-0.5 ${
                         selected ? 'bg-amber-50' : isMarked ? 'bg-sky-50' : ''
-                      } ${!part.visible ? 'opacity-70' : ''}`}
+                      } ${!part.visible ? 'opacity-70' : ''} ${
+                        focusId && part.id !== focusId ? 'opacity-40' : ''
+                      }`}
                     >
                       <button
                         type="button"
@@ -278,7 +283,7 @@ export function Gallery({
                         }`}
                         title={
                           part.visible
-                            ? 'Hide on the table — Alt-click to isolate'
+                            ? 'Hide on the table — Alt-click to focus this part'
                             : 'Show on the table'
                         }
                         aria-pressed={!part.visible}
@@ -305,6 +310,11 @@ export function Gallery({
                         }}
                       >
                         {part.name}
+                        {focusId === part.id ? (
+                          <span className="ml-1 text-[0.6rem] font-bold uppercase tracking-wide text-emerald-700">
+                            focus
+                          </span>
+                        ) : null}
                         {!part.visible ? (
                           <span className="ml-1 text-[0.6rem] font-bold uppercase tracking-wide text-amber-600">
                             hidden

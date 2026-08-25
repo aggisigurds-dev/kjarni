@@ -228,6 +228,8 @@ export function Workbench() {
 
   const [workspace, setWorkspace] = useState<Workspace>('bench');
   const [xray, setXray] = useState(false);
+  /** When set, the table shows only this part. Uncheck View → Focus to restore the rest. */
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [showCallouts, setShowCallouts] = useState(true);
   const [sketch, setSketch] = useState<Sketch>(() => emptySketch());
   const [sketchPlane, setSketchPlane] = useState<ViewPlane>('xy');
@@ -434,6 +436,16 @@ export function Workbench() {
     setPainted(new Set());
   }, [selectedId, selectedSoup]);
 
+  useEffect(() => {
+    if (focusId && !project.parts.some((part) => part.id === focusId)) setFocusId(null);
+  }, [focusId, project.parts]);
+
+  useEffect(() => {
+    if (!focusId || !selectedId || selectedId === focusId) return;
+    setFocusId(selectedId);
+    setFrameToken((token) => token + 1);
+  }, [selectedId, focusId]);
+
   /** Bounding sizes drive the scatter layout; cheap enough to redo on change. */
   const sizes = useMemo(() => {
     const map = new Map<string, PartSize>();
@@ -467,7 +479,8 @@ export function Workbench() {
     for (const part of project.parts) {
       const soup = geometries.get(part.activeVersionId);
       const placement = byId.get(part.id);
-      if (!soup || !placement || !part.visible) continue;
+      if (!soup || !placement) continue;
+      if (focusId ? part.id !== focusId : !part.visible) continue;
 
       parts.push({
         id: part.id,
@@ -480,7 +493,7 @@ export function Workbench() {
       });
     }
     return parts;
-  }, [project.parts, geometries, placements]);
+  }, [project.parts, geometries, placements, focusId]);
 
   const partWorldPos = useCallback(
     (part: Part) => {
@@ -500,7 +513,7 @@ export function Workbench() {
   const snapNeighbors = useMemo(
     () =>
       project.parts.flatMap((part) => {
-        if (!part.visible) return [];
+        if (focusId ? part.id !== focusId : !part.visible) return [];
         const soup = geometries.get(part.activeVersionId);
         if (!soup) return [];
         const local = computeBounds(soup);
@@ -516,7 +529,7 @@ export function Workbench() {
           },
         ];
       }),
-    [project.parts, geometries, partWorldPos]
+    [project.parts, geometries, partWorldPos, focusId]
   );
 
   const snapAnchors = useMemo(
@@ -917,24 +930,26 @@ export function Workbench() {
     });
   }, [patchProject]);
 
-  /** Hide every other part. A second isolate on the same part brings them all back. */
-  const isolatePart = useCallback(
-    (partId: string) => {
-      patchProject((current) => {
-        const already =
-          current.parts.length > 0 &&
-          current.parts.every((part) => (part.id === partId ? part.visible : !part.visible));
-        return {
-          ...current,
-          parts: current.parts.map((part) => ({
-            ...part,
-            visible: already ? true : part.id === partId,
-          })),
-        };
-      });
-    },
-    [patchProject]
-  );
+  /** Hide every other part on the table. A second click on the same part restores them. */
+  const isolatePart = useCallback((partId: string) => {
+    setSelectedId(partId);
+    setFocusId((current) => (current === partId ? null : partId));
+    setFrameToken((token) => token + 1);
+  }, []);
+
+  const toggleFocus = useCallback(() => {
+    if (focusId) {
+      setFocusId(null);
+      setFrameToken((token) => token + 1);
+      return;
+    }
+    if (!selectedId) {
+      toast.error('Select a part first.');
+      return;
+    }
+    setFocusId(selectedId);
+    setFrameToken((token) => token + 1);
+  }, [focusId, selectedId]);
 
   const patchTransform = useCallback(
     (partId: string, patch: Partial<Transform>) => {
@@ -1593,7 +1608,11 @@ export function Workbench() {
   const callouts = useMemo<ViewportCallout[]>(() => {
     if (!showCallouts || mode !== 'assembled') return [];
 
-    return project.slots.map((slot) => {
+    return project.slots.flatMap((slot) => {
+      if (focusId) {
+        const focused = project.parts.find((part) => part.id === focusId);
+        if (!focused || focused.slotId !== slot.id) return [];
+      }
       const variants = project.parts.filter((part) => part.slotId === slot.id);
       const fitted = variants.find((part) => part.id === slot.activePartId);
       return {
@@ -1606,7 +1625,7 @@ export function Workbench() {
         variants: variants.length,
       };
     });
-  }, [project.slots, project.parts, showCallouts, mode]);
+  }, [project.slots, project.parts, showCallouts, mode, focusId]);
 
   const cycleSlot = useCallback(
     (slotId: string, direction: 1 | -1) => {
@@ -2900,6 +2919,11 @@ export function Workbench() {
             setPainting(false);
             break;
           }
+          if (focusId) {
+            setFocusId(null);
+            setFrameToken((token) => token + 1);
+            break;
+          }
           setMoveModeId(null);
           setSelectedId(null);
           setMeasuring(false);
@@ -2924,6 +2948,10 @@ export function Workbench() {
           break;
         case 'a':
           setMode((current) => (current === 'assembled' ? 'scattered' : 'assembled'));
+          break;
+        case '/':
+          event.preventDefault();
+          toggleFocus();
           break;
         default:
           break;
@@ -2951,6 +2979,8 @@ export function Workbench() {
     togglePartVisible,
     showAllParts,
     painting,
+    focusId,
+    toggleFocus,
   ]);
 
   const onDrop = useCallback(
@@ -3142,9 +3172,9 @@ export function Workbench() {
             <MenuItem
               onClick={() => selectedId && isolatePart(selectedId)}
               disabled={!selectedId || project.parts.length < 2}
-              hint="Alt-click the eye in the gallery"
+              hint="Hides every other part. Same as View → Focus. Uncheck Focus to bring them back."
             >
-              Isolate selected
+              {focusId && selectedId === focusId ? 'Exit focus' : 'Focus this part'}
             </MenuItem>
             <MenuItem
               tone="danger"
@@ -3325,6 +3355,13 @@ export function Workbench() {
             </MenuCheckItem>
             <MenuCheckItem checked={xray} onClick={() => setXray((v) => !v)} shortcut="X">
               X-ray isolate
+            </MenuCheckItem>
+            <MenuCheckItem
+              checked={Boolean(focusId)}
+              onClick={toggleFocus}
+              shortcut="/"
+            >
+              Focus
             </MenuCheckItem>
             <MenuCheckItem checked={showCallouts} onClick={() => setShowCallouts((v) => !v)}>
               Mount-point callouts
@@ -3662,6 +3699,7 @@ export function Workbench() {
             onFix={(partId) => fixParts([partId])}
             fixBusy={Boolean(busy)}
             onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
+            focusId={focusId}
           />
         </div>
         )}
@@ -3771,7 +3809,14 @@ export function Workbench() {
             />
           )}
 
-          {project.parts.length > 0 && selectedId && !moveModeId && !painting && (
+          {project.parts.length > 0 && focusId && !painting && !moveModeId && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-emerald-400 bg-white/95 px-3 py-2 text-center text-[0.7rem] font-medium text-emerald-800 shadow-sm">
+              Focus · {project.parts.find((part) => part.id === focusId)?.name ?? 'part'} · View →
+              uncheck Focus to show the rest
+            </div>
+          )}
+
+          {project.parts.length > 0 && selectedId && !moveModeId && !painting && !focusId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
               Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours · Y-axis rotate by default
             </div>
@@ -3879,6 +3924,7 @@ export function Workbench() {
                   onFix={(partId) => fixParts([partId])}
                   fixBusy={Boolean(busy)}
                   onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
+                  focusId={focusId}
                 />
               </div>
             </div>
