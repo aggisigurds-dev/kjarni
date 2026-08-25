@@ -44,6 +44,7 @@ interface InspectorProps {
   onPatchPart: (partId: string, patch: Partial<Part>) => void;
   onPatchTransform: (partId: string, patch: Partial<Transform>) => void;
   onDropToTable: (partId: string) => void;
+  onSettle: (partId: string) => void;
   onCenter: (partId: string) => void;
   onDuplicate: (partId: string) => void;
   onToggleVisible: (partId: string) => void;
@@ -150,6 +151,7 @@ function ModifyTab({
   onPatchPart,
   onPatchTransform,
   onDropToTable,
+  onSettle,
   onCenter,
   onDuplicate,
   onUpdateHardware,
@@ -160,6 +162,7 @@ function ModifyTab({
   onPatchPart: InspectorProps['onPatchPart'];
   onPatchTransform: InspectorProps['onPatchTransform'];
   onDropToTable: InspectorProps['onDropToTable'];
+  onSettle: InspectorProps['onSettle'];
   onCenter: InspectorProps['onCenter'];
   onDuplicate: InspectorProps['onDuplicate'];
   onUpdateHardware: InspectorProps['onUpdateHardware'];
@@ -431,11 +434,14 @@ function ModifyTab({
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className={ACTION_GHOST} onClick={() => onCenter(part.id)}>
-          Centre on mount
+        <button type="button" className={ACTION_GHOST} onClick={() => onSettle(part.id)}>
+          Settle on the floor
         </button>
         <button type="button" className={ACTION_GHOST} onClick={() => onDropToTable(part.id)}>
           Drop to table
+        </button>
+        <button type="button" className={ACTION_GHOST} onClick={() => onCenter(part.id)}>
+          Centre on mount
         </button>
         <button type="button" className={ACTION_GHOST} onClick={() => onDuplicate(part.id)}>
           Duplicate as variant
@@ -1223,6 +1229,7 @@ export function Inspector(props: InspectorProps) {
             onPatchPart={props.onPatchPart}
             onPatchTransform={props.onPatchTransform}
             onDropToTable={props.onDropToTable}
+            onSettle={props.onSettle}
             onCenter={props.onCenter}
             onDuplicate={props.onDuplicate}
             onUpdateHardware={props.onUpdateHardware}

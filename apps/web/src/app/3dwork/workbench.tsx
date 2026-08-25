@@ -22,6 +22,7 @@ import {
   Group,
   Loader2,
   Magnet,
+  ArrowDownToLine,
   Maximize,
   PanelLeft,
   PanelRight,
@@ -112,6 +113,7 @@ import {
 } from '@/lib/3dwork/hardware';
 import { makeSolid, subtractMesh, unionMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
 import { fitTogether } from '@/lib/3dwork/fit';
+import { settleOnFloor } from '@/lib/3dwork/settle';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -1467,6 +1469,96 @@ export function Workbench() {
       toast.success(summary);
     }
   }, [selection, selectedId, soupOfPart, partWorldPos, nudgePart, mode, sizes, patchProject]);
+
+  /**
+   * Drop the selected part onto the table: rotate a face flat onto Y=0, then
+   * lower it until it sits. Lands in Free arrange so it can be dragged after.
+   */
+  const runSettle = useCallback(
+    (partId?: string) => {
+      const id = partId ?? selectedId;
+      const part = project.parts.find((candidate) => candidate.id === id) ?? null;
+      if (!part) {
+        toast.error('Select a part first.');
+        return;
+      }
+      const soup = soupOfPart(part.id);
+      if (!soup) {
+        toast.error('That part has no geometry.');
+        return;
+      }
+
+      const worldPos = partWorldPos(part);
+      const result = settleOnFloor(soup, part.transform, worldPos);
+      const already = Math.abs(result.droppedMm) < 0.05 && Math.abs(result.tiltedDeg) < 0.5;
+
+      if (mode === 'assembled') {
+        const anchor = project.slots.find((slot) => slot.activePartId === part.id)?.anchor ?? {
+          x: 0,
+          y: 0,
+          z: 0,
+        };
+        patchProject((current) => ({
+          ...current,
+          parts: current.parts.map((entry) =>
+            entry.id !== part.id
+              ? entry
+              : {
+                  ...entry,
+                  transform: {
+                    ...entry.transform,
+                    rotation: result.rotation,
+                    position: {
+                      x: result.position.x - anchor.x,
+                      y: result.position.y - anchor.y,
+                      z: result.position.z - anchor.z,
+                    },
+                  },
+                }
+          ),
+        }));
+      } else {
+        patchProject((current) => {
+          const layout =
+            mode === 'free' ? freePlacement(current) : scatterPlacement(current, sizes);
+          const posById = new Map(layout.map((entry) => [entry.partId, entry.position]));
+          return {
+            ...current,
+            parts: current.parts.map((entry) => {
+              if (entry.id === part.id) {
+                return {
+                  ...entry,
+                  transform: { ...entry.transform, rotation: result.rotation },
+                  freePos: result.position,
+                };
+              }
+              return entry.freePos
+                ? entry
+                : { ...entry, freePos: posById.get(entry.id) ?? { x: 0, y: 0, z: 0 } };
+            }),
+          };
+        });
+        if (mode !== 'free') setMode('free');
+      }
+
+      setPainting(false);
+      setMoveModeId(part.id);
+
+      if (already) {
+        toast.success('Already on the floor.');
+        return;
+      }
+      const bits = ['Settled on the floor'];
+      if (Math.abs(result.tiltedDeg) >= 0.5) bits.push('stood upright');
+      const travel = Math.abs(result.droppedMm);
+      if (travel >= 0.05) {
+        const mm = travel < 1 ? travel.toFixed(1) : String(Math.round(travel));
+        bits.push(result.droppedMm >= 0 ? `dropped ${mm} mm` : `lifted ${mm} mm`);
+      }
+      toast.success(bits.join(' · '));
+    },
+    [selectedId, project.parts, project.slots, soupOfPart, partWorldPos, mode, sizes, patchProject]
+  );
 
   const duplicatePart = useCallback(
     (partId: string) => {
@@ -3534,6 +3626,15 @@ export function Workbench() {
               🤖 Revive → OpenSCAD…
             </MenuItem>
             <MenuSeparator />
+            <MenuLabel>Place</MenuLabel>
+            <MenuItem
+              onClick={() => runSettle()}
+              disabled={!selectedId || Boolean(busy)}
+              icon={ArrowDownToLine}
+              hint="Drop it onto the table standing upright, then you can drag it"
+            >
+              Settle on the floor
+            </MenuItem>
             <MenuLabel>Group</MenuLabel>
             <MenuItem
               onClick={runFitTogether}
@@ -3731,6 +3832,16 @@ export function Workbench() {
           >
             <Ungroup className="mx-auto mb-0.5 h-3.5 w-3.5" />
             Ungroup
+          </button>
+          <button
+            type="button"
+            onClick={() => runSettle()}
+            disabled={!selectedId || Boolean(busy)}
+            title="Drop the selected part onto the table standing upright, then drag it"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <ArrowDownToLine className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Settle
           </button>
           <button
             type="button"
@@ -4246,6 +4357,7 @@ export function Workbench() {
             onPatchPart={patchPart}
             onPatchTransform={patchTransform}
             onDropToTable={dropToTable}
+            onSettle={runSettle}
             onCenter={centerPart}
             onDuplicate={duplicatePart}
             onToggleVisible={togglePartVisible}
