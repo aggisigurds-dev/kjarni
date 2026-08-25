@@ -21,6 +21,7 @@ import {
   FolderPlus,
   Group,
   Loader2,
+  Magnet,
   Maximize,
   PanelLeft,
   PanelRight,
@@ -110,6 +111,7 @@ import {
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
 import { makeSolid, subtractMesh, unionMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { fitTogether } from '@/lib/3dwork/fit';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -1385,6 +1387,86 @@ export function Workbench() {
       }
     }, 20);
   }, [selection, soupOfPart, partWorldPos, project, patchProject]);
+
+  /**
+   * Slide the other selected part onto this one so their facing faces sit
+   * flush with as much overlap as possible. A later Merge then has no
+   * hairline gap to turn into extra seam edges.
+   */
+  const runFitTogether = useCallback(() => {
+    if (selection.length !== 2) {
+      toast.error('Select exactly two parts — turn on Multi or hold ⌘/Ctrl.');
+      return;
+    }
+    const fixedPart = selection.find((part) => part.id === selectedId) ?? selection[0];
+    if (!fixedPart) return;
+    const movingPart = selection.find((part) => part.id !== fixedPart.id);
+    if (!movingPart) return;
+
+    const fixedSoup = soupOfPart(fixedPart.id);
+    const movingSoup = soupOfPart(movingPart.id);
+    if (!fixedSoup || !movingSoup) {
+      toast.error('Need geometry on both selected parts.');
+      return;
+    }
+
+    const fixedWorld = bakeTransform(fixedSoup, {
+      ...fixedPart.transform,
+      position: partWorldPos(fixedPart),
+    });
+    const movingWorld = bakeTransform(movingSoup, {
+      ...movingPart.transform,
+      position: partWorldPos(movingPart),
+    });
+    const result = fitTogether(fixedWorld, movingWorld);
+    const contact = `${Math.round(result.contactPercent)}% contact`;
+    const moved = Math.hypot(result.delta.x, result.delta.y, result.delta.z);
+
+    if (moved < 0.02) {
+      toast.success(`Already flush · ${contact}`);
+      return;
+    }
+
+    const applyDelta = (pos: { x: number; y: number; z: number }) => ({
+      x: pos.x + result.delta.x,
+      y: pos.y + result.delta.y,
+      z: pos.z + result.delta.z,
+    });
+
+    if (mode === 'assembled') {
+      nudgePart(movingPart.id, result.delta);
+    } else {
+      // Scatter layout ignores transform.position, so seed Free arrange from
+      // wherever the parts sit now and apply the slide there.
+      patchProject((current) => {
+        const layout =
+          mode === 'free' ? freePlacement(current) : scatterPlacement(current, sizes);
+        const posById = new Map(layout.map((entry) => [entry.partId, entry.position]));
+        return {
+          ...current,
+          parts: current.parts.map((part) => {
+            const seated = part.freePos ?? posById.get(part.id) ?? { x: 0, y: 0, z: 0 };
+            if (part.id !== movingPart.id) {
+              return part.freePos ? part : { ...part, freePos: seated };
+            }
+            return { ...part, freePos: applyDelta(seated) };
+          }),
+        };
+      });
+      if (mode !== 'free') setMode('free');
+    }
+
+    const gap =
+      result.gapClosedMm < 1
+        ? `${result.gapClosedMm.toFixed(2)} mm`
+        : `${result.gapClosedMm.toFixed(1)} mm`;
+    const summary = `Fitted together · ${contact} · closed ${gap}`;
+    if (result.contactPercent < 35) {
+      toast.warning(`${summary}. Faces may not match — rotate one half and try again.`);
+    } else {
+      toast.success(summary);
+    }
+  }, [selection, selectedId, soupOfPart, partWorldPos, nudgePart, mode, sizes, patchProject]);
 
   const duplicatePart = useCallback(
     (partId: string) => {
@@ -3454,6 +3536,18 @@ export function Workbench() {
             <MenuSeparator />
             <MenuLabel>Group</MenuLabel>
             <MenuItem
+              onClick={runFitTogether}
+              disabled={selection.length !== 2 || Boolean(busy)}
+              icon={Magnet}
+              hint={
+                selection.length !== 2
+                  ? 'Select exactly two parts first'
+                  : 'Slide the other part flush onto this one — maximise face contact before Merge'
+              }
+            >
+              Fit together
+            </MenuItem>
+            <MenuItem
               onClick={mergeSelection}
               disabled={selection.length < 2 || Boolean(busy)}
               icon={Combine}
@@ -3637,6 +3731,20 @@ export function Workbench() {
           >
             <Ungroup className="mx-auto mb-0.5 h-3.5 w-3.5" />
             Ungroup
+          </button>
+          <button
+            type="button"
+            onClick={runFitTogether}
+            disabled={selection.length !== 2 || Boolean(busy)}
+            title={
+              selection.length !== 2
+                ? 'Select exactly two parts to fit together'
+                : 'Slide the other part flush onto this one — maximise face contact before Merge'
+            }
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Magnet className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Fit
           </button>
           <button
             type="button"
