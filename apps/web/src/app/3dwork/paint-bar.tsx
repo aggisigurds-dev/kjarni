@@ -43,8 +43,8 @@ export function PaintBar({
         <span className="font-mono text-[0.65rem] text-slate-500">{painted} corners</span>
       </div>
       <p className="px-1 pb-2 text-[0.62rem] leading-snug text-slate-500">
-        Drag over the break. Shift-drag erases. Align evens the edge; Fill closes a painted hole
-        up to the highest point the brush covered.
+        Drag over a broken edge or a hole. Shift-drag erases. Align evens the edge. Fill hole
+        packs the painted opening up to the highest point the brush covered.
       </p>
       <div className="flex flex-wrap items-center gap-1">
         <span className="px-1 text-[0.62rem] font-bold uppercase text-slate-400">mm</span>

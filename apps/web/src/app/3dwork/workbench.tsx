@@ -1793,7 +1793,9 @@ export function Workbench() {
         }
         addVersion(selectedId, toSoup(result.mesh), 'filled', 'Painted hole fill');
         setPainted(new Set());
-        toast.success(`Closed ${result.filled} hole(s).`);
+        toast.success(
+          `Closed ${result.filled} hole(s), filled up to ${result.capHeight.toFixed(1)} mm.`
+        );
       } catch {
         toast.error('Could not fill that hole.');
       } finally {

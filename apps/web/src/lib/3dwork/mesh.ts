@@ -643,6 +643,64 @@ function centroidFan(
   return { positions: next, indices };
 }
 
+/**
+ * Close a rim with a flat lid at `capHeight` (Y-up) and walls from the original
+ * edge up to that lid. Vertices already at the cap are reused so a hole that
+ * already sits at that height just triangulates in place.
+ */
+function capLoopAtHeight(
+  positions: Float64Array,
+  rim: number[],
+  capHeight: number
+): { positions: Float64Array; indices: number[] } {
+  const n = rim.length;
+  const lifted = Array.from({ length: n }, () => -1);
+  const appended: number[] = [];
+  let nextIndex = positions.length / 3;
+  for (let k = 0; k < n; k++) {
+    const i = rim[k];
+    if (i === undefined) continue;
+    const y = positions[i * 3 + 1];
+    if (Math.abs(y - capHeight) <= 1e-6) {
+      lifted[k] = i;
+      continue;
+    }
+    lifted[k] = nextIndex++;
+    appended.push(positions[i * 3], capHeight, positions[i * 3 + 2]);
+  }
+
+  const next = new Float64Array(positions.length + appended.length);
+  next.set(positions);
+  if (appended.length > 0) next.set(appended, positions.length);
+
+  const extra: number[] = [];
+  for (let k = 0; k < n; k++) {
+    const a = rim[k];
+    const b = rim[(k + 1) % n];
+    const a2 = lifted[k];
+    const b2 = lifted[(k + 1) % n];
+    if (a === undefined || b === undefined || a2 === undefined || b2 === undefined) continue;
+    if (a === a2 && b === b2) continue;
+    if (a === a2) extra.push(a, b, b2);
+    else if (b === b2) extra.push(a, b, a2);
+    else {
+      extra.push(a, b, b2);
+      extra.push(a, b2, a2);
+    }
+  }
+
+  const cap = triangulateLoop(next, lifted);
+  if (cap && cap.length >= 3) {
+    extra.push(...cap);
+    return { positions: next, indices: extra };
+  }
+
+  const fan = centroidFan(next, lifted);
+  fan.positions[fan.positions.length - 2] = capHeight;
+  extra.push(...fan.indices);
+  return { positions: fan.positions, indices: extra };
+}
+
 function countTinyHoles(mesh: IndexedMesh): number {
   const loops = boundaryLoops(mesh.indices, buildEdges(mesh.indices));
   return loops.filter((loop) => loop.length <= 6).length;
@@ -966,8 +1024,9 @@ export function alignPaintedVertices(
 }
 
 /**
- * Close holes whose rim was painted, never building new geometry above the
- * highest painted point (Y-up).
+ * Close holes whose rim was painted. New fill sits at most at the highest
+ * painted Y — and rises up to that height when the rim is lower, so a pit
+ * can be packed flush with the lip the brush covered.
  */
 export function fillPaintedHoles(
   mesh: IndexedMesh,
@@ -994,6 +1053,20 @@ export function fillPaintedHoles(
     if (!loop.some((i) => paintedSet.has(i))) continue;
     if (loop.length < 3) continue;
     const rim = [...loop].reverse();
+    let rimHigh = -Infinity;
+    for (const i of rim) {
+      const y = nextPositions[i * 3 + 1];
+      if (y > rimHigh) rimHigh = y;
+    }
+
+    if (capHeight > rimHigh + 1e-6) {
+      const plug = capLoopAtHeight(nextPositions, rim, capHeight);
+      nextPositions = plug.positions;
+      extra.push(...plug.indices);
+      filled++;
+      continue;
+    }
+
     const clipped = triangulateLoop(nextPositions, rim);
     if (clipped && clipped.length >= 3) {
       extra.push(...clipped);

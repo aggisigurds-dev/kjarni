@@ -749,7 +749,8 @@ function RepairTab({
           For parts you merged that sat a hair off — corners that should have met, but did not.
           Snaps unconnected corners that are this close together. Real edges of that length are
           left alone, so a dense mesh is not crushed. Or use Paint on the table: brush the break
-          and press Align.
+          and press Align, or brush a hole and press Fill hole — it packs up to the highest point
+          the brush covered.
         </p>
         <label className="block">
           <span className={`${LABEL} mb-1 block`}>Snap corners closer than</span>

@@ -85,6 +85,48 @@ function openLPrism(): Float32Array {
   return new Float32Array(tris);
 }
 
+/**
+ * 12×12 plate at Y=0 with a 4×4 hole, plus a 5 mm lip on one outer edge.
+ * Painting the hole and the lip should fill the opening up to Y=5, not leave
+ * it flush with the floor.
+ */
+function plateWithLipHoleSoup(): Float32Array {
+  const outer: [number, number, number][] = [
+    [0, 0, 0],
+    [12, 0, 0],
+    [12, 0, 12],
+    [0, 0, 12],
+  ];
+  const inner: [number, number, number][] = [
+    [4, 0, 4],
+    [8, 0, 4],
+    [8, 0, 8],
+    [4, 0, 8],
+  ];
+  const tris: number[] = [];
+  const tri = (
+    p: [number, number, number],
+    q: [number, number, number],
+    r: [number, number, number]
+  ) => {
+    tris.push(...p, ...q, ...r);
+  };
+  tri(outer[0], outer[1], inner[1]);
+  tri(outer[1], outer[2], inner[2]);
+  tri(outer[1], inner[2], inner[1]);
+  tri(outer[2], outer[3], inner[3]);
+  tri(outer[2], inner[3], inner[2]);
+  tri(outer[3], outer[0], inner[0]);
+  tri(outer[3], inner[0], inner[3]);
+  // Bump on the remaining frame corner so the brush has a high point
+  // that is not on either boundary loop.
+  const apex: [number, number, number] = [2, 5, 2];
+  tri(outer[0], inner[1], apex);
+  tri(inner[1], inner[0], apex);
+  tri(inner[0], outer[0], apex);
+  return new Float32Array(tris);
+}
+
 /** Square base on Y=0 with an apex at Y=4 — a bump the align brush should flatten. */
 function pyramidSoup(): Float32Array {
   const base: [number, number, number][] = [
@@ -402,6 +444,33 @@ describe('paint align and fill', () => {
     const { filled } = fillPaintedHoles(mesh, far);
     expect(filled).toBe(0);
     expect(inspect(toSoup(mesh)).watertight).toBe(false);
+  });
+
+  it('fills a painted hole up to the highest point the brush covered', () => {
+    const { mesh } = weld(plateWithLipHoleSoup());
+    const painted: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      const x = mesh.positions[i * 3];
+      const y = mesh.positions[i * 3 + 1];
+      const z = mesh.positions[i * 3 + 2];
+      if (y > 4) painted.push(i);
+      if (y < 0.1 && x >= 4 && x <= 8 && z >= 4 && z <= 8) painted.push(i);
+    }
+
+    const before = inspect(toSoup(mesh));
+    const { mesh: filled, filled: count, capHeight } = fillPaintedHoles(mesh, painted);
+
+    expect(painted.length).toBeGreaterThanOrEqual(5);
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(capHeight).toBeCloseTo(5, 5);
+    const after = inspect(toSoup(filled));
+    expect(after.holes).toBeLessThan(before.holes);
+    let maxY = -Infinity;
+    for (let i = 1; i < filled.positions.length; i += 3) {
+      if (filled.positions[i] > maxY) maxY = filled.positions[i];
+    }
+    expect(maxY).toBeLessThanOrEqual(5 + 1e-6);
+    expect(maxY).toBeGreaterThan(4.5);
   });
 });
 
