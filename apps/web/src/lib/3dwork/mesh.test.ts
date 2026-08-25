@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { autoFix, computeBounds, fixMisalignment, inspect, simplify, weld } from './mesh';
+import { alignPaintedVertices, autoFix, computeBounds, fillPaintedHoles, fixMisalignment, inspect, simplify, toSoup, weld } from './mesh';
 
 /** A sphere-ish blob with far more triangles than its shape needs. */
 function denseSphere(radius = 20, rings = 40, segments = 60): Float32Array {
@@ -82,6 +82,30 @@ function openLPrism(): Float32Array {
     tri(bottom[i], top[j], bottom[j]);
   }
 
+  return new Float32Array(tris);
+}
+
+/** Square base on Y=0 with an apex at Y=4 — a bump the align brush should flatten. */
+function pyramidSoup(): Float32Array {
+  const base: [number, number, number][] = [
+    [0, 0, 0],
+    [10, 0, 0],
+    [10, 0, 10],
+    [0, 0, 10],
+  ];
+  const apex: [number, number, number] = [5, 4, 5];
+  const tris: number[] = [];
+  const tri = (
+    p: [number, number, number],
+    q: [number, number, number],
+    r: [number, number, number]
+  ) => {
+    tris.push(...p, ...q, ...r);
+  };
+  tri(base[0], base[1], apex);
+  tri(base[1], base[2], apex);
+  tri(base[2], base[3], apex);
+  tri(base[3], base[0], apex);
   return new Float32Array(tris);
 }
 
@@ -300,6 +324,84 @@ describe('fixMisalignment', () => {
     expect(report.quantizedVertices).toBeGreaterThan(0);
     expect(report.changed).toBe(true);
     expect(computeBounds(soup).min[0]).toBeCloseTo(0.2, 5);
+  });
+});
+
+describe('paint align and fill', () => {
+  it('flattens a painted bump onto the surrounding plane', () => {
+    const { mesh } = weld(pyramidSoup());
+    const ids = [...Array(mesh.positions.length / 3).keys()];
+    const { mesh: aligned, moved } = alignPaintedVertices(mesh, ids);
+
+    expect(moved).toBeGreaterThan(0);
+    let maxY = -Infinity;
+    for (let i = 1; i < aligned.positions.length; i += 3) {
+      if (aligned.positions[i] > maxY) maxY = aligned.positions[i];
+    }
+    expect(maxY).toBeLessThan(1.5);
+  });
+
+  it('does not move unpainted vertices', () => {
+    const { mesh } = weld(cubeSoup(10));
+    const positions = Float64Array.from(mesh.positions);
+    const painted: number[] = [];
+    for (let i = 0; i < positions.length / 3; i++) {
+      if (positions[i * 3 + 1] > 9) {
+        painted.push(i);
+        positions[i * 3 + 1] = 10 + (positions[i * 3] + positions[i * 3 + 2]) * 0.08;
+      }
+    }
+    const bumpy = { positions, indices: mesh.indices };
+    const before = Float64Array.from(positions);
+    const paintedSet = new Set(painted);
+    const { mesh: aligned, moved } = alignPaintedVertices(bumpy, painted);
+
+    expect(painted.length).toBe(4);
+    expect(moved).toBeGreaterThan(0);
+    for (let i = 0; i < before.length / 3; i++) {
+      if (paintedSet.has(i)) continue;
+      expect(aligned.positions[i * 3]).toBe(before[i * 3]);
+      expect(aligned.positions[i * 3 + 1]).toBe(before[i * 3 + 1]);
+      expect(aligned.positions[i * 3 + 2]).toBe(before[i * 3 + 2]);
+    }
+  });
+
+  it('closes a painted hole', () => {
+    const { mesh } = weld(removeTriangle(cubeSoup(10), 0));
+    const rim: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      if (Math.abs(mesh.positions[i * 3 + 2]) < 1e-9) rim.push(i);
+    }
+    const { mesh: filled, filled: count } = fillPaintedHoles(mesh, rim);
+
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(inspect(toSoup(filled)).watertight).toBe(true);
+  });
+
+  it('does not fill a hole above the highest painted point', () => {
+    const { mesh } = weld(removeTriangle(cubeSoup(10), 0));
+    let maxY = -Infinity;
+    const ids: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      ids.push(i);
+      if (mesh.positions[i * 3 + 1] > maxY) maxY = mesh.positions[i * 3 + 1];
+    }
+    const { mesh: filled, capHeight } = fillPaintedHoles(mesh, ids);
+    expect(capHeight).toBeLessThanOrEqual(maxY + 1e-9);
+    for (let i = 1; i < filled.positions.length; i += 3) {
+      expect(filled.positions[i]).toBeLessThanOrEqual(maxY + 1e-6);
+    }
+  });
+
+  it('does not fill a hole the brush never touched', () => {
+    const { mesh } = weld(removeTriangle(cubeSoup(10), 0));
+    const far: number[] = [];
+    for (let i = 0; i < mesh.positions.length / 3; i++) {
+      if (mesh.positions[i * 3 + 2] > 9) far.push(i);
+    }
+    const { filled } = fillPaintedHoles(mesh, far);
+    expect(filled).toBe(0);
+    expect(inspect(toSoup(mesh)).watertight).toBe(false);
   });
 });
 

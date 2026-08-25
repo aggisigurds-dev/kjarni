@@ -761,6 +761,269 @@ function fillHoles(
   return { positions, indices: merged, filled, unfilled };
 }
 
+export function verticesInRadius(
+  positions: Float64Array,
+  point: [number, number, number],
+  radiusMm: number
+): number[] {
+  const r2 = radiusMm * radiusMm;
+  const found: number[] = [];
+  const vertexCount = positions.length / 3;
+  for (let i = 0; i < vertexCount; i++) {
+    const dx = positions[i * 3] - point[0];
+    const dy = positions[i * 3 + 1] - point[1];
+    const dz = positions[i * 3 + 2] - point[2];
+    if (dx * dx + dy * dy + dz * dz <= r2) found.push(i);
+  }
+  return found;
+}
+
+function vertexNeighbours(indices: Uint32Array, vertexCount: number): number[][] {
+  const nbr: number[][] = Array.from({ length: vertexCount }, () => []);
+  const seen = new Set<string>();
+  for (let t = 0; t < indices.length; t += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = indices[t + e];
+      const b = indices[t + ((e + 1) % 3)];
+      const key = edgeKey(a, b);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      nbr[a].push(b);
+      nbr[b].push(a);
+    }
+  }
+  return nbr;
+}
+
+/** Smallest-eigenvalue normal of a 3×3 covariance via Jacobi rotations. */
+function planeNormalFromCovariance(
+  xx: number,
+  xy: number,
+  xz: number,
+  yy: number,
+  yz: number,
+  zz: number
+): [number, number, number] {
+  const a = [
+    [xx, xy, xz],
+    [xy, yy, yz],
+    [xz, yz, zz],
+  ];
+  const v = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
+
+  for (let iter = 0; iter < 12; iter++) {
+    let p = 0;
+    let q = 1;
+    let max = Math.abs(a[0][1]);
+    const a02 = Math.abs(a[0][2]);
+    const a12 = Math.abs(a[1][2]);
+    if (a02 > max) {
+      max = a02;
+      p = 0;
+      q = 2;
+    }
+    if (a12 > max) {
+      max = a12;
+      p = 1;
+      q = 2;
+    }
+    if (max < 1e-18) break;
+    const app = a[p][p];
+    const aqq = a[q][q];
+    const apq = a[p][q];
+    const tau = (aqq - app) / (2 * apq);
+    const t = Math.sign(tau) / (Math.abs(tau) + Math.sqrt(1 + tau * tau));
+    const c = 1 / Math.sqrt(1 + t * t);
+    const s = t * c;
+
+    for (let k = 0; k < 3; k++) {
+      if (k === p || k === q) continue;
+      const akp = a[k][p];
+      const akq = a[k][q];
+      a[k][p] = a[p][k] = c * akp - s * akq;
+      a[k][q] = a[q][k] = s * akp + c * akq;
+    }
+    a[p][p] = c * c * app - 2 * s * c * apq + s * s * aqq;
+    a[q][q] = s * s * app + 2 * s * c * apq + c * c * aqq;
+    a[p][q] = a[q][p] = 0;
+
+    for (let k = 0; k < 3; k++) {
+      const vkp = v[k][p];
+      const vkq = v[k][q];
+      v[k][p] = c * vkp - s * vkq;
+      v[k][q] = s * vkp + c * vkq;
+    }
+  }
+
+  const e0 = a[0][0];
+  const e1 = a[1][1];
+  const e2 = a[2][2];
+  const col = e0 <= e1 && e0 <= e2 ? 0 : e1 <= e2 ? 1 : 2;
+  return [v[0][col], v[1][col], v[2][col]];
+}
+
+/**
+ * Flatten a painted patch onto its best-fit plane, then relax it so the edge
+ * reads even. Unpainted vertices stay put and hold the rest of the part.
+ */
+export function alignPaintedVertices(
+  mesh: IndexedMesh,
+  painted: Iterable<number>
+): { mesh: IndexedMesh; moved: number } {
+  const ids = [...new Set(painted)].filter(
+    (i) => i >= 0 && i < mesh.positions.length / 3
+  );
+  if (ids.length < 3) return { mesh, moved: 0 };
+
+  let cx = 0,
+    cy = 0,
+    cz = 0;
+  for (const i of ids) {
+    cx += mesh.positions[i * 3];
+    cy += mesh.positions[i * 3 + 1];
+    cz += mesh.positions[i * 3 + 2];
+  }
+  cx /= ids.length;
+  cy /= ids.length;
+  cz /= ids.length;
+
+  let xx = 0,
+    xy = 0,
+    xz = 0,
+    yy = 0,
+    yz = 0,
+    zz = 0;
+  for (const i of ids) {
+    const dx = mesh.positions[i * 3] - cx;
+    const dy = mesh.positions[i * 3 + 1] - cy;
+    const dz = mesh.positions[i * 3 + 2] - cz;
+    xx += dx * dx;
+    xy += dx * dy;
+    xz += dx * dz;
+    yy += dy * dy;
+    yz += dy * dz;
+    zz += dz * dz;
+  }
+
+  let [nx, ny, nz] = planeNormalFromCovariance(xx, xy, xz, yy, yz, zz);
+  const nlen = Math.hypot(nx, ny, nz);
+  if (nlen < 1e-12) return { mesh, moved: 0 };
+  nx /= nlen;
+  ny /= nlen;
+  nz /= nlen;
+
+  const positions = Float64Array.from(mesh.positions);
+  const mask = new Uint8Array(positions.length / 3);
+  for (const i of ids) mask[i] = 1;
+
+  for (const i of ids) {
+    const dx = positions[i * 3] - cx;
+    const dy = positions[i * 3 + 1] - cy;
+    const dz = positions[i * 3 + 2] - cz;
+    const d = dx * nx + dy * ny + dz * nz;
+    positions[i * 3] -= d * nx;
+    positions[i * 3 + 1] -= d * ny;
+    positions[i * 3 + 2] -= d * nz;
+  }
+
+  const nbr = vertexNeighbours(mesh.indices, mask.length);
+  const scratch = new Float64Array(positions.length);
+  for (let iter = 0; iter < 6; iter++) {
+    scratch.set(positions);
+    for (const i of ids) {
+      const neighbours = nbr[i];
+      if (neighbours.length === 0) continue;
+      let ax = 0,
+        ay = 0,
+        az = 0;
+      for (const j of neighbours) {
+        ax += scratch[j * 3];
+        ay += scratch[j * 3 + 1];
+        az += scratch[j * 3 + 2];
+      }
+      ax /= neighbours.length;
+      ay /= neighbours.length;
+      az /= neighbours.length;
+      positions[i * 3] = scratch[i * 3] * 0.55 + ax * 0.45;
+      positions[i * 3 + 1] = scratch[i * 3 + 1] * 0.55 + ay * 0.45;
+      positions[i * 3 + 2] = scratch[i * 3 + 2] * 0.55 + az * 0.45;
+    }
+  }
+
+  let moved = 0;
+  for (const i of ids) {
+    const dx = positions[i * 3] - mesh.positions[i * 3];
+    const dy = positions[i * 3 + 1] - mesh.positions[i * 3 + 1];
+    const dz = positions[i * 3 + 2] - mesh.positions[i * 3 + 2];
+    if (dx * dx + dy * dy + dz * dz > 1e-12) moved++;
+  }
+
+  return { mesh: { positions, indices: mesh.indices }, moved };
+}
+
+/**
+ * Close holes whose rim was painted, never building new geometry above the
+ * highest painted point (Y-up).
+ */
+export function fillPaintedHoles(
+  mesh: IndexedMesh,
+  painted: Iterable<number>
+): { mesh: IndexedMesh; filled: number; capHeight: number } {
+  const paintedSet = new Set(
+    [...painted].filter((i) => i >= 0 && i < mesh.positions.length / 3)
+  );
+  if (paintedSet.size === 0) return { mesh, filled: 0, capHeight: 0 };
+
+  let capHeight = -Infinity;
+  for (const i of paintedSet) {
+    const y = mesh.positions[i * 3 + 1];
+    if (y > capHeight) capHeight = y;
+  }
+
+  const edges = buildEdges(mesh.indices);
+  const loops = boundaryLoops(mesh.indices, edges);
+  let nextPositions = mesh.positions;
+  const extra: number[] = [];
+  let filled = 0;
+
+  for (const loop of loops) {
+    if (!loop.some((i) => paintedSet.has(i))) continue;
+    if (loop.length < 3) continue;
+    const rim = [...loop].reverse();
+    const clipped = triangulateLoop(nextPositions, rim);
+    if (clipped && clipped.length >= 3) {
+      extra.push(...clipped);
+      filled++;
+      continue;
+    }
+    const fan = centroidFan(nextPositions, rim);
+    const ci = fan.positions.length / 3 - 1;
+    if (fan.positions[ci * 3 + 1] > capHeight) fan.positions[ci * 3 + 1] = capHeight;
+    nextPositions = fan.positions;
+    extra.push(...fan.indices);
+    filled++;
+  }
+
+  let indices = mesh.indices;
+  if (extra.length > 0) {
+    const merged = new Uint32Array(mesh.indices.length + extra.length);
+    merged.set(mesh.indices, 0);
+    merged.set(extra, mesh.indices.length);
+    indices = merged;
+  }
+
+  let out: IndexedMesh = { positions: nextPositions, indices };
+  const cleaned = dropDegenerate(out);
+  out = compact({ positions: out.positions, indices: cleaned.indices });
+  const oriented = orient(out);
+  out = { positions: out.positions, indices: oriented.indices };
+  return { mesh: out, filled, capHeight };
+}
+
 function translate(positions: Float64Array, dx: number, dy: number, dz: number): void {
   for (let i = 0; i + 2 < positions.length; i += 3) {
     positions[i] += dx;

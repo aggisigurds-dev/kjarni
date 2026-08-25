@@ -36,14 +36,20 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Paintbrush,
 } from 'lucide-react';
 import {
+  alignPaintedVertices,
   autoFix,
   computeBounds,
+  fillPaintedHoles,
   fixMisalignment,
   inspect,
   recenter,
   simplify,
+  toSoup,
+  verticesInRadius,
+  weld,
   zUpToYUp,
   type FixReport,
   type MisalignReport,
@@ -125,6 +131,7 @@ import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
+import { PaintBar } from './paint-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -166,6 +173,9 @@ export function Workbench() {
   const [showGrid, setShowGrid] = useState(true);
   const [measuring, setMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number, number][]>([]);
+  const [painting, setPainting] = useState(false);
+  const [paintRadiusMm, setPaintRadiusMm] = useState(2);
+  const [painted, setPainted] = useState<Set<number>>(() => new Set());
   const [zUp, setZUp] = useState(true);
   const [unit, setUnit] = useState<Unit>('mm');
   const [cutItems, setCutItems] = useState<CutItem[]>([]);
@@ -403,6 +413,26 @@ export function Workbench() {
     [project.parts, selectedId]
   );
   const selectedSoup = selectedPart ? (geometries.get(selectedPart.activeVersionId) ?? null) : null;
+  const paintMesh = useMemo(
+    () => (selectedSoup ? weld(selectedSoup).mesh : null),
+    [selectedSoup]
+  );
+  const paintLocal = useMemo(() => {
+    if (!paintMesh || painted.size === 0) return new Float32Array(0);
+    const out = new Float32Array(painted.size * 3);
+    let offset = 0;
+    for (const index of painted) {
+      out[offset] = paintMesh.positions[index * 3];
+      out[offset + 1] = paintMesh.positions[index * 3 + 1];
+      out[offset + 2] = paintMesh.positions[index * 3 + 2];
+      offset += 3;
+    }
+    return out;
+  }, [paintMesh, painted]);
+
+  useEffect(() => {
+    setPainted(new Set());
+  }, [selectedId, selectedSoup]);
 
   /** Bounding sizes drive the scatter layout; cheap enough to redo on change. */
   const sizes = useMemo(() => {
@@ -1708,6 +1738,70 @@ export function Workbench() {
     [soupOfPart, addVersion]
   );
 
+  const onPaintAt = useCallback(
+    (partId: string, localPoint: [number, number, number], erase: boolean) => {
+      if (!selectedId || partId !== selectedId || !paintMesh) return;
+      const hits = verticesInRadius(paintMesh.positions, localPoint, paintRadiusMm);
+      if (hits.length === 0) return;
+      setPainted((current) => {
+        const next = new Set(current);
+        for (const index of hits) {
+          if (erase) next.delete(index);
+          else next.add(index);
+        }
+        return next;
+      });
+    },
+    [selectedId, paintMesh, paintRadiusMm]
+  );
+
+  const runPaintAlign = useCallback(() => {
+    if (!selectedId || !paintMesh || painted.size < 3) {
+      toast.error('Paint over the broken edge first.');
+      return;
+    }
+    setBusy('Aligning painted edge…');
+    setTimeout(() => {
+      try {
+        const result = alignPaintedVertices(paintMesh, painted);
+        if (result.moved === 0) {
+          toast.success('That patch was already even.');
+          return;
+        }
+        addVersion(selectedId, toSoup(result.mesh), 'aligned', 'Painted edge align');
+        toast.success(`Evened ${result.moved} corner(s).`);
+      } catch {
+        toast.error('Could not align that patch.');
+      } finally {
+        setBusy(null);
+      }
+    }, 30);
+  }, [selectedId, paintMesh, painted, addVersion]);
+
+  const runPaintFill = useCallback(() => {
+    if (!selectedId || !paintMesh || painted.size < 3) {
+      toast.error('Paint over the hole first.');
+      return;
+    }
+    setBusy('Filling painted hole…');
+    setTimeout(() => {
+      try {
+        const result = fillPaintedHoles(paintMesh, painted);
+        if (result.filled === 0) {
+          toast.success('No painted hole to close.');
+          return;
+        }
+        addVersion(selectedId, toSoup(result.mesh), 'filled', 'Painted hole fill');
+        setPainted(new Set());
+        toast.success(`Closed ${result.filled} hole(s).`);
+      } catch {
+        toast.error('Could not fill that hole.');
+      } finally {
+        setBusy(null);
+      }
+    }, 30);
+  }, [selectedId, paintMesh, painted, addVersion]);
+
   /**
    * Rebuild a part as a watertight solid, optionally boring a hole through it.
    * This is the route for meshes too damaged for edge repair to touch.
@@ -2800,6 +2894,10 @@ export function Workbench() {
           if (selectedId) removePart(selectedId);
           break;
         case 'Escape':
+          if (painting) {
+            setPainting(false);
+            break;
+          }
           setMoveModeId(null);
           setSelectedId(null);
           setMeasuring(false);
@@ -2850,6 +2948,7 @@ export function Workbench() {
     spinPart,
     togglePartVisible,
     showAllParts,
+    painting,
   ]);
 
   const onDrop = useCallback(
@@ -3228,7 +3327,27 @@ export function Workbench() {
             <MenuCheckItem checked={showCallouts} onClick={() => setShowCallouts((v) => !v)}>
               Mount-point callouts
             </MenuCheckItem>
-            <MenuCheckItem checked={measuring} onClick={() => setMeasuring((v) => !v)}>
+            <MenuCheckItem
+              checked={painting}
+              onClick={() => {
+                if (!selectedId) {
+                  toast.error('Select a part first.');
+                  return;
+                }
+                setPainting((value) => !value);
+                setMeasuring(false);
+                setMoveModeId(null);
+              }}
+            >
+              Paint brush
+            </MenuCheckItem>
+            <MenuCheckItem
+              checked={measuring}
+              onClick={() => {
+                setMeasuring((v) => !v);
+                setPainting(false);
+              }}
+            >
               Ruler
             </MenuCheckItem>
             <MenuSeparator />
@@ -3357,6 +3476,29 @@ export function Workbench() {
             Subtract
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedId) {
+              toast.error('Select a part first.');
+              return;
+            }
+            setPainting((value) => !value);
+            setMeasuring(false);
+            setMoveModeId(null);
+          }}
+          disabled={!selectedId}
+          title="Paint a broken edge or hole, then Align or Fill"
+          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
+            painting
+              ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-100 disabled:text-slate-300'
+          }`}
+        >
+          <Paintbrush className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          Paint
+        </button>
 
         <button
           type="button"
@@ -3557,6 +3699,11 @@ export function Workbench() {
             measuring={measuring}
             measurePoints={measurePoints}
             onMeasurePoint={(point) => setMeasurePoints((current) => [...current, point])}
+            painting={painting}
+            paintRadiusMm={paintRadiusMm}
+            paintPartId={painting ? selectedId : null}
+            paintLocal={paintLocal}
+            onPaintAt={onPaintAt}
             callouts={showCallouts && !isMobile ? callouts : []}
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
@@ -3605,7 +3752,24 @@ export function Workbench() {
             />
           )}
 
-          {project.parts.length > 0 && selectedId && !moveModeId && (
+          {project.parts.length > 0 && painting && selectedPart && (
+            <PaintBar
+              name={selectedPart.name}
+              painted={painted.size}
+              radiusMm={paintRadiusMm}
+              onRadius={setPaintRadiusMm}
+              onAlign={runPaintAlign}
+              onFill={runPaintFill}
+              onClear={() => setPainted(new Set())}
+              onDone={() => {
+                setPainting(false);
+                setPainted(new Set());
+              }}
+              busy={Boolean(busy)}
+            />
+          )}
+
+          {project.parts.length > 0 && selectedId && !moveModeId && !painting && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
               Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours · Y-axis rotate by default
             </div>
@@ -3768,7 +3932,10 @@ export function Workbench() {
             busy={Boolean(busy)}
             measurePoints={measurePoints}
             measuring={measuring}
-            onToggleMeasuring={() => setMeasuring((v) => !v)}
+            onToggleMeasuring={() => {
+              setMeasuring((v) => !v);
+              setPainting(false);
+            }}
             onClearMeasure={() => setMeasurePoints([])}
             assemblyTotals={assemblyTotals}
           />
