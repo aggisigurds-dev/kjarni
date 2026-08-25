@@ -17,6 +17,8 @@ interface GalleryProps {
   selectedId: string | null;
   /** Parts picked out alongside the selected one, for group operations. */
   marked: Set<string>;
+  /** When true, a plain tap adds to the selection instead of replacing it. */
+  multiSelect?: boolean;
   onSelect: (partId: string) => void;
   onMark: (partId: string) => void;
   onFit: (slotId: string, partId: string | null) => void;
@@ -30,6 +32,7 @@ function PartCard({
   fitted,
   selected,
   marked,
+  multiSelect,
   onSelect,
   onMark,
   onFit,
@@ -40,6 +43,7 @@ function PartCard({
   fitted: boolean;
   selected: boolean;
   marked: boolean;
+  multiSelect?: boolean;
   onSelect: () => void;
   onMark: () => void;
   onFit: () => void;
@@ -63,7 +67,14 @@ function PartCard({
         type="button"
         // A modified click adds to the selection instead of replacing it,
         // which is what every other parts list works like.
-        onClick={(event) => (event.metaKey || event.ctrlKey ? onMark() : onSelect())}
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || multiSelect) {
+            onMark();
+            onSelect();
+          } else {
+            onSelect();
+          }
+        }}
         onDoubleClick={onFit}
         className="block w-full text-left"
         title={`${part.name} — click to select, ⌘/Ctrl-click to add to the selection, double-click to fit`}
@@ -83,7 +94,7 @@ function PartCard({
         </div>
       </button>
 
-      <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="absolute right-1 top-1 flex gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
         <button
           type="button"
           onClick={onToggleVisible}
@@ -114,6 +125,7 @@ function SlotLane({
   parts,
   selectedId,
   marked,
+  multiSelect,
   onSelect,
   onMark,
   onFit,
@@ -124,6 +136,7 @@ function SlotLane({
   parts: Part[];
   selectedId: string | null;
   marked: Set<string>;
+  multiSelect?: boolean;
   onSelect: (id: string) => void;
   onMark: (id: string) => void;
   onFit: (slotId: string, partId: string | null) => void;
@@ -159,6 +172,7 @@ function SlotLane({
               fitted={slot.activePartId === part.id}
               selected={selectedId === part.id}
               marked={marked.has(part.id)}
+              multiSelect={multiSelect}
               onSelect={() => onSelect(part.id)}
               onMark={() => onMark(part.id)}
               onFit={() => onFit(slot.id, part.id)}
@@ -176,6 +190,7 @@ export function Gallery({
   project,
   selectedId,
   marked,
+  multiSelect,
   onSelect,
   onMark,
   onFit,
@@ -204,6 +219,7 @@ export function Gallery({
             parts={partsForSlot(project, slot.id)}
             selectedId={selectedId}
             marked={marked}
+            multiSelect={multiSelect}
             onSelect={onSelect}
             onMark={onMark}
             onFit={onFit}
@@ -226,6 +242,7 @@ export function Gallery({
                     fitted={false}
                     selected={selectedId === part.id}
                     marked={marked.has(part.id)}
+                    multiSelect={multiSelect}
                     onSelect={() => onSelect(part.id)}
                     onMark={() => onMark(part.id)}
                     onFit={() => onSelect(part.id)}

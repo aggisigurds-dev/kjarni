@@ -756,6 +756,11 @@ export function makeSolid(soup: Float32Array, options: SolidifyOptions): {
 export interface SubtractOptions {
   resolution: number;
   sealMm: number;
+  /**
+   * Extra millimetres to grow the cutter before the cut — a clearance so the
+   * pocket is not a press-fit against voxel rounding. 0.2–0.6 mm is typical.
+   */
+  clearanceMm?: number;
 }
 
 export interface SubtractReport {
@@ -763,6 +768,34 @@ export interface SubtractReport {
   grid: [number, number, number];
   trianglesBefore: number;
   trianglesAfter: number;
+  /** Voxels that belonged to both solids before the cut. Zero means no overlap. */
+  overlapVoxels: number;
+  /** True when the cutter never met the target. */
+  missed: boolean;
+}
+
+/** Concatenate triangle soups into one. */
+export function concatSoups(soups: Float32Array[]): Float32Array {
+  let total = 0;
+  for (const soup of soups) total += soup.length;
+  const out = new Float32Array(total);
+  let offset = 0;
+  for (const soup of soups) {
+    out.set(soup, offset);
+    offset += soup.length;
+  }
+  return out;
+}
+
+/**
+ * Boolean union: rasterise every soup onto one grid and rebuild a single
+ * watertight shell. Overlaps are absorbed rather than left as crossing faces.
+ */
+export function unionMesh(
+  soups: Float32Array[],
+  options: SolidifyOptions
+): { soup: Float32Array; report: SolidifyReport } {
+  return makeSolid(concatSoups(soups), options);
 }
 
 /**
@@ -827,7 +860,31 @@ export function subtractMesh(
   };
 
   const inside = interiorOf(target);
-  const cutter = interiorOf(tool);
+  let cutter = interiorOf(tool);
+
+  // Grow the cutter by the requested clearance so the pocket is not a press-fit
+  // against voxel rounding. One extra voxel is always applied — that is what
+  // used to make thin overlaps vanish into a "nothing left" miss.
+  const clearanceMm = Math.max(0, options.clearanceMm ?? 0.25);
+  const clearanceVoxels = Math.max(1, Math.round(clearanceMm / voxelSize));
+  for (let i = 0; i < clearanceVoxels; i++) cutter = dilate(cutter, dims);
+
+  let overlapVoxels = 0;
+  for (let i = 0; i < inside.length; i++) if (inside[i] && cutter[i]) overlapVoxels++;
+
+  const emptyReport = (soup: Float32Array, missed: boolean): SubtractReport => ({
+    voxelSize,
+    grid: dims,
+    trianglesBefore: Math.floor(target.length / 9),
+    trianglesAfter: Math.floor(soup.length / 9),
+    overlapVoxels,
+    missed,
+  });
+
+  if (overlapVoxels === 0) {
+    return { soup: new Float32Array(0), report: emptyReport(new Float32Array(0), true) };
+  }
+
   for (let i = 0; i < inside.length; i++) if (cutter[i]) inside[i] = 0;
 
   const rebuilt = surfaceNets(inside, dims, origin, voxelSize);
@@ -848,11 +905,6 @@ export function subtractMesh(
 
   return {
     soup: finished,
-    report: {
-      voxelSize,
-      grid: dims,
-      trianglesBefore: Math.floor(target.length / 9),
-      trianglesAfter: Math.floor(finished.length / 9),
-    },
+    report: emptyReport(finished, false),
   };
 }

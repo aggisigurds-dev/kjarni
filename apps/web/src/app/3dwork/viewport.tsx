@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
+import { snapHint, snapNumber, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
 
 export interface ViewportPart {
   id: string;
@@ -65,6 +66,19 @@ interface ViewportProps {
   moveModeId: string | null;
   /** Whether a grab translates the part or spins it. */
   manipMode: 'move' | 'rotate';
+  /** When rotating, lock to one world axis or spin freely. */
+  rotateAxis: 'free' | 'x' | 'y' | 'z';
+  /** Millimetre grid a drag snaps onto. */
+  moveStep: number;
+  /** Degree grid a rotate-drag snaps onto. */
+  rotateStep: number;
+  /** How far a face/centre/anchor may pull a drag, mm. */
+  magnetMm: number;
+  /** Other parts to magnet against, in world millimetres. */
+  snapNeighbors: { id: string; box: Aabb }[];
+  /** Slot anchors to snap a part's centre onto. */
+  snapAnchors: { x: number; y: number; z: number }[];
+  onSnapHint?: (hint: string | null) => void;
   /** Double-tap on a part: put it into move mode. */
   onEnterMoveMode: (id: string) => void;
   /** Commit a world-space move of a part (delta added to its offset). */
@@ -127,6 +141,13 @@ export function Viewport({
   dragEnabled,
   moveModeId,
   manipMode,
+  rotateAxis,
+  moveStep,
+  rotateStep,
+  magnetMm,
+  snapNeighbors,
+  snapAnchors,
+  onSnapHint,
   onEnterMoveMode,
   onDragMove,
   onDragRotate,
@@ -149,6 +170,13 @@ export function Viewport({
     dragEnabled,
     moveModeId,
     manipMode,
+    rotateAxis,
+    moveStep,
+    rotateStep,
+    magnetMm,
+    snapNeighbors,
+    snapAnchors,
+    onSnapHint,
     onEnterMoveMode,
     onDragMove,
     onDragRotate,
@@ -160,6 +188,13 @@ export function Viewport({
     dragEnabled,
     moveModeId,
     manipMode,
+    rotateAxis,
+    moveStep,
+    rotateStep,
+    magnetMm,
+    snapNeighbors,
+    snapAnchors,
+    onSnapHint,
     onEnterMoveMode,
     onDragMove,
     onDragRotate,
@@ -333,7 +368,8 @@ export function Viewport({
     const dragPlane = new THREE.Plane();
     const dragPoint = new THREE.Vector3();
     const camDir = new THREE.Vector3();
-    const ROT_PER_PX = 0.5; // degrees of rotation per pixel dragged
+    const worldBox = new THREE.Box3();
+    const ROT_PER_PX = 0.35; // degrees of rotation per pixel dragged
     let downAt: { x: number; y: number } | null = null;
     let lastTap: { id: string; t: number } = { id: '', t: 0 };
     // Set while a move-mode grab is in progress; null the rest of the time.
@@ -397,10 +433,25 @@ export function Viewport({
       if (!drag) return;
       const mesh = state.meshes.get(drag.id);
       if (!mesh) return;
+      const h = handlers.current;
       if (drag.mode === 'rotate') {
-        const yaw = (event.clientX - drag.startClient.x) * ROT_PER_PX * DEG;
-        const pitch = (event.clientY - drag.startClient.y) * ROT_PER_PX * DEG;
-        mesh.rotation.set(drag.startRot.x + pitch, drag.startRot.y + yaw, drag.startRot.z);
+        const yawPx = (event.clientX - drag.startClient.x) * ROT_PER_PX;
+        const pitchPx = (event.clientY - drag.startClient.y) * ROT_PER_PX;
+        const step = Math.max(0.1, h.rotateStep);
+        const axis = h.rotateAxis;
+        const next = drag.startRot.clone();
+        if (axis === 'x' || axis === 'y' || axis === 'z') {
+          // Dominant screen axis drives a single world axis — the CAD way to
+          // get a rotation to land where you meant it.
+          const amount = snapNumber(Math.abs(yawPx) >= Math.abs(pitchPx) ? yawPx : -pitchPx, step);
+          next[axis] = drag.startRot[axis] + amount * DEG;
+        } else if (event.shiftKey) {
+          next.z = drag.startRot.z + snapNumber(yawPx, step) * DEG;
+        } else {
+          next.x = drag.startRot.x + snapNumber(pitchPx, step) * DEG;
+          next.y = drag.startRot.y + snapNumber(yawPx, step) * DEG;
+        }
+        mesh.rotation.copy(next);
       } else {
         setPointer(event);
         raycaster.setFromCamera(pointer, camera);
@@ -409,10 +460,31 @@ export function Viewport({
         const y = drag.startPos.y + (dragPoint.y - drag.startPoint.y);
         const z = drag.startPos.z + (dragPoint.z - drag.startPoint.z);
         mesh.position.set(x, y, z);
+        mesh.updateMatrixWorld();
+
+        worldBox.setFromObject(mesh);
+        if (!worldBox.isEmpty()) {
+          const neighbors = h.snapNeighbors
+            .filter((entry) => entry.id !== drag!.id)
+            .map((entry) => entry.box);
+          const snap = snapTranslation(
+            {
+              min: [worldBox.min.x, worldBox.min.y, worldBox.min.z],
+              max: [worldBox.max.x, worldBox.max.y, worldBox.max.z],
+            },
+            neighbors,
+            { grid: h.moveStep, magnet: h.magnetMm, anchors: h.snapAnchors }
+          );
+          mesh.position.x += snap.delta.x;
+          mesh.position.y += snap.delta.y;
+          mesh.position.z += snap.delta.z;
+          h.onSnapHint?.(snapHint(snap.hits));
+        }
+
         // Keep the ease target in step so the part does not spring back.
         const target = state.targets.get(drag.id);
-        if (target) target.set(x, y, z);
-        else state.targets.set(drag.id, new THREE.Vector3(x, y, z));
+        if (target) target.copy(mesh.position);
+        else state.targets.set(drag.id, mesh.position.clone());
       }
       if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 4) drag.moved = true;
     };
@@ -427,15 +499,16 @@ export function Viewport({
           /* nothing captured */
         }
         const mesh = state.meshes.get(drag.id);
+        const h = handlers.current;
         if (drag.moved && mesh) {
           if (drag.mode === 'rotate') {
-            handlers.current.onDragRotate(drag.id, {
+            h.onDragRotate(drag.id, {
               x: (mesh.rotation.x - drag.startRot.x) / DEG,
               y: (mesh.rotation.y - drag.startRot.y) / DEG,
-              z: 0,
+              z: (mesh.rotation.z - drag.startRot.z) / DEG,
             });
           } else {
-            handlers.current.onDragMove(drag.id, {
+            h.onDragMove(drag.id, {
               x: mesh.position.x - drag.startPos.x,
               y: mesh.position.y - drag.startPos.y,
               z: mesh.position.z - drag.startPos.z,
@@ -448,6 +521,7 @@ export function Viewport({
           mesh.rotation.copy(drag.startRot);
           state.targets.get(drag.id)?.copy(drag.startPos);
         }
+        h.onSnapHint?.(null);
         drag = null;
         downAt = null;
         return;

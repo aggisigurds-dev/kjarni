@@ -91,11 +91,12 @@ function NumberField({
   return (
     <label className="block">
       <span className={`${LABEL} mb-1 block`}>{label}</span>
-      <input
+        <input
         type="number"
         className={FIELD}
         value={Number.isFinite(value) ? Number(value.toFixed(4)) : 0}
         step={step}
+        inputMode="decimal"
         onChange={(event) => {
           const next = Number(event.target.value);
           if (Number.isFinite(next)) onChange(next);
@@ -118,7 +119,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 px-2 py-2 text-[0.65rem] font-extrabold uppercase tracking-[0.05em] transition-colors ${
+      className={`flex min-h-11 flex-1 px-2 py-2 text-[0.65rem] font-extrabold uppercase tracking-[0.05em] transition-colors ${
         active
           ? 'border-b-2 border-emerald-500 text-emerald-600'
           : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
@@ -329,6 +330,7 @@ function ModifyTab({
               label={axis.toUpperCase()}
               value={transform.position[axis]}
               onChange={(value) => patchVec('position', axis, value)}
+              step={1}
             />
           ))}
         </div>
@@ -359,7 +361,7 @@ function ModifyTab({
               label={axis.toUpperCase()}
               value={transform.rotation[axis]}
               onChange={(value) => patchVec('rotation', axis, value)}
-              step={5}
+              step={1}
             />
           ))}
         </div>

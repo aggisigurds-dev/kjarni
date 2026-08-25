@@ -17,6 +17,7 @@ import {
   Download,
   FileDown,
   FolderPlus,
+  Group,
   Loader2,
   Maximize,
   PanelLeft,
@@ -27,6 +28,7 @@ import {
   Scissors,
   Undo2,
   Redo2,
+  Ungroup,
   Layers,
   Spline,
   Sparkles,
@@ -92,7 +94,7 @@ import {
   type HardwareKind,
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
-import { makeSolid, subtractMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { makeSolid, subtractMesh, unionMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -101,6 +103,13 @@ import { createZip, safeFileName } from '@/lib/3dwork/zip';
 import { emptySketch, toSvg, type Sketch } from '@/lib/3dwork/sketch';
 import { silhouette, type Outline2D, type ViewPlane } from '@/lib/3dwork/silhouette';
 import { formatCount, formatMass, type Unit } from '@/lib/3dwork/format';
+import {
+  DEFAULT_MAGNET_MM,
+  DEFAULT_MOVE_STEP,
+  DEFAULT_ROTATE_STEP,
+  aabbOverlap,
+  orientedAabb,
+} from '@/lib/3dwork/snap';
 import { applyMatrix, bakeTransform, scaleSoup, transformMatrix } from './bake';
 import { Gallery } from './gallery';
 import { Inspector, type InspectorTab } from './inspector';
@@ -109,8 +118,10 @@ import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { RevivePanel } from './revive';
+import { ManipBar, type RotateAxis } from './manip-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'bench' | 'sketch';
@@ -180,6 +191,17 @@ export function Workbench() {
   /** The part currently in move mode (double-tapped), and how a grab acts. */
   const [moveModeId, setMoveModeId] = useState<string | null>(null);
   const [manip, setManip] = useState<'move' | 'rotate'>('move');
+  const [rotateAxis, setRotateAxis] = useState<RotateAxis>('free');
+  const [moveStep, setMoveStep] = useState(DEFAULT_MOVE_STEP);
+  const [rotateStep, setRotateStep] = useState(DEFAULT_ROTATE_STEP);
+  const [snapHint, setSnapHint] = useState<string | null>(null);
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [subtractSpec, setSubtractSpec] = useState({
+    resolution: 220,
+    clearanceMm: 0.3,
+    removeTool: false,
+  });
+  const isMobile = useIsMobile();
 
   const [projectList, setProjectList] = useState<{ id: string; name: string; parts: number }[]>([]);
   const [showGallery, setShowGallery] = useState(true);
@@ -414,6 +436,48 @@ export function Workbench() {
     return parts;
   }, [project.parts, geometries, placements]);
 
+  const partWorldPos = useCallback(
+    (part: Part) => {
+      const placement = placements.find((entry) => entry.partId === part.id);
+      if (placement) return placement.position;
+      if (mode === 'free') return part.freePos ?? { x: 0, y: 0, z: 0 };
+      const anchor = project.slots.find((slot) => slot.activePartId === part.id)?.anchor;
+      return {
+        x: part.transform.position.x + (anchor?.x ?? 0),
+        y: part.transform.position.y + (anchor?.y ?? 0),
+        z: part.transform.position.z + (anchor?.z ?? 0),
+      };
+    },
+    [placements, mode, project.slots]
+  );
+
+  const snapNeighbors = useMemo(
+    () =>
+      project.parts.flatMap((part) => {
+        if (!part.visible) return [];
+        const soup = geometries.get(part.activeVersionId);
+        if (!soup) return [];
+        const local = computeBounds(soup);
+        return [
+          {
+            id: part.id,
+            box: orientedAabb(
+              { min: local.min, max: local.max },
+              partWorldPos(part),
+              part.transform.rotation,
+              part.transform.scale
+            ),
+          },
+        ];
+      }),
+    [project.parts, geometries, partWorldPos]
+  );
+
+  const snapAnchors = useMemo(
+    () => project.slots.map((slot) => slot.anchor),
+    [project.slots]
+  );
+
   // Volume and mass are expensive (they weld the mesh), so results are cached
   // against the geometry and scale they were computed from.
   const statsCache = useRef(new Map<string, { volume: number; triangles: number }>());
@@ -462,7 +526,7 @@ export function Workbench() {
    * so twenty steps costs a few thousand pointers rather than a few hundred
    * megabytes of triangles.
    */
-  const UNDO_DEPTH = 20;
+  const UNDO_DEPTH = 50;
 
   const past = useRef<HistoryStep[]>([]);
   const futureSteps = useRef<HistoryStep[]>([]);
@@ -483,20 +547,25 @@ export function Workbench() {
     geometriesRef.current = geometries;
   }, [geometries]);
 
-  const patchProject = useCallback((patch: (current: Project) => Project) => {
-    setProject((current) => {
-      const next = patch(current);
-      // A patch that changed nothing is not a step worth undoing.
-      if (next === current) return current;
+  const patchProject = useCallback(
+    (patch: (current: Project) => Project, options?: { history?: boolean }) => {
+      setProject((current) => {
+        const next = patch(current);
+        // A patch that changed nothing is not a step worth undoing.
+        if (next === current) return current;
 
-      past.current.push({ project: current, geometries: geometriesRef.current });
-      if (past.current.length > UNDO_DEPTH) past.current.shift();
-      // Any new edit abandons the redo branch, as everywhere else.
-      futureSteps.current = [];
-      setHistoryToken((token) => token + 1);
-      return next;
-    });
-  }, []);
+        if (options?.history !== false) {
+          past.current.push({ project: current, geometries: geometriesRef.current });
+          if (past.current.length > UNDO_DEPTH) past.current.shift();
+          // Any new edit abandons the redo branch, as everywhere else.
+          futureSteps.current = [];
+          setHistoryToken((token) => token + 1);
+        }
+        return next;
+      });
+    },
+    []
+  );
 
   /**
    * Move one step along the history in either direction.
@@ -962,21 +1031,8 @@ export function Workbench() {
       const soup = soupOfPart(member.id);
       if (!soup) continue;
 
-      // Bake each part at its world placement so the group keeps its shape. In
-      // free mode that is the part's own hand-placed position; otherwise it is
-      // the slot anchor plus the part's offset. Baking the transform alone would
-      // collapse the whole group onto one spot.
-      let position: { x: number; y: number; z: number };
-      if (mode === 'free') {
-        position = member.freePos ?? { x: 0, y: 0, z: 0 };
-      } else {
-        const anchor = project.slots.find((slot) => slot.activePartId === member.id)?.anchor;
-        position = {
-          x: member.transform.position.x + (anchor?.x ?? 0),
-          y: member.transform.position.y + (anchor?.y ?? 0),
-          z: member.transform.position.z + (anchor?.z ?? 0),
-        };
-      }
+      // Bake each part at its world placement so the group keeps its shape.
+      const position = partWorldPos(member);
       pieces.push(bakeTransform(soup, { ...member.transform, position }));
     }
     if (pieces.length === 0) return;
@@ -1048,7 +1104,7 @@ export function Workbench() {
     setSelectedId(id);
     setFrameToken((token) => token + 1);
     toast.success(`Grouped ${members.length} parts.`);
-  }, [selection, project, soupOfPart, patchProject, mode]);
+  }, [selection, project, soupOfPart, patchProject, partWorldPos]);
 
   /** Put a group's members back exactly as they were, and drop the bundle. */
   const ungroupPart = useCallback(
@@ -1083,6 +1139,104 @@ export function Workbench() {
     },
     [project.parts, patchProject]
   );
+
+  /**
+   * Fuse the selected parts into one watertight solid on the bench. Unlike
+   * grouping, the originals are not kept — undo is the way back.
+   */
+  const mergeSelection = useCallback(() => {
+    const members = selection;
+    if (members.length < 2) {
+      toast.error('Pick two or more parts to merge — turn on multi-select or hold ⌘/Ctrl.');
+      return;
+    }
+
+    const pieces: Float32Array[] = [];
+    for (const member of members) {
+      const soup = soupOfPart(member.id);
+      if (!soup) continue;
+      pieces.push(bakeTransform(soup, { ...member.transform, position: partWorldPos(member) }));
+    }
+    if (pieces.length < 2) {
+      toast.error('Need geometry on at least two selected parts.');
+      return;
+    }
+
+    setBusy(`Merging ${pieces.length} parts…`);
+    setTimeout(() => {
+      try {
+        const result = unionMesh(pieces, { resolution: 220, sealMm: 0.6 });
+        if (result.soup.length === 0) {
+          toast.error('Merge produced an empty solid.');
+          return;
+        }
+
+        const memberIds = new Set(members.map((part) => part.id));
+        const id = newPartId();
+        const versionId = newVersionId();
+        const color = nextColor(project);
+        const triangles = Math.floor(result.soup.length / 9);
+
+        setGeometries((current) => new Map(current).set(versionId, result.soup));
+        void saveGeometry(versionId, result.soup);
+
+        patchProject((current) => ({
+          ...current,
+          slots: current.slots.map((slot) =>
+            slot.activePartId && memberIds.has(slot.activePartId)
+              ? { ...slot, activePartId: id }
+              : slot
+          ),
+          parts: [
+            ...current.parts.filter((part) => !memberIds.has(part.id)),
+            {
+              id,
+              name: `Merged (${members.length})`,
+              fileName: '',
+              slotId: members[0].slotId,
+              color,
+              visible: true,
+              transform: {
+                position: { x: 0, y: 0, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+              },
+              triangles,
+              materialId: members[0].materialId,
+              notes: members.map((part) => part.name).join('\n'),
+              versions: [
+                {
+                  id: versionId,
+                  label: 'v1 merged',
+                  note: members.map((part) => part.name).join(', '),
+                  triangles,
+                  createdAt: Date.now(),
+                },
+              ],
+              activeVersionId: versionId,
+              thumbnail: renderThumbnail(result.soup, color),
+              addedAt: Date.now(),
+            },
+          ],
+        }));
+
+        for (const member of members) {
+          for (const version of member.versions) void deleteGeometry(version.id);
+        }
+
+        setMarked(new Set());
+        setSelectedId(id);
+        setFrameToken((token) => token + 1);
+        toast.success(
+          `Merged ${members.length} parts · ${formatCount(result.report.trianglesAfter)} triangles`
+        );
+      } catch {
+        toast.error('Could not merge those parts.');
+      } finally {
+        setBusy(null);
+      }
+    }, 20);
+  }, [selection, soupOfPart, partWorldPos, project, patchProject]);
 
   const duplicatePart = useCallback(
     (partId: string) => {
@@ -2115,39 +2269,35 @@ export function Workbench() {
       const soupB = soupOfPart(toolId);
       if (!soupA || !soupB) return;
 
+      const boxA = snapNeighbors.find((entry) => entry.id === targetId)?.box;
+      const boxB = snapNeighbors.find((entry) => entry.id === toolId)?.box;
+      if (boxA && boxB && !aabbOverlap(boxA, boxB, 0.5)) {
+        toast.error('Those parts do not overlap — move them into each other first.');
+        return;
+      }
+
       setShowSubtract(false);
       setBusy(`Subtracting ${tool.name}…`);
       // Let the busy state paint before the synchronous voxel work.
       setTimeout(() => {
         try {
-          // Where each part actually sits on the table right now — free mode
-          // carries its own position, everywhere else it is anchor + offset — so
-          // what overlaps on screen is what gets cut.
-          const worldPos = (part: Part) => {
-            if (mode === 'free') return part.freePos ?? { x: 0, y: 0, z: 0 };
-            const anchor = project.slots.find((slot) => slot.activePartId === part.id)?.anchor;
-            return {
-              x: part.transform.position.x + (anchor?.x ?? 0),
-              y: part.transform.position.y + (anchor?.y ?? 0),
-              z: part.transform.position.z + (anchor?.z ?? 0),
-            };
-          };
           const fullA: Transform = {
-            position: worldPos(target),
+            position: partWorldPos(target),
             rotation: target.transform.rotation,
             scale: target.transform.scale,
           };
           const fullB: Transform = {
-            position: worldPos(tool),
+            position: partWorldPos(tool),
             rotation: tool.transform.rotation,
             scale: tool.transform.scale,
           };
 
           const result = subtractMesh(bakeTransform(soupA, fullA), bakeTransform(soupB, fullB), {
-            resolution: 180,
-            sealMm: 0.6,
+            resolution: subtractSpec.resolution,
+            sealMm: 0.4,
+            clearanceMm: subtractSpec.clearanceMm,
           });
-          if (result.soup.length === 0) {
+          if (result.report.missed || result.soup.length === 0) {
             toast.error('Nothing left after the cut — do the two parts actually overlap?');
             return;
           }
@@ -2156,7 +2306,10 @@ export function Workbench() {
           const local = applyMatrix(result.soup, transformMatrix(fullA).invert());
           addVersion(targetId, local, 'subtract', `− ${tool.name}`);
           setSelectedId(targetId);
-          toast.success(`Cut ${tool.name} out of ${target.name}.`);
+          if (subtractSpec.removeTool) removePart(toolId);
+          toast.success(
+            `Cut ${tool.name} out of ${target.name} · ${formatCount(result.report.trianglesAfter)} triangles`
+          );
         } catch {
           toast.error('Subtract failed — try a lower resolution or simpler parts.');
         } finally {
@@ -2164,7 +2317,7 @@ export function Workbench() {
         }
       }, 20);
     },
-    [project, soupOfPart, addVersion, mode]
+    [project, soupOfPart, addVersion, partWorldPos, snapNeighbors, subtractSpec, removePart]
   );
 
   /**
@@ -2337,7 +2490,71 @@ export function Workbench() {
         if (selectedId) duplicatePart(selectedId);
         return;
       }
+      if (meta && event.key.toLowerCase() === 'g') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          if (selectedId) ungroupPart(selectedId);
+        } else {
+          groupSelection();
+        }
+        return;
+      }
       if (meta) return;
+
+      if (moveModeId) {
+        const fine = event.shiftKey;
+        const coarse = event.altKey;
+        const step =
+          manip === 'move'
+            ? coarse
+              ? 5
+              : fine
+                ? 0.1
+                : moveStep
+            : coarse
+              ? 15
+              : fine
+                ? 0.1
+                : rotateStep;
+        const apply = (axis: 'x' | 'y' | 'z', dir: 1 | -1) => {
+          event.preventDefault();
+          if (manip === 'move') {
+            nudgePart(moveModeId, {
+              x: axis === 'x' ? dir * step : 0,
+              y: axis === 'y' ? dir * step : 0,
+              z: axis === 'z' ? dir * step : 0,
+            });
+          } else {
+            spinPart(moveModeId, {
+              x: axis === 'x' ? dir * step : 0,
+              y: axis === 'y' ? dir * step : 0,
+              z: axis === 'z' ? dir * step : 0,
+            });
+          }
+        };
+        switch (event.key) {
+          case 'ArrowLeft':
+            apply('x', -1);
+            return;
+          case 'ArrowRight':
+            apply('x', 1);
+            return;
+          case 'ArrowUp':
+            apply('y', 1);
+            return;
+          case 'ArrowDown':
+            apply('y', -1);
+            return;
+          case 'PageUp':
+            apply('z', 1);
+            return;
+          case 'PageDown':
+            apply('z', -1);
+            return;
+          default:
+            break;
+        }
+      }
 
       switch (event.key) {
         case 'Delete':
@@ -2345,6 +2562,7 @@ export function Workbench() {
           if (selectedId) removePart(selectedId);
           break;
         case 'Escape':
+          setMoveModeId(null);
           setSelectedId(null);
           setMeasuring(false);
           break;
@@ -2370,7 +2588,23 @@ export function Workbench() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [copySelected, pasteClipboard, duplicatePart, removePart, selectedId, undo, redo]);
+  }, [
+    copySelected,
+    pasteClipboard,
+    duplicatePart,
+    removePart,
+    selectedId,
+    undo,
+    redo,
+    groupSelection,
+    ungroupPart,
+    moveModeId,
+    manip,
+    moveStep,
+    rotateStep,
+    nudgePart,
+    spinPart,
+  ]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -2382,7 +2616,7 @@ export function Workbench() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-2 bg-slate-200 p-2 text-slate-800">
+    <div className="flex h-dvh max-h-dvh flex-col gap-2 bg-slate-200 p-2 text-slate-800">
       <input
         ref={fileInputRef}
         type="file"
@@ -2401,7 +2635,9 @@ export function Workbench() {
           <input
             value={project.name}
             onChange={(event) =>
-              patchProject((current) => ({ ...current, name: event.target.value }))
+              patchProject((current) => ({ ...current, name: event.target.value }), {
+                history: false,
+              })
             }
             className="w-40 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-900 outline-none hover:border-slate-300 focus:border-emerald-500"
             aria-label="Project name"
@@ -2644,6 +2880,18 @@ export function Workbench() {
             <MenuSeparator />
             <MenuLabel>Group</MenuLabel>
             <MenuItem
+              onClick={mergeSelection}
+              disabled={selection.length < 2 || Boolean(busy)}
+              icon={Combine}
+              hint={
+                selection.length < 2
+                  ? 'Select two or more parts first'
+                  : `Fuse ${selection.length} parts into one solid`
+              }
+            >
+              Merge selection
+            </MenuItem>
+            <MenuItem
               onClick={groupSelection}
               disabled={selection.length < 2 || Boolean(busy)}
               icon={Boxes}
@@ -2752,9 +3000,9 @@ export function Workbench() {
             disabled={!canUndo}
             title={canUndo ? `Undo (${past.current.length} step(s) back) — ⌘Z` : 'Nothing to undo'}
             aria-label="Undo"
-            className="px-2 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            className="min-h-11 px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
           >
-            <Undo2 className="h-3.5 w-3.5" />
+            <Undo2 className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -2762,11 +3010,67 @@ export function Workbench() {
             disabled={!canRedo}
             title={canRedo ? `Redo (${futureSteps.current.length} step(s) forward) — ⌘⇧Z` : 'Nothing to redo'}
             aria-label="Redo"
-            className="border-l border-slate-300 px-2 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            className="min-h-11 border-l border-slate-300 px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
           >
-            <Redo2 className="h-3.5 w-3.5" />
+            <Redo2 className="h-4 w-4" />
           </button>
         </div>
+
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          <button
+            type="button"
+            onClick={groupSelection}
+            disabled={selection.length < 2 || Boolean(busy)}
+            title="Group selection — ⌘G"
+            className="min-h-11 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Group className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Group
+          </button>
+          <button
+            type="button"
+            onClick={() => selectedId && ungroupPart(selectedId)}
+            disabled={!selectedPart?.group || Boolean(busy)}
+            title="Ungroup — ⌘⇧G"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Ungroup className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Ungroup
+          </button>
+          <button
+            type="button"
+            onClick={mergeSelection}
+            disabled={selection.length < 2 || Boolean(busy)}
+            title="Boolean-union the selection into one solid"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Combine className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Merge
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSubtract(true)}
+            disabled={!selectedId || project.parts.length < 2 || Boolean(busy)}
+            title="Cut another part out of the selected one"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Scissors className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Subtract
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setMultiSelect((value) => !value)}
+          title="Tap extra parts to add them to the selection"
+          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
+            multiSelect
+              ? 'border-sky-500 bg-sky-50 text-sky-700'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Multi
+        </button>
 
         <div className="flex overflow-hidden rounded border border-slate-300">
           {(['bench', 'sketch'] as Workspace[]).map((option) => (
@@ -2805,7 +3109,7 @@ export function Workbench() {
           </div>
         )}
 
-        <div className="ml-auto flex items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500">
+        <div className="ml-auto hidden items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500 md:flex">
           <span>
             <span className={LABEL}>parts </span>
             {formatCount(project.parts.length)}
@@ -2847,23 +3151,26 @@ export function Workbench() {
         </div>
       ) : (
       <div
-        className="grid min-h-0 flex-1 gap-2"
+        className="relative grid min-h-0 flex-1 gap-2"
         style={{
-          gridTemplateColumns: [
-            showGallery ? 'minmax(220px, 300px)' : null,
-            'minmax(0, 1fr)',
-            showInspector ? 'minmax(260px, 330px)' : null,
-          ]
-            .filter(Boolean)
-            .join(' '),
+          gridTemplateColumns: isMobile
+            ? 'minmax(0, 1fr)'
+            : [
+                showGallery ? 'minmax(200px, 280px)' : null,
+                'minmax(0, 1fr)',
+                showInspector ? 'minmax(240px, 320px)' : null,
+              ]
+                .filter(Boolean)
+                .join(' '),
         }}
       >
-        {showGallery && (
+        {showGallery && !isMobile && (
         <div className="min-h-0">
           <Gallery
             project={project}
             selectedId={selectedId}
             marked={marked}
+            multiSelect={multiSelect}
             onSelect={setSelectedId}
             onMark={toggleMarked}
             onFit={fitPart}
@@ -2878,7 +3185,7 @@ export function Workbench() {
         )}
 
         <div
-          className={`${PANEL} relative min-h-[420px] overflow-hidden ${
+          className={`${PANEL} relative min-h-0 overflow-hidden md:min-h-[420px] ${
             dragging ? 'border-emerald-500' : ''
           }`}
           onDragOver={(event) => {
@@ -2892,9 +3199,18 @@ export function Workbench() {
             parts={viewportParts}
             selectedId={selectedId}
             onSelect={(id) => {
-              // A plain tap drops out of move mode unless it landed on the part
-              // already in it (a tap on empty space clears both).
               setMoveModeId((current) => (current && current === id ? current : null));
+              if (id && multiSelect && selectedId && id !== selectedId) {
+                setMarked((current) => {
+                  const next = new Set(current);
+                  next.add(selectedId);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                });
+                setSelectedId(id);
+                return;
+              }
               selectPart(id);
             }}
             wireframe={wireframe}
@@ -2903,89 +3219,54 @@ export function Workbench() {
             measuring={measuring}
             measurePoints={measurePoints}
             onMeasurePoint={(point) => setMeasurePoints((current) => [...current, point])}
-            callouts={callouts}
+            callouts={showCallouts && !isMobile ? callouts : []}
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
             frameToken={frameToken}
             dragEnabled={project.parts.length > 0}
             moveModeId={moveModeId}
             manipMode={manip}
+            rotateAxis={rotateAxis}
+            moveStep={moveStep}
+            rotateStep={rotateStep}
+            magnetMm={DEFAULT_MAGNET_MM}
+            snapNeighbors={snapNeighbors}
+            snapAnchors={snapAnchors}
+            onSnapHint={setSnapHint}
             onEnterMoveMode={enterMoveMode}
             onDragMove={nudgePart}
             onDragRotate={spinPart}
           />
 
-          {project.parts.length > 0 &&
-            moveModeId &&
-            (() => {
-              const mm = moveModeId;
-              if (!mm) return null;
-              const mv = (a: 'x' | 'y' | 'z', s: number) =>
-                nudgePart(mm, { x: a === 'x' ? s : 0, y: a === 'y' ? s : 0, z: a === 'z' ? s : 0 });
-              const rt = (a: 'x' | 'y' | 'z', s: number) =>
-                spinPart(mm, { x: a === 'x' ? s : 0, y: a === 'y' ? s : 0, z: a === 'z' ? s : 0 });
-              const step = manip === 'move' ? 5 : 15;
-              const act = (a: 'x' | 'y' | 'z', dir: 1 | -1) =>
-                manip === 'move' ? mv(a, dir * step) : rt(a, dir * step);
-              const seg = (on: boolean) =>
-                `px-2.5 py-1 ${on ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`;
-              return (
-                <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-slate-300 bg-white/95 p-2 shadow-lg backdrop-blur-sm">
-                  <div className="mb-2 flex items-center gap-2">
-                    <div className="flex overflow-hidden rounded border border-slate-300 text-[0.68rem] font-bold">
-                      <button type="button" className={seg(manip === 'move')} onClick={() => setManip('move')}>
-                        ✥ Move
-                      </button>
-                      <button type="button" className={seg(manip === 'rotate')} onClick={() => setManip('rotate')}>
-                        ⟳ Rotate
-                      </button>
-                    </div>
-                    <span className="max-w-[120px] truncate text-[0.68rem] font-semibold text-slate-500">
-                      {selectedPart?.name}
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-1 rounded border border-slate-300 px-2 py-1 text-[0.68rem] font-bold text-slate-600 hover:bg-slate-100"
-                      onClick={() => setMoveModeId(null)}
-                    >
-                      Done
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-center gap-3">
-                    {(['x', 'y', 'z'] as const).map((a) => (
-                      <div key={a} className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="h-7 w-7 rounded border border-slate-300 font-mono text-sm text-slate-700 hover:bg-slate-100"
-                          onClick={() => act(a, -1)}
-                          aria-label={`${a.toUpperCase()} minus`}
-                        >
-                          −
-                        </button>
-                        <span className="w-3 text-center text-[0.7rem] font-bold text-slate-500">
-                          {a.toUpperCase()}
-                        </span>
-                        <button
-                          type="button"
-                          className="h-7 w-7 rounded border border-slate-300 font-mono text-sm text-slate-700 hover:bg-slate-100"
-                          onClick={() => act(a, 1)}
-                          aria-label={`${a.toUpperCase()} plus`}
-                        >
-                          +
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-1.5 text-center text-[0.6rem] text-slate-400">
-                    {manip === 'move' ? '±5 mm' : '±15°'} · drag the part too · tap away to exit
-                  </div>
-                </div>
-              );
-            })()}
+          {project.parts.length > 0 && moveModeId && (
+            <ManipBar
+              name={selectedPart?.name ?? ''}
+              mode={manip}
+              onMode={setManip}
+              rotateAxis={rotateAxis}
+              onRotateAxis={setRotateAxis}
+              moveStep={moveStep}
+              rotateStep={rotateStep}
+              onMoveStep={setMoveStep}
+              onRotateStep={setRotateStep}
+              onNudge={(axis, direction) => {
+                const step = manip === 'move' ? moveStep : rotateStep;
+                const delta = {
+                  x: axis === 'x' ? direction * step : 0,
+                  y: axis === 'y' ? direction * step : 0,
+                  z: axis === 'z' ? direction * step : 0,
+                };
+                if (manip === 'move') nudgePart(moveModeId, delta);
+                else spinPart(moveModeId, delta);
+              }}
+              onDone={() => setMoveModeId(null)}
+              snapHint={snapHint}
+            />
+          )}
 
           {project.parts.length > 0 && selectedId && !moveModeId && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[0.7rem] font-medium text-slate-500 shadow-sm">
-              Double-tap a part to move or rotate it
+            <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
+              Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours
             </div>
           )}
 
@@ -3000,26 +3281,26 @@ export function Workbench() {
             </div>
           )}
 
-          <div className="absolute left-2 top-2 flex gap-1">
+          <div className="absolute left-2 top-2 z-10 flex gap-1">
             <button
               type="button"
               onClick={() => setShowGallery((v) => !v)}
               title={showGallery ? 'Hide parts gallery' : 'Show parts gallery'}
-              className="rounded border border-slate-300 bg-white/90 p-1.5 text-slate-500 transition-colors hover:text-slate-900"
+              className="flex h-11 w-11 items-center justify-center rounded border border-slate-300 bg-white/90 text-slate-500 transition-colors hover:text-slate-900"
             >
-              <PanelLeft className="h-3.5 w-3.5" />
+              <PanelLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={() => setShowInspector((v) => !v)}
               title={showInspector ? 'Hide inspector' : 'Show inspector'}
-              className="rounded border border-slate-300 bg-white/90 p-1.5 text-slate-500 transition-colors hover:text-slate-900"
+              className="flex h-11 w-11 items-center justify-center rounded border border-slate-300 bg-white/90 text-slate-500 transition-colors hover:text-slate-900"
             >
-              <PanelRight className="h-3.5 w-3.5" />
+              <PanelRight className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-3 rounded bg-white px-2 py-1 font-mono text-[0.65rem] text-slate-500">
+          <div className="pointer-events-none absolute bottom-2 left-2 hidden flex-wrap gap-3 rounded bg-white px-2 py-1 font-mono text-[0.65rem] text-slate-500 md:flex">
             <span>
               <span className={LABEL}>fitted </span>
               {assemblyTotals.parts}/{project.slots.length}
@@ -3035,17 +3316,43 @@ export function Workbench() {
           </div>
 
           {busy && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/90">
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90">
               <div className="flex items-center gap-2 rounded border border-slate-300 bg-white px-4 py-2 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
                 {busy}
               </div>
             </div>
           )}
+
+          {isMobile && showGallery && (
+            <div className="absolute inset-x-0 bottom-0 top-[28%] z-20 border-t border-slate-300 bg-white shadow-xl">
+              <Gallery
+                project={project}
+                selectedId={selectedId}
+                marked={marked}
+                multiSelect={multiSelect}
+                onSelect={setSelectedId}
+                onMark={toggleMarked}
+                onFit={fitPart}
+                onToggleVisible={(partId) => {
+                  const part = project.parts.find((candidate) => candidate.id === partId);
+                  if (part) patchPart(partId, { visible: !part.visible });
+                }}
+                onDelete={removePart}
+                onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
+              />
+            </div>
+          )}
         </div>
 
         {showInspector && (
-        <div className="min-h-0">
+        <div
+          className={
+            isMobile
+              ? 'absolute inset-x-0 bottom-0 top-[22%] z-30 min-h-0'
+              : 'min-h-0'
+          }
+        >
           <Inspector
             project={project}
             part={selectedPart}
@@ -3337,11 +3644,56 @@ export function Workbench() {
             className="flex max-h-[85vh] w-full max-w-md flex-col rounded-lg border border-slate-300 bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 className="text-sm font-bold text-slate-900">✂️ Subtract from “{selectedPart.name}”</h2>
+            <h2 className="text-sm font-bold text-slate-900">Subtract from “{selectedPart.name}”</h2>
             <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
-              Pick the part to cut OUT of it. Overlap the two first (double-tap → move mode). The cut
-              is watertight — good for a pocket, hole or slot.
+              Pick the cutter. Overlap the two first (double-tap → move). Parts that currently overlap
+              are marked so the cut is not a guess.
             </p>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Resolution</span>
+                <select
+                  className={FIELD}
+                  value={subtractSpec.resolution}
+                  onChange={(event) =>
+                    setSubtractSpec((current) => ({
+                      ...current,
+                      resolution: Number(event.target.value),
+                    }))
+                  }
+                >
+                  <option value={120}>Draft (fast)</option>
+                  <option value={220}>Standard</option>
+                  <option value={320}>Fine</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className={`${LABEL} mb-1 block`}>Clearance mm</span>
+                <input
+                  type="number"
+                  className={FIELD}
+                  step={0.1}
+                  min={0}
+                  value={subtractSpec.clearanceMm}
+                  onChange={(event) =>
+                    setSubtractSpec((current) => ({
+                      ...current,
+                      clearanceMm: Math.max(0, Number(event.target.value) || 0),
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <label className="mb-3 flex min-h-11 items-center gap-2 text-[0.75rem] text-slate-700">
+              <input
+                type="checkbox"
+                checked={subtractSpec.removeTool}
+                onChange={(event) =>
+                  setSubtractSpec((current) => ({ ...current, removeTool: event.target.checked }))
+                }
+              />
+              Remove the cutter after the cut
+            </label>
             <div className="min-h-0 flex-1 overflow-auto">
               {project.parts.filter((part) => part.id !== selectedId).length === 0 ? (
                 <p className="text-[0.8rem] text-slate-400">Add another part to cut with.</p>
@@ -3349,12 +3701,20 @@ export function Workbench() {
                 <div className="grid grid-cols-2 gap-2">
                   {project.parts
                     .filter((part) => part.id !== selectedId)
-                    .map((part) => (
+                    .map((part) => {
+                      const boxA = snapNeighbors.find((entry) => entry.id === selectedId)?.box;
+                      const boxB = snapNeighbors.find((entry) => entry.id === part.id)?.box;
+                      const overlaps = Boolean(boxA && boxB && aabbOverlap(boxA, boxB, 0.5));
+                      return (
                       <button
                         key={part.id}
                         type="button"
                         onClick={() => selectedId && subtractInto(selectedId, part.id)}
-                        className="flex items-center gap-2 rounded border border-slate-300 p-2 text-left transition-colors hover:border-rose-400 hover:bg-rose-50"
+                        className={`flex min-h-14 items-center gap-2 rounded border p-2 text-left transition-colors ${
+                          overlaps
+                            ? 'border-rose-400 bg-rose-50 hover:border-rose-500'
+                            : 'border-slate-300 hover:border-rose-400 hover:bg-rose-50'
+                        }`}
                       >
                         <span
                           className="h-8 w-8 shrink-0 rounded bg-slate-100 bg-cover bg-center"
@@ -3364,18 +3724,24 @@ export function Workbench() {
                               : { background: part.color }
                           }
                         />
-                        <span className="min-w-0 flex-1 truncate text-[0.75rem] font-semibold text-slate-700">
-                          {part.name}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[0.75rem] font-semibold text-slate-700">
+                            {part.name}
+                          </span>
+                          <span className="block text-[0.6rem] font-bold uppercase tracking-wide text-slate-400">
+                            {overlaps ? 'overlaps' : 'no overlap'}
+                          </span>
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
             </div>
             <div className="mt-3 flex justify-end">
               <button
                 type="button"
-                className="rounded border border-slate-300 px-3 py-1.5 text-[0.75rem] font-bold text-slate-600 hover:bg-slate-100"
+                className="min-h-11 rounded border border-slate-300 px-3 py-1.5 text-[0.75rem] font-bold text-slate-600 hover:bg-slate-100"
                 onClick={() => setShowSubtract(false)}
               >
                 Cancel

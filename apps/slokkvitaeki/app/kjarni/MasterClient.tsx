@@ -65,22 +65,34 @@ const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
   },
 ];
 
-const QUICK: { icon: string; label: string; href: string; ext?: boolean }[] = [
-  // Kjarni-síður
-  { icon: "🏠", label: "Forsíða", href: "/" },
-  { icon: "🎛️", label: "Stjórnborð", href: "/stjorn" },
-  { icon: "🧩", label: "Kerfi", href: "/kerfi" },
-  { icon: "🛒", label: "Verslun", href: "/verslun" },
-  { icon: "🗂️", label: "Skjalarinn", href: "/skjalarinn" },
-  { icon: "🧊", label: "3dwork", href: "/3dwork" },
-  { icon: "✎", label: "Prufusvæði", href: "/draft" },
-  // Tól & vefir
-  { icon: "🛠️", label: "Verkfæri (skjalalesari)", href: "https://verkfaeri.vercel.app", ext: true },
-  { icon: "🧯", label: "Slökkvitæki appið", href: "https://slokkvitaeki.netlify.app", ext: true },
-  { icon: "🔥", label: "Brunahólf hub", href: "https://brunaholf.netlify.app", ext: true },
-  // Þróun
-  { icon: "💻", label: "GitHub", href: "https://github.com/aggisigurds-dev/kjarni", ext: true },
-  { icon: "▲", label: "Vercel", href: "https://vercel.com/kjarni", ext: true },
+const QUICK_GROUPS: { title: string; items: { icon: string; label: string; href: string; ext?: boolean }[] }[] = [
+  {
+    title: "Kjarni",
+    items: [
+      { icon: "🏠", label: "Forsíða", href: "/" },
+      { icon: "🎛️", label: "Stjórnborð", href: "/stjorn" },
+      { icon: "🧩", label: "Kerfi", href: "/kerfi" },
+      { icon: "🛒", label: "Verslun", href: "/verslun" },
+      { icon: "🗂️", label: "Skjalarinn", href: "/skjalarinn" },
+      { icon: "🧊", label: "3dwork", href: "/3dwork" },
+      { icon: "✎", label: "Prufusvæði", href: "/draft" },
+    ],
+  },
+  {
+    title: "Öpp",
+    items: [
+      { icon: "🛠️", label: "Verkfæri", href: "https://verkfaeri.vercel.app", ext: true },
+      { icon: "🧯", label: "Slökkvitæki", href: "https://slokkvitaeki.netlify.app", ext: true },
+      { icon: "🔥", label: "Brunahólf", href: "https://brunaholf.netlify.app", ext: true },
+    ],
+  },
+  {
+    title: "Þróun",
+    items: [
+      { icon: "💻", label: "GitHub", href: "https://github.com/aggisigurds-dev/kjarni", ext: true },
+      { icon: "▲", label: "Vercel", href: "https://vercel.com/kjarni", ext: true },
+    ],
+  },
 ];
 const CONNS: { icon: string; nafn: string; status: string; on: boolean; how: string; cta: string; href: string }[] = [
   { icon: "🌐", nafn: "Tengja lén", status: "Ekki tengt", on: false, how: "Bættu léninu þínu við verkefnið í Vercel og vísaðu DNS-færslu (CNAME) á cname.vercel-dns.com. Vefurinn birtist þá á þínu eigin léni.", cta: "Opna Vercel Domains", href: "https://vercel.com/kjarni/slokkvitaeki/settings/domains" },
@@ -102,6 +114,7 @@ export default function MasterClient() {
   const [einingar, setEiningar] = useState<string[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const [galFilter, setGalFilter] = useState<"allt" | "Kerfi" | "Vefur" | "Tól" | "Verkfæri">("allt");
   const [saving, setSaving] = useState(false);
 
   async function loadSites() {
@@ -212,27 +225,66 @@ export default function MasterClient() {
       <header className="ms-top">
         <div className="ms-top-l">
           <span className="ms-badge">◉</span>
-          <div><h1>Kjarni · Stjórnstöð</h1><p>Master-bakendi — vefir, einingar og tól</p></div>
+          <div>
+            <h1>Kjarni · Stjórnstöð</h1>
+            <p>Master-bakendi — vefir, einingar og tól</p>
+          </div>
         </div>
       </header>
 
-      <div className="ms-kpis">
-        <div className="ms-kpi"><span>Vefir & kerfi</span><b>{sites.length}</b></div>
-        <div className="ms-kpi"><span>Einingar tilbúnar</span><b>{readyCount}<small>/{totalCount}</small></b></div>
-        <div className="ms-kpi"><span>Pantanir</span><b>{orders.length}</b></div>
-        <div className="ms-kpi"><span>Kerfi-viðskiptavinir</span><b>{kKunnar}</b></div>
-      </div>
+      <nav className="ms-nav" aria-label="Kaflar">
+        <a href="#ms-yfirlit">Yfirlit</a>
+        <a href="#ms-vefir">Vefir</a>
+        <a href="#ms-einingar">Einingar</a>
+        <a href="#ms-adstod">Aðstoð</a>
+      </nav>
 
-      <h2 className="ms-h2">Allt á einum stað</h2>
-      <div className="ms-launch">
-        {QUICK.map((q) => (
-          <a key={q.label} href={q.href} {...(q.ext ? { target: "_blank", rel: "noreferrer" } : {})}>
-            <span aria-hidden="true">{q.icon}</span> {q.label}{q.ext ? " ↗" : ""}
-          </a>
-        ))}
-      </div>
+      <section id="ms-yfirlit" className="ms-section">
+        <div className="ms-kpis">
+          <div className="ms-kpi"><span>Vefir &amp; kerfi</span><b>{sites.length}</b></div>
+          <div className="ms-kpi"><span>Einingar tilbúnar</span><b>{readyCount}<small>/{totalCount}</small></b></div>
+          <div className="ms-kpi"><span>Pantanir</span><b>{orders.length}</b></div>
+          <div className="ms-kpi"><span>Kerfi-viðskiptavinir</span><b>{kKunnar}</b></div>
+        </div>
 
-      <div className="ms-h2row"><h2 className="ms-h2">Vefir & kerfi</h2><button className="ms-add-btn" onClick={() => setAddOpen(true)}>+ Nýr vefur</button></div>
+        <div className="ms-overview">
+          <div>
+            <h2 className="ms-h2">Allt á einum stað</h2>
+            {QUICK_GROUPS.map((group) => (
+              <div className="ms-launch-group" key={group.title}>
+                <h3 className="ms-h3">{group.title}</h3>
+                <div className="ms-launch">
+                  {group.items.map((q) => (
+                    <a key={q.label} href={q.href} {...(q.ext ? { target: "_blank", rel: "noreferrer" } : {})}>
+                      <span aria-hidden="true">{q.icon}</span> {q.label}{q.ext ? " ↗" : ""}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div>
+            <h2 className="ms-h2" id="ms-virkni">Nýjasta virknin</h2>
+            <div className="ms-card">
+              {activity.length === 0 ? <p className="ms-empty">Engin virkni enn.</p> : (
+                <div className="ms-act">
+                  {activity.map((a, i) => (
+                    <div className="ms-actrow" key={i}>
+                      <span className={`ms-chip ${a.t === "pöntun" ? "ord" : "inq"}`}>{a.t}</span>
+                      <span className="ms-act-nafn">{a.nafn || "—"}</span>
+                      <span className="ms-act-sub">{a.sub}</span>
+                      <span className="ms-act-when">{a.when ? new Date(a.when).toLocaleDateString("is-IS") : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="ms-vefir" className="ms-section">
+      <div className="ms-h2row"><h2 className="ms-h2">Vefir &amp; kerfi</h2><button className="ms-add-btn" onClick={() => setAddOpen(true)}>+ Nýr vefur</button></div>
       <div className="ms-props">
         <div className="ms-prop">
           <div className="ms-prop-h">
@@ -279,14 +331,33 @@ export default function MasterClient() {
           <small>Settu upp næsta þjónustufyrirtæki eða vef á sama grunni.</small>
         </button>
       </div>
+      </section>
 
-      <h2 className="ms-h2">Einingar & tól sem þú getur notað</h2>
+      <section id="ms-einingar" className="ms-section">
+      <h2 className="ms-h2">Einingar &amp; tól sem þú getur notað</h2>
       <p className="ms-galsub">{readyCount} tilbúnar einingar og tól — kveiktu á þeim eftir þörf á hverjum vef eða kerfi.</p>
-      {GALLERY.map((g) => (
+      <div className="ms-filters" role="tablist" aria-label="Sía einingar">
+        {(["allt", "Kerfi", "Vefur", "Tól", "Verkfæri"] as const).map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            role="tab"
+            aria-selected={galFilter === tag}
+            className={galFilter === tag ? "on" : ""}
+            onClick={() => setGalFilter(tag)}
+          >
+            {tag === "allt" ? "Allt" : tag}
+          </button>
+        ))}
+      </div>
+      {GALLERY.map((g) => {
+        const items = g.items.filter((it) => galFilter === "allt" || it.tag === galFilter);
+        if (items.length === 0) return null;
+        return (
         <div className="ms-gal" key={g.group}>
           <div className="ms-gal-h"><h3>{g.group}</h3><span>{g.sub}</span></div>
           <div className="ms-gal-grid">
-            {g.items.map((it) => (
+            {items.map((it) => (
               <div className={`ms-gitem ${it.ready ? "" : "soon"}`} key={it.nafn}>
                 <span className="ms-gitem-ico">{it.icon}</span>
                 <div className="ms-gitem-b">
@@ -301,8 +372,11 @@ export default function MasterClient() {
             ))}
           </div>
         </div>
-      ))}
+        );
+      })}
+      </section>
 
+      <section id="ms-adstod" className="ms-section">
       <h2 className="ms-h2">Aðstoðarborð</h2>
       <div className="ms-help2">
         <div className="ms-conns">
@@ -319,22 +393,7 @@ export default function MasterClient() {
           ))}
         </div>
       </div>
-
-      <h2 className="ms-h2">Nýjasta virknin</h2>
-      <div className="ms-card">
-        {activity.length === 0 ? <p className="ms-empty">Engin virkni enn.</p> : (
-          <div className="ms-act">
-            {activity.map((a, i) => (
-              <div className="ms-actrow" key={i}>
-                <span className={`ms-chip ${a.t === "pöntun" ? "ord" : "inq"}`}>{a.t}</span>
-                <span className="ms-act-nafn">{a.nafn || "—"}</span>
-                <span className="ms-act-sub">{a.sub}</span>
-                <span className="ms-act-when">{a.when ? new Date(a.when).toLocaleDateString("is-IS") : ""}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      </section>
 
       {addOpen && (
         <div className="ms-modal-wrap" onClick={() => setAddOpen(false)}>
