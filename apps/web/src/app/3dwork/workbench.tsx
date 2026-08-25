@@ -40,6 +40,7 @@ import {
 import {
   autoFix,
   computeBounds,
+  inspect,
   recenter,
   simplify,
   zUpToYUp,
@@ -1477,7 +1478,15 @@ export function Workbench() {
   );
 
   const runAutoFix = useCallback(
-    (partId: string, options: { fillHoles: boolean; maxHoleEdges: number }) => {
+    (
+      partId: string,
+      options: {
+        fillHoles: boolean;
+        maxHoleEdges: number;
+        dropToTable?: boolean;
+        fallbackSolid?: boolean;
+      }
+    ) => {
       const soup = soupOfPart(partId);
       if (!soup) return;
 
@@ -1488,14 +1497,55 @@ export function Workbench() {
           const result = autoFix(soup, {
             fillHoles: options.fillHoles,
             maxHoleEdges: options.maxHoleEdges,
+            dropToTable: options.dropToTable,
           });
-          addVersion(partId, result.soup, 'repaired', 'Auto fix');
-          setFixReport(result.report);
-          toast.success(
-            result.report.after.watertight
-              ? 'Repaired — mesh is watertight.'
-              : `Repaired, but ${result.report.unfilledHoles} opening(s) were too large to patch.`
+          let next = result.soup;
+          let usedSolid = false;
+
+          if (options.fallbackSolid && !result.report.after.watertight) {
+            const solid = makeSolid(next, { resolution: 220, sealMm: 0.8 });
+            if (solid.report.trianglesAfter > 0) {
+              next = solid.soup;
+              usedSolid = true;
+              setSolidReport(solid.report);
+            }
+          }
+
+          const report = usedSolid
+            ? {
+                ...result.report,
+                after: inspect(next),
+                unfilledHoles: 0,
+                changed: true,
+              }
+            : result.report;
+          setFixReport(report);
+
+          if (!result.report.changed && !usedSolid) {
+            toast.success(
+              result.report.after.watertight
+                ? 'Already clean — nothing to change.'
+                : 'Could not close it with edge repair. Tick “rebuild as solid” or use Make solid.'
+            );
+            return;
+          }
+
+          addVersion(
+            partId,
+            next,
+            usedSolid ? 'repaired + solid' : 'repaired',
+            usedSolid ? 'Auto fix, then rebuilt as solid' : 'Auto fix'
           );
+
+          if (usedSolid) {
+            toast.success('Patched what we could, then rebuilt as a solid.');
+          } else if (report.after.watertight) {
+            toast.success('Repaired — mesh is watertight.');
+          } else {
+            toast.success(
+              `Repaired, but ${report.unfilledHoles} opening(s) were too large to patch.`
+            );
+          }
         } catch {
           toast.error('Could not repair that mesh.');
         } finally {
@@ -1894,6 +1944,7 @@ export function Workbench() {
     setBusy(`Repairing ${targets.length} parts…`);
     setTimeout(() => {
       let repaired = 0;
+      let skipped = 0;
       let stillOpen = 0;
 
       for (const part of targets) {
@@ -1901,6 +1952,11 @@ export function Workbench() {
         if (!soup) continue;
         try {
           const result = autoFix(soup, { fillHoles: true, maxHoleEdges: 200 });
+          if (!result.report.changed) {
+            skipped++;
+            if (!result.report.after.watertight) stillOpen++;
+            continue;
+          }
           addVersion(part.id, result.soup, 'repaired', 'Auto fix (batch)');
           repaired++;
           if (!result.report.after.watertight) stillOpen++;
@@ -1910,8 +1966,10 @@ export function Workbench() {
       }
 
       setBusy(null);
+      const bits = [`Fixed ${repaired} part(s)`];
+      if (skipped > 0) bits.push(`${skipped} already clean`);
       toast.success(
-        `Repaired ${repaired} part(s).` +
+        `${bits.join(', ')}.` +
           (stillOpen > 0 ? ` ${stillOpen} still have open or non-manifold edges.` : '')
       );
     }, 30);
@@ -2909,11 +2967,24 @@ export function Workbench() {
             <MenuSeparator />
             <MenuLabel>Repair</MenuLabel>
             <MenuItem
+              onClick={() =>
+                selectedId &&
+                runAutoFix(selectedId, {
+                  fillHoles: true,
+                  maxHoleEdges: 200,
+                  fallbackSolid: true,
+                })
+              }
+              disabled={!selectedId || Boolean(busy)}
+              icon={Sparkles}
+              hint="Weld, fill holes, drop dust; rebuild as solid if still open"
+            >
+              Fix selected part
+            </MenuItem>
+            <MenuItem
               onClick={fixEveryPart}
               disabled={Boolean(busy) || project.parts.length === 0}
-              icon={Sparkles}
-              tone="primary"
-              hint="Auto fix over every loaded part"
+              hint="Edge repair over every loaded part — skips ones that are already clean"
             >
               Fix all parts
             </MenuItem>
@@ -3186,6 +3257,20 @@ export function Workbench() {
             Subtract
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            selectedId &&
+            runAutoFix(selectedId, { fillHoles: true, maxHoleEdges: 200, fallbackSolid: true })
+          }
+          disabled={!selectedId || Boolean(busy)}
+          title="Fix this part — weld cracks, fill holes, drop dust. Rebuilds as a solid if it stays open."
+          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+        >
+          <Sparkles className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          Fix
+        </button>
 
         <button
           type="button"

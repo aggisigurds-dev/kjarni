@@ -46,6 +46,45 @@ function removeTriangle(soup: Float32Array, index: number): Float32Array {
   return new Float32Array(kept);
 }
 
+/**
+ * Open-top L prism: 30×10 bar plus a 10×20 stem, 10 mm tall. The missing top
+ * face is a concave 6-edge hole — the case a fan-from-first-vertex fill gets
+ * wrong when the walk starts at the reflex corner.
+ */
+function openLPrism(): Float32Array {
+  const bottom: [number, number, number][] = [
+    [0, 0, 0],
+    [30, 0, 0],
+    [30, 0, 10],
+    [10, 0, 10],
+    [10, 0, 30],
+    [0, 0, 30],
+  ];
+  const top = bottom.map(([x, , z]) => [x, 10, z] as [number, number, number]);
+  const tris: number[] = [];
+  const tri = (
+    p: [number, number, number],
+    q: [number, number, number],
+    r: [number, number, number]
+  ) => {
+    tris.push(...p, ...q, ...r);
+  };
+
+  // Bottom, facing -Y.
+  tri(bottom[0], bottom[1], bottom[2]);
+  tri(bottom[0], bottom[2], bottom[3]);
+  tri(bottom[0], bottom[3], bottom[4]);
+  tri(bottom[0], bottom[4], bottom[5]);
+
+  for (let i = 0; i < 6; i++) {
+    const j = (i + 1) % 6;
+    tri(bottom[i], top[i], top[j]);
+    tri(bottom[i], top[j], bottom[j]);
+  }
+
+  return new Float32Array(tris);
+}
+
 describe('weld', () => {
   it('collapses a triangle soup back onto its shared corners', () => {
     const { mesh, welded } = weld(cubeSoup(10));
@@ -98,6 +137,9 @@ describe('autoFix', () => {
     expect(report.flippedTriangles).toBe(0);
     expect(report.removedDegenerate).toBe(0);
     expect(report.filledHoles).toBe(0);
+    expect(report.changed).toBe(false);
+    expect(report.removedShells).toBe(0);
+    expect(report.crackWeld).toBe(false);
   });
 
   it('re-winds a flipped triangle', () => {
@@ -156,6 +198,60 @@ describe('autoFix', () => {
     const fixed = autoFix(lifted, { dropToTable: true });
 
     expect(computeBounds(fixed.soup).min[1]).toBeCloseTo(0, 5);
+    expect(fixed.report.changed).toBe(true);
+  });
+
+  it('does not count a no-op drop-to-table as a change', () => {
+    const { report } = autoFix(cubeSoup(10), { dropToTable: true });
+    expect(report.changed).toBe(false);
+  });
+
+  it('drops a stray dust triangle that is not part of the shell', () => {
+    const cube = cubeSoup(10);
+    const withDust = new Float32Array(cube.length + 9);
+    withDust.set(cube, 0);
+    withDust.set([100, 100, 100, 100.2, 100, 100, 100, 100.2, 100], cube.length);
+
+    const { report } = autoFix(withDust);
+
+    expect(report.removedShells).toBe(1);
+    expect(report.after.triangles).toBe(12);
+    expect(report.after.watertight).toBe(true);
+    expect(report.changed).toBe(true);
+  });
+
+  it('drops needle slivers that have area but no thickness', () => {
+    const cube = cubeSoup(10);
+    const withNeedle = new Float32Array(cube.length + 9);
+    withNeedle.set(cube, 0);
+    withNeedle.set([0, 0, 0, 1, 0, 0, 0.5, 1e-8, 0], cube.length);
+
+    const { report } = autoFix(withNeedle);
+
+    expect(report.removedDegenerate).toBeGreaterThanOrEqual(1);
+    expect(report.after.triangles).toBe(12);
+    expect(report.after.watertight).toBe(true);
+  });
+
+  it('fills a concave L-shaped hole without covering the outside', () => {
+    const { report } = autoFix(openLPrism());
+
+    expect(report.before.holes).toBeGreaterThanOrEqual(1);
+    expect(report.filledHoles).toBeGreaterThanOrEqual(1);
+    expect(report.after.watertight).toBe(true);
+    expect(report.after.signedVolume).toBeCloseTo(5000, 0);
+  });
+
+  it('closes a hairline crack from a split vertex', () => {
+    const cracked = Float32Array.from(cubeSoup(10));
+    cracked[0] += 0.03;
+
+    const { report } = autoFix(cracked);
+
+    expect(report.before.watertight).toBe(false);
+    expect(report.after.watertight).toBe(true);
+    expect(report.changed).toBe(true);
+    expect(report.crackWeld || report.filledHoles > 0).toBe(true);
   });
 });
 

@@ -42,10 +42,12 @@ export interface Topology {
 export interface FixOptions {
   weldTolerance?: number;
   fillHoles?: boolean;
-  /** Boundary loops longer than this are left alone — a fan fill would lie. */
+  /** Boundary loops longer than this are left alone — a guessed patch would lie. */
   maxHoleEdges?: number;
   dropToTable?: boolean;
   centerOnTable?: boolean;
+  /** Drop disconnected shells under 1% of the largest shell's area. Default true. */
+  dropDust?: boolean;
 }
 
 export interface FixReport {
@@ -56,6 +58,12 @@ export interface FixReport {
   filledHoles: number;
   unfilledHoles: number;
   invertedSolid: boolean;
+  /** Tiny disconnected shells (scan dust) that were dropped. */
+  removedShells: number;
+  /** True when a slightly looser weld was used to close hairline cracks. */
+  crackWeld: boolean;
+  /** False when the mesh was already clean — callers should not save a version. */
+  changed: boolean;
   before: Topology;
   after: Topology;
 }
@@ -339,7 +347,27 @@ export function analyze(mesh: IndexedMesh): Topology {
   };
 }
 
-function dropDegenerate(mesh: IndexedMesh): {
+function triangleLongestEdge(p: Float64Array, a: number, b: number, c: number): number {
+  const d = (i: number, j: number) =>
+    Math.hypot(p[i * 3] - p[j * 3], p[i * 3 + 1] - p[j * 3 + 1], p[i * 3 + 2] - p[j * 3 + 2]);
+  return Math.max(d(a, b), d(b, c), d(c, a));
+}
+
+function triangleIsJunk(p: Float64Array, a: number, b: number, c: number, minArea: number): boolean {
+  if (a === b || b === c || a === c) return true;
+  const area = triangleArea(p, a, b, c);
+  if (area <= minArea) return true;
+  const longest = triangleLongestEdge(p, a, b, c);
+  if (longest === 0) return true;
+  const height = (2 * area) / longest;
+  // Needles: almost-collinear corners that still have a non-zero cross product.
+  return height <= Math.max(1e-8, longest * 1e-5);
+}
+
+function dropDegenerate(
+  mesh: IndexedMesh,
+  minArea = 0
+): {
   indices: Uint32Array;
   degenerate: number;
   duplicates: number;
@@ -354,7 +382,7 @@ function dropDegenerate(mesh: IndexedMesh): {
     const b = mesh.indices[t + 1];
     const c = mesh.indices[t + 2];
 
-    if (a === b || b === c || a === c || triangleArea(mesh.positions, a, b, c) === 0) {
+    if (triangleIsJunk(mesh.positions, a, b, c, minArea)) {
       degenerate++;
       continue;
     }
@@ -369,6 +397,255 @@ function dropDegenerate(mesh: IndexedMesh): {
   }
 
   return { indices: new Uint32Array(kept), degenerate, duplicates };
+}
+
+/** Groups of triangles that share any edge — one shell each. */
+function triangleComponents(indices: Uint32Array): number[][] {
+  const triangleCount = indices.length / 3;
+  const neighbours: number[][] = Array.from({ length: triangleCount }, () => []);
+  for (const record of buildEdges(indices).values()) {
+    const ts = record.triangles;
+    for (let i = 0; i < ts.length; i++) {
+      for (let j = i + 1; j < ts.length; j++) {
+        neighbours[ts[i]].push(ts[j]);
+        neighbours[ts[j]].push(ts[i]);
+      }
+    }
+  }
+
+  const seen = new Uint8Array(triangleCount);
+  const components: number[][] = [];
+  for (let seed = 0; seed < triangleCount; seed++) {
+    if (seen[seed]) continue;
+    seen[seed] = 1;
+    const stack = [seed];
+    const component: number[] = [];
+    while (stack.length > 0) {
+      const t = stack.pop() as number;
+      component.push(t);
+      for (const other of neighbours[t]) {
+        if (seen[other]) continue;
+        seen[other] = 1;
+        stack.push(other);
+      }
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+/**
+ * Drop disconnected dust: anything under 1% of the largest shell's area.
+ * The largest shell is always kept, even if the whole mesh is tiny.
+ */
+function dropDust(mesh: IndexedMesh): { indices: Uint32Array; removedShells: number } {
+  const components = triangleComponents(mesh.indices);
+  if (components.length <= 1) return { indices: mesh.indices, removedShells: 0 };
+
+  const areas = components.map((component) => {
+    let area = 0;
+    for (const t of component) {
+      area += triangleArea(
+        mesh.positions,
+        mesh.indices[t * 3],
+        mesh.indices[t * 3 + 1],
+        mesh.indices[t * 3 + 2]
+      );
+    }
+    return area;
+  });
+  const largest = Math.max(...areas);
+  const cutoff = largest * 0.01;
+  const kept: number[] = [];
+  let removedShells = 0;
+
+  for (let i = 0; i < components.length; i++) {
+    if (areas[i] < cutoff && areas[i] !== largest) {
+      removedShells++;
+      continue;
+    }
+    for (const t of components[i]) {
+      kept.push(mesh.indices[t * 3], mesh.indices[t * 3 + 1], mesh.indices[t * 3 + 2]);
+    }
+  }
+
+  return { indices: new Uint32Array(kept), removedShells };
+}
+
+/** Drop unused vertices so later stats (and the next weld) stay honest. */
+function compact(mesh: IndexedMesh): IndexedMesh {
+  const vertexCount = mesh.positions.length / 3;
+  const map = new Int32Array(vertexCount).fill(-1);
+  let next = 0;
+  for (let i = 0; i < mesh.indices.length; i++) {
+    const v = mesh.indices[i];
+    if (map[v] < 0) map[v] = next++;
+  }
+  if (next === vertexCount) return mesh;
+
+  const positions = new Float64Array(next * 3);
+  for (let v = 0; v < vertexCount; v++) {
+    const mapped = map[v];
+    if (mapped < 0) continue;
+    positions[mapped * 3] = mesh.positions[v * 3];
+    positions[mapped * 3 + 1] = mesh.positions[v * 3 + 1];
+    positions[mapped * 3 + 2] = mesh.positions[v * 3 + 2];
+  }
+  const indices = new Uint32Array(mesh.indices.length);
+  for (let i = 0; i < mesh.indices.length; i++) indices[i] = map[mesh.indices[i]];
+  return { positions, indices };
+}
+
+function newellNormal(positions: Float64Array, loop: number[]): { x: number; y: number; z: number } {
+  let nx = 0;
+  let ny = 0;
+  let nz = 0;
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i] * 3;
+    const b = loop[(i + 1) % loop.length] * 3;
+    const ax = positions[a];
+    const ay = positions[a + 1];
+    const az = positions[a + 2];
+    const bx = positions[b];
+    const by = positions[b + 1];
+    const bz = positions[b + 2];
+    nx += (ay - by) * (az + bz);
+    ny += (az - bz) * (ax + bx);
+    nz += (ax - bx) * (ay + by);
+  }
+  return { x: nx, y: ny, z: nz };
+}
+
+function signedPolyArea(poly: { x: number; y: number }[]): number {
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    area += p.x * q.y - q.x * p.y;
+  }
+  return area / 2;
+}
+
+function pointInTri2d(
+  p: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number }
+): boolean {
+  const orient = (
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    p3: { x: number; y: number }
+  ) => (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+  const o1 = orient(a, b, p);
+  const o2 = orient(b, c, p);
+  const o3 = orient(c, a, p);
+  const hasNeg = o1 < -1e-14 || o2 < -1e-14 || o3 < -1e-14;
+  const hasPos = o1 > 1e-14 || o2 > 1e-14 || o3 > 1e-14;
+  return !(hasNeg && hasPos);
+}
+
+/**
+ * Ear-clip a (mostly) planar hole. Returns triangle indices, or null if the
+ * loop is too folded for a 2D clip — caller then fans from the centroid.
+ */
+function triangulateLoop(positions: Float64Array, loop: number[]): number[] | null {
+  if (loop.length < 3) return null;
+  if (loop.length === 3) return [loop[0], loop[1], loop[2]];
+
+  const nrm = newellNormal(positions, loop);
+  const nlen = Math.hypot(nrm.x, nrm.y, nrm.z);
+  if (nlen < 1e-12) return null;
+  const nx = nrm.x / nlen;
+  const ny = nrm.y / nlen;
+  const nz = nrm.z / nlen;
+
+  const hx = Math.abs(nx) < 0.9 ? 1 : 0;
+  const hy = Math.abs(nx) < 0.9 ? 0 : 1;
+  let ux = -nz * hy;
+  let uy = nz * hx;
+  let uz = nx * hy - ny * hx;
+  const ulen = Math.hypot(ux, uy, uz);
+  if (ulen < 1e-12) return null;
+  ux /= ulen;
+  uy /= ulen;
+  uz /= ulen;
+  const vx = ny * uz - nz * uy;
+  const vy = nz * ux - nx * uz;
+  const vz = nx * uy - ny * ux;
+
+  type P2 = { i: number; x: number; y: number };
+  const origin = loop[0] * 3;
+  let poly: P2[] = loop.map((i) => {
+    const dx = positions[i * 3] - positions[origin];
+    const dy = positions[i * 3 + 1] - positions[origin + 1];
+    const dz = positions[i * 3 + 2] - positions[origin + 2];
+    return { i, x: dx * ux + dy * uy + dz * uz, y: dx * vx + dy * vy + dz * vz };
+  });
+  if (signedPolyArea(poly) < 0) poly = poly.reverse();
+
+  const tris: number[] = [];
+  let guard = 0;
+  while (poly.length > 3 && guard++ < 4000) {
+    let clipped = false;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[(i + poly.length - 1) % poly.length];
+      const b = poly[i];
+      const c = poly[(i + 1) % poly.length];
+      const crossZ = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      if (crossZ <= 1e-14) continue;
+      let ear = true;
+      for (const p of poly) {
+        if (p === a || p === b || p === c) continue;
+        if (pointInTri2d(p, a, b, c)) {
+          ear = false;
+          break;
+        }
+      }
+      if (!ear) continue;
+      tris.push(a.i, b.i, c.i);
+      poly.splice(i, 1);
+      clipped = true;
+      break;
+    }
+    if (!clipped) return null;
+  }
+  if (poly.length === 3) tris.push(poly[0].i, poly[1].i, poly[2].i);
+  return tris.length >= 3 ? tris : null;
+}
+
+/** Last resort for non-planar holes: fan from the centroid of the rim. */
+function centroidFan(
+  positions: Float64Array,
+  loop: number[]
+): { positions: Float64Array; indices: number[] } {
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  for (const i of loop) {
+    cx += positions[i * 3];
+    cy += positions[i * 3 + 1];
+    cz += positions[i * 3 + 2];
+  }
+  const n = loop.length;
+  cx /= n;
+  cy /= n;
+  cz /= n;
+
+  const next = new Float64Array(positions.length + 3);
+  next.set(positions);
+  next[positions.length] = cx;
+  next[positions.length + 1] = cy;
+  next[positions.length + 2] = cz;
+  const ci = positions.length / 3;
+  const indices: number[] = [];
+  for (let i = 0; i < n; i++) indices.push(loop[i], loop[(i + 1) % n], ci);
+  return { positions: next, indices };
+}
+
+function countTinyHoles(mesh: IndexedMesh): number {
+  const loops = boundaryLoops(mesh.indices, buildEdges(mesh.indices));
+  return loops.filter((loop) => loop.length <= 6).length;
 }
 
 /**
@@ -438,37 +715,50 @@ function orient(mesh: IndexedMesh): { indices: Uint32Array; flipped: number; inv
   return { indices, flipped, inverted };
 }
 
-/** Fan-triangulate small boundary rims. Large rims are reported, not guessed at. */
+/**
+ * Patch small boundary rims. Planar holes are ear-clipped (so concave rims
+ * fill without covering the outside). Folded rims fall back to a centroid fan.
+ * Loops longer than `maxHoleEdges` are reported, not guessed at.
+ */
 function fillHoles(
   mesh: IndexedMesh,
   maxHoleEdges: number
-): { indices: Uint32Array; filled: number; unfilled: number } {
+): { positions: Float64Array; indices: Uint32Array; filled: number; unfilled: number } {
   const edges = buildEdges(mesh.indices);
   const loops = boundaryLoops(mesh.indices, edges);
+  let positions = mesh.positions;
   const extra: number[] = [];
   let filled = 0;
   let unfilled = 0;
 
   for (const loop of loops) {
-    if (loop.length > maxHoleEdges) {
+    if (loop.length < 3 || loop.length > maxHoleEdges) {
       unfilled++;
       continue;
     }
     // The rim runs the way the surrounding triangles walk it, so the patch has
-    // to run the other way to face outward.
+    // to run the other way to face outward. `orient()` re-checks after.
     const rim = [...loop].reverse();
-    for (let i = 1; i + 1 < rim.length; i++) {
-      extra.push(rim[0], rim[i], rim[i + 1]);
+    const clipped = triangulateLoop(positions, rim);
+    if (clipped && clipped.length >= 3) {
+      extra.push(...clipped);
+      filled++;
+      continue;
     }
+    const fan = centroidFan(positions, rim);
+    positions = fan.positions;
+    extra.push(...fan.indices);
     filled++;
   }
 
-  if (extra.length === 0) return { indices: mesh.indices, filled, unfilled };
+  if (extra.length === 0) {
+    return { positions, indices: mesh.indices, filled, unfilled };
+  }
 
   const merged = new Uint32Array(mesh.indices.length + extra.length);
   merged.set(mesh.indices, 0);
   merged.set(extra, mesh.indices.length);
-  return { indices: merged, filled, unfilled };
+  return { positions, indices: merged, filled, unfilled };
 }
 
 function translate(positions: Float64Array, dx: number, dy: number, dz: number): void {
@@ -480,20 +770,52 @@ function translate(positions: Float64Array, dx: number, dy: number, dz: number):
 }
 
 /**
- * The one-button repair: weld, drop junk triangles, agree on winding, patch
- * small holes, and optionally sit the part on the table.
+ * The one-button repair: weld (retrying a hairline-crack tolerance if the first
+ * pass leaves pinholes), drop junk and dust shells, agree on winding, patch
+ * holes with ear-clip / centroid fill, and optionally sit the part on the table.
  */
 export function autoFix(soup: Float32Array, options: FixOptions = {}): {
   soup: Float32Array;
   report: FixReport;
 } {
-  const { fillHoles: shouldFill = true, maxHoleEdges = 200 } = options;
+  const {
+    fillHoles: shouldFill = true,
+    maxHoleEdges = 200,
+    dropDust: shouldDropDust = true,
+  } = options;
 
-  const welded = weld(soup, options.weldTolerance);
-  const before = analyze(welded.mesh);
+  const initial = weld(soup, options.weldTolerance);
+  const before = analyze(initial.mesh);
 
-  const cleaned = dropDegenerate(welded.mesh);
+  let welded = initial;
+  let crackWeld = false;
+  if (options.weldTolerance === undefined && countTinyHoles(initial.mesh) > 0) {
+    const bounds = computeBounds(soup);
+    const defaultTol = defaultTolerance(bounds);
+    const looser = Math.min(0.15, Math.max(0.05, bounds.diagonal * 5e-4, defaultTol * 25));
+    if (looser > defaultTol * 1.5) {
+      const retry = weld(soup, looser);
+      const vertsBefore = initial.mesh.positions.length / 3;
+      const vertsAfter = retry.mesh.positions.length / 3;
+      const holesAfter = analyze(retry.mesh).holes;
+      if (vertsAfter >= vertsBefore * 0.45 && holesAfter < before.holes) {
+        welded = retry;
+        crackWeld = true;
+      }
+    }
+  }
+
+  const sliverArea = Math.max(1e-18, before.bounds.diagonal ** 2 * 1e-14);
+  const cleaned = dropDegenerate({ positions: welded.mesh.positions, indices: welded.mesh.indices }, sliverArea);
   let mesh: IndexedMesh = { positions: welded.mesh.positions, indices: cleaned.indices };
+
+  let removedShells = 0;
+  if (shouldDropDust) {
+    const dusted = dropDust(mesh);
+    mesh = { positions: mesh.positions, indices: dusted.indices };
+    removedShells = dusted.removedShells;
+  }
+  mesh = compact(mesh);
 
   const oriented = orient(mesh);
   mesh = { positions: mesh.positions, indices: oriented.indices };
@@ -502,27 +824,40 @@ export function autoFix(soup: Float32Array, options: FixOptions = {}): {
   let unfilled = 0;
   if (shouldFill) {
     const patched = fillHoles(mesh, maxHoleEdges);
-    mesh = { positions: mesh.positions, indices: patched.indices };
+    mesh = { positions: patched.positions, indices: patched.indices };
     filled = patched.filled;
     unfilled = patched.unfilled;
-    // Patches inherit the rim's winding, so re-check the shell once after.
     if (filled > 0) {
+      const afterFill = dropDegenerate(mesh);
+      mesh = compact({ positions: mesh.positions, indices: afterFill.indices });
       const reoriented = orient(mesh);
       mesh = { positions: mesh.positions, indices: reoriented.indices };
     }
   }
 
   const bounds = computeBounds(mesh.positions);
+  let moved = false;
   if (options.centerOnTable || options.dropToTable) {
-    const positions = Float64Array.from(mesh.positions);
-    translate(
-      positions,
-      options.centerOnTable ? -bounds.center[0] : 0,
-      options.dropToTable ? -bounds.min[1] : 0,
-      options.centerOnTable ? -bounds.center[2] : 0
-    );
-    mesh = { positions, indices: mesh.indices };
+    const dx = options.centerOnTable ? -bounds.center[0] : 0;
+    const dy = options.dropToTable ? -bounds.min[1] : 0;
+    const dz = options.centerOnTable ? -bounds.center[2] : 0;
+    moved = Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9 || Math.abs(dz) > 1e-9;
+    if (moved) {
+      const positions = Float64Array.from(mesh.positions);
+      translate(positions, dx, dy, dz);
+      mesh = { positions, indices: mesh.indices };
+    }
   }
+
+  const changed =
+    cleaned.degenerate > 0 ||
+    cleaned.duplicates > 0 ||
+    oriented.flipped > 0 ||
+    filled > 0 ||
+    oriented.inverted ||
+    removedShells > 0 ||
+    crackWeld ||
+    moved;
 
   return {
     soup: toSoup(mesh),
@@ -534,6 +869,9 @@ export function autoFix(soup: Float32Array, options: FixOptions = {}): {
       filledHoles: filled,
       unfilledHoles: unfilled,
       invertedSolid: oriented.inverted,
+      removedShells,
+      crackWeld,
+      changed,
       before,
       after: analyze(mesh),
     },
@@ -596,7 +934,7 @@ export function simplify(soup: Float32Array, options: SimplifyOptions): {
 
   if (options.fillHoles) {
     const patched = fillHoles(mesh, 200);
-    mesh = { positions: mesh.positions, indices: patched.indices };
+    mesh = { positions: patched.positions, indices: patched.indices };
     if (patched.filled > 0) {
       const reoriented = orient(mesh);
       mesh = { positions: mesh.positions, indices: reoriented.indices };

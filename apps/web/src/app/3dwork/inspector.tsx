@@ -47,7 +47,15 @@ interface InspectorProps {
   onCenter: (partId: string) => void;
   onDuplicate: (partId: string) => void;
   onToggleVisible: (partId: string) => void;
-  onAutoFix: (partId: string, options: { fillHoles: boolean; maxHoleEdges: number }) => void;
+  onAutoFix: (
+    partId: string,
+    options: {
+      fillHoles: boolean;
+      maxHoleEdges: number;
+      dropToTable?: boolean;
+      fallbackSolid?: boolean;
+    }
+  ) => void;
   onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
   onMakeSolid: (
     partId: string,
@@ -633,6 +641,8 @@ function RepairTab({
 }) {
   const [fillHoles, setFillHoles] = useState(true);
   const [maxHoleEdges, setMaxHoleEdges] = useState(200);
+  const [dropToTable, setDropToTable] = useState(false);
+  const [fallbackSolid, setFallbackSolid] = useState(true);
   const [detail, setDetail] = useState('medium');
   const [resolution, setResolution] = useState(200);
   const [sealMm, setSealMm] = useState(0.8);
@@ -671,7 +681,12 @@ function RepairTab({
       </div>
 
       <div className={`${PANEL} space-y-2 px-3 py-2`}>
-        <span className={`${LABEL} block`}>Auto fix</span>
+        <span className={`${LABEL} block`}>Fix this part</span>
+        <p className="text-[0.65rem] text-slate-500">
+          Welds hairline cracks, drops junk faces and scan dust, makes every face wind the same
+          way, then patches holes. Openings bigger than the edge limit stay open — tick rebuild
+          below to voxelise those instead of inventing a flat cap.
+        </p>
         <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
           <input
             type="checkbox"
@@ -689,18 +704,33 @@ function RepairTab({
             step={20}
           />
         )}
-        <p className="text-[0.65rem] text-slate-500">
-          Welds split vertices, drops zero-area and duplicate faces, makes every face wind the same
-          way, then patches rims up to that size. Bigger openings are left alone and reported —
-          a flat patch across a large gap would invent geometry.
-        </p>
+        <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
+          <input
+            type="checkbox"
+            checked={dropToTable}
+            onChange={(event) => setDropToTable(event.target.checked)}
+            className="accent-emerald-500"
+          />
+          Sit on the table
+        </label>
+        <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
+          <input
+            type="checkbox"
+            checked={fallbackSolid}
+            onChange={(event) => setFallbackSolid(event.target.checked)}
+            className="accent-emerald-500"
+          />
+          Rebuild as solid if still open
+        </label>
         <button
           type="button"
           className={`${ACTION_PRIMARY} w-full`}
           disabled={busy}
-          onClick={() => onAutoFix(part.id, { fillHoles, maxHoleEdges })}
+          onClick={() =>
+            onAutoFix(part.id, { fillHoles, maxHoleEdges, dropToTable, fallbackSolid })
+          }
         >
-          {busy ? 'Working…' : 'Auto fix this part'}
+          {busy ? 'Working…' : 'Fix this part'}
         </button>
       </div>
 
@@ -951,11 +981,22 @@ function RepairTab({
       {fixReport && (
         <div className={`${PANEL} px-3 py-2`}>
           <span className={`${LABEL} mb-1 block`}>Last repair</span>
+          {!fixReport.changed && (
+            <p className="mb-1 text-[0.65rem] text-slate-500">Already clean — nothing saved.</p>
+          )}
           <Row label="Welded vertices">{formatCount(fixReport.weldedVertices)}</Row>
           <Row label="Removed degenerate">{formatCount(fixReport.removedDegenerate)}</Row>
           <Row label="Removed duplicates">{formatCount(fixReport.removedDuplicateTriangles)}</Row>
+          {fixReport.removedShells > 0 && (
+            <Row label="Dust shells dropped">{formatCount(fixReport.removedShells)}</Row>
+          )}
           <Row label="Re-wound faces">{formatCount(fixReport.flippedTriangles)}</Row>
           <Row label="Filled holes">{formatCount(fixReport.filledHoles)}</Row>
+          {fixReport.crackWeld && (
+            <Row label="Hairline cracks">
+              <span className="text-emerald-600">closed</span>
+            </Row>
+          )}
           {fixReport.unfilledHoles > 0 && (
             <Row label="Left open">
               <span className="text-amber-600">{formatCount(fixReport.unfilledHoles)}</span>
