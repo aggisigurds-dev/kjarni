@@ -878,6 +878,219 @@ export function autoFix(soup: Float32Array, options: FixOptions = {}): {
   };
 }
 
+export interface MisalignOptions {
+  /** Corners closer than this (mm) that do not already share an edge collapse together. */
+  toleranceMm: number;
+  /**
+   * Also round onto a millimetre grid of the same size, so faces that should be
+   * flush actually become flush. Off by default — it will flatten tiny bevels.
+   */
+  snapToGrid?: boolean;
+  fillHoles?: boolean;
+}
+
+export interface MisalignReport {
+  toleranceMm: number;
+  snapToGrid: boolean;
+  verticesBefore: number;
+  verticesAfter: number;
+  trianglesBefore: number;
+  trianglesAfter: number;
+  /** Groups of unconnected corners that were averaged together. */
+  snappedClusters: number;
+  quantizedVertices: number;
+  filledHoles: number;
+  changed: boolean;
+  after: Topology;
+}
+
+function findRoot(parent: Int32Array, i: number): number {
+  let root = i;
+  while (parent[root] !== root) root = parent[root];
+  let cursor = i;
+  while (cursor !== root) {
+    const next = parent[cursor];
+    parent[cursor] = root;
+    cursor = next;
+  }
+  return root;
+}
+
+/**
+ * Collapse corners that sit a hair apart but do not already share an edge —
+ * the usual leftover after merging two parts that were 0.1–0.5 mm out.
+ *
+ * Neighbours that *do* share an edge are left alone, so a dense tessellation
+ * whose edges are themselves ~0.2 mm is not crushed into a blob.
+ */
+function snapUnconnected(mesh: IndexedMesh, toleranceMm: number): {
+  mesh: IndexedMesh;
+  snappedClusters: number;
+} {
+  const vertexCount = mesh.positions.length / 3;
+  if (vertexCount < 2 || toleranceMm <= 0) return { mesh, snappedClusters: 0 };
+
+  const connected = new Set<string>();
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const a = mesh.indices[t];
+    const b = mesh.indices[t + 1];
+    const c = mesh.indices[t + 2];
+    connected.add(edgeKey(a, b));
+    connected.add(edgeKey(b, c));
+    connected.add(edgeKey(c, a));
+  }
+
+  const inv = 1 / toleranceMm;
+  const buckets = new Map<number, number[]>();
+  for (let i = 0; i < vertexCount; i++) {
+    const gx = Math.floor(mesh.positions[i * 3] * inv);
+    const gy = Math.floor(mesh.positions[i * 3 + 1] * inv);
+    const gz = Math.floor(mesh.positions[i * 3 + 2] * inv);
+    const key = cellHash(gx, gy, gz);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(i);
+    else buckets.set(key, [i]);
+  }
+
+  const parent = new Int32Array(vertexCount);
+  for (let i = 0; i < vertexCount; i++) parent[i] = i;
+
+  const tolSq = toleranceMm * toleranceMm;
+  for (let i = 0; i < vertexCount; i++) {
+    const x = mesh.positions[i * 3];
+    const y = mesh.positions[i * 3 + 1];
+    const z = mesh.positions[i * 3 + 2];
+    const gx = Math.floor(x * inv);
+    const gy = Math.floor(y * inv);
+    const gz = Math.floor(z * inv);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = buckets.get(cellHash(gx + dx, gy + dy, gz + dz));
+          if (!bucket) continue;
+          for (let b = 0; b < bucket.length; b++) {
+            const j = bucket[b];
+            if (j <= i) continue;
+            const ox = mesh.positions[j * 3] - x;
+            const oy = mesh.positions[j * 3 + 1] - y;
+            const oz = mesh.positions[j * 3 + 2] - z;
+            if (ox * ox + oy * oy + oz * oz > tolSq) continue;
+            if (connected.has(edgeKey(i, j))) continue;
+            const ri = findRoot(parent, i);
+            const rj = findRoot(parent, j);
+            if (ri !== rj) parent[rj] = ri;
+          }
+        }
+      }
+    }
+  }
+
+  const count = new Uint32Array(vertexCount);
+  const sum = new Float64Array(vertexCount * 3);
+  for (let i = 0; i < vertexCount; i++) {
+    const root = findRoot(parent, i);
+    count[root]++;
+    sum[root * 3] += mesh.positions[i * 3];
+    sum[root * 3 + 1] += mesh.positions[i * 3 + 1];
+    sum[root * 3 + 2] += mesh.positions[i * 3 + 2];
+  }
+
+  let snappedClusters = 0;
+  const positions = Float64Array.from(mesh.positions);
+  for (let root = 0; root < vertexCount; root++) {
+    if (count[root] < 2) continue;
+    snappedClusters++;
+    const n = count[root];
+    positions[root * 3] = sum[root * 3] / n;
+    positions[root * 3 + 1] = sum[root * 3 + 1] / n;
+    positions[root * 3 + 2] = sum[root * 3 + 2] / n;
+  }
+
+  if (snappedClusters === 0) return { mesh, snappedClusters: 0 };
+
+  const indices = new Uint32Array(mesh.indices.length);
+  for (let k = 0; k < mesh.indices.length; k++) indices[k] = findRoot(parent, mesh.indices[k]);
+  return { mesh: compact({ positions, indices }), snappedClusters };
+}
+
+/**
+ * Snap corners that ended up a hair apart after a merge, then tidy the mesh
+ * the same way auto-fix does so leftover pinholes close.
+ */
+export function fixMisalignment(soup: Float32Array, options: MisalignOptions): {
+  soup: Float32Array;
+  report: MisalignReport;
+} {
+  const toleranceMm = Math.max(1e-6, options.toleranceMm);
+  const snapToGrid = Boolean(options.snapToGrid);
+  const shouldFill = options.fillHoles !== false;
+
+  const initial = weld(soup);
+  const verticesBefore = initial.mesh.positions.length / 3;
+  const trianglesBefore = initial.mesh.indices.length / 3;
+
+  let mesh: IndexedMesh = initial.mesh;
+  let quantizedVertices = 0;
+
+  if (snapToGrid) {
+    const positions = Float64Array.from(mesh.positions);
+    for (let i = 0; i < positions.length; i++) {
+      const snapped = Math.round(positions[i] / toleranceMm) * toleranceMm;
+      if (Math.abs(snapped - positions[i]) > 1e-9) quantizedVertices++;
+      positions[i] = snapped;
+    }
+    mesh = weld(toSoup({ positions, indices: mesh.indices }), toleranceMm * 0.51).mesh;
+  }
+
+  const snapped = snapUnconnected(mesh, toleranceMm);
+  mesh = snapped.mesh;
+
+  const cleaned = dropDegenerate(mesh);
+  mesh = compact({ positions: mesh.positions, indices: cleaned.indices });
+
+  const oriented = orient(mesh);
+  mesh = { positions: mesh.positions, indices: oriented.indices };
+
+  let filled = 0;
+  if (shouldFill) {
+    const patched = fillHoles(mesh, 80);
+    mesh = { positions: patched.positions, indices: patched.indices };
+    filled = patched.filled;
+    if (filled > 0) {
+      const afterFill = dropDegenerate(mesh);
+      mesh = compact({ positions: mesh.positions, indices: afterFill.indices });
+      const reoriented = orient(mesh);
+      mesh = { positions: mesh.positions, indices: reoriented.indices };
+    }
+  }
+
+  const after = analyze(mesh);
+  const changed =
+    snapped.snappedClusters > 0 ||
+    quantizedVertices > 0 ||
+    cleaned.degenerate > 0 ||
+    cleaned.duplicates > 0 ||
+    filled > 0 ||
+    after.vertices !== verticesBefore;
+
+  return {
+    soup: toSoup(mesh),
+    report: {
+      toleranceMm,
+      snapToGrid,
+      verticesBefore,
+      verticesAfter: after.vertices,
+      trianglesBefore,
+      trianglesAfter: after.triangles,
+      snappedClusters: snapped.snappedClusters,
+      quantizedVertices,
+      filledHoles: filled,
+      changed,
+      after,
+    },
+  };
+}
+
 /** Topology summary without repairing anything. */
 export function inspect(soup: Float32Array, weldTolerance?: number): Topology {
   return analyze(weld(soup, weldTolerance).mesh);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { autoFix, computeBounds, inspect, simplify, weld } from './mesh';
+import { autoFix, computeBounds, fixMisalignment, inspect, simplify, weld } from './mesh';
 
 /** A sphere-ish blob with far more triangles than its shape needs. */
 function denseSphere(radius = 20, rings = 40, segments = 60): Float32Array {
@@ -252,6 +252,54 @@ describe('autoFix', () => {
     expect(report.after.watertight).toBe(true);
     expect(report.changed).toBe(true);
     expect(report.crackWeld || report.filledHoles > 0).toBe(true);
+  });
+});
+
+describe('fixMisalignment', () => {
+  it('leaves a healthy mesh alone', () => {
+    const { report } = fixMisalignment(cubeSoup(10), { toleranceMm: 0.2 });
+
+    expect(report.changed).toBe(false);
+    expect(report.snappedClusters).toBe(0);
+    expect(report.after.vertices).toBe(8);
+    expect(report.after.watertight).toBe(true);
+  });
+
+  it('snaps two copies that sat 0.1 mm apart after a merge', () => {
+    const a = cubeSoup(10);
+    const b = Float32Array.from(a, (value, i) => (i % 3 === 0 ? value + 0.1 : value));
+    const merged = new Float32Array(a.length + b.length);
+    merged.set(a, 0);
+    merged.set(b, a.length);
+
+    const { report } = fixMisalignment(merged, { toleranceMm: 0.2 });
+
+    expect(report.snappedClusters).toBe(8);
+    expect(report.after.vertices).toBe(8);
+    expect(report.after.triangles).toBe(12);
+    expect(report.after.watertight).toBe(true);
+    expect(report.changed).toBe(true);
+  });
+
+  it('does not crush a mesh whose real edges are around the tolerance', () => {
+    // A 0.3 mm cube has 0.3 mm edges — those must survive a 0.2 mm snap.
+    const { report } = fixMisalignment(cubeSoup(0.3), { toleranceMm: 0.2 });
+
+    expect(report.snappedClusters).toBe(0);
+    expect(report.after.triangles).toBe(12);
+    expect(report.after.vertices).toBe(8);
+  });
+
+  it('grid-snaps a part that was shifted off the millimetre lattice', () => {
+    const shifted = Float32Array.from(cubeSoup(10), (value, i) =>
+      i % 3 === 0 ? value + 0.19 : value
+    );
+
+    const { soup, report } = fixMisalignment(shifted, { toleranceMm: 0.2, snapToGrid: true });
+
+    expect(report.quantizedVertices).toBeGreaterThan(0);
+    expect(report.changed).toBe(true);
+    expect(computeBounds(soup).min[0]).toBeCloseTo(0.2, 5);
   });
 });
 

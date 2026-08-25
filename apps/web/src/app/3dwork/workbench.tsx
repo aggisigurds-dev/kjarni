@@ -40,11 +40,13 @@ import {
 import {
   autoFix,
   computeBounds,
+  fixMisalignment,
   inspect,
   recenter,
   simplify,
   zUpToYUp,
   type FixReport,
+  type MisalignReport,
   type SimplifyReport,
 } from '@/lib/3dwork/mesh';
 import {
@@ -171,6 +173,7 @@ export function Workbench() {
   const [busy, setBusy] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [simplifyReport, setSimplifyReport] = useState<SimplifyReport | null>(null);
+  const [misalignReport, setMisalignReport] = useState<MisalignReport | null>(null);
   const [solidReport, setSolidReport] = useState<SolidifyReport | null>(null);
   const [showWeld, setShowWeld] = useState(false);
   const [showSlice, setShowSlice] = useState(false);
@@ -1320,7 +1323,7 @@ export function Workbench() {
         setSelectedId(id);
         setFrameToken((token) => token + 1);
         toast.success(
-          `Merged ${members.length} parts · ${formatCount(result.report.trianglesAfter)} triangles`
+          `Merged ${members.length} parts · ${formatCount(result.report.trianglesAfter)} triangles. If a seam still steps, Repair → Fix misalignment.`
         );
       } catch {
         toast.error('Could not merge those parts.');
@@ -1656,6 +1659,47 @@ export function Workbench() {
           );
         } catch {
           toast.error('Could not simplify that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
+  const runFixMisalignment = useCallback(
+    (partId: string, options: { toleranceMm: number; snapToGrid: boolean }) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Snapping misaligned corners…');
+      setTimeout(() => {
+        try {
+          const result = fixMisalignment(soup, {
+            toleranceMm: options.toleranceMm,
+            snapToGrid: options.snapToGrid,
+            fillHoles: true,
+          });
+          setMisalignReport(result.report);
+
+          if (!result.report.changed) {
+            toast.success('No corners that close to snap.');
+            return;
+          }
+
+          addVersion(
+            partId,
+            result.soup,
+            'aligned',
+            `${options.toleranceMm} mm snap${options.snapToGrid ? ' + grid' : ''}`
+          );
+          toast.success(
+            result.report.after.watertight
+              ? `Snapped ${formatCount(result.report.snappedClusters)} corner group(s) — watertight.`
+              : `Snapped ${formatCount(result.report.snappedClusters)} corner group(s). Some openings remain.`
+          );
+        } catch {
+          toast.error('Could not snap that mesh.');
         } finally {
           setBusy(null);
         }
@@ -3035,6 +3079,15 @@ export function Workbench() {
             >
               Fix all parts
             </MenuItem>
+            <MenuItem
+              onClick={() =>
+                selectedId && runFixMisalignment(selectedId, { toleranceMm: 0.2, snapToGrid: false })
+              }
+              disabled={!selectedId || Boolean(busy)}
+              hint="Snap corners that sat a hair apart after a merge. 0.2 mm. This part only."
+            >
+              Fix misalignment
+            </MenuItem>
             <MenuSeparator />
             <MenuLabel>Weld the build</MenuLabel>
             <MenuItem
@@ -3701,6 +3754,7 @@ export function Workbench() {
             onToggleVisible={togglePartVisible}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
+            onFixMisalignment={runFixMisalignment}
             onMakeSolid={runMakeSolid}
             solidReport={solidReport}
             onRevert={revertPart}
@@ -3710,6 +3764,7 @@ export function Workbench() {
             canRevert={Boolean(selectedPart && selectedPart.versions.length > 1)}
             fixReport={fixReport}
             simplifyReport={simplifyReport}
+            misalignReport={misalignReport}
             busy={Boolean(busy)}
             measurePoints={measurePoints}
             measuring={measuring}

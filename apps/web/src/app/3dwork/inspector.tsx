@@ -15,7 +15,7 @@ import {
   type Axis,
   type PartMeasurement,
 } from '@/lib/3dwork/measure';
-import type { FixReport, SimplifyReport } from '@/lib/3dwork/mesh';
+import type { FixReport, MisalignReport, SimplifyReport } from '@/lib/3dwork/mesh';
 import type { CylinderCut, SolidifyReport } from '@/lib/3dwork/solidify';
 import { inspect } from '@/lib/3dwork/mesh';
 import { PART_SWATCHES } from '@/lib/3dwork/project';
@@ -57,6 +57,7 @@ interface InspectorProps {
     }
   ) => void;
   onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
+  onFixMisalignment: (partId: string, options: { toleranceMm: number; snapToGrid: boolean }) => void;
   onMakeSolid: (
     partId: string,
     options: { resolution: number; sealMm: number; bore: CylinderCut | null }
@@ -69,6 +70,7 @@ interface InspectorProps {
   canRevert: boolean;
   fixReport: FixReport | null;
   simplifyReport: SimplifyReport | null;
+  misalignReport: MisalignReport | null;
   busy: boolean;
   measurePoints: [number, number, number][];
   measuring: boolean;
@@ -615,6 +617,7 @@ function RepairTab({
   part,
   onAutoFix,
   onSimplify,
+  onFixMisalignment,
   onMakeSolid,
   solidReport,
   onRevert,
@@ -623,12 +626,14 @@ function RepairTab({
   canRevert,
   fixReport,
   simplifyReport,
+  misalignReport,
   busy,
 }: {
   soup: Float32Array;
   part: Part;
   onAutoFix: InspectorProps['onAutoFix'];
   onSimplify: InspectorProps['onSimplify'];
+  onFixMisalignment: InspectorProps['onFixMisalignment'];
   onMakeSolid: InspectorProps['onMakeSolid'];
   solidReport: SolidifyReport | null;
   onRevert: InspectorProps['onRevert'];
@@ -637,12 +642,15 @@ function RepairTab({
   canRevert: boolean;
   fixReport: FixReport | null;
   simplifyReport: SimplifyReport | null;
+  misalignReport: MisalignReport | null;
   busy: boolean;
 }) {
   const [fillHoles, setFillHoles] = useState(true);
   const [maxHoleEdges, setMaxHoleEdges] = useState(200);
   const [dropToTable, setDropToTable] = useState(false);
   const [fallbackSolid, setFallbackSolid] = useState(true);
+  const [alignMm, setAlignMm] = useState(0.2);
+  const [alignGrid, setAlignGrid] = useState(false);
   const [detail, setDetail] = useState('medium');
   const [resolution, setResolution] = useState(200);
   const [sealMm, setSealMm] = useState(0.8);
@@ -732,6 +740,47 @@ function RepairTab({
           }
         >
           {busy ? 'Working…' : 'Fix this part'}
+        </button>
+      </div>
+
+      <div className={`${PANEL} space-y-2 px-3 py-2`}>
+        <span className={`${LABEL} block`}>Fix misalignment</span>
+        <p className="text-[0.65rem] text-slate-500">
+          For parts you merged that sat a hair off — corners that should have met, but did not.
+          Snaps unconnected corners that are this close together. Real edges of that length are
+          left alone, so a dense mesh is not crushed.
+        </p>
+        <label className="block">
+          <span className={`${LABEL} mb-1 block`}>Snap corners closer than</span>
+          <select
+            className={FIELD}
+            value={alignMm}
+            onChange={(event) => setAlignMm(Number(event.target.value))}
+          >
+            <option value={0.1}>0.1 mm</option>
+            <option value={0.2}>0.2 mm · usual leftover</option>
+            <option value={0.5}>0.5 mm</option>
+            <option value={1}>1.0 mm · heavy</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
+          <input
+            type="checkbox"
+            checked={alignGrid}
+            onChange={(event) => setAlignGrid(event.target.checked)}
+            className="accent-emerald-500"
+          />
+          Also snap onto a {alignMm} mm grid (flush faces)
+        </label>
+        <button
+          type="button"
+          className={`${ACTION_PRIMARY} w-full`}
+          disabled={busy}
+          onClick={() =>
+            onFixMisalignment(part.id, { toleranceMm: alignMm, snapToGrid: alignGrid })
+          }
+        >
+          {busy ? 'Working…' : 'Fix misalignment'}
         </button>
       </div>
 
@@ -1015,6 +1064,36 @@ function RepairTab({
           </Row>
         </div>
       )}
+
+      {misalignReport && (
+        <div className={`${PANEL} px-3 py-2`}>
+          <span className={`${LABEL} mb-1 block`}>Last misalignment fix</span>
+          {!misalignReport.changed && (
+            <p className="mb-1 text-[0.65rem] text-slate-500">Nothing that close to snap.</p>
+          )}
+          <Row label="Tolerance">{misalignReport.toleranceMm} mm</Row>
+          <Row label="Snapped clusters">{formatCount(misalignReport.snappedClusters)}</Row>
+          {misalignReport.snapToGrid && (
+            <Row label="Grid-snapped corners">{formatCount(misalignReport.quantizedVertices)}</Row>
+          )}
+          <Row label="Vertices">
+            {formatCount(misalignReport.verticesBefore)} →{' '}
+            <span className="text-emerald-600">{formatCount(misalignReport.verticesAfter)}</span>
+          </Row>
+          <Row label="Triangles">
+            {formatCount(misalignReport.trianglesBefore)} →{' '}
+            {formatCount(misalignReport.trianglesAfter)}
+          </Row>
+          {misalignReport.filledHoles > 0 && (
+            <Row label="Filled holes">{formatCount(misalignReport.filledHoles)}</Row>
+          )}
+          <Row label="Now">
+            <span className={misalignReport.after.watertight ? 'text-emerald-600' : 'text-amber-600'}>
+              {misalignReport.after.watertight ? 'watertight' : 'still open'}
+            </span>
+          </Row>
+        </div>
+      )}
     </div>
   );
 }
@@ -1098,6 +1177,7 @@ export function Inspector(props: InspectorProps) {
             part={part}
             onAutoFix={props.onAutoFix}
             onSimplify={props.onSimplify}
+            onFixMisalignment={props.onFixMisalignment}
             onMakeSolid={props.onMakeSolid}
             solidReport={props.solidReport}
             onRevert={props.onRevert}
@@ -1106,6 +1186,7 @@ export function Inspector(props: InspectorProps) {
             canRevert={props.canRevert}
             fixReport={props.fixReport}
             simplifyReport={props.simplifyReport}
+            misalignReport={props.misalignReport}
             busy={props.busy}
           />
         )}
