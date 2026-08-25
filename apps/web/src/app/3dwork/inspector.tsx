@@ -683,9 +683,10 @@ function RepairTab({
       <div className={`${PANEL} space-y-2 px-3 py-2`}>
         <span className={`${LABEL} block`}>Fix this part</span>
         <p className="text-[0.65rem] text-slate-500">
-          Welds hairline cracks, drops junk faces and scan dust, makes every face wind the same
-          way, then patches holes. Openings bigger than the edge limit stay open — tick rebuild
-          below to voxelise those instead of inventing a flat cap.
+          Only this part — the rest of the bench is left alone. Welds hairline cracks, drops junk
+          faces and scan dust, makes every face wind the same way, then patches holes. Openings
+          bigger than the edge limit stay open — tick rebuild below to voxelise those instead of
+          inventing a flat cap.
         </p>
         <label className="flex items-center gap-2 text-[0.7rem] text-slate-700">
           <input

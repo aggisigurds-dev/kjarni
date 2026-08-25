@@ -1936,44 +1936,89 @@ export function Workbench() {
     [project.parts, selectVersion]
   );
 
-  /** Repair every loaded part in one pass — 50-part projects need this. */
-  const fixEveryPart = useCallback(() => {
-    const targets = project.parts.filter((part) => geometries.has(part.activeVersionId));
-    if (targets.length === 0) return;
-
-    setBusy(`Repairing ${targets.length} parts…`);
-    setTimeout(() => {
-      let repaired = 0;
-      let skipped = 0;
-      let stillOpen = 0;
-
-      for (const part of targets) {
-        const soup = geometries.get(part.activeVersionId);
-        if (!soup) continue;
-        try {
-          const result = autoFix(soup, { fillHoles: true, maxHoleEdges: 200 });
-          if (!result.report.changed) {
-            skipped++;
-            if (!result.report.after.watertight) stillOpen++;
-            continue;
-          }
-          addVersion(part.id, result.soup, 'repaired', 'Auto fix (batch)');
-          repaired++;
-          if (!result.report.after.watertight) stillOpen++;
-        } catch {
-          /* keep going; one bad part must not stop the batch */
-        }
+  /**
+   * Repair a chosen set of parts. One part gets the full fix (including a
+   * solid rebuild if the shell stays open). Several parts get edge repair
+   * only — voxelising a whole bench would freeze the tab.
+   */
+  const fixParts = useCallback(
+    (partIds: string[], options?: { fallbackSolid?: boolean }) => {
+      const ids = [...new Set(partIds)].filter((id) => {
+        const part = project.parts.find((candidate) => candidate.id === id);
+        return Boolean(part && geometries.has(part.activeVersionId));
+      });
+      if (ids.length === 0) {
+        toast.error('Nothing selected to repair.');
+        return;
+      }
+      if (ids.length === 1) {
+        runAutoFix(ids[0], {
+          fillHoles: true,
+          maxHoleEdges: 200,
+          fallbackSolid: options?.fallbackSolid ?? true,
+        });
+        return;
       }
 
-      setBusy(null);
-      const bits = [`Fixed ${repaired} part(s)`];
-      if (skipped > 0) bits.push(`${skipped} already clean`);
-      toast.success(
-        `${bits.join(', ')}.` +
-          (stillOpen > 0 ? ` ${stillOpen} still have open or non-manifold edges.` : '')
-      );
-    }, 30);
-  }, [project.parts, geometries, addVersion]);
+      setBusy(`Repairing ${ids.length} selected parts…`);
+      setTimeout(() => {
+        let repaired = 0;
+        let skipped = 0;
+        let stillOpen = 0;
+
+        for (const id of ids) {
+          const part = project.parts.find((candidate) => candidate.id === id);
+          if (!part) continue;
+          const soup = geometries.get(part.activeVersionId);
+          if (!soup) continue;
+          try {
+            const result = autoFix(soup, { fillHoles: true, maxHoleEdges: 200 });
+            if (!result.report.changed) {
+              skipped++;
+              if (!result.report.after.watertight) stillOpen++;
+              continue;
+            }
+            addVersion(part.id, result.soup, 'repaired', 'Auto fix (selection)');
+            repaired++;
+            if (!result.report.after.watertight) stillOpen++;
+          } catch {
+            /* keep going; one bad part must not stop the rest */
+          }
+        }
+
+        setBusy(null);
+        const bits = [`Fixed ${repaired} of ${ids.length}`];
+        if (skipped > 0) bits.push(`${skipped} already clean`);
+        toast.success(
+          `${bits.join(', ')}.` +
+            (stillOpen > 0 ? ` ${stillOpen} still have open or non-manifold edges.` : '')
+        );
+      }, 30);
+    },
+    [project.parts, geometries, runAutoFix, addVersion]
+  );
+
+  const fixSelection = useCallback(() => {
+    fixParts(selection.map((part) => part.id));
+  }, [fixParts, selection]);
+
+  /** Repair every loaded part in one pass — 50-part projects need this. */
+  const fixEveryPart = useCallback(() => {
+    const n = project.parts.length;
+    if (n === 0) return;
+    if (
+      n >= 6 &&
+      !window.confirm(
+        `Repair all ${n} parts? That can freeze the tab for a while.\n\nTo repair one, click the sparkles next to it in the gallery.`
+      )
+    ) {
+      return;
+    }
+    fixParts(
+      project.parts.map((part) => part.id),
+      { fallbackSolid: false }
+    );
+  }, [project.parts, fixParts]);
 
   const traceOutline = useCallback(() => {
     if (!selectedPart || !selectedSoup) {
@@ -2967,24 +3012,26 @@ export function Workbench() {
             <MenuSeparator />
             <MenuLabel>Repair</MenuLabel>
             <MenuItem
-              onClick={() =>
-                selectedId &&
-                runAutoFix(selectedId, {
-                  fillHoles: true,
-                  maxHoleEdges: 200,
-                  fallbackSolid: true,
-                })
-              }
+              onClick={() => selectedId && fixParts([selectedId])}
               disabled={!selectedId || Boolean(busy)}
               icon={Sparkles}
-              hint="Weld, fill holes, drop dust; rebuild as solid if still open"
+              hint="This part only — not the rest of the bench"
             >
-              Fix selected part
+              Fix this part
             </MenuItem>
+            {selection.length > 1 && (
+              <MenuItem
+                onClick={fixSelection}
+                disabled={Boolean(busy)}
+                hint="Only the parts you have marked, not the whole bench"
+              >
+                Fix {selection.length} selected parts
+              </MenuItem>
+            )}
             <MenuItem
               onClick={fixEveryPart}
               disabled={Boolean(busy) || project.parts.length === 0}
-              hint="Edge repair over every loaded part — skips ones that are already clean"
+              hint="Every loaded part. Heavy on a full bench — pick one in the gallery instead."
             >
               Fix all parts
             </MenuItem>
@@ -3260,16 +3307,17 @@ export function Workbench() {
 
         <button
           type="button"
-          onClick={() =>
-            selectedId &&
-            runAutoFix(selectedId, { fillHoles: true, maxHoleEdges: 200, fallbackSolid: true })
+          onClick={fixSelection}
+          disabled={selection.length === 0 || Boolean(busy)}
+          title={
+            selection.length > 1
+              ? `Repair the ${selection.length} selected parts only — not the whole bench`
+              : 'Fix this part only — weld cracks, fill holes, drop dust. Rebuilds as a solid if it stays open.'
           }
-          disabled={!selectedId || Boolean(busy)}
-          title="Fix this part — weld cracks, fill holes, drop dust. Rebuilds as a solid if it stays open."
           className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
         >
           <Sparkles className="mx-auto mb-0.5 h-3.5 w-3.5" />
-          Fix
+          {selection.length > 1 ? `Fix ${selection.length}` : 'Fix'}
         </button>
 
         <button
@@ -3414,6 +3462,8 @@ export function Workbench() {
             onIsolate={isolatePart}
             onShowAll={showAllParts}
             onDelete={removePart}
+            onFix={(partId) => fixParts([partId])}
+            fixBusy={Boolean(busy)}
             onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
           />
         </div>
@@ -3607,6 +3657,8 @@ export function Workbench() {
                   onIsolate={isolatePart}
                   onShowAll={showAllParts}
                   onDelete={removePart}
+                  onFix={(partId) => fixParts([partId])}
+                  fixBusy={Boolean(busy)}
                   onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
                 />
               </div>
