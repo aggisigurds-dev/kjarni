@@ -40,6 +40,7 @@ import {
   Upload,
   Paintbrush,
   ScanSearch,
+  Github,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -114,6 +115,15 @@ import {
 import { makeSolid, subtractMesh, unionMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
 import { fitTogether } from '@/lib/3dwork/fit';
 import { settleOnFloor } from '@/lib/3dwork/settle';
+import {
+  githubConnect,
+  githubDisconnect,
+  githubListProjects,
+  githubLoadProject,
+  githubSaveProject,
+  githubStatus,
+  type GithubStatus,
+} from '@/lib/3dwork/github-cloud';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -243,6 +253,16 @@ export function Workbench() {
   const [sketchPlane, setSketchPlane] = useState<ViewPlane>('xy');
   const [outline, setOutline] = useState<{ name: string; data: Outline2D } | null>(null);
   const [outlineBusy, setOutlineBusy] = useState(false);
+  const [showGithub, setShowGithub] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  const [githubOwner, setGithubOwner] = useState('');
+  const [github, setGithub] = useState<GithubStatus>({
+    connected: false,
+    login: null,
+    repo: null,
+    mode: null,
+  });
+  const [githubNote, setGithubNote] = useState<string>('Not connected');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadedRef = useRef(false);
@@ -250,6 +270,9 @@ export function Workbench() {
   // unmount) writes the current state without waiting on the debounce timer.
   const projectRef = useRef(project);
   projectRef.current = project;
+  const githubRef = useRef(github);
+  githubRef.current = github;
+  const githubBusyRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -261,12 +284,62 @@ export function Workbench() {
 
   const refreshProjectList = useCallback(async () => {
     const saved = await listProjects();
-    setProjectList(
-      saved.map((entry) => ({ id: entry.id, name: entry.name, parts: entry.parts.length }))
-    );
+    const local = saved.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      parts: entry.parts.length,
+    }));
+    if (!githubRef.current.connected) {
+      setProjectList(local);
+      return;
+    }
+    try {
+      const remote = await githubListProjects();
+      const byId = new Map(local.map((entry) => [entry.id, entry]));
+      for (const entry of remote) {
+        const existing = byId.get(entry.id);
+        if (!existing || entry.updatedAt >= (saved.find((row) => row.id === entry.id)?.updatedAt ?? 0)) {
+          byId.set(entry.id, { id: entry.id, name: entry.name, parts: entry.parts });
+        }
+      }
+      setProjectList([...byId.values()]);
+    } catch {
+      setProjectList(local);
+    }
   }, []);
 
-  // Restore the most recent project, geometry included.
+  const persistLocal = useCallback(async (next: Project, meshes: Map<string, Float32Array>) => {
+    await saveProject(next);
+    for (const [id, soup] of meshes) await saveGeometry(id, soup);
+  }, []);
+
+  const pushGithub = useCallback(async (reason: 'auto' | 'manual' = 'auto') => {
+    if (!loadedRef.current || !githubRef.current.connected || githubBusyRef.current) return;
+    githubBusyRef.current = true;
+    setGithubNote('Saving to GitHub…');
+    try {
+      const result = await githubSaveProject(projectRef.current, geometriesRef.current);
+      projectRef.current = { ...projectRef.current, updatedAt: result.updatedAt };
+      setGithubNote(
+        reason === 'manual'
+          ? `Saved to GitHub · ${githubRef.current.repo}`
+          : `GitHub saved ${new Date().toLocaleTimeString()}`
+      );
+      void refreshProjectList();
+    } catch (error) {
+      setGithubNote(error instanceof Error ? error.message : 'GitHub save failed');
+      if (reason === 'manual') {
+        toast.error(error instanceof Error ? error.message : 'GitHub save failed');
+      }
+    } finally {
+      githubBusyRef.current = false;
+    }
+  }, [refreshProjectList]);
+
+  const pushGithubRef = useRef(pushGithub);
+  pushGithubRef.current = pushGithub;
+
+  // Restore the most recent project, geometry included — local first, then GitHub.
   useEffect(() => {
     let cancelled = false;
 
@@ -278,39 +351,70 @@ export function Workbench() {
         // Nothing to restore: give the blank draft a real id now that we are
         // on the client, so autosave has something stable to write against.
         setProject((current) => ({ ...current, id: newProjectId() }));
-        loadedRef.current = true;
-        void refreshProjectList();
-        return;
-      }
-
-      const restored = saved[0];
-      const loaded = new Map<string, Float32Array>();
-      for (const part of restored.parts) {
-        // Every version is restored, not just the active one, so the history
-        // survives a reload and you can still flip back to the damaged mesh.
-        for (const version of part.versions ?? []) {
-          const soup = await loadGeometry(version.id);
-          if (soup) loaded.set(version.id, soup);
+      } else {
+        const restored = saved[0];
+        const loaded = new Map<string, Float32Array>();
+        for (const part of restored.parts) {
+          for (const version of part.versions ?? []) {
+            const soup = await loadGeometry(version.id);
+            if (soup) loaded.set(version.id, soup);
+          }
         }
+        if (cancelled) return;
+        setProject(restored);
+        setGeometries(loaded);
+        setFrameToken((token) => token + 1);
       }
-      if (cancelled) return;
 
-      // Keep EVERY part, even if its geometry did not come back on this load.
-      // The viewport already skips a part with no mesh (see viewportParts), so a
-      // transient IndexedDB miss just hides it for now — whereas dropping it here
-      // would let the next autosave delete it from storage for good. Restore is
-      // non-destructive so the build always comes back whole.
-      setProject(restored);
-      setGeometries(loaded);
-      setFrameToken((token) => token + 1);
       loadedRef.current = true;
       void refreshProjectList();
+
+      try {
+        const status = await githubStatus();
+        if (cancelled) return;
+        setGithub(status);
+        if (!status.connected) {
+          setGithubNote('Not connected');
+          return;
+        }
+        setGithubNote(`Connected · ${status.repo}`);
+        const remote = await githubListProjects();
+        if (cancelled) return;
+        const current = projectRef.current;
+        const remoteThis = remote.find((entry) => entry.id === current.id);
+        const newest = remote[0];
+        const takeId =
+          remoteThis && remoteThis.updatedAt > (current.updatedAt ?? 0)
+            ? current.id
+            : current.parts.length === 0 && newest
+              ? newest.id
+              : null;
+        if (takeId) {
+          setBusy('Loading from GitHub…');
+          const cloud = await githubLoadProject(takeId);
+          if (cancelled) return;
+          setProject(cloud.project);
+          setGeometries(cloud.geometries);
+          setFrameToken((token) => token + 1);
+          await persistLocal(cloud.project, cloud.geometries);
+          setGithubNote(`Loaded from GitHub · ${status.repo}`);
+          setBusy(null);
+        } else if (current.parts.length > 0) {
+          void pushGithub('auto');
+        }
+        void refreshProjectList();
+      } catch (error) {
+        if (!cancelled) {
+          setGithubNote(error instanceof Error ? error.message : 'GitHub unavailable');
+          setBusy(null);
+        }
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [refreshProjectList]);
+  }, [refreshProjectList, persistLocal, pushGithub]);
 
   // Autosave, debounced so dragging a slider does not hammer IndexedDB.
   useEffect(() => {
@@ -318,6 +422,12 @@ export function Workbench() {
     const timer = setTimeout(() => void saveProject(project), 800);
     return () => clearTimeout(timer);
   }, [project]);
+
+  useEffect(() => {
+    if (!loadedRef.current || !github.connected) return;
+    const timer = setTimeout(() => void pushGithub('auto'), 2500);
+    return () => clearTimeout(timer);
+  }, [project, geometries, github.connected, pushGithub]);
 
   // Belt-and-braces persistence so the bench always comes back exactly as you
   // left it. The debounce above is cancelled on unmount and never fires if you
@@ -329,7 +439,10 @@ export function Workbench() {
   // projectRef keeps this reading the latest state without re-registering.
   useEffect(() => {
     const flush = () => {
-      if (loadedRef.current) void saveProject(projectRef.current);
+      if (loadedRef.current) {
+        void saveProject(projectRef.current);
+        if (githubRef.current.connected) void pushGithubRef.current('auto');
+      }
     };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -352,25 +465,36 @@ export function Workbench() {
 
       setBusy('Opening project…');
       const saved = await listProjects();
-      const target = saved.find((entry) => entry.id === projectId);
+      let target = saved.find((entry) => entry.id === projectId);
+      const loaded = new Map<string, Float32Array>();
+
+      if (!target && githubRef.current.connected) {
+        try {
+          const cloud = await githubLoadProject(projectId);
+          target = cloud.project;
+          for (const [id, soup] of cloud.geometries) loaded.set(id, soup);
+          await persistLocal(cloud.project, cloud.geometries);
+        } catch {
+          /* fall through */
+        }
+      }
+
       if (!target) {
         setBusy(null);
         toast.error('That project could not be found.');
         return;
       }
 
-      const loaded = new Map<string, Float32Array>();
-      // A group's members are nested inside it rather than sitting in the
-      // parts list, and their geometry has to come back too or ungrouping
-      // after a reload would hand back empty parts.
-      const pending = [...target.parts];
-      for (let i = 0; i < pending.length; i++) {
-        const part = pending[i];
-        for (const version of part.versions ?? []) {
-          const soup = await loadGeometry(version.id);
-          if (soup) loaded.set(version.id, soup);
+      if (loaded.size === 0) {
+        const pending = [...target.parts];
+        for (let i = 0; i < pending.length; i++) {
+          const part = pending[i];
+          for (const version of part.versions ?? []) {
+            const soup = await loadGeometry(version.id);
+            if (soup) loaded.set(version.id, soup);
+          }
+          if (part.group) pending.push(...part.group.members);
         }
-        if (part.group) pending.push(...part.group.members);
       }
 
       // Keep every part (see the restore-on-mount note) — a geometry that did
@@ -385,7 +509,7 @@ export function Workbench() {
       setFrameToken((token) => token + 1);
       setBusy(null);
     },
-    [project.id]
+    [project.id, persistLocal]
   );
 
   const createProjectFolder = useCallback(() => {
@@ -417,6 +541,41 @@ export function Workbench() {
     },
     [project.id, refreshProjectList, createProjectFolder]
   );
+
+  const connectGithub = useCallback(async () => {
+    const token = githubToken.trim();
+    if (!token) {
+      toast.error('Paste a GitHub token first.');
+      return;
+    }
+    setBusy('Connecting GitHub…');
+    try {
+      const status = await githubConnect(token, githubOwner);
+      setGithub(status);
+      setGithubToken('');
+      setShowGithub(false);
+      setGithubNote(`Connected · ${status.repo}`);
+      toast.success(`Connected to ${status.repo}. Saves will follow you to other computers.`);
+      loadedRef.current = true;
+      await pushGithub('manual');
+      void refreshProjectList();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not connect GitHub.');
+    } finally {
+      setBusy(null);
+    }
+  }, [githubToken, githubOwner, pushGithub, refreshProjectList]);
+
+  const disconnectGithub = useCallback(async () => {
+    try {
+      const status = await githubDisconnect();
+      setGithub(status);
+      setGithubNote(status.connected ? `Connected · ${status.repo}` : 'Not connected');
+      toast.success(status.connected ? 'Switched back to the shared GitHub save.' : 'GitHub disconnected. Saves stay on this computer.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not disconnect.');
+    }
+  }, []);
 
   const selectedPart = useMemo(
     () => project.parts.find((part) => part.id === selectedId) ?? null,
@@ -3322,6 +3481,19 @@ export function Workbench() {
             className="w-40 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-900 outline-none hover:border-slate-300 focus:border-emerald-500"
             aria-label="Project name"
           />
+          <button
+            type="button"
+            onClick={() => (github.connected ? void pushGithub('manual') : setShowGithub(true))}
+            title={githubNote}
+            className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide ${
+              github.connected
+                ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
+                : 'border-slate-300 text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            <Github className="h-3 w-3" />
+            {github.connected ? 'GitHub' : 'Connect'}
+          </button>
         </div>
 
         <MenuBar>
@@ -3355,6 +3527,24 @@ export function Workbench() {
                 </MenuCheckItem>
               ))}
             </MenuScroll>
+            <MenuSeparator />
+            <MenuLabel>GitHub</MenuLabel>
+            <MenuItem
+              onClick={() => (github.connected ? void pushGithub('manual') : setShowGithub(true))}
+              icon={Github}
+              hint={
+                github.connected
+                  ? `Save now to ${github.repo}`
+                  : 'Same build on every computer — connect a repo'
+              }
+            >
+              {github.connected ? 'Save to GitHub now' : 'Connect GitHub…'}
+            </MenuItem>
+            {github.connected && github.mode === 'user' && (
+              <MenuItem onClick={() => void disconnectGithub()} hint="Stops using your token on this browser">
+                Disconnect GitHub
+              </MenuItem>
+            )}
             <MenuSeparator />
             <MenuItem
               tone="danger"
@@ -4973,6 +5163,72 @@ export function Workbench() {
                 }}
               >
                 Weld &amp; bore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGithub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className={`${PANEL} w-full max-w-md p-4`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Connect GitHub</h2>
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              The bench saves on this computer already. Connect GitHub and the same project opens
+              on your phone, another laptop, or Cursor — it saves every few seconds while you work.
+            </p>
+            <ol className="mb-3 list-decimal space-y-1 pl-4 text-[0.7rem] text-slate-600">
+              <li>
+                Create a private repo named <code className="font-mono">3dwork-bench</code> (we will
+                try to create it for you).
+              </li>
+              <li>
+                Make a token with Contents read/write on that repo —{' '}
+                <a
+                  className="text-emerald-700 underline"
+                  href="https://github.com/settings/personal-access-tokens/new"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  fine-grained tokens
+                </a>
+                . A classic token needs the <code className="font-mono">repo</code> scope.
+              </li>
+              <li>Paste it below. It stays in an httpOnly cookie on this site, not in the project.</li>
+            </ol>
+            <label className="mb-3 block">
+              <span className={`${LABEL} mb-1 block`}>Personal access token</span>
+              <input
+                type="password"
+                className={FIELD}
+                value={githubToken}
+                autoComplete="off"
+                placeholder="github_pat_… or ghp_…"
+                onChange={(event) => setGithubToken(event.target.value)}
+              />
+            </label>
+            <label className="mb-3 block">
+              <span className={`${LABEL} mb-1 block`}>GitHub username (if the token cannot read it)</span>
+              <input
+                type="text"
+                className={FIELD}
+                value={githubOwner}
+                autoComplete="off"
+                placeholder="aggisigurds-dev"
+                onChange={(event) => setGithubOwner(event.target.value)}
+              />
+            </label>
+            <p className="mb-3 text-[0.65rem] text-slate-500">
+              Shared company save: set <code className="font-mono">GITHUB_3DWORK_TOKEN</code> and{' '}
+              <code className="font-mono">GITHUB_3DWORK_REPO</code> on Vercel and every browser
+              syncs with no paste.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ACTION_GHOST} onClick={() => setShowGithub(false)}>
+                Cancel
+              </button>
+              <button type="button" className={ACTION_PRIMARY} onClick={() => void connectGithub()}>
+                Connect
               </button>
             </div>
           </div>
