@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { alignPaintedVertices, autoFix, computeBounds, fillPaintedHoles, fixMisalignment, inspect, simplify, toSoup, weld } from './mesh';
+import { alignPaintedVertices, autoFix, computeBounds, diagnose, fillPaintedHoles, fixMisalignment, inspect, simplify, toSoup, weld } from './mesh';
 
 /** A sphere-ish blob with far more triangles than its shape needs. */
 function denseSphere(radius = 20, rings = 40, segments = 60): Float32Array {
@@ -512,5 +512,46 @@ describe('simplify', () => {
 
     expect(report.after.triangles).toBeGreaterThan(0);
     expect(Math.abs(report.after.signedVolume)).toBeGreaterThan(0);
+  });
+});
+
+describe('diagnose', () => {
+  it('reports a cube as a solid with no faults', () => {
+    const report = diagnose(cubeSoup(10));
+
+    expect(report.watertight).toBe(true);
+    expect(report.missingFaces).toBe(0);
+    expect(report.misalignedClusters).toBe(0);
+    expect(report.flippedFaces).toBe(0);
+    expect(report.disturbedEdges).toBe(0);
+    expect(report.thinShellRisk).toBe(false);
+  });
+
+  it('flags a missing face as a hole that would slice into a thin shell', () => {
+    const report = diagnose(removeTriangle(cubeSoup(10), 0));
+
+    expect(report.watertight).toBe(false);
+    expect(report.missingFaces).toBeGreaterThanOrEqual(1);
+    expect(report.openEdges).toBeGreaterThanOrEqual(3);
+    expect(report.thinShellRisk).toBe(true);
+  });
+
+  it('counts near-miss corners after a merge that sat a hair off', () => {
+    const a = cubeSoup(10);
+    const b = Float32Array.from(a, (value, i) => (i % 3 === 0 ? value + 0.1 : value));
+    const merged = new Float32Array(a.length + b.length);
+    merged.set(a, 0);
+    merged.set(b, a.length);
+
+    const report = diagnose(merged);
+
+    expect(report.misalignedClusters).toBe(8);
+  });
+
+  it('flags a reversed triangle as face trouble', () => {
+    const report = diagnose(flipTriangle(cubeSoup(10), 0));
+
+    expect(report.flippedFaces).toBeGreaterThan(0);
+    expect(report.watertight).toBe(false);
   });
 });

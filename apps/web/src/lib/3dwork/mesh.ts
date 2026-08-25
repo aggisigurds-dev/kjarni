@@ -1432,6 +1432,54 @@ export function inspect(soup: Float32Array, weldTolerance?: number): Topology {
   return analyze(weld(soup, weldTolerance).mesh);
 }
 
+export interface Diagnosis {
+  watertight: boolean;
+  /** Boundary loops — missing faces / holes. */
+  missingFaces: number;
+  openEdges: number;
+  /** Unconnected corners closer than `alignMm`. */
+  misalignedClusters: number;
+  /** Edges whose two triangles wind the same way. */
+  flippedFaces: number;
+  /** Edges shared by three or more triangles — faces fighting each other. */
+  disturbedEdges: number;
+  junkFaces: number;
+  insideOut: boolean;
+  /**
+   * Slice and Subtract need a volume. An open surface, or a shell whose
+   * enclosed volume is a tiny fraction of its bounding box, comes out as a
+   * paper-thin crust instead.
+   */
+  thinShellRisk: boolean;
+  volumeMm3: number;
+}
+
+/**
+ * Read-only look at a part: near-miss corners, missing faces, and face trouble.
+ * Does not write a version.
+ */
+export function diagnose(soup: Float32Array, alignMm = 0.2): Diagnosis {
+  const { mesh } = weld(soup);
+  const topology = analyze(mesh);
+  const junk = dropDegenerate(mesh);
+  const { snappedClusters } = snapUnconnected(mesh, Math.max(1e-6, alignMm));
+  const size = topology.bounds.size;
+  const boxVolume = Math.max(size[0] * size[1] * size[2], 1e-12);
+  const volumeMm3 = Math.abs(topology.signedVolume);
+  return {
+    watertight: topology.watertight,
+    missingFaces: topology.holes,
+    openEdges: topology.boundaryEdges,
+    misalignedClusters: snappedClusters,
+    flippedFaces: topology.inconsistentEdges,
+    disturbedEdges: topology.nonManifoldEdges,
+    junkFaces: junk.degenerate + junk.duplicates,
+    insideOut: topology.signedVolume < 0,
+    thinShellRisk: !topology.watertight || volumeMm3 / boxVolume < 0.08,
+    volumeMm3,
+  };
+}
+
 export interface SimplifyOptions {
   /**
    * Cluster cell size as a fraction of the bounding-box diagonal. Bigger means

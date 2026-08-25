@@ -37,11 +37,13 @@ import {
   Trash2,
   Upload,
   Paintbrush,
+  ScanSearch,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
   autoFix,
   computeBounds,
+  diagnose,
   fillPaintedHoles,
   fixMisalignment,
   inspect,
@@ -51,6 +53,7 @@ import {
   verticesInRadius,
   weld,
   zUpToYUp,
+  type Diagnosis,
   type FixReport,
   type MisalignReport,
   type SimplifyReport,
@@ -184,6 +187,7 @@ export function Workbench() {
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [simplifyReport, setSimplifyReport] = useState<SimplifyReport | null>(null);
   const [misalignReport, setMisalignReport] = useState<MisalignReport | null>(null);
+  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [solidReport, setSolidReport] = useState<SolidifyReport | null>(null);
   const [showWeld, setShowWeld] = useState(false);
   const [showSlice, setShowSlice] = useState(false);
@@ -435,6 +439,10 @@ export function Workbench() {
   useEffect(() => {
     setPainted(new Set());
   }, [selectedId, selectedSoup]);
+
+  useEffect(() => {
+    setDiagnosis(null);
+  }, [selectedId]);
 
   useEffect(() => {
     if (focusId && !project.parts.some((part) => part.id === focusId)) setFocusId(null);
@@ -1604,6 +1612,104 @@ export function Workbench() {
     [soupOfPart, addVersion]
   );
 
+  const runAnalyze = useCallback(
+    (partId: string) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+      setBusy('Analyzing…');
+      setShowInspector(true);
+      setTab('repair');
+      setTimeout(() => {
+        try {
+          const report = diagnose(soup);
+          setDiagnosis(report);
+          if (report.watertight && !report.thinShellRisk && report.misalignedClusters === 0) {
+            toast.success('Solid — ready to slice or subtract.');
+          } else {
+            const bits = [
+              report.misalignedClusters > 0 &&
+                `${report.misalignedClusters} misaligned corner group(s)`,
+              report.missingFaces > 0 && `${report.missingFaces} missing face(s)`,
+              report.flippedFaces + report.disturbedEdges + report.junkFaces > 0 && 'face trouble',
+            ].filter(Boolean);
+            toast.message(
+              bits.length > 0 ? `Found ${bits.join(', ')}.` : 'See Repair for the diagnosis.'
+            );
+          }
+        } catch {
+          toast.error('Could not analyze that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart]
+  );
+
+  /**
+   * Close holes, snap near-miss corners, and rebuild as a solid if it stays
+   * open — so Slice and Subtract cut a volume instead of a paper-thin shell.
+   */
+  const runFillSolid = useCallback(
+    (partId: string) => {
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+
+      setBusy('Filling to a solid…');
+      setShowInspector(true);
+      setTab('repair');
+      setTimeout(() => {
+        try {
+          const aligned = fixMisalignment(soup, { toleranceMm: 0.2, fillHoles: true });
+          const repaired = autoFix(aligned.soup, { fillHoles: true, maxHoleEdges: 200 });
+          let next = repaired.soup;
+          let usedSolid = false;
+
+          if (!repaired.report.after.watertight) {
+            const solid = makeSolid(next, { resolution: 220, sealMm: 0.8 });
+            if (solid.report.trianglesAfter > 0) {
+              next = solid.soup;
+              usedSolid = true;
+              setSolidReport(solid.report);
+            }
+          }
+
+          const after = diagnose(next);
+          setDiagnosis(after);
+          setFixReport(repaired.report);
+
+          if (!aligned.report.changed && !repaired.report.changed && !usedSolid) {
+            toast.success(
+              after.watertight
+                ? 'Already a solid — nothing to fill.'
+                : 'Could not close it. Try Make solid.'
+            );
+            return;
+          }
+
+          addVersion(
+            partId,
+            next,
+            usedSolid ? 'filled + solid' : 'filled',
+            usedSolid ? 'Fill, then rebuilt as solid' : 'Fill holes + snap'
+          );
+          toast.success(
+            after.watertight && !after.thinShellRisk
+              ? 'Filled — watertight. Slice and Subtract will keep volume.'
+              : usedSolid
+                ? 'Rebuilt as a solid.'
+                : 'Filled what we could — some openings remain.'
+          );
+        } catch {
+          toast.error('Could not fill that mesh.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
   /** Slot callouts for the gunsmith overlay, anchored at each mount point. */
   const callouts = useMemo<ViewportCallout[]>(() => {
     if (!showCallouts || mode !== 'assembled') return [];
@@ -1880,6 +1986,17 @@ export function Workbench() {
       const part = selectedPart;
       const soup = part ? soupOfPart(part.id) : undefined;
       if (!part || !soup) return;
+
+      const health = diagnose(soup);
+      if (health.thinShellRisk) {
+        setDiagnosis(health);
+        setShowInspector(true);
+        setTab('repair');
+        toast.error(
+          'This part is open. Analyze → Fill first, or the slice will be a paper-thin shell.'
+        );
+        return;
+      }
 
       setBusy('Cutting…');
       setTimeout(() => {
@@ -2622,6 +2739,18 @@ export function Workbench() {
       const soupB = soupOfPart(toolId);
       if (!soupA || !soupB) return;
 
+      const healthA = diagnose(soupA);
+      if (healthA.thinShellRisk) {
+        setDiagnosis(healthA);
+        setSelectedId(targetId);
+        setShowInspector(true);
+        setTab('repair');
+        toast.error(
+          `${target.name} is open. Analyze → Fill first, or Subtract will leave a paper-thin shell.`
+        );
+        return;
+      }
+
       const boxA = snapNeighbors.find((entry) => entry.id === targetId)?.box;
       const boxB = snapNeighbors.find((entry) => entry.id === toolId)?.box;
       if (boxA && boxB && !aabbOverlap(boxA, boxB, 0.5)) {
@@ -3187,6 +3316,21 @@ export function Workbench() {
             <MenuSeparator />
             <MenuLabel>Repair</MenuLabel>
             <MenuItem
+              onClick={() => selectedId && runAnalyze(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              icon={ScanSearch}
+              hint="Misalignment, missing faces, face trouble"
+            >
+              Analyze this part
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && runFillSolid(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              hint="Close holes and make a solid volume — needed before Slice / Subtract"
+            >
+              Fill to solid
+            </MenuItem>
+            <MenuItem
               onClick={() => selectedId && fixParts([selectedId])}
               disabled={!selectedId || Boolean(busy)}
               icon={Sparkles}
@@ -3537,6 +3681,39 @@ export function Workbench() {
         >
           <Paintbrush className="mx-auto mb-0.5 h-3.5 w-3.5" />
           Paint
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedId) {
+              toast.error('Select a part first.');
+              return;
+            }
+            runAnalyze(selectedId);
+          }}
+          disabled={!selectedId || Boolean(busy)}
+          title="Find misalignment, missing faces, and face trouble"
+          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+        >
+          <ScanSearch className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          Analyze
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedId) {
+              toast.error('Select a part first.');
+              return;
+            }
+            runFillSolid(selectedId);
+          }}
+          disabled={!selectedId || Boolean(busy)}
+          title="Fill holes and rebuild as a solid so Slice / Subtract keep volume"
+          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+        >
+          Fill
         </button>
 
         <button
@@ -3967,6 +4144,9 @@ export function Workbench() {
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
             onFixMisalignment={runFixMisalignment}
+            onAnalyze={runAnalyze}
+            onFillSolid={runFillSolid}
+            diagnosis={diagnosis}
             onMakeSolid={runMakeSolid}
             solidReport={solidReport}
             onRevert={revertPart}
@@ -3998,7 +4178,8 @@ export function Workbench() {
             <h2 className="mb-1 text-sm font-bold text-slate-900">Slice through the part</h2>
             <p className="mb-3 text-[0.7rem] text-slate-500">
               Every triangle the plane misses is kept exactly as it is — only the ones it crosses
-              are split, and the cut face is closed flat. Nothing is resampled.
+              are split, and the cut face is closed flat. The part must be a solid (Analyze → Fill)
+              or the slice comes out as a paper-thin shell.
             </p>
 
             <div className="mb-3 grid grid-cols-2 gap-2">
@@ -4250,8 +4431,9 @@ export function Workbench() {
           >
             <h2 className="text-sm font-bold text-slate-900">Subtract from “{selectedPart.name}”</h2>
             <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
-              Pick the cutter. Overlap the two first (double-tap → move). Parts that currently overlap
-              are marked. Clearance 0 mm is an exact voxel cut; 0.2–0.4 mm helps mating parts slide.
+              Pick the cutter. Overlap the two first (double-tap → move). The target must be a solid
+              (Analyze → Fill) or the cut will be a paper-thin shell. Clearance 0 mm is an exact voxel
+              cut; 0.2–0.4 mm helps mating parts slide.
             </p>
             <div className="mb-3 grid grid-cols-2 gap-2">
               <label className="block">

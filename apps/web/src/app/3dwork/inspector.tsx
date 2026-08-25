@@ -15,7 +15,7 @@ import {
   type Axis,
   type PartMeasurement,
 } from '@/lib/3dwork/measure';
-import type { FixReport, MisalignReport, SimplifyReport } from '@/lib/3dwork/mesh';
+import type { Diagnosis, FixReport, MisalignReport, SimplifyReport } from '@/lib/3dwork/mesh';
 import type { CylinderCut, SolidifyReport } from '@/lib/3dwork/solidify';
 import { inspect } from '@/lib/3dwork/mesh';
 import { PART_SWATCHES } from '@/lib/3dwork/project';
@@ -58,6 +58,9 @@ interface InspectorProps {
   ) => void;
   onSimplify: (partId: string, options: { strength: number; alsoFix: boolean }) => void;
   onFixMisalignment: (partId: string, options: { toleranceMm: number; snapToGrid: boolean }) => void;
+  onAnalyze: (partId: string) => void;
+  onFillSolid: (partId: string) => void;
+  diagnosis: Diagnosis | null;
   onMakeSolid: (
     partId: string,
     options: { resolution: number; sealMm: number; bore: CylinderCut | null }
@@ -619,6 +622,9 @@ function RepairTab({
   onSimplify,
   onFixMisalignment,
   onMakeSolid,
+  onAnalyze,
+  onFillSolid,
+  diagnosis,
   solidReport,
   onRevert,
   onSelectVersion,
@@ -635,6 +641,9 @@ function RepairTab({
   onSimplify: InspectorProps['onSimplify'];
   onFixMisalignment: InspectorProps['onFixMisalignment'];
   onMakeSolid: InspectorProps['onMakeSolid'];
+  onAnalyze: InspectorProps['onAnalyze'];
+  onFillSolid: InspectorProps['onFillSolid'];
+  diagnosis: Diagnosis | null;
   solidReport: SolidifyReport | null;
   onRevert: InspectorProps['onRevert'];
   onSelectVersion: InspectorProps['onSelectVersion'];
@@ -660,31 +669,89 @@ function RepairTab({
   const topology = useMemo(() => inspect(soup), [soup]);
   const level = DETAIL_LEVELS.find((entry) => entry.id === detail) ?? DETAIL_LEVELS[1];
 
-  const problems = [
-    topology.boundaryEdges > 0 && `${formatCount(topology.holes)} hole(s)`,
-    topology.nonManifoldEdges > 0 && `${formatCount(topology.nonManifoldEdges)} non-manifold edges`,
-    topology.inconsistentEdges > 0 && `${formatCount(topology.inconsistentEdges)} flipped faces`,
-    topology.signedVolume < 0 && 'solid is inside-out',
-  ].filter(Boolean) as string[];
-
   return (
     <div className="space-y-4">
-      <div className={`${PANEL} px-3 py-2`}>
-        <span className={`${LABEL} mb-1 block`}>Health</span>
-        <Row label="Status">
-          <span className={topology.watertight ? 'text-emerald-600' : 'text-amber-600'}>
-            {topology.watertight ? 'print ready' : 'needs repair'}
-          </span>
-        </Row>
-        <Row label="Triangles">{formatCount(topology.triangles)}</Row>
-        <Row label="Vertices">{formatCount(topology.vertices)}</Row>
-        <Row label="Open edges">{formatCount(topology.boundaryEdges)}</Row>
-        <Row label="Holes">{formatCount(topology.holes)}</Row>
-        <Row label="Non-manifold">{formatCount(topology.nonManifoldEdges)}</Row>
-        <Row label="Flipped faces">{formatCount(topology.inconsistentEdges)}</Row>
+      <div className={`${PANEL} space-y-2 px-3 py-2`}>
+        <span className={`${LABEL} block`}>Analyze</span>
+        <p className="text-[0.65rem] text-slate-500">
+          Looks for corners that missed each other, missing faces, and faces that fight — then Fill
+          makes it a solid volume so Slice and Subtract cut through material, not a paper-thin shell.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className={ACTION_GHOST}
+            disabled={busy}
+            onClick={() => onAnalyze(part.id)}
+          >
+            {busy ? 'Working…' : 'Analyze'}
+          </button>
+          <button
+            type="button"
+            className={ACTION_PRIMARY}
+            disabled={busy}
+            onClick={() => onFillSolid(part.id)}
+          >
+            {busy ? 'Working…' : 'Fill'}
+          </button>
+        </div>
 
-        {problems.length > 0 && (
-          <p className="mt-2 text-[0.7rem] text-amber-600/90">Found: {problems.join(', ')}.</p>
+        {diagnosis ? (
+          <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
+            <Row label="Status">
+              <span
+                className={
+                  diagnosis.watertight && !diagnosis.thinShellRisk
+                    ? 'text-emerald-600'
+                    : 'text-amber-600'
+                }
+              >
+                {diagnosis.watertight && !diagnosis.thinShellRisk
+                  ? 'solid — ready to slice'
+                  : 'needs Fill before slice / subtract'}
+              </span>
+            </Row>
+            <Row label="Misalignment">
+              {diagnosis.misalignedClusters === 0
+                ? 'none'
+                : `${formatCount(diagnosis.misalignedClusters)} near-miss corner group(s)`}
+            </Row>
+            <Row label="Missing faces">
+              {diagnosis.missingFaces === 0
+                ? 'none'
+                : `${formatCount(diagnosis.missingFaces)} hole(s) · ${formatCount(diagnosis.openEdges)} open edges`}
+            </Row>
+            <Row label="Face trouble">
+              {diagnosis.flippedFaces + diagnosis.disturbedEdges + diagnosis.junkFaces === 0
+                ? 'none'
+                : [
+                    diagnosis.flippedFaces > 0 && `${formatCount(diagnosis.flippedFaces)} flipped`,
+                    diagnosis.disturbedEdges > 0 &&
+                      `${formatCount(diagnosis.disturbedEdges)} fighting`,
+                    diagnosis.junkFaces > 0 && `${formatCount(diagnosis.junkFaces)} junk`,
+                    diagnosis.insideOut && 'inside-out',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+            </Row>
+            {diagnosis.thinShellRisk && (
+              <p className="pt-1 text-[0.65rem] text-amber-700">
+                Open or hollow here — Slice and Subtract would come out as a paper-thin shell. Press
+                Fill first.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
+            <Row label="Status">
+              <span className={topology.watertight ? 'text-emerald-600' : 'text-amber-600'}>
+                {topology.watertight ? 'print ready' : 'needs repair'}
+              </span>
+            </Row>
+            <Row label="Open edges">{formatCount(topology.boundaryEdges)}</Row>
+            <Row label="Holes">{formatCount(topology.holes)}</Row>
+            <p className="pt-1 text-[0.65rem] text-slate-400">Press Analyze for a full diagnosis.</p>
+          </div>
         )}
       </div>
 
@@ -1181,6 +1248,9 @@ export function Inspector(props: InspectorProps) {
             onSimplify={props.onSimplify}
             onFixMisalignment={props.onFixMisalignment}
             onMakeSolid={props.onMakeSolid}
+            onAnalyze={props.onAnalyze}
+            onFillSolid={props.onFillSolid}
+            diagnosis={props.diagnosis}
             solidReport={props.solidReport}
             onRevert={props.onRevert}
             onSelectVersion={props.onSelectVersion}
