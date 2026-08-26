@@ -5,6 +5,7 @@ import {
   Download,
   Eraser,
   Flame,
+  Link2,
   Grid3x3,
   HelpCircle,
   Layers,
@@ -47,6 +48,7 @@ export function TopBar({
   onOpenSample,
   onMarkFirewalls,
   onStrip,
+  onImportUrl,
   viewSize,
 }: {
   onImport: (files: File[]) => void;
@@ -55,6 +57,7 @@ export function TopBar({
   onOpenSample?: () => void;
   onMarkFirewalls?: () => void;
   onStrip?: () => void;
+  onImportUrl?: () => void;
   viewSize: { width: number; height: number };
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -219,6 +222,16 @@ export function TopBar({
       >
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
+        onClick={() => onImportUrl?.()}
+        title="Sækja af permalink (skjalasafn.reykjavik.is) — eða bara Ctrl+V á borðið"
+      >
+        <Link2 className="size-4" />
+        <span className="hidden lg:inline">Af slóð</span>
       </Button>
       <Button
         size="sm"
