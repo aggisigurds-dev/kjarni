@@ -96,6 +96,7 @@ function docFromState(): BoardDocument {
     assetIds: [...new Set(assetIds)],
     boardId: currentBoardId ?? undefined,
     updatedAt: lastUpdatedAt || new Date().toISOString(),
+    syncRev: 2,
   };
 }
 
@@ -207,6 +208,10 @@ export async function pullIfNewer() {
       .maybeSingle();
     if (!data || data.deleted) return;
     const remoteDoc = data.doc as BoardDocument;
+    // Ýting frá GÖMLUM klient (ekkert syncRev = stimplar á ýtingar-tíma og
+    // vinnur LWW ranglega) fær aldrei að draga sig yfir borð sem þetta tæki
+    // heldur þegar á — t.d. sími með óendurhlaðinn flipa.
+    if (!remoteDoc.syncRev) return;
     const local = await get<BoardDocument>(boardKey(currentBoardId));
     const localTime = local?.updatedAt ?? "";
     const remoteTime = remoteDoc.updatedAt ?? (data.updated_at as string) ?? "";
