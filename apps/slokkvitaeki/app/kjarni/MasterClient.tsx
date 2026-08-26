@@ -2,27 +2,8 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbRpc, sbSelect } from "../lib/supabase";
-
-const SKINS = [
-  { id: "command", label: "Command", hint: "Ísblátt HUD-stjórnborð" },
-  { id: "atlas", label: "Atlas", hint: "Bláprent · kortaborð" },
-  { id: "pulse", label: "Pulse", hint: "Vaktborð · ops" },
-  { id: "helix", label: "Helix", hint: "Rásir · lab" },
-  { id: "vector", label: "Vector", hint: "Fjólublá geimstöð" },
-  { id: "don", label: "Don", hint: "Gull · maffía" },
-] as const;
-
-type SkinId = (typeof SKINS)[number]["id"];
-const SKIN_IDS: SkinId[] = SKINS.map((skin) => skin.id);
-const SKIN_KEY = "kjarni_skin";
-
-function readSkin(): SkinId {
-  if (typeof window === "undefined") return "command";
-  const stored = window.localStorage.getItem(SKIN_KEY);
-  const fromHtml = document.documentElement.dataset.kjarniSkin;
-  if (SKIN_IDS.includes(stored as SkinId)) return stored as SkinId;
-  return SKIN_IDS.includes(fromHtml as SkinId) ? (fromHtml as SkinId) : "command";
-}
+import { StationChrome, useStationSkin } from "./StationChrome";
+import { SKINS } from "./skins";
 
 type Order = { id: number; buid_til: string; nafn: string; samtals: number };
 type Inq = { id: number; buid_til: string; nafn: string; skilabod: string };
@@ -115,47 +96,18 @@ const QUICK_GROUPS: { title: string; items: { icon: string; label: string; href:
     ],
   },
 ];
-function SkinSwitcher({ skin, onChange }: { skin: SkinId; onChange: (id: SkinId) => void }) {
-  return (
-    <div className="ms-skins-rail">
-      <div className="ms-skins" role="tablist" aria-label="Þema og útlit">
-        {SKINS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            data-id={option.id}
-            aria-selected={skin === option.id}
-            aria-label={`${option.label} — ${option.hint}`}
-            title={option.hint}
-            className={skin === option.id ? "on" : ""}
-            onClick={() => onChange(option.id)}
-          >
-            <i className="ms-skin-pip" aria-hidden="true" />
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function StationShell({
-  skin,
-  onSkin,
   showNav,
   children,
 }: {
-  skin: SkinId;
-  onSkin: (id: SkinId) => void;
   showNav?: boolean;
   children: ReactNode;
 }) {
+  const { skin } = useStationSkin();
   const current = SKINS.find((option) => option.id === skin);
   return (
     <div className="ms" data-skin={skin}>
       <div className="ms-head">
-        <SkinSwitcher skin={skin} onChange={onSkin} />
         <div className="ms-head-in">
           <header className="ms-top">
             <div className="ms-top-l">
@@ -216,22 +168,6 @@ export default function MasterClient() {
     "Tól & tengingar": true,
   });
   const [saving, setSaving] = useState(false);
-  const [skin, setSkin] = useState<SkinId>("command");
-  const [skinReady, setSkinReady] = useState(false);
-
-  useEffect(() => {
-    setSkin(readSkin());
-    setSkinReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!skinReady) return;
-    window.localStorage.setItem(SKIN_KEY, skin);
-    document.documentElement.dataset.kjarniSkin = skin;
-    return () => {
-      delete document.documentElement.dataset.kjarniSkin;
-    };
-  }, [skin, skinReady]);
 
   async function loadSites() {
     const s = await sbSelect<Site[]>("kjarni_sites?select=*&order=id").catch(() => []);
@@ -304,29 +240,33 @@ export default function MasterClient() {
 
   if (booting) {
     return (
-      <StationShell skin={skin} onSkin={setSkin}>
-        <div className="ms-gate">
-          <span className="ms-gate-badge">◉</span>
-          <h1>Hleð…</h1>
-        </div>
-      </StationShell>
+      <StationChrome tool="kjarni">
+        <StationShell>
+          <div className="ms-gate">
+            <span className="ms-gate-badge">◉</span>
+            <h1>Hleð…</h1>
+          </div>
+        </StationShell>
+      </StationChrome>
     );
   }
 
   if (!unlocked) {
     return (
-      <StationShell skin={skin} onSkin={setSkin}>
-        <div className="ms-gate">
-          <span className="ms-gate-badge">◉</span>
-          <h1>Aðgangur</h1>
-          <p>Master-bakendi platformsins. Sláðu inn leyniorð til að sjá alla vefi, einingar og tól á einum stað.</p>
-          <form onSubmit={openPanel}>
-            <input type="password" placeholder="Leyniorð" value={secret} onChange={(e) => setSecret(e.target.value)} />
-            <button className="ms-btn" type="submit">Opna stjórnstöð</button>
-          </form>
-          {err && <p className="ms-err">{err}</p>}
-        </div>
-      </StationShell>
+      <StationChrome tool="kjarni">
+        <StationShell>
+          <div className="ms-gate">
+            <span className="ms-gate-badge">◉</span>
+            <h1>Aðgangur</h1>
+            <p>Master-bakendi platformsins. Sláðu inn leyniorð til að sjá alla vefi, einingar og tól á einum stað.</p>
+            <form onSubmit={openPanel}>
+              <input type="password" placeholder="Leyniorð" value={secret} onChange={(e) => setSecret(e.target.value)} />
+              <button className="ms-btn" type="submit">Opna stjórnstöð</button>
+            </form>
+            {err && <p className="ms-err">{err}</p>}
+          </div>
+        </StationShell>
+      </StationChrome>
     );
   }
 
@@ -340,7 +280,8 @@ export default function MasterClient() {
   const userSites = sites.filter((s) => s.slug !== "slokkvitaeki" && s.slug !== "kerfi");
 
   return (
-    <StationShell skin={skin} onSkin={setSkin} showNav>
+    <StationChrome tool="kjarni">
+    <StationShell showNav>
       <section id="ms-yfirlit" className="ms-section">
         <div className="ms-kpis">
           <div className="ms-kpi"><span>Vefir &amp; kerfi</span><b>{sites.length}</b></div>
@@ -535,5 +476,6 @@ export default function MasterClient() {
         </div>
       )}
     </StationShell>
+    </StationChrome>
   );
 }

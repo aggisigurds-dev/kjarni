@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageBlocks, type Block } from "../PageBlocks";
 import { BLOCK_TYPES } from "../SidurEditor";
+import { StationChrome } from "../kjarni/StationChrome";
 
 /* Draft workspace — a scratch sandbox to try blocks, themes and layout (skikt).
    Nothing is published; everything lives in localStorage. */
@@ -138,6 +139,7 @@ export default function DraftClient() {
   );
 
   return (
+    <StationChrome tool="draft">
     <div className="dw">
       <aside className="dw-side">
         <div className="dw-brand">
@@ -247,5 +249,6 @@ export default function DraftClient() {
         </div>
       </main>
     </div>
+    </StationChrome>
   );
 }

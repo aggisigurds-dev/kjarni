@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect } from "../lib/supabase";
 import { KerfiUtkeyrsla } from "./KerfiUtkeyrsla";
+import { StationChrome } from "../kjarni/StationChrome";
 
 type Kunni = {
   id: number;
@@ -326,6 +327,7 @@ export default function KerfiClient() {
   const Pill = ({ s }: { s: "ok" | "warn" | "late" }) => <span className={`k-pill ${s}`}>{ST_LABEL[s]}</span>;
 
   return (
+    <StationChrome tool="kerfi">
     <div className="k">
       <aside className="k-side">
         <div className="k-brand">
@@ -768,5 +770,6 @@ export default function KerfiClient() {
         )}
       </main>
     </div>
+    </StationChrome>
   );
 }

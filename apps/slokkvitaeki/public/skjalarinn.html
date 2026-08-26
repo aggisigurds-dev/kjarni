@@ -614,7 +614,7 @@ function defaultTypes(){
   $('#renamePattern').value = state.renamePattern;
   refreshLibrary(); renderDashboard();
   updateRenamePreview();
-  applyTheme(state.theme||'dark');
+  applyTheme((new URLSearchParams(location.search).get('theme')) || state.theme || 'dark');
   applyView(state.viewMode || (window.innerWidth<820?'mobile':'desktop'));
   await loadEaterHandles();
   RUN.eaterSeen=new Set(state.eater&&state.eater.seenKeys||[]);
