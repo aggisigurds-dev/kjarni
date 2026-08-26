@@ -10,8 +10,6 @@ import {
 } from '@/lib/3dwork/github-server';
 import { upsertIndex, type CloudManifest } from '@/lib/3dwork/github-sync';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   const connection = await readConnection();
   if (!connection) {

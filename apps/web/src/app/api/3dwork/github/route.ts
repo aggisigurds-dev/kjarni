@@ -7,8 +7,6 @@ import {
   readConnection,
 } from '@/lib/3dwork/github-server';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   try {
     const connection = await readConnection();

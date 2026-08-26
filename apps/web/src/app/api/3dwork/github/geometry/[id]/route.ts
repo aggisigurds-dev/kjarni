@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readConnection, readGeometry, writeGeometry } from '@/lib/3dwork/github-server';
 
-export const dynamic = 'force-dynamic';
-
 const MAX_BYTES = 4_000_000;
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {

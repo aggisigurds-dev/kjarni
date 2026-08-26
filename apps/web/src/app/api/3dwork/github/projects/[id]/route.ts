@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readConnection, readProject, readManifest } from '@/lib/3dwork/github-server';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const connection = await readConnection();
   if (!connection) {
