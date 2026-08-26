@@ -7,6 +7,7 @@
  */
 
 import * as THREE from 'three';
+import { PLASTIC_LOOK } from '@/lib/3dwork/finish';
 
 const SIZE = 160;
 
@@ -26,7 +27,11 @@ function getRenderer(): THREE.WebGLRenderer | null {
   }
 }
 
-export function renderThumbnail(soup: Float32Array, color: string): string | undefined {
+export function renderThumbnail(
+  soup: Float32Array,
+  color: string,
+  look: { metalness: number; roughness: number } = PLASTIC_LOOK
+): string | undefined {
   const gl = getRenderer();
   if (!gl || soup.length === 0) return undefined;
 
@@ -35,7 +40,11 @@ export function renderThumbnail(soup: Float32Array, color: string): string | und
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
 
-  const material = new THREE.MeshStandardMaterial({ color, metalness: 0.15, roughness: 0.5 });
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    metalness: look.metalness,
+    roughness: look.roughness,
+  });
   const mesh = new THREE.Mesh(geometry, material);
 
   const scene = new THREE.Scene();

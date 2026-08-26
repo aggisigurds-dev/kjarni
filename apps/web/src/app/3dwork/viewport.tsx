@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
@@ -23,6 +24,8 @@ import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/sn
 export interface ViewportPart {
   id: string;
   color: string;
+  metalness: number;
+  roughness: number;
   soup: Float32Array;
   /** Where the part should end up; it eases there rather than jumping. */
   target: { x: number; y: number; z: number };
@@ -233,6 +236,8 @@ export function Viewport({
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(host.clientWidth || 1, host.clientHeight || 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     host.appendChild(renderer.domElement);
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.inset = '0';
@@ -250,11 +255,16 @@ export function Viewport({
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xb8bec9, 2.2));
-    const key = new THREE.DirectionalLight(0xffffff, 2.4);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envMap;
+    pmrem.dispose();
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb8bec9, 1.4));
+    const key = new THREE.DirectionalLight(0xffffff, 1.8);
     key.position.set(1, 2, 1.4);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.9);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.55);
     fill.position.set(-1.4, 0.6, -1);
     scene.add(fill);
 
@@ -662,6 +672,7 @@ export function Viewport({
         (mesh.material as THREE.Material).dispose();
       }
       controls.dispose();
+      envMap.dispose();
       renderer.dispose();
       host.removeChild(renderer.domElement);
       refs.current = null;
@@ -713,7 +724,7 @@ export function Viewport({
       if (!mesh) {
         mesh = new THREE.Mesh(
           buildGeometry(part.soup),
-          new THREE.MeshStandardMaterial({ metalness: 0.15, roughness: 0.55 })
+          new THREE.MeshStandardMaterial({ metalness: part.metalness, roughness: part.roughness })
         );
         mesh.userData.partId = part.id;
         // Start where it belongs so newly added parts do not fly in.
@@ -731,11 +742,17 @@ export function Viewport({
 
       if (ghosted) {
         material.color.set(GHOST_COLOR);
+        material.metalness = 0.1;
+        material.roughness = 0.5;
+        material.envMapIntensity = 0.2;
         material.transparent = true;
         material.opacity = 0.2;
         material.depthWrite = false;
       } else {
         material.color.set(part.color);
+        material.metalness = part.metalness;
+        material.roughness = part.roughness;
+        material.envMapIntensity = 1.2;
         material.transparent = part.dimmed;
         material.opacity = part.dimmed ? 0.22 : 1;
         material.depthWrite = !part.dimmed;

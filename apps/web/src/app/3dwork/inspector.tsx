@@ -4,7 +4,7 @@
  * Right-hand inspector: modify the selected part, measure it, or repair it.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, RotateCw, Ruler } from 'lucide-react';
 import {
   MATERIALS,
@@ -20,6 +20,13 @@ import type { CylinderCut, SolidifyReport } from '@/lib/3dwork/solidify';
 import { inspect } from '@/lib/3dwork/mesh';
 import { PART_SWATCHES } from '@/lib/3dwork/project';
 import type { Part, Project, Transform } from '@/lib/3dwork/project';
+import { FINISHES } from '@/lib/3dwork/finish';
+import {
+  TEXTURE_LABELS,
+  textureForFinish,
+  type PrintTextureKind,
+  type PrintTextureSpec,
+} from '@/lib/3dwork/texture';
 import {
   formatArea,
   formatCount,
@@ -71,6 +78,7 @@ interface InspectorProps {
   onSelectVersion: (partId: string, versionId: string) => void;
   onDeleteVersion: (partId: string, versionId: string) => void;
   onUpdateHardware: (partId: string, spec: HardwareSpec) => void;
+  onEmbossTexture: (partId: string, spec: PrintTextureSpec) => void;
   canRevert: boolean;
   fixReport: FixReport | null;
   simplifyReport: SimplifyReport | null;
@@ -155,7 +163,9 @@ function ModifyTab({
   onCenter,
   onDuplicate,
   onUpdateHardware,
+  onEmbossTexture,
   measurement,
+  busy,
 }: {
   project: Project;
   part: Part;
@@ -166,9 +176,22 @@ function ModifyTab({
   onCenter: InspectorProps['onCenter'];
   onDuplicate: InspectorProps['onDuplicate'];
   onUpdateHardware: InspectorProps['onUpdateHardware'];
+  onEmbossTexture: InspectorProps['onEmbossTexture'];
   measurement: PartMeasurement | null;
+  busy: boolean;
 }) {
   const { transform } = part;
+  const defaults = textureForFinish(part.finishId);
+  const [texKind, setTexKind] = useState<PrintTextureKind>(defaults.kind);
+  const [texSpacing, setTexSpacing] = useState(defaults.spacingMm);
+  const [texDepth, setTexDepth] = useState(defaults.depthMm);
+
+  useEffect(() => {
+    const next = textureForFinish(part.finishId);
+    setTexKind(next.kind);
+    setTexSpacing(next.spacingMm);
+    setTexDepth(next.depthMm);
+  }, [part.id, part.finishId]);
 
   const patchVec = (key: 'position' | 'rotation' | 'scale', axis: 'x' | 'y' | 'z', value: number) =>
     onPatchTransform(part.id, { [key]: { ...transform[key], [axis]: value } } as Partial<Transform>);
@@ -310,12 +333,50 @@ function ModifyTab({
       </div>
 
       <div>
+        <span className={`${LABEL} mb-1.5 block`}>Finish</span>
+        <div className="flex flex-col gap-1">
+          {FINISHES.map((finish) => {
+            const selected = part.finishId === finish.id;
+            return (
+              <button
+                key={finish.id}
+                type="button"
+                title={finish.name}
+                onClick={() => {
+                  onPatchPart(part.id, { color: finish.color, finishId: finish.id });
+                  const grain = textureForFinish(finish.id);
+                  setTexKind(grain.kind);
+                  setTexSpacing(grain.spacingMm);
+                  setTexDepth(grain.depthMm);
+                }}
+                className={`flex min-h-11 items-center gap-2 rounded border px-2 text-left text-[0.7rem] font-bold ${
+                  selected
+                    ? 'border-slate-900 ring-1 ring-slate-900'
+                    : 'border-slate-300 hover:border-slate-400'
+                }`}
+              >
+                <span
+                  className="h-6 w-6 shrink-0 rounded-sm border border-slate-300"
+                  style={{
+                    background: `linear-gradient(135deg, ${finish.color} 0%, #ffffff 45%, ${finish.color} 100%)`,
+                  }}
+                />
+                <span className="min-w-0 flex-1 text-slate-800">{finish.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
         <div className="flex items-center gap-2">
           <span className={LABEL}>Colour</span>
           <input
             type="color"
             value={part.color}
-            onChange={(event) => onPatchPart(part.id, { color: event.target.value })}
+            onChange={(event) =>
+              onPatchPart(part.id, { color: event.target.value, finishId: undefined })
+            }
             className="h-7 w-14 cursor-pointer rounded border border-slate-300 bg-slate-200"
           />
         </div>
@@ -326,9 +387,9 @@ function ModifyTab({
               type="button"
               title={swatch}
               aria-label={`Set colour to ${swatch}`}
-              onClick={() => onPatchPart(part.id, { color: swatch })}
+              onClick={() => onPatchPart(part.id, { color: swatch, finishId: undefined })}
               className={`h-5 w-5 rounded border transition-transform hover:scale-110 ${
-                part.color.toLowerCase() === swatch.toLowerCase()
+                part.color.toLowerCase() === swatch.toLowerCase() && !part.finishId
                   ? 'border-slate-900 ring-1 ring-slate-900'
                   : 'border-slate-300'
               }`}
@@ -336,6 +397,61 @@ function ModifyTab({
             />
           ))}
         </div>
+      </div>
+
+      <div>
+        <span className={`${LABEL} mb-1 block`}>Printable texture</span>
+        <p className="mb-2 text-[0.65rem] leading-snug text-slate-500">
+          A picture on the mesh does not survive the slicer. This raises and lowers the real
+          surface so Gold grain, knurl and brushed grooves are in the STL.
+        </p>
+        <label className="mb-2 block">
+          <span className={`${LABEL} mb-1 block`}>Pattern</span>
+          <select
+            className={FIELD}
+            value={texKind}
+            onChange={(event) => setTexKind(event.target.value as PrintTextureKind)}
+          >
+            {(Object.keys(TEXTURE_LABELS) as PrintTextureKind[]).map((kind) => (
+              <option key={kind} value={kind}>
+                {TEXTURE_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          <NumberField
+            label="Spacing mm"
+            step={0.1}
+            value={texSpacing}
+            onChange={(value) => setTexSpacing(Math.max(0.4, value))}
+          />
+          <NumberField
+            label="Depth mm"
+            step={0.05}
+            value={texDepth}
+            onChange={(value) => setTexDepth(Math.max(0.05, value))}
+          />
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            onEmbossTexture(part.id, {
+              kind: texKind,
+              spacingMm: texSpacing,
+              depthMm: texDepth,
+            })
+          }
+          className={`${ACTION_PRIMARY} w-full`}
+        >
+          Emboss on this part
+        </button>
+        <p className="mt-1.5 text-[0.65rem] text-slate-500">
+          {part.finishId === 'chrome'
+            ? 'Chrome is a polish — skip emboss unless you want a grain on it.'
+            : '0.2–0.4 mm depth prints on a 0.4 mm nozzle. Saves a new version, so you can flip back.'}
+        </p>
       </div>
 
       <div>
@@ -1233,7 +1349,9 @@ export function Inspector(props: InspectorProps) {
             onCenter={props.onCenter}
             onDuplicate={props.onDuplicate}
             onUpdateHardware={props.onUpdateHardware}
+            onEmbossTexture={props.onEmbossTexture}
             measurement={measurement}
+            busy={props.busy}
           />
         ) : tab === 'measure' && measurement && scaledSoup ? (
           <MeasureTab
