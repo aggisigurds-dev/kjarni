@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadBlob, exportBoardJson, exportPdf, exportPngBlob, slug } from "../../lib/board/export-board";
 import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
@@ -55,10 +56,14 @@ export function WhiteboardApp() {
   const [calibrateMeters, setCalibrateMeters] = useState("10");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Eiginleika-panellinn sem yfirlag á síma/spjaldtölvu (< lg) — á desktop er
+  // hann fastur dálkur til hægri eins og áður.
+  const [panelOpen, setPanelOpen] = useState(false);
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);
   const objects = useBoardStore((s) => s.objects);
   const camera = useBoardStore((s) => s.camera);
+  const selectedIds = useBoardStore((s) => s.selectedIds);
 
   useEffect(() => {
     void loadBoard();
@@ -380,6 +385,7 @@ export function WhiteboardApp() {
           n: "sticky",
           m: "measure",
           s: "symbol",
+          k: "calibrate",
         };
         const tool = map[e.key.toLowerCase()];
         if (tool) store.setTool(tool);
@@ -481,6 +487,18 @@ export function WhiteboardApp() {
             <div className="pointer-events-auto absolute top-3 right-3">
               <CountTable />
             </div>
+            {selectedIds.length ? (
+              <div className="pointer-events-auto absolute right-3 bottom-28 lg:hidden">
+                <button
+                  type="button"
+                  title="Eiginleikar valins hlutar"
+                  onClick={() => setPanelOpen(true)}
+                  className="flex size-11 items-center justify-center rounded-full bg-[#FE653F] text-white shadow-xl shadow-black/40 active:translate-y-px"
+                >
+                  <Settings2 className="size-5" />
+                </button>
+              </div>
+            ) : null}
             <div className="absolute top-3 left-1/2 -translate-x-1/2">
               <SelectionBar
                 onExportSelection={() => {
@@ -534,6 +552,18 @@ export function WhiteboardApp() {
           <RightPanel />
         </div>
       </div>
+      {panelOpen ? (
+        <div className="lg:hidden">
+          <div
+            className="fixed inset-0 z-40 bg-black/50"
+            aria-label="Loka eiginleikum"
+            onClick={() => setPanelOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] shadow-2xl shadow-black/60 [&>aside]:w-full">
+            <RightPanel />
+          </div>
+        </div>
+      ) : null}
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} initialTarget={exportTarget} />
       <StripDialog
         planId={stripPlanId}
@@ -857,7 +887,7 @@ function HelpDialog({
             ["W", "Veggir (smelltu, Enter til að loka)"],
             ["P / T / N", "Penni / texti / minnismiði"],
             ["S", "Brunavarnatákn"],
-            ["M", "Mæla"],
+            ["M / K", "Mæla / kvarða (stimpla inn raunlengd)"],
             ["⌘Z / ⌘⇧Z", "Afturkalla / endurtaka"],
             ["⌘D", "Afrita val"],
             ["⌘G / ⌘⇧G", "Hópa / afhópa val"],

@@ -98,3 +98,47 @@
   min-height: 0;
   flex: 1;
 }
+
+/* --- Farsíma-fínstilling (Joker, 2026-08-26) ---------------------------------
+   Ólagskipt CSS vinnur á Tailwind-utilities (þau búa í @layer utilities). */
+
+/* Snertiskjár með næga hæð: verkfærahnappar ≥ 40px (HIG 44 / Material 48 dp
+   viðmiðið — 40px er málamiðlun súlunnar svo hún þeki ekki teikninguna). */
+@media (pointer: coarse) and (min-height: 701px) {
+  .tp-toolbar .tp-toolbtn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
+/* Lágir skjáir (sími á hlið, lítil fartölva): þéttari verkfærasúla svo öll
+   tólin sjáist án þess að súlan nái út fyrir borðið. */
+@media (max-height: 700px) {
+  .tp-toolbar {
+    gap: 0.125rem;
+    padding: 0.25rem;
+  }
+  .tp-toolbar .tp-toolbtn {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.625rem;
+  }
+  .tp-toolbar .tp-tooldiv {
+    margin-top: 0.125rem;
+    margin-bottom: 0.125rem;
+  }
+}
+
+/* StyleStrip á snertiskjá: ósýnilegt ::after stækkar snertiflötinn (~36px á
+   hæð) án þess að blása litapunktana/hnappana út sjónrænt. -4px lárétt = engin
+   skörun við gap-2 (8px) milli hnappa. */
+@media (pointer: coarse) {
+  .tp-stylestrip > button {
+    position: relative;
+  }
+  .tp-stylestrip > button::after {
+    content: "";
+    position: absolute;
+    inset: -8px -4px;
+  }
+}
