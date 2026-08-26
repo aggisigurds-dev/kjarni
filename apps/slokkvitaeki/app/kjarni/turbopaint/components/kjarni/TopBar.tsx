@@ -3,6 +3,7 @@
 import {
   Cloud,
   Download,
+  Eraser,
   Flame,
   Grid3x3,
   HelpCircle,
@@ -45,6 +46,7 @@ export function TopBar({
   onHelp,
   onOpenSample,
   onMarkFirewalls,
+  onStrip,
   viewSize,
 }: {
   onImport: (files: File[]) => void;
@@ -52,6 +54,7 @@ export function TopBar({
   onHelp: () => void;
   onOpenSample?: () => void;
   onMarkFirewalls?: () => void;
+  onStrip?: () => void;
   viewSize: { width: number; height: number };
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -235,6 +238,16 @@ export function TopBar({
       >
         <Shield className="size-4 text-[#FE653F]" />
         <span className="hidden lg:inline">165.BR1</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-stone-200 hover:bg-white/10 hover:text-white"
+        onClick={() => onStrip?.()}
+        title="Hreinsa teikningu — hvítur grunnur, bara veggir og blek"
+      >
+        <Eraser className="size-4" />
+        <span className="hidden lg:inline">Hreinsa</span>
       </Button>
       <Button size="sm" className="bg-[#FE653F] text-white hover:bg-[#E8553F]" onClick={onExport}>
         <Download className="size-4" />

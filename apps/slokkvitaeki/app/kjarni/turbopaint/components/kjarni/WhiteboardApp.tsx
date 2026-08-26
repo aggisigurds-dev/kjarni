@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { downloadBlob, exportBoardJson, exportPdf, exportPngBlob, slug } from "../../lib/board/export-board";
-import { boardBounds, cameraFit, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
+import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
+import {
+  canvasToAsset,
+  isFirewallLabelWord,
+  isNameWord,
+  stripToInk,
+  whiteOutWords,
+} from "../../lib/board/strip";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
@@ -205,6 +212,91 @@ export function WhiteboardApp() {
     useBoardStore.getState().setTool("select");
   }, []);
 
+  const [stripPlanId, setStripPlanId] = useState<string | null>(null);
+
+  const resolvePlan = useCallback(() => {
+    const state = useBoardStore.getState();
+    const images = state.objects.filter(
+      (o): o is Extract<typeof o, { type: "image" }> => o.type === "image" && !o.hidden
+    );
+    const selected = images.find((img) => state.selectedIds.includes(img.id));
+    if (selected) return selected;
+    if (state.selectedIds.length) {
+      const chosen = state.objects.filter((o) => state.selectedIds.includes(o.id));
+      const host = images.find((img) => objectsOnDocument(img, chosen).length > 0);
+      if (host) return host;
+    }
+    return images.length === 1 ? images[0] : null;
+  }, []);
+
+  const runStrip = useCallback(
+    async (planId: string, opts: { threshold: number; keepNames: boolean; keepFw: boolean }) => {
+      const plan = useBoardStore.getState().objects.find((o) => o.id === planId);
+      if (!plan || plan.type !== "image") return;
+      try {
+        useBoardStore.getState().setImportProgress({
+          fileName: plan.name,
+          percent: 4,
+          message: "Hreinsa bakgrunn — geri hvítt á bak við…",
+        });
+        const { canvas } = await stripToInk(plan, opts.threshold, (p) =>
+          useBoardStore.getState().setImportProgress({
+            fileName: plan.name,
+            percent: Math.round(p * 0.55),
+            message: "Hreinsa bakgrunn — geri hvítt á bak við…",
+          })
+        );
+        let assetId = await canvasToAsset(canvas);
+        // Eitt ⌘Z skilar upprunalegu myndinni (asset-skipti í einni sögufærslu).
+        useBoardStore.getState().patchObject(plan.id, { assetId }, true);
+        const needOcr = opts.keepFw || !opts.keepNames;
+        if (needOcr) {
+          const updated = useBoardStore.getState().objects.find((o) => o.id === plan.id);
+          if (updated && updated.type === "image") {
+            const res = await detectFirewallsOnPlan(updated, {
+              onProgress: (message, percent) =>
+                useBoardStore.getState().setImportProgress({
+                  fileName: plan.name,
+                  percent: 55 + Math.round(percent * 0.4),
+                  message,
+                }),
+            });
+            const toErase = res.words.filter(
+              (w) =>
+                (!opts.keepNames && isNameWord(w.text) && !isFirewallLabelWord(w.text)) ||
+                (!opts.keepFw && isFirewallLabelWord(w.text))
+            );
+            if (toErase.length) {
+              whiteOutWords(canvas, toErase);
+              assetId = await canvasToAsset(canvas);
+              useBoardStore.getState().patchObject(plan.id, { assetId }, false);
+            }
+            if (opts.keepFw && res.objects.length) {
+              const stale = useBoardStore
+                .getState()
+                .objects.filter((o) => isFirewallMark(o) && o.parentId === plan.id)
+                .map((o) => o.id);
+              if (stale.length) useBoardStore.getState().deleteIds(stale);
+              useBoardStore.getState().addObjects(res.objects, false);
+            }
+          }
+        }
+        canvas.width = 0;
+        canvas.height = 0;
+        useBoardStore.getState().setImportProgress(null);
+        toast.success(
+          opts.keepFw
+            ? "Teikningin hreinsuð — hvítur grunnur, eldveggir merktir"
+            : "Teikningin hreinsuð — hvítur grunnur"
+        );
+      } catch (err) {
+        useBoardStore.getState().setImportProgress(null);
+        toast.error(err instanceof Error ? err.message : "Hreinsun mistókst");
+      }
+    },
+    []
+  );
+
   const openSamplePlan = useCallback(async () => {
     try {
       useBoardStore.getState().setImportProgress({
@@ -339,6 +431,14 @@ export function WhiteboardApp() {
         onHelp={() => setHelpOpen(true)}
         onOpenSample={() => void openSamplePlan()}
         onMarkFirewalls={() => void markFirewalls(useBoardStore.getState().objects)}
+        onStrip={() => {
+          const plan = resolvePlan();
+          if (!plan) {
+            toast.error("Engin teikning fannst — veldu teikninguna fyrst");
+            return;
+          }
+          setStripPlanId(plan.id);
+        }}
         viewSize={size}
       />
       <div className="flex min-h-0 flex-1">
@@ -435,6 +535,20 @@ export function WhiteboardApp() {
         </div>
       </div>
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} initialTarget={exportTarget} />
+      <StripDialog
+        planId={stripPlanId}
+        planName={
+          stripPlanId
+            ? (objects.find((o) => o.id === stripPlanId)?.name ?? "teikning")
+            : ""
+        }
+        onClose={() => setStripPlanId(null)}
+        onRun={(opts) => {
+          const id = stripPlanId;
+          setStripPlanId(null);
+          if (id) void runStrip(id, opts);
+        }}
+      />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <Dialog open={calibratePx !== null} onOpenChange={(o) => !o && setCalibratePx(null)}>
         <DialogContent className="sm:max-w-md">
@@ -470,6 +584,71 @@ export function WhiteboardApp() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function StripDialog({
+  planId,
+  planName,
+  onClose,
+  onRun,
+}: {
+  planId: string | null;
+  planName: string;
+  onClose: () => void;
+  onRun: (opts: { threshold: number; keepNames: boolean; keepFw: boolean }) => void;
+}) {
+  const [threshold, setThreshold] = useState(0.62);
+  const [keepNames, setKeepNames] = useState(true);
+  const [keepFw, setKeepFw] = useState(true);
+  return (
+    <Dialog open={planId !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Hreinsa teikningu</DialogTitle>
+          <DialogDescription>
+            „{planName}" verður einfölduð: gulur/grár bakgrunnur og litaðar merkingar hverfa —
+            eftir standa veggir og svart blek á hvítum grunni. ⌘Z skilar upprunalegu myndinni.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 text-sm">
+          <label className="grid gap-1.5">
+            <span className="text-muted-foreground">
+              Næmi — hærra heldur fleiri daufum línum ({Math.round(threshold * 100)}%)
+            </span>
+            <input
+              type="range"
+              min={35}
+              max={80}
+              value={Math.round(threshold * 100)}
+              onChange={(e) => setThreshold(Number(e.target.value) / 100)}
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={keepNames}
+              onChange={(e) => setKeepNames(e.target.checked)}
+            />
+            <span>Halda rýmisheitum (annars strokast fundin heiti út)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={keepFw}
+              onChange={(e) => setKeepFw(e.target.checked)}
+            />
+            <span>Brunaveggir — lesa E-30 / E-60 og merkja þá á teikninguna</span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Hætta við
+          </Button>
+          <Button onClick={() => onRun({ threshold, keepNames, keepFw })}>Hreinsa</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

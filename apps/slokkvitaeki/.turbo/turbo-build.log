@@ -1,0 +1,44 @@
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0"} (current: {"node":"v22.22.2","pnpm":"11.1.2"})
+../web                                   | [WARN] Unsupported engine: wanted: {"node":">=24.0.0"} (current: {"node":"v22.22.2","pnpm":"11.1.2"})
+Scope: all 5 workspace projects
+[WARN] Moving @types/node that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @types/react that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @types/react-dom that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @types/utif that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving typescript that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @base-ui/react that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @supabase/supabase-js that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @tailwindcss/postcss that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving @vercel/analytics that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving class-variance-authority that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving clsx that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving idb-keyval that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving jspdf that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving konva that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving lucide-react that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving nanoid that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving next that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving pdfjs-dist that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving react that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving react-dom that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving react-konva that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving sonner that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving tailwind-merge that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving tailwindcss that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving tesseract.js that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving tw-animate-css that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving utif that was installed by a different package manager to "node_modules/.ignored"
+[WARN] Moving zustand that was installed by a different package manager to "node_modules/.ignored"
+[ERROR] Command was killed with SIGINT (User interruption with CTRL-C): pnpm install
+
+pnpm: Command was killed with SIGINT (User interruption with CTRL-C): pnpm install
+    at getFinalError (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:28776:14)
+    at makeError (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:31083:21)
+    at getSyncResult (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:32927:10)
+    at spawnSubprocessSync (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:32887:14)
+    at execaCoreSync (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:32817:23)
+    at callBoundExeca (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:35345:23)
+    at boundExeca (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:35322:49)
+    at sync (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:35477:14)
+    at runPnpmCli (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:211260:5)
+    at runDepsStatusCheck (file:///root/.local/share/pnpm/.tools/pnpm/11.1.2_tmp_7065_0/node_modules/pnpm/dist/pnpm.mjs:212964:7)
