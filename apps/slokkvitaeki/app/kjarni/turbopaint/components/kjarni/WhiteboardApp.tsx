@@ -15,6 +15,7 @@ import { getRegisteredStage } from "../../lib/board/stage-ref";
 import { useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
+import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
@@ -367,6 +368,9 @@ export function WhiteboardApp() {
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute top-1/2 left-3 -translate-y-1/2">
               <Toolbar />
+            </div>
+            <div className="pointer-events-auto absolute top-3 right-3">
+              <CountTable />
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               <SymbolTray />
