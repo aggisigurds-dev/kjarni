@@ -22,6 +22,20 @@ function isTypingTarget(el: EventTarget | null) {
   return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
 }
 
+/** Selecting any member of a group selects the whole group. */
+function expandGroups(ids: string[]) {
+  const all = useBoardStore.getState().objects;
+  const idSet = new Set(ids);
+  const gids = new Set(
+    all.filter((o) => idSet.has(o.id) && o.groupId).map((o) => o.groupId as string)
+  );
+  if (!gids.size) return ids;
+  all.forEach((o) => {
+    if (o.groupId && gids.has(o.groupId)) idSet.add(o.id);
+  });
+  return [...idSet];
+}
+
 export function BoardCanvas({
   width,
   height,
@@ -49,6 +63,8 @@ export function BoardCanvas({
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   const [draft, setDraft] = useState<Draft | null>(null);
   const panRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef<{ dist: number; midWorld: { x: number; y: number } } | null>(null);
   const polyRef = useRef<number[] | null>(null);
   const documentDragRef = useRef<{
     imageId: string;
@@ -163,9 +179,10 @@ export function BoardCanvas({
     const pts = d.kind === "pen" ? simplifyPoints(d.points) : d.points;
     if (pts.length < 4) return;
     if (d.kind === "calibrate" as LineKind) return;
-    // Manual eldveggur: same look as the auto-detected marks — wall-thin and
-    // translucent so the plan shows through. Named "EI-veggur" on purpose:
-    // "Eldveggur…" names are wiped by every auto-remark run.
+    // Manual eldveggur: translucent so the plan shows through, but colour,
+    // width and dash come from the StyleStrip so both are user-choosable.
+    // Named "EI-veggur" on purpose: "Eldveggur…" names are wiped by every
+    // auto-remark run.
     const firewall = d.kind === "polyline" && useBoardStore.getState().tool === "firewall";
     addObjects([
       {
@@ -174,9 +191,9 @@ export function BoardCanvas({
         x: 0,
         y: 0,
         points: pts,
-        stroke: firewall ? "#e11d2e" : d.kind === "measure" ? "#2563eb" : st.stroke,
-        strokeWidth: firewall ? 6 : d.kind === "pen" ? Math.max(2, st.strokeWidth) : st.strokeWidth,
-        dash: firewall ? "solid" : st.dash,
+        stroke: d.kind === "measure" ? "#2563eb" : st.stroke,
+        strokeWidth: d.kind === "pen" ? Math.max(2, st.strokeWidth) : st.strokeWidth,
+        dash: st.dash,
         rotation: 0,
         opacity: firewall ? 0.55 : 1,
         locked: false,
@@ -272,7 +289,7 @@ export function BoardCanvas({
             return o.x >= box.x && o.y >= box.y && o.x <= box.x + box.width && o.y <= box.y + box.height;
           })
           .map((o) => o.id);
-        useBoardStore.getState().setSelected(hits);
+        useBoardStore.getState().setSelected(expandGroups(hits));
       }
       setDraftState(null);
       return;
@@ -292,8 +309,63 @@ export function BoardCanvas({
     }
   }, [commitShape, onCalibrate, setDraftState]);
 
+  // Two-finger pinch: zoom around the fingers' midpoint, pan as it moves.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const dist = (t: TouchList) =>
+      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const mid = (t: TouchList, rect: DOMRect) => ({
+      x: (t[0].clientX + t[1].clientX) / 2 - rect.left,
+      y: (t[0].clientY + t[1].clientY) / 2 - rect.top,
+    });
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      panRef.current = null;
+      setDraftState(null);
+      const rect = el.getBoundingClientRect();
+      const cam = useBoardStore.getState().camera;
+      const m = mid(e.touches, rect);
+      pinchRef.current = {
+        dist: dist(e.touches),
+        midWorld: { x: (m.x - cam.x) / cam.scale, y: (m.y - cam.y) / cam.scale },
+      };
+    };
+    const onMove = (e: TouchEvent) => {
+      const p = pinchRef.current;
+      if (!p || e.touches.length !== 2) return;
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const cam = useBoardStore.getState().camera;
+      const d = dist(e.touches);
+      const m = mid(e.touches, rect);
+      const scale = Math.min(16, Math.max(0.04, cam.scale * (d / p.dist)));
+      p.dist = d;
+      useBoardStore.getState().setCamera({
+        scale,
+        x: m.x - p.midWorld.x * scale,
+        y: m.y - p.midWorld.y * scale,
+      });
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchRef.current = null;
+    };
+    el.addEventListener("touchstart", onStart, { passive: false });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, [setDraftState]);
+
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
+      if (pinchRef.current) return;
       if (!panRef.current && !draftRef.current) return;
       applyPointerMove(e.clientX, e.clientY);
     };
@@ -310,7 +382,7 @@ export function BoardCanvas({
 
   const onPointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = stageRef.current;
-    if (!stage) return;
+    if (!stage || pinchRef.current) return;
     const world = clientToWorld(e.evt.clientX, e.evt.clientY);
     const snapped = snapPoint(world.x, world.y);
     const clickedEmpty = e.target === stage;
@@ -342,7 +414,7 @@ export function BoardCanvas({
     if (currentTool === "symbol") {
       const { style: st, addObjects } = useBoardStore.getState();
       if (st.symbolId === "firewall") {
-        useBoardStore.getState().setTool("firewall");
+        useBoardStore.getState().startFirewall();
         polyRef.current = [snapped.x, snapped.y];
         setDraftState({ kind: "polyline", points: [snapped.x, snapped.y] });
         return;
@@ -434,7 +506,10 @@ export function BoardCanvas({
     commitShape({ kind: "polyline", points: polyRef.current });
     polyRef.current = null;
     setDraftState(null);
-    useBoardStore.getState().setTool("select");
+    // Eldveggs-tólið helst virkt svo næsti veggur byrjar strax; Esc/V hættir.
+    if (useBoardStore.getState().tool !== "firewall") {
+      useBoardStore.getState().setTool("select");
+    }
   }, [commitShape, setDraftState]);
 
   useEffect(() => {
@@ -535,16 +610,36 @@ export function BoardCanvas({
 
   const beginDocumentDrag = (id: string) => {
     const objects = useBoardStore.getState().objects;
-    const image = objects.find((o) => o.id === id);
-    if (!image || image.type !== "image") {
+    const dragged = objects.find((o) => o.id === id);
+    if (!dragged) {
+      documentDragRef.current = null;
+      return;
+    }
+    // Followers move with the dragged object: everything on a dragged plan,
+    // plus every group member (and whatever sits on grouped plans).
+    const followers = new Map<string, { id: string; x: number; y: number }>();
+    const add = (o: BoardObject) => {
+      if (o.id !== id && !followers.has(o.id)) followers.set(o.id, { id: o.id, x: o.x, y: o.y });
+    };
+    if (dragged.type === "image") objectsOnDocument(dragged, objects).forEach(add);
+    if (dragged.groupId) {
+      for (const member of objects) {
+        if (member.groupId !== dragged.groupId) continue;
+        add(member);
+        if (member.type === "image" && member.id !== id) {
+          objectsOnDocument(member, objects).forEach(add);
+        }
+      }
+    }
+    if (!followers.size) {
       documentDragRef.current = null;
       return;
     }
     documentDragRef.current = {
       imageId: id,
-      originX: image.x,
-      originY: image.y,
-      followers: objectsOnDocument(image, objects).map((o) => ({ id: o.id, x: o.x, y: o.y })),
+      originX: dragged.x,
+      originY: dragged.y,
+      followers: [...followers.values()],
     };
   };
 
@@ -588,8 +683,9 @@ export function BoardCanvas({
 
   return (
     <div
+      ref={wrapRef}
       className="relative h-full w-full overflow-hidden"
-      style={{ cursor }}
+      style={{ cursor, touchAction: "none" }}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = e.dataTransfer.types.includes("Files") ? "copy" : "copy";
@@ -627,7 +723,7 @@ export function BoardCanvas({
               draggable={selectLike && !spacePan && !obj.locked}
               listening={selectLike && !spacePan && (obj.type === "image" || !obj.locked)}
               onDragStart={(id) => {
-                if (panRef.current) {
+                if (panRef.current || pinchRef.current) {
                   stageRef.current?.findOne(`#${id}`)?.stopDrag();
                   return;
                 }
@@ -639,12 +735,17 @@ export function BoardCanvas({
               onClick={(id, shift) => {
                 if (!selectLike) return;
                 const current = useBoardStore.getState().selectedIds;
+                const unit = new Set(expandGroups([id]));
                 if (shift) {
                   useBoardStore
                     .getState()
-                    .setSelected(current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
+                    .setSelected(
+                      current.includes(id)
+                        ? current.filter((x) => !unit.has(x))
+                        : expandGroups([...current, id])
+                    );
                 } else {
-                  useBoardStore.getState().setSelected([id]);
+                  useBoardStore.getState().setSelected([...unit]);
                 }
               }}
               onDblClick={(id) => {
@@ -656,9 +757,9 @@ export function BoardCanvas({
           {draft && draft.kind !== "marquee" && draft.kind !== "rect" && draft.kind !== "ellipse" && draft.kind !== "sticky" ? (
             <Line
               points={draft.points}
-              stroke={tool === "firewall" ? "#e11d2e" : style.stroke}
-              strokeWidth={tool === "firewall" ? 6 : style.strokeWidth}
-              dash={tool === "firewall" ? undefined : dashArray(style.dash, style.strokeWidth)}
+              stroke={style.stroke}
+              strokeWidth={style.strokeWidth}
+              dash={dashArray(style.dash, style.strokeWidth)}
               opacity={tool === "firewall" ? 0.55 : 1}
               lineCap="round"
               lineJoin="round"

@@ -42,6 +42,7 @@ export function WhiteboardApp() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1200, height: 800 });
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState<"board" | "viewport" | "selection">("board");
   const [helpOpen, setHelpOpen] = useState(false);
   const [calibratePx, setCalibratePx] = useState<number | null>(null);
   const [calibrateMeters, setCalibrateMeters] = useState("10");
@@ -195,8 +196,8 @@ export function WhiteboardApp() {
   const dropSymbol = useCallback((symbolId: string, world: { x: number; y: number }) => {
     if (symbolId === "firewall") {
       // Eldveggur is drawn along the wall, not stamped as a badge.
-      useBoardStore.getState().setTool("firewall");
-      toast.message("Eldveggur: smelltu eftir veggnum — Enter eða tvísmelltu til að ljúka");
+      useBoardStore.getState().startFirewall();
+      toast.message("Eldveggur: smelltu horn af horni eftir veggnum — Enter lýkur vegg, tólið helst virkt");
       return;
     }
     const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
@@ -254,6 +255,11 @@ export function WhiteboardApp() {
       if (meta && e.key.toLowerCase() === "d") {
         e.preventDefault();
         store.duplicateSelected();
+      }
+      if (meta && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (e.shiftKey) store.ungroupSelected();
+        else store.groupSelected();
       }
       if (meta && e.key.toLowerCase() === "a") {
         e.preventDefault();
@@ -326,7 +332,10 @@ export function WhiteboardApp() {
     >
       <TopBar
         onImport={(files) => void runImport(files)}
-        onExport={() => setExportOpen(true)}
+        onExport={() => {
+          setExportTarget("board");
+          setExportOpen(true);
+        }}
         onHelp={() => setHelpOpen(true)}
         onOpenSample={() => void openSamplePlan()}
         onMarkFirewalls={() => void markFirewalls(useBoardStore.getState().objects)}
@@ -371,6 +380,14 @@ export function WhiteboardApp() {
             </div>
             <div className="pointer-events-auto absolute top-3 right-3">
               <CountTable />
+            </div>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2">
+              <SelectionBar
+                onExportSelection={() => {
+                  setExportTarget("selection");
+                  setExportOpen(true);
+                }}
+              />
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               <SymbolTray />
@@ -417,7 +434,7 @@ export function WhiteboardApp() {
           <RightPanel />
         </div>
       </div>
-      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} initialTarget={exportTarget} />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <Dialog open={calibratePx !== null} onOpenChange={(o) => !o && setCalibratePx(null)}>
         <DialogContent className="sm:max-w-md">
@@ -452,6 +469,34 @@ export function WhiteboardApp() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SelectionBar({ onExportSelection }: { onExportSelection: () => void }) {
+  const selectedIds = useBoardStore((s) => s.selectedIds);
+  const objects = useBoardStore((s) => s.objects);
+  const selected = objects.filter((o) => selectedIds.includes(o.id));
+  const hasGroup = selected.some((o) => o.groupId);
+  if (selected.length < 2 && !hasGroup) return null;
+  const btn =
+    "rounded-lg px-2 py-1 text-[11px] text-stone-200 hover:bg-white/10";
+  return (
+    <div className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#1a1d2e]/95 px-1.5 py-1 shadow-xl">
+      <span className="px-1.5 text-[11px] text-white/45">{selected.length} valin</span>
+      {selected.length >= 2 ? (
+        <button type="button" className={btn} onClick={() => useBoardStore.getState().groupSelected()}>
+          Hópa (⌘G)
+        </button>
+      ) : null}
+      {hasGroup ? (
+        <button type="button" className={btn} onClick={() => useBoardStore.getState().ungroupSelected()}>
+          Afhópa
+        </button>
+      ) : null}
+      <button type="button" className={btn} onClick={onExportSelection}>
+        Flytja út val
+      </button>
     </div>
   );
 }
@@ -492,18 +537,34 @@ function TextEditor({
 function ExportDialog({
   open,
   onOpenChange,
+  initialTarget = "board",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTarget?: "board" | "viewport" | "selection";
 }) {
-  const [target, setTarget] = useState<"board" | "viewport">("board");
+  const [target, setTarget] = useState<"board" | "viewport" | "selection">("board");
   const [scale, setScale] = useState<ExportScale>(3);
   const [busy, setBusy] = useState(false);
   const name = useBoardStore((s) => s.name);
+  const hasSelection = useBoardStore((s) => s.selectedIds.length > 0);
+
+  useEffect(() => {
+    if (open) setTarget(initialTarget === "selection" && !hasSelection ? "board" : initialTarget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialTarget]);
 
   async function run(kind: "png" | "pdf" | "json") {
     const stage = getRegisteredStage();
     const state = useBoardStore.getState();
+    const exportObjects =
+      target === "selection"
+        ? state.objects.filter((o) => state.selectedIds.includes(o.id) && !o.hidden)
+        : state.objects;
+    if (target === "selection" && !exportObjects.length) {
+      toast.error("Ekkert valið til að flytja út");
+      return;
+    }
     setBusy(true);
     try {
       if (kind === "json") {
@@ -523,10 +584,10 @@ function ExportDialog({
       } else if (!stage) {
         toast.error("Borðið er ekki tilbúið");
       } else if (kind === "png") {
-        const blob = await exportPngBlob(stage, state.objects, target, scale);
+        const blob = await exportPngBlob(stage, exportObjects, target, scale);
         downloadBlob(blob, `${slug(name)}.png`);
       } else {
-        await exportPdf(stage, state.objects, target, scale, name);
+        await exportPdf(stage, exportObjects, target, scale, name);
       }
       toast.success("Útflutningur tilbúinn");
       onOpenChange(false);
@@ -557,6 +618,9 @@ function ExportDialog({
             >
               <option value="board">Allt borðið</option>
               <option value="viewport">Sýnilegt svæði</option>
+              <option value="selection" disabled={!hasSelection}>
+                Valið (hópur / valdir hlutir)
+              </option>
             </select>
           </label>
           <label className="grid gap-1">
@@ -617,6 +681,7 @@ function HelpDialog({
             ["M", "Mæla"],
             ["⌘Z / ⌘⇧Z", "Afturkalla / endurtaka"],
             ["⌘D", "Afrita val"],
+            ["⌘G / ⌘⇧G", "Hópa / afhópa val"],
             ["Delete", "Eyða"],
             ["⌘0", "Passa á skjá"],
             ["Hjól", "Aðdráttur"],

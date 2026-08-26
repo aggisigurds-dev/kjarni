@@ -102,6 +102,24 @@ export function StyleStrip() {
   const setStyle = useBoardStore((s) => s.setStyle);
   const tool = useBoardStore((s) => s.tool);
 
+  // Style choices also restyle whatever is selected (walls included), so an
+  // existing eldveggur can be recoloured or thinned after the fact.
+  const applyToSelection = (patch: {
+    stroke?: string;
+    strokeWidth?: number;
+    dash?: "solid" | "dashed" | "dotted";
+  }) => {
+    const { selectedIds, objects, updateObjects } = useBoardStore.getState();
+    if (!selectedIds.length) return;
+    const keys = Object.keys(patch);
+    const ids = objects
+      .filter((o) => selectedIds.includes(o.id) && keys.every((k) => k in o))
+      .map((o) => o.id);
+    if (ids.length) {
+      updateObjects(ids, (o) => ({ ...o, ...patch }) as typeof o);
+    }
+  };
+
   if (tool === "symbol") {
     return (
       <div className="pointer-events-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
@@ -117,7 +135,10 @@ export function StyleStrip() {
         <button
           key={color}
           type="button"
-          onClick={() => setStyle({ stroke: color })}
+          onClick={() => {
+            setStyle({ stroke: color });
+            applyToSelection({ stroke: color });
+          }}
           className={cn("size-5 rounded-full border", style.stroke === color ? "ring-2 ring-white" : "border-white/20")}
           style={{ background: color }}
         />
@@ -127,7 +148,10 @@ export function StyleStrip() {
         <button
           key={w}
           type="button"
-          onClick={() => setStyle({ strokeWidth: w })}
+          onClick={() => {
+            setStyle({ strokeWidth: w });
+            applyToSelection({ strokeWidth: w });
+          }}
           className={cn("rounded-md px-1.5 py-0.5", style.strokeWidth === w ? "bg-white/15 text-white" : "hover:bg-white/8")}
         >
           {w}px
@@ -138,7 +162,10 @@ export function StyleStrip() {
         <button
           key={dash}
           type="button"
-          onClick={() => setStyle({ dash })}
+          onClick={() => {
+            setStyle({ dash });
+            applyToSelection({ dash });
+          }}
           className={cn("rounded-md px-1.5 py-0.5 capitalize", style.dash === dash ? "bg-white/15 text-white" : "hover:bg-white/8")}
         >
           {dash === "solid" ? "heil" : dash === "dashed" ? "strik" : "punktar"}
