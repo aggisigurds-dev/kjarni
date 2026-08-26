@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { Eye, EyeOff, Lock, Trash2, Unlock } from "lucide-react";
 import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
@@ -55,10 +56,23 @@ export function RightPanel() {
               </Field>
             ) : null}
             {primary.type === "image" ? (
-              <p className="text-xs leading-relaxed text-stone-400">
-                Dragðu gólfplönið til að færa skjalið. Merkingar, tákn og minnismiðar ofan á síðunni
-                fylgja með. Læstu síðunni ef þú vilt ekki hreyfa hana óvart.
-              </p>
+              <>
+                <p className="text-xs leading-relaxed text-stone-400">
+                  Dragðu gólfplönið til að færa skjalið. Merkingar, tákn og minnismiðar ofan á síðunni
+                  fylgja með. Læstu síðunni ef þú vilt ekki hreyfa hana óvart.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-white/10 bg-white/5 text-stone-200"
+                  onClick={() => {
+                    useBoardStore.getState().setTool("crop");
+                    toast.message("Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af");
+                  }}
+                >
+                  ✂ Croppa teikningu
+                </Button>
+              </>
             ) : null}
             {"stroke" in primary ? (
               <Field label="Strokulitur">
