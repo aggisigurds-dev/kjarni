@@ -127,6 +127,10 @@ export interface BoardDocument {
   grid: boolean;
   snap: boolean;
   assetIds: string[];
+  /** Board id when synced across devices (turbopaint_boards.id). */
+  boardId?: string;
+  /** ISO timestamp of the last local save — last-write-wins between devices. */
+  updatedAt?: string;
 }
 
 export const IMPORT_MAX_PX: Record<ImportQuality, number> = {
