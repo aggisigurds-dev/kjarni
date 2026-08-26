@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { sbRpc, sbSelect } from "../lib/supabase";
 import { SidurEditor } from "../SidurEditor";
 import { ValmyndEditor } from "../ValmyndEditor";
+import { StationChrome } from "../kjarni/StationChrome";
 
 type Inquiry = {
   id: number;
@@ -104,6 +105,7 @@ export default function StjornClient() {
 
   if (!unlocked) {
     return (
+      <StationChrome tool="stjorn">
       <div className="stjorn-gate">
         <span className="stjorn-gate-badge">B</span>
         <h1>Kjarni · Stjórnborð</h1>
@@ -119,6 +121,7 @@ export default function StjornClient() {
         </form>
         {err && <p className="form-err" style={{ color: "var(--red)" }}>{err}</p>}
       </div>
+      </StationChrome>
     );
   }
 
@@ -141,6 +144,7 @@ export default function StjornClient() {
   );
 
   return (
+    <StationChrome tool="stjorn">
     <div className="stjorn">
       <header className="stjorn-top">
         <div className="stjorn-top-l">
@@ -298,5 +302,6 @@ export default function StjornClient() {
         )}
       </div>
     </div>
+    </StationChrome>
   );
 }
