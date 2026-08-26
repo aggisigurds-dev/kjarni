@@ -595,7 +595,7 @@ export async function detectFirewallsOnPlan(
       y: plan.y + 180,
       width: 240,
       height: 170,
-      text: `Sjálfvirk merking eldveggja\n${lines}\n\nRautt = EI-60, appelsínugult = EI-30, blátt = EI-CS hurð. Dragðu línurnar til ef þær þurfa lagfæringu.`,
+      text: `Sjálfvirk merking eldveggja\n${lines}\n\nAppelsínugult = EI-60, blátt = E-30, ljósblátt = EI-CS hurð. Dragðu línurnar til ef þær þurfa lagfæringu.`,
       fill: "#fecaca",
       fontSize: 15,
       rotation: 0,
