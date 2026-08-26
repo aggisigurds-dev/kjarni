@@ -103,11 +103,10 @@ export default function TurboPaintClient() {
     const dpr = window.devicePixelRatio || 1;
     const w = wrap.clientWidth;
     const h = wrap.clientHeight;
+    if (w < 8 || h < 8) return;
     if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
       canvas.width = Math.floor(w * dpr);
       canvas.height = Math.floor(h * dpr);
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -316,7 +315,13 @@ export default function TurboPaintClient() {
           </div>
           <div className="tp-tools" role="toolbar" aria-label="Teikniverkfæri">
             {TOOLS.map((t) => (
-              <button key={t.id} type="button" className={tool === t.id ? "on" : ""} onClick={() => setTool(t.id)}>
+              <button
+                key={t.id}
+                type="button"
+                className={tool === t.id ? "on" : ""}
+                aria-pressed={tool === t.id}
+                onClick={() => setTool(t.id)}
+              >
                 {t.label}
               </button>
             ))}
