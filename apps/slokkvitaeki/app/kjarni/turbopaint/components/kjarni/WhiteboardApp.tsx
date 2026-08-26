@@ -302,6 +302,64 @@ export function WhiteboardApp() {
     []
   );
 
+  // Sækja teikningu beint af permalink (t.d. skjalasafn.reykjavik.is FotoWeb)
+  // gegnum /api/turbopaint/fetch-plan proxy-ið — CORS bannar beina sókn.
+  const runUrlImport = useCallback(
+    async (raw: string) => {
+      const trimmed = raw.trim();
+      if (!/^https?:\/\//i.test(trimmed)) {
+        toast.error("Þetta lítur ekki út eins og slóð");
+        return;
+      }
+      try {
+        useBoardStore.getState().setImportProgress({
+          fileName: "permalink",
+          percent: 10,
+          message: "Sæki teikningu af skjalasafninu…",
+        });
+        const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}`);
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error || `Gat ekki sótt af slóðinni (${res.status})`);
+        }
+        const blob = await res.blob();
+        const encoded = res.headers.get("x-plan-filename");
+        const name = encoded
+          ? decodeURIComponent(encoded)
+          : trimmed.split("/").pop() || "teikning";
+        useBoardStore.getState().setImportProgress(null);
+        const file = new File([blob], name, { type: blob.type || "image/tiff" });
+        await runImport([file]);
+      } catch (err) {
+        useBoardStore.getState().setImportProgress(null);
+        toast.error(err instanceof Error ? err.message : "Gat ekki sótt af slóðinni");
+      }
+    },
+    [runImport]
+  );
+
+  // Copy → paste permalink beint á borðið.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (isTyping(e.target)) return;
+      const text = e.clipboardData?.getData("text")?.trim() ?? "";
+      if (!/^https?:\/\//i.test(text)) return;
+      let host = "";
+      try {
+        host = new URL(text).hostname;
+      } catch {
+        return;
+      }
+      const fileLike = /\.(tiff?|pdf|png|jpe?g|webp|info)([?#]|$)/i.test(text);
+      if (host === "skjalasafn.reykjavik.is" || fileLike) {
+        e.preventDefault();
+        void runUrlImport(text);
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [runUrlImport]);
+
   const openSamplePlan = useCallback(async () => {
     try {
       useBoardStore.getState().setImportProgress({
@@ -430,6 +488,12 @@ export function WhiteboardApp() {
     >
       <TopBar
         onImport={(files) => void runImport(files)}
+        onImportUrl={() => {
+          const raw = window.prompt(
+            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða beina skráaslóð:"
+          );
+          if (raw) void runUrlImport(raw);
+        }}
         onExport={() => {
           setExportTarget("board");
           setExportOpen(true);
