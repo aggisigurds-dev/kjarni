@@ -244,6 +244,9 @@ export function SymbolNode({
             fontSize={Math.max(10, size * 0.2)}
             fontFamily="Inter, sans-serif"
             fill="#1c1917"
+            stroke="#ffffff"
+            strokeWidth={3}
+            fillAfterStrokeEnabled
             align="center"
           />
         ) : null}
@@ -274,6 +277,9 @@ export function SymbolNode({
           fontSize={Math.max(10, size * 0.22)}
           fontFamily="Inter, sans-serif"
           fill="#1c1917"
+          stroke="#ffffff"
+          strokeWidth={3}
+          fillAfterStrokeEnabled
           align="center"
         />
       ) : null}

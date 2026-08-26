@@ -69,7 +69,35 @@ export function WhiteboardApp() {
 
   useEffect(() => {
     void loadBoard();
+    // Prófunar-krókur: reykprófin (tools/turbopaint-smoke.cjs) lesa raun-stöðu
+    // borðsins gegnum window.__tpStore í stað þess að giska út frá DOM.
+    (window as unknown as { __tpStore?: typeof useBoardStore }).__tpStore = useBoardStore;
   }, []);
+
+  // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
+  const focusObject = useCallback(
+    (id: string) => {
+      const st = useBoardStore.getState();
+      const obj = st.objects.find((o) => o.id === id);
+      if (!obj) return;
+      const b = boardBounds([obj]);
+      const cx = b.x + b.width / 2;
+      const cy = b.y + b.height / 2;
+      const cam = st.camera;
+      const sx = cx * cam.scale + cam.x;
+      const sy = cy * cam.scale + cam.y;
+      const margin = 40;
+      const inView =
+        sx >= margin && sy >= margin && sx <= size.width - margin && sy <= size.height - margin;
+      if (inView) return;
+      st.setCamera({
+        scale: cam.scale,
+        x: size.width / 2 - cx * cam.scale,
+        y: size.height / 2 - cy * cam.scale,
+      });
+    },
+    [size.width, size.height]
+  );
 
   useEffect(() => {
     if (!hydrated) return;
@@ -676,7 +704,7 @@ export function WhiteboardApp() {
           ) : null}
         </div>
         <div className="hidden lg:block">
-          <RightPanel />
+          <RightPanel onFocusObject={focusObject} />
         </div>
       </div>
       {panelOpen ? (
@@ -687,7 +715,7 @@ export function WhiteboardApp() {
             onClick={() => setPanelOpen(false)}
           />
           <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] shadow-2xl shadow-black/60 [&>aside]:w-full">
-            <RightPanel />
+            <RightPanel onFocusObject={focusObject} />
           </div>
         </div>
       ) : null}

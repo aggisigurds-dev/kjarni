@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
+import { getSymbol } from "../../lib/board/symbols";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
@@ -527,10 +528,11 @@ export function BoardCanvas({
           opacity: 1,
           locked: false,
           hidden: false,
-          name: "Tákn",
+          name: getSymbol(st.symbolId).name,
         },
       ]);
-      useBoardStore.getState().setTool("select");
+      // Stimpil-hamur: tólið helst virkt svo hægt sé að stimpla mörg í röð —
+      // Esc eða annað tól hættir (áður datt það úr sambandi eftir eitt stykki).
       return;
     }
 

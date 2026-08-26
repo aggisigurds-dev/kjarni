@@ -416,6 +416,13 @@ async function fetchRemoteBoards(): Promise<{ rows: BoardListEntry[]; ok: boolea
   }
 }
 
+/** Borðin á ÞESSU tæki, samstundis — engin ský-bið. Borðavalið birtir þetta
+ * strax og skiptir svo yfir í sameinaða listann þegar skýið svarar. */
+export async function listBoardsLocal(): Promise<BoardListEntry[]> {
+  const index = await readIndex();
+  return [...index.boards].sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+}
+
 /** All boards: local index merged with the cloud list, newest first. */
 export async function listBoards(): Promise<BoardListEntry[]> {
   const index = await readIndex();
