@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   ArrowUpRight,
   Circle,
+  Eraser,
   Hand,
   Minus,
   MousePointer2,
@@ -38,6 +39,12 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
     label: "Kvarði — dragðu eftir þekktri lengd (t.d. milli veggja) og stimplaðu inn metrana",
     shortcut: "K",
     icon: <PencilRuler className="size-4" />,
+  },
+  {
+    id: "eraser",
+    label: "Strokleður — smelltu eða strjúktu yfir það sem á að hverfa",
+    shortcut: "E",
+    icon: <Eraser className="size-4" />,
   },
 ];
 

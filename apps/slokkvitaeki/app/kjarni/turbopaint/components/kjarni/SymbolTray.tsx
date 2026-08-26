@@ -35,7 +35,7 @@ export function SymbolTray() {
               if (id === "firewall") {
                 useBoardStore.getState().startFirewall();
                 toast.message(
-                  "Eldveggur: smelltu horn af horni eftir veggnum — Enter lýkur vegg, tólið helst virkt. Litur og breidd í stikunni að neðan."
+                  "Eldveggur: smelltu horn af horni — Enter lýkur vegg og næsti getur byrjað, Esc hættir og heldur veggnum. Litur og breidd í stikunni að neðan."
                 );
               } else {
                 setTool("symbol");

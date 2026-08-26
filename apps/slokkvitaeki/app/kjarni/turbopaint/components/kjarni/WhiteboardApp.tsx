@@ -209,7 +209,7 @@ export function WhiteboardApp() {
     if (symbolId === "firewall") {
       // Eldveggur is drawn along the wall, not stamped as a badge.
       useBoardStore.getState().startFirewall();
-      toast.message("Eldveggur: smelltu horn af horni eftir veggnum — Enter lýkur vegg, tólið helst virkt");
+      toast.message("Eldveggur: smelltu horn af horni — Enter lýkur vegg, Esc hættir og heldur veggnum");
       return;
     }
     const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
@@ -444,6 +444,7 @@ export function WhiteboardApp() {
           m: "measure",
           s: "symbol",
           k: "calibrate",
+          e: "eraser",
         };
         const tool = map[e.key.toLowerCase()];
         if (tool) store.setTool(tool);
@@ -952,6 +953,8 @@ function HelpDialog({
             ["P / T / N", "Penni / texti / minnismiði"],
             ["S", "Brunavarnatákn"],
             ["M / K", "Mæla / kvarða (stimpla inn raunlengd)"],
+            ["E", "Strokleður — strjúka yfir til að eyða"],
+            ["Esc", "Hætta í tóli (veggur í vinnslu helst)"],
             ["⌘Z / ⌘⇧Z", "Afturkalla / endurtaka"],
             ["⌘D", "Afrita val"],
             ["⌘G / ⌘⇧G", "Hópa / afhópa val"],
