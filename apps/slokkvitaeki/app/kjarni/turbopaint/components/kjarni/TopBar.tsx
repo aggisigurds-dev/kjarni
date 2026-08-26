@@ -27,6 +27,7 @@ import {
   deleteCurrentBoard,
   getCurrentBoardId,
   listBoards,
+  listBoardsLocal,
   resetBoard,
   switchBoard,
   type BoardListEntry,
@@ -122,7 +123,13 @@ export function TopBar({
       <div className="hidden h-6 w-px bg-white/10 sm:block" />
       <DropdownMenu
         onOpenChange={(open) => {
-          if (open) void listBoards().then(setBoards);
+          if (!open) return;
+          // Tækis-listinn birtist SAMSTUNDIS; ský-listinn sameinast þegar hann kemur
+          // (var: „Sæki borð…" upp í 10–20 sek á hægu neti).
+          void listBoardsLocal().then((local) => {
+            setBoards((prev) => (prev.length && !local.length ? prev : local));
+          });
+          void listBoards().then(setBoards);
         }}
       >
         <DropdownMenuTrigger

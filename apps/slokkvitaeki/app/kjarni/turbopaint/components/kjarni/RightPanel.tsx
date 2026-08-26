@@ -11,11 +11,35 @@ import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 
-export function RightPanel() {
+export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => void } = {}) {
   const objects = useBoardStore((s) => s.objects);
   const selectedIds = useBoardStore((s) => s.selectedIds);
   const selected = objects.filter((o) => selectedIds.includes(o.id));
   const primary = selected[0];
+
+  // Lög heita „tegund + númer" í sköpunarröð (Slökkvitæki 1, 2 …) í stað þess
+  // að allt heiti „Tákn". Númer bætist aðeins við þegar fleiri en eitt deila nafni.
+  const layerNames = (() => {
+    const base = new Map<string, string>();
+    const totals = new Map<string, number>();
+    for (const obj of objects) {
+      const b =
+        obj.type === "symbol" && (!obj.name || obj.name === "Tákn")
+          ? getSymbol(obj.symbolId).name
+          : obj.name || obj.type;
+      base.set(obj.id, b);
+      totals.set(b, (totals.get(b) ?? 0) + 1);
+    }
+    const seen = new Map<string, number>();
+    const out = new Map<string, string>();
+    for (const obj of objects) {
+      const b = base.get(obj.id)!;
+      const n = (seen.get(b) ?? 0) + 1;
+      seen.set(b, n);
+      out.set(obj.id, (totals.get(b) ?? 0) > 1 ? `${b} ${n}` : b);
+    }
+    return out;
+  })();
 
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col border-l border-white/8 bg-[#12141c] text-stone-200">
@@ -158,12 +182,18 @@ export function RightPanel() {
               <button
                 key={obj.id}
                 type="button"
-                onClick={() => useBoardStore.getState().setSelected([obj.id])}
+                onClick={() => {
+                  // Valið sést aðeins í Velja-tólinu — og hlutur utan skjás
+                  // þarf að hoppa í mynd, annars virðist smellurinn dauður.
+                  useBoardStore.getState().setTool("select");
+                  useBoardStore.getState().setSelected([obj.id]);
+                  onFocusObject?.(obj.id);
+                }}
                 className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
                   selectedIds.includes(obj.id) ? "bg-white/10 text-white" : "text-stone-400 hover:bg-white/5"
                 }`}
               >
-                <span className="min-w-0 flex-1 truncate">{obj.name || obj.type}</span>
+                <span className="min-w-0 flex-1 truncate">{layerNames.get(obj.id) ?? obj.name ?? obj.type}</span>
                 <span
                   role="presentation"
                   onClick={(e) => {

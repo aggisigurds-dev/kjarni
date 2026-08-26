@@ -86,7 +86,11 @@ export function CountTable() {
     );
   }, [plan, objects]);
 
-  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  // Samtalan er BÚNAÐARTALA (tákn + eldveggir/-hurðir, hópar 0–1) — form,
+  // textar og minnismiðar eru vinnugögn og standa sér undir „Annað".
+  const equipmentRows = rows.filter((r) => r.group < 2);
+  const otherRows = rows.filter((r) => r.group === 2);
+  const total = equipmentRows.reduce((sum, r) => sum + r.count, 0);
 
   if (!plan) {
     if (images.length < 2) return null;
@@ -102,9 +106,12 @@ export function CountTable() {
     const lines = [
       `MAGNTAFLA — ${plan.name}`,
       "".padEnd(24, "—"),
-      ...rows.map((r) => `${r.count}× ${r.label}`),
+      ...equipmentRows.map((r) => `${r.count}× ${r.label}`),
       "".padEnd(24, "—"),
-      `Samtals: ${total}`,
+      `Samtals búnaður: ${total}`,
+      ...(otherRows.length
+        ? ["", "Annað:", ...otherRows.map((r) => `${r.count}× ${r.label}`)]
+        : []),
     ];
     useBoardStore.getState().addObjects(
       [
@@ -152,10 +159,23 @@ export function CountTable() {
             <div className="max-h-[38vh] overflow-y-auto lg:max-h-[50vh]">
               <table className="w-full border-collapse text-[11px]">
                 <tbody>
-                  {rows.map((r) => (
+                  {equipmentRows.map((r) => (
                     <tr key={r.key} className="border-b border-white/5 last:border-0">
                       <td className="py-0.5 pr-2">{r.label}</td>
                       <td className="py-0.5 text-right font-semibold tabular-nums">{r.count}</td>
+                    </tr>
+                  ))}
+                  {otherRows.length ? (
+                    <tr>
+                      <td colSpan={2} className="pb-0.5 pt-1.5 text-[10px] font-medium tracking-wide text-white/35">
+                        ANNAÐ Á TEIKNINGUNNI
+                      </td>
+                    </tr>
+                  ) : null}
+                  {otherRows.map((r) => (
+                    <tr key={r.key} className="border-b border-white/5 text-white/55 last:border-0">
+                      <td className="py-0.5 pr-2">{r.label}</td>
+                      <td className="py-0.5 text-right tabular-nums">{r.count}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -167,7 +187,7 @@ export function CountTable() {
           {rows.length ? (
             <>
               <div className="mt-1.5 flex items-center justify-between border-t border-white/15 pt-1.5 text-[11px] font-semibold">
-                <span>Samtals</span>
+                <span>Samtals búnaður</span>
                 <span className="tabular-nums">{total}</span>
               </div>
               <button
