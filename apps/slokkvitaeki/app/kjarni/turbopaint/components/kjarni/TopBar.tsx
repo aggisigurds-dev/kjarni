@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  Cloud,
   Download,
   Flame,
   Grid3x3,
   HelpCircle,
+  Layers,
   Magnet,
   Redo2,
   RotateCcw,
@@ -14,10 +16,19 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
-import { clearBoard, resetBoard } from "../../lib/board/persistence";
+import {
+  clearBoard,
+  createBoard,
+  deleteCurrentBoard,
+  getCurrentBoardId,
+  listBoards,
+  resetBoard,
+  switchBoard,
+  type BoardListEntry,
+} from "../../lib/board/persistence";
 import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
 import {
@@ -50,6 +61,17 @@ export function TopBar({
   const grid = useBoardStore((s) => s.grid);
   const snap = useBoardStore((s) => s.snap);
   const quality = useBoardStore((s) => s.importQuality);
+  const syncState = useBoardStore((s) => s.syncState);
+  const [boards, setBoards] = useState<BoardListEntry[]>([]);
+
+  const syncLook =
+    syncState === "synced"
+      ? { color: "text-emerald-400", label: "Vistað í ský — opnast á öllum tækjum" }
+      : syncState === "saving"
+        ? { color: "text-amber-300 animate-pulse", label: "Vistar í ský…" }
+        : syncState === "error"
+          ? { color: "text-red-400", label: "Ský-vistun mistókst — reynt aftur sjálfkrafa" }
+          : { color: "text-stone-500", label: "Vistað á þessu tæki" };
 
   return (
     <header className="flex h-14 items-center gap-3 border-b border-white/8 bg-[#1a1d2e] px-3 text-stone-100">
@@ -63,12 +85,62 @@ export function TopBar({
         </Link>
       </div>
       <div className="h-6 w-px bg-white/10" />
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) void listBoards().then(setBoards);
+        }}
+      >
+        <DropdownMenuTrigger
+          render={
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="shrink-0 text-stone-300 hover:bg-white/10"
+              title="Borðin mín — hoppa á milli verkefna"
+            />
+          }
+        >
+          <Layers className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-[60vh] min-w-64 overflow-y-auto">
+          {boards.length ? (
+            boards.map((b) => (
+              <DropdownMenuItem key={b.id} onClick={() => void switchBoard(b.id)}>
+                <span className="min-w-0 flex-1 truncate">
+                  {b.id === getCurrentBoardId() ? "● " : ""}
+                  {b.name || "Ónefnt borð"}
+                </span>
+                <span className="pl-3 text-[10px] text-muted-foreground">
+                  {b.updatedAt ? b.updatedAt.slice(0, 10).split("-").reverse().join(".") : ""}
+                  {b.remote ? " ☁" : ""}
+                </span>
+              </DropdownMenuItem>
+            ))
+          ) : (
+            <DropdownMenuItem disabled>Sæki borð…</DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => void createBoard()}>➕ Nýtt borð</DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              if (window.confirm("Eyða þessu borði? (Það hverfur af öllum tækjum)")) {
+                void deleteCurrentBoard();
+              }
+            }}
+          >
+            🗑 Eyða þessu borði
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         className="min-w-0 flex-1 bg-transparent text-sm font-medium text-stone-100 outline-none placeholder:text-stone-500 sm:max-w-sm"
         placeholder="Nafn á borði"
       />
+      <span className={`shrink-0 ${syncLook.color}`} title={syncLook.label}>
+        <Cloud className="size-4" />
+      </span>
       <div className="hidden items-center gap-1 md:flex">
         <IconBtn title="Afturkalla (⌘Z)" onClick={() => useBoardStore.getState().undo()}>
           <Undo2 className="size-4" />

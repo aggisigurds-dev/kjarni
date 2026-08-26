@@ -35,6 +35,9 @@ interface BoardStore {
   importQuality: ImportQuality;
   importProgress: ImportProgress | null;
   spacePan: boolean;
+  /** Cloud sync status for the current board (shown in the TopBar). */
+  syncState: "idle" | "saving" | "synced" | "error";
+  setSyncState: (s: "idle" | "saving" | "synced" | "error") => void;
   style: StyleState;
   past: BoardObject[][];
   future: BoardObject[][];
@@ -95,6 +98,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   importQuality: "standard",
   importProgress: null,
   spacePan: false,
+  syncState: "idle",
+  setSyncState: (syncState) => set({ syncState }),
   style: {
     stroke: "#1c1917",
     fill: "transparent",
