@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { TRAY_SYMBOLS, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { getSymbol, symbolColors } from "../../lib/board/symbols";
 import { useBoardStore } from "../../lib/board/store";
@@ -31,7 +32,12 @@ export function SymbolTray() {
             }}
             onClick={() => {
               setStyle({ symbolId: id });
-              setTool("symbol");
+              if (id === "firewall") {
+                setTool("firewall");
+                toast.message("Eldveggur: smelltu eftir veggnum — Enter eða tvísmelltu til að ljúka");
+              } else {
+                setTool("symbol");
+              }
             }}
             className={cn(
               "flex shrink-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-[11px] text-stone-200",

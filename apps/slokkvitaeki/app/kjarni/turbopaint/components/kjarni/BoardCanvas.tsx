@@ -62,7 +62,9 @@ export function BoardCanvas({
     return () => registerStage(null);
   }, [width, height]);
 
-  const panning = tool === "hand" || spacePan;
+  // Hand mode: left button behaves like select ("choose"), the pan itself
+  // lives on right-button drag (touch/pen still pan with the primary pointer).
+  const selectLike = tool === "select" || tool === "hand";
 
   const selectedNodes = useMemo(
     () => objects.filter((o) => selectedIds.includes(o.id) && !o.hidden),
@@ -161,6 +163,10 @@ export function BoardCanvas({
     const pts = d.kind === "pen" ? simplifyPoints(d.points) : d.points;
     if (pts.length < 4) return;
     if (d.kind === "calibrate" as LineKind) return;
+    // Manual eldveggur: same look as the auto-detected marks — wall-thin and
+    // translucent so the plan shows through. Named "EI-veggur" on purpose:
+    // "Eldveggur…" names are wiped by every auto-remark run.
+    const firewall = d.kind === "polyline" && useBoardStore.getState().tool === "firewall";
     addObjects([
       {
         id: newId(),
@@ -168,15 +174,16 @@ export function BoardCanvas({
         x: 0,
         y: 0,
         points: pts,
-        stroke: d.kind === "measure" ? "#2563eb" : st.stroke,
-        strokeWidth: d.kind === "pen" ? Math.max(2, st.strokeWidth) : st.strokeWidth,
-        dash: st.dash,
+        stroke: firewall ? "#e11d2e" : d.kind === "measure" ? "#2563eb" : st.stroke,
+        strokeWidth: firewall ? 6 : d.kind === "pen" ? Math.max(2, st.strokeWidth) : st.strokeWidth,
+        dash: firewall ? "solid" : st.dash,
         rotation: 0,
-        opacity: 1,
+        opacity: firewall ? 0.55 : 1,
         locked: false,
         hidden: false,
-        name:
-          d.kind === "measure"
+        name: firewall
+          ? "EI-veggur"
+          : d.kind === "measure"
             ? "Mæling"
             : d.kind === "arrow"
               ? "Ör"
@@ -310,14 +317,19 @@ export function BoardCanvas({
     const currentTool: Tool = useBoardStore.getState().tool;
     const cam = useBoardStore.getState().camera;
 
-    if (e.evt.button === 1 || currentTool === "hand" || useBoardStore.getState().spacePan) {
+    const mousePointer = e.evt.pointerType === "mouse";
+    if (
+      e.evt.button === 1 ||
+      useBoardStore.getState().spacePan ||
+      (currentTool === "hand" && (!mousePointer || e.evt.button === 2))
+    ) {
       e.evt.preventDefault();
       panRef.current = { x: e.evt.clientX, y: e.evt.clientY, cx: cam.x, cy: cam.y };
       return;
     }
     if (e.evt.button !== 0) return;
 
-    if (currentTool === "select") {
+    if (currentTool === "select" || currentTool === "hand") {
       if (clickedEmpty) {
         useBoardStore.getState().setSelected([]);
         setDraftState({ kind: "marquee", ax: world.x, ay: world.y, bx: world.x, by: world.y });
@@ -329,6 +341,12 @@ export function BoardCanvas({
 
     if (currentTool === "symbol") {
       const { style: st, addObjects } = useBoardStore.getState();
+      if (st.symbolId === "firewall") {
+        useBoardStore.getState().setTool("firewall");
+        polyRef.current = [snapped.x, snapped.y];
+        setDraftState({ kind: "polyline", points: [snapped.x, snapped.y] });
+        return;
+      }
       addObjects([
         {
           id: newId(),
@@ -376,7 +394,7 @@ export function BoardCanvas({
       return;
     }
 
-    if (currentTool === "polyline") {
+    if (currentTool === "polyline" || currentTool === "firewall") {
       if (!polyRef.current) {
         polyRef.current = [snapped.x, snapped.y];
         setDraftState({ kind: "polyline", points: [snapped.x, snapped.y] });
@@ -440,6 +458,9 @@ export function BoardCanvas({
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    // The shell in WhiteboardApp has its own onDrop fallback; without this the
+    // same drop fired both handlers and every file/symbol landed twice.
+    e.stopPropagation();
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
     const world = worldFromScreen(
       { x: e.clientX - rect.left, y: e.clientY - rect.top },
@@ -563,7 +584,7 @@ export function BoardCanvas({
     documentDragRef.current = null;
   };
 
-  const cursor = panning ? "grab" : tool === "select" ? "default" : "crosshair";
+  const cursor = spacePan ? "grab" : selectLike ? "default" : "crosshair";
 
   return (
     <div
@@ -574,6 +595,7 @@ export function BoardCanvas({
         e.dataTransfer.dropEffect = e.dataTransfer.types.includes("Files") ? "copy" : "copy";
       }}
       onDrop={onDrop}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <Stage
         width={width}
@@ -602,14 +624,20 @@ export function BoardCanvas({
               key={obj.id}
               obj={obj}
               pixelsPerMeter={pixelsPerMeter}
-              draggable={tool === "select" && !obj.locked && !panning}
-              listening={tool === "select" && !panning && (obj.type === "image" || !obj.locked)}
-              onDragStart={(id) => beginDocumentDrag(id)}
+              draggable={selectLike && !spacePan && !obj.locked}
+              listening={selectLike && !spacePan && (obj.type === "image" || !obj.locked)}
+              onDragStart={(id) => {
+                if (panRef.current) {
+                  stageRef.current?.findOne(`#${id}`)?.stopDrag();
+                  return;
+                }
+                beginDocumentDrag(id);
+              }}
               onDragMove={(id, x, y) => moveDocumentFollowers(id, x, y)}
               onDragEnd={(id, x, y) => endDocumentDrag(id, x, y)}
               onTransformEnd={applyTransform}
               onClick={(id, shift) => {
-                if (tool !== "select") return;
+                if (!selectLike) return;
                 const current = useBoardStore.getState().selectedIds;
                 if (shift) {
                   useBoardStore
@@ -628,9 +656,10 @@ export function BoardCanvas({
           {draft && draft.kind !== "marquee" && draft.kind !== "rect" && draft.kind !== "ellipse" && draft.kind !== "sticky" ? (
             <Line
               points={draft.points}
-              stroke={style.stroke}
-              strokeWidth={style.strokeWidth}
-              dash={dashArray(style.dash, style.strokeWidth)}
+              stroke={tool === "firewall" ? "#e11d2e" : style.stroke}
+              strokeWidth={tool === "firewall" ? 6 : style.strokeWidth}
+              dash={tool === "firewall" ? undefined : dashArray(style.dash, style.strokeWidth)}
+              opacity={tool === "firewall" ? 0.55 : 1}
               lineCap="round"
               lineJoin="round"
               listening={false}

@@ -191,6 +191,18 @@ export function WhiteboardApp() {
     }
   }, [markFirewalls]);
 
+  const dropSymbol = useCallback((symbolId: string, world: { x: number; y: number }) => {
+    if (symbolId === "firewall") {
+      // Eldveggur is drawn along the wall, not stamped as a badge.
+      useBoardStore.getState().setTool("firewall");
+      toast.message("Eldveggur: smelltu eftir veggnum — Enter eða tvísmelltu til að ljúka");
+      return;
+    }
+    const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
+    useBoardStore.getState().addObjects([obj], true);
+    useBoardStore.getState().setTool("select");
+  }, []);
+
   const openSamplePlan = useCallback(async () => {
     try {
       useBoardStore.getState().setImportProgress({
@@ -294,6 +306,7 @@ export function WhiteboardApp() {
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
+        setDragOver(false);
         const symbolId = e.dataTransfer.getData(SYMBOL_DRAG_TYPE);
         if (symbolId) {
           const shell = shellRef.current;
@@ -303,9 +316,7 @@ export function WhiteboardApp() {
             { x: e.clientX - rect.left, y: e.clientY - rect.top },
             useBoardStore.getState().camera
           );
-          const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
-          useBoardStore.getState().addObjects([obj], true);
-          useBoardStore.getState().setTool("select");
+          dropSymbol(symbolId, world);
           return;
         }
         const files = [...e.dataTransfer.files];
@@ -324,7 +335,9 @@ export function WhiteboardApp() {
         <div
           ref={shellRef}
           className="relative min-w-0 flex-1 bg-[#ece7de]"
-          onDragEnter={() => setDragOver(true)}
+          onDragEnter={(e) => {
+            if (e.dataTransfer?.types?.includes("Files")) setDragOver(true);
+          }}
           onDragLeave={() => setDragOver(false)}
         >
           {hydrated ? (
@@ -337,9 +350,8 @@ export function WhiteboardApp() {
                 void runImport(files, world);
               }}
               onSymbolDropped={(symbolId, world) => {
-                const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
-                useBoardStore.getState().addObjects([obj], true);
-                useBoardStore.getState().setTool("select");
+                setDragOver(false);
+                dropSymbol(symbolId, world);
               }}
               onCalibrate={setCalibratePx}
             />
@@ -592,7 +604,7 @@ function HelpDialog({
         <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
           {[
             ["V", "Velja"],
-            ["H / space", "Færa borð"],
+            ["H / space", "Færa borð (✋: hægri-drag færir, vinstri velur)"],
             ["R / O", "Ferningur / hringur"],
             ["L / A", "Lína / ör"],
             ["W", "Veggir (smelltu, Enter til að loka)"],

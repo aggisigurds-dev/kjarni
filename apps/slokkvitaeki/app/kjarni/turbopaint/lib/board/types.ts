@@ -11,7 +11,8 @@ export type Tool =
   | "sticky"
   | "symbol"
   | "measure"
-  | "calibrate";
+  | "calibrate"
+  | "firewall";
 
 export type ImportQuality = "fast" | "standard" | "print";
 
@@ -127,9 +128,9 @@ export interface BoardDocument {
 }
 
 export const IMPORT_MAX_PX: Record<ImportQuality, number> = {
-  fast: 2800,
-  standard: 5200,
-  print: 8600,
+  fast: 3200,
+  standard: 7200,
+  print: 12500,
 };
 
 export const STROKE_PRESETS = ["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#7c3aed", "#ffffff"];

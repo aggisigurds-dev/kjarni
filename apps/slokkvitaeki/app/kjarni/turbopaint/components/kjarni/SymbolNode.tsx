@@ -161,7 +161,8 @@ function Glyph({
     case "electric":
       return (
         <Group>
-          <Line points={[13, 4, 8, 13, 12, 13, 11, 20, 16, 10, 12, 10, 13, 4]} {...f} />
+          {/* Konva fills a Line only when closed — without it the bolt was invisible */}
+          <Line points={[13, 4, 8, 13, 12, 13, 11, 20, 16, 10, 12, 10, 13, 4]} closed {...f} />
         </Group>
       );
     case "water":
@@ -221,6 +222,34 @@ export function SymbolNode({
   const def = getSymbol(symbolId);
   const colors = symbolColors(def.kind);
   const scale = size / 24;
+  if (def.id === "firewall") {
+    // Eldveggur is a wall overlay, not a badge: a thin translucent bar so the
+    // plan's own wall stays visible underneath.
+    return (
+      <Group>
+        <Rect
+          width={size}
+          height={Math.max(4, size * 0.16)}
+          y={size * 0.42}
+          fill="#e11d2e"
+          opacity={0.55}
+          cornerRadius={Math.max(1, size * 0.03)}
+        />
+        {label ? (
+          <KonvaText
+            y={size * 0.42 + Math.max(4, size * 0.16) + 4}
+            width={size + 28}
+            x={-14}
+            text={label}
+            fontSize={Math.max(10, size * 0.2)}
+            fontFamily="Inter, sans-serif"
+            fill="#1c1917"
+            align="center"
+          />
+        ) : null}
+      </Group>
+    );
+  }
   return (
     <Group>
       <Rect

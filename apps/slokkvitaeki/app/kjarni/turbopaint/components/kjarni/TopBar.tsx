@@ -119,9 +119,9 @@ export function TopBar({
         className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 lg:block"
         title="Innflutningsgæði fyrir stór PDF/TIF"
       >
-        <option value="fast">Flýti · 2.8k</option>
-        <option value="standard">Staðall · 5.2k</option>
-        <option value="print">Há gæði · 8.6k</option>
+        <option value="fast">Flýti · 3.2k</option>
+        <option value="standard">Staðall · 7.2k</option>
+        <option value="print">Há gæði · 12.5k</option>
       </select>
       <input
         ref={fileRef}
