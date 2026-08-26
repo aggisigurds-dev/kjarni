@@ -120,9 +120,11 @@ function nmsHits(hits: FirewallHit[], dist = 70): FirewallHit[] {
   return kept;
 }
 
+/** Litaregla Agnars (verkefnalisti 26.8): EI-60 appelsínugult, E-30 blátt,
+ * EI/E30-CS hurðir ljósbláar. */
 export function ratingColor(rating: FirewallRating): string {
-  if (rating.smoke) return "#2563eb";
-  return rating.minutes === 60 ? "#dc2626" : "#ea580c";
+  if (rating.smoke) return "#38bdf8";
+  return rating.minutes === 60 ? "#ea580c" : "#2563eb";
 }
 
 export function ratingDash(rating: FirewallRating): "solid" | "dashed" {

@@ -1,34 +1,14 @@
 ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0"} (current: {"node":"v22.22.2","pnpm":"11.1.2"})
 ../web                                   | [WARN] Unsupported engine: wanted: {"node":">=24.0.0"} (current: {"node":"v22.22.2","pnpm":"11.1.2"})
 Scope: all 5 workspace projects
-[WARN] Moving @types/node that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @types/react that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @types/react-dom that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @types/utif that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving typescript that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @base-ui/react that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @supabase/supabase-js that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @tailwindcss/postcss that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving @vercel/analytics that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving class-variance-authority that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving clsx that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving idb-keyval that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving jspdf that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving konva that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving lucide-react that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving nanoid that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving next that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving pdfjs-dist that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving react that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving react-dom that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving react-konva that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving sonner that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving tailwind-merge that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving tailwindcss that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving tesseract.js that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving tw-animate-css that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving utif that was installed by a different package manager to "node_modules/.ignored"
-[WARN] Moving zustand that was installed by a different package manager to "node_modules/.ignored"
+../..                                    | Progress: resolved 1, reused 0, downloaded 0, added 0
+../..                                    |   +7 +
+../..                                    | Progress: resolved 7, reused 0, downloaded 0, added 0
+../..                                    | Progress: resolved 7, reused 0, downloaded 4, added 0
+../..                                    | Progress: resolved 7, reused 0, downloaded 7, added 7, done
+[WARN] Failed to create bin at /home/user/kjarni/node_modules/.pnpm/vite@8.0.13_@types+node@25.8.0_esbuild@0.28.0_jiti@2.7.0_tsx@4.22.1/node_modules/vite/node_modules/.bin/tsx. ENOENT: no such file or directory, chmod '/home/user/kjarni/node_modules/.pnpm/vite@8.0.13_@types+node@25.8.0_esbuild@0.28.0_jiti@2.7.0_tsx@4.22.1/node_modules/vite/node_modules/.bin/tsx'
+[WARN] Failed to create bin at /home/user/kjarni/node_modules/.pnpm/next@16.2.6_@playwright+test@1.60.0_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/node_modules/.bin/baseline-browser-mapping. ENOENT: no such file or directory, chmod '/home/user/kjarni/node_modules/.pnpm/next@16.2.6_@playwright+test@1.60.0_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/node_modules/.bin/baseline-browser-mapping'
+[WARN] Failed to create bin at /home/user/kjarni/node_modules/.pnpm/next@16.2.6_@playwright+test@1.60.0_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/node_modules/.bin/playwright. ENOENT: no such file or directory, chmod '/home/user/kjarni/node_modules/.pnpm/next@16.2.6_@playwright+test@1.60.0_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/node_modules/.bin/playwright'
 [ERROR] Command was killed with SIGINT (User interruption with CTRL-C): pnpm install
 
 pnpm: Command was killed with SIGINT (User interruption with CTRL-C): pnpm install
