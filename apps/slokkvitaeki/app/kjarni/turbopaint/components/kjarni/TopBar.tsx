@@ -41,6 +41,16 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
+/** Sjálfgefin borðanöfn — smellur í reitinn velur þá allan textann svo
+ * innsláttur SKIPTIR nafninu út (annars lendir hann inni í miðju orði). */
+const DEFAULT_BOARD_NAMES = new Set([
+  "Nýtt borð",
+  "Nýtt TurboPaint borð",
+  "TurboPaint borð",
+  "TurboPaint",
+  "Ónefnt borð",
+]);
+
 export function TopBar({
   onImport,
   onExport,
@@ -61,6 +71,7 @@ export function TopBar({
   viewSize: { width: number; height: number };
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const name = useBoardStore((s) => s.name);
   const setName = useBoardStore((s) => s.setName);
   const camera = useBoardStore((s) => s.camera);
@@ -69,6 +80,17 @@ export function TopBar({
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
+
+  // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
+  // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
+  // valmyndar-takkann þegar valmyndin lokast — því töfin, hún vinnur það kapphlaup
+  // (annars fara stafirnir í eins-stafs flýtilyklana og skipta um tól).
+  const focusNameSoon = () => {
+    setTimeout(() => {
+      nameRef.current?.focus();
+      nameRef.current?.select();
+    }, 300);
+  };
 
   const syncLook =
     syncState === "synced"
@@ -126,7 +148,7 @@ export function TopBar({
             <DropdownMenuItem disabled>Sæki borð…</DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void createBoard()}>➕ Nýtt borð</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void createBoard().then(focusNameSoon)}>➕ Nýtt borð</DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               if (window.confirm("Eyða þessu borði? (Það hverfur af öllum tækjum)")) {
@@ -139,9 +161,17 @@ export function TopBar({
         </DropdownMenuContent>
       </DropdownMenu>
       <input
+        ref={nameRef}
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 sm:max-w-sm sm:text-sm"
+        onFocus={(e) => {
+          if (DEFAULT_BOARD_NAMES.has(e.target.value.trim())) e.target.select();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        enterKeyHint="done"
+        className="min-w-16 flex-1 rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:max-w-sm sm:text-sm"
         placeholder="Nafn á borði"
       />
       <span className={`shrink-0 ${syncLook.color}`} title={syncLook.label}>
@@ -223,10 +253,11 @@ export function TopBar({
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
       </Button>
+      {/* Á síma búa þessir þrír í ⟳ valmyndinni — annars kremja þeir nafnareitinn. */}
       <Button
         size="sm"
         variant="ghost"
-        className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
         onClick={() => onImportUrl?.()}
         title="Sækja af permalink (skjalasafn.reykjavik.is) — eða bara Ctrl+V á borðið"
       >
@@ -236,7 +267,7 @@ export function TopBar({
       <Button
         size="sm"
         variant="ghost"
-        className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
         onClick={() => onMarkFirewalls?.()}
         title="Merkja E-30 / E-60 eldveggi og 165.BR1 búnað"
       >
@@ -256,7 +287,7 @@ export function TopBar({
       <Button
         size="sm"
         variant="ghost"
-        className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
         onClick={() => onStrip?.()}
         title="Hreinsa teikningu — hvítur grunnur, bara veggir og blek"
       >
@@ -273,7 +304,9 @@ export function TopBar({
         <span className="hidden sm:inline">Flytja út</span>
       </Button>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" className="text-stone-300 hover:bg-white/10 max-sm:size-9" />}>
+        <DropdownMenuTrigger
+          render={<Button size="icon-sm" variant="ghost" className="text-stone-300 hover:bg-white/10 max-sm:size-9" title="Meira" />}
+        >
           <RotateCcw className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-48">
@@ -317,6 +350,13 @@ export function TopBar({
           </DropdownMenuItem>
           <DropdownMenuItem className="md:hidden" onClick={() => useBoardStore.getState().toggleSnap()}>
             {snap ? "✓ " : ""}Festa við grind
+          </DropdownMenuItem>
+          {/* Takkarnir sem eru faldir á síma (hidden sm:inline-flex í stikunni). */}
+          <DropdownMenuItem className="sm:hidden" onClick={() => onImportUrl?.()}>
+            🔗 Sækja af slóð
+          </DropdownMenuItem>
+          <DropdownMenuItem className="sm:hidden" onClick={() => onStrip?.()}>
+            🧹 Hreinsa teikningu
           </DropdownMenuItem>
           <DropdownMenuSeparator className="md:hidden" />
           <DropdownMenuItem onClick={() => void resetBoard()}>Sækja dæmiborð</DropdownMenuItem>
