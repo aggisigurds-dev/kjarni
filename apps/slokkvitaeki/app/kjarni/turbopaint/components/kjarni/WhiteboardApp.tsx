@@ -1,0 +1,657 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { downloadBlob, exportBoardJson, exportPdf, exportPngBlob, slug } from "../../lib/board/export-board";
+import { boardBounds, cameraFit, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
+import { classifyFile, importFiles } from "../../lib/board/import-files";
+import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
+import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
+import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
+import type { OcrWord } from "../../lib/board/firewall-rating";
+import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
+import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
+import { getRegisteredStage } from "../../lib/board/stage-ref";
+import { useBoardStore } from "../../lib/board/store";
+import type { BoardDocument, BoardObject } from "../../lib/board/types";
+import { BoardCanvas } from "./BoardCanvas";
+import { RightPanel } from "./RightPanel";
+import { StyleStrip, Toolbar } from "./Toolbar";
+import { SymbolTray } from "./SymbolTray";
+import { TopBar } from "./TopBar";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+
+type ExportScale = 1 | 2 | 3 | 4;
+
+function isTyping(el: EventTarget | null) {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+
+export function WhiteboardApp() {
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 1200, height: 800 });
+  const [exportOpen, setExportOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [calibratePx, setCalibratePx] = useState<number | null>(null);
+  const [calibrateMeters, setCalibrateMeters] = useState("10");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const hydrated = useBoardStore((s) => s.hydrated);
+  const importProgress = useBoardStore((s) => s.importProgress);
+  const objects = useBoardStore((s) => s.objects);
+  const camera = useBoardStore((s) => s.camera);
+
+  useEffect(() => {
+    void loadBoard();
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const unsub = useBoardStore.subscribe(schedulePersist);
+    return unsub;
+  }, [hydrated]);
+
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const measure = () => {
+      setSize({ width: el.clientWidth, height: el.clientHeight });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hydrated]);
+
+  const markFirewalls = useCallback(
+    async (
+      plans: typeof objects,
+      textByObjectId: Record<string, OcrWord[]> = {}
+    ) => {
+      const images = plans.filter((o): o is Extract<typeof o, { type: "image" }> => o.type === "image");
+      if (!images.length) {
+        toast.message("Ekkert gólfplön á borðinu til að merkja");
+        return;
+      }
+      const existing = useBoardStore
+        .getState()
+        .objects.filter((o) => isFirewallMark(o) || isMvsMark(o))
+        .map((o) => o.id);
+      if (existing.length) useBoardStore.getState().deleteIds(existing);
+      let total = 0;
+      let gear = 0;
+      try {
+        for (let i = 0; i < images.length; i++) {
+          const plan = images[i];
+          useBoardStore.getState().setImportProgress({
+            fileName: plan.name,
+            percent: 8,
+            message: `Les teikningu og 165.BR1 (${i + 1}/${images.length})…`,
+          });
+          const { objects: marks, hits, words } = await detectFirewallsOnPlan(plan, {
+            extraWords: textByObjectId[plan.id],
+            onProgress: (message, percent) =>
+              useBoardStore.getState().setImportProgress({
+                fileName: plan.name,
+                percent,
+                message,
+              }),
+          });
+          const equipment = placeMvs165Equipment(plan, words, {
+            pixelsPerMeter: useBoardStore.getState().pixelsPerMeter,
+          });
+          if (equipment.pixelsPerMeter && !useBoardStore.getState().pixelsPerMeter) {
+            useBoardStore.getState().setPixelsPerMeter(equipment.pixelsPerMeter);
+          }
+          const incomingMarks = [...marks, ...equipment.objects];
+          if (incomingMarks.length) useBoardStore.getState().addObjects(incomingMarks, false);
+          total += hits.length;
+          gear += equipment.objects.filter((o) => o.type === "symbol").length;
+        }
+        useBoardStore.getState().setImportProgress(null);
+        if (total || gear) {
+          toast.success(
+            `Merkti ${total} eldveggi og staðsetti slökkvitæki / slöngur / skilti skv. 165.BR1`
+          );
+        } else {
+          toast.message("Fann engin E-30 / E-60 eða SLT/BRSL merki á teikningunni");
+        }
+      } catch (err) {
+        useBoardStore.getState().setImportProgress(null);
+        toast.error(err instanceof Error ? err.message : "Gat ekki merkt eldveggi");
+      }
+    },
+    []
+  );
+
+  const runImport = useCallback(async (files: File[], world?: { x: number; y: number }) => {
+    const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
+    if (json) {
+      await importKjarniJson(json);
+      return;
+    }
+    const supported = files.filter((f) => classifyFile(f) !== "unknown");
+    if (!supported.length) {
+      toast.error("Stuðningur er við PDF, TIF, PNG, JPG og SVG.");
+      return;
+    }
+    const origin = world ?? {
+      x: boardBounds(useBoardStore.getState().objects).x,
+      y: boardBounds(useBoardStore.getState().objects).y + boardBounds(useBoardStore.getState().objects).height + 80,
+    };
+    try {
+      const { objects: incoming, warnings, textByObjectId } = await importFiles(
+        supported,
+        useBoardStore.getState().importQuality,
+        origin,
+        (fileName, percent, message) =>
+          useBoardStore.getState().setImportProgress({ fileName, percent, message })
+      );
+      useBoardStore.getState().setImportProgress(null);
+      if (!incoming.length) {
+        toast.error(warnings[0] || "Ekkert kom inn");
+        return;
+      }
+      const isPlan = supported.some((f) => {
+        const kind = classifyFile(f);
+        return kind === "pdf" || kind === "tiff";
+      });
+      const kit = isPlan ? incoming.flatMap((img) => markupKitForPlan(img)) : [];
+      useBoardStore.getState().addObjects([...incoming, ...kit], false);
+      useBoardStore.getState().setTool("select");
+      const bounds = boardBounds([...incoming, ...kit]);
+      const view = shellRef.current;
+      if (view) {
+        useBoardStore.getState().setCamera(cameraFit(bounds, view.clientWidth, view.clientHeight));
+      }
+      toast.success(
+        isPlan
+          ? "Gólfplön tilbúið — merki nú E-30 / E-60 eldveggi"
+          : incoming.length === 1
+            ? `${incoming[0].name} er á borðinu`
+            : `${incoming.length} síður settar á borðið`
+      );
+      warnings.forEach((w) => toast.message(w));
+      if (isPlan) {
+        await markFirewalls(incoming, textByObjectId);
+      }
+    } catch (err) {
+      useBoardStore.getState().setImportProgress(null);
+      toast.error(err instanceof Error ? err.message : "Innflutningur mistókst");
+    }
+  }, [markFirewalls]);
+
+  const openSamplePlan = useCallback(async () => {
+    try {
+      useBoardStore.getState().setImportProgress({
+        fileName: "golfplan.pdf",
+        percent: 4,
+        message: "Sæki gólfplön…",
+      });
+      const res = await fetch("/samples/golfplan.pdf");
+      if (!res.ok) throw new Error("Gat ekki sótt PDF skrána");
+      const blob = await res.blob();
+      const file = new File([blob], "golfplan.pdf", { type: "application/pdf" });
+      await clearBoard();
+      await runImport([file], { x: 80, y: 80 });
+      useBoardStore.getState().setName("Gólfplön");
+    } catch (err) {
+      useBoardStore.getState().setImportProgress(null);
+      toast.error(err instanceof Error ? err.message : "Gat ekki opnað PDF");
+    }
+  }, [runImport]);
+
+  const sampleOpened = useRef(false);
+  useEffect(() => {
+    if (!hydrated || sampleOpened.current) return;
+    if (new URLSearchParams(window.location.search).get("open") !== "golfplan") return;
+    sampleOpened.current = true;
+    window.history.replaceState({}, "", window.location.pathname);
+    void openSamplePlan();
+  }, [hydrated, openSamplePlan]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e.target)) return;
+      const meta = e.metaKey || e.ctrlKey;
+      const store = useBoardStore.getState();
+      if (e.code === "Space") {
+        e.preventDefault();
+        store.setSpacePan(true);
+      }
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) store.redo();
+        else store.undo();
+      }
+      if (meta && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        store.redo();
+      }
+      if (meta && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        store.duplicateSelected();
+      }
+      if (meta && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        store.setSelected(store.objects.filter((o) => !o.locked && !o.hidden).map((o) => o.id));
+      }
+      if (meta && e.key === "0") {
+        e.preventDefault();
+        const view = shellRef.current;
+        if (view) store.setCamera(cameraFit(boardBounds(store.objects), view.clientWidth, view.clientHeight));
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        store.deleteIds(store.selectedIds.filter((id) => !store.objects.find((o) => o.id === id)?.locked));
+      }
+      if (!meta && !e.altKey) {
+        const map: Record<string, Parameters<typeof store.setTool>[0]> = {
+          v: "select",
+          h: "hand",
+          r: "rect",
+          o: "ellipse",
+          l: "line",
+          a: "arrow",
+          w: "polyline",
+          p: "pen",
+          t: "text",
+          n: "sticky",
+          m: "measure",
+          s: "symbol",
+        };
+        const tool = map[e.key.toLowerCase()];
+        if (tool) store.setTool(tool);
+      }
+      if (e.key === "?") setHelpOpen(true);
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") useBoardStore.getState().setSpacePan(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, []);
+
+  const editing = objects.find((o) => o.id === editingId);
+
+  return (
+    <div
+      className="tp-root dark flex h-full min-h-0 flex-1 flex-col bg-[#0f1117] text-stone-100"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const symbolId = e.dataTransfer.getData(SYMBOL_DRAG_TYPE);
+        if (symbolId) {
+          const shell = shellRef.current;
+          if (!shell) return;
+          const rect = shell.getBoundingClientRect();
+          const world = worldFromScreen(
+            { x: e.clientX - rect.left, y: e.clientY - rect.top },
+            useBoardStore.getState().camera
+          );
+          const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
+          useBoardStore.getState().addObjects([obj], true);
+          useBoardStore.getState().setTool("select");
+          return;
+        }
+        const files = [...e.dataTransfer.files];
+        if (files.length) void runImport(files);
+      }}
+    >
+      <TopBar
+        onImport={(files) => void runImport(files)}
+        onExport={() => setExportOpen(true)}
+        onHelp={() => setHelpOpen(true)}
+        onOpenSample={() => void openSamplePlan()}
+        onMarkFirewalls={() => void markFirewalls(useBoardStore.getState().objects)}
+        viewSize={size}
+      />
+      <div className="flex min-h-0 flex-1">
+        <div
+          ref={shellRef}
+          className="relative min-w-0 flex-1 bg-[#ece7de]"
+          onDragEnter={() => setDragOver(true)}
+          onDragLeave={() => setDragOver(false)}
+        >
+          {hydrated ? (
+            <BoardCanvas
+              width={size.width}
+              height={size.height}
+              onEditText={setEditingId}
+              onFilesDropped={(files, world) => {
+                setDragOver(false);
+                void runImport(files, world);
+              }}
+              onSymbolDropped={(symbolId, world) => {
+                const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
+                useBoardStore.getState().addObjects([obj], true);
+                useBoardStore.getState().setTool("select");
+              }}
+              onCalibrate={setCalibratePx}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-stone-500">
+              <div className="text-center">
+                <div className="mb-3 text-3xl font-bold text-[#FE653F]">T</div>
+                <div className="text-lg font-medium text-stone-700">TurboPaint</div>
+                <div className="mt-1 text-sm">Hleð borði…</div>
+              </div>
+            </div>
+          )}
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute top-1/2 left-3 -translate-y-1/2">
+              <Toolbar />
+            </div>
+            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+              <SymbolTray />
+              <StyleStrip />
+            </div>
+          </div>
+          {dragOver ? (
+            <div className="pointer-events-none absolute inset-4 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#FE653F] bg-[#FE653F]/10">
+              <div className="rounded-xl bg-[#1a1d2e] px-6 py-4 text-center text-sm text-white shadow-xl">
+                Sleppið PDF, TIF eða mynd hér
+                <div className="mt-1 text-xs text-stone-400">Stórar skrár 5–30 MB eru unnar í vafranum</div>
+              </div>
+            </div>
+          ) : null}
+          {importProgress ? (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#0f1117]/50 backdrop-blur-[2px]">
+              <div className="w-[min(92vw,420px)] rounded-2xl border border-white/10 bg-[#1a1d2e] p-5 shadow-2xl">
+                <div className="text-sm font-medium">Flyt inn {importProgress.fileName}</div>
+                <div className="mt-1 text-xs text-stone-400">{importProgress.message}</div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full bg-[#FE653F] transition-all"
+                    style={{ width: `${importProgress.percent}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {editing && (editing.type === "text" || editing.type === "sticky") ? (
+            <TextEditor obj={editing} camera={camera} onClose={() => setEditingId(null)} />
+          ) : null}
+          {!objects.length && hydrated ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="rounded-2xl border border-stone-300 bg-white/90 px-8 py-6 text-center shadow-lg">
+                <div className="text-base font-medium text-stone-800">Tómt hvítu borð</div>
+                <div className="mt-1 max-w-sm text-sm text-stone-500">
+                  Dragðu inn gólfplön sem PDF eða TIF — síðan teiknarðu línur, örvar og brunavarnatákn ofan á.
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="hidden lg:block">
+          <RightPanel />
+        </div>
+      </div>
+      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <Dialog open={calibratePx !== null} onOpenChange={(o) => !o && setCalibratePx(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Kvarða gólfplön</DialogTitle>
+            <DialogDescription>
+              Þú mældir {calibratePx ? Math.round(calibratePx) : 0} px. Sláðu inn raunlengd svo mælingar
+              sýnist í metrum.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={calibrateMeters}
+            onChange={(e) => setCalibrateMeters(e.target.value)}
+            inputMode="decimal"
+            placeholder="Lengd í metrum"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCalibratePx(null)}>
+              Hætta við
+            </Button>
+            <Button
+              onClick={() => {
+                const meters = Number(calibrateMeters.replace(",", "."));
+                if (!calibratePx || !meters) return;
+                useBoardStore.getState().setPixelsPerMeter(calibratePx / meters);
+                toast.success("Kvarði stilltur");
+                setCalibratePx(null);
+              }}
+            >
+              Vista kvarða
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function TextEditor({
+  obj,
+  camera,
+  onClose,
+}: {
+  obj: Extract<BoardObject, { type: "text" | "sticky" }>;
+  camera: { x: number; y: number; scale: number };
+  onClose: () => void;
+}) {
+  const pos = screenFromWorld({ x: obj.x, y: obj.y }, camera);
+  const [value, setValue] = useState(obj.text);
+  return (
+    <textarea
+      autoFocus
+      value={value}
+      onChange={(e) => {
+        setValue(e.target.value);
+        useBoardStore.getState().patchObject(obj.id, { text: e.target.value }, false);
+      }}
+      onBlur={onClose}
+      className="absolute z-20 resize-none rounded-md border border-[#FE653F] bg-white p-2 text-stone-900 shadow-xl outline-none"
+      style={{
+        left: pos.x,
+        top: pos.y,
+        width: Math.max(160, obj.width * camera.scale),
+        height: obj.type === "sticky" ? obj.height * camera.scale : 80,
+        fontSize: (obj.type === "sticky" ? obj.fontSize : obj.fontSize) * camera.scale,
+        background: obj.type === "sticky" ? obj.fill : "#fff",
+      }}
+    />
+  );
+}
+
+function ExportDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [target, setTarget] = useState<"board" | "viewport">("board");
+  const [scale, setScale] = useState<ExportScale>(3);
+  const [busy, setBusy] = useState(false);
+  const name = useBoardStore((s) => s.name);
+
+  async function run(kind: "png" | "pdf" | "json") {
+    const stage = getRegisteredStage();
+    const state = useBoardStore.getState();
+    setBusy(true);
+    try {
+      if (kind === "json") {
+        await exportBoardJson(
+          {
+            version: 1,
+            name: state.name,
+            objects: state.objects,
+            camera: state.camera,
+            pixelsPerMeter: state.pixelsPerMeter,
+            grid: state.grid,
+            snap: state.snap,
+            assetIds: [],
+          },
+          state.objects
+        );
+      } else if (!stage) {
+        toast.error("Borðið er ekki tilbúið");
+      } else if (kind === "png") {
+        const blob = await exportPngBlob(stage, state.objects, target, scale);
+        downloadBlob(blob, `${slug(name)}.png`);
+      } else {
+        await exportPdf(stage, state.objects, target, scale, name);
+      }
+      toast.success("Útflutningur tilbúinn");
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Útflutningur mistókst");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Flytja út í háum gæðum</DialogTitle>
+          <DialogDescription>
+            PNG og PDF eru teiknuð af öllu borðinu eða því sem þú sérð. JSON vistar borðið með
+            innfelldum gólfplönum.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">
+            <span className="text-muted-foreground">Svæði</span>
+            <select
+              value={target}
+              onChange={(e) => setTarget(e.target.value as typeof target)}
+              className="h-8 rounded-lg border bg-background px-2"
+            >
+              <option value="board">Allt borðið</option>
+              <option value="viewport">Sýnilegt svæði</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-muted-foreground">Upplausn</span>
+            <select
+              value={scale}
+              onChange={(e) => setScale(Number(e.target.value) as ExportScale)}
+              className="h-8 rounded-lg border bg-background px-2"
+            >
+              <option value={1}>1× skjár</option>
+              <option value={2}>2× skörp</option>
+              <option value={3}>3× prentgæði</option>
+              <option value={4}>4× hámark</option>
+            </select>
+          </label>
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button variant="outline" disabled={busy} onClick={() => void run("json")}>
+            JSON afrit
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={busy} onClick={() => void run("pdf")}>
+              PDF
+            </Button>
+            <Button disabled={busy} onClick={() => void run("png")}>
+              PNG
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HelpDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Flýtilyklar</DialogTitle>
+          <DialogDescription>Sama hugsun og á Miro — borðið er óendanlegt, hold space til að færa.</DialogDescription>
+        </DialogHeader>
+        <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+          {[
+            ["V", "Velja"],
+            ["H / space", "Færa borð"],
+            ["R / O", "Ferningur / hringur"],
+            ["L / A", "Lína / ör"],
+            ["W", "Veggir (smelltu, Enter til að loka)"],
+            ["P / T / N", "Penni / texti / minnismiði"],
+            ["S", "Brunavarnatákn"],
+            ["M", "Mæla"],
+            ["⌘Z / ⌘⇧Z", "Afturkalla / endurtaka"],
+            ["⌘D", "Afrita val"],
+            ["Delete", "Eyða"],
+            ["⌘0", "Passa á skjá"],
+            ["Hjól", "Aðdráttur"],
+            ["Velja + draga", "Færa innflutt skjal"],
+          ].map(([k, v]) => (
+            <li key={k} className="flex justify-between gap-3">
+              <span className="font-mono text-xs text-muted-foreground">{k}</span>
+              <span>{v}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted-foreground">
+          Við innflutning merkir TurboPaint E-30/E-60 eldveggi og staðsetur slökkvitæki, brunaslöngur og
+          skilti skv. leiðbeiningum Brunamálastofnunar{" "}
+          <a className="underline" href="/docs/MVS-165_BR1.pdf" target="_blank" rel="noreferrer">
+            165.BR1
+          </a>
+          : nærri útgöngum, mest 25&nbsp;m göngufjarlægð, varnarstaður (slanga + tæki), og skilti ef tæki
+          sést ekki. Handfang í 70–80&nbsp;cm.
+        </p>
+        <DialogFooter>
+          <Button onClick={() => {
+            useBoardStore.getState().setTool("calibrate");
+            onOpenChange(false);
+            toast.message("Teiknaðu línu á þekkta lengd á gólfplaninu");
+          }}>
+            Stilltu kvarða
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+async function importKjarniJson(file: File) {
+  const data = JSON.parse(await file.text()) as BoardDocument & {
+    images?: Record<string, string>;
+  };
+  if (!Array.isArray(data.objects)) throw new Error("Ógild borðskrá");
+  if (data.images) {
+    for (const [id, url] of Object.entries(data.images)) {
+      await putAsset(id, await dataUrlToBlob(url));
+    }
+  }
+  useBoardStore.getState().replaceBoard({
+    name: data.name || file.name,
+    objects: (data.version ?? 1) < 2 ? migrateBoardObjects(data.objects) : data.objects,
+    camera: data.camera,
+    pixelsPerMeter: data.pixelsPerMeter,
+    grid: data.grid ?? true,
+    snap: data.snap ?? true,
+  });
+  toast.success("Borð opnað");
+}

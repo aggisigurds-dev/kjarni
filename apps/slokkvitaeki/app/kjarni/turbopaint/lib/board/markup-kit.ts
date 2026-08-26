@@ -1,0 +1,78 @@
+import { newId } from "./ids";
+import { getSymbol } from "./symbols";
+import type { BoardObject, ImageObject, StickyObject, SymbolObject } from "./types";
+
+export function makeSymbol(
+  symbolId: string,
+  x: number,
+  y: number,
+  label?: string,
+  size = 64
+): SymbolObject {
+  const def = getSymbol(symbolId);
+  const text = label ?? def.name;
+  return {
+    id: newId(),
+    type: "symbol",
+    symbolId,
+    x,
+    y,
+    size,
+    label: text,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    name: text,
+  };
+}
+
+function note(x: number, y: number, text: string, fill: string): StickyObject {
+  return {
+    id: newId(),
+    type: "sticky",
+    x,
+    y,
+    width: 240,
+    height: 150,
+    text,
+    fill,
+    fontSize: 16,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    name: "Minnispunktur",
+  };
+}
+
+export function markupKitForPlan(plan: Pick<ImageObject, "id" | "x" | "y" | "width" | "height">): BoardObject[] {
+  return [
+    note(
+      plan.x + plan.width + 48,
+      plan.y,
+      "Staðsetning slökkvitækja, brunaslangna og skilta fylgir 165.BR1. Dragðu tákn til og bættu við af bakkanum neðst.",
+      "#fde047"
+    ),
+  ].map((obj) => ({ ...obj, parentId: plan.id }));
+}
+
+export const TRAY_SYMBOLS = [
+  "extinguisher",
+  "sign-extinguisher",
+  "hose",
+  "sign-hose",
+  "hydrant",
+  "alarm",
+  "detector",
+  "blanket",
+  "exit",
+  "assembly",
+  "firstaid",
+  "electric",
+  "firedoor",
+  "firewall",
+  "nosmoke",
+] as const;
+
+export const SYMBOL_DRAG_TYPE = "application/x-turbopaint-symbol";

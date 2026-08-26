@@ -61,7 +61,7 @@ const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "🗂️", nafn: "Skjalarinn", desc: "Skjöl · pdf · skrár", tag: "Tól", ready: true, href: "/skjalarinn" },
       { icon: "🧊", nafn: "3dwork", desc: "STL/mesh vinnustöð", tag: "Tól", ready: true, href: "/3dwork" },
       { icon: "✎", nafn: "Prufusvæði", desc: "Blokkir · þemu · skikt", tag: "Tól", ready: true, href: "/draft" },
-      { icon: "🖌️", nafn: "TurboPaint", desc: "Gólfplan · teikniborð", tag: "Tól", ready: true, href: "/kjarni/turbopaint" },
+      { icon: "🖌️", nafn: "TurboPaint", desc: "Gólfplön · PDF/TIF hvítu borð", tag: "Tól", ready: true, href: "/kjarni/turbopaint" },
       { icon: "💳", nafn: "Payday", desc: "Reikningar", tag: "Verkfæri", ready: false },
       { icon: "📘", nafn: "Facebook", desc: "Tenging", tag: "Verkfæri", ready: false },
     ],
