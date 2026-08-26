@@ -60,6 +60,7 @@ export function WhiteboardApp() {
   // Eiginleika-panellinn sem yfirlag á síma/spjaldtölvu (< lg) — á desktop er
   // hann fastur dálkur til hægri eins og áður.
   const [panelOpen, setPanelOpen] = useState(false);
+  const markBusyRef = useRef(false);
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);
   const objects = useBoardStore((s) => s.objects);
@@ -101,6 +102,13 @@ export function WhiteboardApp() {
         toast.message("Ekkert gólfplön á borðinu til að merkja");
         return;
       }
+      // Tvísmellur á E-30/E-60 meðan greining keyrir tvöfaldaði minnisálagið
+      // og átti sinn þátt í frystingunni — ein keyrsla í einu.
+      if (markBusyRef.current) {
+        toast.message("Eldveggja-greining er þegar í gangi — augnablik…");
+        return;
+      }
+      markBusyRef.current = true;
       const existing = useBoardStore
         .getState()
         .objects.filter((o) => isFirewallMark(o) || isMvsMark(o))
@@ -135,6 +143,8 @@ export function WhiteboardApp() {
           if (incomingMarks.length) useBoardStore.getState().addObjects(incomingMarks, false);
           total += hits.length;
           gear += equipment.objects.filter((o) => o.type === "symbol").length;
+          // Öndun milli teikninga — látum React mála framvinduna og GC hreinsa
+          await new Promise((resolve) => setTimeout(resolve, 60));
         }
         useBoardStore.getState().setImportProgress(null);
         if (total || gear) {
@@ -147,6 +157,8 @@ export function WhiteboardApp() {
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         toast.error(err instanceof Error ? err.message : "Gat ekki merkt eldveggi");
+      } finally {
+        markBusyRef.current = false;
       }
     },
     []
@@ -544,7 +556,12 @@ export function WhiteboardApp() {
         }}
         onHelp={() => setHelpOpen(true)}
         onOpenSample={() => void openSamplePlan()}
-        onMarkFirewalls={() => void markFirewalls(useBoardStore.getState().objects)}
+        onMarkFirewalls={() => {
+          // Sé teikning valin er AÐEINS hún greind — annars allar á borðinu.
+          const st = useBoardStore.getState();
+          const chosen = st.objects.filter((o) => o.type === "image" && st.selectedIds.includes(o.id));
+          void markFirewalls(chosen.length ? chosen : st.objects);
+        }}
         onStrip={() => {
           const plan = resolvePlan();
           if (!plan) {

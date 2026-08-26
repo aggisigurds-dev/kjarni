@@ -16,47 +16,59 @@ export const FIREWALL_MARK_NAMES = ["Eldveggur", "Eldhurð", "Eldveggir"] as con
 
 const OCR_MAX = 5200;
 const OCR_MIN = 3600;
+/** Veggja-rakningin þarf ekki fulla upplausn — 4200px á lengri hlið dugar og
+ * getImageData verður ~45 MB í stað ~280 MB á permalink-teikningu (9933px).
+ * Full upplausn þarna var það sem frysti símann/vafrann. */
+const TRACE_MAX = 4200;
+
+const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /** Svart blek á hvítu fyrir OCR: rauð/bleik ský og lituð yfirstrikun sem
- * liggja yfir EI-merkingum á skönnuðum teikningum drekkja textanum annars. */
-function binarizeForOcr(canvas: HTMLCanvasElement) {
+ * liggja yfir EI-merkingum á skönnuðum teikningum drekkja textanum annars.
+ * Keyrt í bútum með yield svo aðalþráðurinn frjósi ekki (19M+ pixlar). */
+async function binarizeForOcr(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = image.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    const max = Math.max(r, g, b);
-    const sat = max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
-    const ink = data[i + 3] > 60 && lum < 165 && sat < 0.45;
-    const v = ink ? 0 : 255;
-    data[i] = v;
-    data[i + 1] = v;
-    data[i + 2] = v;
-    data[i + 3] = 255;
+  const chunk = 2_000_000; // ~500k pixlar per bút
+  for (let start = 0; start < data.length; start += chunk) {
+    const end = Math.min(data.length, start + chunk);
+    for (let i = start; i < end; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const max = Math.max(r, g, b);
+      const sat = max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
+      const ink = data[i + 3] > 60 && lum < 165 && sat < 0.45;
+      const v = ink ? 0 : 255;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+    }
+    await yieldToUi();
   }
   ctx.putImageData(image, 0, 0);
 }
 
-function fitOcrCanvas(source: HTMLCanvasElement) {
+/** Niðurskaluð kópía (litir halda sér). scale = dst/src. */
+function fitCanvas(source: HTMLCanvasElement, maxLongest: number, minLongest = 0) {
   const longest = Math.max(source.width, source.height);
   let scale = 1;
-  if (longest > OCR_MAX) scale = OCR_MAX / longest;
-  else if (longest < OCR_MIN) scale = OCR_MIN / longest;
+  if (longest > maxLongest) scale = maxLongest / longest;
+  else if (minLongest && longest < minLongest) scale = minLongest / longest;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(source.width * scale));
   canvas.height = Math.max(1, Math.round(source.height * scale));
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Gat ekki stillt mynd fyrir OCR");
+  if (!ctx) throw new Error("Gat ekki stillt mynd fyrir greiningu");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  binarizeForOcr(canvas);
   return { canvas, scale };
 }
 
@@ -231,11 +243,11 @@ function mapCcwRotatedWord(word: OcrWord, srcWidth: number): OcrWord {
 }
 
 async function ocrPlan(
-  source: HTMLCanvasElement,
+  prepared: { canvas: HTMLCanvasElement; scale: number },
   extra: OcrWord[],
   onProgress?: (message: string, percent: number) => void
 ) {
-  const { canvas, scale } = fitOcrCanvas(source);
+  const { canvas, scale } = prepared;
   const worker = await getWorker(onProgress);
   await worker.setParameters({
     tessedit_pageseg_mode: "11",
@@ -253,11 +265,15 @@ async function ocrPlan(
   const vertCcw = await worker.recognize(rotatedCcw, {}, { blocks: true, text: true });
   rotatedCcw.width = 0;
   rotatedCcw.height = 0;
+  const srcW = canvas.width;
+  const srcH = canvas.height;
+  canvas.width = 0;
+  canvas.height = 0;
 
   const words = [
     ...wordsFromResult(horiz.data, false),
-    ...wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, canvas.height)),
-    ...wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, canvas.width)),
+    ...wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, srcH)),
+    ...wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, srcW)),
   ].map((w) => ({
     ...w,
     x: w.x / scale,
@@ -497,26 +513,51 @@ export async function detectFirewallsOnPlan(
   }
 ): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[] }> {
   const canvas = await loadPlanCanvas(plan);
-  const sx = plan.width / canvas.width;
-  const sy = plan.height / canvas.height;
+  const srcW = canvas.width;
+  const srcH = canvas.height;
+  const sx = plan.width / srcW;
+  const sy = plan.height / srcH;
   const extra = options?.extraWords ?? [];
 
-  const { words, hits: rawHits } = await ocrPlan(canvas, extra, options?.onProgress);
-  const hits = rawHits.filter((hit) => !inTitleBlock(hit, canvas.width, canvas.height));
+  // Bæði vinnslu-afritin STRAX og risastóra frumritið losað — full upplausn
+  // (permalink-TIF 9933×7016 ≈ 280 MB per getImageData) er það sem frysti
+  // vafrann/símann. OCR fær binaríseraða afritið, rakningin lit-afritið.
+  options?.onProgress?.("Undirbý greiningu…", 20);
+  const ocrFit = fitCanvas(canvas, OCR_MAX, OCR_MIN);
+  const traceFit = fitCanvas(canvas, TRACE_MAX);
+  canvas.width = 0;
+  canvas.height = 0;
+  await binarizeForOcr(ocrFit.canvas);
 
-  const ctx = canvas.getContext("2d");
+  const { words, hits: rawHits } = await ocrPlan(ocrFit, extra, options?.onProgress);
+  const hits = rawHits.filter((hit) => !inTitleBlock(hit, srcW, srcH));
+
+  const ctx = traceFit.canvas.getContext("2d");
   if (!ctx) throw new Error("Gat ekki lesið pixla");
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const image = ctx.getImageData(0, 0, traceFit.canvas.width, traceFit.canvas.height);
+  const tw = traceFit.canvas.width;
+  const th = traceFit.canvas.height;
+  const ts = traceFit.scale;
+  traceFit.canvas.width = 0;
+  traceFit.canvas.height = 0;
   const objects: BoardObject[] = [];
   const counts = new Map<string, number>();
 
   for (const hit of hits) {
     counts.set(hit.rating.label, (counts.get(hit.rating.label) ?? 0) + 1);
-    const local = traceWall(image.data, canvas.width, canvas.height, hit);
+    const traceHit = {
+      ...hit,
+      x: hit.x * ts,
+      y: hit.y * ts,
+      width: hit.width * ts,
+      height: hit.height * ts,
+    };
+    const local = traceWall(image.data, tw, th, traceHit);
     const world: number[] = [];
     for (let i = 0; i < local.length; i += 2) {
-      world.push(plan.x + local[i] * sx, plan.y + local[i + 1] * sy);
+      world.push(plan.x + (local[i] / ts) * sx, plan.y + (local[i + 1] / ts) * sy);
     }
+    await yieldToUi();
     const name = hit.rating.smoke
       ? `Eldhurð ${hit.rating.label}`
       : `Eldveggur ${hit.rating.label}`;
@@ -560,8 +601,6 @@ export async function detectFirewallsOnPlan(
     });
   }
 
-  canvas.width = 0;
-  canvas.height = 0;
   return {
     objects: objects.map((obj) => ({ ...obj, parentId: plan.id })),
     hits,
