@@ -4,7 +4,7 @@ import type Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import { toast } from "sonner";
-import { boardBounds, cameraFit, dashArray, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
+import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
@@ -86,6 +86,11 @@ export function BoardCanvas({
     registerStage(stageRef.current);
     return () => registerStage(null);
   }, [width, height]);
+
+  // Snap notar sama bil og grindin TEIKNAST með á núverandi zoomi.
+  useEffect(() => {
+    useBoardStore.getState().setGridGap(effectiveGridGap(camera, width, height));
+  }, [camera, width, height]);
 
   // Hand mode: left button behaves like select ("choose"), the pan itself
   // lives on right-button drag (touch/pen still pan with the primary pointer).

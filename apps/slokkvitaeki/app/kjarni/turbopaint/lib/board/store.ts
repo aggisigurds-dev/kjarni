@@ -38,6 +38,9 @@ interface BoardStore {
   /** Cloud sync status for the current board (shown in the TopBar). */
   syncState: "idle" | "saving" | "synced" | "error";
   setSyncState: (s: "idle" | "saving" | "synced" | "error") => void;
+  /** Bilið sem grindin sést með á núverandi zoomi — snap notar sama bil. */
+  gridGap: number;
+  setGridGap: (gap: number) => void;
   style: StyleState;
   past: BoardObject[][];
   future: BoardObject[][];
@@ -100,6 +103,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   spacePan: false,
   syncState: "idle",
   setSyncState: (syncState) => set({ syncState }),
+  gridGap: GRID_GAP,
+  setGridGap: (gridGap) => set({ gridGap }),
   style: {
     stroke: "#1c1917",
     fill: "transparent",
@@ -283,9 +288,10 @@ function pushHistory(
 export { newId } from "./ids";
 
 export function snapPoint(x: number, y: number) {
-  const { snap } = useBoardStore.getState();
+  const { snap, gridGap } = useBoardStore.getState();
+  const gap = gridGap || GRID_GAP;
   return {
-    x: snapValue(x, GRID_GAP, snap),
-    y: snapValue(y, GRID_GAP, snap),
+    x: snapValue(x, gap, snap),
+    y: snapValue(y, gap, snap),
   };
 }

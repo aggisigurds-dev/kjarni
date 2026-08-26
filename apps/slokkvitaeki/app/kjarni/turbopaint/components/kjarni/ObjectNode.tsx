@@ -13,6 +13,7 @@ import {
 } from "react-konva";
 import { getAssetUrl } from "../../lib/board/assets";
 import { dashArray, formatLength, lineLength } from "../../lib/board/geometry";
+import { snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
 import { SymbolNode } from "./SymbolNode";
 
@@ -79,6 +80,15 @@ export function ObjectNode({
     visible: !obj.hidden,
     draggable,
     listening,
+    // „Festa við grind": hluturinn smellur á sýnilegu grindina MEÐAN dregið
+    // er (ekki bara við sleppingu). dragBoundFunc fær absolute/skjá-hnit.
+    dragBoundFunc(pos: { x: number; y: number }) {
+      const s = useBoardStore.getState();
+      if (!s.snap) return pos;
+      const cam = s.camera;
+      const sn = snapPoint((pos.x - cam.x) / cam.scale, (pos.y - cam.y) / cam.scale);
+      return { x: sn.x * cam.scale + cam.x, y: sn.y * cam.scale + cam.y };
+    },
     onClick: (e: { evt: MouseEvent; cancelBubble: boolean }) => {
       e.cancelBubble = true;
       onClick(obj.id, e.evt.shiftKey);
