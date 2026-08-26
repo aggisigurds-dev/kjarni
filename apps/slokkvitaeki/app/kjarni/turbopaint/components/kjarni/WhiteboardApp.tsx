@@ -378,7 +378,6 @@ export function WhiteboardApp() {
   // Copy → paste permalink beint á borðið.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (isTyping(e.target)) return;
       const text = e.clipboardData?.getData("text")?.trim() ?? "";
       if (!/^https?:\/\//i.test(text)) return;
       let host = "";
@@ -387,8 +386,12 @@ export function WhiteboardApp() {
       } catch {
         return;
       }
+      const archive = host === "skjalasafn.reykjavik.is";
+      // Skjalasafns-permalink er ALLTAF innflutningur — líka þótt fókusinn
+      // sitji óvart í nafnareitnum (slóðin límdist þar inn og skemmdi nafnið).
+      if (isTyping(e.target) && !archive) return;
       const fileLike = /\.(tiff?|pdf|png|jpe?g|webp|info)([?#]|$)/i.test(text);
-      if (host === "skjalasafn.reykjavik.is" || fileLike) {
+      if (archive || fileLike) {
         e.preventDefault();
         void runUrlImport(text);
       }
