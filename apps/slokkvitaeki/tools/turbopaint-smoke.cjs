@@ -94,7 +94,7 @@ function report(name, ok, extra) {
   try {
     await page.locator('button[title*="Borðin mín"]').click();
     await page.getByText("➕ Nýtt borð").click();
-    await page.waitForTimeout(1400); // createBoard + 300ms fókus-tímastilling
+    await page.waitForTimeout(1600); // createBoard + fókus-stiginn (nær upp í 1150ms)
     await page.keyboard.type(smokeName, { delay: 40 });
     await page.waitForTimeout(300);
     const v = await nameInput.inputValue();
