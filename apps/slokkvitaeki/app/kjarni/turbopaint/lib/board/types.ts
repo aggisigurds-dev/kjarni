@@ -133,6 +133,9 @@ export interface BoardDocument {
   boardId?: string;
   /** ISO timestamp of the last local save — last-write-wins between devices. */
   updatedAt?: string;
+  /** Sync-samningur klientsins. 2 = efnis-stimplun (PR #59+). Pull hunsar
+   * skjöl án syncRev — þau koma frá eldri, óöruggum klientum. */
+  syncRev?: number;
 }
 
 export const IMPORT_MAX_PX: Record<ImportQuality, number> = {
