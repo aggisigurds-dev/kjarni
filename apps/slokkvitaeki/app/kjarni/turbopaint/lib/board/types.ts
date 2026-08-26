@@ -43,6 +43,8 @@ interface BaseObject {
   name: string;
   /** When set, this object moves with the imported page (image) it belongs to. */
   parentId?: string;
+  /** Objects sharing a groupId select and move as one unit (Hópa / ⌘G). */
+  groupId?: string;
 }
 
 export interface ImageObject extends BaseObject {

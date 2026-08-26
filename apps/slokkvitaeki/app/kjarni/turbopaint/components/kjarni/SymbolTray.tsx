@@ -33,8 +33,10 @@ export function SymbolTray() {
             onClick={() => {
               setStyle({ symbolId: id });
               if (id === "firewall") {
-                setTool("firewall");
-                toast.message("Eldveggur: smelltu eftir veggnum — Enter eða tvísmelltu til að ljúka");
+                useBoardStore.getState().startFirewall();
+                toast.message(
+                  "Eldveggur: smelltu horn af horni eftir veggnum — Enter lýkur vegg, tólið helst virkt. Litur og breidd í stikunni að neðan."
+                );
               } else {
                 setTool("symbol");
               }

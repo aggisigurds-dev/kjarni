@@ -49,6 +49,7 @@ interface BoardStore {
   setImportProgress: (p: ImportProgress | null) => void;
   setSpacePan: (v: boolean) => void;
   setStyle: (partial: Partial<StyleState>) => void;
+  startFirewall: () => void;
   setSelected: (ids: string[]) => void;
   replaceBoard: (data: {
     name: string;
@@ -69,6 +70,8 @@ interface BoardStore {
   bringForward: () => void;
   sendBackward: () => void;
   duplicateSelected: () => void;
+  groupSelected: () => void;
+  ungroupSelected: () => void;
   lockSelected: (locked: boolean) => void;
   undo: () => void;
   redo: () => void;
@@ -114,6 +117,16 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   setImportProgress: (importProgress) => set({ importProgress }),
   setSpacePan: (spacePan) => set({ spacePan }),
   setStyle: (partial) => set({ style: { ...get().style, ...partial } }),
+  startFirewall: () => {
+    // Default eldveggur to red, but respect a colour the user already picked;
+    // width/dash always stay as pre-chosen in the StyleStrip.
+    const st = get().style;
+    set({
+      style: st.stroke === "#1c1917" ? { ...st, stroke: "#e11d2e" } : st,
+      tool: "firewall",
+      selectedIds: [],
+    });
+  },
   setSelected: (selectedIds) => set({ selectedIds }),
   replaceBoard: (data) =>
     set({
@@ -179,14 +192,43 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
   duplicateSelected: () => {
     const { objects, selectedIds } = get();
+    const groupMap = new Map<string, string>();
     const copies = objects
       .filter((o) => selectedIds.includes(o.id) && !o.locked)
-      .map((o) => ({ ...structuredClone(o), id: newId(), x: o.x + 24, y: o.y + 24 }));
+      .map((o) => {
+        const copy = { ...structuredClone(o), id: newId(), x: o.x + 24, y: o.y + 24 };
+        if (copy.groupId) {
+          if (!groupMap.has(copy.groupId)) groupMap.set(copy.groupId, newId());
+          copy.groupId = groupMap.get(copy.groupId);
+        }
+        return copy;
+      });
     if (!copies.length) return;
     pushHistory(set, get);
     set({
       objects: [...objects, ...copies],
       selectedIds: copies.map((o) => o.id),
+    });
+  },
+  groupSelected: () => {
+    const { selectedIds } = get();
+    if (selectedIds.length < 2) return;
+    pushHistory(set, get);
+    const gid = newId();
+    const idSet = new Set(selectedIds);
+    set({
+      objects: get().objects.map((o) => (idSet.has(o.id) ? { ...o, groupId: gid } : o)),
+    });
+  },
+  ungroupSelected: () => {
+    const { selectedIds } = get();
+    if (!selectedIds.length) return;
+    pushHistory(set, get);
+    const idSet = new Set(selectedIds);
+    set({
+      objects: get().objects.map((o) =>
+        idSet.has(o.id) && o.groupId ? { ...o, groupId: undefined } : o
+      ),
     });
   },
   lockSelected: (locked) => {

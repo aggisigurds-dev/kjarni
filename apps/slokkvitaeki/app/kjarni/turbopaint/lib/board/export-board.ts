@@ -4,9 +4,9 @@ import { blobToDataUrl, getAssetBlob } from "./assets";
 import { boardBounds } from "./geometry";
 import type { BoardDocument, BoardObject } from "./types";
 
-const MAX_EXPORT_EDGE = 8192;
+const MAX_EXPORT_EDGE = 14000;
 
-export type ExportTarget = "viewport" | "board";
+export type ExportTarget = "viewport" | "board" | "selection";
 export type ExportScale = 1 | 2 | 3 | 4;
 
 function hideUi(stage: Konva.Stage) {
