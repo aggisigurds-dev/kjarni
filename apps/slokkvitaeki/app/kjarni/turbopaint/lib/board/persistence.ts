@@ -43,6 +43,13 @@ let lastContentJson = "";
 let lastUpdatedAt = "";
 let dirtySincePush = false;
 
+/** Ský-lestur má ALDREI halda hydration í gíslingu: fetch hefur ekkert
+ * sjálfgefið tímamark, svo hangandi net (símkerfi á flakki) myndi annars
+ * frysta persist-áskriftina — og allt sem gert er á meðan vistast hvergi. */
+function timeoutSignal(ms: number): AbortSignal | undefined {
+  return typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(ms) : undefined;
+}
+
 function contentSnapshot() {
   const state = useBoardStore.getState();
   return JSON.stringify({
@@ -166,13 +173,15 @@ async function pushBoard() {
   try {
     const doc = docFromState();
     await pushAssets(doc);
-    const { error } = await sb.from("turbopaint_boards").upsert({
+    const upsert = sb.from("turbopaint_boards").upsert({
       id: currentBoardId,
       name: doc.name,
       doc,
       deleted: false,
       updated_at: doc.updatedAt,
     });
+    const sig = timeoutSignal(15000);
+    const { error } = await (sig ? upsert.abortSignal(sig) : upsert);
     if (error) throw error;
     dirtySincePush = false;
     useBoardStore.getState().setSyncState("synced");
@@ -201,11 +210,12 @@ export async function pullIfNewer() {
   // yfir vinnu sem hefur ekki náð að ýtast ("datt allt út"-veilan).
   if (dirtySincePush) return;
   try {
-    const { data } = await sb
+    const query = sb
       .from("turbopaint_boards")
       .select("doc, updated_at, deleted")
-      .eq("id", currentBoardId)
-      .maybeSingle();
+      .eq("id", currentBoardId);
+    const sig = timeoutSignal(6000);
+    const { data } = await (sig ? query.abortSignal(sig) : query).maybeSingle();
     if (!data || data.deleted) return;
     const remoteDoc = data.doc as BoardDocument;
     // Ýting frá GÖMLUM klient (ekkert syncRev = stimplar á ýtingar-tíma og
@@ -251,11 +261,12 @@ async function openBoardId(id: string, fallbackDoc?: BoardDocument) {
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data } = await sb
+      const query = sb
         .from("turbopaint_boards")
         .select("doc, updated_at, deleted")
-        .eq("id", id)
-        .maybeSingle();
+        .eq("id", id);
+      const sig = timeoutSignal(6000);
+      const { data } = await (sig ? query.abortSignal(sig) : query).maybeSingle();
       const remoteDoc = (data && !data.deleted ? (data.doc as BoardDocument) : null) ?? null;
       const remoteTime = remoteDoc?.updatedAt ?? (data?.updated_at as string | undefined) ?? "";
       if (remoteDoc && (!local || remoteTime > (local.updatedAt ?? ""))) {
@@ -382,12 +393,14 @@ async function fetchRemoteBoards(): Promise<{ rows: BoardListEntry[]; ok: boolea
   const sb = getSupabase();
   if (!sb) return { rows: [], ok: true };
   try {
-    const { data, error } = await sb
+    const query = sb
       .from("turbopaint_boards")
       .select("id, name, updated_at")
       .eq("deleted", false)
       .order("updated_at", { ascending: false })
       .limit(100);
+    const sig = timeoutSignal(4000);
+    const { data, error } = await (sig ? query.abortSignal(sig) : query);
     if (error) throw error;
     return {
       ok: true,
@@ -448,7 +461,9 @@ export async function deleteCurrentBoard() {
   const sb = getSupabase();
   if (sb) {
     try {
-      await sb.from("turbopaint_boards").update({ deleted: true }).eq("id", id);
+      const query = sb.from("turbopaint_boards").update({ deleted: true }).eq("id", id);
+      const sig = timeoutSignal(6000);
+      await (sig ? query.abortSignal(sig) : query);
     } catch {
       // offline — row hverfur úr listanum næst þegar eyðingin nær í gegn
     }

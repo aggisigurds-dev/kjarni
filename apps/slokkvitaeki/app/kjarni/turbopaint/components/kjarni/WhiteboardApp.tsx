@@ -73,6 +73,9 @@ export function WhiteboardApp() {
   useEffect(() => {
     if (!hydrated) return;
     const unsub = useBoardStore.subscribe(schedulePersist);
+    // Breytingar sem notandinn gerði MEÐAN hleðslan stóð yfir (t.d. skírði
+    // borðið á hægu neti) gerðust fyrir áskriftina — grípum þær núna.
+    schedulePersist();
     return unsub;
   }, [hydrated]);
 
