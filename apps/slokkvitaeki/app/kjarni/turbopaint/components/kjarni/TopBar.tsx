@@ -83,13 +83,20 @@ export function TopBar({
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
   // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
-  // valmyndar-takkann þegar valmyndin lokast — því töfin, hún vinnur það kapphlaup
-  // (annars fara stafirnir í eins-stafs flýtilyklana og skipta um tól).
+  // valmyndar-takkann þegar valmyndin lokast — og tímasetning þess ræðst af
+  // exit-animasjóninni, svo eitt skot dugar ekki: stiginn hér tekur fókusinn
+  // aftur þar til hann helst. Select-að er BARA meðan nafnið er enn sjálfgefið,
+  // svo endurtekningarnar geta aldrei étið það sem notandinn er byrjaður að skrifa.
   const focusNameSoon = () => {
-    setTimeout(() => {
-      nameRef.current?.focus();
-      nameRef.current?.select();
-    }, 300);
+    const delays = [0, 200, 400, 650, 900, 1150];
+    for (const d of delays) {
+      setTimeout(() => {
+        const el = nameRef.current;
+        if (!el || document.activeElement === el) return;
+        el.focus();
+        if (DEFAULT_BOARD_NAMES.has(el.value.trim())) el.select();
+      }, d);
+    }
   };
 
   const syncLook =
