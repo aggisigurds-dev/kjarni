@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ["tesseract.js"],
   async redirects() {
     return [
       // 3dwork lives in its own Vercel project (apps/web); surface it on the main domain.

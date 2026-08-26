@@ -1,0 +1,244 @@
+import { create } from "zustand";
+import { newId } from "./ids";
+import type {
+  BoardObject,
+  Camera,
+  DashStyle,
+  ImportProgress,
+  ImportQuality,
+  Tool,
+} from "./types";
+import { GRID_GAP, snapValue } from "./geometry";
+
+const MAX_HISTORY = 80;
+
+export interface StyleState {
+  stroke: string;
+  fill: string;
+  strokeWidth: number;
+  dash: DashStyle;
+  stickyFill: string;
+  fontSize: number;
+  symbolId: string;
+}
+
+interface BoardStore {
+  hydrated: boolean;
+  name: string;
+  objects: BoardObject[];
+  selectedIds: string[];
+  tool: Tool;
+  camera: Camera;
+  pixelsPerMeter: number | null;
+  grid: boolean;
+  snap: boolean;
+  importQuality: ImportQuality;
+  importProgress: ImportProgress | null;
+  spacePan: boolean;
+  style: StyleState;
+  past: BoardObject[][];
+  future: BoardObject[][];
+  setHydrated: (v: boolean) => void;
+  setName: (name: string) => void;
+  setTool: (tool: Tool) => void;
+  setCamera: (camera: Camera) => void;
+  setPixelsPerMeter: (n: number | null) => void;
+  toggleGrid: () => void;
+  toggleSnap: () => void;
+  setImportQuality: (q: ImportQuality) => void;
+  setImportProgress: (p: ImportProgress | null) => void;
+  setSpacePan: (v: boolean) => void;
+  setStyle: (partial: Partial<StyleState>) => void;
+  setSelected: (ids: string[]) => void;
+  replaceBoard: (data: {
+    name: string;
+    objects: BoardObject[];
+    camera: Camera;
+    pixelsPerMeter: number | null;
+    grid: boolean;
+    snap: boolean;
+  }) => void;
+  addObjects: (objects: BoardObject[], select?: boolean) => void;
+  updateObjects: (
+    ids: string[],
+    updater: (obj: BoardObject) => BoardObject,
+    recordHistory?: boolean
+  ) => void;
+  patchObject: (id: string, patch: Partial<BoardObject>, recordHistory?: boolean) => void;
+  deleteIds: (ids: string[]) => void;
+  bringForward: () => void;
+  sendBackward: () => void;
+  duplicateSelected: () => void;
+  lockSelected: (locked: boolean) => void;
+  undo: () => void;
+  redo: () => void;
+  commitHistory: () => void;
+}
+
+function cloneObjects(objects: BoardObject[]) {
+  return structuredClone(objects);
+}
+
+export const useBoardStore = create<BoardStore>((set, get) => ({
+  hydrated: false,
+  name: "TurboPaint",
+  objects: [],
+  selectedIds: [],
+  tool: "select",
+  camera: { x: 80, y: 64, scale: 0.62 },
+  pixelsPerMeter: null,
+  grid: true,
+  snap: true,
+  importQuality: "standard",
+  importProgress: null,
+  spacePan: false,
+  style: {
+    stroke: "#1c1917",
+    fill: "transparent",
+    strokeWidth: 4,
+    dash: "solid",
+    stickyFill: "#fde047",
+    fontSize: 22,
+    symbolId: "extinguisher",
+  },
+  past: [],
+  future: [],
+  setHydrated: (hydrated) => set({ hydrated }),
+  setName: (name) => set({ name }),
+  setTool: (tool) => set({ tool, selectedIds: tool === "select" ? get().selectedIds : [] }),
+  setCamera: (camera) => set({ camera }),
+  setPixelsPerMeter: (pixelsPerMeter) => set({ pixelsPerMeter }),
+  toggleGrid: () => set({ grid: !get().grid }),
+  toggleSnap: () => set({ snap: !get().snap }),
+  setImportQuality: (importQuality) => set({ importQuality }),
+  setImportProgress: (importProgress) => set({ importProgress }),
+  setSpacePan: (spacePan) => set({ spacePan }),
+  setStyle: (partial) => set({ style: { ...get().style, ...partial } }),
+  setSelected: (selectedIds) => set({ selectedIds }),
+  replaceBoard: (data) =>
+    set({
+      ...data,
+      selectedIds: [],
+      past: [],
+      future: [],
+    }),
+  addObjects: (incoming, select = true) => {
+    const { objects } = get();
+    pushHistory(set, get);
+    const images = incoming.filter((o) => o.type === "image");
+    const rest = incoming.filter((o) => o.type !== "image");
+    const existingImages = objects.filter((o) => o.type === "image");
+    const existingRest = objects.filter((o) => o.type !== "image");
+    const next = [...existingImages, ...images, ...existingRest, ...rest];
+    set({
+      objects: next,
+      selectedIds: select ? incoming.map((o) => o.id) : [],
+    });
+  },
+  updateObjects: (ids, updater, recordHistory = true) => {
+    if (recordHistory) pushHistory(set, get);
+    const idSet = new Set(ids);
+    set({
+      objects: get().objects.map((obj) => (idSet.has(obj.id) ? updater(obj) : obj)),
+    });
+  },
+  patchObject: (id, patch, recordHistory = true) => {
+    if (recordHistory) pushHistory(set, get);
+    set({
+      objects: get().objects.map((obj) =>
+        obj.id === id ? ({ ...obj, ...patch } as BoardObject) : obj
+      ),
+    });
+  },
+  deleteIds: (ids) => {
+    if (!ids.length) return;
+    pushHistory(set, get);
+    const idSet = new Set(ids);
+    set({
+      objects: get().objects.filter((o) => !idSet.has(o.id)),
+      selectedIds: get().selectedIds.filter((id) => !idSet.has(id)),
+    });
+  },
+  bringForward: () => {
+    const { objects, selectedIds } = get();
+    if (!selectedIds.length) return;
+    pushHistory(set, get);
+    const idSet = new Set(selectedIds);
+    const moving = objects.filter((o) => idSet.has(o.id));
+    const staying = objects.filter((o) => !idSet.has(o.id));
+    set({ objects: [...staying, ...moving] });
+  },
+  sendBackward: () => {
+    const { objects, selectedIds } = get();
+    if (!selectedIds.length) return;
+    pushHistory(set, get);
+    const idSet = new Set(selectedIds);
+    const moving = objects.filter((o) => idSet.has(o.id));
+    const staying = objects.filter((o) => !idSet.has(o.id));
+    set({ objects: [...moving, ...staying] });
+  },
+  duplicateSelected: () => {
+    const { objects, selectedIds } = get();
+    const copies = objects
+      .filter((o) => selectedIds.includes(o.id) && !o.locked)
+      .map((o) => ({ ...structuredClone(o), id: newId(), x: o.x + 24, y: o.y + 24 }));
+    if (!copies.length) return;
+    pushHistory(set, get);
+    set({
+      objects: [...objects, ...copies],
+      selectedIds: copies.map((o) => o.id),
+    });
+  },
+  lockSelected: (locked) => {
+    const { selectedIds } = get();
+    if (!selectedIds.length) return;
+    pushHistory(set, get);
+    const idSet = new Set(selectedIds);
+    set({
+      objects: get().objects.map((o) => (idSet.has(o.id) ? { ...o, locked } : o)),
+    });
+  },
+  undo: () => {
+    const { past, objects, future } = get();
+    if (!past.length) return;
+    const prev = past[past.length - 1];
+    set({
+      objects: prev,
+      past: past.slice(0, -1),
+      future: [...future, cloneObjects(objects)],
+      selectedIds: [],
+    });
+  },
+  redo: () => {
+    const { future, objects, past } = get();
+    if (!future.length) return;
+    const next = future[future.length - 1];
+    set({
+      objects: next,
+      future: future.slice(0, -1),
+      past: [...past, cloneObjects(objects)],
+      selectedIds: [],
+    });
+  },
+  commitHistory: () => pushHistory(set, get),
+}));
+
+function pushHistory(
+  set: (partial: Partial<BoardStore>) => void,
+  get: () => BoardStore
+) {
+  const { past, objects } = get();
+  const nextPast = [...past, cloneObjects(objects)];
+  if (nextPast.length > MAX_HISTORY) nextPast.shift();
+  set({ past: nextPast, future: [] });
+}
+
+export { newId } from "./ids";
+
+export function snapPoint(x: number, y: number) {
+  const { snap } = useBoardStore.getState();
+  return {
+    x: snapValue(x, GRID_GAP, snap),
+    y: snapValue(y, GRID_GAP, snap),
+  };
+}

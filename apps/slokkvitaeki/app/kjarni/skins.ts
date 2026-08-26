@@ -13,6 +13,7 @@ export const SKIN_KEY = "kjarni_skin";
 
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
+  { id: "turbopaint", label: "TurboPaint", href: "/kjarni/turbopaint" },
   { id: "stjorn", label: "Stjórnborð", href: "/stjorn" },
   { id: "kerfi", label: "Kerfi", href: "/kerfi" },
   { id: "skjalarinn", label: "Skjalarinn", href: "/skjalarinn" },
