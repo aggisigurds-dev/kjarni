@@ -49,6 +49,7 @@ export function StationChrome({
                 key={item.id}
                 href={item.href}
                 className={item.id === tool ? "on" : ""}
+                aria-current={item.id === tool ? "page" : undefined}
                 {...("ext" in item && item.ext ? { target: "_blank", rel: "noreferrer" } : {})}
               >
                 {item.label}
