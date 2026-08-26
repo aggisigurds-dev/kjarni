@@ -65,6 +65,7 @@ export function BoardCanvas({
   const panRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ dist: number; midWorld: { x: number; y: number } } | null>(null);
+  const eraseRef = useRef(false);
   const polyRef = useRef<number[] | null>(null);
   const documentDragRef = useRef<{
     imageId: string;
@@ -115,7 +116,7 @@ export function BoardCanvas({
     );
   }, []);
 
-  const commitShape = useCallback((d: Draft) => {
+  const commitShape = useCallback((d: Draft, firewallWall = false) => {
     const { style: st, addObjects } = useBoardStore.getState();
     if (d.kind === "marquee") return;
     if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
@@ -176,14 +177,26 @@ export function BoardCanvas({
       }
       return;
     }
-    const pts = d.kind === "pen" ? simplifyPoints(d.points) : d.points;
+    let pts = d.kind === "pen" ? simplifyPoints(d.points) : d.points;
+    if (d.kind === "polyline") {
+      // Tvísmellur til að ljúka bætti við tveimur auka-punktum á nánast sama
+      // stað — fella saman samliggjandi punkta nær en 6px svo enginn
+      // "auka-krókur" verði til í lok veggjar.
+      const clean: number[] = [];
+      for (let i = 0; i < pts.length; i += 2) {
+        const n = clean.length;
+        if (n >= 2 && Math.hypot(pts[i] - clean[n - 2], pts[i + 1] - clean[n - 1]) < 6) continue;
+        clean.push(pts[i], pts[i + 1]);
+      }
+      pts = clean;
+    }
     if (pts.length < 4) return;
     if (d.kind === "calibrate" as LineKind) return;
     // Manual eldveggur: translucent so the plan shows through, but colour,
     // width and dash come from the StyleStrip so both are user-choosable.
     // Named "EI-veggur" on purpose: "Eldveggur…" names are wiped by every
     // auto-remark run.
-    const firewall = d.kind === "polyline" && useBoardStore.getState().tool === "firewall";
+    const firewall = d.kind === "polyline" && firewallWall;
     addObjects([
       {
         id: newId(),
@@ -235,6 +248,31 @@ export function BoardCanvas({
     });
   };
 
+  // Strokleður: eyðir hlutnum undir bendlinum (aldrei innfluttum plönum eða
+  // læstum hlutum) — smellt eða strokið yfir.
+  const eraseAt = useCallback((clientX: number, clientY: number) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const rect = stage.container().getBoundingClientRect();
+    const hit = stage.getIntersection({ x: clientX - rect.left, y: clientY - rect.top });
+    if (!hit) return;
+    const objects = useBoardStore.getState().objects;
+    let node: Konva.Node | null = hit;
+    while (node && node !== (stage as unknown as Konva.Node)) {
+      const id = node.id();
+      if (id) {
+        const obj = objects.find((o) => o.id === id);
+        if (obj) {
+          if (obj.type !== "image" && !obj.locked) {
+            useBoardStore.getState().deleteIds([obj.id]);
+          }
+          return;
+        }
+      }
+      node = node.getParent();
+    }
+  }, []);
+
   const applyPointerMove = useCallback(
     (clientX: number, clientY: number) => {
       if (panRef.current) {
@@ -248,16 +286,20 @@ export function BoardCanvas({
         });
         return;
       }
+      const liveTool = useBoardStore.getState().tool;
+      const freehand =
+        liveTool === "firewall" || liveTool === "measure" || liveTool === "calibrate";
       const d = draftRef.current;
       if (!d) {
         if (polyRef.current && polyRef.current.length >= 2) {
-          const world = snapPoint(clientToWorld(clientX, clientY).x, clientToWorld(clientX, clientY).y);
+          const raw = clientToWorld(clientX, clientY);
+          const world = freehand ? raw : snapPoint(raw.x, raw.y);
           setDraftState({ kind: "polyline", points: [...polyRef.current, world.x, world.y] });
         }
         return;
       }
       const world = clientToWorld(clientX, clientY);
-      const snapped = snapPoint(world.x, world.y);
+      const snapped = freehand ? world : snapPoint(world.x, world.y);
       if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky" || d.kind === "marquee") {
         setDraftState({ ...d, bx: snapped.x, by: snapped.y });
         return;
@@ -276,6 +318,7 @@ export function BoardCanvas({
 
   const endGesture = useCallback(() => {
     panRef.current = null;
+    eraseRef.current = false;
     const d = draftRef.current;
     if (!d) return;
     if (d.kind === "polyline") return;
@@ -366,6 +409,10 @@ export function BoardCanvas({
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       if (pinchRef.current) return;
+      if (eraseRef.current) {
+        eraseAt(e.clientX, e.clientY);
+        return;
+      }
       if (!panRef.current && !draftRef.current) return;
       applyPointerMove(e.clientX, e.clientY);
     };
@@ -378,16 +425,20 @@ export function BoardCanvas({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [applyPointerMove, endGesture]);
+  }, [applyPointerMove, endGesture, eraseAt]);
 
   const onPointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = stageRef.current;
     if (!stage || pinchRef.current) return;
     const world = clientToWorld(e.evt.clientX, e.evt.clientY);
-    const snapped = snapPoint(world.x, world.y);
     const clickedEmpty = e.target === stage;
     const currentTool: Tool = useBoardStore.getState().tool;
     const cam = useBoardStore.getState().camera;
+    // Eldveggur, mæling og kvarði elta teikninguna sjálfa, ekki grindina —
+    // grid-snap togaði hvern smell á næsta 20px-punkt ("hoppar til manns").
+    const freehand =
+      currentTool === "firewall" || currentTool === "measure" || currentTool === "calibrate";
+    const snapped = freehand ? world : snapPoint(world.x, world.y);
 
     const mousePointer = e.evt.pointerType === "mouse";
     if (
@@ -400,6 +451,13 @@ export function BoardCanvas({
       return;
     }
     if (e.evt.button !== 0) return;
+
+    if (currentTool === "eraser") {
+      e.cancelBubble = true;
+      eraseRef.current = true;
+      eraseAt(e.evt.clientX, e.evt.clientY);
+      return;
+    }
 
     if (currentTool === "select" || currentTool === "hand") {
       if (clickedEmpty) {
@@ -415,8 +473,8 @@ export function BoardCanvas({
       const { style: st, addObjects } = useBoardStore.getState();
       if (st.symbolId === "firewall") {
         useBoardStore.getState().startFirewall();
-        polyRef.current = [snapped.x, snapped.y];
-        setDraftState({ kind: "polyline", points: [snapped.x, snapped.y] });
+        polyRef.current = [world.x, world.y];
+        setDraftState({ kind: "polyline", points: [world.x, world.y] });
         return;
       }
       addObjects([
@@ -503,7 +561,10 @@ export function BoardCanvas({
       setDraftState(null);
       return;
     }
-    commitShape({ kind: "polyline", points: polyRef.current });
+    commitShape(
+      { kind: "polyline", points: polyRef.current },
+      useBoardStore.getState().tool === "firewall"
+    );
     polyRef.current = null;
     setDraftState(null);
     // Eldveggs-tólið helst virkt svo næsti veggur byrjar strax; Esc/V hættir.
@@ -512,12 +573,38 @@ export function BoardCanvas({
     }
   }, [commitShape, setDraftState]);
 
+  // Skipt um tól í miðjum vegg (V, toolbar, tákn-bakkinn) → veggurinn sem er
+  // í vinnslu committast í stað þess að týnast.
+  const prevToolRef = useRef(tool);
+  useEffect(() => {
+    const prev = prevToolRef.current;
+    prevToolRef.current = tool;
+    if (
+      prev !== tool &&
+      (prev === "polyline" || prev === "firewall") &&
+      tool !== "polyline" &&
+      tool !== "firewall" &&
+      polyRef.current &&
+      polyRef.current.length >= 4
+    ) {
+      commitShape({ kind: "polyline", points: polyRef.current }, prev === "firewall");
+      polyRef.current = null;
+      setDraftState(null);
+    }
+  }, [tool, commitShape, setDraftState]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       if (e.key === "Escape") {
+        // Esc heldur veggnum sem er í vinnslu — lýkur honum og fer í Velja
+        // (áður datt allt út).
+        if (polyRef.current && polyRef.current.length >= 4) {
+          finishPolyline();
+        }
         polyRef.current = null;
         panRef.current = null;
+        eraseRef.current = false;
         setDraftState(null);
         useBoardStore.getState().setSelected([]);
         useBoardStore.getState().setTool("select");
@@ -721,7 +808,11 @@ export function BoardCanvas({
               obj={obj}
               pixelsPerMeter={pixelsPerMeter}
               draggable={selectLike && !spacePan && !obj.locked}
-              listening={selectLike && !spacePan && (obj.type === "image" || !obj.locked)}
+              listening={
+                (selectLike || tool === "eraser") &&
+                !spacePan &&
+                (obj.type === "image" || !obj.locked)
+              }
               onDragStart={(id) => {
                 if (panRef.current || pinchRef.current) {
                   stageRef.current?.findOne(`#${id}`)?.stopDrag();
