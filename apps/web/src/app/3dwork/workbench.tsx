@@ -70,7 +70,14 @@ import {
   type CutItem,
 } from '@/lib/3dwork/measure';
 import { exportBinaryStl, parseStl } from '@/lib/3dwork/stl';
-import { is3mf, parse3mf } from '@/lib/3dwork/threemf';
+import { exportColored3mf, is3mf, parse3mf } from '@/lib/3dwork/threemf';
+import { lookFor } from '@/lib/3dwork/finish';
+import {
+  applyPrintTexture,
+  TEXTURE_LABELS,
+  textureForFinish,
+  type PrintTextureSpec,
+} from '@/lib/3dwork/texture';
 import { DEFAULT_BEND, bendLabel, bendMesh, bendReport, type BendSpec } from '@/lib/3dwork/bend';
 import {
   DEFAULT_SHELL,
@@ -653,9 +660,12 @@ export function Workbench() {
       if (!soup || !placement) continue;
       if (focusId ? part.id !== focusId : !part.visible) continue;
 
+      const look = lookFor(part);
       parts.push({
         id: part.id,
-        color: part.color,
+        color: look.color,
+        metalness: look.metalness,
+        roughness: look.roughness,
         soup,
         target: placement.position,
         rotation: part.transform.rotation,
@@ -1067,10 +1077,21 @@ export function Workbench() {
     (partId: string, patch: Partial<Part>) => {
       patchProject((current) => ({
         ...current,
-        parts: current.parts.map((part) => (part.id === partId ? { ...part, ...patch } : part)),
+        parts: current.parts.map((part) => {
+          if (part.id !== partId) return part;
+          const next = { ...part, ...patch };
+          if (patch.color !== undefined || 'finishId' in patch) {
+            const soup = geometries.get(part.activeVersionId);
+            if (soup) {
+              const look = lookFor(next);
+              next.thumbnail = renderThumbnail(soup, look.color, look);
+            }
+          }
+          return next;
+        }),
       }));
     },
-    [patchProject]
+    [patchProject, geometries]
   );
 
   const togglePartVisible = useCallback(
@@ -1775,10 +1796,11 @@ export function Workbench() {
         ...current,
         parts: current.parts.map((part) => {
           if (part.id !== partId) return part;
+          const look = lookFor(part);
           return {
             ...part,
             triangles,
-            thumbnail: renderThumbnail(soup, part.color),
+            thumbnail: renderThumbnail(soup, look.color, look),
             activeVersionId: versionId,
             versions: [
               ...part.versions,
@@ -1799,6 +1821,38 @@ export function Workbench() {
     [patchProject]
   );
 
+  const runEmbossTexture = useCallback(
+    (partId: string, spec: PrintTextureSpec) => {
+      const soup = soupOfPart(partId);
+      if (!soup) {
+        toast.error('That part has no mesh to texture.');
+        return;
+      }
+      setBusy(`Embossing ${TEXTURE_LABELS[spec.kind].toLowerCase()}…`);
+      setTab('modify');
+      setShowInspector(true);
+      setTimeout(() => {
+        try {
+          const result = applyPrintTexture(soup, spec);
+          addVersion(
+            partId,
+            result.soup,
+            'texture',
+            `${TEXTURE_LABELS[result.kind]} · ${result.depthMm.toFixed(2)} mm deep`
+          );
+          toast.success(
+            `Embossed ${TEXTURE_LABELS[result.kind].toLowerCase()} · ${formatCount(result.triangles)} triangles. In the STL / 3MF.`
+          );
+        } catch {
+          toast.error('Could not emboss that texture.');
+        } finally {
+          setBusy(null);
+        }
+      }, 30);
+    },
+    [soupOfPart, addVersion]
+  );
+
   /**
    * Overwrite the active version's mesh. Used for origin moves — centring and
    * dropping to the table — which are housekeeping rather than edits worth
@@ -1813,7 +1867,7 @@ export function Workbench() {
       setGeometries((current) => new Map(current).set(versionId, soup));
       void saveGeometry(versionId, soup);
       statsCache.current.delete(`${versionId}:${soup.length}`);
-      patchPart(partId, { thumbnail: renderThumbnail(soup, part.color) });
+      patchPart(partId, { thumbnail: renderThumbnail(soup, lookFor(part).color, lookFor(part)) });
     },
     [project.parts, patchPart]
   );
@@ -2665,8 +2719,8 @@ export function Workbench() {
   }, [sketch, outline, project.name]);
 
   /** The fitted parts, baked into world space, ready to write out. */
-  const bakedAssembly = useCallback((): { name: string; soup: Float32Array }[] => {
-    const baked: { name: string; soup: Float32Array }[] = [];
+  const bakedAssembly = useCallback((): { name: string; soup: Float32Array; color: string }[] => {
+    const baked: { name: string; soup: Float32Array; color: string }[] = [];
 
     for (const slot of project.slots) {
       const part = project.parts.find((candidate) => candidate.id === slot.activePartId);
@@ -2675,6 +2729,7 @@ export function Workbench() {
 
       baked.push({
         name: part.name,
+        color: lookFor(part).color,
         soup: bakeTransform(soup, {
           ...part.transform,
           position: {
@@ -2723,6 +2778,24 @@ export function Workbench() {
       `${project.name.replace(/\s+/g, '_')}_assembly.stl`
     );
     toast.success(`Combined ${baked.length} part(s) into one STL.`);
+  }, [bakedAssembly, project.name]);
+
+  const exportColor3mf = useCallback(() => {
+    const baked = bakedAssembly();
+    if (baked.length === 0) {
+      toast.error('Nothing is fitted to the blaster yet.');
+      return;
+    }
+    download(
+      exportColored3mf(
+        baked.map((entry) => ({ name: entry.name, soup: entry.soup, color: entry.color })),
+        project.name
+      ),
+      `${project.name.replace(/\s+/g, '_')}_colour.3mf`
+    );
+    toast.success(
+      `Exported ${baked.length} part(s) as a colour 3MF — slicers keep Gold / Chrome / steel.`
+    );
   }, [bakedAssembly, project.name]);
 
   const mergeAndClean = useCallback(() => {
@@ -3634,6 +3707,20 @@ export function Workbench() {
             >
               Duplicate as variant
             </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (!selectedId) {
+                  toast.error('Select a part first.');
+                  return;
+                }
+                const part = project.parts.find((candidate) => candidate.id === selectedId);
+                runEmbossTexture(selectedId, textureForFinish(part?.finishId));
+              }}
+              disabled={!selectedId || Boolean(busy)}
+              hint="Raises the real surface so the grain is in the STL, not a picture on it"
+            >
+              Emboss printable texture
+            </MenuItem>
             <MenuItem onClick={copySelected} disabled={!selectedId} shortcut="⌘C">
               Copy
             </MenuItem>
@@ -3955,6 +4042,13 @@ export function Workbench() {
             </MenuItem>
             <MenuItem onClick={exportCombined} icon={Download} hint="Fitted parts, as they are">
               Combined STL
+            </MenuItem>
+            <MenuItem
+              onClick={exportColor3mf}
+              icon={Download}
+              hint="Slicers keep Gold / Chrome / steel as filament colours"
+            >
+              Colour 3MF
             </MenuItem>
             <MenuItem
               onClick={exportSplitZip}
@@ -4565,6 +4659,7 @@ export function Workbench() {
             onSelectVersion={selectVersion}
             onDeleteVersion={deleteVersion}
             onUpdateHardware={updateHardware}
+            onEmbossTexture={runEmbossTexture}
             canRevert={Boolean(selectedPart && selectedPart.versions.length > 1)}
             fixReport={fixReport}
             simplifyReport={simplifyReport}

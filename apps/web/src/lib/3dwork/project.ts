@@ -43,6 +43,11 @@ export interface Part {
   /** Slot this part is a candidate for. Empty means loose on the table. */
   slotId: string;
   color: string;
+  /**
+   * Named metal look (Gold, Chrome, Brushed steel). Optional so older saved
+   * projects stay plastic. The hex in `color` is what a colour 3MF exports.
+   */
+  finishId?: string;
   visible: boolean;
   transform: Transform;
   triangles: number;

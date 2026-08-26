@@ -1,14 +1,19 @@
 /**
- * Reading 3MF.
+ * Reading and writing 3MF.
  *
  * 3MF is a ZIP holding an XML model, and it is what slicers actually prefer —
- * it carries units, several objects, and their placement in one file, none of
- * which STL can express.
+ * it carries units, several objects, their placement, and colours in one file,
+ * none of which STL can express. Colours go out as `basematerials` so a
+ * colour printer can keep Gold / Chrome / steel; surface grain that should
+ * print is already baked into the mesh by `texture.ts`.
  *
  * No zip library is needed. The archive layout is simple enough to walk
  * directly, and `DecompressionStream` for the deflate is built into both the
  * browser and Node, so this costs nothing in dependencies.
  */
+
+import { weld } from './mesh';
+import { createZip } from './zip';
 
 export interface ThreeMfObject {
   id: string;
@@ -354,3 +359,123 @@ export async function parse3mf(buffer: ArrayBuffer): Promise<ThreeMfObject[]> {
 }
 
 export const is3mf = (fileName: string): boolean => /\.3mf$/i.test(fileName);
+
+export interface ThreeMfExportPart {
+  name: string;
+  soup: Float32Array;
+  color: string;
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function displayColor(hex: string): string {
+  const raw = hex.trim().replace('#', '');
+  const rgb =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : raw.padEnd(6, '0').slice(0, 6);
+  return `#${rgb.toUpperCase()}FF`;
+}
+
+function fmt(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  const rounded = Math.round(n * 10000) / 10000;
+  return String(rounded);
+}
+
+const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>
+`;
+
+const RELS = `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>
+`;
+
+/**
+ * Write a colour 3MF. Each part is its own object with a `basematerials`
+ * swatch, so Bambu / Prusa / Cura can map Gold and Chrome to a filament
+ * instead of flattening everything to grey plastic.
+ */
+export function exportColored3mf(parts: ThreeMfExportPart[], title = '3dwork'): Blob {
+  const palette: string[] = [];
+  const indexOf = new Map<string, number>();
+  for (const part of parts) {
+    const key = displayColor(part.color || '#888888');
+    if (!indexOf.has(key)) {
+      indexOf.set(key, palette.length);
+      palette.push(key);
+    }
+  }
+
+  const bases = palette
+    .map((color, i) => `      <base name="Colour ${i + 1}" displaycolor="${color}"/>`)
+    .join('\n');
+
+  const objects: string[] = [];
+  const items: string[] = [];
+
+  parts.forEach((part, i) => {
+    const objectId = i + 2;
+    const { mesh } = weld(part.soup);
+    const vertices: string[] = [];
+    for (let v = 0; v < mesh.positions.length; v += 3) {
+      vertices.push(
+        `        <vertex x="${fmt(mesh.positions[v])}" y="${fmt(mesh.positions[v + 1])}" z="${fmt(mesh.positions[v + 2])}"/>`
+      );
+    }
+    const triangles: string[] = [];
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      triangles.push(
+        `        <triangle v1="${mesh.indices[t]}" v2="${mesh.indices[t + 1]}" v3="${mesh.indices[t + 2]}"/>`
+      );
+    }
+    const pindex = indexOf.get(displayColor(part.color || '#888888')) ?? 0;
+    const name = xmlEscape(part.name || `Part ${i + 1}`);
+    objects.push(`    <object id="${objectId}" name="${name}" type="model" pid="1" pindex="${pindex}">
+      <mesh>
+        <vertices>
+${vertices.join('\n')}
+        </vertices>
+        <triangles>
+${triangles.join('\n')}
+        </triangles>
+      </mesh>
+    </object>`);
+    items.push(`    <item objectid="${objectId}"/>`);
+  });
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Title">${xmlEscape(title)}</metadata>
+  <resources>
+    <basematerials id="1">
+${bases}
+    </basematerials>
+${objects.join('\n')}
+  </resources>
+  <build>
+${items.join('\n')}
+  </build>
+</model>
+`;
+
+  return createZip([
+    { name: '[Content_Types].xml', data: new TextEncoder().encode(CONTENT_TYPES) },
+    { name: '_rels/.rels', data: new TextEncoder().encode(RELS) },
+    { name: '3D/3dmodel.model', data: new TextEncoder().encode(xml) },
+  ]);
+}

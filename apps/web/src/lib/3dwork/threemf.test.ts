@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createZip } from './zip';
-import { is3mf, parse3mf } from './threemf';
+import { is3mf, parse3mf, exportColored3mf } from './threemf';
 import { computeBounds } from './mesh';
 
 /** A unit cube as an indexed 3MF mesh body. */
@@ -139,5 +139,25 @@ describe('parse3mf', () => {
 
   it('refuses a file that is not a readable 3MF', async () => {
     await expect(parse3mf(new ArrayBuffer(64))).rejects.toThrow(/readable 3MF/);
+  });
+});
+
+describe('exportColored3mf', () => {
+  it('round-trips a Gold cube so a slicer can keep the colour', async () => {
+    const { cubeSoup } = await import('./fixtures');
+    const blob = exportColored3mf(
+      [{ name: 'Gold plate', soup: cubeSoup(10), color: '#d4af37' }],
+      'gold-test'
+    );
+    const buffer = await blob.arrayBuffer();
+    const objects = await parse3mf(buffer);
+    expect(objects).toHaveLength(1);
+    expect(objects[0].name).toBe('Gold plate');
+    expect(objects[0].triangles).toBe(12);
+    const bounds = computeBounds(objects[0].soup);
+    expect(bounds.size[0]).toBeCloseTo(10, 4);
+    expect(bounds.size[1]).toBeCloseTo(10, 4);
+    expect(bounds.size[2]).toBeCloseTo(10, 4);
+    expect(new TextDecoder().decode(buffer)).toContain('displaycolor="#D4AF37FF"');
   });
 });
