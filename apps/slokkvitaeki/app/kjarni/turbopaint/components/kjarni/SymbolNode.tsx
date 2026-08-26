@@ -231,7 +231,7 @@ export function SymbolNode({
           width={size}
           height={Math.max(4, size * 0.16)}
           y={size * 0.42}
-          fill="#e11d2e"
+          fill="#ea580c"
           opacity={0.55}
           cornerRadius={Math.max(1, size * 0.03)}
         />
