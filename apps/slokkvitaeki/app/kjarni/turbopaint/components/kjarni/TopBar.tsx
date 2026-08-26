@@ -122,6 +122,7 @@ export function TopBar({
       </Link>
       <div className="hidden h-6 w-px bg-white/10 sm:block" />
       <DropdownMenu
+        modal={false}
         onOpenChange={(open) => {
           if (!open) return;
           // Tækis-listinn birtist SAMSTUNDIS; ský-listinn sameinast þegar hann kemur
@@ -317,7 +318,9 @@ export function TopBar({
         <Download className="size-4" />
         <span className="hidden sm:inline">Flytja út</span>
       </Button>
-      <DropdownMenu>
+      {/* modal={false}: annars leggst ósýnilegt bakdrop yfir allt appið meðan
+          valmyndin er opin og fyrsti smellur á hvaða takka sem er "deyr". */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger
           render={<Button size="icon-sm" variant="ghost" className="text-stone-300 hover:bg-white/10 max-sm:size-9" title="Meira" />}
         >

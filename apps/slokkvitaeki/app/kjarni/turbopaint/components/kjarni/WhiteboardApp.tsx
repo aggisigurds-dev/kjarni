@@ -21,7 +21,7 @@ import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
-import { snapPoint, useBoardStore } from "../../lib/board/store";
+import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
@@ -53,7 +53,7 @@ export function WhiteboardApp() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<"board" | "viewport" | "selection">("board");
   const [helpOpen, setHelpOpen] = useState(false);
-  const [calibratePx, setCalibratePx] = useState<number | null>(null);
+  const [calibrateDraft, setCalibrateDraft] = useState<{ px: number; points: number[] } | null>(null);
   const [calibrateMeters, setCalibrateMeters] = useState("10");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -622,7 +622,7 @@ export function WhiteboardApp() {
                 setDragOver(false);
                 dropSymbol(symbolId, world);
               }}
-              onCalibrate={setCalibratePx}
+              onCalibrate={(px, points) => setCalibrateDraft({ px, points })}
               onCropRect={(rect) => void runCrop(rect)}
               onRequestStrip={(planId) => setStripPlanId(planId)}
             />
@@ -735,32 +735,56 @@ export function WhiteboardApp() {
         }}
       />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <Dialog open={calibratePx !== null} onOpenChange={(o) => !o && setCalibratePx(null)}>
+      <Dialog open={calibrateDraft !== null} onOpenChange={(o) => !o && setCalibrateDraft(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Kvarða gólfplön</DialogTitle>
             <DialogDescription>
-              Þú mældir {calibratePx ? Math.round(calibratePx) : 0} px. Sláðu inn raunlengd svo mælingar
-              sýnist í metrum.
+              Sláðu inn raunlengdina sem þú mældir (t.d. 4,28 eða 4280 mm) — línan vistast á
+              teikninguna með tölunni og allar mælingar sýnast í millimetrum.
             </DialogDescription>
           </DialogHeader>
           <Input
             value={calibrateMeters}
             onChange={(e) => setCalibrateMeters(e.target.value)}
             inputMode="decimal"
-            placeholder="Lengd í metrum"
+            placeholder="Lengd í metrum (eða mm)"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCalibratePx(null)}>
+            <Button variant="outline" onClick={() => setCalibrateDraft(null)}>
               Hætta við
             </Button>
             <Button
               onClick={() => {
-                const meters = Number(calibrateMeters.replace(",", "."));
-                if (!calibratePx || !meters) return;
-                useBoardStore.getState().setPixelsPerMeter(calibratePx / meters);
-                toast.success("Kvarði stilltur");
-                setCalibratePx(null);
+                const raw = Number(calibrateMeters.replace(",", "."));
+                if (!calibrateDraft || !raw) return;
+                // 100+ án kommu = innslegið í millimetrum (byggingavenja)
+                const meters = raw >= 100 ? raw / 1000 : raw;
+                useBoardStore.getState().setPixelsPerMeter(calibrateDraft.px / meters);
+                // Innslegna mælingin HELST á teikningunni — merkt raun-lengdinni
+                useBoardStore.getState().addObjects(
+                  [
+                    {
+                      id: newId(),
+                      type: "measure",
+                      x: 0,
+                      y: 0,
+                      points: calibrateDraft.points,
+                      stroke: "#2563eb",
+                      strokeWidth: 2,
+                      dash: "solid",
+                      meters,
+                      rotation: 0,
+                      opacity: 1,
+                      locked: false,
+                      hidden: false,
+                      name: "Mæling (innslegin)",
+                    },
+                  ],
+                  false
+                );
+                toast.success("Kvarði stilltur — mælingin vistuð á teikninguna");
+                setCalibrateDraft(null);
               }}
             >
               Vista kvarða

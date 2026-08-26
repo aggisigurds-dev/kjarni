@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { objectsOnDocument } from "../../lib/board/geometry";
+import { formatM2, objectsOnDocument } from "../../lib/board/geometry";
 import { newId } from "../../lib/board/ids";
 import { useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
@@ -25,6 +25,7 @@ const GENERIC_LABELS: Record<string, string> = {
 export function CountTable() {
   const objects = useBoardStore((s) => s.objects);
   const selectedIds = useBoardStore((s) => s.selectedIds);
+  const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   // Á síma/spjaldtölvu (< 1024px eða snertiskjár) byrjar spjaldið samanfellt svo
   // það þeki ekki teikninguna. matchMedia má ekki keyra í SSR-prerender — guarded.
   const [open, setOpen] = useState(() => {
@@ -92,6 +93,18 @@ export function CountTable() {
   const otherRows = rows.filter((r) => r.group === 2);
   const total = equipmentRows.reduce((sum, r) => sum + r.count, 0);
 
+  // Nýtanlegt flatarmál: gegnsæir ferningar á kvörðuðu borði eru rýma-taka —
+  // dregnir yfir hvert rými (L-form = fleiri en einn) og lagðir hér saman.
+  const areaM2 = useMemo(() => {
+    if (!plan || !pixelsPerMeter || pixelsPerMeter <= 0) return 0;
+    return objectsOnDocument(plan, objects)
+      .filter(
+        (o): o is Extract<typeof o, { type: "rect" }> =>
+          o.type === "rect" && !o.hidden && o.fill === "transparent"
+      )
+      .reduce((sum, r) => sum + (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter), 0);
+  }, [plan, objects, pixelsPerMeter]);
+
   if (!plan) {
     if (images.length < 2) return null;
     return (
@@ -109,6 +122,7 @@ export function CountTable() {
       ...equipmentRows.map((r) => `${r.count}× ${r.label}`),
       "".padEnd(24, "—"),
       `Samtals búnaður: ${total}`,
+      ...(areaM2 > 0 ? [`Nýtanlegt flatarmál: ${formatM2(areaM2)}`] : []),
       ...(otherRows.length
         ? ["", "Annað:", ...otherRows.map((r) => `${r.count}× ${r.label}`)]
         : []),
@@ -190,6 +204,12 @@ export function CountTable() {
                 <span>Samtals búnaður</span>
                 <span className="tabular-nums">{total}</span>
               </div>
+              {areaM2 > 0 ? (
+                <div className="flex items-center justify-between pt-1 text-[11px] font-semibold text-emerald-300">
+                  <span>Nýtanlegt flatarmál</span>
+                  <span className="tabular-nums">{formatM2(areaM2)}</span>
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={stamp}

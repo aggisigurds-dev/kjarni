@@ -42,14 +42,28 @@ export function lineLength(points: number[]) {
   return total;
 }
 
-export function formatLength(px: number, pixelsPerMeter: number | null) {
-  if (pixelsPerMeter && pixelsPerMeter > 0) {
-    const meters = px / pixelsPerMeter;
-    if (meters >= 10) return `${meters.toFixed(1)} m`;
-    if (meters >= 1) return `${meters.toFixed(2)} m`;
-    return `${Math.round(meters * 100)} cm`;
-  }
-  return `${Math.round(px)} px`;
+/** Byggingamál eru í MILLIMETRUM (ósk Agnars) — 4.280 mm, ekki 4,28 m.
+ * metersOverride = innslegin raun-lengd (Kvarði) sem trompar reiknaða. */
+export function formatLength(
+  px: number,
+  pixelsPerMeter: number | null,
+  metersOverride?: number | null
+) {
+  const meters =
+    metersOverride ?? (pixelsPerMeter && pixelsPerMeter > 0 ? px / pixelsPerMeter : null);
+  if (meters == null) return `${Math.round(px)} px — kvarða fyrst (K)`;
+  return `${formatMm(meters)} mm`;
+}
+
+export function formatMm(meters: number) {
+  return Math.round(meters * 1000)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/** Flatarmál í m² með íslenskri kommu, 1 aukastaf. */
+export function formatM2(m2: number) {
+  return `${m2.toFixed(1).replace(".", ",")} m²`;
 }
 
 export function objectBounds(obj: BoardObject): {
