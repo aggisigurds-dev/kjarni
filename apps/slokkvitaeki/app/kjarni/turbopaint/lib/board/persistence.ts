@@ -35,6 +35,25 @@ let pushInFlight = false;
 let pushAgain = false;
 let listenersInstalled = false;
 
+// Last-write-wins má ALDREI stimplast á ýtingar-tíma: gömul flipi sem ýtir
+// GÖMLU efni fengi þá nýjasta tímastimpilinn og myndi éta nýja vinnu á hinu
+// tækinu við næsta pull. updatedAt fylgir því síðustu EFNISbreytingu — og
+// ýting gerist bara þegar efnið breyttist í alvöru.
+let lastContentJson = "";
+let lastUpdatedAt = "";
+let dirtySincePush = false;
+
+function contentSnapshot() {
+  const state = useBoardStore.getState();
+  return JSON.stringify({
+    name: state.name,
+    objects: state.objects,
+    pixelsPerMeter: state.pixelsPerMeter,
+    grid: state.grid,
+    snap: state.snap,
+  });
+}
+
 export function getCurrentBoardId() {
   return currentBoardId;
 }
@@ -76,7 +95,7 @@ function docFromState(): BoardDocument {
     snap: state.snap,
     assetIds: [...new Set(assetIds)],
     boardId: currentBoardId ?? undefined,
-    updatedAt: new Date().toISOString(),
+    updatedAt: lastUpdatedAt || new Date().toISOString(),
   };
 }
 
@@ -154,6 +173,7 @@ async function pushBoard() {
       updated_at: doc.updatedAt,
     });
     if (error) throw error;
+    dirtySincePush = false;
     useBoardStore.getState().setSyncState("synced");
   } catch {
     useBoardStore.getState().setSyncState("error");
@@ -176,6 +196,9 @@ function schedulePush() {
 export async function pullIfNewer() {
   const sb = getSupabase();
   if (!sb || !currentBoardId || pushInFlight) return;
+  // Óstaðfestar breytingar á þessu tæki eru rétthærri — aldrei draga skýið
+  // yfir vinnu sem hefur ekki náð að ýtast ("datt allt út"-veilan).
+  if (dirtySincePush) return;
   try {
     const { data } = await sb
       .from("turbopaint_boards")
@@ -191,6 +214,9 @@ export async function pullIfNewer() {
       await ensureAssetsLocal(remoteDoc);
       applyDoc(remoteDoc);
       await set(boardKey(currentBoardId), remoteDoc);
+      lastContentJson = contentSnapshot();
+      lastUpdatedAt = remoteTime;
+      dirtySincePush = false;
       useBoardStore.getState().setSyncState("synced");
     }
   } catch {
@@ -216,6 +242,7 @@ async function openBoardId(id: string, fallbackDoc?: BoardDocument) {
     await ensureAssetsLocal(local);
     applyDoc(local);
   }
+  let applied = local;
   const sb = getSupabase();
   if (sb) {
     try {
@@ -230,19 +257,24 @@ async function openBoardId(id: string, fallbackDoc?: BoardDocument) {
         await ensureAssetsLocal(remoteDoc);
         applyDoc(remoteDoc);
         await set(boardKey(id), remoteDoc);
+        applied = remoteDoc;
         useBoardStore.getState().setSyncState("synced");
-      } else if (local) {
-        schedulePush();
       }
     } catch {
       useBoardStore.getState().setSyncState("error");
     }
   }
+  // Grunnlína fyrir efnis-samanburðinn: það sem var opnað. Ef local var nýrra
+  // en skýið heldur það SÍNUM updatedAt og ýtist með honum.
+  lastContentJson = contentSnapshot();
+  lastUpdatedAt = applied?.updatedAt ?? new Date().toISOString();
+  dirtySincePush = false;
+  if (sb && applied === local && local) {
+    dirtySincePush = true;
+    schedulePush();
+  }
   const state = useBoardStore.getState();
-  await rememberBoard(
-    { id, name: state.name, updatedAt: new Date().toISOString() },
-    true
-  );
+  await rememberBoard({ id, name: state.name, updatedAt: lastUpdatedAt }, true);
 }
 
 export async function loadBoard() {
@@ -273,16 +305,38 @@ export async function loadBoard() {
     }
   }
 
-  // Ekkert borð til staðar (fyrsta ræsing) — reyna borð úr skýinu, annars demo.
-  const remote = await listBoards();
-  const newest = remote.find((b) => b.remote);
-  if (newest) {
-    await openBoardId(newest.id);
+  // Ekkert borð til staðar — reyna borð úr skýinu.
+  const remote = await fetchRemoteBoards();
+  if (remote.rows[0]) {
+    await openBoardId(remote.rows[0].id);
+    useBoardStore.getState().setHydrated(true);
+    return;
+  }
+  if (!remote.ok) {
+    // Skýið næst ekki í augnablikinu — ALDREI sá demo-borðið yfir (borðin
+    // hans gætu verið þar); tómt borð þar til tenging næst.
+    currentBoardId = newId();
+    lastContentJson = "";
+    lastUpdatedAt = "";
+    dirtySincePush = false;
+    useBoardStore.getState().replaceBoard({
+      name: "Nýtt borð",
+      objects: [],
+      camera: { x: 80, y: 80, scale: 1 },
+      pixelsPerMeter: null,
+      grid: true,
+      snap: true,
+    });
+    await persistBoard();
+    useBoardStore.getState().setSyncState("error");
     useBoardStore.getState().setHydrated(true);
     return;
   }
   const objects = await createDemoBoard();
   currentBoardId = newId();
+  lastContentJson = "";
+  lastUpdatedAt = "";
+  dirtySincePush = false;
   useBoardStore.getState().replaceBoard({
     name: "Helluhraun 10 · 2. hæð",
     objects,
@@ -301,13 +355,47 @@ export async function loadBoard() {
 
 export async function persistBoard() {
   if (!currentBoardId) currentBoardId = newId();
+  const content = contentSnapshot();
+  const changed = content !== lastContentJson;
+  if (changed) {
+    lastContentJson = content;
+    lastUpdatedAt = new Date().toISOString();
+    dirtySincePush = true;
+  }
   const doc = docFromState();
   await set(boardKey(currentBoardId), doc);
   await rememberBoard(
     { id: currentBoardId, name: doc.name, updatedAt: doc.updatedAt ?? "" },
     true
   );
-  schedulePush();
+  // Camera-hreyfing ein og sér ýtir ekki í skýið og bumpar ekki updatedAt —
+  // annars myndi iðjulaus flipi vinna LWW-kapphlaupið með gömlu efni.
+  if (changed) schedulePush();
+}
+
+async function fetchRemoteBoards(): Promise<{ rows: BoardListEntry[]; ok: boolean }> {
+  const sb = getSupabase();
+  if (!sb) return { rows: [], ok: true };
+  try {
+    const { data, error } = await sb
+      .from("turbopaint_boards")
+      .select("id, name, updated_at")
+      .eq("deleted", false)
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return {
+      ok: true,
+      rows: (data ?? []).map((row) => ({
+        id: row.id as string,
+        name: row.name as string,
+        updatedAt: (row.updated_at as string) ?? "",
+        remote: true,
+      })),
+    };
+  } catch {
+    return { rows: [], ok: false };
+  }
 }
 
 /** All boards: local index merged with the cloud list, newest first. */
@@ -315,29 +403,10 @@ export async function listBoards(): Promise<BoardListEntry[]> {
   const index = await readIndex();
   const merged = new Map<string, BoardListEntry>();
   for (const b of index.boards) merged.set(b.id, b);
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const { data } = await sb
-        .from("turbopaint_boards")
-        .select("id, name, updated_at")
-        .eq("deleted", false)
-        .order("updated_at", { ascending: false })
-        .limit(100);
-      for (const row of data ?? []) {
-        const existing = merged.get(row.id);
-        const entry: BoardListEntry = {
-          id: row.id,
-          name: row.name,
-          updatedAt: (row.updated_at as string) ?? "",
-          remote: true,
-        };
-        if (!existing || entry.updatedAt > existing.updatedAt) merged.set(row.id, entry);
-        else merged.set(row.id, { ...existing, remote: true });
-      }
-    } catch {
-      // offline — local list only
-    }
+  for (const entry of (await fetchRemoteBoards()).rows) {
+    const existing = merged.get(entry.id);
+    if (!existing || entry.updatedAt > existing.updatedAt) merged.set(entry.id, entry);
+    else merged.set(entry.id, { ...existing, remote: true });
   }
   return [...merged.values()].sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
 }
@@ -352,6 +421,9 @@ export async function switchBoard(id: string) {
 export async function createBoard(name = "Nýtt borð") {
   await persistBoard();
   currentBoardId = newId();
+  lastContentJson = "";
+  lastUpdatedAt = "";
+  dirtySincePush = false;
   useBoardStore.getState().replaceBoard({
     name,
     objects: [],
