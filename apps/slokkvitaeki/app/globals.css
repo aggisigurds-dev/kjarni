@@ -2414,6 +2414,8 @@ a.ms-gitem:hover { border-color:var(--m-navy); }
 }
 @media (max-width:620px) {
   .ms-skin-hint { display:none; }
+  .ms-hud { display:none; }
+  .ms-skins { width:100%; margin-left:0; flex-wrap:wrap; }
 }
 
 /* new-site landing (/s/[slug]) */
