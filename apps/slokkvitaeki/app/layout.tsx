@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter, IBM_Plex_Mono } from "next/font/google";
+import Script from "next/script";
 import { Tools } from "./Tools";
 import "./globals.css";
 
@@ -24,8 +25,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="is" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="is" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body>
+        <Script id="kjarni-skin" strategy="beforeInteractive">
+          {`try{if(location.pathname.indexOf("/kjarni")===0){var s=localStorage.getItem("kjarni_skin");if(s)document.documentElement.dataset.kjarniSkin=s}}catch(e){}`}
+        </Script>
         {children}
         <Tools />
       </body>
