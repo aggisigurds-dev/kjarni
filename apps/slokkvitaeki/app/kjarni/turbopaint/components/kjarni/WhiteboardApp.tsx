@@ -21,7 +21,7 @@ import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
-import { useBoardStore } from "../../lib/board/store";
+import { snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
@@ -213,7 +213,8 @@ export function WhiteboardApp() {
       toast.message("Eldveggur: smelltu horn af horni — Enter lýkur vegg, Esc hættir og heldur veggnum");
       return;
     }
-    const obj = makeSymbol(symbolId, world.x - 32, world.y - 32);
+    const spot = snapPoint(world.x - 32, world.y - 32);
+    const obj = makeSymbol(symbolId, spot.x, spot.y);
     useBoardStore.getState().addObjects([obj], true);
     useBoardStore.getState().setTool("select");
   }, []);

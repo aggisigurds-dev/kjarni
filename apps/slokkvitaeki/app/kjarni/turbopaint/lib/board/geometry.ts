@@ -162,6 +162,20 @@ export function simplifyPoints(points: number[], minDist = 2.4) {
 
 export const GRID_GAP = 20;
 
+/** Bilið sem grindin TEIKNAST með á núverandi zoomi — punktarnir tvöfalda
+ * bilið eftir þörfum svo þeir drekki ekki skjánum. Snap verður að nota SAMA
+ * bil, annars límast hlutir milli sýnilegu punktanna („festa við grind
+ * virkar ekki"). */
+export function effectiveGridGap(camera: Camera, width: number, height: number) {
+  const cols = width / camera.scale / GRID_GAP;
+  const rows = height / camera.scale / GRID_GAP;
+  let gap = GRID_GAP;
+  while (cols * (GRID_GAP / gap) * rows * (GRID_GAP / gap) > 9000) {
+    gap *= 2;
+  }
+  return gap;
+}
+
 const DOCUMENT_CLUSTER_NAMES = [
   "Eldveggur",
   "Eldhurð",
