@@ -14,15 +14,38 @@ import type { BoardObject, ImageObject, LineObject, RectObject, TextObject } fro
 
 export const FIREWALL_MARK_NAMES = ["Eldveggur", "Eldhurð", "Eldveggir"] as const;
 
-const OCR_MAX = 4800;
+const OCR_MAX = 5200;
 const OCR_MIN = 3600;
+
+/** Svart blek á hvítu fyrir OCR: rauð/bleik ský og lituð yfirstrikun sem
+ * liggja yfir EI-merkingum á skönnuðum teikningum drekkja textanum annars. */
+function binarizeForOcr(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = image.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const max = Math.max(r, g, b);
+    const sat = max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
+    const ink = data[i + 3] > 60 && lum < 165 && sat < 0.45;
+    const v = ink ? 0 : 255;
+    data[i] = v;
+    data[i + 1] = v;
+    data[i + 2] = v;
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+}
 
 function fitOcrCanvas(source: HTMLCanvasElement) {
   const longest = Math.max(source.width, source.height);
   let scale = 1;
   if (longest > OCR_MAX) scale = OCR_MAX / longest;
   else if (longest < OCR_MIN) scale = OCR_MIN / longest;
-  if (Math.abs(scale - 1) < 0.02) return { canvas: source, scale: 1 };
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(source.width * scale));
   canvas.height = Math.max(1, Math.round(source.height * scale));
@@ -33,6 +56,7 @@ function fitOcrCanvas(source: HTMLCanvasElement) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  binarizeForOcr(canvas);
   return { canvas, scale };
 }
 
@@ -166,9 +190,36 @@ function rotate90cw(src: HTMLCanvasElement) {
   return dst;
 }
 
+function rotate90ccw(src: HTMLCanvasElement) {
+  const dst = document.createElement("canvas");
+  dst.width = src.height;
+  dst.height = src.width;
+  const ctx = dst.getContext("2d");
+  if (!ctx) throw new Error("Gat ekki snúið mynd");
+  ctx.translate(0, dst.height);
+  ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(src, 0, 0);
+  return dst;
+}
+
+/** Orð úr mynd sem var snúið réttsælis (les texta sem snýr neðan-upp). */
 function mapRotatedWord(word: OcrWord, srcHeight: number): OcrWord {
   const x0 = word.y;
   const y0 = srcHeight - (word.x + word.width);
+  return {
+    ...word,
+    vertical: true,
+    x: x0,
+    y: y0,
+    width: word.height,
+    height: word.width,
+  };
+}
+
+/** Orð úr mynd sem var snúið rangsælis (les texta sem snýr ofan-niður). */
+function mapCcwRotatedWord(word: OcrWord, srcWidth: number): OcrWord {
+  const x0 = srcWidth - (word.y + word.height);
+  const y0 = word.x;
   return {
     ...word,
     vertical: true,
@@ -190,17 +241,23 @@ async function ocrPlan(
     tessedit_pageseg_mode: "11",
     user_defined_dpi: "220",
   });
-  onProgress?.("Les láréttar merkingar…", 52);
+  onProgress?.("Les láréttar merkingar…", 48);
   const horiz = await worker.recognize(canvas, {}, { blocks: true, text: true });
-  onProgress?.("Les lóðréttar merkingar…", 78);
-  const rotated = rotate90cw(canvas);
-  const vert = await worker.recognize(rotated, {}, { blocks: true, text: true });
-  rotated.width = 0;
-  rotated.height = 0;
+  onProgress?.("Les lóðréttar merkingar (neðan-upp)…", 66);
+  const rotatedCw = rotate90cw(canvas);
+  const vertCw = await worker.recognize(rotatedCw, {}, { blocks: true, text: true });
+  rotatedCw.width = 0;
+  rotatedCw.height = 0;
+  onProgress?.("Les lóðréttar merkingar (ofan-niður)…", 80);
+  const rotatedCcw = rotate90ccw(canvas);
+  const vertCcw = await worker.recognize(rotatedCcw, {}, { blocks: true, text: true });
+  rotatedCcw.width = 0;
+  rotatedCcw.height = 0;
 
   const words = [
     ...wordsFromResult(horiz.data, false),
-    ...wordsFromResult(vert.data, true).map((w) => mapRotatedWord(w, canvas.height)),
+    ...wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, canvas.height)),
+    ...wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, canvas.width)),
   ].map((w) => ({
     ...w,
     x: w.x / scale,
