@@ -13,7 +13,8 @@ export type Tool =
   | "measure"
   | "calibrate"
   | "firewall"
-  | "eraser";
+  | "eraser"
+  | "crop";
 
 export type ImportQuality = "fast" | "standard" | "print";
 

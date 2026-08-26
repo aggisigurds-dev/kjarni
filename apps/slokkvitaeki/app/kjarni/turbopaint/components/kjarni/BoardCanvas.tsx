@@ -3,7 +3,8 @@
 import type Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
-import { dashArray, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
+import { toast } from "sonner";
+import { boardBounds, cameraFit, dashArray, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
@@ -15,7 +16,8 @@ type Draft =
   | { kind: "ellipse"; ax: number; ay: number; bx: number; by: number }
   | { kind: "sticky"; ax: number; ay: number; bx: number; by: number }
   | { kind: LineKind; points: number[] }
-  | { kind: "marquee"; ax: number; ay: number; bx: number; by: number };
+  | { kind: "marquee"; ax: number; ay: number; bx: number; by: number }
+  | { kind: "crop"; ax: number; ay: number; bx: number; by: number };
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -43,6 +45,8 @@ export function BoardCanvas({
   onFilesDropped,
   onSymbolDropped,
   onCalibrate,
+  onCropRect,
+  onRequestStrip,
 }: {
   width: number;
   height: number;
@@ -50,6 +54,8 @@ export function BoardCanvas({
   onFilesDropped: (files: File[], world: { x: number; y: number }) => void;
   onSymbolDropped: (symbolId: string, world: { x: number; y: number }) => void;
   onCalibrate: (pixels: number) => void;
+  onCropRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  onRequestStrip?: (planId: string) => void;
 }) {
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -66,6 +72,8 @@ export function BoardCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ dist: number; midWorld: { x: number; y: number } } | null>(null);
   const eraseRef = useRef(false);
+  const rightDownRef = useRef<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; targetId: string | null } | null>(null);
   const polyRef = useRef<number[] | null>(null);
   const documentDragRef = useRef<{
     imageId: string;
@@ -118,7 +126,7 @@ export function BoardCanvas({
 
   const commitShape = useCallback((d: Draft, firewallWall = false) => {
     const { style: st, addObjects } = useBoardStore.getState();
-    if (d.kind === "marquee") return;
+    if (d.kind === "marquee" || d.kind === "crop") return;
     if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
       const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       if (box.width < 4 && box.height < 4) return;
@@ -300,8 +308,15 @@ export function BoardCanvas({
       }
       const world = clientToWorld(clientX, clientY);
       const snapped = freehand ? world : snapPoint(world.x, world.y);
-      if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky" || d.kind === "marquee") {
-        setDraftState({ ...d, bx: snapped.x, by: snapped.y });
+      if (
+        d.kind === "rect" ||
+        d.kind === "ellipse" ||
+        d.kind === "sticky" ||
+        d.kind === "marquee" ||
+        d.kind === "crop"
+      ) {
+        const pt = d.kind === "crop" ? world : snapped;
+        setDraftState({ ...d, bx: pt.x, by: pt.y });
         return;
       }
       if (d.kind === "pen") {
@@ -322,6 +337,13 @@ export function BoardCanvas({
     const d = draftRef.current;
     if (!d) return;
     if (d.kind === "polyline") return;
+    if (d.kind === "crop") {
+      const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
+      setDraftState(null);
+      useBoardStore.getState().setTool("select");
+      if (box.width > 24 && box.height > 24) onCropRect?.(box);
+      return;
+    }
     if (d.kind === "marquee") {
       const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       if (box.width > 8 && box.height > 8) {
@@ -350,7 +372,7 @@ export function BoardCanvas({
     if (useBoardStore.getState().tool !== "pen") {
       useBoardStore.getState().setTool("select");
     }
-  }, [commitShape, onCalibrate, setDraftState]);
+  }, [commitShape, onCalibrate, onCropRect, setDraftState]);
 
   // Two-finger pinch: zoom around the fingers' midpoint, pan as it moves.
   useEffect(() => {
@@ -430,6 +452,11 @@ export function BoardCanvas({
   const onPointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = stageRef.current;
     if (!stage || pinchRef.current) return;
+    if (e.evt.button === 2) {
+      // Kyrrstæður hægri-smellur opnar hraðvalmyndina (sjá onContextMenu);
+      // hægri-DRAG í ✋ færir borðið áfram — fjarlægðin sker úr.
+      rightDownRef.current = { x: e.evt.clientX, y: e.evt.clientY };
+    }
     const world = clientToWorld(e.evt.clientX, e.evt.clientY);
     const clickedEmpty = e.target === stage;
     const currentTool: Tool = useBoardStore.getState().tool;
@@ -456,6 +483,11 @@ export function BoardCanvas({
       e.cancelBubble = true;
       eraseRef.current = true;
       eraseAt(e.evt.clientX, e.evt.clientY);
+      return;
+    }
+
+    if (currentTool === "crop") {
+      setDraftState({ kind: "crop", ax: world.x, ay: world.y, bx: world.x, by: world.y });
       return;
     }
 
@@ -766,6 +798,51 @@ export function BoardCanvas({
     documentDragRef.current = null;
   };
 
+  // Loka hraðvalmyndinni við smell utan hennar, skrun eða Esc.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("keydown", onEsc);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("keydown", onEsc);
+    };
+  }, [menu]);
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const down = rightDownRef.current;
+    rightDownRef.current = null;
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const rect = stage.container().getBoundingClientRect();
+    const hit = stage.getIntersection({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    let targetId: string | null = null;
+    if (hit) {
+      const all = useBoardStore.getState().objects;
+      let node: Konva.Node | null = hit;
+      while (node && node !== (stage as unknown as Konva.Node)) {
+        const id = node.id();
+        if (id && all.some((o) => o.id === id)) {
+          targetId = id;
+          break;
+        }
+        node = node.getParent();
+      }
+    }
+    if (targetId && !useBoardStore.getState().selectedIds.includes(targetId)) {
+      useBoardStore.getState().setSelected(expandGroups([targetId]));
+    }
+    setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, targetId });
+  };
+
   const cursor = spacePan ? "grab" : selectLike ? "default" : "crosshair";
 
   return (
@@ -778,7 +855,7 @@ export function BoardCanvas({
         e.dataTransfer.dropEffect = e.dataTransfer.types.includes("Files") ? "copy" : "copy";
       }}
       onDrop={onDrop}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={onContextMenu}
     >
       <Stage
         width={width}
@@ -845,7 +922,12 @@ export function BoardCanvas({
               }}
             />
           ))}
-          {draft && draft.kind !== "marquee" && draft.kind !== "rect" && draft.kind !== "ellipse" && draft.kind !== "sticky" ? (
+          {draft &&
+          draft.kind !== "marquee" &&
+          draft.kind !== "crop" &&
+          draft.kind !== "rect" &&
+          draft.kind !== "ellipse" &&
+          draft.kind !== "sticky" ? (
             <Line
               points={draft.points}
               stroke={style.stroke}
@@ -866,6 +948,17 @@ export function BoardCanvas({
               dash={[8, 6]}
               fill={draft.kind === "sticky" ? style.stickyFill : style.fill === "transparent" ? undefined : style.fill}
               cornerRadius={draft.kind === "sticky" ? 4 : 0}
+              listening={false}
+              name="ui-only"
+            />
+          ) : null}
+          {draft && draft.kind === "crop" ? (
+            <Rect
+              {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
+              stroke="#FE653F"
+              strokeWidth={2 / camera.scale}
+              dash={[10, 6]}
+              fill="rgba(254,101,63,0.08)"
               listening={false}
               name="ui-only"
             />
@@ -900,6 +993,161 @@ export function BoardCanvas({
           />
         </Layer>
       </Stage>
+      {menu
+        ? (() => {
+            const target = objects.find((o) => o.id === menu.targetId) ?? null;
+            const selCount = selectedIds.length;
+            const hasGroup = objects.some((o) => selectedIds.includes(o.id) && o.groupId);
+            const act = (fn: () => void) => () => {
+              setMenu(null);
+              fn();
+            };
+            const item =
+              "block w-full rounded-md px-2.5 py-1.5 text-left text-[12px] text-stone-200 hover:bg-white/10";
+            return (
+              <div
+                className="absolute z-30 w-52 rounded-xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl backdrop-blur-md"
+                style={{
+                  left: Math.max(4, Math.min(menu.x, width - 216)),
+                  top: Math.max(4, Math.min(menu.y, height - 280)),
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                {target ? (
+                  <>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() =>
+                        useBoardStore.getState().deleteIds(useBoardStore.getState().selectedIds)
+                      )}
+                    >
+                      🗑 Eyða
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().duplicateSelected())}
+                    >
+                      ⧉ Afrita (⌘D)
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().lockSelected(!target.locked))}
+                    >
+                      {target.locked ? "🔓 Aflæsa" : "🔒 Læsa"}
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().bringForward())}
+                    >
+                      ⬆ Færa fram
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().sendBackward())}
+                    >
+                      ⬇ Færa aftar
+                    </button>
+                    {selCount >= 2 ? (
+                      <button
+                        type="button"
+                        className={item}
+                        onClick={act(() => useBoardStore.getState().groupSelected())}
+                      >
+                        Hópa saman (⌘G)
+                      </button>
+                    ) : null}
+                    {hasGroup ? (
+                      <button
+                        type="button"
+                        className={item}
+                        onClick={act(() => useBoardStore.getState().ungroupSelected())}
+                      >
+                        Afhópa
+                      </button>
+                    ) : null}
+                    {target.type === "image" ? (
+                      <>
+                        <div className="my-1 h-px bg-white/10" />
+                        <button
+                          type="button"
+                          className={item}
+                          onClick={act(() => {
+                            useBoardStore.getState().setTool("crop");
+                            toast.message(
+                              "Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af"
+                            );
+                          })}
+                        >
+                          ✂ Croppa teikningu
+                        </button>
+                        <button
+                          type="button"
+                          className={item}
+                          onClick={act(() => onRequestStrip?.(target.id))}
+                        >
+                          🧹 Hreinsa teikningu
+                        </button>
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => {
+                        const s = useBoardStore.getState();
+                        s.setSelected(
+                          s.objects.filter((o) => !o.locked && !o.hidden).map((o) => o.id)
+                        );
+                      })}
+                    >
+                      Velja allt (⌘A)
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => {
+                        const s = useBoardStore.getState();
+                        s.setCamera(cameraFit(boardBounds(s.objects), width, height));
+                      })}
+                    >
+                      Passa á skjá (⌘0)
+                    </button>
+                    <div className="my-1 h-px bg-white/10" />
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().startFirewall())}
+                    >
+                      🔥 Eldveggur
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().setTool("calibrate"))}
+                    >
+                      📏 Kvarði
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => useBoardStore.getState().setTool("eraser"))}
+                    >
+                      Strokleður (E)
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()
+        : null}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   stripToInk,
   whiteOutWords,
 } from "../../lib/board/strip";
+import { cropPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
@@ -302,6 +303,41 @@ export function WhiteboardApp() {
     []
   );
 
+  const runCrop = useCallback(
+    async (rect: { x: number; y: number; width: number; height: number }) => {
+      const state = useBoardStore.getState();
+      const images = state.objects.filter(
+        (o): o is Extract<typeof o, { type: "image" }> => o.type === "image" && !o.hidden
+      );
+      // Efsta planið sem ramminn sker (aftar í listanum = ofar á borðinu).
+      const plan = [...images]
+        .reverse()
+        .find(
+          (img) =>
+            rect.x < img.x + img.width &&
+            rect.x + rect.width > img.x &&
+            rect.y < img.y + img.height &&
+            rect.y + rect.height > img.y
+        );
+      if (!plan) {
+        toast.error("Ramminn nær ekki yfir neina teikningu");
+        return;
+      }
+      if (Math.abs(plan.rotation % 360) > 0.5) {
+        toast.error("Snúðu teikningunni í 0° áður en croppað er");
+        return;
+      }
+      try {
+        const res = await cropPlanAsset(plan, rect);
+        useBoardStore.getState().patchObject(plan.id, res, true);
+        toast.success("Króppað — ⌘Z afturkallar");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Cropp mistókst");
+      }
+    },
+    []
+  );
+
   // Sækja teikningu beint af permalink (t.d. skjalasafn.reykjavik.is FotoWeb)
   // gegnum /api/turbopaint/fetch-plan proxy-ið — CORS bannar beina sókn.
   const runUrlImport = useCallback(
@@ -535,6 +571,8 @@ export function WhiteboardApp() {
                 dropSymbol(symbolId, world);
               }}
               onCalibrate={setCalibratePx}
+              onCropRect={(rect) => void runCrop(rect)}
+              onRequestStrip={(planId) => setStripPlanId(planId)}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-stone-500">
