@@ -25,7 +25,15 @@ const GENERIC_LABELS: Record<string, string> = {
 export function CountTable() {
   const objects = useBoardStore((s) => s.objects);
   const selectedIds = useBoardStore((s) => s.selectedIds);
-  const [open, setOpen] = useState(true);
+  // Á síma/spjaldtölvu (< 1024px eða snertiskjár) byrjar spjaldið samanfellt svo
+  // það þeki ekki teikninguna. matchMedia má ekki keyra í SSR-prerender — guarded.
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      window.matchMedia("(min-width: 1024px)").matches &&
+      !window.matchMedia("(pointer: coarse)").matches
+    );
+  });
 
   const images = useMemo(
     () => objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden),
@@ -125,15 +133,15 @@ export function CountTable() {
   };
 
   return (
-    <div className="w-[224px] rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-stone-100 shadow-2xl">
+    <div className="w-44 rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-stone-100 shadow-2xl lg:w-[224px]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-2"
+        className="flex min-h-9 w-full items-center justify-between px-3 py-2"
         title={open ? "Fella saman" : "Opna magntöflu"}
       >
         <span className="text-[11px] font-semibold tracking-wide">MAGNTAFLA</span>
-        <span className="text-[11px] text-white/50">{open ? "−" : total}</span>
+        <span className="text-[11px] text-white/50">{open ? "−" : `· ${total}`}</span>
       </button>
       {open ? (
         <div className="px-3 pb-2.5">
@@ -141,16 +149,18 @@ export function CountTable() {
             {plan.name}
           </div>
           {rows.length ? (
-            <table className="w-full border-collapse text-[11px]">
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.key} className="border-b border-white/5 last:border-0">
-                    <td className="py-0.5 pr-2">{r.label}</td>
-                    <td className="py-0.5 text-right font-semibold tabular-nums">{r.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="max-h-[38vh] overflow-y-auto lg:max-h-[50vh]">
+              <table className="w-full border-collapse text-[11px]">
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.key} className="border-b border-white/5 last:border-0">
+                      <td className="py-0.5 pr-2">{r.label}</td>
+                      <td className="py-0.5 text-right font-semibold tabular-nums">{r.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="text-[11px] text-white/40">Ekkert á teikningunni enn</div>
           )}

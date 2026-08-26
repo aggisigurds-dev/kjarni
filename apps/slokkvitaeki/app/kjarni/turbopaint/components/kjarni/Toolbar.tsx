@@ -9,6 +9,7 @@ import {
   Minus,
   MousePointer2,
   Pencil,
+  PencilRuler,
   Pentagon,
   Ruler,
   Square,
@@ -32,6 +33,12 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
   { id: "text", label: "Texti", shortcut: "T", icon: <Type className="size-4" /> },
   { id: "sticky", label: "Minnispunktur", shortcut: "N", icon: <StickyNote className="size-4" /> },
   { id: "measure", label: "Mæla", shortcut: "M", icon: <Ruler className="size-4" /> },
+  {
+    id: "calibrate",
+    label: "Kvarði — dragðu eftir þekktri lengd (t.d. milli veggja) og stimplaðu inn metrana",
+    shortcut: "K",
+    icon: <PencilRuler className="size-4" />,
+  },
 ];
 
 export function Toolbar() {
@@ -41,10 +48,10 @@ export function Toolbar() {
   const symbol = getSymbol(style.symbolId);
 
   return (
-    <div className="pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
+    <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
       {TOOLS.map((item, index) => (
         <div key={item.id}>
-          {index === 2 || index === 8 ? <div className="mx-auto my-1 h-px w-6 bg-white/10" /> : null}
+          {index === 2 || index === 8 ? <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" /> : null}
           <ToolButton
             active={tool === item.id}
             label={`${item.label} (${item.shortcut})`}
@@ -54,7 +61,7 @@ export function Toolbar() {
           </ToolButton>
         </div>
       ))}
-      <div className="mx-auto my-1 h-px w-6 bg-white/10" />
+      <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" />
       <ToolButton
         active={tool === "symbol"}
         label={`Tákn — ${symbol.name}`}
@@ -88,7 +95,7 @@ function ToolButton({
       title={label}
       onClick={onClick}
       className={cn(
-        "flex size-9 items-center justify-center rounded-xl text-stone-300 transition",
+        "tp-toolbtn flex size-9 items-center justify-center rounded-xl text-stone-300 transition",
         active ? "bg-[#FE653F] text-white shadow-inner" : "hover:bg-white/8 hover:text-white"
       )}
     >
@@ -129,7 +136,7 @@ export function StyleStrip() {
   }
 
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+    <div className="tp-stylestrip pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
       <span className="hidden sm:inline text-stone-500">Litur</span>
       {["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"].map((color) => (
         <button
