@@ -54,7 +54,7 @@ export function BoardCanvas({
   onEditText: (id: string) => void;
   onFilesDropped: (files: File[], world: { x: number; y: number }) => void;
   onSymbolDropped: (symbolId: string, world: { x: number; y: number }) => void;
-  onCalibrate: (pixels: number) => void;
+  onCalibrate: (pixels: number, points: number[]) => void;
   onCropRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   onRequestStrip?: (planId: string) => void;
 }) {
@@ -368,7 +368,9 @@ export function BoardCanvas({
     if (useBoardStore.getState().tool === "calibrate" && d.kind === "measure") {
       const dx = d.points[2] - d.points[0];
       const dy = d.points[3] - d.points[1];
-      onCalibrate(Math.hypot(dx, dy));
+      // Línan fylgir með svo innslegna mælingin VISTIST á teikninguna
+      // (áður hvarf hún og talan með — "hélt að mælistikan myndi haldast").
+      onCalibrate(Math.hypot(dx, dy), d.points.slice(0, 4));
       setDraftState(null);
       useBoardStore.getState().setTool("select");
       return;

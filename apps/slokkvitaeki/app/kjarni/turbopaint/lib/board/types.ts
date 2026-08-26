@@ -83,6 +83,8 @@ export interface LineObject extends BaseObject {
   stroke: string;
   strokeWidth: number;
   dash: DashStyle;
+  /** Innslegin RAUN-lengd í metrum (Kvarði) — yfirskrifar reiknaða lengd á merkimiða. */
+  meters?: number;
 }
 
 export interface TextObject extends BaseObject {

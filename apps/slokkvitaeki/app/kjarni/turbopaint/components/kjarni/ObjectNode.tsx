@@ -12,7 +12,7 @@ import {
   Text as KonvaText,
 } from "react-konva";
 import { getAssetUrl } from "../../lib/board/assets";
-import { dashArray, formatLength, lineLength } from "../../lib/board/geometry";
+import { dashArray, formatLength, formatM2, formatMm, lineLength } from "../../lib/board/geometry";
 import { snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
 import { SymbolNode } from "./SymbolNode";
@@ -139,16 +139,39 @@ export function ObjectNode({
   }
 
   if (obj.type === "rect") {
+    // Gegnsær ferningur á kvörðuðu borði er flatarmáls-taka: sýnir b × h og m²
+    // (nýtanlegir fermetrar) — litaðir ferningar eru venjuleg merking án mála.
+    const showDims = obj.fill === "transparent" && pixelsPerMeter && pixelsPerMeter > 0;
+    const wM = showDims ? obj.width / pixelsPerMeter : 0;
+    const hM = showDims ? obj.height / pixelsPerMeter : 0;
     return (
-      <Rect
-        {...common}
-        width={obj.width}
-        height={obj.height}
-        fill={obj.fill === "transparent" ? undefined : obj.fill}
-        stroke={obj.stroke}
-        strokeWidth={obj.strokeWidth}
-        cornerRadius={obj.cornerRadius}
-      />
+      <Group {...common}>
+        <Rect
+          width={obj.width}
+          height={obj.height}
+          fill={obj.fill === "transparent" ? undefined : obj.fill}
+          stroke={obj.stroke}
+          strokeWidth={obj.strokeWidth}
+          cornerRadius={obj.cornerRadius}
+        />
+        {showDims ? (
+          <KonvaText
+            width={Math.max(80, obj.width)}
+            x={obj.width < 80 ? (obj.width - 80) / 2 : 0}
+            y={Math.max(4, obj.height / 2 - 18)}
+            text={`${formatMm(wM)} × ${formatMm(hM)} mm\n${formatM2(wM * hM)}`}
+            fontSize={15}
+            fontStyle="bold"
+            align="center"
+            fill={obj.stroke}
+            stroke="#ffffff"
+            strokeWidth={3}
+            fillAfterStrokeEnabled
+            fontFamily="Inter, sans-serif"
+            listening={false}
+          />
+        ) : null}
+      </Group>
     );
   }
 
@@ -190,10 +213,13 @@ export function ObjectNode({
           <KonvaText
             x={(obj.points[0] + obj.points[obj.points.length - 2]) / 2}
             y={(obj.points[1] + obj.points[obj.points.length - 1]) / 2 - 18}
-            text={formatLength(length, pixelsPerMeter)}
+            text={formatLength(length, pixelsPerMeter, obj.meters ?? null)}
             fontSize={16}
             fontStyle="bold"
             fill={obj.stroke}
+            stroke="#ffffff"
+            strokeWidth={3}
+            fillAfterStrokeEnabled
             fontFamily="Inter, sans-serif"
           />
         ) : null}
