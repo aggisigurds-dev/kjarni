@@ -95,6 +95,7 @@ export function CountTable() {
 
   // Nýtanlegt flatarmál: gegnsæir ferningar á kvörðuðu borði eru rýma-taka —
   // dregnir yfir hvert rými (L-form = fleiri en einn) og lagðir hér saman.
+  // "Frádráttur…"-ferningar (stigahús, skaft) DRAGAST FRÁ samtölunni.
   const areaM2 = useMemo(() => {
     if (!plan || !pixelsPerMeter || pixelsPerMeter <= 0) return 0;
     return objectsOnDocument(plan, objects)
@@ -102,7 +103,10 @@ export function CountTable() {
         (o): o is Extract<typeof o, { type: "rect" }> =>
           o.type === "rect" && !o.hidden && o.fill === "transparent"
       )
-      .reduce((sum, r) => sum + (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter), 0);
+      .reduce((sum, r) => {
+        const a = (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter);
+        return r.name.startsWith("Frádráttur") ? sum - a : sum + a;
+      }, 0);
   }, [plan, objects, pixelsPerMeter]);
 
   if (!plan) {
@@ -122,7 +126,7 @@ export function CountTable() {
       ...equipmentRows.map((r) => `${r.count}× ${r.label}`),
       "".padEnd(24, "—"),
       `Samtals búnaður: ${total}`,
-      ...(areaM2 > 0 ? [`Nýtanlegt flatarmál: ${formatM2(areaM2)}`] : []),
+      ...(areaM2 !== 0 ? [`Nýtanlegt flatarmál: ${formatM2(areaM2)}`] : []),
       ...(otherRows.length
         ? ["", "Annað:", ...otherRows.map((r) => `${r.count}× ${r.label}`)]
         : []),
@@ -204,7 +208,7 @@ export function CountTable() {
                 <span>Samtals búnaður</span>
                 <span className="tabular-nums">{total}</span>
               </div>
-              {areaM2 > 0 ? (
+              {areaM2 !== 0 ? (
                 <div className="flex items-center justify-between pt-1 text-[11px] font-semibold text-emerald-300">
                   <span>Nýtanlegt flatarmál</span>
                   <span className="tabular-nums">{formatM2(areaM2)}</span>

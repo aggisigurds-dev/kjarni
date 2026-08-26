@@ -12,6 +12,16 @@ import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
 
+/** Litaregla Agnars: EI-60 appelsínugult · E-30 blátt · EI-CS ljósblátt (strikað) ·
+ * AREIM fjólublátt. Nafnið heldur "EI-veggur"-forskeytinu svo Magntaflan telji
+ * flokkana og sjálfvirka endur-merkingin hreinsi þá aldrei. */
+const FIREWALL_CLASSES: { label: string; color: string; dash: "solid" | "dashed"; width: number }[] = [
+  { label: "EI-60", color: "#ea580c", dash: "solid", width: 8 },
+  { label: "EI-30", color: "#2563eb", dash: "solid", width: 6 },
+  { label: "EI-CS", color: "#38bdf8", dash: "dashed", width: 6 },
+  { label: "AREIM", color: "#7c3aed", dash: "solid", width: 6 },
+];
+
 type Draft =
   | { kind: "rect"; ax: number; ay: number; bx: number; by: number }
   | { kind: "ellipse"; ax: number; ay: number; bx: number; by: number }
@@ -1078,6 +1088,61 @@ export function BoardCanvas({
                         onClick={act(() => useBoardStore.getState().ungroupSelected())}
                       >
                         Afhópa
+                      </button>
+                    ) : null}
+                    {target.type === "polyline" || target.type === "line" || target.type === "pen" ? (
+                      <>
+                        <div className="my-1 h-px bg-white/10" />
+                        <div className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium tracking-wide text-white/40">
+                          FLOKKA SEM ELDVEGG
+                        </div>
+                        <div className="flex gap-1 px-1.5 pb-1">
+                          {FIREWALL_CLASSES.map((c) => (
+                            <button
+                              key={c.label}
+                              type="button"
+                              className="flex-1 rounded-md px-1 py-1 text-[10px] font-semibold text-white hover:opacity-85"
+                              style={{ background: c.color }}
+                              onClick={act(() => {
+                                const ids = useBoardStore.getState().selectedIds;
+                                useBoardStore.getState().updateObjects(ids, (o) =>
+                                  o.type === "polyline" || o.type === "line" || o.type === "pen"
+                                    ? {
+                                        ...o,
+                                        stroke: c.color,
+                                        dash: c.dash,
+                                        strokeWidth: c.width,
+                                        opacity: 0.55,
+                                        name: `EI-veggur ${c.label}`,
+                                      }
+                                    : o
+                                );
+                              })}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                    {target.type === "rect" ? (
+                      <button
+                        type="button"
+                        className={item}
+                        onClick={act(() => {
+                          // Frádráttar-svæði (stigahús, skaft …) dregst frá
+                          // nýtanlegu fermetrunum í Magntöflunni.
+                          const neg = !target.name.startsWith("Frádráttur");
+                          useBoardStore.getState().patchObject(target.id, {
+                            name: neg ? "Frádráttur" : "Flatarmál",
+                            fill: "transparent",
+                            stroke: neg ? "#dc2626" : "#16a34a",
+                          } as never);
+                        })}
+                      >
+                        {target.name.startsWith("Frádráttur")
+                          ? "➕ Telja sem nýtanlegt flatarmál"
+                          : "➖ Telja sem frádrátt (stigahús o.þ.h.)"}
                       </button>
                     ) : null}
                     {target.type === "image" ? (

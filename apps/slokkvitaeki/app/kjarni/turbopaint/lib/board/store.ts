@@ -132,7 +132,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     // width/dash always stay as pre-chosen in the StyleStrip.
     const st = get().style;
     set({
-      style: st.stroke === "#1c1917" ? { ...st, stroke: "#e11d2e" } : st,
+      // Sjálfgefinn nýr eldveggur = EI-60 appelsínugult (litaregla Agnars)
+      style: st.stroke === "#1c1917" ? { ...st, stroke: "#ea580c" } : st,
       tool: "firewall",
       selectedIds: [],
     });

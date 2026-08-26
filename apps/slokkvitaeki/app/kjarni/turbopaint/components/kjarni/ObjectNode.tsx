@@ -141,7 +141,9 @@ export function ObjectNode({
   if (obj.type === "rect") {
     // Gegnsær ferningur á kvörðuðu borði er flatarmáls-taka: sýnir b × h og m²
     // (nýtanlegir fermetrar) — litaðir ferningar eru venjuleg merking án mála.
+    // "Frádráttur…"-ferningar (stigahús, skaft, veggir) teljast NEIKVÆTT.
     const showDims = obj.fill === "transparent" && pixelsPerMeter && pixelsPerMeter > 0;
+    const negative = obj.name.startsWith("Frádráttur");
     const wM = showDims ? obj.width / pixelsPerMeter : 0;
     const hM = showDims ? obj.height / pixelsPerMeter : 0;
     return (
@@ -159,11 +161,11 @@ export function ObjectNode({
             width={Math.max(80, obj.width)}
             x={obj.width < 80 ? (obj.width - 80) / 2 : 0}
             y={Math.max(4, obj.height / 2 - 18)}
-            text={`${formatMm(wM)} × ${formatMm(hM)} mm\n${formatM2(wM * hM)}`}
+            text={`${formatMm(wM)} × ${formatMm(hM)} mm\n${negative ? "−" : ""}${formatM2(wM * hM)}`}
             fontSize={15}
             fontStyle="bold"
             align="center"
-            fill={obj.stroke}
+            fill={negative ? "#dc2626" : obj.stroke}
             stroke="#ffffff"
             strokeWidth={3}
             fillAfterStrokeEnabled
