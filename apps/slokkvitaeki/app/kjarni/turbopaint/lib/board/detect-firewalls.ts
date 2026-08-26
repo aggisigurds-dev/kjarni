@@ -108,9 +108,14 @@ async function getWorker(onProgress?: (message: string, percent: number) => void
   if (!workerPromise) {
     workerPromise = (async () => {
       const { createWorker, PSM } = await import("tesseract.js");
+      // SJÁLFHÝST í public/tesseract/ (afrit úr node_modules, sömu útgáfu):
+      // new Worker(cross-origin CDN-slóð) er BANNAÐ í vöfrum, svo CDN-uppsetningin
+      // gat aldrei ræst OCR í framleiðslu — það var "les ekkert"-veilan.
+      // Uppfærist tesseract.js þarf að endurafrita worker.min.js + core-skrárnar.
       const worker = await createWorker("eng", 1, {
-        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/worker.min.js",
-        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@6.1.2/tesseract-core-simd-lstm.wasm.js",
+        workerPath: "/tesseract/worker.min.js",
+        corePath: "/tesseract/tesseract-core-simd-lstm.wasm.js",
+        langPath: "/tesseract/lang",
         workerBlobURL: false,
         logger: (m) => {
           if (!progressCb) return;
