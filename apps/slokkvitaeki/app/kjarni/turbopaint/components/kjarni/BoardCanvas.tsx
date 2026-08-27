@@ -371,6 +371,9 @@ export function BoardCanvas({
           })
           .map((o) => o.id);
         useBoardStore.getState().setSelected(expandGroups(hits));
+      } else {
+        // Tiny marquee = tap on empty canvas → deselect (deferred from pointerdown).
+        useBoardStore.getState().setSelected([]);
       }
       setDraftState(null);
       return;
@@ -511,7 +514,8 @@ export function BoardCanvas({
 
     if (currentTool === "select" || currentTool === "hand") {
       if (clickedEmpty) {
-        useBoardStore.getState().setSelected([]);
+        // Deselect is deferred to endGesture (on tiny-tap marquee) so an
+        // accidental near-miss touch does NOT immediately drop the selection.
         setDraftState({ kind: "marquee", ax: world.x, ay: world.y, bx: world.x, by: world.y });
       }
       return;
@@ -936,6 +940,7 @@ export function BoardCanvas({
             <ObjectNode
               key={obj.id}
               obj={obj}
+              isSelected={selectedIds.includes(obj.id)}
               pixelsPerMeter={pixelsPerMeter}
               draggable={selectLike && !spacePan && !obj.locked}
               listening={
@@ -1038,10 +1043,12 @@ export function BoardCanvas({
               if (newBox.width < 8 || newBox.height < 8) return oldBox;
               return newBox;
             }}
-            anchorSize={8}
+            anchorSize={14}
             borderStroke="#FE653F"
+            borderStrokeWidth={2}
             anchorStroke="#FE653F"
             anchorFill="#fff"
+            anchorCornerRadius={3}
             name="ui-only"
           />
         </Layer>
