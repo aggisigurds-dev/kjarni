@@ -118,8 +118,9 @@ export default function KerfiClient() {
 
   const [vorur, setVorur] = useState<Vara[]>([]);
   const [solur, setSolur] = useState<SalaRec[]>([]);
-  const [salaTab, setSalaTab] = useState<"afgreidsla" | "solur">("afgreidsla");
+  const [salaTab, setSalaTab] = useState<"afgreidsla" | "solur" | "vorur">("afgreidsla");
   const [cart, setCart] = useState<Record<number, number>>({});
+  const [voruForm, setVoruForm] = useState(false);
   const [salaKunni, setSalaKunni] = useState<string>("");
   const [greidsla, setGreidsla] = useState("kort");
   const [salaDone, setSalaDone] = useState<SalaRec | null>(null);
@@ -136,7 +137,7 @@ export default function KerfiClient() {
         sbSelect<Kunni[]>("kerfi_vidskiptavinir?select=*&order=nafn"),
         sbSelect<Taeki[]>("kerfi_taeki?select=*"),
         sbSelect<{ lykill: string; gildi: string }[]>("kerfi_stillingar?select=lykill,gildi&lykill=eq.einingar"),
-        sbSelect<Vara[]>("kerfi_vorur?select=*&virk=eq.true&order=rod"),
+        sbSelect<Vara[]>("kerfi_vorur?select=*&order=rod"),
         sbSelect<SalaRec[]>("kerfi_solur?select=*&order=buid_til.desc&limit=50"),
         sbSelect<Verk[]>("kerfi_verkbeidnir?select=*&order=buid_til.desc"),
         sbSelect<Samningur[]>("kerfi_samningar?select=*&virk=eq.true"),
@@ -243,6 +244,36 @@ export default function KerfiClient() {
     setCart({});
     setSalaKunni("");
     setSolur((s) => [saved, ...s]);
+  }
+
+  async function addVara(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const row = {
+      heiti: f.get("heiti") as string,
+      tegund: (f.get("tegund") as string) || "vara",
+      verd: Math.round(Number(f.get("verd")) || 0),
+      vsk: Number(f.get("vsk")) || 24,
+      virk: true,
+      rod: vorur.length + 1,
+    };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kerfi_vorur`, {
+      method: "POST",
+      headers: { ...H, Prefer: "return=representation" },
+      body: JSON.stringify(row),
+    }).then((r) => r.json()).catch(() => null);
+    if (Array.isArray(res) && res[0]) setVorur((vs) => [...vs, res[0]]);
+    (e.target as HTMLFormElement).reset();
+    setVoruForm(false);
+  }
+
+  async function toggleVara(v: Vara) {
+    setVorur((vs) => vs.map((x) => (x.id === v.id ? { ...x, virk: !x.virk } : x)));
+    await fetch(`${SUPABASE_URL}/rest/v1/kerfi_vorur?id=eq.${v.id}`, {
+      method: "PATCH",
+      headers: { ...H, Prefer: "return=minimal" },
+      body: JSON.stringify({ virk: !v.virk }),
+    }).catch(() => {});
   }
 
   async function setVerkStada(id: number, stada: string) {
@@ -482,12 +513,13 @@ export default function KerfiClient() {
               <div className="k-subtabs">
                 <button className={salaTab === "afgreidsla" ? "on" : ""} onClick={() => setSalaTab("afgreidsla")}>Afgreiðsla</button>
                 <button className={salaTab === "solur" ? "on" : ""} onClick={() => setSalaTab("solur")}>Sölur ({solur.length})</button>
+                <button className={salaTab === "vorur" ? "on" : ""} onClick={() => setSalaTab("vorur")}>Vörur ({vorur.length})</button>
               </div>
             </div>
             {salaTab === "afgreidsla" ? (
               <div className="k-pos">
                 <div className="k-pos-vorur">
-                  {vorur.map((v) => (
+                  {vorur.filter((v) => v.virk).map((v) => (
                     <button className="k-vara" key={v.id} onClick={() => addToCart(v.id)}>
                       <span className="k-vara-teg">{v.tegund === "thjonusta" ? "Þjónusta" : "Vara"}</span>
                       <b>{v.heiti}</b>
@@ -532,7 +564,7 @@ export default function KerfiClient() {
                   )}
                 </div>
               </div>
-            ) : (
+            ) : salaTab === "solur" ? (
               <div className="k-card">
                 {solur.length === 0 ? (
                   <p className="k-empty">Engin sala skráð enn.</p>
@@ -549,6 +581,56 @@ export default function KerfiClient() {
                   </div>
                 )}
               </div>
+            ) : (
+              <>
+                <div className="k-card">
+                  <div className="k-card-h">
+                    <h2>Vörulisti</h2>
+                    <button className="k-btn" onClick={() => setVoruForm(true)}>+ Ný vara</button>
+                  </div>
+                  {vorur.length === 0 ? (
+                    <p className="k-empty">Engar vörur skráðar enn. Bættu við vöru til að byrja.</p>
+                  ) : (
+                    <div className="k-list">
+                      {vorur.map((v) => (
+                        <div className="k-row static" key={v.id}>
+                          <span className="k-row-nafn" style={{ opacity: v.virk ? 1 : 0.45 }}>{v.heiti}</span>
+                          <span className="k-row-meta">{v.tegund === "thjonusta" ? "Þjónusta" : "Vara"} · VSK {v.vsk}%</span>
+                          <b className="k-sol-tot" style={{ opacity: v.virk ? 1 : 0.45 }}>{kr(v.verd)}</b>
+                          <button className={`k-mini ${v.virk ? "ghost" : ""}`} onClick={() => toggleVara(v)}>
+                            {v.virk ? "Gera óvirka" : "Virkja"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {voruForm && (
+                  <div className="k-drawer-wrap" onClick={() => setVoruForm(false)}>
+                    <aside className="k-drawer" onClick={(e) => e.stopPropagation()}>
+                      <div className="k-drawer-h"><h2>Ný vara</h2><button className="k-x" onClick={() => setVoruForm(false)} aria-label="Loka">✕</button></div>
+                      <form className="k-form" onSubmit={addVara}>
+                        <label>Heiti<input name="heiti" required placeholder="t.d. Þjónustugjald" /></label>
+                        <label>Tegund
+                          <select name="tegund" defaultValue="vara">
+                            <option value="vara">Vara</option>
+                            <option value="thjonusta">Þjónusta</option>
+                          </select>
+                        </label>
+                        <label>Verð (með VSK)<input name="verd" type="number" min="0" required placeholder="t.d. 5000" /></label>
+                        <label>VSK %
+                          <select name="vsk" defaultValue="24">
+                            <option value="24">24%</option>
+                            <option value="11">11%</option>
+                            <option value="0">0%</option>
+                          </select>
+                        </label>
+                        <button className="k-btn" type="submit">Vista vöru</button>
+                      </form>
+                    </aside>
+                  </div>
+                )}
+              </>
             )}
           </>
         ) : view === "verkstaedi" ? (
