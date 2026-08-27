@@ -2135,10 +2135,20 @@ html[data-kjarni-skin="don"], html[data-kjarni-skin="don"] body { background:#f4
 }
 .stn[data-tool="turbopaint"] .stn-body,
 .stn[data-tool="turbopaint"] .tp { min-height:0; }
-@media (max-width:900px) {
+/* Toppstikan (StationChrome): heim + kaflar (Stjórnstöð/TurboPaint/Stjórnborð/
+   Kerfi …) + þema-pillurnar (Command/Atlas/…) þurfa ~1356px til að rúmast á
+   EINNI línu. Fyrir neðan það kramdist stikan: kaflarnir aftast (Kerfi,
+   Skjalarinn, Prufusvæði, 3dwork) klipptust á bak við þema-pillurnar (margin-
+   left:auto hélt þeim á sömu línu, overflow-x faldi restina). Stöflum þema-
+   pillunum á sína eigin línu undir köflunum og gerum stikuna ósticky í þessu
+   bili — 2-línu stikan er þá hærri en --stn-h (58px) og myndi annars rekast á
+   sticky ms-head. Gildir alla leið upp í 1380px svo fartölvur (1366) klippi ekki. */
+@media (max-width:1380px) {
   .stn { --stn-h:0px; }
   .stn-bar { position:static; }
   .stn-skins { width:100%; margin-left:0; flex-wrap:wrap; }
+}
+@media (max-width:900px) {
   .stn[data-tool="kerfi"] .k-side { top:0; height:auto; }
   .stn[data-tool="draft"] .dw-side, .stn[data-tool="draft"] .dw-stage { height:auto; }
 }
