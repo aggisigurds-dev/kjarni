@@ -1126,24 +1126,61 @@ export function BoardCanvas({
                       </>
                     ) : null}
                     {target.type === "rect" ? (
-                      <button
-                        type="button"
-                        className={item}
-                        onClick={act(() => {
-                          // Frádráttar-svæði (stigahús, skaft …) dregst frá
-                          // nýtanlegu fermetrunum í Magntöflunni.
-                          const neg = !target.name.startsWith("Frádráttur");
-                          useBoardStore.getState().patchObject(target.id, {
-                            name: neg ? "Frádráttur" : "Flatarmál",
-                            fill: "transparent",
-                            stroke: neg ? "#dc2626" : "#16a34a",
-                          } as never);
-                        })}
-                      >
-                        {target.name.startsWith("Frádráttur")
-                          ? "➕ Telja sem nýtanlegt flatarmál"
-                          : "➖ Telja sem frádrátt (stigahús o.þ.h.)"}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className={item}
+                          onClick={act(() => {
+                            // Rými í fermetratöku: fer í RÝMI-kafla Magntöflunnar
+                            // með nafni og m² — nafnið breytist í Eiginleikum.
+                            const on = !target.isRoom;
+                            useBoardStore.getState().patchObject(target.id, {
+                              isRoom: on,
+                              ...(on && (target.name === "Ferningur" || !target.name)
+                                ? { name: "Rými" }
+                                : {}),
+                              ...(on && target.fill !== "transparent"
+                                ? { fill: "#16a34a33" }
+                                : {}),
+                            } as never);
+                          })}
+                        >
+                          {target.isRoom ? "🏠 Fjarlægja úr rýmum" : "🏠 Gera að rými (fermetrar)"}
+                        </button>
+                        {target.isRoom ? (
+                          <button
+                            type="button"
+                            className={item}
+                            onClick={act(() =>
+                              useBoardStore.getState().patchObject(target.id, {
+                                roomExcluded: !target.roomExcluded,
+                              } as never)
+                            )}
+                          >
+                            {target.roomExcluded
+                              ? "☑ Telja með í nettó"
+                              : "☐ Frátelja úr nettó (svalir o.þ.h.)"}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={item}
+                          onClick={act(() => {
+                            // Frádráttar-svæði (stigahús, skaft …) dregst frá
+                            // nýtanlegu fermetrunum í Magntöflunni.
+                            const neg = !target.name.startsWith("Frádráttur");
+                            useBoardStore.getState().patchObject(target.id, {
+                              name: neg ? "Frádráttur" : "Flatarmál",
+                              fill: "transparent",
+                              stroke: neg ? "#dc2626" : "#16a34a",
+                            } as never);
+                          })}
+                        >
+                          {target.name.startsWith("Frádráttur")
+                            ? "➕ Telja sem nýtanlegt flatarmál"
+                            : "➖ Telja sem frádrátt (stigahús o.þ.h.)"}
+                        </button>
+                      </>
                     ) : null}
                     {target.type === "image" ? (
                       <>
