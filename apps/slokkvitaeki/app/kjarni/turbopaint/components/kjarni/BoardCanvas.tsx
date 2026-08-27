@@ -371,6 +371,9 @@ export function BoardCanvas({
           })
           .map((o) => o.id);
         useBoardStore.getState().setSelected(expandGroups(hits));
+      } else {
+        // Tiny marquee = tap on empty canvas → deselect (deferred from pointerdown).
+        useBoardStore.getState().setSelected([]);
       }
       setDraftState(null);
       return;
@@ -511,7 +514,8 @@ export function BoardCanvas({
 
     if (currentTool === "select" || currentTool === "hand") {
       if (clickedEmpty) {
-        useBoardStore.getState().setSelected([]);
+        // Deselect is deferred to endGesture (on tiny-tap marquee) so an
+        // accidental near-miss touch does NOT immediately drop the selection.
         setDraftState({ kind: "marquee", ax: world.x, ay: world.y, bx: world.x, by: world.y });
       }
       return;
@@ -743,6 +747,40 @@ export function BoardCanvas({
       );
       return;
     }
+    // LÍNU-ÆTTIN (line · arrow · pen · polyline · MÆLING).
+    //
+    // Villan (Agnar 27.08: „ég næ einhvern veginn að draga þetta í sundur —
+    // mælingarnar"): Transformer skalar hnútinn sjónrænt og ObjectNode
+    // núllstillir svo scale aftur í 1 — en hér var scaleX/scaleY HENT. Staða og
+    // snúningur festust því á meðan LENGDIN fór alltaf í fyrra horf. Mælingin
+    // sat eftir skökk ofan á teikningunni, ekki lengur á veggnum sem hún mældi,
+    // og talan lýsti ekki því sem sást. Ferningar/hringir baka skalann inn
+    // (obj.width * scaleX) — línur gerðu það ekki.
+    //
+    // Núna bökum við skalann inn í points, svo geómetrían fylgi því sem
+    // notandinn dró og merkimiðinn (reiknaður af lengdinni) fylgi með.
+    if ("points" in obj && Array.isArray(obj.points) && obj.points.length >= 4) {
+      const sx = node.scaleX || 1;
+      const sy = node.scaleY || 1;
+      const stretched = Math.abs(sx - 1) > 0.001 || Math.abs(sy - 1) > 0.001;
+      const patch: Partial<BoardObject> = {
+        x: node.x,
+        y: node.y,
+        rotation: node.rotation,
+        ...(stretched
+          ? { points: obj.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)) }
+          : null),
+      } as Partial<BoardObject>;
+      // Innslegin raun-lengd (Kvarði) lýsir EKKI nýrri lengd. Væri henni haldið
+      // sýndi merkimiðinn áfram gömlu töluna á lengdri línu — talan lygi. Við
+      // sleppum henni svo mælingin reiknist aftur af því sem er teiknað.
+      // (Óteygð lína heldur sinni innslegnu tölu óbreyttri.)
+      if (stretched && obj.type === "measure" && obj.meters != null) {
+        (patch as { meters?: number }).meters = undefined;
+      }
+      useBoardStore.getState().patchObject(id, patch, false);
+      return;
+    }
     useBoardStore.getState().patchObject(id, { x: node.x, y: node.y, rotation: node.rotation }, false);
   };
 
@@ -902,6 +940,7 @@ export function BoardCanvas({
             <ObjectNode
               key={obj.id}
               obj={obj}
+              isSelected={selectedIds.includes(obj.id)}
               pixelsPerMeter={pixelsPerMeter}
               draggable={selectLike && !spacePan && !obj.locked}
               listening={
@@ -1004,10 +1043,12 @@ export function BoardCanvas({
               if (newBox.width < 8 || newBox.height < 8) return oldBox;
               return newBox;
             }}
-            anchorSize={8}
+            anchorSize={14}
             borderStroke="#FE653F"
+            borderStrokeWidth={2}
             anchorStroke="#FE653F"
             anchorFill="#fff"
+            anchorCornerRadius={3}
             name="ui-only"
           />
         </Layer>

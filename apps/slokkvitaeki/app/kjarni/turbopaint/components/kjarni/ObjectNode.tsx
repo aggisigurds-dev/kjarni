@@ -49,6 +49,7 @@ function FloorplanImage({ obj }: { obj: Extract<BoardObject, { type: "image" }> 
 
 export function ObjectNode({
   obj,
+  isSelected = false,
   pixelsPerMeter,
   draggable,
   listening = draggable,
@@ -60,6 +61,7 @@ export function ObjectNode({
   onDblClick,
 }: {
   obj: BoardObject;
+  isSelected?: boolean;
   pixelsPerMeter: number | null;
   draggable: boolean;
   listening?: boolean;
@@ -70,6 +72,10 @@ export function ObjectNode({
   onClick: (id: string, shift: boolean) => void;
   onDblClick: (id: string) => void;
 }) {
+  const selGlow = isSelected
+    ? { shadowColor: "#FE653F", shadowBlur: 22, shadowOpacity: 0.85, shadowEnabled: true }
+    : { shadowEnabled: false };
+
   const common = {
     id: obj.id,
     name: obj.id,
@@ -77,6 +83,7 @@ export function ObjectNode({
     y: obj.y,
     rotation: obj.rotation,
     opacity: obj.opacity,
+    ...selGlow,
     visible: !obj.hidden,
     draggable,
     listening,
