@@ -129,6 +129,18 @@
   }
 }
 
+/* Súlan má ALDREI verða hærri en bilið sem henni er ætlað (sjá WhiteboardApp:
+   top-2 → bottom-28). Kemst hún ekki fyrir skrunar hún í staðinn fyrir að
+   flæða yfir teikninguna og neðri borðin. */
+.tp-toolbar {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.tp-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* StyleStrip á snertiskjá: ósýnilegt ::after stækkar snertiflötinn (~36px á
    hæð) án þess að blása litapunktana/hnappana út sjónrænt. -4px lárétt = engin
    skörun við gap-2 (8px) milli hnappa. */

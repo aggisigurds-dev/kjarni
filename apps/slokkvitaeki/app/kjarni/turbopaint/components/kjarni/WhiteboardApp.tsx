@@ -636,7 +636,13 @@ export function WhiteboardApp() {
             </div>
           )}
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute top-1/2 left-3 -translate-y-1/2">
+            {/* Verkfærasúlan var lóðrétt MIÐJUÐ (top-1/2 + -translate-y-1/2).
+                Á síma er hún hærri en borðið, svo hún klipptist af að ofan OG
+                lenti ofan í Táknaborðinu + Stílborðinu neðst (Agnar 27.08).
+                Núna: bundin milli topps og neðri borðanna og miðjuð INNAN þess
+                bils — hún getur því hvorki farið upp fyrir né niður í borðin.
+                Súlan sjálf skrunar ef hún kemst enn ekki fyrir (sjá styles.css). */}
+            <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
             </div>
             <div className="pointer-events-auto absolute top-3 right-3">

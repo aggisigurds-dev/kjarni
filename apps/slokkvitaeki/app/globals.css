@@ -2088,6 +2088,16 @@ html[data-kjarni-skin="don"], html[data-kjarni-skin="don"] body { background:#f4
   cursor:pointer; display:inline-flex; align-items:center; gap:8px;
 }
 .stn-skins button.on { background:var(--m-navy, #102038); color:#fff; border-color:var(--m-navy, #102038); }
+/* Farsími: hausinn er flex-wrap, svo þema-pillurnar (Command/Atlas/Pulse/
+   Helix/Vector/Don) brotna niður í AÐRA röð og tvöfalda hæð hans — dýrmæt hæð
+   sem teikniborðið þarf (Agnar 27.08: krossaði yfir alla röðina á síma).
+   Þemaval er ekki síma-verk; við felum röðina á mjóum skjá í TurboPaint þar
+   sem hver pixill telur. Á breiðari skjá er hún óbreytt. */
+@media (max-width: 767px) {
+  .stn[data-tool="turbopaint"] .stn-skins { display:none; }
+  .stn[data-tool="turbopaint"] .stn-bar { flex-wrap:nowrap; gap:8px; padding-top:6px; padding-bottom:6px; }
+  .stn[data-tool="turbopaint"] .stn-tools { min-width:0; }
+}
 .stn-body { flex:1; min-height:0; display:flex; flex-direction:column; }
 .stn-frame { flex:1; width:100%; border:0; min-height:0; background:var(--m-bg); }
 .stn[data-skin="helix"] .stn-tools a, .stn[data-skin="helix"] .stn-skins button { border-radius:0; }
