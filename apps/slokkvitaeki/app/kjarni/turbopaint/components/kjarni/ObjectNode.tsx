@@ -139,11 +139,13 @@ export function ObjectNode({
   }
 
   if (obj.type === "rect") {
-    // Gegnsær ferningur á kvörðuðu borði er flatarmáls-taka: sýnir b × h og m²
-    // (nýtanlegir fermetrar) — litaðir ferningar eru venjuleg merking án mála.
-    // "Frádráttur…"-ferningar (stigahús, skaft, veggir) teljast NEIKVÆTT.
-    const showDims = obj.fill === "transparent" && pixelsPerMeter && pixelsPerMeter > 0;
+    // Gegnsær ferningur eða 🏠 rými á kvörðuðu borði sýnir b × h og m² —
+    // litaðir venjulegir ferningar eru merking án mála.
+    // "Frádráttur…" telst neikvætt; frátalin rými sýna "(frátalið)".
+    const showDims = (obj.fill === "transparent" || obj.isRoom) && pixelsPerMeter && pixelsPerMeter > 0;
     const negative = obj.name.startsWith("Frádráttur");
+    const roomName =
+      obj.isRoom && obj.name && obj.name !== "Rými" && obj.name !== "Ferningur" ? obj.name : "";
     const wM = showDims ? obj.width / pixelsPerMeter : 0;
     const hM = showDims ? obj.height / pixelsPerMeter : 0;
     return (
@@ -160,12 +162,12 @@ export function ObjectNode({
           <KonvaText
             width={Math.max(80, obj.width)}
             x={obj.width < 80 ? (obj.width - 80) / 2 : 0}
-            y={Math.max(4, obj.height / 2 - 18)}
-            text={`${formatMm(wM)} × ${formatMm(hM)} mm\n${negative ? "−" : ""}${formatM2(wM * hM)}`}
+            y={Math.max(4, obj.height / 2 - (roomName ? 27 : 18))}
+            text={`${roomName ? `${roomName}\n` : ""}${formatMm(wM)} × ${formatMm(hM)} mm\n${negative ? "−" : ""}${formatM2(wM * hM)}${obj.roomExcluded ? " (frátalið)" : ""}`}
             fontSize={15}
             fontStyle="bold"
             align="center"
-            fill={negative ? "#dc2626" : obj.stroke}
+            fill={negative ? "#dc2626" : obj.roomExcluded ? "#78716c" : obj.stroke}
             stroke="#ffffff"
             strokeWidth={3}
             fillAfterStrokeEnabled

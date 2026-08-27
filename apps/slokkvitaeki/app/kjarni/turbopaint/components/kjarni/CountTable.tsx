@@ -79,6 +79,8 @@ export function CountTable() {
         continue;
       }
       if (o.name.startsWith("Eldveggir")) continue;
+      // 🏠 rými eiga sinn eigin RÝMI-kafla — ekki telja þau sem "Ferningar"
+      if (o.type === "rect" && o.isRoom) continue;
       const label = GENERIC_LABELS[o.type];
       if (label) bump(`t:${o.type}`, label, 2);
     }
@@ -93,21 +95,45 @@ export function CountTable() {
   const otherRows = rows.filter((r) => r.group === 2);
   const total = equipmentRows.reduce((sum, r) => sum + r.count, 0);
 
-  // Nýtanlegt flatarmál: gegnsæir ferningar á kvörðuðu borði eru rýma-taka —
-  // dregnir yfir hvert rými (L-form = fleiri en einn) og lagðir hér saman.
-  // "Frádráttur…"-ferningar (stigahús, skaft) DRAGAST FRÁ samtölunni.
-  const areaM2 = useMemo(() => {
-    if (!plan || !pixelsPerMeter || pixelsPerMeter <= 0) return 0;
-    return objectsOnDocument(plan, objects)
-      .filter(
-        (o): o is Extract<typeof o, { type: "rect" }> =>
-          o.type === "rect" && !o.hidden && o.fill === "transparent"
-      )
-      .reduce((sum, r) => {
-        const a = (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter);
-        return r.name.startsWith("Frádráttur") ? sum - a : sum + a;
-      }, 0);
+  // Fermetrarnir: 🏠 rými fara í RÝMI-listann (hak = telst í nettó);
+  // gegnsæir ferningar án rýmis-merkingar teljast beint (eldra lagið);
+  // "Frádráttur…" dregst frá hvoru tveggja. Nettó = hakað; brúttó = öll rými.
+  const { rooms, netM2, grossM2, uncalibratedRooms } = useMemo(() => {
+    const empty = { rooms: [] as { id: string; name: string; m2: number; excluded: boolean }[], netM2: 0, grossM2: 0, uncalibratedRooms: false };
+    if (!plan) return empty;
+    const rects = objectsOnDocument(plan, objects).filter(
+      (o): o is Extract<typeof o, { type: "rect" }> => o.type === "rect" && !o.hidden
+    );
+    if (!pixelsPerMeter || pixelsPerMeter <= 0) {
+      return { ...empty, uncalibratedRooms: rects.some((r) => r.isRoom) };
+    }
+    const area = (r: { width: number; height: number }) =>
+      (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter);
+    const roomRects = rects.filter((r) => r.isRoom);
+    const seen = new Map<string, number>();
+    const roomList = roomRects.map((r) => {
+      const base = r.name && r.name !== "Ferningur" ? r.name : "Rými";
+      const n = (seen.get(base) ?? 0) + 1;
+      seen.set(base, n);
+      const dup = roomRects.filter((x) => (x.name && x.name !== "Ferningur" ? x.name : "Rými") === base).length > 1;
+      return { id: r.id, name: dup ? `${base} ${n}` : base, m2: area(r), excluded: !!r.roomExcluded };
+    });
+    let net = roomList.reduce((s, r) => s + (r.excluded ? 0 : r.m2), 0);
+    let gross = roomList.reduce((s, r) => s + r.m2, 0);
+    for (const r of rects) {
+      if (r.isRoom || r.fill !== "transparent") continue;
+      const a = area(r);
+      if (r.name.startsWith("Frádráttur")) {
+        net -= a;
+        gross -= a;
+      } else {
+        net += a;
+        gross += a;
+      }
+    }
+    return { rooms: roomList, netM2: net, grossM2: gross, uncalibratedRooms: false };
   }, [plan, objects, pixelsPerMeter]);
+  const areaM2 = netM2;
 
   if (!plan) {
     if (images.length < 2) return null;
@@ -126,7 +152,18 @@ export function CountTable() {
       ...equipmentRows.map((r) => `${r.count}× ${r.label}`),
       "".padEnd(24, "—"),
       `Samtals búnaður: ${total}`,
-      ...(areaM2 !== 0 ? [`Nýtanlegt flatarmál: ${formatM2(areaM2)}`] : []),
+      ...(rooms.length
+        ? [
+            "",
+            "RÝMI:",
+            ...rooms.map((r) => `${r.excluded ? "✗" : "✓"} ${r.name}: ${formatM2(r.m2)}${r.excluded ? " (frátalið)" : ""}`),
+          ]
+        : []),
+      ...(areaM2 !== 0 || rooms.length
+        ? Math.abs(grossM2 - netM2) > 0.05
+          ? [`Nýtanlegt (nettó): ${formatM2(netM2)}`, `Brúttó (öll rými): ${formatM2(grossM2)}`]
+          : [`Nýtanlegt flatarmál: ${formatM2(netM2)}`]
+        : []),
       ...(otherRows.length
         ? ["", "Annað:", ...otherRows.map((r) => `${r.count}× ${r.label}`)]
         : []),
@@ -208,10 +245,42 @@ export function CountTable() {
                 <span>Samtals búnaður</span>
                 <span className="tabular-nums">{total}</span>
               </div>
-              {areaM2 !== 0 ? (
+              {rooms.length ? (
+                <div className="mt-1.5 border-t border-white/15 pt-1">
+                  <div className="pb-0.5 text-[10px] font-medium tracking-wide text-white/35">
+                    RÝMI — hak = telst í nettó
+                  </div>
+                  {rooms.map((r) => (
+                    <label
+                      key={r.id}
+                      className={`flex cursor-pointer items-center gap-1.5 py-0.5 text-[11px] ${r.excluded ? "text-white/40" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!r.excluded}
+                        onChange={() =>
+                          useBoardStore.getState().patchObject(r.id, { roomExcluded: !r.excluded } as never)
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      <span className="tabular-nums">{formatM2(r.m2)}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {uncalibratedRooms ? (
+                <div className="pt-1 text-[10px] text-amber-300">Rými á borðinu — kvarðaðu fyrst (K)</div>
+              ) : null}
+              {areaM2 !== 0 || rooms.length ? (
                 <div className="flex items-center justify-between pt-1 text-[11px] font-semibold text-emerald-300">
-                  <span>Nýtanlegt flatarmál</span>
-                  <span className="tabular-nums">{formatM2(areaM2)}</span>
+                  <span>{Math.abs(grossM2 - netM2) > 0.05 ? "Nýtanlegt (nettó)" : "Nýtanlegt flatarmál"}</span>
+                  <span className="tabular-nums">{formatM2(netM2)}</span>
+                </div>
+              ) : null}
+              {Math.abs(grossM2 - netM2) > 0.05 ? (
+                <div className="flex items-center justify-between text-[11px] text-white/55">
+                  <span>Brúttó (öll rými)</span>
+                  <span className="tabular-nums">{formatM2(grossM2)}</span>
                 </div>
               ) : null}
               <button

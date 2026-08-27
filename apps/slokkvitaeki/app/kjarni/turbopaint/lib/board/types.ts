@@ -66,6 +66,10 @@ export interface RectObject extends BaseObject {
   stroke: string;
   strokeWidth: number;
   cornerRadius: number;
+  /** Rými í fermetratöku: birtist í RÝMI-kafla Magntöflunnar með m². */
+  isRoom?: boolean;
+  /** Rými sem telst EKKI með í nettó (svalir, geymsla, bílskúr …). */
+  roomExcluded?: boolean;
 }
 
 export interface EllipseObject extends BaseObject {
