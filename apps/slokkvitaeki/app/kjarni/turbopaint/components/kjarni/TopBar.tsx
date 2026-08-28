@@ -34,6 +34,7 @@ import {
 } from "../../lib/board/persistence";
 import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
+import { HeimilisfangLeit } from "./HeimilisfangLeit";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +61,7 @@ export function TopBar({
   onMarkFirewalls,
   onStrip,
   onImportUrl,
+  onVeljaTeikningu,
   viewSize,
 }: {
   onImport: (files: File[]) => void;
@@ -69,6 +71,8 @@ export function TopBar({
   onMarkFirewalls?: () => void;
   onStrip?: () => void;
   onImportUrl?: () => void;
+  /** Teikning valin úr heimilisfangaleitinni — `.info` permalink. */
+  onVeljaTeikningu?: (infoUrl: string) => void;
   viewSize: { width: number; height: number };
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -189,6 +193,11 @@ export function TopBar({
         className="min-w-16 flex-1 rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:max-w-sm sm:text-sm"
         placeholder="Nafn á borði"
       />
+      {onVeljaTeikningu && (
+        <div className="hidden shrink-0 md:block">
+          <HeimilisfangLeit onVelja={onVeljaTeikningu} />
+        </div>
+      )}
       <span className={`shrink-0 ${syncLook.color}`} title={syncLook.label}>
         <Cloud className="size-4" />
       </span>

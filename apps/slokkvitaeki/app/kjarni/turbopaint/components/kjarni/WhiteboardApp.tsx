@@ -572,6 +572,7 @@ export function WhiteboardApp() {
     >
       <TopBar
         onImport={(files) => void runImport(files)}
+        onVeljaTeikningu={(infoUrl) => void runUrlImport(infoUrl)}
         onImportUrl={() => {
           const raw = window.prompt(
             "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða beina skráaslóð:"
