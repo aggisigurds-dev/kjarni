@@ -24,6 +24,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 30;
 
+/* Útgáfumerki fylgir hverju svari. Tvisvar 28.08 taldi ég deploy lent af því
+ * bið-skilyrðið mitt var merki sem GAMLI kóðinn gat líka gefið (landnúmerið
+ * fannst grafið í ruslinu; tómt svar við rugli). Þetta er ótvírætt. */
+const API_UTGAFA = "2026-08-28-nfc";
+
 const LANDEIGN = "https://geo.fasteignaskra.is/landeignaskra/search";
 const FOTOWEB = "https://skjalasafn.reykjavik.is";
 const RVK_ARCHIVE = "/fotoweb/archives/5000-A%C3%B0aluppdr%C3%A6ttir/";
@@ -112,7 +117,7 @@ async function heimilisfong(q: string) {
       };
     });
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ utgafa: API_UTGAFA, results });
 }
 
 /** Hvaða skjalasafn á við þetta póstnúmer — og hvert má senda notandann. */
@@ -274,6 +279,7 @@ async function teikningar(landnr: string) {
   merkt.sort((a, b) => (b.dags || "").localeCompare(a.dags || ""));
 
   return NextResponse.json({
+    utgafa: API_UTGAFA,
     landnr: Number(landnr),
     fjoldi: merkt.length,
     gildandi: merkt.filter((x) => !x.urelt).length,
