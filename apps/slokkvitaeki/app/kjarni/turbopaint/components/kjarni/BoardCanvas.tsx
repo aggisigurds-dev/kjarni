@@ -25,6 +25,32 @@ const FIREWALL_CLASSES: { label: string; color: string; dash: "solid" | "dashed"
   { label: "AREIM", ...FIREWALL_PALETTE.areim },
 ];
 
+/* HORNALÆSING — hreinir, hornréttir veggir (Agnar 28.08: "bara svona teiknaða
+ * veggi", með Drafted-teikniforritið sem fyrirmynd).
+ *
+ * Veggir í húsum eru nær undantekningalaust lóðréttir eða láréttir. Án læsingar
+ * verður handdregin lína alltaf örlítið skökk og teikningin lítur út fyrir að
+ * vera krot fremur en uppdráttur. Hér smellur hver hluti í næsta rétta horn —
+ * og Shift heldur inni gefur frjálsan halla þegar veggurinn er í raun skakkur.
+ *
+ * 45° eru höfð með því skáveggir og horn-afskurðir eru algengir í eldri húsum. */
+function orthoSnap(px: number, py: number, x: number, y: number, free: boolean) {
+  if (free) return { x, y };
+  const dx = x - px;
+  const dy = y - py;
+  const ang = Math.atan2(dy, dx);
+  const step = Math.PI / 4;                       // 45°
+  const snapped = Math.round(ang / step) * step;
+  const len = Math.hypot(dx, dy);
+  // Á réttu hornunum er hnitið látið standa nákvæmt (engin fljótandi skekkja).
+  const c = Math.cos(snapped);
+  const sn = Math.sin(snapped);
+  return {
+    x: Math.abs(c) < 1e-9 ? px : px + len * c,
+    y: Math.abs(sn) < 1e-9 ? py : py + len * sn,
+  };
+}
+
 type Draft =
   | { kind: "rect"; ax: number; ay: number; bx: number; by: number }
   | { kind: "ellipse"; ax: number; ay: number; bx: number; by: number }
@@ -81,6 +107,22 @@ export function BoardCanvas({
   const spacePan = useBoardStore((s) => s.spacePan);
   const style = useBoardStore((s) => s.style);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
+  /* Shift = frjáls halli meðan hornalæsingin er á. Hreyfi-handlerinn fær aðeins
+   * hnitin, ekki atburðinn, svo staðan er geymd hér og uppfærð af glugganum. */
+  const shiftRef = useRef(false);
+  useEffect(() => {
+    const dn = (ev: KeyboardEvent) => { if (ev.key === "Shift") shiftRef.current = true; };
+    const up = (ev: KeyboardEvent) => { if (ev.key === "Shift") shiftRef.current = false; };
+    const blur = () => { shiftRef.current = false; };
+    window.addEventListener("keydown", dn);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", dn);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
   const [draft, setDraft] = useState<Draft | null>(null);
   const panRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -321,7 +363,13 @@ export function BoardCanvas({
         if (polyRef.current && polyRef.current.length >= 2) {
           const raw = clientToWorld(clientX, clientY);
           const world = freehand ? raw : snapPoint(raw.x, raw.y);
-          setDraftState({ kind: "polyline", points: [...polyRef.current, world.x, world.y] });
+          {
+            const pr = polyRef.current;
+            const px = pr[pr.length - 2];
+            const py = pr[pr.length - 1];
+            const sp = orthoSnap(px, py, world.x, world.y, shiftRef.current);
+            setDraftState({ kind: "polyline", points: [...pr, sp.x, sp.y] });
+          }
         }
         return;
       }
@@ -587,7 +635,15 @@ export function BoardCanvas({
         polyRef.current = [snapped.x, snapped.y];
         setDraftState({ kind: "polyline", points: [snapped.x, snapped.y] });
       } else {
-        const next = [...polyRef.current, snapped.x, snapped.y];
+        const pr = polyRef.current;
+        const sp = orthoSnap(
+          pr[pr.length - 2],
+          pr[pr.length - 1],
+          snapped.x,
+          snapped.y,
+          shiftRef.current
+        );
+        const next = [...pr, sp.x, sp.y];
         polyRef.current = next;
         setDraftState({ kind: "polyline", points: next });
       }
