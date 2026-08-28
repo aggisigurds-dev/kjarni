@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { formatM2, objectsOnDocument } from "../../lib/board/geometry";
 import { newId } from "../../lib/board/ids";
 import { useBoardStore } from "../../lib/board/store";
+import { NOTKUNARFLOKKAR, greinaTharfir, type Notkunarflokkur } from "../../lib/board/krofur";
 import { getSymbol } from "../../lib/board/symbols";
 import type { ImageObject } from "../../lib/board/types";
 
@@ -134,6 +135,33 @@ export function CountTable() {
     return { rooms: roomList, netM2: net, grossM2: gross, uncalibratedRooms: false };
   }, [plan, objects, pixelsPerMeter]);
   const areaM2 = netM2;
+
+  /* ÞARFAGREINING — hvað þarf húsnæðið (Agnar 28.08). Telur búnaðinn sem er á
+   * borðinu og ber saman við reglukröfuna; sjá lib/board/krofur.ts. */
+  const [flokkur, setFlokkur] = useState<Notkunarflokkur>(1);
+  const tharfir = useMemo(() => {
+    if (!plan) return null;
+    const on = objectsOnDocument(plan, objects).filter((o) => !o.hidden);
+    const telja = (...ids: string[]) =>
+      on.filter((o) => o.type === "symbol" && ids.includes(o.symbolId)).length;
+    const kefli = telja("hose");
+    return greinaTharfir({
+      m2: netM2 || grossM2,
+      flokkur,
+      // Kefli eða úðakerfi á hæðinni helmingar slökkviþörfina (165.BR1).
+      keflaEdaUdakerfi: kefli > 0 || telja("sprinkler") > 0,
+      komid: {
+        slokkvitaeki: telja("extinguisher"),
+        kefli,
+        skiltiSlokkvitaekis: telja("sign-extinguisher"),
+        skiltiKeflis: telja("sign-hose"),
+        flottaskilti: telja("route", "e-light"),
+        utgangar: telja("exit"),
+        reykskynjarar: telja("detector"),
+      },
+    });
+  }, [plan, objects, netM2, grossM2, flokkur]);
+
 
   if (!plan) {
     if (images.length < 2) return null;
@@ -283,6 +311,57 @@ export function CountTable() {
                   <span className="tabular-nums">{formatM2(grossM2)}</span>
                 </div>
               ) : null}
+              {tharfir && (netM2 || grossM2) > 0 ? (
+                <div className="mt-2 border-t border-white/15 pt-1.5">
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-[10px] font-medium tracking-wide text-white/35">
+                      ÞARFAGREINING
+                    </span>
+                    <select
+                      value={flokkur}
+                      onChange={(e) => setFlokkur(Number(e.target.value) as Notkunarflokkur)}
+                      className="rounded bg-white/10 px-1 py-0.5 text-[10px] text-stone-200 outline-none"
+                      title="Notkunarflokkur ræður kröfunni — verslun/skrifstofa 1–2, íbúðir 3, gisting 4+"
+                    >
+                      {NOTKUNARFLOKKAR.map((f) => (
+                        <option key={f.gildi} value={f.gildi} className="text-stone-900">
+                          {f.heiti}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {tharfir.krofur.map((k) => (
+                    <div
+                      key={k.bunadur}
+                      className="flex items-start justify-between gap-2 py-0.5 text-[11px]"
+                      title={`${k.rokstudningur}
+
+Heimild: ${k.heimild}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-white/70">{k.bunadur}</span>
+                      <span className="shrink-0 tabular-nums text-white/45">
+                        {k.komid}/{k.þarf ?? "—"}
+                      </span>
+                      <span
+                        className={`shrink-0 text-[10px] font-semibold ${
+                          k.stada === "í lagi"
+                            ? "text-emerald-400"
+                            : k.stada === "vantar"
+                              ? "text-red-400"
+                              : "text-amber-400"
+                        }`}
+                      >
+                        {k.stada === "í lagi" ? "✓" : k.stada === "vantar" ? "vantar" : "?"}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="pt-1 text-[10px] leading-snug text-white/35">
+                    Slökkvigildi ≥ {tharfir.slokkvigildi}A á {formatM2(tharfir.m2)}. Leiðbeinandi —
+                    endanlegt samþykki er hjá hönnuði og slökkviliði.
+                  </div>
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={stamp}

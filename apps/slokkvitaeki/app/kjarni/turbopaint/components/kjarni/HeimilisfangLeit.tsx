@@ -37,6 +37,7 @@ type Teikning = {
   bnnr: string | null;
   urelt: boolean;
   haed: number[];
+  stig: string[];
   kjallari: boolean;
   ris: boolean;
   grunnmynd: boolean;
@@ -46,7 +47,7 @@ type Teikning = {
  *  Hæðin er það sem skiptir máli — hún fer fremst og feit, restin dauf undir. */
 function skipta(t: Teikning): { adal: string; auka: string | null } {
   const l = (t.lysing || "").trim();
-  if (t.kjallari) return { adal: "Kjallari", auka: l || null };
+  if (t.stig.length && !t.haed.length) return { adal: t.stig.join(" + "), auka: l || null };
   if (t.haed.length) {
     const adal = t.haed.map((h) => `${h}. hæð`).join(" + ");
     // Fella burt "Grunnmynd N. hæð" úr afganginum svo hann tvítaki ekki hæðina.
@@ -166,10 +167,10 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
   const haedirTiltaekar = Array.from(
     new Set(virk.flatMap((t) => t.haed))
   ).sort((a, b) => a - b);
-  const erKjallari = virk.some((t) => t.kjallari);
+  const stigTiltaek = Array.from(new Set(virk.flatMap((t) => t.stig)));
   const synd = virk.filter((t) => {
     if (sia === "allt") return true;
-    if (sia === "kjallari") return t.kjallari;
+    if (sia.startsWith("s:")) return t.stig.includes(sia.slice(2));
     if (sia === "annad") return !t.grunnmynd;
     return t.haed.includes(Number(sia));
   });
@@ -246,11 +247,11 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
             </a>
           )}
 
-          {virk.length > 0 && (haedirTiltaekar.length > 0 || erKjallari) && (
+          {virk.length > 0 && (haedirTiltaekar.length > 0 || stigTiltaek.length > 0) && (
             <div className="flex flex-wrap gap-1 border-b border-stone-200 px-0.5 pb-1.5 pt-0.5">
               {[
                 { k: "allt", t: `Allt (${virk.length})` },
-                ...(erKjallari ? [{ k: "kjallari", t: "Kjallari" }] : []),
+                ...stigTiltaek.map((sn) => ({ k: "s:" + sn, t: sn })),
                 ...haedirTiltaekar.map((h) => ({ k: String(h), t: `${h}. hæð` })),
                 { k: "annad", t: "Annað" },
               ].map((c) => (

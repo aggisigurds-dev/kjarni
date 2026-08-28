@@ -122,9 +122,34 @@ function nmsHits(hits: FirewallHit[], dist = 70): FirewallHit[] {
 
 /** Litaregla Agnars (verkefnalisti 26.8): EI-60 appelsínugult, E-30 blátt,
  * EI/E30-CS hurðir ljósbláar. */
+/* BRUNAHÓLFUN ER RAUÐ OG HÁLFGEGNSÆ (Agnar 28.08).
+ *
+ * Áður: EI-60 appelsínugult, EI-30 blátt, reyk ljósblátt — og teiknað með
+ * opacity 0.88, sem er nánast gegnheilt. Á aðaluppdrætti lagðist það yfir
+ * veggina og málsetninguna undir, svo ekki sást hvað var verið að merkja.
+ *
+ * Nú: einn rauður skali þar sem dýpt litarins fylgir brunamótstöðunni, og
+ * gegnsæi sem hleypir teikningunni í gegn. Litirnir eru þeir sem Arnold
+ * (brunavarna-sérfræðingurinn) notar: EI-60 #d32f2f, AREIM-120 #7f0000.
+ *
+ * EIN TAFLA fyrir bæði sjálfvirku greininguna og handvirku flokka-takkana —
+ * áður voru þeir tvíteknir í BoardCanvas og gátu rekið í sundur. */
+export const FIREWALL_OPACITY = 0.45;
+
+export const FIREWALL_PALETTE = {
+  /** EI-60 — 60 mín. brunahólf */
+  ei60: { color: "#d32f2f", width: 8, dash: "solid" as const },
+  /** EI-30 — 30 mín. brunahólf */
+  ei30: { color: "#ef5350", width: 6, dash: "solid" as const },
+  /** EI-CS / reykþétt — strikað svo það greinist frá heilu hólfi */
+  smoke: { color: "#ff8a80", width: 6, dash: "dashed" as const },
+  /** AREIM-120 — brunaveggur milli matshluta, þyngsta stigið */
+  areim: { color: "#7f0000", width: 8, dash: "solid" as const },
+};
+
 export function ratingColor(rating: FirewallRating): string {
-  if (rating.smoke) return "#38bdf8";
-  return rating.minutes === 60 ? "#ea580c" : "#2563eb";
+  if (rating.smoke) return FIREWALL_PALETTE.smoke.color;
+  return rating.minutes === 60 ? FIREWALL_PALETTE.ei60.color : FIREWALL_PALETTE.ei30.color;
 }
 
 export function ratingDash(rating: FirewallRating): "solid" | "dashed" {

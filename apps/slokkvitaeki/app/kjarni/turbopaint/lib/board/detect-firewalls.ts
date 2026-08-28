@@ -1,8 +1,9 @@
 import { getAssetBlob } from "./assets";
-import { simplifyPoints } from "./geometry";
+import { straightenWall } from "./geometry";
 import { newId } from "./ids";
 import {
   collectFirewallHits,
+  FIREWALL_OPACITY,
   ratingColor,
   ratingDash,
   type FirewallHit,
@@ -407,7 +408,8 @@ function traceWall(
     const b = walk(data, width, height, wx, wy, 1, 0);
     pts = [...reversePairs(a), wx, wy, ...b];
   }
-  const simplified = simplifyPoints(pts, 10);
+  // Bein lína frá horni til horns — ekki þræða meðfram veggnum.
+  const simplified = straightenWall(pts);
   if (simplified.length >= 4) return simplified;
   const stub = hit.vertical ? 90 : 110;
   return hit.vertical
@@ -444,7 +446,7 @@ function polyline(
     strokeWidth: rating.minutes === 60 ? 8 : 6,
     dash: ratingDash(rating),
     rotation: 0,
-    opacity: 0.88,
+    opacity: FIREWALL_OPACITY,
     locked: false,
     hidden: false,
     name,

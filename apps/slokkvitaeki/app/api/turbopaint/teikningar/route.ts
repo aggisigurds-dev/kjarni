@@ -129,13 +129,22 @@ function haedir(lysing: string | null) {
   }
   const kjallari = /kjallar/.test(t);
   const ris = /ris|ris\.|rish[æa]ð/.test(t);
+  // NEFNDAR hæðir sem bera enga tölu. Staðfest á Skútuvogi 2: "grunnmynd
+  // milligólf, snið" datt út úr hæða-síunni af því orðið er ekki tala, og
+  // teikningin varð ófinnanleg þótt hún sé grunnmynd af hæð.
+  const stig: string[] = [];
+  if (kjallari) stig.push("Kjallari");
+  if (/milligólf|milligolf/.test(t)) stig.push("Milligólf");
+  if (/jarðh[æa]ð|jardh/.test(t)) stig.push("Jarðhæð");
+  if (ris) stig.push("Ris");
   return {
     haed: haed.sort((a, b) => a - b),
+    stig,
     kjallari,
     ris,
     // Grunnmynd = teikning AF hæð. Útlit/snið/skráningartafla/afstöðumynd eru
     // annars konar blöð og eiga ekki heima í hæða-síunni.
-    grunnmynd: /grunnmynd/.test(t) || haed.length > 0 || kjallari,
+    grunnmynd: /grunnmynd/.test(t) || haed.length > 0 || stig.length > 0,
   };
 }
 
@@ -219,7 +228,7 @@ async function teikningar(landnr: string) {
   // 2014-blað af þótt 2022-blöð sýndu báðar hæðirnar (staðfest 28.08).
   const lyklar = (r: (typeof results)[number]) => {
     const k: string[] = [];
-    if (r.kjallari) k.push("kj");
+    r.stig.forEach((sn) => k.push("s:" + sn));
     r.haed.forEach((h) => k.push("h" + h));
     if (!k.length) k.push("l:" + (r.lysing || r.filename).toLowerCase().replace(/\s+/g, " ").trim());
     return k;

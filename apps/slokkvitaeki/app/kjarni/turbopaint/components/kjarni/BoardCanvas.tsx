@@ -9,17 +9,20 @@ import { registerStage } from "../../lib/board/stage-ref";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
+import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
 
-/** Litaregla Agnars: EI-60 appelsínugult · E-30 blátt · EI-CS ljósblátt (strikað) ·
- * AREIM fjólublátt. Nafnið heldur "EI-veggur"-forskeytinu svo Magntaflan telji
- * flokkana og sjálfvirka endur-merkingin hreinsi þá aldrei. */
+/** Brunahólfun er RAUÐ og hálfgegnsæ — sjá FIREWALL_PALETTE í firewall-rating.
+ * Litirnir koma ÞAÐAN svo handvirku takkarnir og sjálfvirka greiningin noti
+ * sömu töflu; áður voru þeir tvíteknir hér og gátu rekið í sundur.
+ * Nafnið heldur "EI-veggur"-forskeytinu svo Magntaflan telji flokkana og
+ * sjálfvirka endur-merkingin hreinsi þá aldrei. */
 const FIREWALL_CLASSES: { label: string; color: string; dash: "solid" | "dashed"; width: number }[] = [
-  { label: "EI-60", color: "#ea580c", dash: "solid", width: 8 },
-  { label: "EI-30", color: "#2563eb", dash: "solid", width: 6 },
-  { label: "EI-CS", color: "#38bdf8", dash: "dashed", width: 6 },
-  { label: "AREIM", color: "#7c3aed", dash: "solid", width: 6 },
+  { label: "EI-60", ...FIREWALL_PALETTE.ei60 },
+  { label: "EI-30", ...FIREWALL_PALETTE.ei30 },
+  { label: "EI-CS", ...FIREWALL_PALETTE.smoke },
+  { label: "AREIM", ...FIREWALL_PALETTE.areim },
 ];
 
 type Draft =
@@ -232,7 +235,7 @@ export function BoardCanvas({
         strokeWidth: d.kind === "pen" ? Math.max(2, st.strokeWidth) : st.strokeWidth,
         dash: st.dash,
         rotation: 0,
-        opacity: firewall ? 0.55 : 1,
+        opacity: firewall ? FIREWALL_OPACITY : 1,
         locked: false,
         hidden: false,
         name: firewall
@@ -1153,7 +1156,7 @@ export function BoardCanvas({
                                         stroke: c.color,
                                         dash: c.dash,
                                         strokeWidth: c.width,
-                                        opacity: 0.55,
+                                        opacity: FIREWALL_OPACITY,
                                         name: `EI-veggur ${c.label}`,
                                       }
                                     : o

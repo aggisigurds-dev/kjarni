@@ -174,6 +174,80 @@ export function simplifyPoints(points: number[], minDist = 2.4) {
   return out;
 }
 
+/* BEIN LÍNA FRÁ HORNI TIL HORNS (Agnar 28.08).
+ *
+ * `simplifyPoints` grisjar aðeins eftir FJARLÆGÐ — hún heldur hverjum punkti
+ * sem er ≥ minDist frá þeim síðasta og fjarlægir því engar hlykkjur. Rakningin
+ * elti þar með hverja ójöfnu í veggnum (múrsteina, málsetningar, hurðargöt) og
+ * brunaveggurinn varð bugðóttur í stað þess að vera bein lína.
+ *
+ * Hér er gert þrennt í röð:
+ *   1. Ramer–Douglas–Peucker — hendir öllu sem víkur minna en `eps` frá beinu
+ *      línunni. Þar fara hlykkjurnar, hornin standa eftir.
+ *   2. Ás-hnökkun — veggir í húsum eru nær alltaf lóðréttir eða láréttir, svo
+ *      hluti sem hallar innan við `snapDeg` er réttur af í fullkomlega beinan.
+ *      Endapunkturinn er færður áfram svo línan slitni ekki.
+ *   3. Samlínu-sameining — þrír punktar á nánast beinni línu verða að tveimur.
+ * Útkoman á venjulegum vegg er einn beinn hluti: tveir punktar.               */
+function rdp(pts: number[], eps: number): number[] {
+  const n = pts.length / 2;
+  if (n < 3) return pts;
+  const x0 = pts[0], y0 = pts[1];
+  const x1 = pts[pts.length - 2], y1 = pts[pts.length - 1];
+  let maxD = -1, idx = -1;
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  for (let i = 1; i < n - 1; i++) {
+    const px = pts[i * 2], py = pts[i * 2 + 1];
+    const d = Math.abs((py - y0) * dx - (px - x0) * dy) / len;
+    if (d > maxD) { maxD = d; idx = i; }
+  }
+  if (maxD <= eps || idx < 0) return [x0, y0, x1, y1];
+  const left = rdp(pts.slice(0, idx * 2 + 2), eps);
+  const right = rdp(pts.slice(idx * 2), eps);
+  return [...left.slice(0, -2), ...right];
+}
+
+export function straightenWall(points: number[], eps = 8, snapDeg = 14): number[] {
+  if (points.length < 6) return points;
+  const p = rdp(points, eps);
+
+  // 2) ás-hnökkun
+  const out = p.slice();
+  const tol = (snapDeg * Math.PI) / 180;
+  for (let i = 0; i + 3 < out.length; i += 2) {
+    const ax = out[i], ay = out[i + 1];
+    const bx = out[i + 2], by = out[i + 3];
+    const ang = Math.atan2(by - ay, bx - ax);
+    const nearH = Math.abs(Math.sin(ang)) < Math.sin(tol);
+    const nearV = Math.abs(Math.cos(ang)) < Math.sin(tol);
+    if (nearH) {
+      const y = (ay + by) / 2;
+      out[i + 1] = y; out[i + 3] = y;
+    } else if (nearV) {
+      const x = (ax + bx) / 2;
+      out[i] = x; out[i + 2] = x;
+    }
+  }
+
+  // 3) sameina samlínu-hluta
+  const merged = [out[0], out[1]];
+  for (let i = 2; i + 1 < out.length; i += 2) {
+    const cx = out[i], cy = out[i + 1];
+    if (i + 3 < out.length) {
+      const px = merged[merged.length - 2], py = merged[merged.length - 1];
+      const nx = out[i + 2], ny = out[i + 3];
+      const a1 = Math.atan2(cy - py, cx - px);
+      const a2 = Math.atan2(ny - cy, nx - cx);
+      let d = Math.abs(a1 - a2);
+      if (d > Math.PI) d = 2 * Math.PI - d;
+      if (d < (8 * Math.PI) / 180) continue;   // beygjan er hverfandi → sleppa
+    }
+    merged.push(cx, cy);
+  }
+  return merged.length >= 4 ? merged : [out[0], out[1], out[out.length - 2], out[out.length - 1]];
+}
+
 export const GRID_GAP = 20;
 
 /** Bilið sem grindin TEIKNAST með á núverandi zoomi — punktarnir tvöfalda
