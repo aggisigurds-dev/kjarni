@@ -105,7 +105,9 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
   }, []);
 
   const leita = useCallback(async (term: string) => {
-    const t = term.trim();
+    // NFC strax hér líka: síma-lyklaborð senda "ú" sem u + lausan brodd og
+    // Landeignaskrá skilar þá óskyldum eignum (Skuld í stað Skútuvogs).
+    const t = term.normalize("NFC").trim();
     setTeikningar([]);
     setValin(null);
     if (t.length < 2) { setEignir([]); setMsg(null); return; }

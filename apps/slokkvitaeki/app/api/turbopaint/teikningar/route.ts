@@ -41,13 +41,27 @@ const RVK_POSTNR = new Set([
 
 type LeitRow = { Landnr?: number; Vef_Birting?: string; X?: number; Y?: number; Heinum?: number };
 
+/** Samanburður óháður hástöfum, aukabilum og rithætti broddstafa. */
+function norm(t: string) {
+  return t
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
-  const heimilisfang = (sp.get("heimilisfang") || "").trim();
+  /* ⚠️ NFC-SAMRÆMING. Android/iOS-lyklaborð senda "ú" sem TVO stafi (u + laus
+   * broddur, NFD) þar sem tölvan sendir einn (NFC). Landeignaskrá hunsar lausa
+   * broddinn, leitar að "Sku…" og skilar Skuld, Skál, Eskiás — algjörlega
+   * óskyldum eignum. Staðfest 28.08: NFC skilar Skútuvogi 4, NFD skilar Skuld.
+   * Þetta gerði leitina ónothæfa í síma þótt hún virkaði á tölvu. */
+  const heimilisfang = (sp.get("heimilisfang") || "").normalize("NFC").trim();
   const landnr = (sp.get("landnr") || "").replace(/[^0-9]/g, "");
 
   if (landnr) return teikningar(landnr);
@@ -71,8 +85,19 @@ async function heimilisfong(q: string) {
   }
   if (!Array.isArray(raw)) raw = [];
 
+  /* Landeignaskrá er LAUS í leit — hún skilar einhverju sem líkist inntakinu
+   * fremur en engu (staðfest: "zzzqqq ekkert hér" skilaði Héraðsdal). Fyrir
+   * notandann er það verra en ekkert: hann skrifar Skútuvogur og fær Eskiás,
+   * og heldur að kerfið sé bilað. Hér er haldið eftir því sem byrjar á
+   * götuheitinu sem slegið var inn; finnist ekkert er sagt frá því hreint út. */
+  const gata = norm(q.replace(/\s*\d.*$/, ""));
   const results = raw
     .filter((x) => x.Landnr)
+    .filter((x) => {
+      if (gata.length < 2) return true;
+      const label = String(x.Vef_Birting || "");
+      return norm(label.split("(")[0]).startsWith(gata);
+    })
     .map((x) => {
       const label = String(x.Vef_Birting || "").replace(/\s+/g, " ").trim();
       // "Skútuvogur 4 (104) - L 105166" → póstnúmerið er í svigunum.
