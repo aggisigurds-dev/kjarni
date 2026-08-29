@@ -150,15 +150,22 @@ export function HeimilisfangLeit({
     }
   }, [velja]);
 
-  // Loka við smell utan reitsins OG portal-spjaldsins.
+  // Loka við smell utan reitsins OG portal-spjaldsins, eða Escape.
   useEffect(() => {
-    const f = (ev: MouseEvent) => {
+    const onDown = (ev: MouseEvent) => {
       const t = ev.target as Node;
       if (wrap.current?.contains(t) || panelRef.current?.contains(t)) return;
       setOpid(false);
     };
-    document.addEventListener("mousedown", f);
-    return () => document.removeEventListener("mousedown", f);
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setOpid(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   useLayoutEffect(() => {

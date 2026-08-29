@@ -18,7 +18,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
 import {
@@ -88,6 +88,15 @@ export function TopBar({
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
+  const [compactSearch, setCompactSearch] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setCompactSearch(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
   // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
@@ -122,7 +131,7 @@ export function TopBar({
         <div className="flex size-8 items-center justify-center rounded-full bg-[#FE653F] text-white">
           <span className="text-sm font-bold leading-none">T</span>
         </div>
-        <div className="hidden leading-tight xl:block">
+        <div className="hidden leading-tight 2xl:block">
           <div className="text-[11px] font-semibold tracking-[0.14em] text-[#FE653F]">TURBOPAINT</div>
           <div className="text-xs text-white/55">Kjarni · sjálfstæð síða</div>
         </div>
@@ -200,23 +209,18 @@ export function TopBar({
           if (e.key === "Enter") e.currentTarget.blur();
         }}
         enterKeyHint="done"
-        className="min-w-0 flex-1 basis-28 truncate rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:basis-40 sm:text-sm"
+        className="min-w-[8rem] flex-1 basis-[8rem] truncate rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:min-w-[12rem] sm:basis-[12rem] sm:text-sm"
         placeholder="Nafn á borði"
       />
       {onVeljaTeikningu && (
-        <>
-          <div className="hidden shrink-0 md:block">
-            <HeimilisfangLeit onVelja={onVeljaTeikningu} />
-          </div>
-          <div className="shrink-0 md:hidden">
-            <HeimilisfangLeit onVelja={onVeljaTeikningu} compact />
-          </div>
-        </>
+        <div className="shrink-0">
+          <HeimilisfangLeit onVelja={onVeljaTeikningu} compact={compactSearch} />
+        </div>
       )}
-      <span className={`shrink-0 ${syncLook.color}`} title={syncLook.label}>
+      <span className={`hidden shrink-0 sm:inline ${syncLook.color}`} title={syncLook.label}>
         <Cloud className="size-4" />
       </span>
-      <div className="hidden items-center gap-1 xl:flex">
+      <div className="hidden items-center gap-1 2xl:flex">
         <IconBtn title="Afturkalla (⌘Z)" onClick={() => useBoardStore.getState().undo()}>
           <Undo2 className="size-4" />
         </IconBtn>
@@ -263,7 +267,7 @@ export function TopBar({
         onChange={(e) =>
           useBoardStore.getState().setImportQuality(e.target.value as typeof quality)
         }
-        className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 xl:block"
+        className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 2xl:block"
         title="Innflutningsgæði fyrir stór PDF/TIF"
       >
         <option value="fast">Flýti · 3.2k</option>
@@ -325,7 +329,7 @@ export function TopBar({
       </Button>
       <Button
         size="sm"
-        className="bg-[#FE653F] text-white hover:bg-[#E8553F] max-sm:size-9 max-sm:px-0"
+        className="hidden bg-[#FE653F] text-white hover:bg-[#E8553F] sm:inline-flex"
         title="Flytja út PNG / PDF / JSON"
         onClick={onExport}
       >
@@ -343,14 +347,14 @@ export function TopBar({
         <DropdownMenuContent align="end" className="min-w-48">
           {/* Sjaldnotuðu stiku-hnapparnir (Undo/Redo, zoom, grind, segull) eru
               hidden md:flex í stikunni — á síma búa þeir hér í staðinn. */}
-          <DropdownMenuItem className="xl:hidden" onClick={() => useBoardStore.getState().undo()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().undo()}>
             ↩ Afturkalla
           </DropdownMenuItem>
-          <DropdownMenuItem className="xl:hidden" onClick={() => useBoardStore.getState().redo()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().redo()}>
             ↪ Endurtaka
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="xl:hidden"
+            className="2xl:hidden"
             onClick={() => {
               const cam = useBoardStore.getState().camera;
               useBoardStore.getState().setCamera({ ...cam, scale: Math.min(16, cam.scale * 1.3) });
@@ -359,7 +363,7 @@ export function TopBar({
             Stækka ({Math.round(camera.scale * 100)}%)
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="xl:hidden"
+            className="2xl:hidden"
             onClick={() => {
               const cam = useBoardStore.getState().camera;
               useBoardStore.getState().setCamera({ ...cam, scale: Math.max(0.04, cam.scale / 1.3) });
@@ -368,7 +372,7 @@ export function TopBar({
             Minnka
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="xl:hidden"
+            className="2xl:hidden"
             onClick={() => {
               const bounds = boardBounds(useBoardStore.getState().objects);
               useBoardStore.getState().setCamera(cameraFit(bounds, viewSize.width, viewSize.height));
@@ -376,10 +380,10 @@ export function TopBar({
           >
             Passa á skjá
           </DropdownMenuItem>
-          <DropdownMenuItem className="xl:hidden" onClick={() => useBoardStore.getState().toggleGrid()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().toggleGrid()}>
             {grid ? "✓ " : ""}Grind
           </DropdownMenuItem>
-          <DropdownMenuItem className="xl:hidden" onClick={() => useBoardStore.getState().toggleSnap()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().toggleSnap()}>
             {snap ? "✓ " : ""}Festa við grind
           </DropdownMenuItem>
           {/* Takkarnir sem eru faldir á síma / þröngu skjáborði. */}
@@ -389,12 +393,15 @@ export function TopBar({
           <DropdownMenuItem className="lg:hidden" onClick={() => onStrip?.()}>
             🧹 Hreinsa teikningu
           </DropdownMenuItem>
+          <DropdownMenuItem className="sm:hidden" onClick={onExport}>
+            ⬇ Flytja út
+          </DropdownMenuItem>
           {onOpenLayers ? (
             <DropdownMenuItem className="lg:hidden" onClick={onOpenLayers}>
               Lög og eiginleikar
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuSeparator className="xl:hidden" />
+          <DropdownMenuSeparator className="2xl:hidden" />
           <DropdownMenuItem onClick={() => void resetBoard()}>Sækja dæmiborð</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onMarkFirewalls?.()}>
