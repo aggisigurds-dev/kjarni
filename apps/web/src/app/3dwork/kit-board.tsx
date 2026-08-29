@@ -8,8 +8,8 @@
  * Shotgun, Pistol, Evo). Nothing is meshed until Open in 3dwork.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HardDrive, Layers, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { HardDrive, Layers, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DEFAULT_DRIVE_FOLDER_ID,
@@ -51,6 +51,7 @@ export function KitBoard({
   const [catalog, setCatalog] = useState<CatalogPart[]>([]);
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshToken = () => setToken(readStoredToken());
 
@@ -175,6 +176,26 @@ export function KitBoard({
     void openEntries(chosen);
   };
 
+  const openLocalFiles = async (list: FileList | File[] | null) => {
+    const files = Array.from(list ?? []).filter(
+      (file) => /\.stl$/i.test(file.name) || is3mf(file.name)
+    );
+    if (files.length === 0) {
+      toast.error('Pick an STL or 3MF file.');
+      return;
+    }
+    const tags: Record<string, { slotId: string; kitId: string }> = {};
+    for (const file of files) {
+      tags[file.name] = classifyPart(file.name);
+    }
+    setBusy(`Opening ${files.length} file${files.length === 1 ? '' : 's'}…`);
+    try {
+      await Promise.resolve(onOpenIn3dwork(files, tags));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const unslotted = useMemo(
     () => catalog.filter((entry) => !entry.slotId),
     [catalog]
@@ -186,11 +207,30 @@ export function KitBoard({
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-slate-900">2D kits</h2>
           <p className="text-[0.7rem] text-slate-500">
-            Pictures only. Pick one option per row, then open the gun in 3dwork.
+            Tap a part to open just that file in 3dwork. Tick a few, then Open, for a kit.
           </p>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".stl,.3mf"
+          className="hidden"
+          onChange={(event) => {
+            void openLocalFiles(event.target.files);
+            event.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          className={token ? ACTION_GHOST : ACTION_PRIMARY}
+          onClick={() => fileInputRef.current?.click()}
+          disabled={Boolean(busy) || opening}
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Open a file…
+        </button>
         {!token ? (
-          <button type="button" className={ACTION_PRIMARY} onClick={onConnectDrive}>
+          <button type="button" className={ACTION_GHOST} onClick={onConnectDrive}>
             <HardDrive className="h-3.5 w-3.5" />
             Connect Drive
           </button>
@@ -210,7 +250,7 @@ export function KitBoard({
               onClick={() => void openIn3dwork()}
               disabled={pickCount === 0 || Boolean(busy) || opening}
             >
-              Open in 3dwork{pickCount ? ` · ${pickCount}` : ''}
+              Open kit{pickCount ? ` · ${pickCount}` : ''}
             </button>
           </>
         )}
@@ -219,9 +259,9 @@ export function KitBoard({
       <div className="min-h-0 flex-1 overflow-auto">
         {!token ? (
           <p className="px-4 py-8 text-sm text-slate-500">
-            Connect Drive once. This board then fills from <strong>Top model 3</strong> — Iron Wolf,
-            Guardwolf, shotgun, pistol, Evo — as pictures only. Meshes stay on Drive until you open
-            one part, or a whole pick, in 3dwork.
+            <strong>Open a file…</strong> pushes one STL or 3MF onto the 3D bench for Fix and mesh
+            work — no Drive needed. Connect Drive to fill this board from{' '}
+            <strong>Top model 3</strong> as pictures; tap a tile to open just that part.
           </p>
         ) : (
           <table className="min-w-[720px] w-full border-collapse text-left">
@@ -267,7 +307,7 @@ export function KitBoard({
                               return (
                                 <div
                                   key={entry.driveId}
-                                  className={`w-[84px] overflow-hidden rounded border text-left ${
+                                  className={`relative w-[100px] overflow-hidden rounded border text-left ${
                                     selected
                                       ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400'
                                       : 'border-slate-200 bg-slate-50'
@@ -275,11 +315,24 @@ export function KitBoard({
                                 >
                                   <button
                                     type="button"
+                                    className={`absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border text-[0.7rem] font-extrabold ${
+                                      selected
+                                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                                        : 'border-slate-300 bg-white text-slate-400 hover:border-slate-500'
+                                    }`}
+                                    title={`Tick to include ${entry.name} in a kit`}
                                     onClick={() => pick(slot.id, entry.driveId)}
-                                    title={`Pick ${entry.name} for this row`}
-                                    className="block w-full"
                                   >
-                                    <div className="flex h-14 items-center justify-center bg-slate-100">
+                                    {selected ? '✓' : ''}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void openEntries([entry])}
+                                    title={`Open ${entry.name} in 3dwork`}
+                                    disabled={Boolean(busy) || opening}
+                                    className="block w-full text-left disabled:opacity-50"
+                                  >
+                                    <div className="flex h-16 items-center justify-center bg-slate-100">
                                       {entry.thumbnail ? (
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img
@@ -296,15 +349,9 @@ export function KitBoard({
                                     <div className="truncate px-1 py-0.5 text-[0.58rem] font-semibold text-slate-700">
                                       {entry.name}
                                     </div>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="w-full border-t border-slate-200 py-0.5 text-[0.52rem] font-extrabold uppercase tracking-wide text-emerald-700 hover:bg-emerald-50 disabled:text-slate-300"
-                                    disabled={Boolean(busy) || opening}
-                                    onClick={() => void openEntries([entry])}
-                                    title="Download only this file and open it on the 3D bench"
-                                  >
-                                    → 3D
+                                    <div className="border-t border-slate-200 px-1 py-1 text-center text-[0.52rem] font-extrabold uppercase tracking-wide text-emerald-700">
+                                      Open in 3dwork
+                                    </div>
                                   </button>
                                 </div>
                               );
@@ -360,8 +407,7 @@ export function KitBoard({
       ) : catalog.length > 0 ? (
         <div className="flex items-center gap-2 border-t border-slate-200 px-3 py-1.5 text-[0.65rem] text-slate-400">
           <Layers className="h-3.5 w-3.5" />
-          {catalog.length} files on the board · {pickCount} picked · meshes stay on Drive until Open
-          in 3dwork
+          {catalog.length} files on the board · tap one to open it · {pickCount} ticked for a kit
         </div>
       ) : null}
     </div>
