@@ -28,7 +28,7 @@ import {
 } from '@/lib/3dwork/drive';
 import { extract3mfThumbnail, is3mf, parse3mf } from '@/lib/3dwork/threemf';
 import { parseStl, peekBinaryStlTriangles } from '@/lib/3dwork/stl';
-import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
+import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL } from './ui';
 import { renderThumbnail } from './thumbnail';
 
 interface Crumb {
@@ -301,9 +301,7 @@ export function DriveBrowser({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
-      <div
-        className={`${PANEL} flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden sm:h-[min(88dvh,820px)]`}
-      >
+      <div className="flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden rounded border border-slate-300 bg-white sm:h-[min(88dvh,820px)]">
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
           <HardDrive className="h-4 w-4 text-emerald-600" />
           <div className="min-w-0 flex-1">
