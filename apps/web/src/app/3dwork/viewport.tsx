@@ -19,6 +19,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
+import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
 
 export interface ViewportPart {
@@ -103,6 +104,35 @@ const DEG = Math.PI / 180;
 const EASE = 0.18;
 const GHOST_COLOR = '#38bdf8';
 
+function makeCheckerFloor(sizeMm = 1600): THREE.Mesh {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#e8eaed';
+    ctx.fillRect(0, 0, 16, 16);
+    ctx.fillStyle = '#cfd3d8';
+    ctx.fillRect(0, 0, 8, 8);
+    ctx.fillRect(8, 8, 8, 8);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.repeat.set(sizeMm / 80, sizeMm / 80);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(sizeMm, sizeMm),
+    new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 })
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = -0.4;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
 /** Callout lane geometry, in pixels. */
 const LANE_TOP = 44;
 const LANE_BOTTOM_INSET = 76;
@@ -117,7 +147,7 @@ interface SceneRefs {
   meshRoot: THREE.Group;
   overlay: THREE.Group;
   paintMarks: THREE.Group;
-  grid: THREE.GridHelper;
+  grid: THREE.Object3D;
   selection: THREE.BoxHelper;
   meshes: Map<string, THREE.Mesh>;
   targets: Map<string, THREE.Vector3>;
@@ -233,8 +263,13 @@ export function Viewport({
     const host = hostRef.current;
     if (!host) return;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const slow = isSlowMachine();
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !slow,
+      alpha: true,
+      powerPreference: slow ? 'low-power' : 'default',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, slow ? 1 : 1.5));
     renderer.setSize(host.clientWidth || 1, host.clientHeight || 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -243,22 +278,27 @@ export function Viewport({
     renderer.domElement.style.inset = '0';
 
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xd5d8dc);
     const camera = new THREE.PerspectiveCamera(
-      45,
+      35,
       (host.clientWidth || 1) / (host.clientHeight || 1),
       1,
       20000
     );
-    camera.position.set(420, 320, 520);
+    camera.position.set(40, 90, 480);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    controls.enableDamping = !slow;
     controls.dampingFactor = 0.08;
+    controls.target.set(40, 20, 0);
 
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environment = envMap;
-    pmrem.dispose();
+    let envMap: THREE.Texture | null = null;
+    if (!slow) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = envMap;
+      pmrem.dispose();
+    }
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0xb8bec9, 1.4));
     const key = new THREE.DirectionalLight(0xffffff, 1.8);
@@ -268,9 +308,7 @@ export function Viewport({
     fill.position.set(-1.4, 0.6, -1);
     scene.add(fill);
 
-    const grid = new THREE.GridHelper(1600, 32, 0x64748b, 0xcbd5e1);
-    (grid.material as THREE.Material).opacity = 0.45;
-    (grid.material as THREE.Material).transparent = true;
+    const grid = makeCheckerFloor();
     scene.add(grid);
 
     const meshRoot = new THREE.Group();
@@ -376,7 +414,9 @@ export function Viewport({
       }
     };
 
+    let running = true;
     const tick = () => {
+      if (!running) return;
       state.raf = requestAnimationFrame(tick);
       // Ease every mesh toward its arrangement position; this is what makes
       // scatter and assemble read as one motion instead of a jump cut.
@@ -392,6 +432,19 @@ export function Viewport({
       layoutCallouts();
     };
     tick();
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        running = false;
+        cancelAnimationFrame(state.raf);
+        return;
+      }
+      if (!running) {
+        running = true;
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     const observer = new ResizeObserver(() => {
       const width = host.clientWidth || 1;
@@ -671,8 +724,15 @@ export function Viewport({
         mesh.geometry.dispose();
         (mesh.material as THREE.Material).dispose();
       }
+      running = false;
+      document.removeEventListener('visibilitychange', onVisibility);
       controls.dispose();
-      envMap.dispose();
+      envMap?.dispose();
+      const floor = grid as THREE.Mesh;
+      floor.geometry.dispose();
+      const floorMat = floor.material as THREE.MeshStandardMaterial;
+      floorMat.map?.dispose();
+      floorMat.dispose();
       renderer.dispose();
       host.removeChild(renderer.domElement);
       refs.current = null;
@@ -693,7 +753,7 @@ export function Viewport({
     const distance = (radius / Math.sin((state.camera.fov * DEG) / 2)) * 1.5;
 
     state.controls.target.copy(center);
-    state.camera.position.copy(center).add(new THREE.Vector3(0.55, 0.42, 1).setLength(distance));
+    state.camera.position.copy(center).add(new THREE.Vector3(0.12, 0.18, 1).setLength(distance));
     state.camera.near = Math.max(distance / 500, 0.1);
     state.camera.far = distance * 20;
     state.camera.updateProjectionMatrix();

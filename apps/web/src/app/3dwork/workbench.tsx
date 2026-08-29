@@ -5,8 +5,8 @@
  *
  * Holds the project state and wires the four pieces together: the gallery of
  * parts on the left, the table in the middle, the inspector on the right, and
- * the steel take-off underneath. Everything lives in the browser; nothing is
- * uploaded.
+ * the steel take-off underneath. The bench autosaves locally; Save on Supabase
+ * is what opens the same build on a phone or another computer.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,7 +40,9 @@ import {
   Upload,
   Paintbrush,
   ScanSearch,
+  Cloud,
   Github,
+  HardDrive,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -89,6 +91,7 @@ import {
 import {
   assembledPlacement,
   createProject,
+  guessKit,
   guessSlot,
   newProjectId,
   nextColor,
@@ -131,6 +134,7 @@ import {
   githubStatus,
   type GithubStatus,
 } from '@/lib/3dwork/github-cloud';
+import { listCloudProjects, loadFromCloud, saveToCloud } from '@/lib/3dwork/supabase-sync';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -159,9 +163,12 @@ import { PaintBar } from './paint-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, TOOL_BTN, TOOL_BTN_PRIMARY } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { DriveBrowser } from './drive-browser';
+import { KitBoard } from './kit-board';
+import { CloudPicker } from './cloud-picker';
 
 type Mode = 'assembled' | 'scattered' | 'free';
-type Workspace = 'bench' | 'sketch';
+type Workspace = 'kits' | 'bench' | 'sketch';
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -187,7 +194,17 @@ interface HistoryStep {
   geometries: Map<string, Float32Array>;
 }
 
-export function Workbench() {
+export function Workbench({
+  initialWorkspace = 'kits',
+  pendingImport,
+  pendingCloudId,
+  onPendingConsumed,
+}: {
+  initialWorkspace?: Workspace;
+  pendingImport?: { files: File[]; tags: Record<string, { slotId: string; kitId: string }> } | null;
+  pendingCloudId?: string | null;
+  onPendingConsumed?: () => void;
+} = {}) {
   const [project, setProject] = useState<Project>(() => createProject());
   const [geometries, setGeometries] = useState<Map<string, Float32Array>>(() => new Map());
   const [mode, setMode] = useState<Mode>('scattered');
@@ -251,7 +268,7 @@ export function Workbench() {
   const [showInspector, setShowInspector] = useState(true);
   const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part } | null>(null);
 
-  const [workspace, setWorkspace] = useState<Workspace>('bench');
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const [xray, setXray] = useState(false);
   /** When set, the table shows only this part. Uncheck View → Focus to restore the rest. */
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -261,6 +278,8 @@ export function Workbench() {
   const [outline, setOutline] = useState<{ name: string; data: Outline2D } | null>(null);
   const [outlineBusy, setOutlineBusy] = useState(false);
   const [showGithub, setShowGithub] = useState(false);
+  const [showCloud, setShowCloud] = useState(false);
+  const [showDrive, setShowDrive] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [githubOwner, setGithubOwner] = useState('');
   const [github, setGithub] = useState<GithubStatus>({
@@ -270,6 +289,8 @@ export function Workbench() {
     mode: null,
   });
   const [githubNote, setGithubNote] = useState<string>('Not connected');
+  const [cloudNote, setCloudNote] = useState<string>('Not saved to Supabase yet');
+  const [cloudAttached, setCloudAttached] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadedRef = useRef(false);
@@ -280,6 +301,18 @@ export function Workbench() {
   const githubRef = useRef(github);
   githubRef.current = github;
   const githubBusyRef = useRef(false);
+  const cloudAttachedRef = useRef(false);
+  const cloudBusyRef = useRef(false);
+  const attachCloud = useCallback((note?: string) => {
+    cloudAttachedRef.current = true;
+    setCloudAttached(true);
+    if (note) setCloudNote(note);
+  }, []);
+  const detachCloud = useCallback(() => {
+    cloudAttachedRef.current = false;
+    setCloudAttached(false);
+    setCloudNote('Not saved to Supabase yet');
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -296,29 +329,100 @@ export function Workbench() {
       name: entry.name,
       parts: entry.parts.length,
     }));
-    if (!githubRef.current.connected) {
-      setProjectList(local);
-      return;
-    }
+    const byId = new Map(local.map((entry) => [entry.id, entry]));
     try {
-      const remote = await githubListProjects();
-      const byId = new Map(local.map((entry) => [entry.id, entry]));
-      for (const entry of remote) {
+      const cloud = await listCloudProjects();
+      for (const entry of cloud) {
         const existing = byId.get(entry.id);
         if (!existing || entry.updatedAt >= (saved.find((row) => row.id === entry.id)?.updatedAt ?? 0)) {
           byId.set(entry.id, { id: entry.id, name: entry.name, parts: entry.parts });
         }
       }
-      setProjectList([...byId.values()]);
     } catch {
-      setProjectList(local);
+      /* cloud list is optional — local still shows */
     }
+    if (githubRef.current.connected) {
+      try {
+        const remote = await githubListProjects();
+        for (const entry of remote) {
+          const existing = byId.get(entry.id);
+          if (!existing || entry.updatedAt >= (saved.find((row) => row.id === entry.id)?.updatedAt ?? 0)) {
+            byId.set(entry.id, { id: entry.id, name: entry.name, parts: entry.parts });
+          }
+        }
+      } catch {
+        /* keep what we have */
+      }
+    }
+    setProjectList([...byId.values()]);
   }, []);
 
   const persistLocal = useCallback(async (next: Project, meshes: Map<string, Float32Array>) => {
     await saveProject(next);
     for (const [id, soup] of meshes) await saveGeometry(id, soup);
   }, []);
+
+  const applyCloudProject = useCallback(
+    async (cloud: { project: Project; geometries: Map<string, Float32Array> }, note: string) => {
+      setProject(cloud.project);
+      setGeometries(cloud.geometries);
+      setFrameToken((token) => token + 1);
+      await persistLocal(cloud.project, cloud.geometries);
+      attachCloud(note);
+    },
+    [persistLocal, attachCloud]
+  );
+
+  const pushCloud = useCallback(
+    async (reason: 'auto' | 'manual' = 'auto') => {
+      if (!loadedRef.current || cloudBusyRef.current) return;
+      if (projectRef.current.parts.length === 0) {
+        if (reason === 'manual') toast.error('Add a part before saving to Supabase.');
+        return;
+      }
+      cloudBusyRef.current = true;
+      setCloudNote('Saving to Supabase…');
+      try {
+        const result = await saveToCloud(projectRef.current, geometriesRef.current);
+        projectRef.current = { ...projectRef.current, updatedAt: result.updatedAt };
+        attachCloud(
+          reason === 'manual'
+            ? 'Saved to Supabase — open this on your phone'
+            : `Cloud saved ${new Date().toLocaleTimeString()}`
+        );
+        if (reason === 'manual') toast.success('Saved to Supabase. Same build on your phone or another computer.');
+        void refreshProjectList();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Supabase save failed';
+        setCloudNote(message);
+        if (reason === 'manual') toast.error(message);
+      } finally {
+        cloudBusyRef.current = false;
+      }
+    },
+    [refreshProjectList, attachCloud]
+  );
+
+  const pushCloudRef = useRef(pushCloud);
+  pushCloudRef.current = pushCloud;
+
+  const openCloudProject = useCallback(
+    async (projectId: string) => {
+      setBusy('Loading from Supabase…');
+      try {
+        const cloud = await loadFromCloud(projectId);
+        await applyCloudProject(cloud, `Loaded from Supabase · ${cloud.project.name}`);
+        setShowCloud(false);
+        setWorkspace('bench');
+        toast.success(`Opened ${cloud.project.name} from Supabase.`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not open that cloud build.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [applyCloudProject]
+  );
 
   const pushGithub = useCallback(async (reason: 'auto' | 'manual' = 'auto') => {
     if (!loadedRef.current || !githubRef.current.connected || githubBusyRef.current) return;
@@ -346,11 +450,32 @@ export function Workbench() {
   const pushGithubRef = useRef(pushGithub);
   pushGithubRef.current = pushGithub;
 
-  // Restore the most recent project, geometry included — local first, then GitHub.
+  // Restore: local first, then Supabase (phone / other computer). GitHub is
+  // optional leftover — never preferred over the company cloud.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      if (pendingCloudId) {
+        try {
+          setBusy('Loading from Supabase…');
+          const cloud = await loadFromCloud(pendingCloudId);
+          if (cancelled) return;
+          await applyCloudProject(cloud, `Loaded from Supabase · ${cloud.project.name}`);
+          setWorkspace('bench');
+        } catch (error) {
+          if (!cancelled) {
+            setCloudNote(error instanceof Error ? error.message : 'Supabase unavailable');
+            toast.error(error instanceof Error ? error.message : 'Could not open that cloud build.');
+          }
+        } finally {
+          if (!cancelled) setBusy(null);
+        }
+        loadedRef.current = true;
+        void refreshProjectList();
+        return;
+      }
+
       const saved = await listProjects();
       if (cancelled) return;
 
@@ -376,16 +501,9 @@ export function Workbench() {
       loadedRef.current = true;
       void refreshProjectList();
 
+      let usedCloud = false;
       try {
-        const status = await githubStatus();
-        if (cancelled) return;
-        setGithub(status);
-        if (!status.connected) {
-          setGithubNote('Not connected');
-          return;
-        }
-        setGithubNote(`Connected · ${status.repo}`);
-        const remote = await githubListProjects();
+        const remote = await listCloudProjects();
         if (cancelled) return;
         const current = projectRef.current;
         const remoteThis = remote.find((entry) => entry.id === current.id);
@@ -397,8 +515,44 @@ export function Workbench() {
               ? newest.id
               : null;
         if (takeId) {
+          setBusy('Loading from Supabase…');
+          const cloud = await loadFromCloud(takeId);
+          if (cancelled) return;
+          await applyCloudProject(cloud, `Loaded from Supabase · ${cloud.project.name}`);
+          setBusy(null);
+          usedCloud = true;
+        } else if (remoteThis) {
+          attachCloud('Supabase · this build');
+        } else if (current.parts.length === 0 && remote.length === 0) {
+          setCloudNote('Not saved to Supabase yet');
+        }
+        void refreshProjectList();
+      } catch (error) {
+        if (!cancelled) {
+          setCloudNote(error instanceof Error ? error.message : 'Supabase unavailable');
+          setBusy(null);
+        }
+      }
+
+      try {
+        const status = await githubStatus();
+        if (cancelled) return;
+        setGithub(status);
+        if (!status.connected) {
+          setGithubNote('Not connected');
+          return;
+        }
+        setGithubNote(`Connected · ${status.repo}`);
+        if (usedCloud || projectRef.current.parts.length > 0) {
+          void refreshProjectList();
+          return;
+        }
+        const remote = await githubListProjects();
+        if (cancelled) return;
+        const newest = remote[0];
+        if (newest) {
           setBusy('Loading from GitHub…');
-          const cloud = await githubLoadProject(takeId);
+          const cloud = await githubLoadProject(newest.id);
           if (cancelled) return;
           setProject(cloud.project);
           setGeometries(cloud.geometries);
@@ -406,8 +560,6 @@ export function Workbench() {
           await persistLocal(cloud.project, cloud.geometries);
           setGithubNote(`Loaded from GitHub · ${status.repo}`);
           setBusy(null);
-        } else if (current.parts.length > 0) {
-          void pushGithub('auto');
         }
         void refreshProjectList();
       } catch (error) {
@@ -421,7 +573,7 @@ export function Workbench() {
     return () => {
       cancelled = true;
     };
-  }, [refreshProjectList, persistLocal, pushGithub]);
+  }, [refreshProjectList, persistLocal, applyCloudProject, pendingCloudId, attachCloud]);
 
   // Autosave, debounced so dragging a slider does not hammer IndexedDB.
   useEffect(() => {
@@ -429,6 +581,12 @@ export function Workbench() {
     const timer = setTimeout(() => void saveProject(project), 800);
     return () => clearTimeout(timer);
   }, [project]);
+
+  useEffect(() => {
+    if (!loadedRef.current || !cloudAttachedRef.current) return;
+    const timer = setTimeout(() => void pushCloud('auto'), 2500);
+    return () => clearTimeout(timer);
+  }, [project, geometries, pushCloud]);
 
   useEffect(() => {
     if (!loadedRef.current || !github.connected) return;
@@ -448,6 +606,7 @@ export function Workbench() {
     const flush = () => {
       if (loadedRef.current) {
         void saveProject(projectRef.current);
+        if (cloudAttachedRef.current) void pushCloudRef.current('auto');
         if (githubRef.current.connected) void pushGithubRef.current('auto');
       }
     };
@@ -474,6 +633,18 @@ export function Workbench() {
       const saved = await listProjects();
       let target = saved.find((entry) => entry.id === projectId);
       const loaded = new Map<string, Float32Array>();
+
+      if (!target) {
+        try {
+          const cloud = await loadFromCloud(projectId);
+          target = cloud.project;
+          for (const [id, soup] of cloud.geometries) loaded.set(id, soup);
+          await persistLocal(cloud.project, cloud.geometries);
+          attachCloud(`Loaded from Supabase · ${cloud.project.name}`);
+        } catch {
+          /* fall through */
+        }
+      }
 
       if (!target && githubRef.current.connected) {
         try {
@@ -521,6 +692,7 @@ export function Workbench() {
 
   const createProjectFolder = useCallback(() => {
     // The current project is already saved by the autosave effect.
+    detachCloud();
     setProject({ ...createProject('New build', newProjectId()) });
     setGeometries(new Map());
     setSelectedId(null);
@@ -529,7 +701,7 @@ export function Workbench() {
     setSketch(emptySketch());
     toast.success('Started a new project.');
     void refreshProjectList();
-  }, [refreshProjectList]);
+  }, [refreshProjectList, detachCloud]);
 
   const deleteProjectFolder = useCallback(
     async (projectId: string) => {
@@ -562,7 +734,7 @@ export function Workbench() {
       setGithubToken('');
       setShowGithub(false);
       setGithubNote(`Connected · ${status.repo}`);
-      toast.success(`Connected to ${status.repo}. Saves will follow you to other computers.`);
+      toast.success(`Connected to ${status.repo}. Optional GitHub backup — parts still live in Supabase.`);
       loadedRef.current = true;
       await pushGithub('manual');
       void refreshProjectList();
@@ -647,16 +819,19 @@ export function Workbench() {
   }, [project.parts, geometries]);
 
   const placements = useMemo<Placement[]>(
-    () =>
-      mode === 'assembled'
+    () => {
+      if (workspace !== 'bench') return [];
+      return mode === 'assembled'
         ? assembledPlacement(project)
         : mode === 'free'
           ? freePlacement(project)
-          : scatterPlacement(project, sizes),
-    [mode, project, sizes]
+          : scatterPlacement(project, sizes);
+    },
+    [mode, project, sizes, workspace]
   );
 
   const viewportParts = useMemo<ViewportPart[]>(() => {
+    if (workspace !== 'bench') return [];
     const byId = new Map(placements.map((placement) => [placement.partId, placement]));
     const parts: ViewportPart[] = [];
 
@@ -680,7 +855,7 @@ export function Workbench() {
       });
     }
     return parts;
-  }, [project.parts, geometries, placements, focusId]);
+  }, [project.parts, geometries, placements, focusId, workspace]);
 
   const partWorldPos = useCallback(
     (part: Part) => {
@@ -698,8 +873,9 @@ export function Workbench() {
   );
 
   const snapNeighbors = useMemo(
-    () =>
-      project.parts.flatMap((part) => {
+    () => {
+      if (workspace !== 'bench') return [];
+      return project.parts.flatMap((part) => {
         if (focusId ? part.id !== focusId : !part.visible) return [];
         const soup = geometries.get(part.activeVersionId);
         if (!soup) return [];
@@ -715,8 +891,9 @@ export function Workbench() {
             ),
           },
         ];
-      }),
-    [project.parts, geometries, partWorldPos, focusId]
+      });
+    },
+    [project.parts, geometries, partWorldPos, focusId, workspace]
   );
 
   const snapAnchors = useMemo(
@@ -869,7 +1046,14 @@ export function Workbench() {
   void historyToken;
 
   const importFiles = useCallback(
-    async (files: File[]) => {
+    async (
+      files: File[],
+      opts?: {
+        autoFit?: boolean;
+        classifyHint?: string;
+        tags?: Record<string, { slotId: string; kitId: string }>;
+      }
+    ) => {
       const accepted = files.filter((file) => /\.stl$/i.test(file.name) || is3mf(file.name));
       if (accepted.length === 0) {
         toast.error('No STL or 3MF files in that drop.');
@@ -953,7 +1137,8 @@ export function Workbench() {
         fileName: string,
         soup: Float32Array,
         position: { x: number; y: number; z: number },
-        slotId: string
+        slotId: string,
+        kitId = ''
       ): Part => {
         const versionId = newVersionId();
         const color = nextColor({ ...project, parts: [...project.parts, ...addedParts] } as Project);
@@ -964,6 +1149,7 @@ export function Workbench() {
           name,
           fileName,
           slotId,
+          kitId,
           color,
           visible: true,
           transform: { position, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } },
@@ -986,14 +1172,19 @@ export function Workbench() {
           }));
 
           if (prepared.length === 1) {
-            // Land a lone part on its own origin, as before.
+            const tagged = opts?.tags?.[file.fileName];
+            const slotId = tagged?.slotId || guessSlot(prepared[0].name, opts?.classifyHint);
+            const kitId =
+              tagged?.kitId ||
+              guessKit(`${opts?.classifyHint ?? ''} ${file.fileName} ${prepared[0].name}`);
             addedParts.push(
               mkPart(
                 prepared[0].name,
                 file.fileName,
                 recenter(prepared[0].soup),
                 { x: 0, y: 0, z: 0 },
-                guessSlot(prepared[0].name)
+                slotId,
+                kitId
               )
             );
             continue;
@@ -1049,7 +1240,15 @@ export function Workbench() {
             at += piece.length;
           }
 
-          const groupPart = mkPart(file.base, file.fileName, combined, { x: 0, y: 0, z: 0 }, guessSlot(file.base));
+          const groupPart = mkPart(
+            file.base,
+            file.fileName,
+            combined,
+            { x: 0, y: 0, z: 0 },
+            opts?.tags?.[file.fileName]?.slotId || guessSlot(file.base, opts?.classifyHint),
+            opts?.tags?.[file.fileName]?.kitId ||
+              guessKit(`${opts?.classifyHint ?? ''} ${file.fileName} ${file.base}`)
+          );
           groupPart.group = { members, fitted: [] };
           groupPart.notes = members.map((part) => part.name).join('\n');
           addedParts.push(groupPart);
@@ -1066,13 +1265,14 @@ export function Workbench() {
         });
 
         patchProject((current) => {
-          const slots = current.slots.map((slot) => {
-            // Fit the first part that lands in an empty slot, so a fresh
-            // import shows an assembled blaster rather than an empty frame.
-            if (slot.activePartId) return slot;
-            const candidate = addedParts.find((part) => part.slotId === slot.id);
-            return candidate ? { ...slot, activePartId: candidate.id } : slot;
-          });
+          const autoFit = opts?.autoFit !== false;
+          const slots = autoFit
+            ? current.slots.map((slot) => {
+                if (slot.activePartId) return slot;
+                const candidate = addedParts.find((part) => part.slotId === slot.id);
+                return candidate ? { ...slot, activePartId: candidate.id } : slot;
+              })
+            : current.slots;
           return { ...current, slots, parts: [...current.parts, ...addedParts] };
         });
 
@@ -1084,9 +1284,27 @@ export function Workbench() {
       setBusy(null);
       if (failures > 0) toast.error(`${failures} file(s) could not be read.`);
       if (addedParts.length > 0) toast.success(`Added ${addedParts.length} part(s).`);
+      return addedParts;
     },
     [project, patchProject, zUp]
   );
+
+  const pendingConsumed = useRef(false);
+  useEffect(() => {
+    if (pendingConsumed.current || !pendingImport?.files.length) return;
+    pendingConsumed.current = true;
+    void (async () => {
+      const added = await importFiles(pendingImport.files, {
+        autoFit: true,
+        tags: pendingImport.tags,
+      });
+      onPendingConsumed?.();
+      if (!added?.length) return;
+      setWorkspace('bench');
+      setMode('assembled');
+      setShowGallery(true);
+    })();
+  }, [importFiles, pendingImport, onPendingConsumed]);
 
   const patchPart = useCallback(
     (partId: string, patch: Partial<Part>) => {
@@ -3643,16 +3861,16 @@ export function Workbench() {
           />
           <button
             type="button"
-            onClick={() => (github.connected ? void pushGithub('manual') : setShowGithub(true))}
-            title={githubNote}
+            onClick={() => setShowCloud(true)}
+            title={cloudNote}
             className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide ${
-              github.connected
+              cloudAttached
                 ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
                 : 'border-slate-300 text-slate-500 hover:bg-slate-100'
             }`}
           >
-            <Github className="h-3 w-3" />
-            <span className="hidden sm:inline">{github.connected ? 'GitHub' : 'Connect'}</span>
+            <Cloud className="h-3 w-3" />
+            <span className="hidden sm:inline">Cloud</span>
           </button>
         </div>
 
@@ -3668,6 +3886,19 @@ export function Workbench() {
               hint="Or drag STL and 3MF files onto the table"
             >
               Import STL · 3MF…
+            </MenuItem>
+            <MenuItem
+              onClick={() => setShowDrive(true)}
+              icon={HardDrive}
+              hint="Preview STL and 3MF that Drive itself cannot show — Top model 3"
+            >
+              Open from Google Drive…
+            </MenuItem>
+            <MenuItem
+              onClick={() => setWorkspace('kits')}
+              hint="Pictures first — pick parts, then open only those in 3dwork"
+            >
+              2D kits from Drive
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Open</MenuLabel>
@@ -3688,14 +3919,30 @@ export function Workbench() {
               ))}
             </MenuScroll>
             <MenuSeparator />
-            <MenuLabel>GitHub</MenuLabel>
+            <MenuLabel>Supabase</MenuLabel>
+            <MenuItem
+              onClick={() => setShowCloud(true)}
+              icon={Cloud}
+              hint="Same build on your phone and other computers"
+            >
+              Open saved builds…
+            </MenuItem>
+            <MenuItem
+              onClick={() => void pushCloud('manual')}
+              icon={Cloud}
+              hint={cloudNote}
+            >
+              Save this build to Supabase
+            </MenuItem>
+            <MenuSeparator />
+            <MenuLabel>GitHub (kjarni code)</MenuLabel>
             <MenuItem
               onClick={() => (github.connected ? void pushGithub('manual') : setShowGithub(true))}
               icon={Github}
               hint={
                 github.connected
-                  ? `Save now to ${github.repo}`
-                  : 'Same build on every computer — connect a repo'
+                  ? `Optional backup to ${github.repo}`
+                  : 'kjarni repo is the website — parts live in Supabase'
               }
             >
               {github.connected ? 'Save to GitHub now' : 'Connect GitHub…'}
@@ -4093,6 +4340,17 @@ export function Workbench() {
               Ruler
             </MenuCheckItem>
             <MenuSeparator />
+            <MenuLabel>Workspace</MenuLabel>
+            <MenuCheckItem checked={workspace === 'kits'} onClick={() => setWorkspace('kits')}>
+              2D kits
+            </MenuCheckItem>
+            <MenuCheckItem checked={workspace === 'bench'} onClick={() => setWorkspace('bench')}>
+              3D bench
+            </MenuCheckItem>
+            <MenuCheckItem checked={workspace === 'sketch'} onClick={() => setWorkspace('sketch')}>
+              2D sketch
+            </MenuCheckItem>
+            <MenuSeparator />
             <MenuLabel>Panels</MenuLabel>
             <MenuCheckItem checked={showGallery} onClick={() => setShowGallery((v) => !v)}>
               Parts gallery
@@ -4157,8 +4415,25 @@ export function Workbench() {
             </MenuItem>
           </Menu>
         </MenuBar>
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          {(['kits', 'bench', 'sketch'] as Workspace[]).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setWorkspace(option)}
+              className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
+                workspace === option
+                  ? 'bg-sky-600 text-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {option === 'kits' ? '2D kits' : option === 'bench' ? '3D bench' : '2D sketch'}
+            </button>
+          ))}
+        </div>
         </div>
 
+        {workspace === 'bench' && (
         <div className="hidden min-w-0 flex-wrap items-center gap-1 md:flex">
 
         <div className="flex overflow-hidden rounded border border-slate-300">
@@ -4260,6 +4535,16 @@ export function Workbench() {
         >
           <Cylinder className="h-3.5 w-3.5" />
           Pipe ⌀{weldBore.diameter}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowDrive(true)}
+          title="Preview STL and 3MF from Google Drive — Drive itself cannot show them"
+          className={TOOL_BTN}
+        >
+          <HardDrive className="h-3.5 w-3.5" />
+          Drive
         </button>
 
         <button
@@ -4369,24 +4654,6 @@ export function Workbench() {
           Multi
         </button>
 
-        <div className="flex overflow-hidden rounded border border-slate-300">
-          {(['bench', 'sketch'] as Workspace[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setWorkspace(option)}
-              className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
-                workspace === option
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              {option === 'bench' ? '3D bench' : '2D sketch'}
-            </button>
-          ))}
-        </div>
-
-        {workspace === 'bench' && (
           <div className="flex overflow-hidden rounded border border-slate-300">
             {(['assembled', 'scattered', 'free'] as Mode[]).map((option) => (
               <button
@@ -4404,7 +4671,6 @@ export function Workbench() {
               </button>
             ))}
           </div>
-        )}
 
         <div className="ml-auto hidden items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500 lg:flex">
           <span>
@@ -4421,6 +4687,7 @@ export function Workbench() {
           </span>
         </div>
         </div>
+        )}
       </div>
 
       {isMobile && workspace === 'bench' && (
@@ -4432,6 +4699,10 @@ export function Workbench() {
           >
             <Upload className="h-3.5 w-3.5" />
             Import
+          </button>
+          <button type="button" className={TOOL_BTN} onClick={() => setShowDrive(true)}>
+            <HardDrive className="h-3.5 w-3.5" />
+            Drive
           </button>
           <button
             type="button"
@@ -4480,7 +4751,27 @@ export function Workbench() {
       )}
 
 
-      {workspace === 'sketch' ? (
+      {workspace === 'kits' ? (
+        <div className="min-h-0 flex-1">
+          <KitBoard
+            driveOpen={showDrive}
+            onConnectDrive={() => setShowDrive(true)}
+            opening={Boolean(busy)}
+            onOpenIn3dwork={async (files, tags) => {
+              const added = await importFiles(files, { autoFit: true, tags });
+              if (!added?.length) return;
+              setWorkspace('bench');
+              setMode('assembled');
+              setShowGallery(true);
+              toast.success(
+                added.length === 1
+                  ? 'Opened that part on the 3D bench — Fix and mesh tools are here.'
+                  : 'Opened in 3dwork — parts sit on their mounts. Swap a row and open again to change one.'
+              );
+            }}
+          />
+        </div>
+      ) : workspace === 'sketch' ? (
         <div className="min-h-0 flex-1">
           <SketchBoard
             sketch={sketch}
@@ -4663,8 +4954,8 @@ export function Workbench() {
               <Upload className="h-8 w-8 text-slate-700" />
               <p className="text-sm font-bold text-slate-500">Drop STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
-                Drop the body parts, tap Multi to select them, then Pipe ⌀28 to weld a hole through
-                the whole length.
+                Drop the body parts — or open Drive to preview the STL / 3MF Google will not
+                show — then Multi and Pipe ⌀28.
               </p>
             </div>
           )}
@@ -5429,13 +5720,33 @@ export function Workbench() {
         </div>
       )}
 
+      <CloudPicker
+        open={showCloud}
+        onClose={() => setShowCloud(false)}
+        onOpen={(id) => void openCloudProject(id)}
+        onSave={() => void pushCloud('manual')}
+        note={cloudNote}
+        saving={cloudNote === 'Saving to Supabase…'}
+        canSave={project.parts.length > 0}
+      />
+
+      {showDrive && (
+        <DriveBrowser
+          onClose={() => setShowDrive(false)}
+          onImport={(files, folderHint) =>
+            void importFiles(files, { classifyHint: folderHint })
+          }
+        />
+      )}
+
       {showGithub && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className={`${PANEL} w-full max-w-md p-4`}>
             <h2 className="mb-1 text-sm font-bold text-slate-900">Connect GitHub</h2>
             <p className="mb-3 text-[0.7rem] text-slate-500">
-              The bench saves on this computer already. Connect GitHub and the same project opens
-              on your phone, another laptop, or Cursor — it saves every few seconds while you work.
+              Optional. GitHub here is a leftover backup into a <code className="font-mono">3dwork-bench</code>{' '}
+              repo. The kjarni GitHub connection is the website code. Parts you want on your phone
+              or another computer go to Supabase — use Project → Save this build to Supabase.
             </p>
             <ol className="mb-3 list-decimal space-y-1 pl-4 text-[0.7rem] text-slate-600">
               <li>

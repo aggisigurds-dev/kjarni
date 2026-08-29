@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Workbench } from './workbench';
+import { KitsHome } from './kits-home';
 
 export const metadata: Metadata = {
   title: '3dwork — STL bench',
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function ThreeDWorkPage() {
-  return <Workbench />;
+  return <KitsHome />;
 }

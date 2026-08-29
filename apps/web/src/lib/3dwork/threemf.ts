@@ -24,7 +24,7 @@ export interface ThreeMfObject {
 }
 
 /** Locate a file inside the zip and return its bytes, inflating if needed. */
-async function readZipEntry(buffer: ArrayBuffer, wanted: string): Promise<Uint8Array | null> {
+export async function readZipEntry(buffer: ArrayBuffer, wanted: string): Promise<Uint8Array | null> {
   const view = new DataView(buffer);
   const bytes = new Uint8Array(buffer);
 
@@ -108,41 +108,295 @@ async function readZipEntry(buffer: ArrayBuffer, wanted: string): Promise<Uint8A
 
       if (method === 0) return raw;
       if (method !== 8) return null;
-
-      // 'deflate-raw' because a zip entry has no zlib header. The source is a
-      // ReadableStream rather than a Blob: Blob.stream() is missing in some
-      // non-browser runtimes, while ReadableStream is everywhere we run.
-      const source = new ReadableStream<BufferSource>({
-        start(controller) {
-          controller.enqueue(raw);
-          controller.close();
-        },
-      });
-      const stream = source.pipeThrough(new DecompressionStream('deflate-raw'));
-
-      const chunks: Uint8Array[] = [];
-      let total = 0;
-      const reader = stream.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value as Uint8Array);
-        total += (value as Uint8Array).length;
-      }
-
-      const out = new Uint8Array(total);
-      let at2 = 0;
-      for (const chunk of chunks) {
-        out.set(chunk, at2);
-        at2 += chunk.length;
-      }
-      return out;
+      // 'deflate-raw' because a zip entry has no zlib header.
+      return inflateRaw(raw);
     }
 
     offset += 46 + nameLength + extraLength + commentLength;
   }
 
   return null;
+}
+
+export interface ZipLocalEntry {
+  name: string;
+  localOffset: number;
+  compressedSize: number;
+  method: number;
+}
+
+export const ZIP_TAIL_BYTES = 256 * 1024;
+export const MAX_THUMB_COMPRESSED = 2 * 1024 * 1024;
+
+function viewOf(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+function findEocd(view: DataView, length: number): number {
+  for (let i = length - 22; i >= 0 && i > length - 66000; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) return i;
+  }
+  return -1;
+}
+
+/** Prefer a slicer thumbnail, then the small plate picture Bambu leaves. */
+export function pick3mfPreviewName(names: string[]): string | undefined {
+  return (
+    names.find((name) => /(?:^|\/)thumbnail\.(png|jpe?g|webp)$/i.test(name)) ??
+    names.find((name) => /thumbnail/i.test(name) && /\.(png|jpe?g|webp)$/i.test(name)) ??
+    names.find((name) => /(?:^|\/)plate_\d+_small\.(png|jpe?g|webp)$/i.test(name)) ??
+    names.find((name) => /(?:^|\/)plate_\d+\.(png|jpe?g|webp)$/i.test(name)) ??
+    names.find((name) => /^Metadata\/[^/]+\.(png|jpe?g|webp)$/i.test(name))
+  );
+}
+
+function walkCentralDirectory(
+  bytes: Uint8Array,
+  fileToView: (fileOffset: number) => number | null,
+  cdFileOffset: number,
+  entries: number
+): ZipLocalEntry[] {
+  const view = viewOf(bytes);
+  const decoder = new TextDecoder();
+  const found: ZipLocalEntry[] = [];
+  let fileOffset = cdFileOffset;
+
+  for (let i = 0; i < entries; i++) {
+    const at = fileToView(fileOffset);
+    if (at == null || at + 46 > bytes.length) break;
+    if (view.getUint32(at, true) !== 0x02014b50) break;
+
+    const method = view.getUint16(at + 10, true);
+    let compressedSize = view.getUint32(at + 20, true);
+    const uncompressedSize = view.getUint32(at + 24, true);
+    const nameLength = view.getUint16(at + 28, true);
+    const extraLength = view.getUint16(at + 30, true);
+    const commentLength = view.getUint16(at + 32, true);
+    let localOffset = view.getUint32(at + 42, true);
+    if (at + 46 + nameLength > bytes.length) break;
+    const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength));
+
+    if (compressedSize === 0xffffffff || localOffset === 0xffffffff) {
+      let fieldAt = at + 46 + nameLength;
+      const end = fieldAt + extraLength;
+      while (fieldAt + 4 <= end && fieldAt + 4 <= bytes.length) {
+        const headerId = view.getUint16(fieldAt, true);
+        const size = view.getUint16(fieldAt + 2, true);
+        if (headerId === 0x0001) {
+          let field = fieldAt + 4;
+          if (uncompressedSize === 0xffffffff) field += 8;
+          if (compressedSize === 0xffffffff) {
+            compressedSize = Number(view.getBigUint64(field, true));
+            field += 8;
+          }
+          if (localOffset === 0xffffffff) localOffset = Number(view.getBigUint64(field, true));
+          break;
+        }
+        fieldAt += 4 + size;
+      }
+    }
+
+    found.push({ name, localOffset, compressedSize, method });
+    fileOffset += 46 + nameLength + extraLength + commentLength;
+  }
+  return found;
+}
+
+function cdFromEocd(
+  bytes: Uint8Array,
+  eocd: number,
+  fileToView: (fileOffset: number) => number | null
+): { entries: number; offset: number } | null {
+  const view = viewOf(bytes);
+  let entries = view.getUint16(eocd + 10, true);
+  let offset = view.getUint32(eocd + 16, true);
+  if (entries !== 0xffff && offset !== 0xffffffff) return { entries, offset };
+
+  let locator = -1;
+  for (let i = eocd - 20; i >= 0 && i > eocd - 66000; i--) {
+    if (view.getUint32(i, true) === 0x07064b50) {
+      locator = i;
+      break;
+    }
+  }
+  if (locator < 0) return null;
+  const zip64File = Number(view.getBigUint64(locator + 8, true));
+  const zip64 = fileToView(zip64File);
+  if (zip64 == null || zip64 + 56 > bytes.length) return null;
+  if (view.getUint32(zip64, true) !== 0x06064b50) return null;
+  return {
+    entries: Number(view.getBigUint64(zip64 + 32, true)),
+    offset: Number(view.getBigUint64(zip64 + 48, true)),
+  };
+}
+
+/**
+ * Read the zip tail (last ~256 KB of a 3MF) and find the slicer picture
+ * without pulling the mesh. Used so a 90 MB Bambu file can still preview.
+ */
+export function locateZipThumbnailInTail(
+  tail: Uint8Array,
+  fileSize: number
+): ZipLocalEntry | { needFrom: number } | undefined {
+  const view = viewOf(tail);
+  const eocd = findEocd(view, tail.length);
+  if (eocd < 0) return undefined;
+  const tailStart = fileSize - tail.length;
+  const fileToView = (fileOffset: number) => {
+    const at = fileOffset - tailStart;
+    return at >= 0 ? at : null;
+  };
+  const cd = cdFromEocd(tail, eocd, fileToView);
+  if (!cd) return undefined;
+  if (fileToView(cd.offset) == null) return { needFrom: cd.offset };
+  const entries = walkCentralDirectory(tail, fileToView, cd.offset, cd.entries);
+  const hit = pick3mfPreviewName(entries.map((entry) => entry.name));
+  if (!hit) return undefined;
+  return entries.find((entry) => entry.name === hit);
+}
+
+async function inflateRaw(raw: Uint8Array): Promise<Uint8Array> {
+  const copy = new Uint8Array(raw.byteLength);
+  copy.set(raw);
+  const source = new ReadableStream<BufferSource>({
+    start(controller) {
+      controller.enqueue(copy);
+      controller.close();
+    },
+  });
+  const stream = source.pipeThrough(new DecompressionStream('deflate-raw'));
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = stream.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value as Uint8Array);
+    total += (value as Uint8Array).length;
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.length;
+  }
+  return out;
+}
+
+export async function readZipLocalPayload(
+  slice: Uint8Array,
+  compressedSize: number,
+  method: number
+): Promise<Uint8Array | null> {
+  if (slice.length < 30) return null;
+  const view = viewOf(slice);
+  if (view.getUint32(0, true) !== 0x04034b50) return null;
+  const nameLength = view.getUint16(26, true);
+  const extraLength = view.getUint16(28, true);
+  const start = 30 + nameLength + extraLength;
+  if (start + compressedSize > slice.length) return null;
+  const raw = slice.subarray(start, start + compressedSize);
+  if (method === 0) return raw;
+  if (method !== 8) return null;
+  return inflateRaw(raw);
+}
+
+function imageDataUrl(bytes: Uint8Array, name: string): string | undefined {
+  if (bytes.length < 8) return undefined;
+  const mime = /\.jpe?g$/i.test(name)
+    ? 'image/jpeg'
+    : /\.webp$/i.test(name)
+      ? 'image/webp'
+      : 'image/png';
+  return bytesToDataUrl(bytes, mime);
+}
+
+/** Pull only the thumbnail bytes from a 3MF, via Range requests. */
+export async function peek3mfThumbnailFromRanges(
+  fileSize: number,
+  getRange: (start: number, endInclusive: number) => Promise<Uint8Array>
+): Promise<string | undefined> {
+  if (fileSize < 22) return undefined;
+  const tailStart = Math.max(0, fileSize - ZIP_TAIL_BYTES);
+  let located = locateZipThumbnailInTail(await getRange(tailStart, fileSize - 1), fileSize);
+  if (located && 'needFrom' in located) {
+    located = locateZipThumbnailInTail(await getRange(located.needFrom, fileSize - 1), fileSize);
+  }
+  if (!located || 'needFrom' in located) return undefined;
+  if (located.compressedSize <= 0 || located.compressedSize > MAX_THUMB_COMPRESSED) return undefined;
+  const slice = await getRange(
+    located.localOffset,
+    located.localOffset + 30 + 1024 + located.compressedSize - 1
+  );
+  const bytes = await readZipLocalPayload(slice, located.compressedSize, located.method);
+  if (!bytes) return undefined;
+  return imageDataUrl(bytes, located.name);
+}
+
+/** Central-directory names only — used to find a slicer thumbnail without guessing. */
+export function listZipEntryNames(buffer: ArrayBuffer): string[] {
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  let eocd = -1;
+  for (let i = buffer.byteLength - 22; i >= 0 && i > buffer.byteLength - 66000; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) return [];
+
+  let entries = view.getUint16(eocd + 10, true);
+  let offset = view.getUint32(eocd + 16, true);
+  if (entries === 0xffff || offset === 0xffffffff) {
+    let locator = -1;
+    for (let i = eocd - 20; i >= 0 && i > eocd - 66000; i--) {
+      if (view.getUint32(i, true) === 0x07064b50) {
+        locator = i;
+        break;
+      }
+    }
+    if (locator < 0) return [];
+    const zip64 = Number(view.getBigUint64(locator + 8, true));
+    if (zip64 + 56 > buffer.byteLength) return [];
+    if (view.getUint32(zip64, true) !== 0x06064b50) return [];
+    entries = Number(view.getBigUint64(zip64 + 32, true));
+    offset = Number(view.getBigUint64(zip64 + 48, true));
+  }
+
+  const decoder = new TextDecoder();
+  const names: string[] = [];
+  for (let i = 0; i < entries; i++) {
+    if (offset + 46 > buffer.byteLength) break;
+    if (view.getUint32(offset, true) !== 0x02014b50) break;
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    names.push(decoder.decode(bytes.subarray(offset + 46, offset + 46 + nameLength)));
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return names;
+}
+
+function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return `data:${mime};base64,${btoa(binary)}`;
+}
+
+/**
+ * Slicers (Bambu, Prusa, Cura) almost always stash a PNG of the build in the
+ * 3MF. Drive cannot show that picture — we can, without meshing the file.
+ */
+export async function extract3mfThumbnail(buffer: ArrayBuffer): Promise<string | undefined> {
+  const hit = pick3mfPreviewName(listZipEntryNames(buffer));
+  if (!hit) return undefined;
+  const bytes = await readZipEntry(buffer, hit);
+  if (!bytes) return undefined;
+  return imageDataUrl(bytes, hit);
 }
 
 /**

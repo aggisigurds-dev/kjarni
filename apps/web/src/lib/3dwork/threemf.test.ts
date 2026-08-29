@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createZip } from './zip';
-import { is3mf, parse3mf, exportColored3mf } from './threemf';
+import {
+  extract3mfThumbnail,
+  is3mf,
+  parse3mf,
+  exportColored3mf,
+  locateZipThumbnailInTail,
+  peek3mfThumbnailFromRanges,
+  pick3mfPreviewName,
+} from './threemf';
 import { computeBounds } from './mesh';
 
 /** A unit cube as an indexed 3MF mesh body. */
@@ -139,6 +147,73 @@ describe('parse3mf', () => {
 
   it('refuses a file that is not a readable 3MF', async () => {
     await expect(parse3mf(new ArrayBuffer(64))).rejects.toThrow(/readable 3MF/);
+  });
+});
+
+describe('pick3mfPreviewName', () => {
+  it('prefers a thumbnail over a Bambu plate picture', () => {
+    expect(
+      pick3mfPreviewName([
+        '3D/3dmodel.model',
+        'Metadata/plate_1.png',
+        'Metadata/thumbnail.png',
+        'Metadata/plate_1_small.png',
+      ])
+    ).toBe('Metadata/thumbnail.png');
+  });
+
+  it('falls back to the small plate picture', () => {
+    expect(pick3mfPreviewName(['Metadata/plate_1.png', 'Metadata/plate_1_small.png'])).toBe(
+      'Metadata/plate_1_small.png'
+    );
+  });
+});
+
+describe('extract3mfThumbnail', () => {
+  it('reads the PNG a slicer leaves in Metadata/thumbnail.png', async () => {
+    // 1×1 green PNG
+    const png = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=='
+      ),
+      (c) => c.charCodeAt(0)
+    );
+    const zip = createZip([
+      { name: '[Content_Types].xml', data: new TextEncoder().encode('<Types />') },
+      { name: '3D/3dmodel.model', data: new TextEncoder().encode(model(`<object id="1" type="model"><mesh>${CUBE}</mesh></object>`)) },
+      { name: 'Metadata/thumbnail.png', data: png },
+    ]);
+    const url = await extract3mfThumbnail(await zip.arrayBuffer());
+    expect(url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('returns nothing when the archive has no picture', async () => {
+    const url = await extract3mfThumbnail(
+      await pack(model(`<object id="1" type="model"><mesh>${CUBE}</mesh></object>`))
+    );
+    expect(url).toBeUndefined();
+  });
+
+  it('finds the thumbnail from only the zip tail, as a Range peek would', async () => {
+    const png = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=='
+      ),
+      (c) => c.charCodeAt(0)
+    );
+    const zip = createZip([
+      { name: '3D/3dmodel.model', data: new Uint8Array(80_000) },
+      { name: 'Metadata/thumbnail.png', data: png },
+    ]);
+    const file = new Uint8Array(await zip.arrayBuffer());
+    const tail = file.subarray(file.length - 8_000);
+    const located = locateZipThumbnailInTail(tail, file.length);
+    expect(located && 'name' in located ? located.name : null).toBe('Metadata/thumbnail.png');
+
+    const url = await peek3mfThumbnailFromRanges(file.length, async (start, end) =>
+      file.subarray(start, end + 1)
+    );
+    expect(url).toMatch(/^data:image\/png;base64,/);
   });
 });
 
