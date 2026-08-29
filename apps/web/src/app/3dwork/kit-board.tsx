@@ -1,38 +1,36 @@
 'use client';
 
 /**
- * 2D kit board — pick parts as pictures, then open them in 3dwork.
+ * 2D part chooser — like a Drive / Explorer window, then open the picks in 3dwork.
  *
- * Drive will not preview STL/3MF. This board lists the Top model 3 folder as
- * rows (body, barrel, grip, …) and columns (Unconnected, Iron Wolf, Guardwolf,
- * Shotgun, Pistol, Evo). Nothing is meshed until Open in 3dwork.
+ * Folders and 3MF pictures only. Click to tick one or many. Open in 3dwork
+ * downloads those files and starts the bench. The 3D table does not run here.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HardDrive, Layers, Loader2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Folder, HardDrive, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DEFAULT_DRIVE_FOLDER_ID,
-  driveCollectMeshes,
+  DEFAULT_DRIVE_FOLDER_NAME,
   driveDownload,
+  driveFolderMeta,
+  driveListFolder,
   drivePeek3mfThumbnail,
   formatDriveBytes,
   readStoredToken,
+  type DriveItem,
 } from '@/lib/3dwork/drive';
-import {
-  DEFAULT_SLOTS,
-  GUN_KITS,
-  UNCONNECTED_KIT,
-  classifyPart,
-  type CatalogPart,
-} from '@/lib/3dwork/project';
-import { ACTION_GHOST, ACTION_PRIMARY, LABEL } from './ui';
+import { classifyPart } from '@/lib/3dwork/project';
+import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL } from './ui';
 
 const isMeshFile = (name: string) => /\.(stl|3mf)$/i.test(name);
 const is3mfName = (name: string) => /\.3mf$/i.test(name);
 
-const CELL_LIMIT = 5;
-const KIT_COLUMNS = [UNCONNECTED_KIT, ...GUN_KITS];
+interface Crumb {
+  id: string;
+  name: string;
+}
 
 export function KitBoard({
   onConnectDrive,
@@ -46,12 +44,17 @@ export function KitBoard({
     tags: Record<string, { slotId: string; kitId: string }>
   ) => void | Promise<void>;
   opening?: boolean;
-  /** When the Drive dialog closes, re-read the stored token. */
   driveOpen?: boolean;
 }) {
   const [token, setToken] = useState('');
-  const [catalog, setCatalog] = useState<CatalogPart[]>([]);
-  const [picks, setPicks] = useState<Record<string, string>>({});
+  const [folderId, setFolderId] = useState(DEFAULT_DRIVE_FOLDER_ID);
+  const [crumbs, setCrumbs] = useState<Crumb[]>([
+    { id: DEFAULT_DRIVE_FOLDER_ID, name: DEFAULT_DRIVE_FOLDER_NAME },
+  ]);
+  const [items, setItems] = useState<DriveItem[]>([]);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,46 +68,45 @@ export function KitBoard({
     if (!driveOpen) refreshToken();
   }, [driveOpen]);
 
-  const loadCatalog = useCallback(
-    async (access = token) => {
+  const loadFolder = useCallback(
+    async (id: string, access = token) => {
       if (!access) {
         toast.error('Connect Google Drive first.');
         return;
       }
-      setBusy('Listing Drive parts…');
+      setBusy('Listing folder…');
       try {
-        const collected = await driveCollectMeshes(access, DEFAULT_DRIVE_FOLDER_ID);
-        const entries: CatalogPart[] = collected.map(({ item, parentName }) => {
-          const classified = classifyPart(item.name, parentName);
-          return {
-            driveId: item.id,
-            name: item.name,
-            size: item.size,
-            slotId: classified.slotId,
-            kitId: classified.kitId,
-            parentName,
-            thumbnail: item.thumbnailLink ?? undefined,
-          };
+        const meta = await driveFolderMeta(access, id);
+        const listed = await driveListFolder(access, id);
+        setFolderId(id);
+        setItems(listed);
+        setSelected(new Set());
+        setCrumbs((current) => {
+          const index = current.findIndex((crumb) => crumb.id === id);
+          if (index >= 0) return current.slice(0, index + 1);
+          return [...current, { id, name: meta.name }];
         });
-        setCatalog(entries);
-        setBusy(`Pictures for ${entries.filter((entry) => is3mfName(entry.name)).length} 3MF files…`);
-        const withPics = [...entries];
+        setThumbs({});
+        setBusy('Pictures…');
+        const next: Record<string, string> = {};
         let cursor = 0;
         const workers = Array.from({ length: 3 }, async () => {
-          while (cursor < withPics.length) {
+          while (cursor < listed.length) {
             const index = cursor++;
-            const entry = withPics[index];
-            if (!is3mfName(entry.name) || !entry.size) continue;
+            const item = listed[index];
+            if (!item.isMesh) continue;
+            if (item.thumbnailLink) next[item.id] = item.thumbnailLink;
+            if (!is3mfName(item.name) || !item.size) continue;
             try {
-              const image = await drivePeek3mfThumbnail(access, entry.driveId, entry.size);
-              if (image) withPics[index] = { ...entry, thumbnail: image };
+              const image = await drivePeek3mfThumbnail(access, item.id, item.size);
+              if (image) next[item.id] = image;
             } catch {
-              // Leave the cell as a name badge — Open in 3dwork still works.
+              // Name badge is enough — Open in 3dwork still works.
             }
           }
         });
         await Promise.all(workers);
-        setCatalog([...withPics]);
+        setThumbs({ ...next });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Could not list Drive.');
       } finally {
@@ -115,55 +117,30 @@ export function KitBoard({
   );
 
   useEffect(() => {
-    if (token && catalog.length === 0) void loadCatalog(token);
-  }, [token, catalog.length, loadCatalog]);
+    if (token) void loadFolder(folderId, token);
+    // First load only — later opens go through loadFolder directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
-  const pickCount = Object.keys(picks).length;
+  const folderName = crumbs[crumbs.length - 1]?.name ?? '';
 
-  const pick = (slotId: string, driveId: string) => {
-    setPicks((current) => {
-      if (current[slotId] === driveId) {
-        const next = { ...current };
-        delete next[slotId];
-        return next;
-      }
-      return { ...current, [slotId]: driveId };
-    });
-  };
-
-  const pickKit = (kitId: string) => {
-    const next: Record<string, string> = {};
-    for (const slot of DEFAULT_SLOTS) {
-      const first = catalog.find(
-        (entry) => entry.slotId === slot.id && (entry.kitId || '') === kitId
-      );
-      if (first) next[slot.id] = first.driveId;
+  const openMeshes = async (meshes: DriveItem[]) => {
+    if (meshes.length === 0) {
+      toast.error('Tick a part first.');
+      return;
     }
-    setPicks(next);
-    toast.message(
-      Object.keys(next).length
-        ? `Picked ${Object.keys(next).length} ${KIT_COLUMNS.find((kit) => kit.id === kitId)?.name ?? ''} parts — still 2D.`
-        : 'Nothing in that column yet.'
-    );
-  };
-
-  const openEntries = async (chosen: CatalogPart[]) => {
     if (!token) {
       toast.error('Connect Google Drive first.');
       return;
     }
-    if (chosen.length === 0) {
-      toast.error('Pick a part first.');
-      return;
-    }
-    setBusy(`Downloading ${chosen.length} part${chosen.length === 1 ? '' : 's'}…`);
+    setBusy(`Downloading ${meshes.length} part${meshes.length === 1 ? '' : 's'}…`);
     try {
       const tags: Record<string, { slotId: string; kitId: string }> = {};
       const files: File[] = [];
-      for (const entry of chosen) {
-        const file = await driveDownload(token, entry.driveId, entry.name);
+      for (const item of meshes) {
+        const file = await driveDownload(token, item.id, item.name);
         files.push(file);
-        tags[file.name] = { slotId: entry.slotId, kitId: entry.kitId };
+        tags[file.name] = classifyPart(item.name, folderName);
       }
       await Promise.resolve(onOpenIn3dwork(files, tags));
     } catch (error) {
@@ -173,23 +150,14 @@ export function KitBoard({
     }
   };
 
-  const openIn3dwork = () => {
-    const chosen = catalog.filter((entry) => picks[entry.slotId] === entry.driveId);
-    void openEntries(chosen);
-  };
-
   const openLocalFiles = async (list: FileList | File[] | null) => {
-    const files = Array.from(list ?? []).filter(
-      (file) => isMeshFile(file.name)
-    );
+    const files = Array.from(list ?? []).filter((file) => isMeshFile(file.name));
     if (files.length === 0) {
       toast.error('Pick an STL or 3MF file.');
       return;
     }
     const tags: Record<string, { slotId: string; kitId: string }> = {};
-    for (const file of files) {
-      tags[file.name] = classifyPart(file.name);
-    }
+    for (const file of files) tags[file.name] = classifyPart(file.name);
     setBusy(`Opening ${files.length} file${files.length === 1 ? '' : 's'}…`);
     try {
       await Promise.resolve(onOpenIn3dwork(files, tags));
@@ -198,10 +166,25 @@ export function KitBoard({
     }
   };
 
-  const unslotted = useMemo(
-    () => catalog.filter((entry) => !entry.slotId),
-    [catalog]
+  const toggle = (item: DriveItem) => {
+    if (item.isFolder) {
+      void loadFolder(item.id);
+      return;
+    }
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+  };
+
+  const shown = items.filter((item) =>
+    filter.trim() ? item.name.toLowerCase().includes(filter.trim().toLowerCase()) : true
   );
+  const pickCount = [...selected].filter((id) => items.some((item) => item.id === id && item.isMesh))
+    .length;
+  const blocked = Boolean(busy) || opening;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded border border-slate-300 bg-white">
@@ -209,13 +192,15 @@ export function KitBoard({
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-slate-900">2D kits</h2>
           <p className="text-[0.7rem] text-slate-500">
-            2D only — the 3D table does not start until you open a part. Tap one file.
+            Same as Explorer: folders and pictures. Tick the parts you want, then open them in
+            3dwork.
           </p>
         </div>
         <input
           ref={fileInputRef}
           type="file"
           accept=".stl,.3mf"
+          multiple
           className="hidden"
           onChange={(event) => {
             void openLocalFiles(event.target.files);
@@ -226,7 +211,7 @@ export function KitBoard({
           type="button"
           className={token ? ACTION_GHOST : ACTION_PRIMARY}
           onClick={() => fileInputRef.current?.click()}
-          disabled={Boolean(busy) || opening}
+          disabled={blocked}
         >
           <Upload className="h-3.5 w-3.5" />
           Open a file…
@@ -241,163 +226,113 @@ export function KitBoard({
             <button
               type="button"
               className={ACTION_GHOST}
-              onClick={() => void loadCatalog()}
-              disabled={Boolean(busy)}
+              onClick={() => void loadFolder(folderId)}
+              disabled={blocked}
             >
-              Reload Drive
+              Reload
             </button>
             <button
               type="button"
               className={ACTION_PRIMARY}
-              onClick={() => void openIn3dwork()}
-              disabled={pickCount === 0 || Boolean(busy) || opening}
+              onClick={() =>
+                void openMeshes(items.filter((item) => item.isMesh && selected.has(item.id)))
+              }
+              disabled={pickCount === 0 || blocked}
             >
-              Open kit{pickCount ? ` · ${pickCount}` : ''}
+              Open in 3dwork{pickCount ? ` · ${pickCount}` : ''}
             </button>
           </>
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {!token ? (
-          <p className="px-4 py-8 text-sm text-slate-500">
-            This page is pictures and names. WebGL stays off. <strong>Open a file…</strong> (or tap
-            a Drive tile) starts the 3D bench with that one part so Fix can run. Connect Drive to
-            fill the board from <strong>Top model 3</strong>.
-          </p>
-        ) : (
-          <table className="min-w-[720px] w-full border-collapse text-left">
-            <thead className="sticky top-0 z-10 bg-white">
-              <tr className="border-b border-slate-200">
-                <th className="sticky left-0 z-20 bg-white px-2 py-2 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-400">
-                  Part
-                </th>
-                {KIT_COLUMNS.map((kit) => (
-                  <th key={kit.id || 'unconnected'} className="px-1 py-2">
-                    <button
-                      type="button"
-                      className={`${LABEL} hover:text-emerald-700`}
-                      onClick={() => pickKit(kit.id)}
-                      title={`Pick this column’s first option on every row`}
-                    >
-                      {kit.name}
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {DEFAULT_SLOTS.map((slot) => (
-                <tr key={slot.id} className="border-b border-slate-100 align-top">
-                  <th className="sticky left-0 bg-white px-2 py-2 text-[0.75rem] font-bold text-slate-700">
-                    {slot.name}
-                  </th>
-                  {KIT_COLUMNS.map((kit) => {
-                    const cell = catalog.filter(
-                      (entry) =>
-                        entry.slotId === slot.id && (entry.kitId || '') === kit.id
-                    );
-                    const shown = cell.slice(0, CELL_LIMIT);
-                    return (
-                      <td key={`${slot.id}-${kit.id || 'u'}`} className="px-1 py-1.5">
-                        {shown.length === 0 ? (
-                          <span className="text-[0.65rem] text-slate-300">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {shown.map((entry) => {
-                              const selected = picks[slot.id] === entry.driveId;
-                              return (
-                                <div
-                                  key={entry.driveId}
-                                  className={`relative w-[100px] overflow-hidden rounded border text-left ${
-                                    selected
-                                      ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400'
-                                      : 'border-slate-200 bg-slate-50'
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    className={`absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border text-[0.7rem] font-extrabold ${
-                                      selected
-                                        ? 'border-emerald-600 bg-emerald-600 text-white'
-                                        : 'border-slate-300 bg-white text-slate-400 hover:border-slate-500'
-                                    }`}
-                                    title={`Tick to include ${entry.name} in a kit`}
-                                    onClick={() => pick(slot.id, entry.driveId)}
-                                  >
-                                    {selected ? '✓' : ''}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => void openEntries([entry])}
-                                    title={`Open ${entry.name} in 3dwork`}
-                                    disabled={Boolean(busy) || opening}
-                                    className="block w-full text-left disabled:opacity-50"
-                                  >
-                                    <div className="flex h-16 items-center justify-center bg-slate-100">
-                                      {entry.thumbnail ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={entry.thumbnail}
-                                          alt=""
-                                          className="h-full w-full object-contain"
-                                        />
-                                      ) : (
-                                        <span className="font-mono text-[0.55rem] font-bold uppercase text-slate-400">
-                                          {entry.name.replace(/^.*\./, '')}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="truncate px-1 py-0.5 text-[0.58rem] font-semibold text-slate-700">
-                                      {entry.name}
-                                    </div>
-                                    <div className="border-t border-slate-200 px-1 py-1 text-center text-[0.52rem] font-extrabold uppercase tracking-wide text-emerald-700">
-                                      Open in 3dwork
-                                    </div>
-                                  </button>
-                                </div>
-                              );
-                            })}
-                            {cell.length > CELL_LIMIT ? (
-                              <span className="self-center text-[0.6rem] text-slate-400">
-                                +{cell.length - CELL_LIMIT}
-                              </span>
-                            ) : null}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {token ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-[0.7rem] text-slate-500">
+            {crumbs.map((crumb, index) => (
+              <span key={crumb.id} className="flex items-center gap-1">
+                {index > 0 ? <span>/</span> : null}
+                <button
+                  type="button"
+                  className="font-bold text-slate-700 hover:text-emerald-700"
+                  onClick={() => void loadFolder(crumb.id)}
+                >
+                  {crumb.name}
+                </button>
+              </span>
+            ))}
+          </div>
+          <input
+            className={`${FIELD} max-w-[12rem]`}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Filter name"
+          />
+        </div>
+      ) : null}
 
-        {unslotted.length > 0 && (
-          <div className="border-t border-slate-200 px-3 py-2">
-            <div className={`${LABEL} mb-1.5`}>Not sure which row</div>
-            <p className="mb-2 text-[0.65rem] text-slate-500">
-              Name did not match a slot. Open one in 3dwork to mesh-fix it, or leave it off the
-              grid.
-            </p>
-            <ul className="flex flex-wrap gap-1.5">
-              {unslotted.slice(0, 24).map((entry) => (
-                <li key={entry.driveId}>
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        {!token ? (
+          <p className="px-1 py-6 text-sm text-slate-500">
+            Connect Drive once. This window then looks like your{' '}
+            <strong>Top model 3</strong> folder — barrel, gw15, iron wolf, and the loose Valken /
+            trigger / mag files — as pictures. Tick a few, then Open in 3dwork. WebGL stays off
+            until that click.
+          </p>
+        ) : shown.length === 0 ? (
+          <p className="text-sm text-slate-500">{busy ? busy : 'Nothing in this folder.'}</p>
+        ) : (
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {shown.map((item) => {
+              const ticked = selected.has(item.id);
+              return (
+                <li key={item.id}>
                   <button
                     type="button"
-                    className="max-w-[12rem] truncate rounded border border-slate-200 px-2 py-1 text-left text-[0.65rem] text-slate-600 hover:border-emerald-400 hover:text-emerald-800 disabled:text-slate-400"
-                    title={`${entry.parentName} / ${entry.name} — open this file in 3dwork`}
-                    disabled={Boolean(busy) || opening}
-                    onClick={() => void openEntries([entry])}
+                    onClick={() => toggle(item)}
+                    onDoubleClick={() => {
+                      if (item.isMesh) void openMeshes([item]);
+                    }}
+                    title={
+                      item.isFolder
+                        ? `Open folder ${item.name}`
+                        : `Tick ${item.name} — double-click opens only this file`
+                    }
+                    disabled={blocked && !item.isFolder}
+                    className={`flex h-full w-full flex-col overflow-hidden rounded border text-left ${
+                      ticked
+                        ? 'border-sky-500 bg-sky-50 ring-2 ring-sky-400'
+                        : 'border-slate-200 bg-white hover:border-slate-400'
+                    }`}
                   >
-                    {entry.name}
-                    <span className="ml-1 text-slate-400">{formatDriveBytes(entry.size)}</span>
+                    <div className="flex aspect-square items-center justify-center bg-slate-50">
+                      {item.isFolder ? (
+                        <Folder className="h-14 w-14 text-amber-400" strokeWidth={1.25} />
+                      ) : thumbs[item.id] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumbs[item.id]}
+                          alt=""
+                          className="h-full w-full object-contain p-1"
+                        />
+                      ) : (
+                        <span className="font-mono text-[0.65rem] font-bold uppercase text-slate-400">
+                          {item.name.replace(/^.*\./, '')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 px-1.5 py-1.5">
+                      <div className="line-clamp-2 text-[0.7rem] font-semibold leading-tight text-slate-800">
+                        {item.name}
+                      </div>
+                      <div className="mt-0.5 text-[0.6rem] text-slate-400">
+                        {item.isFolder ? 'Folder' : formatDriveBytes(item.size)}
+                      </div>
+                    </div>
                   </button>
                 </li>
-              ))}
-            </ul>
-          </div>
+              );
+            })}
+          </ul>
         )}
       </div>
 
@@ -406,10 +341,10 @@ export function KitBoard({
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {busy || 'Opening in 3dwork…'}
         </div>
-      ) : catalog.length > 0 ? (
-        <div className="flex items-center gap-2 border-t border-slate-200 px-3 py-1.5 text-[0.65rem] text-slate-400">
-          <Layers className="h-3.5 w-3.5" />
-          {catalog.length} files on the board · tap one to open it · {pickCount} ticked for a kit
+      ) : token ? (
+        <div className={`${LABEL} border-t border-slate-200 px-3 py-1.5`}>
+          {shown.filter((item) => item.isFolder).length} folders ·{' '}
+          {shown.filter((item) => item.isMesh).length} parts · {pickCount} ticked · pictures only
         </div>
       ) : null}
     </div>

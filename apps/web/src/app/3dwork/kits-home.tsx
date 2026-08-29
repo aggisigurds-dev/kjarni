@@ -56,7 +56,7 @@ export function KitsHome() {
         <div className="flex min-w-0 items-center gap-2">
           <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
           <span className="text-sm font-bold text-slate-900">3dwork</span>
-          <span className="text-[0.65rem] text-slate-500">2D first — 3D starts when you open a part</span>
+          <span className="text-[0.65rem] text-slate-500">Pick parts as pictures, then work with them</span>
         </div>
         <div className="flex overflow-hidden rounded border border-slate-300">
           <button

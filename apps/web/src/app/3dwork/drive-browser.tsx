@@ -98,6 +98,7 @@ export function DriveBrowser({
   const [filter, setFilter] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     setClientId(readStoredClientId());
@@ -118,6 +119,7 @@ export function DriveBrowser({
         setFolderId(id);
         rememberFolder(id);
         setItems(listed);
+        setPicked(new Set());
         setCrumbs((current) => {
           const index = current.findIndex((crumb) => crumb.id === id);
           if (index >= 0) return current.slice(0, index + 1);
@@ -217,6 +219,12 @@ export function DriveBrowser({
       void openFolder(item.id);
       return;
     }
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
     if (!token) return;
     const cached = thumbs[item.id] || item.thumbnailLink || undefined;
     setPreview({
@@ -281,6 +289,27 @@ export function DriveBrowser({
     }
   };
 
+  const addPicked = async () => {
+    const meshes = items.filter((item) => item.isMesh && picked.has(item.id));
+    if (meshes.length === 0) {
+      toast.error('Tick a part first.');
+      return;
+    }
+    setBusy(`Adding ${meshes.length} part${meshes.length === 1 ? '' : 's'}…`);
+    try {
+      const files: File[] = [];
+      for (const item of meshes) {
+        files.push(await driveDownload(token, item.id, item.name));
+      }
+      onImport(files, crumbs[crumbs.length - 1]?.name);
+      toast.success(`Opening ${files.length} part${files.length === 1 ? '' : 's'} in 3dwork.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add those files.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const addToBench = async (item: DriveItem, already?: File) => {
     if (!token && !already) return;
     setBusy(`Adding ${item.name}…`);
@@ -307,7 +336,8 @@ export function DriveBrowser({
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold text-slate-900">Google Drive parts</h2>
             <p className="truncate text-[0.7rem] text-slate-500">
-              Drive will not preview STL or 3MF. This window will.
+              Tick one or more parts, then add them. Drive will not preview STL or 3MF — this window
+              will.
             </p>
           </div>
           {token ? (
@@ -403,9 +433,11 @@ export function DriveBrowser({
                       type="button"
                       onClick={() => void loadPreview(item)}
                       className={`flex h-full w-full flex-col overflow-hidden rounded border text-left ${
-                        preview?.id === item.id
-                          ? 'border-emerald-500 bg-emerald-50'
-                          : 'border-slate-200 bg-white hover:border-slate-400'
+                        picked.has(item.id)
+                          ? 'border-sky-500 bg-sky-50 ring-2 ring-sky-400'
+                          : preview?.id === item.id
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : 'border-slate-200 bg-white hover:border-slate-400'
                       }`}
                     >
                       <div className="flex aspect-square items-center justify-center bg-slate-100">
@@ -461,6 +493,15 @@ export function DriveBrowser({
                   <Upload className="h-3.5 w-3.5" />
                   Add to bench
                 </button>
+                {picked.size > 0 ? (
+                  <button
+                    type="button"
+                    className={`${ACTION_GHOST} mt-2`}
+                    onClick={() => void addPicked()}
+                  >
+                    Open {picked.size} selected in 3dwork
+                  </button>
+                ) : null}
               </>
             ) : (
               <p className="text-[0.7rem] leading-relaxed text-slate-500">
