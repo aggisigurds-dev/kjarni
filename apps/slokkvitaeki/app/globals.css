@@ -2095,7 +2095,6 @@ html[data-kjarni-skin="don"], html[data-kjarni-skin="don"] body { background:#f4
    sem hver pixill telur. Á breiðari skjá er hún óbreytt. */
 @media (max-width: 767px) {
   .stn[data-tool="turbopaint"] .stn-skins { display:none; }
-  .stn[data-tool="turbopaint"] .stn-bar { flex-wrap:nowrap; gap:8px; padding-top:6px; padding-bottom:6px; }
   .stn[data-tool="turbopaint"] .stn-tools { min-width:0; }
 }
 .stn-body { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -2142,21 +2141,39 @@ html[data-kjarni-skin="don"], html[data-kjarni-skin="don"] body { background:#f4
 .stn[data-tool="draft"] .dw-layer-btns button { background:var(--m-muted); color:var(--m-ink); min-width:44px; min-height:44px; }
 .stn[data-tool="turbopaint"] {
   height:100dvh; max-height:100dvh; overflow:hidden;
+  --stn-h:40px;
 }
 .stn[data-tool="turbopaint"] .stn-body,
 .stn[data-tool="turbopaint"] .tp { min-height:0; }
-/* Toppstikan (StationChrome): heim + kaflar (Stjórnstöð/TurboPaint/Stjórnborð/
-   Kerfi …) + þema-pillurnar (Command/Atlas/…) þurfa ~1356px til að rúmast á
-   EINNI línu. Fyrir neðan það kramdist stikan: kaflarnir aftast (Kerfi,
-   Skjalarinn, Prufusvæði, 3dwork) klipptust á bak við þema-pillurnar (margin-
-   left:auto hélt þeim á sömu línu, overflow-x faldi restina). Stöflum þema-
-   pillunum á sína eigin línu undir köflunum og gerum stikuna ósticky í þessu
-   bili — 2-línu stikan er þá hærri en --stn-h (58px) og myndi annars rekast á
-   sticky ms-head. Gildir alla leið upp í 1380px svo fartölvur (1366) klippi ekki. */
+.stn[data-tool="turbopaint"] .stn-bar {
+  flex-wrap:nowrap;
+  gap:8px;
+  padding:4px 10px;
+  position:sticky;
+}
+.stn[data-tool="turbopaint"] .stn-home { min-height:36px; font-size:0.72rem; }
+.stn[data-tool="turbopaint"] .stn-tools a {
+  display:none;
+  min-height:36px;
+  padding:6px 10px;
+  font-size:0.78rem;
+}
+.stn[data-tool="turbopaint"] .stn-tools a.on,
+.stn[data-tool="turbopaint"] .stn-tools a[href="/kjarni"],
+.stn[data-tool="turbopaint"] .stn-tools a[href="/3dwork"] { display:inline-flex; }
+.stn[data-tool="turbopaint"] .stn-skins { display:none; }
+/* Toppstikan (StationChrome) á ÖÐRUM tólum: heim + kaflar + þema-pillur
+   þurfa ~1356px. Fyrir neðan það stöflum þema-röðinni svo Kerfi/Draft
+   klippist ekki. TurboPaint er undanskilin — hún felur þemu og þéttir
+   stikuna sjálf, og á síma hverfur Kjarni-stikan alveg. */
 @media (max-width:1380px) {
-  .stn { --stn-h:0px; }
-  .stn-bar { position:static; }
-  .stn-skins { width:100%; margin-left:0; flex-wrap:wrap; }
+  .stn:not([data-tool="turbopaint"]) { --stn-h:0px; }
+  .stn:not([data-tool="turbopaint"]) .stn-bar { position:static; }
+  .stn:not([data-tool="turbopaint"]) .stn-skins { width:100%; margin-left:0; flex-wrap:wrap; }
+}
+@media (max-width: 767px) {
+  .stn[data-tool="turbopaint"] { --stn-h:0px; }
+  .stn[data-tool="turbopaint"] .stn-bar { display:none; }
 }
 @media (max-width:900px) {
   .stn[data-tool="kerfi"] .k-side { top:0; height:auto; }

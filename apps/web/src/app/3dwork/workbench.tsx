@@ -157,7 +157,7 @@ import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { PaintBar } from './paint-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
-import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
+import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, TOOL_BTN, TOOL_BTN_PRIMARY } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 type Mode = 'assembled' | 'scattered' | 'free';
@@ -247,8 +247,8 @@ export function Workbench() {
   const isMobile = useIsMobile();
 
   const [projectList, setProjectList] = useState<{ id: string; name: string; parts: number }[]>([]);
-  const [showGallery, setShowGallery] = useState(false);
-  const [showInspector, setShowInspector] = useState(false);
+  const [showGallery, setShowGallery] = useState(true);
+  const [showInspector, setShowInspector] = useState(true);
   const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part } | null>(null);
 
   const [workspace, setWorkspace] = useState<Workspace>('bench');
@@ -615,6 +615,12 @@ export function Workbench() {
   }, [selectedId]);
 
   useEffect(() => {
+    if (!isMobile) return;
+    setShowGallery(false);
+    setShowInspector(false);
+  }, [isMobile]);
+
+  useEffect(() => {
     if (focusId && !project.parts.some((part) => part.id === focusId)) setFocusId(null);
   }, [focusId, project.parts]);
 
@@ -719,18 +725,19 @@ export function Workbench() {
   );
 
   // Volume and mass are expensive (they weld the mesh), so results are cached
-  // against the geometry and scale they were computed from.
+  // against the geometry and scale they were computed from. Count everything
+  // on the table — not only parts assigned to a blaster slot — so a four-piece
+  // body you just dropped still shows mass and triangle counts.
   const statsCache = useRef(new Map<string, { volume: number; triangles: number }>());
-  const assemblyTotals = useMemo(() => {
+  const tableTotals = useMemo(() => {
     let triangles = 0;
     let volume = 0;
     let mass = 0;
     let count = 0;
 
-    for (const slot of project.slots) {
-      const part = project.parts.find((candidate) => candidate.id === slot.activePartId);
-      const soup = part ? geometries.get(part.activeVersionId) : undefined;
-      if (!part || !soup || !part.visible) continue;
+    for (const part of project.parts) {
+      const soup = geometries.get(part.activeVersionId);
+      if (!soup || part.visible === false) continue;
 
       const scale =
         Math.abs(part.transform.scale.x * part.transform.scale.y * part.transform.scale.z) || 1;
@@ -749,7 +756,15 @@ export function Workbench() {
     }
 
     return { parts: count, triangles, volume, mass };
-  }, [project.slots, project.parts, geometries]);
+  }, [project.parts, geometries]);
+
+  const fittedCount = useMemo(
+    () => project.slots.filter((slot) => Boolean(slot.activePartId)).length,
+    [project.slots]
+  );
+
+  /** Same numbers the HUD and weld-disabled checks read. */
+  const assemblyTotals = tableTotals;
 
   /** The live mesh of a part, i.e. whichever version is currently selected. */
   const soupOfPart = useCallback(
@@ -2718,31 +2733,26 @@ export function Workbench() {
     );
   }, [sketch, outline, project.name]);
 
-  /** The fitted parts, baked into world space, ready to write out. */
+  /** Every visible part, baked into world space — what you see on the table. */
   const bakedAssembly = useCallback((): { name: string; soup: Float32Array; color: string }[] => {
     const baked: { name: string; soup: Float32Array; color: string }[] = [];
 
-    for (const slot of project.slots) {
-      const part = project.parts.find((candidate) => candidate.id === slot.activePartId);
-      const soup = part ? geometries.get(part.activeVersionId) : undefined;
-      if (!part || !soup || !part.visible) continue;
+    for (const part of project.parts) {
+      const soup = geometries.get(part.activeVersionId);
+      if (!soup || part.visible === false) continue;
 
       baked.push({
         name: part.name,
         color: lookFor(part).color,
         soup: bakeTransform(soup, {
           ...part.transform,
-          position: {
-            x: slot.anchor.x + part.transform.position.x,
-            y: slot.anchor.y + part.transform.position.y,
-            z: slot.anchor.z + part.transform.position.z,
-          },
+          position: partWorldPos(part),
         }),
       });
     }
 
     return baked;
-  }, [project, geometries]);
+  }, [project.parts, geometries, partWorldPos]);
 
   /** Bounding box of the selected part, for centring a cut or a bore. */
   const selectedBounds = useCallback(() => {
@@ -2768,7 +2778,7 @@ export function Workbench() {
   const exportCombined = useCallback(() => {
     const baked = bakedAssembly();
     if (baked.length === 0) {
-      toast.error('Nothing is fitted to the blaster yet.');
+      toast.error('Nothing on the table to export.');
       return;
     }
     download(
@@ -2783,7 +2793,7 @@ export function Workbench() {
   const exportColor3mf = useCallback(() => {
     const baked = bakedAssembly();
     if (baked.length === 0) {
-      toast.error('Nothing is fitted to the blaster yet.');
+      toast.error('Nothing on the table to export.');
       return;
     }
     download(
@@ -2801,7 +2811,7 @@ export function Workbench() {
   const mergeAndClean = useCallback(() => {
     const baked = bakedAssembly();
     if (baked.length === 0) {
-      toast.error('Nothing is fitted to the blaster yet.');
+      toast.error('Nothing on the table to export.');
       return;
     }
 
@@ -2840,29 +2850,46 @@ export function Workbench() {
   }, [bakedAssembly, project.name]);
 
   /**
-   * Weld every fitted part into a single watertight solid, optionally with a
-   * bore through it. Voxelising several meshes at once *is* the union, so the
-   * parts fuse where they touch and the overlaps are absorbed rather than left
-   * as surfaces crossing each other.
+   * Fuse the parts on the table (or the current multi-selection) into one
+   * watertight solid, optionally with a pipe bore straight through. The result
+   * lands on the bench so you can keep working — Export if you want a file.
    */
   const weldAssembly = useCallback(
     (options: { resolution: number; sealMm: number; bore: CylinderCut | null }) => {
-      const baked = bakedAssembly();
-      if (baked.length === 0) {
-        toast.error('Nothing is fitted to the blaster yet.');
+      const pool = (selection.length >= 2 ? selection : project.parts).filter(
+        (part) => part.visible !== false && geometries.get(part.activeVersionId)
+      );
+      if (pool.length === 0) {
+        toast.error('Add parts to the table first.');
         return;
       }
 
-      setBusy(`Welding ${baked.length} parts into one solid…`);
+      const pieces: Float32Array[] = [];
+      for (const part of pool) {
+        const soup = geometries.get(part.activeVersionId);
+        if (!soup) continue;
+        pieces.push(bakeTransform(soup, { ...part.transform, position: partWorldPos(part) }));
+      }
+      if (pieces.length === 0) {
+        toast.error('Those parts have no mesh yet.');
+        return;
+      }
+
+      const boreLabel = options.bore ? ` · ⌀${options.bore.diameter} mm bore` : '';
+      setBusy(
+        pieces.length === 1
+          ? `Rebuilding solid${boreLabel}…`
+          : `Welding ${pieces.length} parts${boreLabel}…`
+      );
       setTimeout(() => {
         try {
           let total = 0;
-          for (const entry of baked) total += entry.soup.length;
+          for (const soup of pieces) total += soup.length;
           const merged = new Float32Array(total);
           let offset = 0;
-          for (const entry of baked) {
-            merged.set(entry.soup, offset);
-            offset += entry.soup.length;
+          for (const soup of pieces) {
+            merged.set(soup, offset);
+            offset += soup.length;
           }
 
           const result = makeSolid(merged, {
@@ -2870,26 +2897,85 @@ export function Workbench() {
             sealMm: options.sealMm,
             cuts: options.bore ? [options.bore] : [],
           });
+          if (result.soup.length === 0) {
+            toast.error('Nothing solid came out — try a larger seal distance.');
+            return;
+          }
           setSolidReport(result.report);
 
-          download(
-            new Blob([exportBinaryStl([result.soup], `${project.name} welded`)], {
-              type: 'model/stl',
-            }),
-            `${project.name.replace(/\s+/g, '_')}_welded_solid.stl`
-          );
+          const memberIds = new Set(pool.map((part) => part.id));
+          const id = newPartId();
+          const versionId = newVersionId();
+          const color = nextColor(project);
+          const triangles = Math.floor(result.soup.length / 9);
+          const name = options.bore
+            ? `Body ⌀${options.bore.diameter}`
+            : pool.length === 1
+              ? `${pool[0].name} solid`
+              : `Welded (${pool.length})`;
+
+          setGeometries((current) => new Map(current).set(versionId, result.soup));
+          void saveGeometry(versionId, result.soup);
+
+          patchProject((current) => ({
+            ...current,
+            slots: current.slots.map((slot) =>
+              slot.activePartId && memberIds.has(slot.activePartId)
+                ? { ...slot, activePartId: id }
+                : slot
+            ),
+            parts: [
+              ...current.parts.filter((part) => !memberIds.has(part.id)),
+              {
+                id,
+                name,
+                fileName: '',
+                slotId: pool[0].slotId,
+                color,
+                visible: true,
+                transform: {
+                  position: { x: 0, y: 0, z: 0 },
+                  rotation: { x: 0, y: 0, z: 0 },
+                  scale: { x: 1, y: 1, z: 1 },
+                },
+                triangles,
+                materialId: pool[0].materialId,
+                notes: pool.map((part) => part.name).join('\n'),
+                versions: [
+                  {
+                    id: versionId,
+                    label: options.bore ? 'v1 pipe-through' : 'v1 welded',
+                    note: pool.map((part) => part.name).join(', '),
+                    triangles,
+                    createdAt: Date.now(),
+                  },
+                ],
+                activeVersionId: versionId,
+                thumbnail: renderThumbnail(result.soup, color),
+                addedAt: Date.now(),
+              },
+            ],
+          }));
+
+          for (const member of pool) {
+            for (const version of member.versions) void deleteGeometry(version.id);
+          }
+
+          setMarked(new Set());
+          setSelectedId(id);
+          setFrameToken((token) => token + 1);
           toast.success(
-            `Welded ${baked.length} parts · ${formatCount(result.report.trianglesAfter)} triangles · ` +
-              `${result.report.after.boundaryEdges} open edges`
+            `${name} · ${formatCount(result.report.trianglesAfter)} triangles` +
+              (options.bore ? ` · ⌀${options.bore.diameter} mm through` : '')
           );
         } catch {
-          toast.error('Could not weld the assembly.');
+          toast.error('Could not weld those parts.');
         } finally {
           setBusy(null);
         }
       }, 30);
     },
-    [bakedAssembly, project.name]
+    [selection, project, geometries, partWorldPos, patchProject]
   );
 
   const exportSplitZip = useCallback(() => {
@@ -3541,9 +3627,10 @@ export function Workbench() {
         }}
       />
 
-      <div className={`${PANEL} relative z-40 flex flex-nowrap items-center gap-x-2 gap-y-1 overflow-visible px-2 py-1.5`}>
-        <div className="flex items-center gap-2 pr-1">
-          <Boxes className="h-5 w-5 text-emerald-600" />
+      <div className={`${PANEL} relative z-40 flex flex-col gap-1 px-2 py-1.5`}>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
           <input
             value={project.name}
             onChange={(event) =>
@@ -3551,21 +3638,21 @@ export function Workbench() {
                 history: false,
               })
             }
-            className="w-40 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-900 outline-none hover:border-slate-300 focus:border-emerald-500"
+            className="min-w-0 max-w-[12rem] flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-900 outline-none hover:border-slate-300 focus:border-emerald-500 sm:max-w-[16rem]"
             aria-label="Project name"
           />
           <button
             type="button"
             onClick={() => (github.connected ? void pushGithub('manual') : setShowGithub(true))}
             title={githubNote}
-            className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide ${
+            className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide ${
               github.connected
                 ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
                 : 'border-slate-300 text-slate-500 hover:bg-slate-100'
             }`}
           >
             <Github className="h-3 w-3" />
-            {github.connected ? 'GitHub' : 'Connect'}
+            <span className="hidden sm:inline">{github.connected ? 'GitHub' : 'Connect'}</span>
           </button>
         </div>
 
@@ -3815,25 +3902,25 @@ export function Workbench() {
               Fix misalignment
             </MenuItem>
             <MenuSeparator />
-            <MenuLabel>Weld the build</MenuLabel>
+            <MenuLabel>Weld the body</MenuLabel>
             <MenuItem
               onClick={() =>
                 weldAssembly({ resolution: 200, sealMm: 0.8, bore: null })
               }
-              disabled={Boolean(busy) || assemblyTotals.parts === 0}
+              disabled={Boolean(busy) || tableTotals.parts === 0}
               icon={Combine}
               tone="primary"
-              hint="Fuses every fitted part into one watertight solid"
+              hint="Fuses every visible part (or the selection) into one watertight solid on the table"
             >
-              Weld fitted parts into one solid
+              Weld into one solid
             </MenuItem>
             <MenuItem
               onClick={() => setShowWeld(true)}
-              disabled={Boolean(busy) || assemblyTotals.parts === 0}
-              icon={Combine}
-              hint="Same, with a pipe bore straight through"
+              disabled={Boolean(busy) || tableTotals.parts === 0}
+              icon={Cylinder}
+              hint="Weld the body, then bore a pipe hole through the whole thing — default ⌀28 mm"
             >
-              Weld around a bore…
+              Pipe through body…
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Cut the selected part</MenuLabel>
@@ -4040,7 +4127,7 @@ export function Workbench() {
             >
               Merge &amp; clean assembly
             </MenuItem>
-            <MenuItem onClick={exportCombined} icon={Download} hint="Fitted parts, as they are">
+            <MenuItem onClick={exportCombined} icon={Download} hint="Everything visible on the table">
               Combined STL
             </MenuItem>
             <MenuItem
@@ -4070,9 +4157,9 @@ export function Workbench() {
             </MenuItem>
           </Menu>
         </MenuBar>
+        </div>
 
-        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-2 overflow-x-auto">
-        <div className="mx-1 h-5 w-px bg-slate-300" />
+        <div className="hidden min-w-0 flex-wrap items-center gap-1 md:flex">
 
         <div className="flex overflow-hidden rounded border border-slate-300">
           <button
@@ -4163,6 +4250,17 @@ export function Workbench() {
             Subtract
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowWeld(true)}
+          disabled={Boolean(busy) || tableTotals.parts === 0}
+          title="Weld the body and bore a pipe through the whole length — default ⌀28 mm"
+          className={TOOL_BTN_PRIMARY}
+        >
+          <Cylinder className="h-3.5 w-3.5" />
+          Pipe ⌀{weldBore.diameter}
+        </button>
 
         <button
           type="button"
@@ -4308,22 +4406,78 @@ export function Workbench() {
           </div>
         )}
 
-        <div className="ml-auto hidden items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500 md:flex">
+        <div className="ml-auto hidden items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500 lg:flex">
           <span>
             <span className={LABEL}>parts </span>
-            {formatCount(project.parts.length)}
+            {formatCount(tableTotals.parts)}
           </span>
           <span>
             <span className={LABEL}>fitted </span>
-            {assemblyTotals.parts}/{project.slots.length}
+            {fittedCount}/{project.slots.length}
           </span>
           <span>
             <span className={LABEL}>mass </span>
-            {formatMass(assemblyTotals.mass)}
+            {formatMass(tableTotals.mass)}
           </span>
         </div>
         </div>
       </div>
+
+      {isMobile && workspace === 'bench' && (
+        <div className="flex shrink-0 gap-1 overflow-x-auto bg-white px-2 py-2">
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Import
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={mergeSelection}
+            disabled={selection.length < 2 || Boolean(busy)}
+          >
+            <Combine className="h-3.5 w-3.5" />
+            Merge
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN_PRIMARY}
+            onClick={() => setShowWeld(true)}
+            disabled={Boolean(busy) || tableTotals.parts === 0}
+          >
+            <Cylinder className="h-3.5 w-3.5" />
+            Pipe ⌀{weldBore.diameter}
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={() => setShowSubtract(true)}
+            disabled={!selectedId || project.parts.length < 2 || Boolean(busy)}
+          >
+            <Scissors className="h-3.5 w-3.5" />
+            Subtract
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={fixSelection}
+            disabled={selection.length === 0 || Boolean(busy)}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Fix
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={() => setMultiSelect((value) => !value)}
+          >
+            {multiSelect ? 'Multi on' : 'Multi'}
+          </button>
+        </div>
+      )}
 
 
       {workspace === 'sketch' ? (
@@ -4509,8 +4663,8 @@ export function Workbench() {
               <Upload className="h-8 w-8 text-slate-700" />
               <p className="text-sm font-bold text-slate-500">Drop STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
-                Load every part of your build. They land in lanes by name — barrel, grip, magazine —
-                and you swap between them by clicking.
+                Drop the body parts, tap Multi to select them, then Pipe ⌀28 to weld a hole through
+                the whole length.
               </p>
             </div>
           )}
@@ -4556,16 +4710,20 @@ export function Workbench() {
 
           <div className="pointer-events-none absolute bottom-2 left-2 hidden flex-wrap gap-3 rounded bg-white px-2 py-1 font-mono text-[0.65rem] text-slate-500 md:flex">
             <span>
-              <span className={LABEL}>fitted </span>
-              {assemblyTotals.parts}/{project.slots.length}
+              <span className={LABEL}>on table </span>
+              {formatCount(tableTotals.parts)}
             </span>
             <span>
               <span className={LABEL}>tri </span>
-              {formatCount(assemblyTotals.triangles)}
+              {formatCount(tableTotals.triangles)}
             </span>
             <span>
               <span className={LABEL}>mass </span>
-              {formatMass(assemblyTotals.mass)}
+              {formatMass(tableTotals.mass)}
+            </span>
+            <span>
+              <span className={LABEL}>fitted </span>
+              {fittedCount}/{project.slots.length}
             </span>
           </div>
 
@@ -4938,9 +5096,10 @@ export function Workbench() {
           >
             <h2 className="text-sm font-bold text-slate-900">Subtract from “{selectedPart.name}”</h2>
             <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
-              Pick the cutter. Overlap the two first (double-tap → move). The target must be a solid
-              (Analyze → Fill) or the cut will be a paper-thin shell. Clearance 0 mm is an exact voxel
-              cut; 0.2–0.4 mm helps mating parts slide.
+              Pick the cutter. Overlap the two first (double-tap → move), or switch to assembled
+              layout. Need a 28 mm hole through several body pieces instead? Use Pipe ⌀28 — it welds
+              then bores, so the parts do not have to overlap. Clearance 0 mm is an exact voxel cut;
+              0.2–0.4 mm helps mating parts slide.
             </p>
             <div className="mb-3 grid grid-cols-2 gap-2">
               <label className="block">
@@ -5189,10 +5348,11 @@ export function Workbench() {
       {showWeld && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className={`${PANEL} w-full max-w-md p-4`}>
-            <h2 className="mb-1 text-sm font-bold text-slate-900">Weld the build around a bore</h2>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Pipe through the body</h2>
             <p className="mb-3 text-[0.7rem] text-slate-500">
-              Every fitted part is fused into one watertight solid and the bore is cut straight
-              through it. The parts do not need to be valid meshes — they are rebuilt, not merged.
+              Welds the parts on the table — or just the ones you have selected — into one solid,
+              then bores a round hole through the whole length. Use this for a four-piece body that
+              needs a 28 mm pipe down the middle. The result stays on the bench.
             </p>
 
             <div className="mb-3 grid grid-cols-2 gap-2">
@@ -5229,6 +5389,12 @@ export function Workbench() {
               </label>
             </div>
 
+            <p className="mb-3 text-[0.7rem] text-slate-500">
+              {selection.length >= 2
+                ? `${selection.length} selected parts will be welded, then bored.`
+                : `${tableTotals.parts} visible part${tableTotals.parts === 1 ? '' : 's'} on the table will be welded, then bored.`}
+            </p>
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -5242,7 +5408,6 @@ export function Workbench() {
                 className={ACTION_PRIMARY}
                 onClick={() => {
                   setShowWeld(false);
-                  // Bore through the centre of everything currently fitted.
                   const index = { x: 0, y: 1, z: 2 }[weldBore.axis];
                   const others = [0, 1, 2].filter((i) => i !== index);
                   const box = assemblyBounds();
@@ -5257,7 +5422,7 @@ export function Workbench() {
                   });
                 }}
               >
-                Weld &amp; bore
+                Weld &amp; bore ⌀{weldBore.diameter}
               </button>
             </div>
           </div>

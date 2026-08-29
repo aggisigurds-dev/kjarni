@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Search, X, ExternalLink, MapPin } from "lucide-react";
 
 /* Heimilisfang → landnúmer → teikning beint á borðið.
@@ -62,7 +63,14 @@ function skipta(t: Teikning): { adal: string; auka: string | null } {
   return { adal: fyrsti.trim(), auka: rest.join(",").trim() || null };
 }
 
-export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => void }) {
+export function HeimilisfangLeit({
+  onVelja,
+  compact = false,
+}: {
+  onVelja: (infoUrl: string) => void;
+  /** Aðeins leitar-táknið — spjaldið opnast sem portal undir stikunni. */
+  compact?: boolean;
+}) {
   const [q, setQ] = useState("");
   const [eignir, setEignir] = useState<Eign[]>([]);
   const [valin, setValin] = useState<Eign | null>(null);
@@ -72,7 +80,9 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [opid, setOpid] = useState(false);
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 8, width: 390 });
   const wrap = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
 
   const velja = useCallback(async (e: Eign) => {
@@ -140,14 +150,37 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
     }
   }, [velja]);
 
-  // Loka við smell utan reitsins — annars situr spjaldið yfir borðinu.
+  // Loka við smell utan reitsins OG portal-spjaldsins.
   useEffect(() => {
     const f = (ev: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(ev.target as Node)) setOpid(false);
+      const t = ev.target as Node;
+      if (wrap.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpid(false);
     };
     document.addEventListener("mousedown", f);
     return () => document.removeEventListener("mousedown", f);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!opid) return;
+    const place = () => {
+      const el = wrap.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const width = Math.min(390, window.innerWidth - 16);
+      let left = r.left;
+      if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+      if (left < 8) left = 8;
+      setPanelPos({ top: r.bottom + 8, left, width });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [opid, eignir.length, teikningar.length, msg, compact]);
 
   // Lifandi leit, hömluð svo hvert stafabil verði ekki að fyrirspurn.
   useEffect(() => {
@@ -177,32 +210,55 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
     return t.haed.includes(Number(sia));
   });
 
-  return (
-    <div ref={wrap} className="relative">
-      <div className="flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-1">
-        <Search className="size-3.5 shrink-0 text-stone-300" />
-        <input
-          value={q}
-          onFocus={() => setOpid(true)}
-          onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
-          onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
-          placeholder="Heimilisfang — t.d. Skútuvogur 4"
-          className="w-[190px] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none"
-        />
-        {q && (
-          <button
-            type="button"
-            onClick={() => { setQ(""); setEignir([]); setTeikningar([]); setValin(null); setMsg(null); }}
-            className="shrink-0 text-stone-400 hover:text-white"
-            title="Hreinsa"
-          >
-            <X className="size-3.5" />
-          </button>
-        )}
-      </div>
+  const showPanel = opid && (compact || eignir.length > 0 || msg || teikningar.length > 0);
 
-      {opid && (eignir.length > 0 || msg || teikningar.length > 0) && (
-        <div className="absolute left-0 top-[115%] z-50 max-h-[70vh] w-[390px] overflow-auto rounded-xl border border-stone-300 bg-white p-2 text-stone-800 shadow-2xl">
+  const searchField = (
+    <div className="flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-1">
+      <Search className="size-3.5 shrink-0 text-stone-300" />
+      <input
+        value={q}
+        onFocus={() => setOpid(true)}
+        onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
+        onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
+        placeholder="Heimilisfang — t.d. Skútuvogur 4"
+        className="w-[160px] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none lg:w-[190px]"
+      />
+      {q && (
+        <button
+          type="button"
+          onClick={() => { setQ(""); setEignir([]); setTeikningar([]); setValin(null); setMsg(null); }}
+          className="shrink-0 text-stone-400 hover:text-white"
+          title="Hreinsa"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
+  );
+
+  const panel = showPanel && typeof document !== "undefined" ? createPortal(
+    <div
+      ref={panelRef}
+      style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
+      className="fixed z-[80] max-h-[min(70vh,calc(100dvh-5rem))] overflow-auto rounded-xl border border-stone-300 bg-white p-2 text-stone-800 shadow-2xl"
+    >
+      {compact && (
+        <div className="mb-2 flex items-center gap-1.5 rounded-md bg-stone-100 px-2 py-1.5">
+          <Search className="size-3.5 shrink-0 text-stone-500" />
+          <input
+            autoFocus
+            value={q}
+            onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
+            onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
+            placeholder="Heimilisfang — t.d. Skútuvogur 4"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-stone-900 placeholder:text-stone-400 focus:outline-none"
+          />
+          <button type="button" onClick={() => setOpid(false)} className="text-[12px] text-stone-500">
+            Loka
+          </button>
+        </div>
+      )}
+      <div>
           {!valin &&
             eignir.map((e) => (
               <button
@@ -329,8 +385,28 @@ export function HeimilisfangLeit({ onVelja }: { onVelja: (infoUrl: string) => vo
                 : `Sýna úreltar teikningar (${ureltFjoldi})`}
             </button>
           )}
-        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <div ref={wrap} className="relative">
+      {compact ? (
+        <button
+          type="button"
+          title="Leita að teikningu eftir heimilisfangi"
+          onClick={() => setOpid((v) => !v)}
+          className={`flex size-9 items-center justify-center rounded-lg ${
+            opid ? "bg-white/15 text-white" : "text-stone-300 hover:bg-white/8 hover:text-white"
+          }`}
+        >
+          <Search className="size-4" />
+        </button>
+      ) : (
+        searchField
       )}
+      {panel}
     </div>
   );
 }
