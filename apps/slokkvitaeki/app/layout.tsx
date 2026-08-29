@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="is" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body>
         <Script id="kjarni-skin" strategy="beforeInteractive">
-          {`try{if(/\\/(kjarni|stjorn|kerfi|skjalarinn|draft)(\\/|$)/.test(location.pathname)){var s=localStorage.getItem("kjarni_skin");if(s)document.documentElement.dataset.kjarniSkin=s}}catch(e){}`}
+          {`try{var p=location.pathname||"";if(/\\/(kjarni|stjorn|kerfi|skjalarinn|draft)(\\/|$)/.test(p)){var s=localStorage.getItem("kjarni_skin");if(s)document.documentElement.dataset.kjarniSkin=s;if(p.indexOf("/kjarni/turbopaint")<0&&Math.min(screen.width,screen.height)<850)document.documentElement.dataset.deskLock="1"}}catch(e){}`}
         </Script>
         {children}
         <Tools />
