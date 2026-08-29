@@ -93,7 +93,14 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   name: "TurboPaint",
   objects: [],
   selectedIds: [],
-  tool: "select",
+  // 2026-08-29 (Agnar): „Handarbendillinn má veljast default þegar maður fer
+  // inn í kerfið." Fyrsta verkið á nýju borði er nánast alltaf að skoða og færa
+  // teikninguna, ekki að velja hluti — og með „select" var auðvelt að grípa
+  // óvart í hlut og hliðra honum áður en maður áttaði sig. „hand" er óvirkt í
+  // þeim skilningi að það breytir engu á borðinu.
+  // ATH: þetta er AÐEINS upphafsgildið. Tólin skipta sér áfram sjálf yfir í
+  // „select" eftir að teiknað hefur verið (sjá setTool-köllin í BoardCanvas).
+  tool: "hand",
   camera: { x: 80, y: 64, scale: 0.62 },
   pixelsPerMeter: null,
   grid: true,

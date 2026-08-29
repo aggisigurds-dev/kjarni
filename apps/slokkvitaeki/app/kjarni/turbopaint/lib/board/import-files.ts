@@ -64,6 +64,43 @@ function rasterizeToLimit(
   return { canvas, width: fit.width, height: fit.height };
 }
 
+/* PDF er VIGUR — hann má teikna í hvaða upplausn sem er. fitSize() MINNKAR hins
+ * vegar bara (scale = 1 þegar síðan er minni en þakið), svo venjuleg A3-teikning
+ * var teiknuð á scale 1 = hráum PDF-punktum ≈ 72 DPI ≈ 1191 px á lengri kant.
+ * Þakið (7.200 px á „Staðli") kom aldrei við sögu. Myndin varð því óskýr um leið
+ * og þysjað var inn — 2026-08-29, Agnar: „pdf import er að missa mikið af
+ * gæðunum inn í turbopaint".
+ *
+ * Hér er miðað við RAUNVERULEGA upplausn (DPI) í staðinn. Tvö þök halda þessu í
+ * skefjum: langhliðin (IMPORT_MAX_PX, óbreytt) og heildarflatarmál — vafrar hafa
+ * efri mörk á striga (Chrome ~268 MP, MUN lægri í símum) og innflutningur á að
+ * hægjast, ekki springa.
+ *
+ * ATH stærðin á borðinu breytist EKKI: Konva skalar myndina í obj.width/height,
+ * svo hlutnum er áfram gefin gamla stærðin og aðeins strigann er teiknaður
+ * stærri. Þess vegna helst pixelsPerPdfPoint líka óbreytt — mælitólið (Kvarða)
+ * reiknar í heimshnitum og má ekki hliðrast. */
+const PDF_DPI: Record<ImportQuality, number> = { fast: 150, standard: 300, print: 600 };
+const PDF_MAX_AREA: Record<ImportQuality, number> = {
+  fast: 24_000_000,
+  standard: 40_000_000,
+  print: 100_000_000,
+};
+
+function pdfRenderScale(baseW: number, baseH: number, quality: ImportQuality) {
+  const longest = Math.max(baseW, baseH, 1);
+  let scale = PDF_DPI[quality] / 72;
+  const maxPx = IMPORT_MAX_PX[quality];
+  if (longest * scale > maxPx) scale = maxPx / longest;
+  const maxArea = PDF_MAX_AREA[quality];
+  const area = baseW * baseH * scale * scale;
+  if (area > maxArea) scale = Math.sqrt(maxArea / Math.max(1, baseW * baseH));
+  // EKKI klemma upp í 1 hér: risastór síða (A0 og stærri) á áfram að MINNKA niður
+  // í þökin, nákvæmlega eins og áður. DPI-markmiðið lyftir aðeins litlum síðum;
+  // þökin lækka þær stóru. Neðri vörnin er bara til að scale verði aldrei 0.
+  return Math.max(0.05, scale);
+}
+
 async function importPdf(
   file: File,
   quality: ImportQuality,
@@ -84,8 +121,10 @@ async function importPdf(
     );
     const page = await pdf.getPage(i);
     const base = page.getViewport({ scale: 1 });
+    // Stærðin á BORÐINU — óbreytt frá því sem var (PDF-punktar, klemmt við þakið).
     const target = fitSize(base.width, base.height, maxPx);
-    const viewport = page.getViewport({ scale: target.scale });
+    // Upplausnin sem teiknað er í — ný, miðuð við DPI.
+    const viewport = page.getViewport({ scale: pdfRenderScale(base.width, base.height, quality) });
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(viewport.width));
     canvas.height = Math.max(1, Math.round(viewport.height));
@@ -94,18 +133,23 @@ async function importPdf(
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-    const words = await extractPdfWords(page, viewport);
+    // Textareitirnir verða að vera í HEIMSHNITUM hlutarins, ekki í upplausn
+    // strigans — annars hliðrast þeir um sama hlutfall og upplausnin hækkaði
+    // (OCR/EI-greiningin les þessa reiti og myndi þá benda á rangan stað).
+    const worldViewport = page.getViewport({ scale: target.scale });
+    const words = await extractPdfWords(page, worldViewport);
     const blob = await canvasToBlob(canvas);
     const assetId = newId();
     await putAsset(assetId, blob);
     const name =
       pdf.numPages > 1 ? `${file.name} · síða ${i}` : file.name.replace(/\.[^.]+$/, "");
-    const obj = makeImageObject(assetId, canvas.width, canvas.height, name, cursorX, origin.y, {
-      pixelsPerPdfPoint: viewport.scale,
+    // Stærðin á borðinu er ÓBREYTT (target), aðeins myndin á bak við er skarpari.
+    const obj = makeImageObject(assetId, target.width, target.height, name, cursorX, origin.y, {
+      pixelsPerPdfPoint: target.scale,
     });
     objects.push(obj);
     if (words.length) textByObjectId[obj.id] = words;
-    cursorX += canvas.width + 96;
+    cursorX += target.width + 96;
     canvas.width = 0;
     canvas.height = 0;
   }

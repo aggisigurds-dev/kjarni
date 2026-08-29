@@ -149,7 +149,14 @@ export function TopBar({
         >
           <Layers className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-[60vh] min-w-64 overflow-y-auto">
+        {/* Hvítur flötur að ósk Agnars 29.08 — borðalistinn liggur ofan á
+            teikningunni og var ólæsilegur. Rótarlagfæringin (body:has(.tp-root)
+            í styles.css) gefur öllum portal-valmyndum dökka þemað aftur; þessi
+            eina fær hvítt því hún er efnis-listi, ekki stjórntæki. */}
+        <DropdownMenuContent
+          align="start"
+          className="max-h-[60vh] min-w-64 overflow-y-auto border border-stone-200 bg-white text-stone-900 shadow-xl [&_[data-slot=dropdown-menu-item]]:text-stone-900 [&_[data-slot=dropdown-menu-item]:hover]:bg-stone-100"
+        >
           {boards.length ? (
             boards.map((b) => (
               <DropdownMenuItem key={b.id} onClick={() => void switchBoard(b.id)}>

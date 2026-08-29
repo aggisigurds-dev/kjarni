@@ -49,6 +49,20 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 2026-08-29 (Agnar: „mætti setja hvítan bakgrunn bakvið þegar maður er að velja
+ * borð í turbopaint").
+ *
+ * Borðavalið var GEGNSÆTT — teikningin skein í gegn og listinn varð ólæsilegur.
+ * Ástæðan var ekki stíllinn á valmyndinni heldur HVAR hún lendir: base-ui setur
+ * hana í Portal á <body>, þ.e. UTAN .tp-root. Tóknarnir hér að neðan voru bara
+ * skilgreindir á .tp-root, svo `bg-popover` fann ekkert gildi og skilaði engum
+ * bakgrunni. Sama gildir um allar aðrar portal-valmyndir (popover, dialog,
+ * tooltip) — þær voru allar jafn gegnsæjar, þetta var bara mest áberandi hér.
+ *
+ * Lausnin er að láta <body> bera sömu tókna MEÐAN TurboPaint er á skjánum, svo
+ * portalarnir erfi þá. `body:has(.tp-root)` heldur þessu bundnu við þessa síðu —
+ * aðrar síður í appinu verða ekki fyrir áhrifum. */
+body:has(.tp-root),
 .tp-root {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
