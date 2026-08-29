@@ -1,7 +1,36 @@
 "use client";
 
-import { Circle, Group, Line, Rect, Text as KonvaText } from "react-konva";
+import { useEffect, useState } from "react";
+import { Circle, Group, Image as KonvaImage, Line, Rect, Text as KonvaText } from "react-konva";
 import { getSymbol, symbolColors } from "../../lib/board/symbols";
+import { subscribeSymbolSettings, symbolOverride } from "../../lib/board/symbol-settings";
+
+/* Eigin mynd á tákni (Agnar 29.08). Konva teiknar aðeins hlaðin HTMLImageElement,
+ * svo myndin er sótt hér og teiknuð þegar hún er tilbúin — þangað til stendur
+ * innbyggða teikningin, svo aldrei komi tómur reitur á borðið. */
+function useSymbolImage(url: string | undefined) {
+  const [img, setImg] = useState<HTMLImageElement | undefined>();
+  useEffect(() => {
+    if (!url) {
+      setImg(undefined);
+      return;
+    }
+    let alive = true;
+    const el = new window.Image();
+    el.crossOrigin = "anonymous";   // svo útflutningur á PNG mengi ekki strigann
+    el.onload = () => {
+      if (alive) setImg(el);
+    };
+    el.onerror = () => {
+      if (alive) setImg(undefined);
+    };
+    el.src = url;
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  return img;
+}
 
 function Glyph({
   id,
@@ -222,6 +251,11 @@ export function SymbolNode({
   const def = getSymbol(symbolId);
   const colors = symbolColors(def.kind);
   const scale = size / 24;
+  // Endurteiknar þegar stillingarnar berast/breytast (líka úr öðru tæki).
+  const [, bump] = useState(0);
+  useEffect(() => subscribeSymbolSettings(() => bump((n) => n + 1)), []);
+  const ov = symbolOverride(symbolId);
+  const customImg = useSymbolImage(ov.imageUrl);
   if (def.id === "firewall") {
     // Eldveggur is a wall overlay, not a badge: a thin translucent bar so the
     // plan's own wall stays visible underneath.
@@ -265,9 +299,26 @@ export function SymbolNode({
         shadowOffsetY={2}
         shadowEnabled
       />
-      <Group x={0} y={0} scaleX={scale} scaleY={scale}>
-        <Glyph id={def.id} color={colors.fg} />
-      </Group>
+      {customImg ? (
+        // „fit to frame": contain = öll myndin inni í reitnum (sjálfgefið),
+        // cover = fyllir reitinn og skerst á lengri kantinum.
+        (() => {
+          const iw = customImg.naturalWidth || 1;
+          const ih = customImg.naturalHeight || 1;
+          const r = ov.fit === "cover" ? Math.max(size / iw, size / ih) : Math.min(size / iw, size / ih);
+          const w = iw * r;
+          const h = ih * r;
+          return (
+            <Group clipX={0} clipY={0} clipWidth={size} clipHeight={size}>
+              <KonvaImage image={customImg} x={(size - w) / 2} y={(size - h) / 2} width={w} height={h} />
+            </Group>
+          );
+        })()
+      ) : (
+        <Group x={0} y={0} scaleX={scale} scaleY={scale}>
+          <Glyph id={def.id} color={colors.fg} />
+        </Group>
+      )}
       {label ? (
         <KonvaText
           y={size + 4}

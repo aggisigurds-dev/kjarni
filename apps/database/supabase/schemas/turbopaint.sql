@@ -75,3 +75,31 @@ drop trigger if exists turbopaint_boards_history_trg on public.turbopaint_boards
 create trigger turbopaint_boards_history_trg
   before update on public.turbopaint_boards
   for each row execute function public.turbopaint_boards_snapshot();
+
+-- Sameiginlegar stillingar (applied 2026-08-29 as migration
+-- turbopaint_settings_shared). Ein röð, id = 'global'.
+--
+-- Agnar 2026-08-29, spurður beint hvort táknastillingar ættu að fylgja hverju
+-- borði: „látum það bara vera sameiginlegt á öllum borðum." Borðin berast milli
+-- tækja gegnum turbopaint_boards, svo stillingarnar gera það líka — annars væru
+-- þær ólíkar eftir vél og það kæmi á óvart.
+--
+-- doc.overrides[symbolId] = { hidden?, imageUrl?, fit? } — sjá
+-- app/kjarni/turbopaint/lib/board/symbol-settings.ts. Eigin tákn-myndir fara í
+-- sama public bucket og planmyndirnar (`turbopaint`, undirmappa symbols/).
+create table if not exists public.turbopaint_settings (
+  id text primary key,
+  doc jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.turbopaint_settings enable row level security;
+
+-- Sama mynstur og turbopaint_boards: anon leyft (engin innskráning í appinu),
+-- engin DELETE-policy.
+create policy "turbopaint_settings_select" on public.turbopaint_settings
+  for select using (true);
+create policy "turbopaint_settings_insert" on public.turbopaint_settings
+  for insert with check (true);
+create policy "turbopaint_settings_update" on public.turbopaint_settings
+  for update using (true) with check (true);
