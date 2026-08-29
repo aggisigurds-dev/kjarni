@@ -26,8 +26,10 @@ import {
   classifyPart,
   type CatalogPart,
 } from '@/lib/3dwork/project';
-import { is3mf } from '@/lib/3dwork/threemf';
 import { ACTION_GHOST, ACTION_PRIMARY, LABEL } from './ui';
+
+const isMeshFile = (name: string) => /\.(stl|3mf)$/i.test(name);
+const is3mfName = (name: string) => /\.3mf$/i.test(name);
 
 const CELL_LIMIT = 5;
 const KIT_COLUMNS = [UNCONNECTED_KIT, ...GUN_KITS];
@@ -85,14 +87,14 @@ export function KitBoard({
           };
         });
         setCatalog(entries);
-        setBusy(`Pictures for ${entries.filter((entry) => is3mf(entry.name)).length} 3MF files…`);
+        setBusy(`Pictures for ${entries.filter((entry) => is3mfName(entry.name)).length} 3MF files…`);
         const withPics = [...entries];
         let cursor = 0;
         const workers = Array.from({ length: 3 }, async () => {
           while (cursor < withPics.length) {
             const index = cursor++;
             const entry = withPics[index];
-            if (!is3mf(entry.name) || !entry.size) continue;
+            if (!is3mfName(entry.name) || !entry.size) continue;
             try {
               const image = await drivePeek3mfThumbnail(access, entry.driveId, entry.size);
               if (image) withPics[index] = { ...entry, thumbnail: image };
@@ -178,7 +180,7 @@ export function KitBoard({
 
   const openLocalFiles = async (list: FileList | File[] | null) => {
     const files = Array.from(list ?? []).filter(
-      (file) => /\.stl$/i.test(file.name) || is3mf(file.name)
+      (file) => isMeshFile(file.name)
     );
     if (files.length === 0) {
       toast.error('Pick an STL or 3MF file.');
@@ -207,7 +209,7 @@ export function KitBoard({
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-slate-900">2D kits</h2>
           <p className="text-[0.7rem] text-slate-500">
-            Tap a part to open just that file in 3dwork. Tick a few, then Open, for a kit.
+            2D only — the 3D table does not start until you open a part. Tap one file.
           </p>
         </div>
         <input
@@ -259,9 +261,9 @@ export function KitBoard({
       <div className="min-h-0 flex-1 overflow-auto">
         {!token ? (
           <p className="px-4 py-8 text-sm text-slate-500">
-            <strong>Open a file…</strong> pushes one STL or 3MF onto the 3D bench for Fix and mesh
-            work — no Drive needed. Connect Drive to fill this board from{' '}
-            <strong>Top model 3</strong> as pictures; tap a tile to open just that part.
+            This page is pictures and names. WebGL stays off. <strong>Open a file…</strong> (or tap
+            a Drive tile) starts the 3D bench with that one part so Fix can run. Connect Drive to
+            fill the board from <strong>Top model 3</strong>.
           </p>
         ) : (
           <table className="min-w-[720px] w-full border-collapse text-left">

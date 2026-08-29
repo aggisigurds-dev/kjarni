@@ -191,7 +191,15 @@ interface HistoryStep {
   geometries: Map<string, Float32Array>;
 }
 
-export function Workbench() {
+export function Workbench({
+  initialWorkspace = 'kits',
+  pendingImport,
+  onPendingConsumed,
+}: {
+  initialWorkspace?: Workspace;
+  pendingImport?: { files: File[]; tags: Record<string, { slotId: string; kitId: string }> } | null;
+  onPendingConsumed?: () => void;
+} = {}) {
   const [project, setProject] = useState<Project>(() => createProject());
   const [geometries, setGeometries] = useState<Map<string, Float32Array>>(() => new Map());
   const [mode, setMode] = useState<Mode>('scattered');
@@ -255,7 +263,7 @@ export function Workbench() {
   const [showInspector, setShowInspector] = useState(true);
   const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part } | null>(null);
 
-  const [workspace, setWorkspace] = useState<Workspace>('kits');
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const [xray, setXray] = useState(false);
   /** When set, the table shows only this part. Uncheck View → Focus to restore the rest. */
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -652,16 +660,19 @@ export function Workbench() {
   }, [project.parts, geometries]);
 
   const placements = useMemo<Placement[]>(
-    () =>
-      mode === 'assembled'
+    () => {
+      if (workspace !== 'bench') return [];
+      return mode === 'assembled'
         ? assembledPlacement(project)
         : mode === 'free'
           ? freePlacement(project)
-          : scatterPlacement(project, sizes),
-    [mode, project, sizes]
+          : scatterPlacement(project, sizes);
+    },
+    [mode, project, sizes, workspace]
   );
 
   const viewportParts = useMemo<ViewportPart[]>(() => {
+    if (workspace !== 'bench') return [];
     const byId = new Map(placements.map((placement) => [placement.partId, placement]));
     const parts: ViewportPart[] = [];
 
@@ -685,7 +696,7 @@ export function Workbench() {
       });
     }
     return parts;
-  }, [project.parts, geometries, placements, focusId]);
+  }, [project.parts, geometries, placements, focusId, workspace]);
 
   const partWorldPos = useCallback(
     (part: Part) => {
@@ -703,8 +714,9 @@ export function Workbench() {
   );
 
   const snapNeighbors = useMemo(
-    () =>
-      project.parts.flatMap((part) => {
+    () => {
+      if (workspace !== 'bench') return [];
+      return project.parts.flatMap((part) => {
         if (focusId ? part.id !== focusId : !part.visible) return [];
         const soup = geometries.get(part.activeVersionId);
         if (!soup) return [];
@@ -720,8 +732,9 @@ export function Workbench() {
             ),
           },
         ];
-      }),
-    [project.parts, geometries, partWorldPos, focusId]
+      });
+    },
+    [project.parts, geometries, partWorldPos, focusId, workspace]
   );
 
   const snapAnchors = useMemo(
@@ -1116,6 +1129,23 @@ export function Workbench() {
     },
     [project, patchProject, zUp]
   );
+
+  const pendingConsumed = useRef(false);
+  useEffect(() => {
+    if (pendingConsumed.current || !pendingImport?.files.length) return;
+    pendingConsumed.current = true;
+    void (async () => {
+      const added = await importFiles(pendingImport.files, {
+        autoFit: true,
+        tags: pendingImport.tags,
+      });
+      onPendingConsumed?.();
+      if (!added?.length) return;
+      setWorkspace('bench');
+      setMode('assembled');
+      setShowGallery(true);
+    })();
+  }, [importFiles, pendingImport, onPendingConsumed]);
 
   const patchPart = useCallback(
     (partId: string, patch: Partial<Part>) => {

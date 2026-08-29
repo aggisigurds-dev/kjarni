@@ -19,6 +19,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
+import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
 
 export interface ViewportPart {
@@ -233,8 +234,13 @@ export function Viewport({
     const host = hostRef.current;
     if (!host) return;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const slow = isSlowMachine();
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !slow,
+      alpha: true,
+      powerPreference: slow ? 'low-power' : 'default',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, slow ? 1 : 1.5));
     renderer.setSize(host.clientWidth || 1, host.clientHeight || 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -252,13 +258,16 @@ export function Viewport({
     camera.position.set(420, 320, 520);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    controls.enableDamping = !slow;
     controls.dampingFactor = 0.08;
 
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environment = envMap;
-    pmrem.dispose();
+    let envMap: THREE.Texture | null = null;
+    if (!slow) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = envMap;
+      pmrem.dispose();
+    }
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0xb8bec9, 1.4));
     const key = new THREE.DirectionalLight(0xffffff, 1.8);
@@ -376,7 +385,9 @@ export function Viewport({
       }
     };
 
+    let running = true;
     const tick = () => {
+      if (!running) return;
       state.raf = requestAnimationFrame(tick);
       // Ease every mesh toward its arrangement position; this is what makes
       // scatter and assemble read as one motion instead of a jump cut.
@@ -392,6 +403,19 @@ export function Viewport({
       layoutCallouts();
     };
     tick();
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        running = false;
+        cancelAnimationFrame(state.raf);
+        return;
+      }
+      if (!running) {
+        running = true;
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     const observer = new ResizeObserver(() => {
       const width = host.clientWidth || 1;
@@ -671,8 +695,10 @@ export function Viewport({
         mesh.geometry.dispose();
         (mesh.material as THREE.Material).dispose();
       }
+      running = false;
+      document.removeEventListener('visibilitychange', onVisibility);
       controls.dispose();
-      envMap.dispose();
+      envMap?.dispose();
       renderer.dispose();
       host.removeChild(renderer.domElement);
       refs.current = null;
