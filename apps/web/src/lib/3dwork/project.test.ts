@@ -47,6 +47,7 @@ describe('guessKit', () => {
     expect(guessKit('Tippmann - Salvo - 98sk. 250mm.3mf')).toBe('shotgun');
     expect(guessKit('tipx hulstur hækkað f 10 kúlur v6.3mf')).toBe('pistol');
     expect(guessKit('mws_charging_handle_knob 6mm_3mm.3mf')).toBe('evo');
+    expect(guessKit('CZ SCORPION EVO 3 S2.3mf')).toBe('evo');
   });
 
   it('leaves unmatched files unconnected', () => {

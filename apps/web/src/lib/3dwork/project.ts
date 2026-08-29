@@ -361,7 +361,7 @@ export const GUN_KITS: GunKit[] = [
   { id: 'guardwolf', name: 'Guardwolf' },
   { id: 'shotgun', name: 'Shotgun' },
   { id: 'pistol', name: 'Pistol' },
-  { id: 'evo', name: 'Evo' },
+  { id: 'evo', name: 'Evo / Scorpion' },
 ];
 
 export const UNCONNECTED_KIT: GunKit = { id: '', name: 'Unconnected' };
@@ -371,7 +371,7 @@ const KIT_HINTS: { id: string; patterns: RegExp }[] = [
   { id: 'guardwolf', patterns: /guard\s*wolf|gw15|\bgw16\b|\bg15\b|valken|\bgw\s*grip|\bgw\s*stock/i },
   { id: 'shotgun', patterns: /shotgun|spas|salvo|98sk/i },
   { id: 'pistol', patterns: /pistol|tipx|hulstur/i },
-  { id: 'evo', patterns: /(^|[^a-z])evo([^a-z]|$)|mws_/i },
+  { id: 'evo', patterns: /(^|[^a-z])evo([^a-z]|$)|mws_|scorpion|cz\s*scorpion/i },
 ];
 
 export function guessKit(text: string): string {
