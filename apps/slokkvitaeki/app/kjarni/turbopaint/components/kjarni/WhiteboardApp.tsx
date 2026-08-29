@@ -599,6 +599,7 @@ export function WhiteboardApp() {
           }
           setStripPlanId(plan.id);
         }}
+        onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
       <div className="flex min-h-0 flex-1">
@@ -721,7 +722,14 @@ export function WhiteboardApp() {
             aria-label="Loka eiginleikum"
             onClick={() => setPanelOpen(false)}
           />
-          <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] shadow-2xl shadow-black/60 [&>aside]:w-full">
+          <div className="fixed inset-y-0 right-0 z-40 flex w-[300px] max-w-[85vw] flex-col shadow-2xl shadow-black/60 [&>aside]:h-full [&>aside]:w-full">
+            <button
+              type="button"
+              className="absolute left-0 top-3 z-10 -translate-x-full rounded-l-md bg-[#12141c] px-2 py-2 text-xs text-stone-300"
+              onClick={() => setPanelOpen(false)}
+            >
+              Loka
+            </button>
             <RightPanel onFocusObject={focusObject} />
           </div>
         </div>

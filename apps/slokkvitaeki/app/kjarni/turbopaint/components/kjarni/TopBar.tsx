@@ -9,16 +9,16 @@ import {
   Grid3x3,
   HelpCircle,
   Layers,
+  ListTree,
   Magnet,
   Redo2,
   RotateCcw,
-  Shield,
   Undo2,
   Upload,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
 import {
@@ -62,6 +62,7 @@ export function TopBar({
   onStrip,
   onImportUrl,
   onVeljaTeikningu,
+  onOpenLayers,
   viewSize,
 }: {
   onImport: (files: File[]) => void;
@@ -73,6 +74,8 @@ export function TopBar({
   onImportUrl?: () => void;
   /** Teikning valin úr heimilisfangaleitinni — `.info` permalink. */
   onVeljaTeikningu?: (infoUrl: string) => void;
+  /** Opna lög/eiginleika á síma — panellinn er falinn undir lg. */
+  onOpenLayers?: () => void;
   viewSize: { width: number; height: number };
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -85,6 +88,15 @@ export function TopBar({
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
+  const [compactSearch, setCompactSearch] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setCompactSearch(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
   // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
@@ -114,12 +126,12 @@ export function TopBar({
           : { color: "text-stone-500", label: "Vistað á þessu tæki" };
 
   return (
-    <header className="tp-topbar flex h-14 items-center gap-1 border-b border-white/8 bg-[#1a1d2e] px-2 text-stone-100 sm:gap-3 sm:px-3">
-      <Link href="/kjarni" className="flex shrink-0 items-center gap-2.5 pr-1 sm:pr-2">
+    <header className="tp-topbar flex h-14 min-w-0 items-center gap-1 border-b border-white/8 bg-[#1a1d2e] px-2 text-stone-100 sm:gap-2 sm:px-3">
+      <Link href="/kjarni" className="flex shrink-0 items-center gap-2.5 pr-1" title="Kjarni">
         <div className="flex size-8 items-center justify-center rounded-full bg-[#FE653F] text-white">
           <span className="text-sm font-bold leading-none">T</span>
         </div>
-        <div className="hidden leading-tight sm:block">
+        <div className="hidden leading-tight 2xl:block">
           <div className="text-[11px] font-semibold tracking-[0.14em] text-[#FE653F]">TURBOPAINT</div>
           <div className="text-xs text-white/55">Kjarni · sjálfstæð síða</div>
         </div>
@@ -197,18 +209,18 @@ export function TopBar({
           if (e.key === "Enter") e.currentTarget.blur();
         }}
         enterKeyHint="done"
-        className="min-w-16 flex-1 rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:max-w-sm sm:text-sm"
+        className="min-w-[8rem] flex-1 basis-[8rem] truncate rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:min-w-[12rem] sm:basis-[12rem] sm:text-sm"
         placeholder="Nafn á borði"
       />
       {onVeljaTeikningu && (
-        <div className="hidden shrink-0 md:block">
-          <HeimilisfangLeit onVelja={onVeljaTeikningu} />
+        <div className="shrink-0">
+          <HeimilisfangLeit onVelja={onVeljaTeikningu} compact={compactSearch} />
         </div>
       )}
-      <span className={`shrink-0 ${syncLook.color}`} title={syncLook.label}>
+      <span className={`hidden shrink-0 sm:inline ${syncLook.color}`} title={syncLook.label}>
         <Cloud className="size-4" />
       </span>
-      <div className="hidden items-center gap-1 md:flex">
+      <div className="hidden items-center gap-1 2xl:flex">
         <IconBtn title="Afturkalla (⌘Z)" onClick={() => useBoardStore.getState().undo()}>
           <Undo2 className="size-4" />
         </IconBtn>
@@ -255,7 +267,7 @@ export function TopBar({
         onChange={(e) =>
           useBoardStore.getState().setImportQuality(e.target.value as typeof quality)
         }
-        className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 lg:block"
+        className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 2xl:block"
         title="Innflutningsgæði fyrir stór PDF/TIF"
       >
         <option value="fast">Flýti · 3.2k</option>
@@ -288,12 +300,12 @@ export function TopBar({
       <Button
         size="sm"
         variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
         onClick={() => onImportUrl?.()}
         title="Sækja af permalink (skjalasafn.reykjavik.is) — eða bara Ctrl+V á borðið"
       >
         <Link2 className="size-4" />
-        <span className="hidden lg:inline">Af slóð</span>
+        <span className="hidden xl:inline">Af slóð</span>
       </Button>
       <Button
         size="sm"
@@ -303,22 +315,12 @@ export function TopBar({
         title="Merkja E-30 / E-60 eldveggi og 165.BR1 búnað"
       >
         <Flame className="size-4 text-[#FE653F]" />
-        <span className="hidden sm:inline">E-30 / E-60</span>
+        <span className="hidden lg:inline">E-30 / E-60</span>
       </Button>
       <Button
         size="sm"
         variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white md:inline-flex"
-        onClick={() => onMarkFirewalls?.()}
-        title="Staðsetja slökkvitæki, brunaslöngur og skilti skv. 165.BR1"
-      >
-        <Shield className="size-4 text-[#FE653F]" />
-        <span className="hidden lg:inline">165.BR1</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
         onClick={() => onStrip?.()}
         title="Hreinsa teikningu — hvítur grunnur, bara veggir og blek"
       >
@@ -327,7 +329,7 @@ export function TopBar({
       </Button>
       <Button
         size="sm"
-        className="bg-[#FE653F] text-white hover:bg-[#E8553F] max-sm:size-9 max-sm:px-0"
+        className="hidden bg-[#FE653F] text-white hover:bg-[#E8553F] sm:inline-flex"
         title="Flytja út PNG / PDF / JSON"
         onClick={onExport}
       >
@@ -345,14 +347,14 @@ export function TopBar({
         <DropdownMenuContent align="end" className="min-w-48">
           {/* Sjaldnotuðu stiku-hnapparnir (Undo/Redo, zoom, grind, segull) eru
               hidden md:flex í stikunni — á síma búa þeir hér í staðinn. */}
-          <DropdownMenuItem className="md:hidden" onClick={() => useBoardStore.getState().undo()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().undo()}>
             ↩ Afturkalla
           </DropdownMenuItem>
-          <DropdownMenuItem className="md:hidden" onClick={() => useBoardStore.getState().redo()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().redo()}>
             ↪ Endurtaka
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="md:hidden"
+            className="2xl:hidden"
             onClick={() => {
               const cam = useBoardStore.getState().camera;
               useBoardStore.getState().setCamera({ ...cam, scale: Math.min(16, cam.scale * 1.3) });
@@ -361,7 +363,7 @@ export function TopBar({
             Stækka ({Math.round(camera.scale * 100)}%)
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="md:hidden"
+            className="2xl:hidden"
             onClick={() => {
               const cam = useBoardStore.getState().camera;
               useBoardStore.getState().setCamera({ ...cam, scale: Math.max(0.04, cam.scale / 1.3) });
@@ -370,7 +372,7 @@ export function TopBar({
             Minnka
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="md:hidden"
+            className="2xl:hidden"
             onClick={() => {
               const bounds = boardBounds(useBoardStore.getState().objects);
               useBoardStore.getState().setCamera(cameraFit(bounds, viewSize.width, viewSize.height));
@@ -378,20 +380,28 @@ export function TopBar({
           >
             Passa á skjá
           </DropdownMenuItem>
-          <DropdownMenuItem className="md:hidden" onClick={() => useBoardStore.getState().toggleGrid()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().toggleGrid()}>
             {grid ? "✓ " : ""}Grind
           </DropdownMenuItem>
-          <DropdownMenuItem className="md:hidden" onClick={() => useBoardStore.getState().toggleSnap()}>
+          <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().toggleSnap()}>
             {snap ? "✓ " : ""}Festa við grind
           </DropdownMenuItem>
-          {/* Takkarnir sem eru faldir á síma (hidden sm:inline-flex í stikunni). */}
-          <DropdownMenuItem className="sm:hidden" onClick={() => onImportUrl?.()}>
+          {/* Takkarnir sem eru faldir á síma / þröngu skjáborði. */}
+          <DropdownMenuItem className="lg:hidden" onClick={() => onImportUrl?.()}>
             🔗 Sækja af slóð
           </DropdownMenuItem>
-          <DropdownMenuItem className="sm:hidden" onClick={() => onStrip?.()}>
+          <DropdownMenuItem className="lg:hidden" onClick={() => onStrip?.()}>
             🧹 Hreinsa teikningu
           </DropdownMenuItem>
-          <DropdownMenuSeparator className="md:hidden" />
+          <DropdownMenuItem className="sm:hidden" onClick={onExport}>
+            ⬇ Flytja út
+          </DropdownMenuItem>
+          {onOpenLayers ? (
+            <DropdownMenuItem className="lg:hidden" onClick={onOpenLayers}>
+              Lög og eiginleikar
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator className="2xl:hidden" />
           <DropdownMenuItem onClick={() => void resetBoard()}>Sækja dæmiborð</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onMarkFirewalls?.()}>
@@ -402,6 +412,17 @@ export function TopBar({
           <DropdownMenuItem onClick={onHelp}>Flýtilyklar</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {onOpenLayers ? (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="text-stone-300 hover:bg-white/10 lg:hidden max-sm:size-9"
+          title="Lög og eiginleikar"
+          onClick={onOpenLayers}
+        >
+          <ListTree className="size-4" />
+        </Button>
+      ) : null}
       <Button
         size="icon-sm"
         variant="ghost"
