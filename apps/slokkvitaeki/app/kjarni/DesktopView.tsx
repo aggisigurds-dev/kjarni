@@ -5,9 +5,9 @@ import {
   DESK_WIDTH,
   ZOOM_KEY,
   fitZoom,
-  isPhoneScreen,
   readStoredZoom,
   stepZoom,
+  shouldLockDesktop,
 } from "./desktop-view";
 
 export function DesktopView({
@@ -22,18 +22,29 @@ export function DesktopView({
   const [stageH, setStageH] = useState(0);
   const [viewH, setViewH] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
+  const zoomReady = useRef(false);
 
   useEffect(() => {
-    if (!enabled || !isPhoneScreen(window.screen.width, window.screen.height)) return;
-    setPhone(true);
-    document.documentElement.dataset.deskLock = "1";
-    const fit = fitZoom(window.innerWidth);
-    setViewH(window.innerHeight);
-    setZoom(readStoredZoom(window.localStorage.getItem(ZOOM_KEY), fit));
-    const onResize = () => setViewH(window.innerHeight);
-    window.addEventListener("resize", onResize);
+    if (!enabled) return;
+    const apply = () => {
+      const lock = shouldLockDesktop(window.screen.width, window.screen.height, window.innerWidth);
+      setPhone(lock);
+      if (lock) {
+        document.documentElement.dataset.deskLock = "1";
+        setViewH(window.innerHeight);
+        if (!zoomReady.current) {
+          zoomReady.current = true;
+          setZoom(readStoredZoom(window.localStorage.getItem(ZOOM_KEY), fitZoom(window.innerWidth)));
+        }
+      } else {
+        zoomReady.current = false;
+        delete document.documentElement.dataset.deskLock;
+      }
+    };
+    apply();
+    window.addEventListener("resize", apply);
     return () => {
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", apply);
       delete document.documentElement.dataset.deskLock;
     };
   }, [enabled]);

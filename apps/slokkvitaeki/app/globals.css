@@ -2139,13 +2139,14 @@ html[data-desk-lock] .stn[data-tool="kerfi"] .k-side {
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: rgba(16, 32, 56, 0.78);
+  background: rgba(16, 32, 56, 0.88);
   color: #fff;
   font: 700 16px/1 system-ui, sans-serif;
   display: grid;
   place-items: center;
   cursor: pointer;
   touch-action: manipulation;
+  border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

@@ -9,6 +9,7 @@ import {
   isPhoneScreen,
   isStationDesktopPath,
   readStoredZoom,
+  shouldLockDesktop,
   stepZoom,
 } from "./desktop-view";
 
@@ -46,4 +47,9 @@ test("station paths lock desktop except TurboPaint", () => {
   assert.equal(isStationDesktopPath("/kjarni"), true);
   assert.equal(isStationDesktopPath("/kjarni/turbopaint"), false);
   assert.equal(isStationDesktopPath("/"), false);
+});
+
+test("desktop lock also follows a narrow viewport", () => {
+  assert.equal(shouldLockDesktop(1920, 1080, 390), true);
+  assert.equal(shouldLockDesktop(1920, 1080, 1440), false);
 });

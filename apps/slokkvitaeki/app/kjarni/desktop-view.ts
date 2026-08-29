@@ -29,6 +29,10 @@ export function readStoredZoom(raw: string | null, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? clampZoom(n) : clampZoom(fallback);
 }
 
+export function shouldLockDesktop(screenW: number, screenH: number, innerW: number): boolean {
+  return isPhoneScreen(screenW, screenH) || innerW < PHONE_MAX_EDGE;
+}
+
 export function isStationDesktopPath(pathname: string): boolean {
   if (/\/kjarni\/turbopaint(\/|$)/.test(pathname)) return false;
   return /\/(kjarni|stjorn|kerfi|skjalarinn|draft)(\/|$)/.test(pathname);
