@@ -51,7 +51,7 @@ export function CloudPicker({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, note]);
 
   if (!open) return null;
 
