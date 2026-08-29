@@ -9,10 +9,11 @@
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { Boxes } from 'lucide-react';
+import { Boxes, Cloud } from 'lucide-react';
 import { classifyPart } from '@/lib/3dwork/project';
+import { CloudPicker } from './cloud-picker';
 import { KitBoard } from './kit-board';
-import { PANEL } from './ui';
+import { ACTION_GHOST, PANEL } from './ui';
 
 const DriveBrowser = dynamic(
   () => import('./drive-browser').then((mod) => ({ default: mod.DriveBrowser })),
@@ -38,13 +39,16 @@ type Engine = null | 'bench' | 'sketch';
 export function KitsHome() {
   const [engine, setEngine] = useState<Engine>(null);
   const [pending, setPending] = useState<PendingImport | null>(null);
+  const [pendingCloudId, setPendingCloudId] = useState<string | null>(null);
   const [showDrive, setShowDrive] = useState(false);
+  const [showCloud, setShowCloud] = useState(false);
 
   if (engine) {
     return (
       <Workbench
         initialWorkspace={engine}
         pendingImport={pending}
+        pendingCloudId={pendingCloudId}
         onPendingConsumed={() => setPending(null)}
       />
     );
@@ -58,6 +62,14 @@ export function KitsHome() {
           <span className="text-sm font-bold text-slate-900">3dwork</span>
           <span className="text-[0.65rem] text-slate-500">Pick parts as pictures, then work with them</span>
         </div>
+        <button
+          type="button"
+          className={`${ACTION_GHOST} inline-flex items-center gap-1`}
+          onClick={() => setShowCloud(true)}
+        >
+          <Cloud className="h-3.5 w-3.5" />
+          Open saved build
+        </button>
         <div className="flex overflow-hidden rounded border border-slate-300">
           <button
             type="button"
@@ -92,6 +104,16 @@ export function KitsHome() {
           }}
         />
       </div>
+
+      <CloudPicker
+        open={showCloud}
+        onClose={() => setShowCloud(false)}
+        onOpen={(id) => {
+          setPendingCloudId(id);
+          setShowCloud(false);
+          setEngine('bench');
+        }}
+      />
 
       {showDrive && (
         <DriveBrowser
