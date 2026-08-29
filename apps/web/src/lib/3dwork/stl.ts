@@ -83,6 +83,15 @@ function parseAscii(text: string): RawMesh {
   return { positions, fileNormals, triangles };
 }
 
+/** Triangle count from the first 84 bytes of a binary STL — no mesh load. */
+export function peekBinaryStlTriangles(buffer: ArrayBuffer, fileSize?: number): number | null {
+  if (buffer.byteLength < BINARY_HEADER_BYTES + 4) return null;
+  const triangles = new DataView(buffer).getUint32(BINARY_HEADER_BYTES, true);
+  if (!Number.isFinite(triangles) || triangles <= 0 || triangles > 200_000_000) return null;
+  if (fileSize != null && fileSize !== BINARY_HEADER_BYTES + 4 + triangles * 50) return null;
+  return triangles;
+}
+
 export function parseStl(buffer: ArrayBuffer): RawMesh {
   if (looksBinary(buffer)) return parseBinary(buffer);
 

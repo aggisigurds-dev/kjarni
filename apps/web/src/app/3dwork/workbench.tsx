@@ -41,6 +41,7 @@ import {
   Paintbrush,
   ScanSearch,
   Github,
+  HardDrive,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -159,6 +160,7 @@ import { PaintBar } from './paint-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, TOOL_BTN, TOOL_BTN_PRIMARY } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { DriveBrowser } from './drive-browser';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'bench' | 'sketch';
@@ -261,6 +263,7 @@ export function Workbench() {
   const [outline, setOutline] = useState<{ name: string; data: Outline2D } | null>(null);
   const [outlineBusy, setOutlineBusy] = useState(false);
   const [showGithub, setShowGithub] = useState(false);
+  const [showDrive, setShowDrive] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [githubOwner, setGithubOwner] = useState('');
   const [github, setGithub] = useState<GithubStatus>({
@@ -3669,6 +3672,13 @@ export function Workbench() {
             >
               Import STL · 3MF…
             </MenuItem>
+            <MenuItem
+              onClick={() => setShowDrive(true)}
+              icon={HardDrive}
+              hint="Preview STL and 3MF that Drive itself cannot show — Top model 3"
+            >
+              Open from Google Drive…
+            </MenuItem>
             <MenuSeparator />
             <MenuLabel>Open</MenuLabel>
             <MenuScroll>
@@ -4264,6 +4274,16 @@ export function Workbench() {
 
         <button
           type="button"
+          onClick={() => setShowDrive(true)}
+          title="Preview STL and 3MF from Google Drive — Drive itself cannot show them"
+          className={TOOL_BTN}
+        >
+          <HardDrive className="h-3.5 w-3.5" />
+          Drive
+        </button>
+
+        <button
+          type="button"
           onClick={() => {
             if (!selectedId) {
               toast.error('Select a part first.');
@@ -4432,6 +4452,10 @@ export function Workbench() {
           >
             <Upload className="h-3.5 w-3.5" />
             Import
+          </button>
+          <button type="button" className={TOOL_BTN} onClick={() => setShowDrive(true)}>
+            <HardDrive className="h-3.5 w-3.5" />
+            Drive
           </button>
           <button
             type="button"
@@ -4663,8 +4687,8 @@ export function Workbench() {
               <Upload className="h-8 w-8 text-slate-700" />
               <p className="text-sm font-bold text-slate-500">Drop STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
-                Drop the body parts, tap Multi to select them, then Pipe ⌀28 to weld a hole through
-                the whole length.
+                Drop the body parts — or open Drive to preview the STL / 3MF Google will not
+                show — then Multi and Pipe ⌀28.
               </p>
             </div>
           )}
@@ -5427,6 +5451,10 @@ export function Workbench() {
             </div>
           </div>
         </div>
+      )}
+
+      {showDrive && (
+        <DriveBrowser onClose={() => setShowDrive(false)} onImport={(files) => void importFiles(files)} />
       )}
 
       {showGithub && (

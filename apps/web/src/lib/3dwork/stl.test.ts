@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { exportBinaryStl, parseStl } from './stl';
+import { exportBinaryStl, parseStl, peekBinaryStlTriangles } from './stl';
 
 const ASCII_CUBE_FACE = `solid test
   facet normal 0 0 -1
@@ -52,5 +52,11 @@ describe('parseStl', () => {
   it('rejects data that is not an STL at all', () => {
     const tiny = new TextEncoder().encode('nope').buffer as ArrayBuffer;
     expect(() => parseStl(tiny)).toThrow();
+  });
+
+  it('reads the triangle count from the 84-byte header alone', () => {
+    const file = exportBinaryStl([cubeSoup(10)]);
+    expect(peekBinaryStlTriangles(file.slice(0, 84), file.byteLength)).toBe(12);
+    expect(peekBinaryStlTriangles(file.slice(0, 84), 999)).toBeNull();
   });
 });
