@@ -114,7 +114,7 @@ export function TopBar({
           : { color: "text-stone-500", label: "Vistað á þessu tæki" };
 
   return (
-    <header className="flex h-14 items-center gap-1 border-b border-white/8 bg-[#1a1d2e] px-2 text-stone-100 sm:gap-3 sm:px-3">
+    <header className="tp-topbar flex h-14 items-center gap-1 border-b border-white/8 bg-[#1a1d2e] px-2 text-stone-100 sm:gap-3 sm:px-3">
       <Link href="/kjarni" className="flex shrink-0 items-center gap-2.5 pr-1 sm:pr-2">
         <div className="flex size-8 items-center justify-center rounded-full bg-[#FE653F] text-white">
           <span className="text-sm font-bold leading-none">T</span>

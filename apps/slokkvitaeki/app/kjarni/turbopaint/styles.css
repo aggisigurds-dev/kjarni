@@ -155,6 +155,21 @@ body:has(.tp-root),
   display: none;
 }
 
+/* Efsta stikan: skrunast til hliðar í stað þess að klippast af.
+   Á síma í SKJÁBORÐSHAM (Chrome „Desktop site") er útsýnisglugginn ~980px svo
+   öll sm:/md:/lg:-brotmörkin kvikna og stikan verður breiðari en skjárinn —
+   E-30/E-60, 165.BR1, stroka og Flytja út lentu utan skjás og varð ekki náð í.
+   Sama hugsun og .tp-toolbar, bara á hinum ásnum. */
+.tp-topbar {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tp-topbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* StyleStrip á snertiskjá: ósýnilegt ::after stækkar snertiflötinn (~36px á
    hæð) án þess að blása litapunktana/hnappana út sjónrænt. -4px lárétt = engin
    skörun við gap-2 (8px) milli hnappa. */
