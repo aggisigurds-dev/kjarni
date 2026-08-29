@@ -84,7 +84,7 @@ export function DriveBrowser({
   onImport,
 }: {
   onClose: () => void;
-  onImport: (files: File[]) => void;
+  onImport: (files: File[], folderHint?: string) => void;
 }) {
   const [clientId, setClientId] = useState('');
   const [token, setToken] = useState('');
@@ -286,7 +286,7 @@ export function DriveBrowser({
     setBusy(`Adding ${item.name}…`);
     try {
       const file = already ?? (await driveDownload(token, item.id, item.name));
-      onImport([file]);
+      onImport([file], crumbs[crumbs.length - 1]?.name);
       toast.success(`Adding ${item.name} to the bench.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not add that file.');

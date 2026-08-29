@@ -206,6 +206,30 @@ export async function driveListFolder(token: string, folderId: string): Promise<
   return items;
 }
 
+/** Root folder plus two levels of subfolders — enough for iron wolf / Iron wolf v2. */
+export async function driveCollectMeshes(
+  token: string,
+  rootId: string
+): Promise<{ item: DriveItem; parentName: string }[]> {
+  const out: { item: DriveItem; parentName: string }[] = [];
+  const rootMeta = await driveFolderMeta(token, rootId);
+  const root = await driveListFolder(token, rootId);
+  for (const item of root) {
+    if (item.isMesh) out.push({ item, parentName: rootMeta.name });
+    if (!item.isFolder) continue;
+    const children = await driveListFolder(token, item.id);
+    for (const child of children) {
+      if (child.isMesh) out.push({ item: child, parentName: item.name });
+      if (!child.isFolder) continue;
+      const grand = await driveListFolder(token, child.id);
+      for (const file of grand) {
+        if (file.isMesh) out.push({ item: file, parentName: `${item.name} / ${child.name}` });
+      }
+    }
+  }
+  return out;
+}
+
 export async function driveRange(
   token: string,
   id: string,

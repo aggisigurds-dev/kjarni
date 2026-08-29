@@ -90,6 +90,7 @@ import {
 import {
   assembledPlacement,
   createProject,
+  guessKit,
   guessSlot,
   newProjectId,
   nextColor,
@@ -161,9 +162,10 @@ import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSepa
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, TOOL_BTN, TOOL_BTN_PRIMARY } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DriveBrowser } from './drive-browser';
+import { KitBoard } from './kit-board';
 
 type Mode = 'assembled' | 'scattered' | 'free';
-type Workspace = 'bench' | 'sketch';
+type Workspace = 'kits' | 'bench' | 'sketch';
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -253,7 +255,7 @@ export function Workbench() {
   const [showInspector, setShowInspector] = useState(true);
   const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part } | null>(null);
 
-  const [workspace, setWorkspace] = useState<Workspace>('bench');
+  const [workspace, setWorkspace] = useState<Workspace>('kits');
   const [xray, setXray] = useState(false);
   /** When set, the table shows only this part. Uncheck View → Focus to restore the rest. */
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -872,7 +874,14 @@ export function Workbench() {
   void historyToken;
 
   const importFiles = useCallback(
-    async (files: File[]) => {
+    async (
+      files: File[],
+      opts?: {
+        autoFit?: boolean;
+        classifyHint?: string;
+        tags?: Record<string, { slotId: string; kitId: string }>;
+      }
+    ) => {
       const accepted = files.filter((file) => /\.stl$/i.test(file.name) || is3mf(file.name));
       if (accepted.length === 0) {
         toast.error('No STL or 3MF files in that drop.');
@@ -956,7 +965,8 @@ export function Workbench() {
         fileName: string,
         soup: Float32Array,
         position: { x: number; y: number; z: number },
-        slotId: string
+        slotId: string,
+        kitId = ''
       ): Part => {
         const versionId = newVersionId();
         const color = nextColor({ ...project, parts: [...project.parts, ...addedParts] } as Project);
@@ -967,6 +977,7 @@ export function Workbench() {
           name,
           fileName,
           slotId,
+          kitId,
           color,
           visible: true,
           transform: { position, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } },
@@ -989,14 +1000,19 @@ export function Workbench() {
           }));
 
           if (prepared.length === 1) {
-            // Land a lone part on its own origin, as before.
+            const tagged = opts?.tags?.[file.fileName];
+            const slotId = tagged?.slotId || guessSlot(prepared[0].name, opts?.classifyHint);
+            const kitId =
+              tagged?.kitId ||
+              guessKit(`${opts?.classifyHint ?? ''} ${file.fileName} ${prepared[0].name}`);
             addedParts.push(
               mkPart(
                 prepared[0].name,
                 file.fileName,
                 recenter(prepared[0].soup),
                 { x: 0, y: 0, z: 0 },
-                guessSlot(prepared[0].name)
+                slotId,
+                kitId
               )
             );
             continue;
@@ -1052,7 +1068,15 @@ export function Workbench() {
             at += piece.length;
           }
 
-          const groupPart = mkPart(file.base, file.fileName, combined, { x: 0, y: 0, z: 0 }, guessSlot(file.base));
+          const groupPart = mkPart(
+            file.base,
+            file.fileName,
+            combined,
+            { x: 0, y: 0, z: 0 },
+            opts?.tags?.[file.fileName]?.slotId || guessSlot(file.base, opts?.classifyHint),
+            opts?.tags?.[file.fileName]?.kitId ||
+              guessKit(`${opts?.classifyHint ?? ''} ${file.fileName} ${file.base}`)
+          );
           groupPart.group = { members, fitted: [] };
           groupPart.notes = members.map((part) => part.name).join('\n');
           addedParts.push(groupPart);
@@ -1069,13 +1093,14 @@ export function Workbench() {
         });
 
         patchProject((current) => {
-          const slots = current.slots.map((slot) => {
-            // Fit the first part that lands in an empty slot, so a fresh
-            // import shows an assembled blaster rather than an empty frame.
-            if (slot.activePartId) return slot;
-            const candidate = addedParts.find((part) => part.slotId === slot.id);
-            return candidate ? { ...slot, activePartId: candidate.id } : slot;
-          });
+          const autoFit = opts?.autoFit !== false;
+          const slots = autoFit
+            ? current.slots.map((slot) => {
+                if (slot.activePartId) return slot;
+                const candidate = addedParts.find((part) => part.slotId === slot.id);
+                return candidate ? { ...slot, activePartId: candidate.id } : slot;
+              })
+            : current.slots;
           return { ...current, slots, parts: [...current.parts, ...addedParts] };
         });
 
@@ -1087,6 +1112,7 @@ export function Workbench() {
       setBusy(null);
       if (failures > 0) toast.error(`${failures} file(s) could not be read.`);
       if (addedParts.length > 0) toast.success(`Added ${addedParts.length} part(s).`);
+      return addedParts;
     },
     [project, patchProject, zUp]
   );
@@ -3679,6 +3705,12 @@ export function Workbench() {
             >
               Open from Google Drive…
             </MenuItem>
+            <MenuItem
+              onClick={() => setWorkspace('kits')}
+              hint="Pictures first — pick parts, then open only those in 3dwork"
+            >
+              2D kits from Drive
+            </MenuItem>
             <MenuSeparator />
             <MenuLabel>Open</MenuLabel>
             <MenuScroll>
@@ -4103,6 +4135,17 @@ export function Workbench() {
               Ruler
             </MenuCheckItem>
             <MenuSeparator />
+            <MenuLabel>Workspace</MenuLabel>
+            <MenuCheckItem checked={workspace === 'kits'} onClick={() => setWorkspace('kits')}>
+              2D kits
+            </MenuCheckItem>
+            <MenuCheckItem checked={workspace === 'bench'} onClick={() => setWorkspace('bench')}>
+              3D bench
+            </MenuCheckItem>
+            <MenuCheckItem checked={workspace === 'sketch'} onClick={() => setWorkspace('sketch')}>
+              2D sketch
+            </MenuCheckItem>
+            <MenuSeparator />
             <MenuLabel>Panels</MenuLabel>
             <MenuCheckItem checked={showGallery} onClick={() => setShowGallery((v) => !v)}>
               Parts gallery
@@ -4167,8 +4210,25 @@ export function Workbench() {
             </MenuItem>
           </Menu>
         </MenuBar>
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          {(['kits', 'bench', 'sketch'] as Workspace[]).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setWorkspace(option)}
+              className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
+                workspace === option
+                  ? 'bg-sky-600 text-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {option === 'kits' ? '2D kits' : option === 'bench' ? '3D bench' : '2D sketch'}
+            </button>
+          ))}
+        </div>
         </div>
 
+        {workspace === 'bench' && (
         <div className="hidden min-w-0 flex-wrap items-center gap-1 md:flex">
 
         <div className="flex overflow-hidden rounded border border-slate-300">
@@ -4389,24 +4449,6 @@ export function Workbench() {
           Multi
         </button>
 
-        <div className="flex overflow-hidden rounded border border-slate-300">
-          {(['bench', 'sketch'] as Workspace[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setWorkspace(option)}
-              className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
-                workspace === option
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              {option === 'bench' ? '3D bench' : '2D sketch'}
-            </button>
-          ))}
-        </div>
-
-        {workspace === 'bench' && (
           <div className="flex overflow-hidden rounded border border-slate-300">
             {(['assembled', 'scattered', 'free'] as Mode[]).map((option) => (
               <button
@@ -4424,7 +4466,6 @@ export function Workbench() {
               </button>
             ))}
           </div>
-        )}
 
         <div className="ml-auto hidden items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500 lg:flex">
           <span>
@@ -4441,6 +4482,7 @@ export function Workbench() {
           </span>
         </div>
         </div>
+        )}
       </div>
 
       {isMobile && workspace === 'bench' && (
@@ -4504,7 +4546,27 @@ export function Workbench() {
       )}
 
 
-      {workspace === 'sketch' ? (
+      {workspace === 'kits' ? (
+        <div className="min-h-0 flex-1">
+          <KitBoard
+            driveOpen={showDrive}
+            onConnectDrive={() => setShowDrive(true)}
+            opening={Boolean(busy)}
+            onOpenIn3dwork={async (files, tags) => {
+              const added = await importFiles(files, { autoFit: true, tags });
+              if (!added?.length) return;
+              setWorkspace('bench');
+              setMode('assembled');
+              setShowGallery(true);
+              toast.success(
+                added.length === 1
+                  ? 'Opened that part on the 3D bench — Fix and mesh tools are here.'
+                  : 'Opened in 3dwork — parts sit on their mounts. Swap a row and open again to change one.'
+              );
+            }}
+          />
+        </div>
+      ) : workspace === 'sketch' ? (
         <div className="min-h-0 flex-1">
           <SketchBoard
             sketch={sketch}
@@ -5454,7 +5516,12 @@ export function Workbench() {
       )}
 
       {showDrive && (
-        <DriveBrowser onClose={() => setShowDrive(false)} onImport={(files) => void importFiles(files)} />
+        <DriveBrowser
+          onClose={() => setShowDrive(false)}
+          onImport={(files, folderHint) =>
+            void importFiles(files, { classifyHint: folderHint })
+          }
+        />
       )}
 
       {showGithub && (

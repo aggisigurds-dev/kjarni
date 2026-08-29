@@ -42,6 +42,11 @@ export interface Part {
   fileName: string;
   /** Slot this part is a candidate for. Empty means loose on the table. */
   slotId: string;
+  /**
+   * Which gun kit this part belongs to (Iron Wolf, Guardwolf, …). Empty means
+   * it sits in the Unconnected column on the 2D kit board.
+   */
+  kitId?: string;
   color: string;
   /**
    * Named metal look (Gold, Chrome, Brushed steel). Optional so older saved
@@ -319,20 +324,83 @@ export function nextColor(project: Project): string {
 /** Slot ids guessed from the file name, so a folder drop lands roughly right. */
 const SLOT_HINTS: { slotId: string; patterns: RegExp }[] = [
   { slotId: 'barrel', patterns: /barrel|hlaup|tube|pipe/i },
-  { slotId: 'muzzle', patterns: /muzzle|tip|brake|shroud/i },
-  { slotId: 'magazine', patterns: /mag(azine)?|clip|drum/i },
+  { slotId: 'muzzle', patterns: /muzzle|brake|shroud|(^|[^a-z])tip([^a-z]|$)|(^|[^a-z])front([^a-z]|$)/i },
+  { slotId: 'magazine', patterns: /mag(azine)?|clip|drum|hulstur|mag\s*adapter/i },
   { slotId: 'stock', patterns: /stock|butt|shoulder/i },
-  { slotId: 'grip', patterns: /grip|handle|foregrip/i },
+  { slotId: 'internals', patterns: /plunger|spring|internal|catch|bolt|piston|powertube|charging/i },
+  { slotId: 'grip', patterns: /grip|foregrip|(?<!charging[_\s-]?)handle/i },
   { slotId: 'trigger', patterns: /trigger|sear/i },
-  { slotId: 'sight', patterns: /sight|scope|optic|iron/i },
-  { slotId: 'rail', patterns: /rail|picatinny|accessory|light|laser/i },
-  { slotId: 'internals', patterns: /plunger|spring|internal|catch|bolt|piston/i },
-  { slotId: 'body', patterns: /body|receiver|shell|frame|main/i },
+  { slotId: 'sight', patterns: /sight|scope|optic/i },
+  { slotId: 'rail', patterns: /rail|picatinny|accessory|handguard|mlok|sling/i },
+  { slotId: 'body', patterns: /body|receiver|recever|shell|frame|main/i },
 ];
 
-export function guessSlot(fileName: string): string {
+const SLOT_FROM_FOLDER: Record<string, string> = {
+  barrel: 'barrel',
+  recever: 'body',
+  receiver: 'body',
+};
+
+export function guessSlot(fileName: string, folderName = ''): string {
+  const folderKey = folderName.trim().split('/').pop()?.toLowerCase() ?? '';
+  if (folderKey && SLOT_FROM_FOLDER[folderKey]) return SLOT_FROM_FOLDER[folderKey];
   for (const hint of SLOT_HINTS) {
-    if (hint.patterns.test(fileName)) return hint.slotId;
+    if (hint.patterns.test(fileName) || (folderName && hint.patterns.test(folderName))) return hint.slotId;
   }
   return '';
+}
+
+export interface GunKit {
+  id: string;
+  name: string;
+}
+
+/** Columns on the 2D kit board, after Unconnected. */
+export const GUN_KITS: GunKit[] = [
+  { id: 'iron-wolf', name: 'Iron Wolf' },
+  { id: 'guardwolf', name: 'Guardwolf' },
+  { id: 'shotgun', name: 'Shotgun' },
+  { id: 'pistol', name: 'Pistol' },
+  { id: 'evo', name: 'Evo' },
+];
+
+export const UNCONNECTED_KIT: GunKit = { id: '', name: 'Unconnected' };
+
+const KIT_HINTS: { id: string; patterns: RegExp }[] = [
+  { id: 'iron-wolf', patterns: /iron\s*wolf|ironwolf/i },
+  { id: 'guardwolf', patterns: /guard\s*wolf|gw15|\bgw16\b|\bg15\b|valken|\bgw\s*grip|\bgw\s*stock/i },
+  { id: 'shotgun', patterns: /shotgun|spas|salvo|98sk/i },
+  { id: 'pistol', patterns: /pistol|tipx|hulstur/i },
+  { id: 'evo', patterns: /(^|[^a-z])evo([^a-z]|$)|mws_/i },
+];
+
+export function guessKit(text: string): string {
+  const hay = text.replace(/[_-]+/g, ' ');
+  for (const hint of KIT_HINTS) {
+    if (hint.patterns.test(hay) || hint.patterns.test(text)) return hint.id;
+  }
+  return '';
+}
+
+/** Slot + kit from a Drive file name and the folder it sat in. */
+export function classifyPart(fileName: string, folderName = ''): { slotId: string; kitId: string } {
+  return {
+    slotId: guessSlot(fileName, folderName),
+    kitId: guessKit(`${folderName} ${fileName}`),
+  };
+}
+
+export function partsForKitSlot(project: Project, slotId: string, kitId: string): Part[] {
+  return project.parts.filter((part) => part.slotId === slotId && (part.kitId || '') === kitId);
+}
+
+/** One file on the 2D kit board — a picture and a Drive id, no mesh yet. */
+export interface CatalogPart {
+  driveId: string;
+  name: string;
+  size: number | null;
+  slotId: string;
+  kitId: string;
+  parentName: string;
+  thumbnail?: string;
 }
