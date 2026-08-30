@@ -157,7 +157,7 @@ export async function listMarksBoards(): Promise<MarksSiteListItem[]> {
       const id = typeof row.id === 'string' ? row.id : '';
       if (!isMarksBoardId(id)) continue;
       const doc = normalizeDoc(row.doc);
-      const updatedAt = doc?.updatedAt ?? Date.parse(String(row.updated_at || '')) || 0;
+      const updatedAt = (doc?.updatedAt ?? Date.parse(String(row.updated_at || ''))) || 0;
       const existing = byId.get(id);
       if (existing && existing.updatedAt > updatedAt) continue;
       byId.set(id, { id, title: titleFor(id, doc), updatedAt });
