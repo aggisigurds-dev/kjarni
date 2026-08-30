@@ -43,7 +43,7 @@ describe('isMeshName', () => {
 describe('DEFAULT_GOOGLE_CLIENT_ID', () => {
   it('is the company Web OAuth client', () => {
     expect(DEFAULT_GOOGLE_CLIENT_ID).toMatch(/\.apps\.googleusercontent\.com$/);
-    expect(DEFAULT_GOOGLE_CLIENT_ID.startsWith('708215000553-')).toBe(true);
+    expect(DEFAULT_GOOGLE_CLIENT_ID).toContain('7sc6vb83g2manolct21l7gh45tk442es');
   });
 });
 

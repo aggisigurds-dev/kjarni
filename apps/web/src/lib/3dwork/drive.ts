@@ -24,7 +24,11 @@ export const FOLDER_KEY = 'kjarni_3dwork_drive_folder';
  * Authorized JavaScript origins on this client must include the 3dwork URL.
  */
 export const DEFAULT_GOOGLE_CLIENT_ID =
-  '708215000553-77htigi4tkqdr00bfak0j2e539h9bc2d.apps.googleusercontent.com';
+  '708215000553-7sc6vb83g2manolct21l7gh45tk442es.apps.googleusercontent.com';
+
+const LEGACY_GOOGLE_CLIENT_IDS = new Set([
+  '708215000553-77htigi4tkqdr00bfak0j2e539h9bc2d.apps.googleusercontent.com',
+]);
 
 /** Auto-mesh a file for a preview only when it is this small. */
 export const PREVIEW_BYTES = 12 * 1024 * 1024;
@@ -83,8 +87,11 @@ export function defaultGoogleClientId(): string {
 }
 
 export function readStoredClientId(): string {
-  if (typeof window === 'undefined') return defaultGoogleClientId();
-  return window.localStorage.getItem(CLIENT_ID_KEY)?.trim() || defaultGoogleClientId();
+  const baked = defaultGoogleClientId();
+  if (typeof window === 'undefined') return baked;
+  const stored = window.localStorage.getItem(CLIENT_ID_KEY)?.trim();
+  if (!stored || LEGACY_GOOGLE_CLIENT_IDS.has(stored)) return baked;
+  return stored;
 }
 
 export function storeClientId(id: string) {
