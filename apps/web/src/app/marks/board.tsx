@@ -428,7 +428,7 @@ export function MarksBoard() {
             <p className={LABEL}>Kjarni</p>
             <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
             <p className="text-sm text-stone-500">
-              Whiteboard bookmarks — drag folders and links, stick covers, filter by tag. Same board on your phone.
+              Folders, links, and buttons. Structured columns — same board on your phone.
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
