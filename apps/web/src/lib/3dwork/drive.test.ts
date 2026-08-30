@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDriveBytes, isMeshName, parseDriveId } from './drive';
+import { DEFAULT_GOOGLE_CLIENT_ID, formatDriveBytes, isMeshName, parseDriveId } from './drive';
 
 describe('parseDriveId', () => {
   it('reads a nested mobile folder URL and keeps the last folder', () => {
@@ -37,6 +37,13 @@ describe('isMeshName', () => {
     expect(isMeshName('grip.STL')).toBe(true);
     expect(isMeshName('body.3mf')).toBe(true);
     expect(isMeshName('notes.pdf')).toBe(false);
+  });
+});
+
+describe('DEFAULT_GOOGLE_CLIENT_ID', () => {
+  it('is the company Web OAuth client', () => {
+    expect(DEFAULT_GOOGLE_CLIENT_ID).toMatch(/\.apps\.googleusercontent\.com$/);
+    expect(DEFAULT_GOOGLE_CLIENT_ID).toContain('7sc6vb83g2manolct21l7gh45tk442es');
   });
 });
 
