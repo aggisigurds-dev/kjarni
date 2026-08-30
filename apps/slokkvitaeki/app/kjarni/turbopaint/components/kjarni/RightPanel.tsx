@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Lock, Trash2, Unlock } from "lucide-react";
 import { isFirewallMark } from "../../lib/board/detect-firewalls";
+import { findLayer, objectLayerId } from "../../lib/board/layers";
 import { isMvsMark } from "../../lib/board/mvs165";
 import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS, type BoardObject } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
@@ -12,18 +13,28 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
+import { LayerList } from "./LayerList";
 
-type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "annad";
+type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "kalt" | "heitt" | "skolp" | "loftræsting" | "hitakerfi" | "annad";
 
 const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
   { id: "teikning", label: "Teikningar" },
   { id: "eldveggur", label: "Eldveggir" },
   { id: "mvs", label: "165.BR1" },
   { id: "takn", label: "Tákn" },
+  { id: "kalt", label: "Kalt vatn" },
+  { id: "heitt", label: "Heitt vatn" },
+  { id: "skolp", label: "Skolp / fráveita" },
+  { id: "loftræsting", label: "Loftræsting" },
+  { id: "hitakerfi", label: "Hitakerfi" },
   { id: "annad", label: "Annað" },
 ];
 
 function layerGroupOf(obj: BoardObject): LayerGroupId {
+  const lid = objectLayerId(obj);
+  if (lid === "kalt" || lid === "heitt" || lid === "skolp" || lid === "loftræsting" || lid === "hitakerfi") {
+    return lid;
+  }
   if (obj.type === "image") return "teikning";
   if (isFirewallMark(obj)) return "eldveggur";
   if (isMvsMark(obj)) return "mvs";
@@ -33,6 +44,7 @@ function layerGroupOf(obj: BoardObject): LayerGroupId {
 
 export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => void } = {}) {
   const objects = useBoardStore((s) => s.objects);
+  const layers = useBoardStore((s) => s.layers);
   const selectedIds = useBoardStore((s) => s.selectedIds);
   const selected = objects.filter((o) => selectedIds.includes(o.id));
   const primary = selected[0];
@@ -200,8 +212,11 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
           </p>
         )}
         <div className="mt-6">
+          <LayerList />
+        </div>
+        <div className="mt-6">
           <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-stone-500">
-            LÖG · {objects.length}
+            HLUTIR · {objects.length}
           </div>
           <div className="space-y-2">
             {LAYER_GROUPS.map((group) => {
@@ -229,6 +244,10 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                             : "text-stone-400 hover:bg-white/5"
                         }`}
                       >
+                        <span
+                          className="size-2 shrink-0 rounded-full ring-1 ring-white/15"
+                          style={{ background: findLayer(layers, objectLayerId(obj))?.color ?? "#78716c" }}
+                        />
                         <span className="min-w-0 flex-1 truncate">
                           {layerNames.get(obj.id) ?? obj.name ?? obj.type}
                         </span>

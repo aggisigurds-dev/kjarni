@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatM2, objectsOnDocument } from "../../lib/board/geometry";
 import { newId } from "../../lib/board/ids";
+import { LAYER_ALMENNT } from "../../lib/board/layers";
 import { useBoardStore } from "../../lib/board/store";
 import { NOTKUNARFLOKKAR, greinaTharfir, type Notkunarflokkur } from "../../lib/board/krofur";
 import { getSymbol } from "../../lib/board/symbols";
@@ -215,6 +216,7 @@ export function CountTable() {
           hidden: false,
           name: "Magntafla",
           parentId: plan.id,
+          layerId: LAYER_ALMENNT,
         },
       ],
       true

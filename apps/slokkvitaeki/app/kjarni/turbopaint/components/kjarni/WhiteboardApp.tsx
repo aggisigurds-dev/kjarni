@@ -21,6 +21,13 @@ import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
+import {
+  isDrawnLocked,
+  isDrawnVisible,
+  LAYER_ALMENNT,
+  selectableIds,
+  withLayerId,
+} from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
@@ -167,7 +174,7 @@ export function WhiteboardApp() {
           if (equipment.pixelsPerMeter && !useBoardStore.getState().pixelsPerMeter) {
             useBoardStore.getState().setPixelsPerMeter(equipment.pixelsPerMeter);
           }
-          const incomingMarks = [...marks, ...equipment.objects];
+          const incomingMarks = withLayerId([...marks, ...equipment.objects], LAYER_ALMENNT);
           if (incomingMarks.length) useBoardStore.getState().addObjects(incomingMarks, false);
           total += hits.length;
           gear += equipment.objects.filter((o) => o.type === "symbol").length;
@@ -224,7 +231,7 @@ export function WhiteboardApp() {
         const kind = classifyFile(f);
         return kind === "pdf" || kind === "tiff";
       });
-      const kit = isPlan ? incoming.flatMap((img) => markupKitForPlan(img)) : [];
+      const kit = isPlan ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
       useBoardStore.getState().addObjects([...incoming, ...kit], false);
       useBoardStore.getState().setTool("select");
       const bounds = boardBounds([...incoming, ...kit]);
@@ -327,7 +334,7 @@ export function WhiteboardApp() {
                 .objects.filter((o) => isFirewallMark(o) && o.parentId === plan.id)
                 .map((o) => o.id);
               if (stale.length) useBoardStore.getState().deleteIds(stale);
-              useBoardStore.getState().addObjects(res.objects, false);
+              useBoardStore.getState().addObjects(withLayerId(res.objects, LAYER_ALMENNT), false);
             }
           }
         }
@@ -501,7 +508,7 @@ export function WhiteboardApp() {
       }
       if (meta && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        store.setSelected(store.objects.filter((o) => !o.locked && !o.hidden).map((o) => o.id));
+        store.setSelected(selectableIds(store.objects, store.layers));
       }
       if (meta && e.key === "0") {
         e.preventDefault();
@@ -510,7 +517,12 @@ export function WhiteboardApp() {
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        store.deleteIds(store.selectedIds.filter((id) => !store.objects.find((o) => o.id === id)?.locked));
+        store.deleteIds(
+          store.selectedIds.filter((id) => {
+            const obj = store.objects.find((o) => o.id === id);
+            return obj && !isDrawnLocked(obj, store.layers);
+          })
+        );
       }
       if (!meta && !e.altKey) {
         const map: Record<string, Parameters<typeof store.setTool>[0]> = {
@@ -962,7 +974,7 @@ function ExportDialog({
     const state = useBoardStore.getState();
     const exportObjects =
       target === "selection"
-        ? state.objects.filter((o) => state.selectedIds.includes(o.id) && !o.hidden)
+        ? state.objects.filter((o) => state.selectedIds.includes(o.id) && isDrawnVisible(o, state.layers))
         : state.objects;
     if (target === "selection" && !exportObjects.length) {
       toast.error("Ekkert valið til að flytja út");
@@ -1138,6 +1150,8 @@ async function importKjarniJson(file: File) {
     pixelsPerMeter: data.pixelsPerMeter,
     grid: data.grid ?? true,
     snap: data.snap ?? true,
+    layers: data.layers,
+    activeLayerId: data.activeLayerId,
   });
   toast.success("Borð opnað");
 }

@@ -1,5 +1,15 @@
 import { create } from "zustand";
 import { newId } from "./ids";
+import {
+  DEFAULT_LAYERS,
+  LAYER_ALMENNT,
+  ensureLayers,
+  findLayer,
+  layerStrokeForActive,
+  objectLayerId,
+  stampLayerId,
+  type BoardLayer,
+} from "./layers";
 import type {
   BoardObject,
   Camera,
@@ -42,6 +52,8 @@ interface BoardStore {
   gridGap: number;
   setGridGap: (gap: number) => void;
   style: StyleState;
+  layers: BoardLayer[];
+  activeLayerId: string;
   past: BoardObject[][];
   future: BoardObject[][];
   setHydrated: (v: boolean) => void;
@@ -55,6 +67,9 @@ interface BoardStore {
   setImportProgress: (p: ImportProgress | null) => void;
   setSpacePan: (v: boolean) => void;
   setStyle: (partial: Partial<StyleState>) => void;
+  setActiveLayer: (id: string) => void;
+  toggleLayerVisible: (id: string) => void;
+  toggleLayerLocked: (id: string) => void;
   startFirewall: () => void;
   setSelected: (ids: string[]) => void;
   replaceBoard: (data: {
@@ -64,6 +79,8 @@ interface BoardStore {
     pixelsPerMeter: number | null;
     grid: boolean;
     snap: boolean;
+    layers?: BoardLayer[];
+    activeLayerId?: string;
   }) => void;
   addObjects: (objects: BoardObject[], select?: boolean) => void;
   updateObjects: (
@@ -121,6 +138,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     fontSize: 22,
     symbolId: "extinguisher",
   },
+  layers: DEFAULT_LAYERS.map((l) => ({ ...l })),
+  activeLayerId: LAYER_ALMENNT,
   past: [],
   future: [],
   setHydrated: (hydrated) => set({ hydrated }),
@@ -134,6 +153,39 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   setImportProgress: (importProgress) => set({ importProgress }),
   setSpacePan: (spacePan) => set({ spacePan }),
   setStyle: (partial) => set({ style: { ...get().style, ...partial } }),
+  setActiveLayer: (id) => {
+    const layers = get().layers;
+    if (!findLayer(layers, id)) return;
+    const stroke = layerStrokeForActive(layers, id);
+    set({
+      activeLayerId: id,
+      style: stroke ? { ...get().style, stroke } : get().style,
+    });
+  },
+  toggleLayerVisible: (id) => {
+    const layers = get().layers.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l));
+    const hidden = layers.find((l) => l.id === id && !l.visible);
+    let selectedIds = get().selectedIds;
+    if (hidden) {
+      selectedIds = selectedIds.filter((sid) => {
+        const obj = get().objects.find((o) => o.id === sid);
+        return !obj || objectLayerId(obj) !== id;
+      });
+    }
+    set({ layers, selectedIds });
+  },
+  toggleLayerLocked: (id) => {
+    const layers = get().layers.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l));
+    const locked = layers.find((l) => l.id === id && l.locked);
+    let selectedIds = get().selectedIds;
+    if (locked) {
+      selectedIds = selectedIds.filter((sid) => {
+        const obj = get().objects.find((o) => o.id === sid);
+        return !obj || objectLayerId(obj) !== id;
+      });
+    }
+    set({ layers, selectedIds });
+  },
   startFirewall: () => {
     // Default eldveggur to red, but respect a colour the user already picked;
     // width/dash always stay as pre-chosen in the StyleStrip.
@@ -146,18 +198,29 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     });
   },
   setSelected: (selectedIds) => set({ selectedIds }),
-  replaceBoard: (data) =>
+  replaceBoard: (data) => {
+    const layers = ensureLayers(data.layers);
+    const activeLayerId =
+      data.activeLayerId && findLayer(layers, data.activeLayerId)
+        ? data.activeLayerId
+        : LAYER_ALMENNT;
+    const objects = data.objects.map((o) => stampLayerId(o, objectLayerId(o)));
     set({
       ...data,
+      layers,
+      activeLayerId,
+      objects,
       selectedIds: [],
       past: [],
       future: [],
-    }),
+    });
+  },
   addObjects: (incoming, select = true) => {
-    const { objects } = get();
+    const { objects, activeLayerId } = get();
     pushHistory(set, get);
-    const images = incoming.filter((o) => o.type === "image");
-    const rest = incoming.filter((o) => o.type !== "image");
+    const stamped = incoming.map((o) => stampLayerId(o, activeLayerId));
+    const images = stamped.filter((o) => o.type === "image");
+    const rest = stamped.filter((o) => o.type !== "image");
     const existingImages = objects.filter((o) => o.type === "image");
     const existingRest = objects.filter((o) => o.type !== "image");
     const next = [...existingImages, ...images, ...existingRest, ...rest];

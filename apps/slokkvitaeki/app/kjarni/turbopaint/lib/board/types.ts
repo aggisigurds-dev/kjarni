@@ -47,6 +47,8 @@ interface BaseObject {
   parentId?: string;
   /** Objects sharing a groupId select and move as one unit (Hópa / ⌘G). */
   groupId?: string;
+  /** Named drawing / piping layer (`teikning`, `almennt`, `kalt`, …). */
+  layerId?: string;
 }
 
 export interface ImageObject extends BaseObject {
@@ -135,6 +137,10 @@ export interface BoardDocument {
   grid: boolean;
   snap: boolean;
   assetIds: string[];
+  /** Named plumbing / drawing layers. Missing on older boards. */
+  layers?: import("./layers").BoardLayer[];
+  /** Id of the layer new strokes land on. */
+  activeLayerId?: string;
   /** Board id when synced across devices (turbopaint_boards.id). */
   boardId?: string;
   /** ISO timestamp of the last local save — last-write-wins between devices. */
