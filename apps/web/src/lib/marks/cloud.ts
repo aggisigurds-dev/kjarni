@@ -5,6 +5,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MARKS_BOARD_ID, isMarksDoc, normalizeDoc, type MarksDoc } from './model';
+import { layoutMissingWindows } from './windows';
 
 const COMPANY_URL = 'https://osfdzskyvisifcwyjkuk.supabase.co';
 const COMPANY_KEY = 'sb_publishable_YVpznM5EK01qOdevQwOcIg_rMjTkT7f';
@@ -52,7 +53,8 @@ export async function loadMarksBoard(): Promise<MarksDoc | null> {
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || data.deleted) return null;
-  return normalizeDoc(data.doc) ?? (isMarksDoc(data.doc) ? data.doc : null);
+  const normalized = normalizeDoc(data.doc) ?? (isMarksDoc(data.doc) ? data.doc : null);
+  return normalized ? layoutMissingWindows(normalized, data.doc) : null;
 }
 
 export async function saveMarksBoard(doc: MarksDoc): Promise<void> {

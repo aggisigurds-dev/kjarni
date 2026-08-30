@@ -62,6 +62,7 @@ import {
   type MarksClock,
   type MarksDoc,
 } from '@/lib/marks/model';
+import { UNFILED_WINDOW_ID, layoutMissingWindows, setCategoryLayout, setUnfiledLayout } from '@/lib/marks/windows';
 import { screenshotCoverUrl } from '@/lib/marks/preview';
 import { cropImageToSquare } from '@/lib/marks/square-cover';
 import {
@@ -149,13 +150,13 @@ export function MarksBoard() {
     (async () => {
       const local = readLocal();
       if (local && (local.links.length > 0 || local.categories.length > 0 || local.buttons.length > 0)) {
-        setDoc(layoutMissingPositions(local));
+        setDoc(layoutMissingWindows(local, local));
       }
       try {
         const cloud = await loadMarksBoard();
         if (cancelled) return;
         if (cloud && cloud.updatedAt >= (local?.updatedAt ?? 0)) {
-          const next = layoutMissingPositions(cloud);
+          const next = layoutMissingWindows(cloud, cloud);
           setDoc(next);
           writeLocal(next);
           setNote('Saved across devices');
@@ -504,8 +505,8 @@ export function MarksBoard() {
             <p className={LABEL}>Kjarni</p>
             <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
             <p className="text-sm text-stone-500">
-              Folders, links, and buttons in columns — drag a link or folder onto another column.
-              Same board on your phone.
+              Drag a category window by its title bar, resize from the edges. Drop a link onto
+              another window to move it. Columns on a phone.
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
@@ -765,6 +766,13 @@ export function MarksBoard() {
               apply(next, 'Link moved.', 'Could not move that link.');
             }}
             onScreenshotLink={applyPageScreenshot}
+            onLayout={(id, rect) => {
+              if (id === UNFILED_WINDOW_ID) {
+                patch(setUnfiledLayout(doc, rect, clock.now()));
+                return;
+              }
+              patch(setCategoryLayout(doc, id, rect, clock.now()));
+            }}
           />
         )}
       </main>
