@@ -394,8 +394,8 @@ export function WhiteboardApp() {
     []
   );
 
-  // Sækja teikningu beint af permalink (t.d. skjalasafn.reykjavik.is FotoWeb)
-  // gegnum /api/turbopaint/fetch-plan proxy-ið — CORS bannar beina sókn.
+  // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
+  // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
     async (raw: string) => {
       const trimmed = raw.trim();
@@ -407,7 +407,7 @@ export function WhiteboardApp() {
         useBoardStore.getState().setImportProgress({
           fileName: "skjalasafn",
           percent: 10,
-          message: "Sæki teikningu (JPEG, ekki fullt TIF)…",
+          message: "Sæki teikningu…",
         });
         const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}`);
         if (!res.ok) {
@@ -453,7 +453,8 @@ export function WhiteboardApp() {
       } catch {
         return;
       }
-      const archive = host === "skjalasafn.reykjavik.is";
+      const archive =
+        host === "skjalasafn.reykjavik.is" || host === "teikningar.hafnarfjordur.is";
       // Skjalasafns-permalink er ALLTAF innflutningur — líka þótt fókusinn
       // sitji óvart í nafnareitnum (slóðin límdist þar inn og skemmdi nafnið).
       if (isTyping(e.target) && !archive) return;
@@ -604,7 +605,7 @@ export function WhiteboardApp() {
         onVeljaTeikningu={(infoUrl) => void runUrlImport(infoUrl)}
         onImportUrl={() => {
           const raw = window.prompt(
-            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða beina skráaslóð:"
+            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða PDF af teikningar.hafnarfjordur.is:"
           );
           if (raw) void runUrlImport(raw);
         }}
