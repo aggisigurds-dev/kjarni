@@ -140,6 +140,16 @@ export interface MarksDoc {
   folders?: MarkCategory[];
 }
 
+/** Parallel whiteboard-item branch reads this shape; tables do not store items. */
+export type WhiteboardItem = {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z?: number;
+};
+
 export const DEFAULT_TABLE_COL_COUNT = 8;
 export const DEFAULT_TABLE_ROW_COUNT = 14;
 export const MAX_TABLE_COL_COUNT = 30;
@@ -341,18 +351,16 @@ export function defaultTable(partial: Partial<MarkTable> & Pick<MarkTable, 'id'>
     if (raw) cells[key.toUpperCase()] = { raw };
   }
   return {
-    title: 'Table',
-    x: 0,
-    y: 0,
-    w: DEFAULT_TABLE_W,
-    h: DEFAULT_TABLE_H,
-    colCount: DEFAULT_TABLE_COL_COUNT,
-    rowCount: DEFAULT_TABLE_ROW_COUNT,
-    cells,
-    ...partial,
+    id: partial.id,
     title: (partial.title ?? 'Table').trim() || 'Table',
+    x: typeof partial.x === 'number' ? partial.x : 0,
+    y: typeof partial.y === 'number' ? partial.y : 0,
+    w: typeof partial.w === 'number' && partial.w > 0 ? partial.w : DEFAULT_TABLE_W,
+    h: typeof partial.h === 'number' && partial.h > 0 ? partial.h : DEFAULT_TABLE_H,
+    z: partial.z,
     colCount: clampInt(partial.colCount ?? DEFAULT_TABLE_COL_COUNT, 1, MAX_TABLE_COL_COUNT, DEFAULT_TABLE_COL_COUNT),
     rowCount: clampInt(partial.rowCount ?? DEFAULT_TABLE_ROW_COUNT, 1, MAX_TABLE_ROW_COUNT, DEFAULT_TABLE_ROW_COUNT),
+    cols: partial.cols,
     cells,
   };
 }

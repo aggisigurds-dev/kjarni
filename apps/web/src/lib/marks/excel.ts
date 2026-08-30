@@ -387,14 +387,14 @@ class Parser {
       if (!first) return 0;
       return this.evalCell(cellKey(first.col, first.row));
     }
-    return value;
+    return value as ExcelValue;
   }
 
   private valuesOf(arg: EvalVal): ExcelValue[] {
     if (arg && typeof arg === 'object' && arg.kind === 'range') {
       return arg.cells.map((cell) => this.evalCell(cellKey(cell.col, cell.row)));
     }
-    return [arg];
+    return [arg as ExcelValue];
   }
 
   private call(name: string, args: EvalVal[]): ExcelValue {

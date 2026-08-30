@@ -67,16 +67,23 @@ export function MarksWindowDesk({
   const tables = doc.tables ?? [];
 
   const items = useMemo(() => {
-    const rows = roots.map((folder, index) => {
+    type DeskItem = {
+      id: string;
+      name: string;
+      kind: 'folder' | 'unfiled' | 'table';
+      origin: MarksWindowRect;
+      rect: MarksWindowRect;
+      minW?: number;
+      minH?: number;
+    };
+    const rows: DeskItem[] = roots.map((folder, index) => {
       const origin = folderWindowRect(folder, index);
       return {
         id: folder.id,
         name: folder.name,
-        kind: 'folder' as const,
+        kind: 'folder',
         origin,
         rect: preview?.id === folder.id ? preview.rect : origin,
-        minW: undefined as number | undefined,
-        minH: undefined as number | undefined,
       };
     });
     rows.push({
