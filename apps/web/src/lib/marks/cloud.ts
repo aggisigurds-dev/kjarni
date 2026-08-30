@@ -175,11 +175,16 @@ export async function listMarksBoards(): Promise<MarksSiteListItem[]> {
   });
 }
 
-export async function uploadMarkCover(file: Blob, fileName = 'cover.jpg'): Promise<string> {
+export async function uploadMarkCover(
+  file: Blob,
+  fileName = 'cover.jpg',
+  folder = 'covers'
+): Promise<string> {
   const sb = getMarksSupabase();
   if (!sb) throw new Error('Supabase is only available in the browser.');
   const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : '.jpg';
-  const path = `covers/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+  const prefix = folder.replace(/\/+$/, '') || 'covers';
+  const path = `${prefix}/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}${ext}`;
   const { error } = await sb.storage.from(MARKS_BUCKET).upload(path, file, {
     contentType: file.type || 'image/jpeg',
     upsert: true,

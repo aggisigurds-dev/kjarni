@@ -1,8 +1,8 @@
 /**
- * Marks — folders, links, buttons, and filter chips on a structured board.
+ * Marks — folders, links, buttons, filter chips, and free-canvas whiteboards.
  *
  * Stored as jsonb on `marks_boards.doc`. Older docs used flat `categories` +
- * `links[].note`. `normalizeDoc` lifts those fields.
+ * `links[].note`. `normalizeDoc` lifts those fields and defaults `whiteboards`.
  *
  * Folder delete default: the folder row is removed; its links, buttons, and
  * child folders move to the parent (or Unfiled when the folder was top-level).
@@ -153,6 +153,30 @@ export function folderCoverClass(size: MarksPreviewSize): string {
   return 'h-24 w-24';
 }
 
+export type WhiteboardItemKind = 'image' | 'icon';
+
+export interface WhiteboardItem {
+  id: string;
+  kind: WhiteboardItemKind;
+  src: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z?: number;
+}
+
+export interface MarkWhiteboard {
+  id: string;
+  title: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z?: number;
+  items: WhiteboardItem[];
+}
+
 export interface MarksDoc {
   /** Site name. Home is "Home"; new sites start empty under their own title. */
   title: string;
@@ -162,6 +186,7 @@ export interface MarksDoc {
   filters: MarksFilter[];
   display: MarksDisplay;
   unfiledCollapsed: boolean;
+  whiteboards: MarkWhiteboard[];
   updatedAt: number;
   folders?: MarkCategory[];
 }
@@ -314,6 +339,50 @@ export function defaultButton(
   };
 }
 
+export const DEFAULT_WHITEBOARD_W = 420;
+export const DEFAULT_WHITEBOARD_H = 320;
+export const DEFAULT_WHITEBOARD_ITEM_W = 160;
+export const DEFAULT_WHITEBOARD_ITEM_H = 120;
+
+export function defaultWhiteboardItem(
+  partial: Partial<WhiteboardItem> & Pick<WhiteboardItem, 'id' | 'src'>
+): WhiteboardItem {
+  const kind: WhiteboardItemKind = partial.kind === 'icon' ? 'icon' : 'image';
+  return {
+    kind,
+    x: 16,
+    y: 16,
+    w: DEFAULT_WHITEBOARD_ITEM_W,
+    h: DEFAULT_WHITEBOARD_ITEM_H,
+    z: 1,
+    ...partial,
+    src: asString(partial.src).trim(),
+  };
+}
+
+export function defaultWhiteboard(
+  partial: Partial<MarkWhiteboard> & Pick<MarkWhiteboard, 'id'>
+): MarkWhiteboard {
+  const items = Array.isArray(partial.items)
+    ? partial.items.map((item, index) =>
+        defaultWhiteboardItem({
+          ...item,
+          z: item.z ?? index + 1,
+        })
+      )
+    : [];
+  return {
+    title: 'Whiteboard',
+    x: 0,
+    y: 0,
+    w: DEFAULT_WHITEBOARD_W,
+    h: DEFAULT_WHITEBOARD_H,
+    z: 1,
+    ...partial,
+    items,
+  };
+}
+
 export function latestAdded<T extends { id: string }>(before: T[], after: T[]): T | undefined {
   const known = new Set(before.map((row) => row.id));
   return after.find((row) => !known.has(row.id));
@@ -352,6 +421,7 @@ export function emptyDoc(now = 0, title = ''): MarksDoc {
     filters: [],
     display: { ...DEFAULT_MARKS_DISPLAY },
     unfiledCollapsed: false,
+    whiteboards: [],
     updatedAt: now,
   };
 }
@@ -363,6 +433,7 @@ export function persistDoc(doc: MarksDoc): MarksDoc {
     display: normalizeDisplay(doc.display),
     unfiledCollapsed: Boolean(doc.unfiledCollapsed),
     folders: doc.categories,
+    whiteboards: doc.whiteboards ?? [],
     links: doc.links.map((link) => ({
       ...link,
       folderId: link.categoryId,
@@ -469,6 +540,46 @@ function normalizeFilterRow(value: unknown, index: number): MarksFilter | null {
   });
 }
 
+function normalizeWhiteboardItemRow(value: unknown, index: number): WhiteboardItem | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id);
+  const src = asString(row.src).trim();
+  if (!id || !src) return null;
+  const kind: WhiteboardItemKind = asString(row.kind) === 'icon' ? 'icon' : 'image';
+  return defaultWhiteboardItem({
+    id,
+    kind,
+    src,
+    x: asNumber(row.x, 16 + (index % 6) * 24),
+    y: asNumber(row.y, 16 + (index % 6) * 24),
+    w: asNumber(row.w, DEFAULT_WHITEBOARD_ITEM_W),
+    h: asNumber(row.h, DEFAULT_WHITEBOARD_ITEM_H),
+    z: asNumber(row.z, index + 1),
+  });
+}
+
+function normalizeWhiteboardRow(value: unknown, index: number): MarkWhiteboard | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id);
+  if (!id) return null;
+  const title = asString(row.title).trim() || 'Whiteboard';
+  const items = (Array.isArray(row.items) ? row.items : [])
+    .map((item, itemIndex) => normalizeWhiteboardItemRow(item, itemIndex))
+    .filter((item): item is WhiteboardItem => Boolean(item));
+  return defaultWhiteboard({
+    id,
+    title,
+    x: asNumber(row.x),
+    y: asNumber(row.y),
+    w: asNumber(row.w, DEFAULT_WHITEBOARD_W),
+    h: asNumber(row.h, DEFAULT_WHITEBOARD_H),
+    z: asNumber(row.z, index + 1),
+    items,
+  });
+}
+
 export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
   const doc = asRecord(value);
   if (!doc) return null;
@@ -495,6 +606,9 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
   const filters = (Array.isArray(doc.filters) ? doc.filters : [])
     .map((row, index) => normalizeFilterRow(row, index))
     .filter((row): row is MarksFilter => Boolean(row));
+  const whiteboards = (Array.isArray(doc.whiteboards) ? doc.whiteboards : [])
+    .map((row, index) => normalizeWhiteboardRow(row, index))
+    .filter((row): row is MarkWhiteboard => Boolean(row));
   return persistDoc({
     title: asString(doc.title).trim(),
     categories,
@@ -503,6 +617,7 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
     filters,
     display: normalizeDisplay(doc.display),
     unfiledCollapsed: asBoolean(doc.unfiledCollapsed),
+    whiteboards,
     updatedAt: asNumber(doc.updatedAt, now),
   });
 }
@@ -569,6 +684,7 @@ export function seedDoc(now = 1): MarksDoc {
     filters,
     display: { ...DEFAULT_MARKS_DISPLAY },
     unfiledCollapsed: false,
+    whiteboards: [],
     updatedAt: now,
   });
 }
@@ -1145,4 +1261,156 @@ export function moveButton(
 export function removeButton(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
   if (!(doc.buttons ?? []).some((button) => button.id === id)) return doc;
   return touch(doc, clock, { buttons: (doc.buttons ?? []).filter((button) => button.id !== id) });
+}
+
+export function whiteboardById(doc: MarksDoc, id: string): MarkWhiteboard | undefined {
+  return (doc.whiteboards ?? []).find((board) => board.id === id);
+}
+
+export function nextWhiteboardTitle(doc: MarksDoc): string {
+  const count = (doc.whiteboards ?? []).length;
+  return count === 0 ? 'Whiteboard' : `Whiteboard ${count + 1}`;
+}
+
+export function nextWhiteboardSlot(doc: MarksDoc): { x: number; y: number } {
+  const n = doc.categories.filter((category) => !category.parentId).length + 1 + (doc.whiteboards ?? []).length;
+  return { x: (n % 3) * SLOT_W, y: Math.floor(n / 3) * SLOT_H };
+}
+
+export function addWhiteboard(
+  doc: MarksDoc,
+  input: Partial<Pick<MarkWhiteboard, 'title' | 'x' | 'y' | 'w' | 'h'>> = {},
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const slot = nextWhiteboardSlot(doc);
+  const board = defaultWhiteboard({
+    id: clock.nextId('wb'),
+    title: (input.title ?? nextWhiteboardTitle(doc)).trim() || 'Whiteboard',
+    x: typeof input.x === 'number' ? input.x : slot.x,
+    y: typeof input.y === 'number' ? input.y : slot.y,
+    w: typeof input.w === 'number' ? input.w : DEFAULT_WHITEBOARD_W,
+    h: typeof input.h === 'number' ? input.h : DEFAULT_WHITEBOARD_H,
+    items: [],
+  });
+  return touch(doc, clock, { whiteboards: [...(doc.whiteboards ?? []), board] });
+}
+
+export function renameWhiteboard(
+  doc: MarksDoc,
+  id: string,
+  title: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const trimmed = title.trim();
+  if (!trimmed || !whiteboardById(doc, id)) return doc;
+  return touch(doc, clock, {
+    whiteboards: (doc.whiteboards ?? []).map((board) =>
+      board.id === id ? { ...board, title: trimmed } : board
+    ),
+  });
+}
+
+export function removeWhiteboard(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  if (!whiteboardById(doc, id)) return doc;
+  return touch(doc, clock, {
+    whiteboards: (doc.whiteboards ?? []).filter((board) => board.id !== id),
+  });
+}
+
+export function setWhiteboardRect(
+  doc: MarksDoc,
+  id: string,
+  rect: Pick<MarkWhiteboard, 'x' | 'y' | 'w' | 'h'>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (!whiteboardById(doc, id)) return doc;
+  return touch(doc, clock, {
+    whiteboards: (doc.whiteboards ?? []).map((board) =>
+      board.id === id ? { ...board, x: rect.x, y: rect.y, w: rect.w, h: rect.h } : board
+    ),
+  });
+}
+
+export function nextWhiteboardItemSlot(items: WhiteboardItem[]): { x: number; y: number } {
+  const n = items.length;
+  return { x: 16 + (n % 6) * 28, y: 16 + (n % 6) * 28 };
+}
+
+export function addWhiteboardItem(
+  doc: MarksDoc,
+  whiteboardId: string,
+  input: Partial<WhiteboardItem> & Pick<WhiteboardItem, 'src'>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const board = whiteboardById(doc, whiteboardId);
+  const src = input.src.trim();
+  if (!board || !src) return doc;
+  const slot = nextWhiteboardItemSlot(board.items);
+  const z = board.items.reduce((max, item) => Math.max(max, item.z ?? 0), 0) + 1;
+  const item = defaultWhiteboardItem({
+    id: clock.nextId('wbi'),
+    kind: input.kind === 'icon' ? 'icon' : 'image',
+    src,
+    x: typeof input.x === 'number' ? input.x : slot.x,
+    y: typeof input.y === 'number' ? input.y : slot.y,
+    w: typeof input.w === 'number' ? input.w : DEFAULT_WHITEBOARD_ITEM_W,
+    h: typeof input.h === 'number' ? input.h : DEFAULT_WHITEBOARD_ITEM_H,
+    z: typeof input.z === 'number' ? input.z : z,
+  });
+  return touch(doc, clock, {
+    whiteboards: (doc.whiteboards ?? []).map((row) =>
+      row.id === whiteboardId ? { ...row, items: [...row.items, item] } : row
+    ),
+  });
+}
+
+export function updateWhiteboardItem(
+  doc: MarksDoc,
+  whiteboardId: string,
+  itemId: string,
+  patch: Partial<Pick<WhiteboardItem, 'kind' | 'src' | 'x' | 'y' | 'w' | 'h' | 'z'>>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const board = whiteboardById(doc, whiteboardId);
+  if (!board || !board.items.some((item) => item.id === itemId)) return doc;
+  return touch(doc, clock, {
+    whiteboards: (doc.whiteboards ?? []).map((row) =>
+      row.id !== whiteboardId
+        ? row
+        : {
+            ...row,
+            items: row.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+          }
+    ),
+  });
+}
+
+export function removeWhiteboardItem(
+  doc: MarksDoc,
+  whiteboardId: string,
+  itemId: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const board = whiteboardById(doc, whiteboardId);
+  if (!board || !board.items.some((item) => item.id === itemId)) return doc;
+  return touch(doc, clock, {
+    whiteboards: (doc.whiteboards ?? []).map((row) =>
+      row.id === whiteboardId ? { ...row, items: row.items.filter((item) => item.id !== itemId) } : row
+    ),
+  });
+}
+
+export function raiseWhiteboardItem(
+  doc: MarksDoc,
+  whiteboardId: string,
+  itemId: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const board = whiteboardById(doc, whiteboardId);
+  if (!board) return doc;
+  const current = board.items.find((item) => item.id === itemId);
+  if (!current) return doc;
+  const top = board.items.reduce((max, item) => Math.max(max, item.z ?? 0), 0);
+  if ((current.z ?? 0) >= top) return doc;
+  return updateWhiteboardItem(doc, whiteboardId, itemId, { z: top + 1 }, clock);
 }
