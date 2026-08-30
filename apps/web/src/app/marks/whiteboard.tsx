@@ -372,6 +372,9 @@ export function Whiteboard({
                           setOverLink(link.id);
                         }}
                         onDrop={(event) => acceptDrop(null, event, index)}
+                        onHoldOver={holdOver}
+                        onHoldClear={holdClear}
+                        onHoldDrop={holdDrop}
                         onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
                       />
                     ))}
@@ -415,6 +418,9 @@ export function Whiteboard({
               onMarkOver={markOver}
               onOverLink={setOverLink}
               onDrop={acceptDrop}
+              onHoldOver={holdOver}
+              onHoldClear={holdClear}
+              onHoldDrop={holdDrop}
               onScreenshotLink={onScreenshotLink}
             />
           );
