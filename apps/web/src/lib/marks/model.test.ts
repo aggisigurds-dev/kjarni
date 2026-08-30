@@ -57,6 +57,33 @@ describe('normalizeUrl', () => {
   it('promotes protocol-relative URLs', () => {
     expect(normalizeUrl('//example.com/a')).toBe('https://example.com/a');
   });
+
+  it('rewrites retired Netlify Kjarni/TurboPaint URLs to Vercel', () => {
+    expect(normalizeUrl('https://slokkvitaeki.netlify.app/kjarni/turbopaint')).toBe(
+      'https://slokkvitaeki.vercel.app/kjarni/turbopaint'
+    );
+    expect(normalizeUrl('https://slokkvitaeki.netlify.app/kjarni')).toBe(
+      'https://slokkvitaeki.vercel.app/kjarni'
+    );
+    expect(normalizeUrl('https://slokkvitaeki.netlify.app')).toBe('https://slokkvitaeki.netlify.app');
+  });
+});
+
+describe('retired Kjarni hosts', () => {
+  it('rewrites a saved TurboPaint bookmark when the Marks board loads', () => {
+    const doc = normalizeDoc({
+      categories: [{ id: 'cat_kjarni', name: 'Kjarni' }],
+      links: [
+        {
+          id: 'lnk_paint',
+          categoryId: 'cat_kjarni',
+          title: 'TurboPaint',
+          url: 'https://slokkvitaeki.netlify.app/kjarni/turbopaint',
+        },
+      ],
+    });
+    expect(doc?.links[0]?.url).toBe('https://slokkvitaeki.vercel.app/kjarni/turbopaint');
+  });
 });
 
 describe('hostOf', () => {
@@ -71,6 +98,9 @@ describe('organizer', () => {
     expect(seeded.categories.map((category) => category.name)).toEqual(['Kjarni', 'Apps', 'Build']);
     expect(seeded.links.length).toBeGreaterThan(3);
     expect(seeded.filters.length).toBeGreaterThan(0);
+    expect(seeded.links.find((link) => link.id === 'lnk_paint')?.url).toBe(
+      'https://slokkvitaeki.vercel.app/kjarni/turbopaint'
+    );
 
     const withCat = addCategory(seeded, 'Personal');
     const personal = withCat.categories.find((category) => category.name === 'Personal');
