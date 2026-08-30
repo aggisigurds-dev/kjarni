@@ -31,6 +31,7 @@ import {
   createClientClock,
   emptyDoc,
   filterDoc,
+  layoutMissingPositions,
   linksInCategory,
   looksLikeUrl,
   moveButton,
@@ -38,6 +39,8 @@ import {
   moveLink,
   normalizeDoc,
   persistDoc,
+  setCategoryPos,
+  setLinkPos,
   removeButton,
   removeCategory,
   removeLink,
@@ -70,6 +73,7 @@ import {
   type LinkDraft,
 } from './dialogs';
 import { ACTION_GHOST, ACTION_PRIMARY, ACTION_TINY, BUTTON_CHIP, CHIP_IDLE, CHIP_ON, FIELD, LABEL, PANEL, SURFACE } from './ui';
+import { Whiteboard } from './whiteboard';
 
 const LOCAL_KEY = 'kjarni-marks-home';
 
@@ -133,14 +137,15 @@ export function MarksBoard() {
     (async () => {
       const local = readLocal();
       if (local && (local.links.length > 0 || local.categories.length > 0 || local.buttons.length > 0)) {
-        setDoc(local);
+        setDoc(layoutMissingPositions(local));
       }
       try {
         const cloud = await loadMarksBoard();
         if (cancelled) return;
         if (cloud && cloud.updatedAt >= (local?.updatedAt ?? 0)) {
-          setDoc(cloud);
-          writeLocal(cloud);
+          const next = layoutMissingPositions(cloud);
+          setDoc(next);
+          writeLocal(next);
           setNote('Saved across devices');
         } else if (local) {
           setNote('This computer · saving to cloud…');
@@ -180,6 +185,34 @@ export function MarksBoard() {
     }, 900);
     return () => window.clearTimeout(timer);
   }, [doc]);
+
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!ready || hydrated.current) return;
+    hydrated.current = true;
+    const missing = docRef.current.links.filter((link) => !link.coverUrl && link.url && !link.url.startsWith('/'));
+    void (async () => {
+      for (const link of missing.slice(0, 16)) {
+        try {
+          const response = await fetch(`/api/marks/preview?url=${encodeURIComponent(link.url)}`);
+          const data = (await response.json()) as { coverUrl?: string; description?: string };
+          if (!data.coverUrl) continue;
+          const latest = docRef.current.links.find((row) => row.id === link.id);
+          if (!latest || latest.coverUrl) continue;
+          patch(
+            updateLink(
+              docRef.current,
+              link.id,
+              { coverUrl: data.coverUrl, note: latest.note || data.description || '' },
+              clock
+            )
+          );
+        } catch {
+          /* preview is best-effort */
+        }
+      }
+    })();
+  }, [ready, patch, clock]);
 
   const saved = doc.filters.find((filter) => filter.id === activeFilter);
   const shown = useMemo(() => {
@@ -472,14 +505,14 @@ export function MarksBoard() {
         ) : null}
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-4 px-4 py-6 md:grid-cols-2 xl:grid-cols-3">
+      <main className="overflow-auto px-3 py-4">
         {!ready ? (
-          <p className="col-span-full flex items-center gap-2 text-sm text-stone-500">
+          <p className="flex items-center gap-2 px-2 text-sm text-stone-500">
             <Loader2 className="h-4 w-4 animate-spin" />
             Opening Marks…
           </p>
         ) : query.trim() && topFolders.length === 0 && unfiledLinks.length === 0 && !saved ? (
-          <p className={`${PANEL} col-span-full px-4 py-8 text-sm text-stone-500`}>Nothing matches that filter.</p>
+          <p className={`${PANEL} mx-auto max-w-xl px-4 py-8 text-sm text-stone-500`}>Nothing matches that filter.</p>
         ) : emptyBoard ? (
           <div className={`${PANEL} col-span-full flex flex-col items-start gap-3 px-4 py-8`}>
             <p className="text-sm text-stone-500">
@@ -519,90 +552,60 @@ export function MarksBoard() {
             </div>
           </div>
         ) : (
-          <>
-            {topFolders.map((folder) => (
-              <FolderColumn
-                key={folder.id}
-                doc={shown}
-                fullDoc={doc}
-                folder={folder}
-                highlightFolder={highlightFolder}
-                hoverLink={hoverLink}
-                clock={clock}
-                nested={false}
-                onHoverLink={setHoverLink}
-                onPatch={patch}
-                onApply={apply}
-                onAddLink={(categoryId) => {
-                  setEditingLink(null);
-                  setLinkDraft(emptyLinkDraft(categoryId));
-                }}
-                onEditLink={(link) => {
-                  setEditingLink(link);
-                  setLinkDraft(draftFromLink(link));
-                }}
-                onAddButton={(folderId) => {
-                  setEditingButton(null);
-                  setButtonDraft(emptyButtonDraft(folderId));
-                }}
-                onEditButton={(button) => {
-                  setEditingButton(button);
-                  setButtonDraft(draftFromButton(button));
-                }}
-                onEditFolder={(category) => {
-                  setFolderEdit(category);
-                  setFolderName(category.name);
-                  setFolderCover(category.coverUrl);
-                  setFolderShowCover(category.showCover);
-                }}
-                onRunButton={runButton}
-                onDropItem={onDropItem}
-              />
-            ))}
-            <section
-              className={`${PANEL} flex flex-col p-3 ${highlightFolder === '' ? 'ring-2 ring-emerald-500' : ''}`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => onDropItem('', event)}
-            >
-              <div className="mb-2 flex items-center gap-2">
-                <h2 className="min-w-0 flex-1 text-sm font-semibold">Unfiled</h2>
-                <span className="text-[0.65rem] text-stone-400">{unfiledLinks.length}</span>
-              </div>
-              {unfiledLinks.length === 0 ? (
-                <p className="px-1 py-3 text-[0.75rem] text-stone-400">Links with no folder land here.</p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {unfiledLinks.map((link) => (
-                    <LinkRow
-                      key={link.id}
-                      link={link}
-                      folders={doc.categories}
-                      hovering={hoverLink === link.id}
-                      onHover={setHoverLink}
-                      onEdit={() => {
-                        setEditingLink(link);
-                        setLinkDraft(draftFromLink(link));
-                      }}
-                      onMove={(categoryId) =>
-                        apply(moveLink(doc, link.id, categoryId, clock), 'Moved link.', 'Could not move.')
-                      }
-                    />
-                  ))}
-                </ul>
-              )}
-              <AddRow
-                onFolder={() => apply(addCategory(doc, 'Untitled', null, clock), 'Folder added.', 'Name the folder first.')}
-                onLink={() => {
-                  setEditingLink(null);
-                  setLinkDraft(emptyLinkDraft(''));
-                }}
-                onButton={() => {
-                  setEditingButton(null);
-                  setButtonDraft(emptyButtonDraft(''));
-                }}
-              />
-            </section>
-          </>
+          <Whiteboard
+            doc={shown}
+            onRenameFolder={(id, name) => {
+              patch(
+                persistDoc({
+                  ...doc,
+                  updatedAt: clock.now(),
+                  categories: doc.categories.map((category) =>
+                    category.id === id ? { ...category, name } : category
+                  ),
+                })
+              );
+            }}
+            onEditLink={(link) => {
+              setEditingLink(link);
+              setLinkDraft(draftFromLink(link));
+            }}
+            onAddLink={(categoryId) => {
+              setEditingLink(null);
+              setLinkDraft(emptyLinkDraft(categoryId));
+            }}
+            onEditFolder={(category) => {
+              setFolderEdit(category);
+              setFolderName(category.name);
+              setFolderCover(category.coverUrl);
+              setFolderShowCover(category.showCover);
+            }}
+            onDrop={(kind, id, target) => {
+              if (kind === 'folder') {
+                apply(moveCategory(doc, id, target, clock), 'Folder moved.', 'Could not nest that folder.');
+                return;
+              }
+              apply(moveLink(doc, id, target ?? '', clock), 'Bookmark moved.', 'Could not move that bookmark.');
+            }}
+            onMove={(kind, id, x, y) => {
+              if (kind === 'folder') {
+                const category = doc.categories.find((row) => row.id === id);
+                if (category?.parentId) {
+                  const rooted = moveCategory(doc, id, null, clock);
+                  patch(setCategoryPos(rooted, id, x, y, clock));
+                  return;
+                }
+                patch(setCategoryPos(doc, id, x, y, clock));
+                return;
+              }
+              const link = doc.links.find((row) => row.id === id);
+              if (link?.categoryId) {
+                const loose = moveLink(doc, id, '', clock);
+                patch(setLinkPos(loose, id, x, y, clock));
+                return;
+              }
+              patch(setLinkPos(doc, id, x, y, clock));
+            }}
+          />
         )}
       </main>
 
