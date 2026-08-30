@@ -1,6 +1,6 @@
 'use client';
 
-import { faviconUrl, type MarkLink } from '@/lib/marks/model';
+import { faviconUrl, previewFrameClass, type MarkLink, type MarksPreviewSize } from '@/lib/marks/model';
 import { coverForLink, type HoverVideo } from '@/lib/marks/video';
 
 function PreviewPlayer({ video }: { video: HoverVideo }) {
@@ -40,10 +40,12 @@ export function BookmarkMedia({
   link,
   video,
   hovering,
+  size = 'm',
 }: {
   link: MarkLink;
   video: HoverVideo | null;
   hovering: boolean;
+  size?: MarksPreviewSize;
 }) {
   const fav = faviconUrl(link.url);
   const cover = coverForLink(link);
@@ -73,7 +75,7 @@ export function BookmarkMedia({
 
   return (
     <span
-      className="relative aspect-square h-14 w-14 shrink-0 overflow-hidden rounded-md bg-stone-200"
+      className={`relative aspect-square ${previewFrameClass(size)} shrink-0 overflow-hidden rounded-md bg-stone-200`}
       aria-hidden
       data-mark-cover={idleImage || undefined}
       data-mark-cover-shape="square"

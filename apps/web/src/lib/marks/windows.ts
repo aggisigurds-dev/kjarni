@@ -8,9 +8,12 @@
 import {
   DEFAULT_TABLE_H,
   DEFAULT_TABLE_W,
+  DEFAULT_WHITEBOARD_H,
+  DEFAULT_WHITEBOARD_W,
   persistDoc,
   type MarkCategory,
   type MarkTable,
+  type MarkWhiteboard,
   type MarksDoc,
 } from './model';
 
@@ -18,6 +21,8 @@ export const MIN_WINDOW_W = 220;
 export const MIN_WINDOW_H = 160;
 export const MIN_TABLE_W = 360;
 export const MIN_TABLE_H = 240;
+export const MIN_WHITEBOARD_W = 200;
+export const MIN_WHITEBOARD_H = 160;
 export const DEFAULT_WINDOW_W = 320;
 export const DEFAULT_WINDOW_H = 380;
 export const WINDOW_SLOT_W = 348;
@@ -236,7 +241,29 @@ export function layoutMissingWindows(doc: MarksDoc, raw?: unknown): MarksDoc {
       ),
     };
   });
-  return persistDoc({ ...doc, categories, tables, unfiledLayout } as MarksDoc);
+  const rawBoards = Array.isArray(source?.whiteboards) ? source.whiteboards : doc.whiteboards ?? [];
+  const rawById = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(rawBoards)) {
+    for (const row of rawBoards) {
+      const rec = asRecord(row);
+      if (rec?.id) rawById.set(String(rec.id), rec);
+    }
+  }
+  const whiteboards = (doc.whiteboards ?? []).map((board) => {
+    const rawRow = rawById.get(board.id);
+    const layout = rawRow ? readLayoutFields(rawRow) : { x: board.x, y: board.y, w: board.w, h: board.h };
+    const tiled = tileRect(n);
+    n += 1;
+    const origin = hasWindowOrigin({ x: layout.x || board.x, y: layout.y || board.y });
+    return {
+      ...board,
+      x: origin ? layout.x || board.x : tiled.x,
+      y: origin ? layout.y || board.y : tiled.y,
+      w: layout.w || board.w || DEFAULT_WHITEBOARD_W,
+      h: layout.h || board.h || DEFAULT_WHITEBOARD_H,
+    };
+  });
+  return persistDoc({ ...doc, categories, tables, whiteboards, unfiledLayout } as MarksDoc);
 }
 
 export function setCategoryLayout(doc: MarksDoc, id: string, rect: MarksWindowRect, now: number): MarksDoc {
@@ -288,6 +315,32 @@ export function setTableLayout(doc: MarksDoc, id: string, rect: MarksWindowRect,
     updatedAt: now,
     tables: (doc.tables ?? []).map((row) =>
       row.id === id ? { ...row, x: next.x, y: next.y, w: next.w, h: next.h } : row
+    ),
+  });
+}
+
+export function whiteboardWindowRect(board: MarkWhiteboard, index = 0): MarksWindowRect {
+  const tiled = tileRect(index);
+  return {
+    x: hasWindowOrigin(board) ? Math.max(0, Math.round(board.x)) : tiled.x,
+    y: hasWindowOrigin(board) ? Math.max(0, Math.round(board.y)) : tiled.y,
+    w: Math.max(MIN_WHITEBOARD_W, Math.round(board.w || DEFAULT_WHITEBOARD_W)),
+    h: Math.max(MIN_WHITEBOARD_H, Math.round(board.h || DEFAULT_WHITEBOARD_H)),
+  };
+}
+
+export function setWhiteboardLayout(doc: MarksDoc, id: string, rect: MarksWindowRect, now: number): MarksDoc {
+  if (!(doc.whiteboards ?? []).some((row) => row.id === id)) return doc;
+  const snapped = snapWindowRect({
+    ...clampWindowRect(rect),
+    w: Math.max(MIN_WHITEBOARD_W, rect.w),
+    h: Math.max(MIN_WHITEBOARD_H, rect.h),
+  });
+  return persistDoc({
+    ...doc,
+    updatedAt: now,
+    whiteboards: (doc.whiteboards ?? []).map((row) =>
+      row.id === id ? { ...row, x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h } : row
     ),
   });
 }

@@ -157,7 +157,7 @@ export async function listMarksBoards(): Promise<MarksSiteListItem[]> {
       const id = typeof row.id === 'string' ? row.id : '';
       if (!isMarksBoardId(id)) continue;
       const doc = normalizeDoc(row.doc);
-      const updatedAt = doc?.updatedAt ?? (Date.parse(String(row.updated_at || '')) || 0);
+      const updatedAt = (doc?.updatedAt ?? Date.parse(String(row.updated_at || ''))) || 0;
       const existing = byId.get(id);
       if (existing && existing.updatedAt > updatedAt) continue;
       byId.set(id, { id, title: titleFor(id, doc), updatedAt });
@@ -175,11 +175,16 @@ export async function listMarksBoards(): Promise<MarksSiteListItem[]> {
   });
 }
 
-export async function uploadMarkCover(file: Blob, fileName = 'cover.jpg'): Promise<string> {
+export async function uploadMarkCover(
+  file: Blob,
+  fileName = 'cover.jpg',
+  folder = 'covers'
+): Promise<string> {
   const sb = getMarksSupabase();
   if (!sb) throw new Error('Supabase is only available in the browser.');
   const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : '.jpg';
-  const path = `covers/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+  const prefix = folder.replace(/\/+$/, '') || 'covers';
+  const path = `${prefix}/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}${ext}`;
   const { error } = await sb.storage.from(MARKS_BUCKET).upload(path, file, {
     contentType: file.type || 'image/jpeg',
     upsert: true,
