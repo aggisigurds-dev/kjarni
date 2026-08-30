@@ -207,7 +207,7 @@ export function TopBar({
         placeholder="Nafn á borði"
       />
       {onVeljaTeikningu && (
-        <div className="min-w-0 shrink">
+        <div className="hidden min-w-0 shrink md:block">
           <HeimilisfangLeit onVelja={onVeljaTeikningu} />
         </div>
       )}
@@ -290,7 +290,6 @@ export function TopBar({
       >
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
-        <span className="sm:hidden">PDF</span>
       </Button>
       <span className="hidden max-w-[10.5rem] text-[10px] leading-tight text-stone-500 2xl:inline">
         Í vafranum · engin 20 MB hömlun

@@ -30,10 +30,12 @@ import {
   withLayerId,
 } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
+import { useMobileUi } from "../../lib/board/use-mobile-ui";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RoomTable } from "./RoomTable";
+import { MobileController } from "./MobileChrome";
 import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
@@ -69,6 +71,7 @@ export function WhiteboardApp() {
   // Eiginleika-panellinn sem yfirlag á síma/spjaldtölvu (< lg) — á desktop er
   // hann fastur dálkur til hægri eins og áður.
   const [panelOpen, setPanelOpen] = useState(false);
+  const mobileUi = useMobileUi();
   const markBusyRef = useRef(false);
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);
@@ -669,20 +672,18 @@ export function WhiteboardApp() {
             </div>
           )}
           <div className="pointer-events-none absolute inset-0">
-            {/* Verkfærasúlan var lóðrétt MIÐJUÐ (top-1/2 + -translate-y-1/2).
-                Á síma er hún hærri en borðið, svo hún klipptist af að ofan OG
-                lenti ofan í Táknaborðinu + Stílborðinu neðst (Agnar 27.08).
-                Núna: bundin milli topps og neðri borðanna og miðjuð INNAN þess
-                bils — hún getur því hvorki farið upp fyrir né niður í borðin.
-                Súlan sjálf skrunar ef hún kemst enn ekki fyrir (sjá styles.css). */}
-            <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
-              <Toolbar />
-            </div>
-            <div className="pointer-events-auto absolute top-3 right-3 flex flex-col items-end gap-2">
-              <CountTable />
-              <RoomTable />
-            </div>
-            {selectedIds.length ? (
+            {!mobileUi ? (
+              <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
+                <Toolbar />
+              </div>
+            ) : null}
+            {!mobileUi ? (
+              <div className="pointer-events-auto absolute top-3 right-3 flex flex-col items-end gap-2">
+                <CountTable />
+                <RoomTable />
+              </div>
+            ) : null}
+            {!mobileUi && selectedIds.length ? (
               <div className="pointer-events-auto absolute right-3 bottom-28 lg:hidden">
                 <button
                   type="button"
@@ -694,18 +695,26 @@ export function WhiteboardApp() {
                 </button>
               </div>
             ) : null}
-            <div className="absolute top-3 left-1/2 -translate-x-1/2">
-              <SelectionBar
-                onExportSelection={() => {
-                  setExportTarget("selection");
-                  setExportOpen(true);
-                }}
-              />
-            </div>
-            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
-              <SymbolTray />
-              <StyleStrip />
-            </div>
+            {!mobileUi ? (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2">
+                <SelectionBar
+                  onExportSelection={() => {
+                    setExportTarget("selection");
+                    setExportOpen(true);
+                  }}
+                />
+              </div>
+            ) : null}
+            {mobileUi ? (
+              <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 pb-[env(safe-area-inset-bottom,0px)]">
+                <MobileController onOpenProperties={() => setPanelOpen(true)} />
+              </div>
+            ) : (
+              <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+                <SymbolTray />
+                <StyleStrip />
+              </div>
+            )}
           </div>
           {dragOver ? (
             <div className="pointer-events-none absolute inset-4 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#FE653F] bg-[#FE653F]/10">

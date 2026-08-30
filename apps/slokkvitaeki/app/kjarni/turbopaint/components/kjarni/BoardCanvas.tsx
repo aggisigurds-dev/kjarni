@@ -14,6 +14,7 @@ import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
+import { useMobileUi } from "../../lib/board/use-mobile-ui";
 
 /** Brunahólfun er RAUÐ og hálfgegnsæ — sjá FIREWALL_PALETTE í firewall-rating.
  * Litirnir koma ÞAÐAN svo handvirku takkarnir og sjálfvirka greiningin noti
@@ -81,6 +82,16 @@ function expandGroups(ids: string[]) {
   return [...idSet];
 }
 
+function hitObjectId(target: unknown, stage: Konva.Stage, objects: BoardObject[]): string | null {
+  let node = target as Konva.Node | null;
+  while (node && node !== (stage as unknown as Konva.Node)) {
+    const id = typeof node.id === "function" ? node.id() : "";
+    if (id && objects.some((o) => o.id === id)) return id;
+    node = node.getParent();
+  }
+  return null;
+}
+
 export function BoardCanvas({
   width,
   height,
@@ -112,6 +123,7 @@ export function BoardCanvas({
   const style = useBoardStore((s) => s.style);
   const roomSettings = useBoardStore((s) => s.roomSettings);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
+  const mobileUi = useMobileUi();
   /* Shift = frjáls halli meðan hornalæsingin er á. Hreyfi-handlerinn fær aðeins
    * hnitin, ekki atburðinn, svo staðan er geymd hér og uppfærð af glugganum. */
   const shiftRef = useRef(false);
@@ -134,6 +146,8 @@ export function BoardCanvas({
   const pinchRef = useRef<{ dist: number; midWorld: { x: number; y: number } } | null>(null);
   const eraseRef = useRef(false);
   const rightDownRef = useRef<{ x: number; y: number } | null>(null);
+  const holdRef = useRef<{ timer: number; x: number; y: number; id: string } | null>(null);
+  const holdFiredRef = useRef(false);
   const [menu, setMenu] = useState<{ x: number; y: number; targetId: string | null } | null>(null);
   const polyRef = useRef<number[] | null>(null);
   const documentDragRef = useRef<{
@@ -358,8 +372,20 @@ export function BoardCanvas({
     }
   }, []);
 
+  const clearHold = () => {
+    if (holdRef.current) {
+      window.clearTimeout(holdRef.current.timer);
+      holdRef.current = null;
+    }
+  };
+
   const applyPointerMove = useCallback(
     (clientX: number, clientY: number) => {
+      if (holdRef.current) {
+        const dx = clientX - holdRef.current.x;
+        const dy = clientY - holdRef.current.y;
+        if (Math.hypot(dx, dy) > 14) clearHold();
+      }
       if (panRef.current) {
         const dx = clientX - panRef.current.x;
         const dy = clientY - panRef.current.y;
@@ -418,6 +444,12 @@ export function BoardCanvas({
   const endGesture = useCallback(() => {
     panRef.current = null;
     eraseRef.current = false;
+    clearHold();
+    if (holdFiredRef.current) {
+      holdFiredRef.current = false;
+      setDraftState(null);
+      return;
+    }
     const d = draftRef.current;
     if (!d) return;
     if (d.kind === "polyline") return;
@@ -568,6 +600,32 @@ export function BoardCanvas({
       return;
     }
     if (e.evt.button !== 0) return;
+
+    const hitId = hitObjectId(e.target, stage, useBoardStore.getState().objects);
+    if (hitId && currentTool !== "eraser" && currentTool !== "crop" && e.evt.pointerType !== "mouse") {
+      holdFiredRef.current = false;
+      clearHold();
+      const id = hitId;
+      holdRef.current = {
+        x: e.evt.clientX,
+        y: e.evt.clientY,
+        id,
+        timer: window.setTimeout(() => {
+          holdFiredRef.current = true;
+          holdRef.current = null;
+          useBoardStore.getState().setTool("select");
+          useBoardStore.getState().setSelected(expandGroups([id]));
+          try {
+            navigator.vibrate?.(15);
+          } catch {
+            /* no haptic */
+          }
+        }, 480),
+      };
+      // Hold is pending: do not start a draw draft on this object. A move
+      // cancels the hold; a still finger becomes the object action bar.
+      if (currentTool !== "select" && currentTool !== "hand") return;
+    }
 
     if (currentTool === "eraser") {
       e.cancelBubble = true;
@@ -981,6 +1039,8 @@ export function BoardCanvas({
 
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    // Phone long-press uses the bottom action bar, not the desktop menu.
+    if (mobileUi) return;
     const down = rightDownRef.current;
     rightDownRef.current = null;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
@@ -1053,6 +1113,7 @@ export function BoardCanvas({
               listening={
                 (selectLike ||
                   tool === "eraser" ||
+                  mobileUi ||
                   (obj.type === "rect" && obj.isRoom && (obj.holesTotal != null || obj.holesLeft != null))) &&
                 !spacePan &&
                 isDrawnVisible(obj, layers) &&

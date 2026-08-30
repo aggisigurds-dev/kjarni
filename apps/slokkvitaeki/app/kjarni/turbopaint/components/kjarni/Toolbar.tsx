@@ -23,7 +23,7 @@ import { useBoardStore } from "../../lib/board/store";
 import type { Tool } from "../../lib/board/types";
 import { cn } from "../../lib/utils";
 
-const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = [
+export const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = [
   { id: "select", label: "Velja", shortcut: "V", icon: <MousePointer2 className="size-4" /> },
   { id: "hand", label: "Hönd / færa borð", shortcut: "H", icon: <Hand className="size-4" /> },
   { id: "rect", label: "Ferningur", shortcut: "R", icon: <Square className="size-4" /> },
