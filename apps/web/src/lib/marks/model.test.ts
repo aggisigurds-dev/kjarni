@@ -7,16 +7,21 @@ import {
   addButton,
   addCategory,
   addLink,
+  childCategories,
   descendantIds,
   emptyDoc,
   hostOf,
   layoutMissingPositions,
+  linksInCategory,
   moveCategory,
   moveLink,
   normalizeDoc,
   normalizeUrl,
   removeCategory,
+  reorderCategory,
+  reorderLink,
   seedDoc,
+  updateLink,
   wouldCycle,
 } from './model';
 
@@ -119,6 +124,36 @@ describe('nested folder moves', () => {
 
     const missing = moveLink(seeded, 'lnk_3dwork', 'cat_missing');
     expect(missing).toBe(seeded);
+  });
+
+  it('reorders a link inside a folder and a folder among siblings', () => {
+    let doc = seedDoc(1);
+    const before = linksInCategory(doc, 'cat_kjarni').map((link) => link.id);
+    expect(before[0]).toBe('lnk_3dwork');
+    doc = reorderLink(doc, 'lnk_hub', 'cat_kjarni', 0);
+    expect(linksInCategory(doc, 'cat_kjarni').map((link) => link.id)[0]).toBe('lnk_hub');
+
+    doc = reorderCategory(doc, 'cat_build', null, 0);
+    expect(childCategories(doc, null).map((folder) => folder.id)[0]).toBe('cat_build');
+    expect(doc.categories.find((folder) => folder.id === 'cat_build')?.parentId).toBeNull();
+  });
+
+  it('keeps coverUrl and showImage when moving or hiding a cover', () => {
+    let doc = seedDoc(1);
+    doc = updateLink(doc, 'lnk_hub', {
+      coverUrl: 'https://example.com/cover.jpg',
+      showImage: false,
+    });
+    const hidden = doc.links.find((link) => link.id === 'lnk_hub');
+    expect(hidden?.coverUrl).toBe('https://example.com/cover.jpg');
+    expect(hidden?.showImage).toBe(false);
+    expect(hidden?.cover).toBe('https://example.com/cover.jpg');
+
+    const moved = moveLink(doc, 'lnk_hub', 'cat_apps');
+    const after = moved.links.find((link) => link.id === 'lnk_hub');
+    expect(after?.coverUrl).toBe('https://example.com/cover.jpg');
+    expect(after?.showImage).toBe(false);
+    expect(after?.categoryId).toBe('cat_apps');
   });
 
   it('removes a folder and promotes nested children', () => {

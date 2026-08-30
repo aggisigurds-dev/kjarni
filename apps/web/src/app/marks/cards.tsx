@@ -95,7 +95,7 @@ export function LinkCard({
         className="block"
       >
         {showMedia ? (
-          <div className="relative aspect-video overflow-hidden bg-stone-200" aria-hidden>
+          <div className="relative aspect-square overflow-hidden bg-stone-200" aria-hidden data-mark-cover-shape="square">
             {video && hovering ? <VideoHover video={video} /> : <CoverImage src={image} alt="" className="h-full w-full object-cover" />}
             {video && !hovering ? (
               <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded bg-stone-900/75 px-1.5 py-0.5 text-[0.55rem] font-extrabold uppercase tracking-wide text-white">
@@ -184,7 +184,7 @@ export function FolderCard({
       className={`${PANEL} ${nested ? 'w-full' : 'w-[20.5rem]'} overflow-hidden ${highlightId === category.id ? 'ring-2 ring-emerald-600' : ''}`}
     >
       {category.showCover ? (
-        <div className="relative h-24 overflow-hidden bg-gradient-to-br from-emerald-100 to-stone-200">
+        <div className="relative aspect-square w-24 overflow-hidden bg-gradient-to-br from-emerald-100 to-stone-200">
           <CoverImage src={cover} alt="" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-white/90 to-transparent" />
         </div>

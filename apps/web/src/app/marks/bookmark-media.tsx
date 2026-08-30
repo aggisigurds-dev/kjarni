@@ -32,6 +32,10 @@ function PreviewPlayer({ video }: { video: HoverVideo }) {
   );
 }
 
+function hideBroken(event: { currentTarget: HTMLImageElement }) {
+  event.currentTarget.style.display = 'none';
+}
+
 export function BookmarkMedia({
   link,
   video,
@@ -43,18 +47,24 @@ export function BookmarkMedia({
 }) {
   const fav = faviconUrl(link.url);
   const cover = coverForLink(link);
+  const idleImage = link.showImage
+    ? cover
+    : video?.kind === 'youtube'
+      ? `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`
+      : '';
   const playPreview = Boolean(video && hovering);
+  const showFrame = Boolean(link.showImage || video);
 
-  if (!video) {
+  if (!showFrame) return null;
+
+  if (!video && !idleImage) {
     return fav ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={fav}
         alt=""
         className="h-5 w-5 shrink-0 rounded"
-        onError={(event) => {
-          event.currentTarget.style.visibility = 'hidden';
-        }}
+        onError={hideBroken}
       />
     ) : (
       <span className="h-5 w-5 shrink-0 rounded bg-emerald-100" />
@@ -63,19 +73,26 @@ export function BookmarkMedia({
 
   return (
     <span
-      className="relative h-11 w-[4.6rem] shrink-0 overflow-hidden rounded-md bg-stone-200"
+      className="relative aspect-square h-14 w-14 shrink-0 overflow-hidden rounded-md bg-stone-200"
       aria-hidden
+      data-mark-cover={idleImage || undefined}
+      data-mark-cover-shape="square"
     >
-      {playPreview ? <PreviewPlayer video={video} /> : null}
-      {!playPreview && cover ? (
+      {playPreview ? <PreviewPlayer video={video!} /> : null}
+      {!playPreview && idleImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={idleImage}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={hideBroken}
+        />
       ) : null}
-      {!playPreview && !cover && fav ? (
+      {!playPreview && !idleImage && fav ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={fav} alt="" className="absolute inset-0 m-auto h-5 w-5 rounded" />
+        <img src={fav} alt="" className="absolute inset-0 m-auto h-5 w-5 rounded" onError={hideBroken} />
       ) : null}
-      {!playPreview ? (
+      {video && !playPreview ? (
         <span className="absolute bottom-0.5 left-0.5 rounded bg-stone-900/75 px-1 py-px text-[0.55rem] font-extrabold uppercase tracking-wide text-white">
           ▶ video
         </span>

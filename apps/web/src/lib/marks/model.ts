@@ -9,7 +9,8 @@
  * Nested grandchildren stay inside the promoted child folders.
  *
  * `categories` is the persisted folder list (`parentId: null` = top-level).
- * Root folders and unfiled links use `x`/`y` on the whiteboard canvas.
+ * `x`/`y` are leftover fields from an older canvas experiment — the live
+ * board is nested folder columns, not free-position cards.
  */
 
 export const MARKS_BOARD_ID = 'home';
@@ -712,22 +713,38 @@ export function revealFolder(doc: MarksDoc, id: string, clock: MarksClock = fall
   });
 }
 
+export function reorderCategory(
+  doc: MarksDoc,
+  id: string,
+  parentId: string | null,
+  index: number,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const category = categoryById(doc, id);
+  if (!category) return doc;
+  const nextParent = parentId || null;
+  if (nextParent && !categoryById(doc, nextParent)) return doc;
+  if (wouldCycle(doc, id, nextParent)) return doc;
+  const siblings = childCategories(doc, nextParent).filter((row) => row.id !== id);
+  const clamped = Math.max(0, Math.min(Math.floor(index), siblings.length));
+  const ordered = [...siblings.slice(0, clamped), category, ...siblings.slice(clamped)];
+  const sortOf = new Map(ordered.map((row, sort) => [row.id, sort]));
+  return touch(doc, clock, {
+    categories: doc.categories.map((row) => {
+      if (row.id === id) return { ...row, parentId: nextParent, sort: clamped };
+      const sort = sortOf.get(row.id);
+      return sort === undefined ? row : { ...row, sort };
+    }),
+  });
+}
+
 export function moveCategory(
   doc: MarksDoc,
   id: string,
   parentId: string | null,
   clock: MarksClock = fallbackClock
 ): MarksDoc {
-  const category = categoryById(doc, id);
-  if (!category) return doc;
-  if (parentId && !categoryById(doc, parentId)) return doc;
-  if (wouldCycle(doc, id, parentId)) return doc;
-  const siblings = childCategories(doc, parentId).filter((row) => row.id !== id);
-  return touch(doc, clock, {
-    categories: doc.categories.map((row) =>
-      row.id === id ? { ...row, parentId, sort: nextSort(siblings) } : row
-    ),
-  });
+  return reorderCategory(doc, id, parentId, Number.POSITIVE_INFINITY, clock);
 }
 
 export function moveFolder(
@@ -855,14 +872,36 @@ export function updateLink(
   });
 }
 
+export function reorderLink(
+  doc: MarksDoc,
+  id: string,
+  categoryId: string,
+  index: number,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const link = doc.links.find((row) => row.id === id);
+  if (!link) return doc;
+  if (categoryId && !categoryById(doc, categoryId)) return doc;
+  const siblings = linksInCategory(doc, categoryId).filter((row) => row.id !== id);
+  const clamped = Math.max(0, Math.min(Math.floor(index), siblings.length));
+  const ordered = [...siblings.slice(0, clamped), link, ...siblings.slice(clamped)];
+  const sortOf = new Map(ordered.map((row, sort) => [row.id, sort]));
+  return touch(doc, clock, {
+    links: doc.links.map((row) => {
+      if (row.id === id) return defaultLink({ ...row, categoryId, sort: clamped });
+      const sort = sortOf.get(row.id);
+      return sort === undefined ? row : { ...row, sort };
+    }),
+  });
+}
+
 export function moveLink(
   doc: MarksDoc,
   id: string,
   categoryId: string,
   clock: MarksClock = fallbackClock
 ): MarksDoc {
-  if (categoryId && !categoryById(doc, categoryId)) return doc;
-  return updateLink(doc, id, { categoryId }, clock);
+  return reorderLink(doc, id, categoryId, Number.POSITIVE_INFINITY, clock);
 }
 
 export function setCategoryPos(

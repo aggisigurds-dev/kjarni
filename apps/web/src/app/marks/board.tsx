@@ -1,15 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookmarkPlus,
-  ChevronDown,
-  ChevronRight,
   FolderPlus,
   Loader2,
   MousePointerClick,
   Search,
-  Trash2,
   Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,6 +34,8 @@ import {
   createClientClock,
   emptyDoc,
   filterDoc,
+  hostOf,
+  latestAdded,
   layoutMissingPositions,
   linksInCategory,
   looksLikeUrl,
@@ -44,13 +43,13 @@ import {
   moveCategory,
   moveLink,
   normalizeDoc,
+  normalizeUrl,
   persistDoc,
-  setCategoryPos,
-  setLinkPos,
   removeButton,
   removeCategory,
   removeLink,
-  renameCategory,
+  reorderCategory,
+  reorderLink,
   revealFolder,
   seedDoc,
   setFolderCollapsed,
@@ -63,8 +62,8 @@ import {
   type MarksClock,
   type MarksDoc,
 } from '@/lib/marks/model';
-import { videoSourceForLink } from '@/lib/marks/video';
-import { BookmarkMedia } from './bookmark-media';
+import { screenshotCoverUrl } from '@/lib/marks/preview';
+import { cropImageToSquare } from '@/lib/marks/square-cover';
 import {
   ButtonDialog,
   draftFromButton,
@@ -135,6 +134,7 @@ export function MarksBoard() {
   const [filterFolder, setFilterFolder] = useState('');
   const [highlightFolder, setHighlightFolder] = useState('');
   const [hoverLink, setHoverLink] = useState('');
+  const [previewBusy, setPreviewBusy] = useState(false);
   const loaded = useRef(false);
   const docRef = useRef(doc);
   docRef.current = doc;
@@ -248,6 +248,60 @@ export function MarksBoard() {
     return true;
   };
 
+  const fillCover = useCallback(
+    async (linkId: string, opts?: { force?: boolean }) => {
+      const link = docRef.current.links.find((row) => row.id === linkId);
+      if (!link || link.url.startsWith('/')) return;
+      if (link.coverUrl && !opts?.force) return;
+      try {
+        const response = await fetch(`/api/marks/preview?url=${encodeURIComponent(link.url)}`);
+        const data = (await response.json()) as {
+          coverUrl?: string;
+          description?: string;
+          title?: string;
+        };
+        const latest = docRef.current.links.find((row) => row.id === linkId);
+        if (!latest) return;
+        const coverUrl = opts?.force ? data.coverUrl || latest.coverUrl : latest.coverUrl || data.coverUrl || '';
+        const note = latest.note || data.description || '';
+        if (coverUrl === latest.coverUrl && note === latest.note) return;
+        patch(updateLink(docRef.current, linkId, { coverUrl, note }, clock));
+      } catch {
+        /* preview is best-effort */
+      }
+    },
+    [patch, clock]
+  );
+
+  const fetchDraftPreview = async () => {
+    if (!linkDraft) return;
+    const url = normalizeUrl(linkDraft.url);
+    if (!url || url.startsWith('/')) return;
+    setPreviewBusy(true);
+    try {
+      const response = await fetch(`/api/marks/preview?url=${encodeURIComponent(url)}`);
+      const data = (await response.json()) as {
+        coverUrl?: string;
+        description?: string;
+        title?: string;
+      };
+      setLinkDraft((current) =>
+        current
+          ? {
+              ...current,
+              title: current.title || data.title || hostOf(url),
+              note: current.note || data.description || '',
+              coverUrl: current.coverUrl || data.coverUrl || '',
+            }
+          : current
+      );
+    } catch {
+      toast.error('Could not fetch a cover for that URL.');
+    } finally {
+      setPreviewBusy(false);
+    }
+  };
+
   const submitFastAdd = (raw = fastUrl) => {
     const text = raw.trim();
     if (!text) return;
@@ -261,7 +315,11 @@ export function MarksBoard() {
     if (many.length > 1) {
       let next = doc;
       for (const item of many) next = addLink(next, item, clock);
-      if (apply(next, `Added ${many.length} links.`, 'Need a URL.')) setFastUrl('');
+      const added = next.links.filter((link) => !doc.links.some((row) => row.id === link.id));
+      if (apply(next, `Added ${many.length} links.`, 'Need a URL.')) {
+        setFastUrl('');
+        for (const link of added) void fillCover(link.id);
+      }
       return;
     }
     if (!looksLikeUrl(text) && many.length === 0) {
@@ -269,7 +327,12 @@ export function MarksBoard() {
       return;
     }
     const item = many[0] ?? { url: text, title: '', note: '' };
-    if (apply(addLink(doc, item, clock), 'Link added.', 'Need a URL.')) setFastUrl('');
+    const next = addLink(doc, item, clock);
+    const added = latestAdded(doc.links, next.links);
+    if (apply(next, 'Link added.', 'Need a URL.')) {
+      setFastUrl('');
+      if (added) void fillCover(added.id);
+    }
   };
 
   const runButton = (button: MarksButton) => {
@@ -297,14 +360,6 @@ export function MarksBoard() {
     }
   };
 
-  const onDropItem = (categoryId: string, event: DragEvent) => {
-    event.preventDefault();
-    const linkId = event.dataTransfer.getData('text/marks-link');
-    const buttonId = event.dataTransfer.getData('text/marks-button');
-    if (linkId) apply(moveLink(doc, linkId, categoryId, clock), 'Moved link.', 'Could not move that link.');
-    if (buttonId) apply(moveButton(doc, buttonId, categoryId, clock), 'Moved button.', 'Could not move that button.');
-  };
-
   const submitLink = () => {
     if (!linkDraft) return;
     if (!editingLink && linkDraft.many.trim()) {
@@ -325,9 +380,11 @@ export function MarksBoard() {
           clock
         );
       }
+      const added = next.links.filter((link) => !doc.links.some((row) => row.id === link.id));
       if (apply(next, `Added ${items.length} links.`, 'Need a URL.')) {
         setLinkDraft(null);
         setEditingLink(null);
+        for (const link of added) void fillCover(link.id);
       }
       return;
     }
@@ -344,9 +401,11 @@ export function MarksBoard() {
       showDescription: linkDraft.showDescription,
     };
     const next = editingLink ? updateLink(doc, editingLink.id, input, clock) : addLink(doc, input, clock);
+    const added = editingLink ? null : latestAdded(doc.links, next.links);
     if (apply(next, editingLink ? 'Link updated.' : 'Link added.', 'Need a URL.')) {
       setLinkDraft(null);
       setEditingLink(null);
+      if (added && !input.coverUrl) void fillCover(added.id);
     }
   };
 
@@ -411,13 +470,30 @@ export function MarksBoard() {
 
   const uploadCover = async (file: File, into: 'link' | 'folder') => {
     try {
-      const url = await uploadMarkCover(file, file.name);
-      if (into === 'link' && linkDraft) setLinkDraft({ ...linkDraft, coverUrl: url });
-      if (into === 'folder') setFolderCover(url);
+      const cropped = await cropImageToSquare(file);
+      const url = await uploadMarkCover(cropped.blob, cropped.fileName);
+      if (into === 'link' && linkDraft) setLinkDraft({ ...linkDraft, coverUrl: url, showImage: true });
+      if (into === 'folder') {
+        setFolderCover(url);
+        setFolderShowCover(true);
+      }
       toast.success('Cover uploaded.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Upload failed.');
     }
+  };
+
+  const applyPageScreenshot = (link: MarkLink) => {
+    const coverUrl = screenshotCoverUrl(link.url);
+    if (!coverUrl) {
+      toast.error('Need a web URL for a screenshot.');
+      return;
+    }
+    apply(
+      updateLink(doc, link.id, { coverUrl, showImage: true }, clock),
+      'Screenshot in the square.',
+      'Could not set that screenshot.'
+    );
   };
 
   return (
@@ -428,7 +504,8 @@ export function MarksBoard() {
             <p className={LABEL}>Kjarni</p>
             <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
             <p className="text-sm text-stone-500">
-              Folders, links, and buttons. Structured columns — same board on your phone.
+              Folders, links, and buttons in columns — drag a link or folder onto another column.
+              Same board on your phone.
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
@@ -612,6 +689,9 @@ export function MarksBoard() {
         ) : (
           <Whiteboard
             doc={shown}
+            highlightFolder={highlightFolder}
+            hoverLink={hoverLink}
+            onHoverLink={setHoverLink}
             onRenameFolder={(id, name) => {
               patch(
                 persistDoc({
@@ -631,38 +711,60 @@ export function MarksBoard() {
               setEditingLink(null);
               setLinkDraft(emptyLinkDraft(categoryId));
             }}
+            onAddFolder={(parentId) =>
+              apply(addCategory(doc, 'Untitled', parentId, clock), 'Folder added.', 'Name the folder first.')
+            }
+            onAddButton={(folderId) => {
+              setEditingButton(null);
+              setButtonDraft(emptyButtonDraft(folderId));
+            }}
             onEditFolder={(category) => {
               setFolderEdit(category);
               setFolderName(category.name);
               setFolderCover(category.coverUrl);
               setFolderShowCover(category.showCover);
             }}
-            onDrop={(kind, id, target) => {
-              if (kind === 'folder') {
-                apply(moveCategory(doc, id, target, clock), 'Folder moved.', 'Could not nest that folder.');
-                return;
-              }
-              apply(moveLink(doc, id, target ?? '', clock), 'Bookmark moved.', 'Could not move that bookmark.');
+            onEditButton={(button) => {
+              setEditingButton(button);
+              setButtonDraft(draftFromButton(button));
             }}
-            onMove={(kind, id, x, y) => {
+            onRunButton={runButton}
+            onMoveLink={(id, categoryId) =>
+              apply(moveLink(doc, id, categoryId, clock), 'Moved link.', 'Could not move that link.')
+            }
+            onMoveFolder={(id, parentId) =>
+              apply(moveCategory(doc, id, parentId, clock), 'Moved folder.', 'Could not nest that folder.')
+            }
+            onToggleFolder={(id, collapsed) => patch(setFolderCollapsed(doc, id, collapsed, clock))}
+            onDeleteFolder={(category) =>
+              apply(
+                removeCategory(doc, category.id, clock),
+                `Removed ${category.name}. Contents moved up.`,
+                'Could not remove folder.'
+              )
+            }
+            onDrop={(kind, id, target, index) => {
               if (kind === 'folder') {
-                const category = doc.categories.find((row) => row.id === id);
-                if (category?.parentId) {
-                  const rooted = moveCategory(doc, id, null, clock);
-                  patch(setCategoryPos(rooted, id, x, y, clock));
-                  return;
-                }
-                patch(setCategoryPos(doc, id, x, y, clock));
+                const next =
+                  index == null
+                    ? moveCategory(doc, id, target, clock)
+                    : reorderCategory(doc, id, target, index, clock);
+                if (next === doc) return;
+                apply(next, 'Folder moved.', 'Could not nest that folder.');
                 return;
               }
-              const link = doc.links.find((row) => row.id === id);
-              if (link?.categoryId) {
-                const loose = moveLink(doc, id, '', clock);
-                patch(setLinkPos(loose, id, x, y, clock));
+              if (kind === 'button') {
+                apply(moveButton(doc, id, target ?? '', clock), 'Moved button.', 'Could not move that button.');
                 return;
               }
-              patch(setLinkPos(doc, id, x, y, clock));
+              const next =
+                index == null
+                  ? moveLink(doc, id, target ?? '', clock)
+                  : reorderLink(doc, id, target ?? '', index, clock);
+              if (next === doc) return;
+              apply(next, 'Link moved.', 'Could not move that link.');
             }}
+            onScreenshotLink={applyPageScreenshot}
           />
         )}
       </main>
@@ -688,6 +790,8 @@ export function MarksBoard() {
               : undefined
           }
           onUploadCover={(file) => void uploadCover(file, 'link')}
+          onFetchPreview={() => void fetchDraftPreview()}
+          previewBusy={previewBusy}
         />
       ) : null}
 
@@ -746,6 +850,7 @@ export function MarksBoard() {
             setFolderEdit(null);
           }}
           onUploadCover={(file) => void uploadCover(file, 'folder')}
+          screenshotUrl={linksInCategory(doc, folderEdit.id).find((link) => screenshotCoverUrl(link.url))?.url ?? ''}
         />
       ) : null}
 
@@ -837,213 +942,6 @@ export function MarksBoard() {
   );
 }
 
-function AddRow({
-  onFolder,
-  onLink,
-  onButton,
-}: {
-  onFolder: () => void;
-  onLink: () => void;
-  onButton: () => void;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1">
-      <button type="button" className={ACTION_TINY} onClick={onFolder}>
-        + Folder
-      </button>
-      <button type="button" className={ACTION_TINY} onClick={onLink}>
-        + Link
-      </button>
-      <button type="button" className={ACTION_TINY} onClick={onButton}>
-        + Button
-      </button>
-    </div>
-  );
-}
-
-function FolderColumn({
-  doc,
-  fullDoc,
-  folder,
-  highlightFolder,
-  hoverLink,
-  clock,
-  nested,
-  onHoverLink,
-  onPatch,
-  onApply,
-  onAddLink,
-  onEditLink,
-  onAddButton,
-  onEditButton,
-  onEditFolder,
-  onRunButton,
-  onDropItem,
-}: {
-  doc: MarksDoc;
-  fullDoc: MarksDoc;
-  folder: MarkCategory;
-  highlightFolder: string;
-  hoverLink: string;
-  clock: MarksClock;
-  nested: boolean;
-  onHoverLink: (id: string) => void;
-  onPatch: (doc: MarksDoc) => void;
-  onApply: (next: MarksDoc, ok: string, fail: string) => boolean;
-  onAddLink: (categoryId: string) => void;
-  onEditLink: (link: MarkLink) => void;
-  onAddButton: (folderId: string) => void;
-  onEditButton: (button: MarksButton) => void;
-  onEditFolder: (category: MarkCategory) => void;
-  onRunButton: (button: MarksButton) => void;
-  onDropItem: (categoryId: string, event: DragEvent) => void;
-}) {
-  const links = linksInCategory(doc, folder.id);
-  const buttons = buttonsInFolder(doc, folder.id);
-  const children = childCategories(doc, folder.id);
-  const count = links.length + buttons.length + children.length;
-
-  return (
-    <section
-      id={`marks-folder-${folder.id}`}
-      className={`${nested ? 'rounded-lg bg-stone-50/80 p-2' : `${PANEL} p-3`} flex flex-col ${
-        highlightFolder === folder.id ? 'ring-2 ring-emerald-500' : ''
-      }`}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => onDropItem(folder.id, event)}
-    >
-      <div className="mb-2 flex items-center gap-1">
-        <button
-          type="button"
-          className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-800"
-          aria-label={folder.collapsed ? 'Open folder' : 'Collapse folder'}
-          onClick={() => onPatch(setFolderCollapsed(fullDoc, folder.id, !folder.collapsed, clock))}
-        >
-          {folder.collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </button>
-        <input
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
-          value={folder.name}
-          aria-label="Folder name"
-          onChange={(event) => onPatch(renameCategory(fullDoc, folder.id, event.target.value || ' ', clock))}
-          onBlur={(event) => {
-            if (!event.target.value.trim()) onPatch(renameCategory(fullDoc, folder.id, 'Untitled', clock));
-          }}
-        />
-        <span className="text-[0.65rem] text-stone-400">{count}</span>
-        <select
-          className="max-w-[7rem] rounded border border-transparent bg-transparent text-[0.65rem] text-stone-400 outline-none hover:border-stone-300"
-          value={folder.parentId ?? ''}
-          aria-label="Move folder"
-          onChange={(event) =>
-            onApply(moveCategory(fullDoc, folder.id, event.target.value || null, clock), 'Moved folder.', 'Could not move folder.')
-          }
-        >
-          <option value="">Top level</option>
-          {fullDoc.categories
-            .filter((row) => row.id !== folder.id)
-            .map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.name}
-              </option>
-            ))}
-        </select>
-        <button
-          type="button"
-          className="rounded px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-stone-400 hover:text-stone-800"
-          onClick={() => onEditFolder(folder)}
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          className="rounded p-1 text-stone-400 hover:bg-rose-50 hover:text-rose-700"
-          title="Remove folder — contents move to the parent (or Unfiled)"
-          onClick={() =>
-            onApply(
-              removeCategory(fullDoc, folder.id, clock),
-              `Removed ${folder.name}. Contents moved up.`,
-              'Could not remove folder.'
-            )
-          }
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {folder.collapsed ? (
-        <p className="px-1 text-[0.7rem] text-stone-400">{count} items</p>
-      ) : (
-        <>
-          {buttons.length > 0 ? (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {buttons.map((button) => (
-                <MarkButtonChip
-                  key={button.id}
-                  button={button}
-                  folders={fullDoc.categories}
-                  onRun={() => onRunButton(button)}
-                  onEdit={() => onEditButton(button)}
-                  onMove={(folderId) =>
-                    onApply(moveButton(fullDoc, button.id, folderId, clock), 'Moved button.', 'Could not move.')
-                  }
-                />
-              ))}
-            </div>
-          ) : null}
-          <ul className="flex flex-col gap-1">
-            {links.map((link) => (
-              <LinkRow
-                key={link.id}
-                link={link}
-                folders={fullDoc.categories}
-                hovering={hoverLink === link.id}
-                onHover={onHoverLink}
-                onEdit={() => onEditLink(link)}
-                onMove={(categoryId) =>
-                  onApply(moveLink(fullDoc, link.id, categoryId, clock), 'Moved link.', 'Could not move.')
-                }
-              />
-            ))}
-          </ul>
-          {children.map((child) => (
-            <div key={child.id} className="mt-2 border-l-2 border-stone-100 pl-2">
-              <FolderColumn
-                doc={doc}
-                fullDoc={fullDoc}
-                folder={child}
-                highlightFolder={highlightFolder}
-                hoverLink={hoverLink}
-                clock={clock}
-                nested
-                onHoverLink={onHoverLink}
-                onPatch={onPatch}
-                onApply={onApply}
-                onAddLink={onAddLink}
-                onEditLink={onEditLink}
-                onAddButton={onAddButton}
-                onEditButton={onEditButton}
-                onEditFolder={onEditFolder}
-                onRunButton={onRunButton}
-                onDropItem={onDropItem}
-              />
-            </div>
-          ))}
-          {links.length === 0 && buttons.length === 0 && children.length === 0 ? (
-            <p className="px-1 py-2 text-[0.75rem] text-stone-400">Empty folder</p>
-          ) : null}
-          <AddRow
-            onFolder={() =>
-              onApply(addCategory(fullDoc, 'Untitled', folder.id, clock), 'Folder added.', 'Name the folder first.')
-            }
-            onLink={() => onAddLink(folder.id)}
-            onButton={() => onAddButton(folder.id)}
-          />
-        </>
-      )}
-    </section>
-  );
-}
-
 function MarkButtonChip({
   button,
   folders,
@@ -1064,6 +962,7 @@ function MarkButtonChip({
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/marks-button', button.id);
+        event.dataTransfer.setData('text/plain', `button:${button.id}`);
       }}
     >
       <button type="button" className={BUTTON_CHIP} style={{ backgroundColor: button.color }} onClick={onRun}>
@@ -1087,93 +986,5 @@ function MarkButtonChip({
         ))}
       </select>
     </span>
-  );
-}
-
-function LinkRow({
-  link,
-  folders,
-  hovering,
-  onHover,
-  onEdit,
-  onMove,
-}: {
-  link: MarkLink;
-  folders: MarkCategory[];
-  hovering: boolean;
-  onHover: (id: string) => void;
-  onEdit: () => void;
-  onMove: (categoryId: string) => void;
-}) {
-  const video = videoSourceForLink(link);
-  return (
-    <li>
-      <div
-        className="group flex items-stretch gap-1 rounded-lg hover:bg-stone-50"
-        draggable
-        onDragStart={(event) => {
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/marks-link', link.id);
-        }}
-        onMouseEnter={() => onHover(link.id)}
-        onMouseLeave={() => onHover('')}
-      >
-        <a
-          href={link.url}
-          target={link.url.startsWith('/') ? undefined : '_blank'}
-          rel="noreferrer"
-          className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2"
-        >
-          {link.showImage || video ? (
-            <BookmarkMedia link={link} video={video} hovering={hovering} />
-          ) : null}
-          <span className="min-w-0">
-            <span className="flex items-center gap-1.5">
-              <span className="block min-w-0 truncate text-sm font-medium text-stone-900">{link.title}</span>
-              {video ? (
-                <span className="shrink-0 text-[0.6rem] font-extrabold uppercase tracking-wide text-emerald-700">
-                  ▶ video
-                </span>
-              ) : null}
-            </span>
-            {link.showDescription && link.note ? (
-              <span className="block truncate text-[0.7rem] text-stone-400">{link.note}</span>
-            ) : null}
-            {link.showUrl ? (
-              <span className="block truncate text-[0.65rem] text-stone-400">{link.url}</span>
-            ) : null}
-            {link.tags.length > 0 ? (
-              <span className="mt-0.5 flex flex-wrap gap-1">
-                {link.tags.map((tag) => (
-                  <span key={tag} className="rounded bg-stone-100 px-1 text-[0.6rem] font-bold text-stone-500">
-                    #{tag}
-                  </span>
-                ))}
-              </span>
-            ) : null}
-          </span>
-        </a>
-        <select
-          className="max-w-[6rem] self-center bg-transparent text-[0.6rem] text-stone-400 outline-none sm:opacity-0 sm:group-hover:opacity-100"
-          value={link.categoryId}
-          aria-label="Move to folder"
-          onChange={(event) => onMove(event.target.value)}
-        >
-          <option value="">Unfiled</option>
-          {folders.map((folder) => (
-            <option key={folder.id} value={folder.id}>
-              {folder.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="px-2 text-[0.65rem] font-bold uppercase tracking-wide text-stone-400 hover:text-stone-800 sm:opacity-0 sm:group-hover:opacity-100"
-          onClick={onEdit}
-        >
-          Edit
-        </button>
-      </div>
-    </li>
   );
 }
