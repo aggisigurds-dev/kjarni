@@ -228,7 +228,7 @@ export function HeimilisfangLeit({
         onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
         onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
         placeholder="Heimilisfang — t.d. Skútuvogur 4"
-        className="w-[160px] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none lg:w-[190px]"
+        className="w-[min(46vw,220px)] min-w-[9rem] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none sm:w-[220px]"
       />
       {q && (
         <button
@@ -404,11 +404,12 @@ export function HeimilisfangLeit({
           type="button"
           title="Leita að teikningu eftir heimilisfangi"
           onClick={() => setOpid((v) => !v)}
-          className={`flex size-9 items-center justify-center rounded-lg ${
+          className={`flex h-9 items-center gap-1 rounded-lg px-2 ${
             opid ? "bg-white/15 text-white" : "text-stone-300 hover:bg-white/8 hover:text-white"
           }`}
         >
           <Search className="size-4" />
+          <span className="text-[11px] font-medium">Leita</span>
         </button>
       ) : (
         searchField

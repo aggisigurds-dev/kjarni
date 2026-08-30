@@ -9,6 +9,20 @@ const nextConfig = {
       { source: "/marks", destination: "https://kjarni-3dwork.vercel.app/marks", permanent: false },
     ];
   },
+  async headers() {
+    return [
+      {
+        source: "/kjarni/turbopaint",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "frame-ancestors 'self' https://slokkvitaeki.netlify.app https://brunaholf.netlify.app https://*.netlify.app",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

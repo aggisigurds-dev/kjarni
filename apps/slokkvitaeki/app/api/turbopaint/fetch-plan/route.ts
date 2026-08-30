@@ -1,23 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fotowebDownloadOrder, type FotowebAsset } from "../fotoweb-pick";
 
 // Proxy fyrir TurboPaint: sækir gólfplan af leyfðum ytri slóðum (CORS bannar
 // vafranum að gera það sjálfur). Skilur FotoWeb-permalink skjalasafns
-// Reykjavíkur (…/<skrá>.tif.info): les asset-JSON og velur bestu rendition
-// sem er opin nafnlausum — ORIGINAL ef hún svarar, annars stærsta
-// quickRendition (cache-JPEG, t.d. 6006px). Beinar skráaslóðir á leyfðum
-// hýslum streymast óbreyttar.
+// Reykjavíkur (…/<skrá>.tif.info): les asset-JSON og velur cache-JPEG
+// (t.d. 6006 px) á undan ORIGINAL TIF svo síminn frjósi ekki við afþjöppun.
 
 export const maxDuration = 60;
 
 const ALLOWED_HOSTS = new Set(["skjalasafn.reykjavik.is"]);
 const MAX_BYTES = 80 * 1024 * 1024;
 const OK_TYPES = /^(image\/|application\/pdf)/i;
-
-type FotowebAsset = {
-  filename?: string;
-  renditions?: { href?: string; original?: boolean; width?: number; height?: number }[];
-  quickRenditions?: { href?: string; size?: number }[];
-};
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -108,30 +101,19 @@ export async function GET(req: NextRequest) {
       if (!meta.ok) return bad(502, `Skjalasafnið svaraði ${meta.status} fyrir permalinkinn`);
       const asset = (await meta.json()) as FotowebAsset;
       const base = `${target.protocol}//${target.host}`;
-      const baseName = (asset.filename || target.pathname.split("/").pop() || "teikning")
-        .replace(/\.info$/i, "");
 
-      // Fyrst: rendition-request á ORIGINAL — skilar fullu upplausninni
-      // (sama leið og Download-hnappurinn, opin nafnlausum).
-      const original = asset.renditions?.find((r) => r.original && r.href);
-      if (original?.href) {
-        try {
-          const full = await tryRenditionRequest(base, original.href, baseName);
-          if (full) return full;
-        } catch (err) {
-          if (err instanceof Error && err.message === "too-large") throw err;
-        }
-      }
-
-      const candidates: { href: string; name: string }[] = [];
-      if (original?.href) candidates.push({ href: original.href, name: baseName });
-      const quick = [...(asset.quickRenditions ?? [])]
-        .filter((q) => q.href)
-        .sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
-      for (const q of quick) candidates.push({ href: q.href as string, name: `${baseName}.jpg` });
-
-      for (const cand of candidates) {
+      // JPEG (≈6000 px) á undan ORIGINAL TIF (≈10000 px / 70 MP).
+      // Fullt TIF afþjappað í vafranum frysti innflutninginn á síma.
+      for (const cand of fotowebDownloadOrder(asset, target.pathname)) {
         const href = cand.href.startsWith("http") ? cand.href : base + cand.href;
+        if (cand.kind === "original") {
+          try {
+            const full = await tryRenditionRequest(base, cand.href, cand.name);
+            if (full) return full;
+          } catch (err) {
+            if (err instanceof Error && err.message === "too-large") throw err;
+          }
+        }
         const res = await tryFetchFile(href);
         if (res) return passThrough(res, cand.name);
       }

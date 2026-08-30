@@ -20,7 +20,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
 import { IMPORT_FILE_ACCEPT, IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
@@ -91,15 +91,6 @@ export function TopBar({
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
-  const [compactSearch, setCompactSearch] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const apply = () => setCompactSearch(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
   // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
@@ -216,8 +207,8 @@ export function TopBar({
         placeholder="Nafn á borði"
       />
       {onVeljaTeikningu && (
-        <div className="shrink-0">
-          <HeimilisfangLeit onVelja={onVeljaTeikningu} compact={compactSearch} />
+        <div className="min-w-0 shrink">
+          <HeimilisfangLeit onVelja={onVeljaTeikningu} />
         </div>
       )}
       <span className={`hidden shrink-0 sm:inline ${syncLook.color}`} title={syncLook.label}>
