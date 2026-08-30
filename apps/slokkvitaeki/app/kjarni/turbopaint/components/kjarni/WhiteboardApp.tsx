@@ -430,6 +430,18 @@ export function WhiteboardApp() {
     [runImport]
   );
 
+  const planFromQuery = useRef(false);
+  useEffect(() => {
+    if (planFromQuery.current) return;
+    const raw = new URLSearchParams(window.location.search).get("plan");
+    if (!raw) return;
+    planFromQuery.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("plan");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    void runUrlImport(raw);
+  }, [runUrlImport]);
+
   // Copy → paste permalink beint á borðið.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {

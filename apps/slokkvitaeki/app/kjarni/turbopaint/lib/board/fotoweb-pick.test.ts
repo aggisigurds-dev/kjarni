@@ -5,7 +5,7 @@ import {
   fotowebBaseName,
   fotowebDownloadOrder,
   type FotowebAsset,
-} from "./fotoweb-pick";
+} from "../../../../api/turbopaint/fotoweb-pick";
 
 const SKUTUVOGUR: FotowebAsset = {
   filename: "2021-01-2631662.tif",

@@ -267,7 +267,8 @@ async function importTiff(
         sampled = downsampleTiffData(rgba, width, height, maxPx);
       }
       if (sampled.warning) warnings.push(sampled.warning);
-      const imageData = new ImageData(sampled.rgba, sampled.width, sampled.height);
+      const imageData = new ImageData(sampled.width, sampled.height);
+      imageData.data.set(sampled.rgba);
       const canvas = document.createElement("canvas");
       canvas.width = sampled.width;
       canvas.height = sampled.height;

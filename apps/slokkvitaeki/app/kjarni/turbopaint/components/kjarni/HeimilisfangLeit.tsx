@@ -228,7 +228,7 @@ export function HeimilisfangLeit({
         onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
         onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
         placeholder="Heimilisfang — t.d. Skútuvogur 4"
-        className="w-[160px] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none lg:w-[190px]"
+        className="w-[min(46vw,220px)] min-w-[9rem] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none sm:w-[220px]"
       />
       {q && (
         <button
