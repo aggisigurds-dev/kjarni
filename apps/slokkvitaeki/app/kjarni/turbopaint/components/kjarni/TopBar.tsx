@@ -23,7 +23,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
-import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
+import { IMPORT_FILE_ACCEPT, IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import {
   clearBoard,
   createBoard,
@@ -278,11 +278,12 @@ export function TopBar({
         <option value="print">Há gæði · 12.5k</option>
       </select>
       <input
+        id="tp-import-input"
         ref={fileRef}
         type="file"
         hidden
         multiple
-        accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,.webp,.svg,.gif,.kjarni.json,application/pdf,image/*"
+        accept={IMPORT_FILE_ACCEPT}
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];
           if (files.length) onImport(files);
@@ -292,12 +293,13 @@ export function TopBar({
       <Button
         size="sm"
         variant="ghost"
-        className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
+        className="text-stone-200 hover:bg-white/10 hover:text-white"
         title={IMPORT_SIZE_HINT}
         onClick={() => fileRef.current?.click()}
       >
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
+        <span className="sm:hidden">PDF</span>
       </Button>
       <span className="hidden max-w-[10.5rem] text-[10px] leading-tight text-stone-500 2xl:inline">
         Í vafranum · engin 20 MB hömlun

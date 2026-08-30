@@ -58,12 +58,15 @@ describe('normalizeUrl', () => {
     expect(normalizeUrl('//example.com/a')).toBe('https://example.com/a');
   });
 
-  it('rewrites retired Netlify Kjarni/TurboPaint URLs to Vercel', () => {
+  it('rewrites retired and alias Kjarni/TurboPaint URLs to kjarni.vercel.app', () => {
     expect(normalizeUrl('https://slokkvitaeki.netlify.app/kjarni/turbopaint')).toBe(
-      'https://slokkvitaeki.vercel.app/kjarni/turbopaint'
+      'https://kjarni.vercel.app/kjarni/turbopaint'
     );
-    expect(normalizeUrl('https://slokkvitaeki.netlify.app/kjarni')).toBe(
-      'https://slokkvitaeki.vercel.app/kjarni'
+    expect(normalizeUrl('https://slokkvitaeki.vercel.app/kjarni')).toBe(
+      'https://kjarni.vercel.app/kjarni'
+    );
+    expect(normalizeUrl('https://kjarni-3dwork.vercel.app/kjarni/turbopaint')).toBe(
+      'https://kjarni.vercel.app/kjarni/turbopaint'
     );
     expect(normalizeUrl('https://slokkvitaeki.netlify.app')).toBe('https://slokkvitaeki.netlify.app');
   });
@@ -82,7 +85,7 @@ describe('retired Kjarni hosts', () => {
         },
       ],
     });
-    expect(doc?.links[0]?.url).toBe('https://slokkvitaeki.vercel.app/kjarni/turbopaint');
+    expect(doc?.links[0]?.url).toBe('https://kjarni.vercel.app/kjarni/turbopaint');
   });
 });
 
@@ -99,7 +102,7 @@ describe('organizer', () => {
     expect(seeded.links.length).toBeGreaterThan(3);
     expect(seeded.filters.length).toBeGreaterThan(0);
     expect(seeded.links.find((link) => link.id === 'lnk_paint')?.url).toBe(
-      'https://slokkvitaeki.vercel.app/kjarni/turbopaint'
+      'https://kjarni.vercel.app/kjarni/turbopaint'
     );
 
     const withCat = addCategory(seeded, 'Personal');
