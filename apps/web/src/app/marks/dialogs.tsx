@@ -784,3 +784,50 @@ export function ButtonDialog({
     </div>
   );
 }
+
+export function NewSiteDialog({
+  name,
+  setName,
+  onClose,
+  onCreate,
+}: {
+  name: string;
+  setName: (value: string) => void;
+  onClose: () => void;
+  onCreate: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/40 p-0 sm:items-center sm:p-4">
+      <form
+        className={`${PANEL} w-full max-w-md p-4`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onCreate();
+        }}
+      >
+        <h2 className="text-sm font-bold">New site</h2>
+        <p className="mt-1 text-sm text-stone-500">
+          A clean screen for a completely different topic. Jump back from the header anytime.
+        </p>
+        <label className="mt-3 block">
+          <span className={`${LABEL} mb-1 block`}>Site name</span>
+          <input
+            className={FIELD}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Recipes, Travel, Work…"
+            autoFocus
+          />
+        </label>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className={ACTION_GHOST} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className={ACTION_PRIMARY} disabled={!name.trim()}>
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

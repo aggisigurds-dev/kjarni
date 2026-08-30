@@ -1,16 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   BookmarkPlus,
   FolderPlus,
   Loader2,
   MousePointerClick,
+  Plus,
+  PanelsTopLeft,
   Search,
   Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { loadMarksBoard, saveMarksBoard, uploadMarkCover } from '@/lib/marks/cloud';
+import {
+  listMarksBoards,
+  loadMarksBoard,
+  loadMarksLocal,
+  saveMarksBoard,
+  saveMarksLocal,
+  uploadMarkCover,
+  type MarksSiteListItem,
+} from '@/lib/marks/cloud';
 import { addFilter, allTags, applyMarksQuery, applySavedFilter, parseTags, removeFilter } from '@/lib/marks/filters';
 import {
   countImported,
@@ -29,39 +41,57 @@ import {
   addButton,
   addCategory,
   addLink,
+  addWhiteboard,
+  addWhiteboardItem,
   buttonsInFolder,
   childCategories,
   createClientClock,
+  createSiteId,
   emptyDoc,
   filterDoc,
   hostOf,
   latestAdded,
-  layoutMissingPositions,
   linksInCategory,
   looksLikeUrl,
+  MARKS_BOARD_ID,
+  marksHref,
   moveButton,
   moveCategory,
   moveLink,
-  normalizeDoc,
   normalizeUrl,
   persistDoc,
   removeButton,
   removeCategory,
   removeLink,
+  removeWhiteboard,
+  removeWhiteboardItem,
+  renameWhiteboard,
   reorderCategory,
   reorderLink,
   revealFolder,
   seedDoc,
   setFolderCollapsed,
+  setDisplay,
+  setSiteTitle,
+  setUnfiledCollapsed,
+  siteTitle,
   updateButton,
   updateCategory,
   updateLink,
+  updateWhiteboardItem,
   type MarkCategory,
   type MarkLink,
   type MarksButton,
   type MarksClock,
   type MarksDoc,
 } from '@/lib/marks/model';
+import {
+  UNFILED_WINDOW_ID,
+  layoutMissingWindows,
+  setCategoryLayout,
+  setUnfiledLayout,
+  setWhiteboardLayout,
+} from '@/lib/marks/windows';
 import { screenshotCoverUrl } from '@/lib/marks/preview';
 import { cropImageToSquare } from '@/lib/marks/square-cover';
 import {
@@ -74,6 +104,7 @@ import {
   FolderDialog,
   ImportDialog,
   LinkDialog,
+  NewSiteDialog,
   type ButtonDraft,
   type LinkDraft,
 } from './dialogs';
@@ -81,20 +112,27 @@ import { KeepImportDialog } from './keep-import-dialog';
 import { ACTION_GHOST, ACTION_PRIMARY, ACTION_TINY, BUTTON_CHIP, CHIP_IDLE, CHIP_ON, FIELD, LABEL, PANEL, SURFACE } from './ui';
 import { Whiteboard } from './whiteboard';
 
-const LOCAL_KEY = 'kjarni-marks-home';
-
-function readLocal(): MarksDoc | null {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return null;
-    return normalizeDoc(JSON.parse(raw));
-  } catch {
-    return null;
-  }
+function hasBoardContent(doc: MarksDoc): boolean {
+  return (
+    doc.links.length > 0 ||
+    doc.categories.length > 0 ||
+    (doc.buttons ?? []).length > 0 ||
+    (doc.whiteboards ?? []).length > 0
+  );
 }
 
-function writeLocal(doc: MarksDoc) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(persistDoc(doc)));
+function withCurrentSite(
+  rows: MarksSiteListItem[],
+  boardId: string,
+  title: string
+): MarksSiteListItem[] {
+  const next = rows.some((row) => row.id === boardId)
+    ? rows.map((row) => (row.id === boardId ? { ...row, title: title || row.title } : row))
+    : [...rows, { id: boardId, title, updatedAt: 0 }];
+  if (!next.some((row) => row.id === MARKS_BOARD_ID)) {
+    next.unshift({ id: MARKS_BOARD_ID, title: 'Home', updatedAt: 0 });
+  }
+  return next;
 }
 
 function useMarksClock(): MarksClock {
@@ -103,14 +141,22 @@ function useMarksClock(): MarksClock {
   return ref.current;
 }
 
-export function MarksBoard() {
+export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
   const clock = useMarksClock();
+  const router = useRouter();
+  const isHome = boardId === MARKS_BOARD_ID;
   const [doc, setDoc] = useState<MarksDoc>(() => emptyDoc());
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
   const [ready, setReady] = useState(false);
   const [note, setNote] = useState('Loading…');
   const [fastUrl, setFastUrl] = useState('');
+  const [sites, setSites] = useState<MarksSiteListItem[]>(() => [
+    { id: MARKS_BOARD_ID, title: 'Home', updatedAt: 0 },
+  ]);
+  const [showNewSite, setShowNewSite] = useState(false);
+  const [newSiteName, setNewSiteName] = useState('');
+  const [titleDraft, setTitleDraft] = useState(() => (isHome ? 'Home' : 'Untitled'));
   const [linkDraft, setLinkDraft] = useState<LinkDraft | null>(null);
   const [editingLink, setEditingLink] = useState<MarkLink | null>(null);
   const [buttonDraft, setButtonDraft] = useState<ButtonDraft | null>(null);
@@ -134,6 +180,7 @@ export function MarksBoard() {
   const [filterFolder, setFilterFolder] = useState('');
   const [highlightFolder, setHighlightFolder] = useState('');
   const [hoverLink, setHoverLink] = useState('');
+  const [activeWhiteboard, setActiveWhiteboard] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const loaded = useRef(false);
   const docRef = useRef(doc);
@@ -141,34 +188,57 @@ export function MarksBoard() {
 
   const patch = useCallback((next: MarksDoc) => {
     setDoc(next);
-    writeLocal(next);
-  }, []);
+    saveMarksLocal(boardId, next);
+  }, [boardId]);
+
+  const refreshSites = useCallback(
+    async (title?: string) => {
+      try {
+        const listed = await listMarksBoards();
+        setSites(withCurrentSite(listed, boardId, title || siteTitle(docRef.current, isHome ? 'Home' : 'Untitled')));
+      } catch {
+        setSites((current) =>
+          withCurrentSite(current, boardId, title || siteTitle(docRef.current, isHome ? 'Home' : 'Untitled'))
+        );
+      }
+    },
+    [boardId, isHome]
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const local = readLocal();
-      if (local && (local.links.length > 0 || local.categories.length > 0 || local.buttons.length > 0)) {
-        setDoc(layoutMissingPositions(local));
+      const local = loadMarksLocal(boardId);
+      if (local && (!isHome || hasBoardContent(local))) {
+        setDoc(layoutMissingWindows(local, local));
+        setTitleDraft(siteTitle(local, isHome ? 'Home' : 'Untitled'));
       }
       try {
-        const cloud = await loadMarksBoard();
+        const cloud = await loadMarksBoard(boardId);
         if (cancelled) return;
         if (cloud && cloud.updatedAt >= (local?.updatedAt ?? 0)) {
-          const next = layoutMissingPositions(cloud);
+          const next = layoutMissingWindows(cloud, cloud);
           setDoc(next);
-          writeLocal(next);
+          saveMarksLocal(boardId, next);
+          setTitleDraft(siteTitle(next, isHome ? 'Home' : 'Untitled'));
           setNote('Saved across devices');
         } else if (local) {
           setNote('This computer · saving to cloud…');
-          await saveMarksBoard(local);
+          await saveMarksBoard(local, boardId);
           if (!cancelled) setNote('Saved across devices');
-        } else {
+        } else if (isHome) {
           const seeded = seedDoc(clock.now());
           setDoc(seeded);
-          writeLocal(seeded);
-          await saveMarksBoard(seeded);
+          saveMarksLocal(boardId, seeded);
+          setTitleDraft(siteTitle(seeded, 'Home'));
+          await saveMarksBoard(seeded, boardId);
           if (!cancelled) setNote('Starter kjarni links · saved across devices');
+        } else {
+          const blank = emptyDoc(clock.now(), '');
+          setDoc(blank);
+          saveMarksLocal(boardId, blank);
+          await saveMarksBoard(blank, boardId);
+          if (!cancelled) setNote('Clean screen · saved across devices');
         }
       } catch (error) {
         if (!cancelled) {
@@ -178,25 +248,26 @@ export function MarksBoard() {
         if (!cancelled) {
           loaded.current = true;
           setReady(true);
+          void refreshSites();
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [clock]);
+  }, [boardId, clock, isHome, refreshSites]);
 
   useEffect(() => {
     if (!loaded.current) return;
     const timer = window.setTimeout(() => {
-      void saveMarksBoard(docRef.current)
+      void saveMarksBoard(docRef.current, boardId)
         .then(() => setNote('Saved across devices'))
         .catch((error: unknown) => {
           setNote(error instanceof Error ? error.message : 'Cloud save failed');
         });
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [doc]);
+  }, [doc, boardId]);
 
   const hydrated = useRef(false);
   useEffect(() => {
@@ -236,7 +307,11 @@ export function MarksBoard() {
   const unfiledLinks = linksInCategory(shown, '');
   const toolbarButtons = buttonsInFolder(shown, '');
   const tags = allTags(doc);
-  const emptyBoard = doc.categories.length === 0 && doc.links.length === 0 && (doc.buttons ?? []).length === 0;
+  const emptyBoard =
+    doc.categories.length === 0 &&
+    doc.links.length === 0 &&
+    (doc.buttons ?? []).length === 0 &&
+    (doc.whiteboards ?? []).length === 0;
 
   const apply = (next: MarksDoc, ok: string, fail: string) => {
     if (next === doc) {
@@ -246,6 +321,37 @@ export function MarksBoard() {
     patch(next);
     toast.success(ok);
     return true;
+  };
+
+  const commitTitle = () => {
+    const next = setSiteTitle(doc, titleDraft, clock);
+    if (next === doc) {
+      setTitleDraft(siteTitle(doc, isHome ? 'Home' : 'Untitled'));
+      return;
+    }
+    patch(next);
+    const title = siteTitle(next, isHome ? 'Home' : 'Untitled');
+    setTitleDraft(title);
+    setSites((rows) => withCurrentSite(rows, boardId, title));
+  };
+
+  const createSite = () => {
+    const title = newSiteName.trim();
+    if (!title) {
+      toast.error('Name the site first.');
+      return;
+    }
+    const nextId = createSiteId(clock);
+    const blank = emptyDoc(clock.now(), title);
+    saveMarksLocal(nextId, persistDoc(blank));
+    void saveMarksBoard(blank, nextId).catch(() => {
+      /* local row is enough to open the clean screen */
+    });
+    setShowNewSite(false);
+    setNewSiteName('');
+    setSites((rows) => withCurrentSite(rows, nextId, title));
+    toast.success(`${title} is ready.`);
+    router.push(marksHref(nextId));
   };
 
   const fillCover = useCallback(
@@ -468,6 +574,38 @@ export function MarksBoard() {
     if (applyKeepResult(result, 'Paste Keep notes or URLs first.')) setKeepPasted('');
   };
 
+  const uploadWhiteboardFiles = async (whiteboardId: string, files: File[], at?: { x: number; y: number }) => {
+    let next = docRef.current;
+    let added = 0;
+    for (const [index, file] of files.entries()) {
+      if (!file.type.startsWith('image/')) continue;
+      try {
+        const url = await uploadMarkCover(file, file.name || 'image.png', 'whiteboards');
+        const placed = addWhiteboardItem(
+          next,
+          whiteboardId,
+          {
+            src: url,
+            kind: file.size < 12_000 ? 'icon' : 'image',
+            x: (at?.x ?? 16) + index * 24,
+            y: (at?.y ?? 16) + index * 24,
+          },
+          clock
+        );
+        if (placed !== next) {
+          next = placed;
+          added += 1;
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Upload failed.');
+      }
+    }
+    if (added) {
+      patch(next);
+      toast.success(added === 1 ? 'Image added.' : `${added} images added.`);
+    }
+  };
+
   const uploadCover = async (file: File, into: 'link' | 'folder') => {
     try {
       const cropped = await cropImageToSquare(file);
@@ -501,14 +639,87 @@ export function MarksBoard() {
       <header className="border-b border-stone-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
           <div className="min-w-0 flex-1">
-            <p className={LABEL}>Kjarni</p>
-            <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
+            <p className={LABEL}>Kjarni · Marks</p>
+            <input
+              className="w-full bg-transparent text-2xl font-semibold tracking-tight text-stone-900 outline-none"
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+              aria-label="Site name"
+            />
             <p className="text-sm text-stone-500">
-              Folders, links, and buttons in columns. On a phone, hold a link, then drag it
-              into another folder.
+              {isHome
+                ? 'Drag a window by its title bar, resize from any edge or corner. Create a whiteboard to paste images. On a phone: three columns, tap ▾ to collapse. Hold a link to move it. Hide URLs, names, or images for the whole site.'
+                : 'Clean site — a different topic from Home. Jump back from the site chips.'}
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
+        </div>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1 px-4 pb-3">
+          {sites.map((site) => (
+            <Link
+              key={site.id}
+              href={marksHref(site.id)}
+              className={site.id === boardId ? CHIP_ON : CHIP_IDLE}
+              aria-current={site.id === boardId ? 'page' : undefined}
+            >
+              {site.title}
+            </Link>
+          ))}
+          <button type="button" className={ACTION_TINY} onClick={() => setShowNewSite(true)}>
+            <Plus className="h-3 w-3" />
+            New site
+          </button>
+        </div>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1 px-4 pb-2">
+          <span className={LABEL}>Show</span>
+          {(
+            [
+              ['showUrls', 'URLs'],
+              ['showNames', 'Names'],
+              ['showImages', 'Images'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={doc.display[key] ? CHIP_ON : CHIP_IDLE}
+              aria-pressed={doc.display[key]}
+              onClick={() =>
+                apply(
+                  setDisplay(doc, { [key]: !doc.display[key] }, clock),
+                  doc.display[key] ? `${label} off.` : `${label} on.`,
+                  'Could not update the view.'
+                )
+              }
+            >
+              {label}
+            </button>
+          ))}
+          <span className={`${LABEL} ml-2`}>Size</span>
+          {(['s', 'm', 'l'] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              className={doc.display.previewSize === size ? CHIP_ON : CHIP_IDLE}
+              aria-pressed={doc.display.previewSize === size}
+              onClick={() =>
+                apply(
+                  setDisplay(doc, { previewSize: size }, clock),
+                  `Preview ${size.toUpperCase()}.`,
+                  'Could not update the view.'
+                )
+              }
+            >
+              {size.toUpperCase()}
+            </button>
+          ))}
         </div>
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 pb-3">
           <label className="relative min-w-[12rem] flex-1">
@@ -570,6 +781,14 @@ export function MarksBoard() {
           >
             <MousePointerClick className="h-3.5 w-3.5" />
             Button
+          </button>
+          <button
+            type="button"
+            className={ACTION_GHOST}
+            onClick={() => apply(addWhiteboard(doc, {}, clock), 'Whiteboard added.', 'Could not add whiteboard.')}
+          >
+            <PanelsTopLeft className="h-3.5 w-3.5" />
+            Whiteboard
           </button>
           <button type="button" className={ACTION_GHOST} onClick={() => setShowImport(true)}>
             <Upload className="h-3.5 w-3.5" />
@@ -651,7 +870,9 @@ export function MarksBoard() {
         ) : emptyBoard ? (
           <div className={`${PANEL} col-span-full flex flex-col items-start gap-3 px-4 py-8`}>
             <p className="text-sm text-stone-500">
-              Empty board. Add a folder, a link, or a button — or paste a URL above.
+              {isHome
+                ? 'Empty board. Add a folder, a link, a button, or a whiteboard — or paste a URL above.'
+                : 'Clean screen. Start from nothing — a completely different topic. Jump back to Home from the header.'}
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -683,6 +904,14 @@ export function MarksBoard() {
               >
                 <MousePointerClick className="h-3.5 w-3.5" />
                 Button
+              </button>
+              <button
+                type="button"
+                className={ACTION_GHOST}
+                onClick={() => apply(addWhiteboard(doc, {}, clock), 'Whiteboard added.', 'Could not add whiteboard.')}
+              >
+                <PanelsTopLeft className="h-3.5 w-3.5" />
+                Whiteboard
               </button>
             </div>
           </div>
@@ -736,6 +965,7 @@ export function MarksBoard() {
               apply(moveCategory(doc, id, parentId, clock), 'Moved folder.', 'Could not nest that folder.')
             }
             onToggleFolder={(id, collapsed) => patch(setFolderCollapsed(doc, id, collapsed, clock))}
+            onToggleUnfiled={(collapsed) => patch(setUnfiledCollapsed(doc, collapsed, clock))}
             onDeleteFolder={(category) =>
               apply(
                 removeCategory(doc, category.id, clock),
@@ -765,6 +995,37 @@ export function MarksBoard() {
               apply(next, 'Link moved.', 'Could not move that link.');
             }}
             onScreenshotLink={applyPageScreenshot}
+            onLayout={(id, rect) => {
+              if (id === UNFILED_WINDOW_ID) {
+                patch(setUnfiledLayout(doc, rect, clock.now()));
+                return;
+              }
+              if ((doc.whiteboards ?? []).some((board) => board.id === id)) {
+                patch(setWhiteboardLayout(doc, id, rect, clock.now()));
+                return;
+              }
+              patch(setCategoryLayout(doc, id, rect, clock.now()));
+            }}
+            onRenameWhiteboard={(id, title) => patch(renameWhiteboard(doc, id, title, clock))}
+            onDeleteWhiteboard={(id) =>
+              apply(removeWhiteboard(doc, id, clock), 'Whiteboard removed.', 'Could not remove whiteboard.')
+            }
+            activeWhiteboard={activeWhiteboard}
+            onActiveWhiteboard={setActiveWhiteboard}
+            onAddWhiteboardFiles={(id, files, at) => void uploadWhiteboardFiles(id, files, at)}
+            onAddWhiteboardUrl={(id, src, at) => {
+              apply(
+                addWhiteboardItem(doc, id, { src, x: at?.x, y: at?.y }, clock),
+                'Image added.',
+                'Could not add that image.'
+              );
+            }}
+            onMoveWhiteboardItem={(whiteboardId, itemId, rect) =>
+              patch(updateWhiteboardItem(doc, whiteboardId, itemId, rect, clock))
+            }
+            onRemoveWhiteboardItem={(whiteboardId, itemId) =>
+              patch(removeWhiteboardItem(doc, whiteboardId, itemId, clock))
+            }
           />
         )}
       </main>
@@ -900,6 +1161,18 @@ export function MarksBoard() {
           onClose={() => setShowKeepImport(false)}
           onFiles={(files) => void importKeepFiles(files)}
           onPaste={importKeepPaste}
+        />
+      ) : null}
+
+      {showNewSite ? (
+        <NewSiteDialog
+          name={newSiteName}
+          setName={setNewSiteName}
+          onClose={() => {
+            setShowNewSite(false);
+            setNewSiteName('');
+          }}
+          onCreate={createSite}
         />
       ) : null}
 
