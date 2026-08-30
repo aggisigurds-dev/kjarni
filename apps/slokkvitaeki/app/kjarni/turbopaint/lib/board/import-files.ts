@@ -1,13 +1,16 @@
-import { getDocument, GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import * as UTIF from "utif";
 import { canvasToBlob, fitSize, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
+import { PDFJS_WORKER_SRC, classifyFile, pdfJsDocumentOptions } from "./pdfjs-setup";
 import type { ImageObject, ImportQuality } from "./types";
 import { IMPORT_MAX_PX } from "./types";
 
+export { classifyFile, PDFJS_WASM_URL, PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
+
 if (typeof window !== "undefined") {
-  GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
+  GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
 }
 
 export type ImportResult = {
@@ -109,7 +112,7 @@ async function importPdf(
 ): Promise<ImportResult> {
   const maxPx = IMPORT_MAX_PX[quality];
   const data = await file.arrayBuffer();
-  const pdf = await getDocument({ data, disableRange: true }).promise;
+  const pdf = await getDocument(pdfJsDocumentOptions(data)).promise;
   const objects: ImageObject[] = [];
   const textByObjectId: Record<string, OcrWord[]> = {};
   let cursorX = origin.x;
@@ -304,27 +307,6 @@ function loadHtmlImage(url: string) {
     img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
     img.src = url;
   });
-}
-
-export function classifyFile(file: File): "pdf" | "tiff" | "raster" | "unknown" {
-  const name = file.name.toLowerCase();
-  const type = file.type.toLowerCase();
-  if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
-  if (
-    type.includes("tiff") ||
-    type.includes("tif") ||
-    name.endsWith(".tif") ||
-    name.endsWith(".tiff")
-  ) {
-    return "tiff";
-  }
-  if (
-    type.startsWith("image/") ||
-    /\.(png|jpe?g|webp|gif|svg|bmp)$/.test(name)
-  ) {
-    return "raster";
-  }
-  return "unknown";
 }
 
 export async function importFiles(
