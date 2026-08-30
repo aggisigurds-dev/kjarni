@@ -1044,9 +1044,18 @@ function LinkRow({
           rel="noreferrer"
           className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2"
         >
-          {link.showImage ? <BookmarkMedia link={link} video={video} hovering={hovering} /> : null}
+          {link.showImage || video ? (
+            <BookmarkMedia link={link} video={video} hovering={hovering} />
+          ) : null}
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-stone-900">{link.title}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="block min-w-0 truncate text-sm font-medium text-stone-900">{link.title}</span>
+              {video ? (
+                <span className="shrink-0 text-[0.6rem] font-extrabold uppercase tracking-wide text-emerald-700">
+                  ▶ video
+                </span>
+              ) : null}
+            </span>
             {link.showDescription && link.note ? (
               <span className="block truncate text-[0.7rem] text-stone-400">{link.note}</span>
             ) : null}

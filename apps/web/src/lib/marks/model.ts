@@ -9,7 +9,7 @@
  * Nested grandchildren stay inside the promoted child folders.
  *
  * `categories` is the persisted folder list (`parentId: null` = top-level).
- * Root folders and unfiled links use `x`/`y` on the whiteboard canvas.
+ * `x`/`y` are kept for older saved docs; the UI is columns, not a canvas.
  */
 
 export const MARKS_BOARD_ID = 'home';
