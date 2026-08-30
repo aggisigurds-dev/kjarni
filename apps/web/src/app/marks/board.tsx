@@ -36,7 +36,6 @@ import {
   filterDoc,
   hostOf,
   latestAdded,
-  layoutMissingPositions,
   linksInCategory,
   looksLikeUrl,
   moveButton,
