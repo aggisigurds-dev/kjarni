@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { MarksBoard } from './board';
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function MarksPage() {
-  return <MarksBoard />;
+  return (
+    <Suspense fallback={null}>
+      <MarksBoard />
+    </Suspense>
+  );
 }

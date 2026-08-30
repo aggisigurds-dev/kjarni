@@ -51,12 +51,12 @@ export function faviconUrl(url: string): string {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
 }
 
-export function emptyDoc(now = Date.now()): MarksDoc {
+export function emptyDoc(now = 0): MarksDoc {
   return { categories: [], links: [], updatedAt: now };
 }
 
 /** First-run kjarni sites, grouped so the front page is useful immediately. */
-export function seedDoc(now = Date.now()): MarksDoc {
+export function seedDoc(now = 1): MarksDoc {
   const kjarni = { id: 'cat_kjarni', name: 'Kjarni', sort: 0 };
   const apps = { id: 'cat_apps', name: 'Apps', sort: 1 };
   const shop = { id: 'cat_build', name: 'Build', sort: 2 };

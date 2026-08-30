@@ -7,6 +7,7 @@ import { loadMarksBoard, saveMarksBoard } from '@/lib/marks/cloud';
 import {
   addCategory,
   addLink,
+  emptyDoc,
   faviconUrl,
   filterDoc,
   linksInCategory,
@@ -40,7 +41,7 @@ function writeLocal(doc: MarksDoc) {
 }
 
 export function MarksBoard() {
-  const [doc, setDoc] = useState<MarksDoc>(() => seedDoc());
+  const [doc, setDoc] = useState<MarksDoc>(() => emptyDoc());
   const [query, setQuery] = useState('');
   const [ready, setReady] = useState(false);
   const [note, setNote] = useState('Loading…');
@@ -272,6 +273,9 @@ export function MarksBoard() {
                               src={faviconUrl(link.url)}
                               alt=""
                               className="h-5 w-5 shrink-0 rounded"
+                              onError={(event) => {
+                                event.currentTarget.style.visibility = 'hidden';
+                              }}
                             />
                           ) : (
                             <span className="h-5 w-5 shrink-0 rounded bg-emerald-100" />
