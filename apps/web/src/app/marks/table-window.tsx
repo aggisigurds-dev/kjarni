@@ -37,6 +37,7 @@ export function TableGrid({
   onAddCol,
   onRemoveRow,
   onRemoveCol,
+  onRename,
 }: {
   table: MarkTable;
   onCell: (key: string, raw: string) => void;
@@ -45,6 +46,7 @@ export function TableGrid({
   onAddCol?: () => void;
   onRemoveRow?: () => void;
   onRemoveCol?: () => void;
+  onRename?: (title: string) => void;
 }) {
   const [selected, setSelected] = useState('A1');
   const [editing, setEditing] = useState<string | null>(null);
@@ -221,6 +223,14 @@ export function TableGrid({
       onPointerDown={preventWindowDrag}
     >
       <div className="flex flex-wrap items-center gap-1 border-b border-stone-100 px-2 py-1">
+        {onRename ? (
+          <input
+            className="min-w-[7rem] max-w-[10rem] rounded border border-transparent px-1 py-0.5 text-xs font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
+            value={table.title}
+            aria-label="Table name"
+            onChange={(event) => onRename(event.target.value)}
+          />
+        ) : null}
         <button type="button" className={ACTION_TINY} onClick={onAddRow}>
           + Row
         </button>

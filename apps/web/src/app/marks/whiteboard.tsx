@@ -236,6 +236,7 @@ export function Whiteboard({
               onAddTableCol={onAddTableCol}
               onRemoveTableRow={onRemoveTableRow}
               onRemoveTableCol={onRemoveTableCol}
+              onRenameTable={onRenameTable}
             />
           </div>
         </section>
@@ -263,6 +264,7 @@ export function Whiteboard({
                 onAddTableCol={onAddTableCol}
                 onRemoveTableRow={onRemoveTableRow}
                 onRemoveTableCol={onRemoveTableCol}
+                onRenameTable={onRenameTable}
               />
             );
           }
@@ -358,14 +360,8 @@ function TableTitle({
   onDelete?: (id: string) => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1" data-no-drag>
-      <input
-        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
-        value={table.title}
-        aria-label="Table name"
-        data-no-drag
-        onChange={(event) => onRename?.(table.id, event.target.value)}
-      />
+    <div className="flex min-w-0 flex-1 items-center gap-1">
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{table.title}</span>
       {onDelete ? (
         <button
           type="button"
@@ -388,6 +384,7 @@ function TableSheet({
   onAddTableCol,
   onRemoveTableRow,
   onRemoveTableCol,
+  onRenameTable,
 }: {
   table: MarkTable;
   onTableCell?: (id: string, key: string, raw: string) => void;
@@ -396,6 +393,7 @@ function TableSheet({
   onAddTableCol?: (id: string) => void;
   onRemoveTableRow?: (id: string) => void;
   onRemoveTableCol?: (id: string) => void;
+  onRenameTable?: (id: string, title: string) => void;
 }) {
   return (
     <TableGrid
@@ -406,6 +404,7 @@ function TableSheet({
       onAddCol={() => onAddTableCol?.(table.id)}
       onRemoveRow={() => onRemoveTableRow?.(table.id)}
       onRemoveCol={() => onRemoveTableCol?.(table.id)}
+      onRename={(title) => onRenameTable?.(table.id, title)}
     />
   );
 }
