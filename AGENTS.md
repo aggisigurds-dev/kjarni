@@ -30,3 +30,16 @@ Follow these steps to get the repo running locally end-to-end. This is a pnpm + 
 7. Wait for Supabase to finish starting (the CLI prints `API URL`, `DB URL`, and keys) before moving on.
 8. Return to the repo root and run `pnpm supabase:sync-env` to sync the local Supabase keys into your env files.
 9. Start the dev server with `pnpm dev` (runs all apps in parallel) or `pnpm web#dev` for just the web app.
+
+## Cursor Cloud specific instructions
+
+Cloud Agents see this repo at `/agent/repos/kjarni`. Open that folder. Daily work is one repo per window; the 8-root workspace is only when the task crosses repos.
+
+**Verkefnalisti** still applies: `GET https://brunaholf.netlify.app/api/verkefnalisti` (beidni/i_vinnu) before starting new work.
+
+**Charlize** still applies when the work touches the shared Supabase, Drive, or deploy surface: read `v_charlize_active` (scope `kerfi`/`baedi`/`slokkvitaeki`) first. The standing rule lives with slokkvitaeki ops.
+
+**Screenshots / browser:** use Cursor Playwright MCP or computer use. `tools/bh-browser.cjs` in the sibling repos is a Claude Code remote-egress workaround. Do not use it unless Playwright fails.
+
+Schema changes go in `apps/database/supabase/schemas/*.sql`. Never hand-edit `apps/database/supabase/migrations`. Generate with `supabase db diff`. Do not commit `.oneignore`.
+

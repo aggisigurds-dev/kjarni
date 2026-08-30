@@ -1,0 +1,12 @@
+---
+description: Kjarni schema workflow and skill location
+alwaysApply: true
+---
+
+Schema changes belong in `apps/database/supabase/schemas/*.sql` only.
+
+Never hand-edit files in `apps/database/supabase/migrations`. Generate with `supabase db diff`.
+
+Never create, stage, or commit `.oneignore`.
+
+Skills live in `.agents/skills/`. Do not copy them into `.cursor/skills`.
