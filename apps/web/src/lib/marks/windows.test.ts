@@ -65,14 +65,14 @@ describe('category window layout', () => {
 
   it('persists a window move and unfiled chrome', () => {
     const seeded = layoutMissingWindows(seedDoc(1));
-    const moved = setCategoryLayout(seeded, 'cat_kjarni', { x: 64, y: 32, w: 300, h: 240 }, 9);
+    const moved = setCategoryLayout(seeded, 'cat_kjarni', { x: 64, y: 32, w: 304, h: 240 }, 9);
     expect(moved.categories.find((row) => row.id === 'cat_kjarni')).toMatchObject({
       x: 64,
       y: 32,
-      w: 300,
+      w: 304,
       h: 240,
     });
-    const next = setUnfiledLayout(moved, { x: 24, y: 16, w: 260, h: 180 }, 10);
-    expect((next as { unfiledLayout?: unknown }).unfiledLayout).toEqual({ x: 24, y: 16, w: 260, h: 180 });
+    const next = setUnfiledLayout(moved, { x: 24, y: 16, w: 264, h: 184 }, 10);
+    expect((next as { unfiledLayout?: unknown }).unfiledLayout).toEqual({ x: 24, y: 16, w: 264, h: 184 });
   });
 });
