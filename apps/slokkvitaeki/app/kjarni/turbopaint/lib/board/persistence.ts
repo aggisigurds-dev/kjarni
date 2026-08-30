@@ -61,6 +61,7 @@ function contentSnapshot() {
     snap: state.snap,
     layers: state.layers,
     activeLayerId: state.activeLayerId,
+    roomSettings: state.roomSettings,
   });
 }
 
@@ -105,6 +106,7 @@ function docFromState(): BoardDocument {
     snap: state.snap,
     layers: state.layers,
     activeLayerId: state.activeLayerId,
+    roomSettings: state.roomSettings,
     assetIds: [...new Set(assetIds)],
     boardId: currentBoardId ?? undefined,
     updatedAt: lastUpdatedAt || new Date().toISOString(),
@@ -122,6 +124,7 @@ function applyDoc(doc: BoardDocument) {
     snap: doc.snap ?? true,
     layers: doc.layers,
     activeLayerId: doc.activeLayerId,
+    roomSettings: doc.roomSettings,
   });
 }
 

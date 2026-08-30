@@ -20,6 +20,14 @@ import type {
 } from "./types";
 import { crossingSignature, isCrossingMark, replaceCrossingMarks } from "./crossings";
 import { GRID_GAP, snapValue } from "./geometry";
+import {
+  applyRoomAppearance,
+  DEFAULT_ROOM_SETTINGS,
+  isHoleRoom,
+  normalizeRoomSettings,
+  punchRoom,
+  type RoomSettings,
+} from "./room-rules";
 
 const MAX_HISTORY = 80;
 
@@ -55,6 +63,7 @@ interface BoardStore {
   style: StyleState;
   layers: BoardLayer[];
   activeLayerId: string;
+  roomSettings: RoomSettings;
   past: BoardObject[][];
   future: BoardObject[][];
   setHydrated: (v: boolean) => void;
@@ -82,7 +91,11 @@ interface BoardStore {
     snap: boolean;
     layers?: BoardLayer[];
     activeLayerId?: string;
+    roomSettings?: RoomSettings;
   }) => void;
+  setRoomSettings: (settings: RoomSettings) => void;
+  setRoomHoles: (id: string, next: { name?: string; holesTotal?: number; holesLeft?: number }) => void;
+  punchHole: (id: string) => void;
   addObjects: (objects: BoardObject[], select?: boolean) => void;
   updateObjects: (
     ids: string[],
@@ -143,6 +156,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
   layers: DEFAULT_LAYERS.map((l) => ({ ...l })),
   activeLayerId: LAYER_ALMENNT,
+  roomSettings: DEFAULT_ROOM_SETTINGS,
   past: [],
   future: [],
   setHydrated: (hydrated) => set({ hydrated }),
@@ -207,15 +221,65 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       data.activeLayerId && findLayer(layers, data.activeLayerId)
         ? data.activeLayerId
         : LAYER_ALMENNT;
-    const objects = data.objects.map((o) => stampLayerId(o, objectLayerId(o)));
+    const roomSettings =
+      data.roomSettings !== undefined
+        ? normalizeRoomSettings(data.roomSettings)
+        : get().roomSettings;
+    const objects = data.objects.map((o) => {
+      const stamped = stampLayerId(o, objectLayerId(o));
+      return isHoleRoom(stamped) ? applyRoomAppearance(stamped, roomSettings) : stamped;
+    });
     set({
       ...data,
       layers,
       activeLayerId,
       objects,
+      roomSettings,
       selectedIds: [],
       past: [],
       future: [],
+    });
+  },
+  setRoomSettings: (settings) => {
+    const roomSettings = normalizeRoomSettings(settings);
+    set({
+      roomSettings,
+      objects: get().objects.map((o) =>
+        isHoleRoom(o) ? applyRoomAppearance(o, roomSettings) : o
+      ),
+    });
+  },
+  setRoomHoles: (id, next) => {
+    const roomSettings = get().roomSettings;
+    pushHistory(set, get);
+    set({
+      objects: get().objects.map((obj) => {
+        if (obj.id !== id || obj.type !== "rect") return obj;
+        const merged = {
+          ...obj,
+          name: next.name !== undefined ? next.name : obj.name,
+          holesTotal: next.holesTotal !== undefined ? Math.max(0, Math.round(next.holesTotal)) : obj.holesTotal,
+          holesLeft: next.holesLeft !== undefined ? next.holesLeft : obj.holesLeft,
+          isRoom: true,
+        };
+        const tracksHoles =
+          next.holesTotal !== undefined ||
+          next.holesLeft !== undefined ||
+          obj.holesTotal != null ||
+          obj.holesLeft != null;
+        return tracksHoles ? applyRoomAppearance(merged, roomSettings) : merged;
+      }),
+    });
+  },
+  punchHole: (id) => {
+    const roomSettings = get().roomSettings;
+    const target = get().objects.find((o) => o.id === id);
+    if (!target || !isHoleRoom(target) || (target.holesLeft ?? 0) <= 0) return;
+    pushHistory(set, get);
+    set({
+      objects: get().objects.map((obj) =>
+        obj.id === id && isHoleRoom(obj) ? applyRoomAppearance(punchRoom(obj, roomSettings), roomSettings) : obj
+      ),
     });
   },
   addObjects: (incoming, select = true) => {

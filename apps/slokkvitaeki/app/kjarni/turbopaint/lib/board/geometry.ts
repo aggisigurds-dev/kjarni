@@ -280,6 +280,15 @@ function pointInRect(
   return x >= rect.x && y >= rect.y && x <= rect.x + rect.width && y <= rect.y + rect.height;
 }
 
+/** Topmost imported page that contains this world point. */
+export function imageAtPoint(objects: BoardObject[], x: number, y: number): ImageObject | undefined {
+  const images = objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden);
+  for (let i = images.length - 1; i >= 0; i--) {
+    if (pointInRect(x, y, images[i])) return images[i];
+  }
+  return undefined;
+}
+
 /** Markup, symbols and notes that should travel with an imported page. */
 export function objectsOnDocument(image: ImageObject, objects: BoardObject[]): BoardObject[] {
   const gutter = {

@@ -4,7 +4,8 @@ import type Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import { toast } from "sonner";
-import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
+import { boardBounds, cameraFit, dashArray, effectiveGridGap, imageAtPoint, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
+import { createHoleRoom, roomFillForHoles } from "../../lib/board/room-rules";
 import { registerStage } from "../../lib/board/stage-ref";
 import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
@@ -54,6 +55,7 @@ function orthoSnap(px: number, py: number, x: number, y: number, free: boolean) 
 
 type Draft =
   | { kind: "rect"; ax: number; ay: number; bx: number; by: number }
+  | { kind: "room"; ax: number; ay: number; bx: number; by: number }
   | { kind: "ellipse"; ax: number; ay: number; bx: number; by: number }
   | { kind: "sticky"; ax: number; ay: number; bx: number; by: number }
   | { kind: LineKind; points: number[] }
@@ -108,6 +110,7 @@ export function BoardCanvas({
   const grid = useBoardStore((s) => s.grid);
   const spacePan = useBoardStore((s) => s.spacePan);
   const style = useBoardStore((s) => s.style);
+  const roomSettings = useBoardStore((s) => s.roomSettings);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   /* Shift = frjáls halli meðan hornalæsingin er á. Hreyfi-handlerinn fær aðeins
    * hnitin, ekki atburðinn, svo staðan er geymd hér og uppfærð af glugganum. */
@@ -188,11 +191,21 @@ export function BoardCanvas({
   }, []);
 
   const commitShape = useCallback((d: Draft, firewallWall = false) => {
-    const { style: st, addObjects } = useBoardStore.getState();
+    const { style: st, addObjects, objects, roomSettings } = useBoardStore.getState();
     if (d.kind === "marquee" || d.kind === "crop") return;
-    if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
+    if (d.kind === "rect" || d.kind === "room" || d.kind === "ellipse" || d.kind === "sticky") {
       const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       if (box.width < 4 && box.height < 4) return;
+      if (d.kind === "room") {
+        const host = imageAtPoint(objects, box.x + box.width / 2, box.y + box.height / 2);
+        addObjects([
+          createHoleRoom(box, objects, roomSettings, {
+            id: newId(),
+            parentId: host?.id,
+          }),
+        ]);
+        return;
+      }
       if (d.kind === "rect") {
         addObjects([
           {
@@ -380,6 +393,7 @@ export function BoardCanvas({
       const snapped = freehand ? world : snapPoint(world.x, world.y);
       if (
         d.kind === "rect" ||
+        d.kind === "room" ||
         d.kind === "ellipse" ||
         d.kind === "sticky" ||
         d.kind === "marquee" ||
@@ -444,7 +458,8 @@ export function BoardCanvas({
     }
     commitShape(d);
     setDraftState(null);
-    if (useBoardStore.getState().tool !== "pen") {
+    const live = useBoardStore.getState().tool;
+    if (live !== "pen" && live !== "room") {
       useBoardStore.getState().setTool("select");
     }
   }, [commitShape, onCalibrate, onCropRect, setDraftState]);
@@ -575,6 +590,12 @@ export function BoardCanvas({
       return;
     }
 
+    const targetName =
+      typeof (e.target as { name?: () => string }).name === "function"
+        ? (e.target as { name: () => string }).name()
+        : "";
+    if (targetName === "room-punch") return;
+
     e.cancelBubble = true;
 
     const board = useBoardStore.getState();
@@ -656,6 +677,20 @@ export function BoardCanvas({
         polyRef.current = next;
         setDraftState({ kind: "polyline", points: next });
       }
+      return;
+    }
+
+    if (currentTool === "room") {
+      let node: Konva.Node | null = e.target as unknown as Konva.Node;
+      while (node && node !== (stage as unknown as Konva.Node)) {
+        const id = node.id();
+        const hit = id ? useBoardStore.getState().objects.find((o) => o.id === id) : undefined;
+        if (hit && hit.type === "rect" && hit.isRoom && (hit.holesTotal != null || hit.holesLeft != null)) {
+          return;
+        }
+        node = node.getParent();
+      }
+      setDraftState({ kind: "room", ax: snapped.x, ay: snapped.y, bx: snapped.x, by: snapped.y });
       return;
     }
 
@@ -1016,7 +1051,9 @@ export function BoardCanvas({
               pixelsPerMeter={pixelsPerMeter}
               draggable={selectLike && !spacePan && !isDrawnLocked(obj, layers)}
               listening={
-                (selectLike || tool === "eraser") &&
+                (selectLike ||
+                  tool === "eraser" ||
+                  (obj.type === "rect" && obj.isRoom && (obj.holesTotal != null || obj.holesLeft != null))) &&
                 !spacePan &&
                 isDrawnVisible(obj, layers) &&
                 (obj.type === "image" || !isDrawnLocked(obj, layers))
@@ -1057,6 +1094,7 @@ export function BoardCanvas({
           draft.kind !== "marquee" &&
           draft.kind !== "crop" &&
           draft.kind !== "rect" &&
+          draft.kind !== "room" &&
           draft.kind !== "ellipse" &&
           draft.kind !== "sticky" ? (
             <Line
@@ -1071,14 +1109,23 @@ export function BoardCanvas({
               name="ui-only"
             />
           ) : null}
-          {draft && (draft.kind === "rect" || draft.kind === "ellipse" || draft.kind === "sticky") ? (
+          {draft &&
+          (draft.kind === "rect" || draft.kind === "room" || draft.kind === "ellipse" || draft.kind === "sticky") ? (
             <Rect
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
-              stroke={style.stroke}
+              stroke={draft.kind === "room" ? roomSettings.strokeColor : style.stroke}
               strokeWidth={style.strokeWidth}
               dash={[8, 6]}
-              fill={draft.kind === "sticky" ? style.stickyFill : style.fill === "transparent" ? undefined : style.fill}
-              cornerRadius={draft.kind === "sticky" ? 4 : 0}
+              fill={
+                draft.kind === "sticky"
+                  ? style.stickyFill
+                  : draft.kind === "room"
+                    ? roomFillForHoles(roomSettings, roomSettings.defaultHolesTotal)
+                    : style.fill === "transparent"
+                      ? undefined
+                      : style.fill
+              }
+              cornerRadius={draft.kind === "sticky" ? 4 : draft.kind === "room" ? 2 : 0}
               listening={false}
               name="ui-only"
             />

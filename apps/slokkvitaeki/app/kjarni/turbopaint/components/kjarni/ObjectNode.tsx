@@ -4,6 +4,7 @@ import type Konva from "konva";
 import { useEffect, useState } from "react";
 import {
   Arrow,
+  Circle,
   Ellipse,
   Group,
   Image as KonvaImage,
@@ -11,6 +12,7 @@ import {
   Rect,
   Text as KonvaText,
 } from "react-konva";
+import { isHoleRoom, roomHoles, solidHex } from "../../lib/board/room-rules";
 import { getAssetUrl } from "../../lib/board/assets";
 import { dashArray, formatLength, formatM2, formatMm, lineLength } from "../../lib/board/geometry";
 import { isDrawnVisible } from "../../lib/board/layers";
@@ -151,12 +153,23 @@ export function ObjectNode({
     // Gegnsær ferningur eða 🏠 rými á kvörðuðu borði sýnir b × h og m² —
     // litaðir venjulegir ferningar eru merking án mála.
     // "Frádráttur…" telst neikvætt; frátalin rými sýna "(frátalið)".
+    const holeRoom = isHoleRoom(obj);
+    const holes = holeRoom ? roomHoles(obj) : null;
     const showDims = (obj.fill === "transparent" || obj.isRoom) && pixelsPerMeter && pixelsPerMeter > 0;
     const negative = obj.name.startsWith("Frádráttur");
     const roomName =
       obj.isRoom && obj.name && obj.name !== "Rými" && obj.name !== "Ferningur" ? obj.name : "";
     const wM = showDims ? obj.width / pixelsPerMeter : 0;
     const hM = showDims ? obj.height / pixelsPerMeter : 0;
+    const labelLines = [
+      roomName || (holeRoom ? obj.name : ""),
+      holes ? `${holes.left} / ${holes.total} göt` : "",
+      showDims ? `${formatMm(wM)} × ${formatMm(hM)} mm` : "",
+      showDims ? `${negative ? "−" : ""}${formatM2(wM * hM)}${obj.roomExcluded ? " (frátalið)" : ""}` : "",
+    ].filter(Boolean);
+    const badgeR = 13;
+    const badgeX = Math.max(badgeR + 4, obj.width - badgeR - 8);
+    const badgeY = Math.min(obj.height / 2, badgeR + 8);
     return (
       <Group {...common}>
         <Rect
@@ -167,22 +180,69 @@ export function ObjectNode({
           strokeWidth={obj.strokeWidth}
           cornerRadius={obj.cornerRadius}
         />
-        {showDims ? (
+        {labelLines.length ? (
           <KonvaText
             width={Math.max(80, obj.width)}
             x={obj.width < 80 ? (obj.width - 80) / 2 : 0}
-            y={Math.max(4, obj.height / 2 - (roomName ? 27 : 18))}
-            text={`${roomName ? `${roomName}\n` : ""}${formatMm(wM)} × ${formatMm(hM)} mm\n${negative ? "−" : ""}${formatM2(wM * hM)}${obj.roomExcluded ? " (frátalið)" : ""}`}
+            y={Math.max(4, obj.height / 2 - labelLines.length * 9)}
+            text={labelLines.join("\n")}
             fontSize={15}
             fontStyle="bold"
             align="center"
-            fill={negative ? "#dc2626" : obj.roomExcluded ? "#78716c" : obj.stroke}
+            fill={negative ? "#dc2626" : obj.roomExcluded ? "#78716c" : holes?.left === 0 ? "#166534" : obj.stroke}
             stroke="#ffffff"
             strokeWidth={3}
             fillAfterStrokeEnabled
             fontFamily="Inter, sans-serif"
             listening={false}
           />
+        ) : null}
+        {holes ? (
+          <>
+            <Circle
+              name="room-punch"
+              x={badgeX}
+              y={badgeY}
+              radius={badgeR}
+              fill={holes.left === 0 ? "#166534" : solidHex(obj.fill)}
+              stroke="#ffffff"
+              strokeWidth={2}
+              onMouseDown={(e) => {
+                e.cancelBubble = true;
+              }}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                if (holes.left > 0) useBoardStore.getState().punchHole(obj.id);
+              }}
+              onTap={(e) => {
+                e.cancelBubble = true;
+                if (holes.left > 0) useBoardStore.getState().punchHole(obj.id);
+              }}
+            />
+            <KonvaText
+              name="room-punch"
+              x={badgeX - badgeR}
+              y={badgeY - 7}
+              width={badgeR * 2}
+              text={holes.left === 0 ? "✓" : String(holes.left)}
+              fontSize={holes.left === 0 ? 14 : 13}
+              fontStyle="bold"
+              align="center"
+              fill="#ffffff"
+              listening
+              onMouseDown={(e) => {
+                e.cancelBubble = true;
+              }}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                if (holes.left > 0) useBoardStore.getState().punchHole(obj.id);
+              }}
+              onTap={(e) => {
+                e.cancelBubble = true;
+                if (holes.left > 0) useBoardStore.getState().punchHole(obj.id);
+              }}
+            />
+          </>
         ) : null}
       </Group>
     );

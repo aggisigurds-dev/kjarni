@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import {
   ArrowUpRight,
+  BoxSelect,
   Circle,
   Eraser,
   Hand,
@@ -26,6 +27,7 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
   { id: "select", label: "Velja", shortcut: "V", icon: <MousePointer2 className="size-4" /> },
   { id: "hand", label: "Hönd / færa borð", shortcut: "H", icon: <Hand className="size-4" /> },
   { id: "rect", label: "Ferningur", shortcut: "R", icon: <Square className="size-4" /> },
+  { id: "room", label: "Rými — dragðu kassa, smelltu á göt", shortcut: "B", icon: <BoxSelect className="size-4" /> },
   { id: "ellipse", label: "Hringur", shortcut: "O", icon: <Circle className="size-4" /> },
   { id: "line", label: "Lína", shortcut: "L", icon: <Minus className="size-4" /> },
   { id: "arrow", label: "Ör", shortcut: "A", icon: <ArrowUpRight className="size-4" /> },
@@ -58,7 +60,7 @@ export function Toolbar() {
     <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
       {TOOLS.map((item, index) => (
         <div key={item.id}>
-          {index === 2 || index === 8 ? <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" /> : null}
+          {index === 2 || index === 9 ? <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" /> : null}
           <ToolButton
             active={tool === item.id}
             label={`${item.label} (${item.shortcut})`}
@@ -138,6 +140,14 @@ export function StyleStrip() {
       updateObjects(ids, (o) => ({ ...o, ...patch }) as typeof o);
     }
   };
+
+  if (tool === "room") {
+    return (
+      <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+        <span className="text-stone-400">Dragðu kassa yfir rýmið · smelltu á gatið til að slá út</span>
+      </div>
+    );
+  }
 
   if (tool === "symbol") {
     return (

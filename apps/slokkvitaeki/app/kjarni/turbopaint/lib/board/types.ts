@@ -14,7 +14,8 @@ export type Tool =
   | "calibrate"
   | "firewall"
   | "eraser"
-  | "crop";
+  | "crop"
+  | "room";
 
 export type ImportQuality = "fast" | "standard" | "print";
 
@@ -72,6 +73,10 @@ export interface RectObject extends BaseObject {
   isRoom?: boolean;
   /** Rými sem telst EKKI með í nettó (svalir, geymsla, bílskúr …). */
   roomExcluded?: boolean;
+  /** Göt sem á að klára í rýminu (heild). */
+  holesTotal?: number;
+  /** Göt sem eru eftir — 0 → rýmið verður grænt. */
+  holesLeft?: number;
 }
 
 export interface EllipseObject extends BaseObject {
@@ -148,6 +153,8 @@ export interface BoardDocument {
   /** Sync-samningur klientsins. 2 = efnis-stimplun (PR #59+). Pull hunsar
    * skjöl án syncRev — þau koma frá eldri, óöruggum klientum. */
   syncRev?: number;
+  /** Litir og þröskuldar fyrir göt-í-rými. */
+  roomSettings?: import("./room-rules").RoomSettings;
 }
 
 export const IMPORT_MAX_PX: Record<ImportQuality, number> = {

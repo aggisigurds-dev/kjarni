@@ -33,6 +33,7 @@ import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
+import { RoomTable } from "./RoomTable";
 import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
@@ -546,6 +547,7 @@ export function WhiteboardApp() {
           v: "select",
           h: "hand",
           r: "rect",
+          b: "room",
           o: "ellipse",
           l: "line",
           a: "arrow",
@@ -676,8 +678,9 @@ export function WhiteboardApp() {
             <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
             </div>
-            <div className="pointer-events-auto absolute top-3 right-3">
+            <div className="pointer-events-auto absolute top-3 right-3 flex flex-col items-end gap-2">
               <CountTable />
+              <RoomTable />
             </div>
             {selectedIds.length ? (
               <div className="pointer-events-auto absolute right-3 bottom-28 lg:hidden">
@@ -1115,6 +1118,7 @@ function HelpDialog({
             ["V", "Velja"],
             ["H / space", "Færa borð (✋: hægri-drag færir, vinstri velur)"],
             ["R / O", "Ferningur / hringur"],
+            ["B", "Rými — dragðu kassa, smelltu á göt"],
             ["L / A", "Lína / ör"],
             ["W", "Veggir (smelltu, Enter til að loka)"],
             ["P / T / N", "Penni / texti / minnismiði"],
@@ -1178,6 +1182,7 @@ async function importKjarniJson(file: File) {
     snap: data.snap ?? true,
     layers: data.layers,
     activeLayerId: data.activeLayerId,
+    roomSettings: data.roomSettings,
   });
   toast.success("Borð opnað");
 }

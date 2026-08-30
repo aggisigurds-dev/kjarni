@@ -15,13 +15,14 @@ import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
 
-type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "kalt" | "heitt" | "skolp" | "loftræsting" | "hitakerfi" | "gegnumtak" | "annad";
+type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "rymi" | "kalt" | "heitt" | "skolp" | "loftræsting" | "hitakerfi" | "gegnumtak" | "annad";
 
 const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
   { id: "teikning", label: "Teikningar" },
   { id: "eldveggur", label: "Eldveggir" },
   { id: "mvs", label: "165.BR1" },
   { id: "takn", label: "Tákn" },
+  { id: "rymi", label: "Rými" },
   { id: "kalt", label: "Kalt vatn" },
   { id: "heitt", label: "Heitt vatn" },
   { id: "skolp", label: "Skolp / fráveita" },
@@ -38,6 +39,7 @@ function layerGroupOf(obj: BoardObject): LayerGroupId {
     return lid;
   }
   if (obj.type === "image") return "teikning";
+  if (obj.type === "rect" && obj.isRoom) return "rymi";
   if (isFirewallMark(obj)) return "eldveggur";
   if (isMvsMark(obj)) return "mvs";
   if (obj.type === "symbol") return "takn";
@@ -90,6 +92,58 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {primary ? (
           <div className="space-y-4">
+            {primary.type === "rect" && primary.isRoom ? (
+              <>
+                <Field label="Nafn">
+                  <Input
+                    value={primary.name}
+                    onChange={(e) =>
+                      useBoardStore.getState().setRoomHoles(primary.id, { name: e.target.value })
+                    }
+                    className="h-8 border-white/10 bg-white/5 text-stone-100"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Göt eftir">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={primary.holesLeft ?? ""}
+                      onChange={(e) =>
+                        useBoardStore.getState().setRoomHoles(primary.id, {
+                          holesLeft: Number(e.target.value),
+                          holesTotal: primary.holesTotal ?? useBoardStore.getState().roomSettings.defaultHolesTotal,
+                        })
+                      }
+                      className="h-8 border-white/10 bg-white/5 text-stone-100"
+                    />
+                  </Field>
+                  <Field label="Göt heild">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={primary.holesTotal ?? ""}
+                      onChange={(e) =>
+                        useBoardStore.getState().setRoomHoles(primary.id, {
+                          holesTotal: Number(e.target.value),
+                          holesLeft: primary.holesLeft ?? Number(e.target.value),
+                        })
+                      }
+                      className="h-8 border-white/10 bg-white/5 text-stone-100"
+                    />
+                  </Field>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-white/10 bg-white/5 text-stone-200"
+                  disabled={(primary.holesLeft ?? 0) <= 0}
+                  onClick={() => useBoardStore.getState().punchHole(primary.id)}
+                >
+                  {(primary.holesLeft ?? 0) <= 0 ? "Lokið" : "Slá út eitt gat"}
+                </Button>
+              </>
+            ) : null}
             {primary.type === "symbol" ? (
               <Field label="Merki / númer">
                 <Input
