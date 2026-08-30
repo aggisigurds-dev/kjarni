@@ -10,6 +10,7 @@ import {
   pdfJsDocumentOptions,
 } from "./pdfjs-setup";
 import {
+  IMPORT_FILE_ACCEPT,
   IMPORT_FILE_WARN_BYTES,
   IMPORT_SIZE_HINT,
   PDF_SAFE_AREA,
@@ -90,4 +91,10 @@ test("ordinary A3 at standard 300 DPI is not clamped below target", () => {
 test("UI hint states there is no 20 MB file cap", () => {
   assert.ok(IMPORT_SIZE_HINT.includes("20 MB"));
   assert.ok(IMPORT_SIZE_HINT.includes("vafranum"));
+});
+
+test("file picker lists PDF first and does not use a bare image/* accept", () => {
+  assert.ok(IMPORT_FILE_ACCEPT.startsWith("application/pdf"));
+  assert.ok(IMPORT_FILE_ACCEPT.includes(".pdf"));
+  assert.equal(IMPORT_FILE_ACCEPT.includes("image/*"), false);
 });

@@ -20,6 +20,28 @@ export const PDF_SAFE_AREA = 40_000_000;
 export const IMPORT_SIZE_HINT =
   "PDF/TIF eru lesin í vafranum — engin 20 MB skráarhömlun. 30+ MB er í lagi; stórar síður eru teiknaðar í lægri DPI.";
 
+/** File picker accept list. Do not use a bare `image/*` — Android then opens
+ * Gallery/Camera and hides Documents, so a PDF looks like it "does not work". */
+export const IMPORT_FILE_ACCEPT = [
+  "application/pdf",
+  ".pdf",
+  ".tif",
+  ".tiff",
+  "image/tiff",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+  "image/gif",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".svg",
+  ".gif",
+  ".kjarni.json",
+].join(",");
+
 export type PdfRasterPlan = {
   scale: number;
   width: number;

@@ -13,6 +13,10 @@
  * board is nested folder columns, not free-position cards.
  */
 
+import { rewriteRetiredKjarniUrl, TURBOPAINT_APP, TURBOPAINT_HUB } from '@/lib/kjarni-hosts';
+
+export { rewriteRetiredKjarniUrl } from '@/lib/kjarni-hosts';
+
 export const MARKS_BOARD_ID = 'home';
 
 export type MarksClock = {
@@ -240,22 +244,6 @@ export function siteTitle(
 }
 
 export const BUTTON_COLORS = ['#047857', '#1d4ed8', '#b45309', '#be123c', '#6d28d9', '#44403c'] as const;
-
-const NETLIFY_KJARNI = 'https://slokkvitaeki.netlify.app/kjarni';
-const VERCEL_KJARNI = 'https://slokkvitaeki.vercel.app/kjarni';
-
-/** Kjarni/TurboPaint moved off Netlify. Rewrite so existing Marks boards do not 404. */
-export function rewriteRetiredKjarniUrl(url: string): string {
-  if (
-    url === NETLIFY_KJARNI ||
-    url.startsWith(`${NETLIFY_KJARNI}/`) ||
-    url.startsWith(`${NETLIFY_KJARNI}?`) ||
-    url.startsWith(`${NETLIFY_KJARNI}#`)
-  ) {
-    return VERCEL_KJARNI + url.slice(NETLIFY_KJARNI.length);
-  }
-  return url;
-}
 
 export function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -761,18 +749,8 @@ export function seedDoc(now = 1): MarksDoc {
       'kjarni',
     ]),
     linkAt('lnk_marks', kjarni.id, 'Marks', '/marks', 'This start page', 1, ['kjarni']),
-    linkAt(
-      'lnk_paint',
-      kjarni.id,
-      'TurboPaint',
-      'https://slokkvitaeki.vercel.app/kjarni/turbopaint',
-      'Floor plans',
-      2,
-      ['kjarni']
-    ),
-    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', 'https://slokkvitaeki.vercel.app/kjarni', 'Stjórnstöð', 3, [
-      'kjarni',
-    ]),
+    linkAt('lnk_paint', kjarni.id, 'TurboPaint', TURBOPAINT_APP, 'Floor plans', 2, ['kjarni']),
+    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', TURBOPAINT_HUB, 'Stjórnstöð', 3, ['kjarni']),
     linkAt('lnk_slokk', apps.id, 'Slökkvitæki', 'https://slokkvitaeki.netlify.app', '', 0, ['app']),
     linkAt('lnk_bruna', apps.id, 'Brunahólf', 'https://brunaholf.netlify.app', '', 1, ['app']),
     linkAt('lnk_github', shop.id, 'GitHub · kjarni', 'https://github.com/aggisigurds-dev/kjarni', 'Website code', 0, [
@@ -789,7 +767,7 @@ export function seedDoc(now = 1): MarksDoc {
       id: 'btn_hub',
       label: 'Hub',
       kind: 'url',
-      url: 'https://slokkvitaeki.vercel.app/kjarni',
+      url: TURBOPAINT_HUB,
       color: BUTTON_COLORS[0],
     }),
   ];

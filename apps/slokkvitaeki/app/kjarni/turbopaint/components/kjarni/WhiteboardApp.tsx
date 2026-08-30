@@ -718,13 +718,18 @@ export function WhiteboardApp() {
             <TextEditor obj={editing} camera={camera} onClose={() => setEditingId(null)} />
           ) : null}
           {!objects.length && hydrated ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="rounded-2xl border border-stone-300 bg-white/90 px-8 py-6 text-center shadow-lg">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <button
+                type="button"
+                className="pointer-events-auto rounded-2xl border border-stone-300 bg-white/90 px-8 py-6 text-center shadow-lg"
+                onClick={() => document.getElementById("tp-import-input")?.click()}
+              >
                 <div className="text-base font-medium text-stone-800">Tómt hvítu borð</div>
                 <div className="mt-1 max-w-sm text-sm text-stone-500">
-                  Dragðu inn gólfplön sem PDF eða TIF — síðan teiknarðu línur, örvar og brunavarnatákn ofan á.
+                  Ýttu hér eða á <span className="font-medium text-stone-700">PDF</span> til að
+                  flytja inn gólfplön. Síðan teiknarðu línur, örvar og brunavarnatákn ofan á.
                 </div>
-              </div>
+              </button>
             </div>
           ) : null}
         </div>
