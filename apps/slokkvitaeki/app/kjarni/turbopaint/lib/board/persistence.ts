@@ -58,6 +58,8 @@ function contentSnapshot() {
     pixelsPerMeter: state.pixelsPerMeter,
     grid: state.grid,
     snap: state.snap,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
   });
 }
 
@@ -100,6 +102,8 @@ function docFromState(): BoardDocument {
     pixelsPerMeter: state.pixelsPerMeter,
     grid: state.grid,
     snap: state.snap,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
     assetIds: [...new Set(assetIds)],
     boardId: currentBoardId ?? undefined,
     updatedAt: lastUpdatedAt || new Date().toISOString(),
@@ -115,6 +119,8 @@ function applyDoc(doc: BoardDocument) {
     pixelsPerMeter: doc.pixelsPerMeter,
     grid: doc.grid ?? true,
     snap: doc.snap ?? true,
+    layers: doc.layers,
+    activeLayerId: doc.activeLayerId,
   });
 }
 

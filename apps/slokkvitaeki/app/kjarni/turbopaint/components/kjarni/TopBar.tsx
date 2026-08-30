@@ -1,7 +1,9 @@
 "use client";
 
+import { toast } from "sonner";
 import {
   Cloud,
+  Crosshair,
   Download,
   Eraser,
   Flame,
@@ -321,6 +323,20 @@ export function TopBar({
         size="sm"
         variant="ghost"
         className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
+        onClick={() => {
+          const n = useBoardStore.getState().refreshCrossings();
+          if (n) toast.message(`Gegnumtök: ${n} krossar vegg`);
+          else toast.message("Engin lagnir krossa vegg");
+        }}
+        title="Merkja þar sem lagnir krossa veggi — sterkari merki á EI-30 / EI-60"
+      >
+        <Crosshair className="size-4" />
+        <span className="hidden xl:inline">Gegnumtök</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
         onClick={() => onStrip?.()}
         title="Hreinsa teikningu — hvítur grunnur, bara veggir og blek"
       >
@@ -406,6 +422,14 @@ export function TopBar({
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onMarkFirewalls?.()}>
             Merkja eldveggi og 165.BR1 (SLT / slöngur / skilti)
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              const n = useBoardStore.getState().refreshCrossings();
+              toast.message(n ? `Gegnumtök: ${n} krossar vegg` : "Engin lagnir krossa vegg");
+            }}
+          >
+            Gegnumtök — krossar vegg
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void clearBoard()}>Tómt borð</DropdownMenuItem>
           <DropdownMenuSeparator />

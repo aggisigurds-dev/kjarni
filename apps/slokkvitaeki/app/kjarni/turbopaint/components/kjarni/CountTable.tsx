@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatM2, objectsOnDocument } from "../../lib/board/geometry";
 import { newId } from "../../lib/board/ids";
+import { LAYER_ALMENNT } from "../../lib/board/layers";
 import { useBoardStore } from "../../lib/board/store";
 import { NOTKUNARFLOKKAR, greinaTharfir, type Notkunarflokkur } from "../../lib/board/krofur";
 import { getSymbol } from "../../lib/board/symbols";
@@ -80,6 +81,7 @@ export function CountTable() {
         continue;
       }
       if (o.name.startsWith("Eldveggir")) continue;
+      if (o.name.startsWith("Gegnumtak")) continue;
       // 🏠 rými eiga sinn eigin RÝMI-kafla — ekki telja þau sem "Ferningar"
       if (o.type === "rect" && o.isRoom) continue;
       const label = GENERIC_LABELS[o.type];
@@ -215,6 +217,7 @@ export function CountTable() {
           hidden: false,
           name: "Magntafla",
           parentId: plan.id,
+          layerId: LAYER_ALMENNT,
         },
       ],
       true

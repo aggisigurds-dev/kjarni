@@ -6,6 +6,7 @@ import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import { toast } from "sonner";
 import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
+import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
@@ -100,6 +101,7 @@ export function BoardCanvas({
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const objects = useBoardStore((s) => s.objects);
+  const layers = useBoardStore((s) => s.layers);
   const selectedIds = useBoardStore((s) => s.selectedIds);
   const tool = useBoardStore((s) => s.tool);
   const camera = useBoardStore((s) => s.camera);
@@ -153,8 +155,8 @@ export function BoardCanvas({
   const selectLike = tool === "select" || tool === "hand";
 
   const selectedNodes = useMemo(
-    () => objects.filter((o) => selectedIds.includes(o.id) && !o.hidden),
-    [objects, selectedIds]
+    () => objects.filter((o) => selectedIds.includes(o.id) && isDrawnVisible(o, layers)),
+    [objects, selectedIds, layers]
   );
 
   useEffect(() => {
@@ -332,8 +334,9 @@ export function BoardCanvas({
       if (id) {
         const obj = objects.find((o) => o.id === id);
         if (obj) {
-          if (obj.type !== "image" && !obj.locked) {
-            useBoardStore.getState().deleteIds([obj.id]);
+          const st = useBoardStore.getState();
+          if (obj.type !== "image" && !isDrawnLocked(obj, st.layers)) {
+            st.deleteIds([obj.id]);
           }
           return;
         }
@@ -414,10 +417,10 @@ export function BoardCanvas({
     if (d.kind === "marquee") {
       const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       if (box.width > 8 && box.height > 8) {
-        const hits = useBoardStore
-          .getState()
-          .objects.filter((o) => {
-            if (o.locked || o.hidden) return false;
+        const st = useBoardStore.getState();
+        const hits = st.objects
+          .filter((o) => {
+            if (isDrawnLocked(o, st.layers) || !isDrawnVisible(o, st.layers)) return false;
             return o.x >= box.x && o.y >= box.y && o.x <= box.x + box.width && o.y <= box.y + box.height;
           })
           .map((o) => o.id);
@@ -573,6 +576,12 @@ export function BoardCanvas({
     }
 
     e.cancelBubble = true;
+
+    const board = useBoardStore.getState();
+    if (isLayerLocked(board.layers, board.activeLayerId)) {
+      toast.message("Lagið er læst — aflæstu því til að teikna");
+      return;
+    }
 
     if (currentTool === "symbol") {
       const { style: st, addObjects } = useBoardStore.getState();
@@ -838,9 +847,11 @@ export function BoardCanvas({
         (patch as { meters?: number }).meters = undefined;
       }
       useBoardStore.getState().patchObject(id, patch, false);
+      useBoardStore.getState().refreshCrossings(false);
       return;
     }
     useBoardStore.getState().patchObject(id, { x: node.x, y: node.y, rotation: node.rotation }, false);
+    useBoardStore.getState().refreshCrossings(false);
   };
 
   const beginDocumentDrag = (id: string) => {
@@ -897,6 +908,7 @@ export function BoardCanvas({
     useBoardStore.getState().commitHistory();
     if (!drag || drag.imageId !== id) {
       useBoardStore.getState().patchObject(id, { x: snapped.x, y: snapped.y }, false);
+      useBoardStore.getState().refreshCrossings(false);
       documentDragRef.current = null;
       return;
     }
@@ -911,6 +923,7 @@ export function BoardCanvas({
       },
       false
     );
+    useBoardStore.getState().refreshCrossings(false);
     documentDragRef.current = null;
   };
 
@@ -1001,11 +1014,12 @@ export function BoardCanvas({
               obj={obj}
               isSelected={selectedIds.includes(obj.id)}
               pixelsPerMeter={pixelsPerMeter}
-              draggable={selectLike && !spacePan && !obj.locked}
+              draggable={selectLike && !spacePan && !isDrawnLocked(obj, layers)}
               listening={
                 (selectLike || tool === "eraser") &&
                 !spacePan &&
-                (obj.type === "image" || !obj.locked)
+                isDrawnVisible(obj, layers) &&
+                (obj.type === "image" || !isDrawnLocked(obj, layers))
               }
               onDragStart={(id) => {
                 if (panRef.current || pinchRef.current) {
@@ -1314,9 +1328,7 @@ export function BoardCanvas({
                       className={item}
                       onClick={act(() => {
                         const s = useBoardStore.getState();
-                        s.setSelected(
-                          s.objects.filter((o) => !o.locked && !o.hidden).map((o) => o.id)
-                        );
+                        s.setSelected(selectableIds(s.objects, s.layers));
                       })}
                     >
                       Velja allt (⌘A)
