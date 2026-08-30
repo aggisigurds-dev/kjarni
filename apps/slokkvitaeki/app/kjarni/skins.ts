@@ -19,6 +19,7 @@ export const TOOLS = [
   { id: "skjalarinn", label: "Skjalarinn", href: "/skjalarinn" },
   { id: "draft", label: "Prufusvæði", href: "/draft" },
   { id: "3dwork", label: "3dwork", href: "/3dwork", ext: true },
+  { id: "marks", label: "Marks", href: "/marks", ext: true },
 ] as const;
 
 export type ToolId = (typeof TOOLS)[number]["id"];
