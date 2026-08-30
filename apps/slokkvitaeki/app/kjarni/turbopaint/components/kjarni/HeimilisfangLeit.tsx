@@ -404,11 +404,12 @@ export function HeimilisfangLeit({
           type="button"
           title="Leita að teikningu eftir heimilisfangi"
           onClick={() => setOpid((v) => !v)}
-          className={`flex size-9 items-center justify-center rounded-lg ${
+          className={`flex h-9 items-center gap-1 rounded-lg px-2 ${
             opid ? "bg-white/15 text-white" : "text-stone-300 hover:bg-white/8 hover:text-white"
           }`}
         >
           <Search className="size-4" />
+          <span className="text-[11px] font-medium">Leita</span>
         </button>
       ) : (
         searchField

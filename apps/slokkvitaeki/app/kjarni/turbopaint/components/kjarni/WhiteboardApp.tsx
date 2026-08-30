@@ -200,7 +200,11 @@ export function WhiteboardApp() {
     []
   );
 
-  const runImport = useCallback(async (files: File[], world?: { x: number; y: number }) => {
+  const runImport = useCallback(async (
+    files: File[],
+    world?: { x: number; y: number },
+    opts?: { asPlan?: boolean }
+  ) => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
       await importKjarniJson(json);
@@ -216,7 +220,7 @@ export function WhiteboardApp() {
       y: boardBounds(useBoardStore.getState().objects).y + boardBounds(useBoardStore.getState().objects).height + 80,
     };
     try {
-      const { objects: incoming, warnings, textByObjectId } = await importFiles(
+      const { objects: incoming, warnings } = await importFiles(
         supported,
         useBoardStore.getState().importQuality,
         origin,
@@ -228,7 +232,7 @@ export function WhiteboardApp() {
         toast.error(warnings[0] || "Ekkert kom inn");
         return;
       }
-      const isPlan = supported.some((f) => {
+      const isPlan = opts?.asPlan || supported.some((f) => {
         const kind = classifyFile(f);
         return kind === "pdf" || kind === "tiff";
       });
@@ -240,22 +244,22 @@ export function WhiteboardApp() {
       if (view) {
         useBoardStore.getState().setCamera(cameraFit(bounds, view.clientWidth, view.clientHeight));
       }
+      useBoardStore.getState().setImportProgress(null);
       toast.success(
         isPlan
-          ? "Gólfplön tilbúið — merki nú E-30 / E-60 eldveggi"
+          ? "Gólfplön á borðinu — smelltu E-30 / E-60 til að merkja eldveggi"
           : incoming.length === 1
             ? `${incoming[0].name} er á borðinu`
             : `${incoming.length} síður settar á borðið`
       );
       warnings.forEach((w) => toast.message(w));
-      if (isPlan) {
-        await markFirewalls(incoming, textByObjectId);
-      }
+      // Ekki keyra OCR sjálfkrafa. Á TIF (og JPEG af skjalasafninu) tók
+      // Tesseract svo langan tíma að innflutningurinn virtist stoppa.
     } catch (err) {
       useBoardStore.getState().setImportProgress(null);
       toast.error(err instanceof Error ? err.message : "Innflutningur mistókst");
     }
-  }, [markFirewalls]);
+  }, []);
 
   const dropSymbol = useCallback((symbolId: string, world: { x: number; y: number }) => {
     if (symbolId === "firewall") {
@@ -401,9 +405,9 @@ export function WhiteboardApp() {
       }
       try {
         useBoardStore.getState().setImportProgress({
-          fileName: "permalink",
+          fileName: "skjalasafn",
           percent: 10,
-          message: "Sæki teikningu af skjalasafninu…",
+          message: "Sæki teikningu (JPEG, ekki fullt TIF)…",
         });
         const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}`);
         if (!res.ok) {
@@ -417,7 +421,7 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        await runImport([file]);
+        await runImport([file], undefined, { asPlan: true });
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         toast.error(err instanceof Error ? err.message : "Gat ekki sótt af slóðinni");

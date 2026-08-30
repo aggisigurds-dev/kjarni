@@ -5,6 +5,7 @@ import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
 import { fileSizeWarning, planPdfRaster, PDF_SAFE_AREA } from "./import-limits";
 import { PDFJS_WORKER_SRC, classifyFile, pdfJsDocumentOptions } from "./pdfjs-setup";
+import { downsampleTiffData } from "./tiff-raster";
 import type { ImageObject, ImportQuality } from "./types";
 import { IMPORT_MAX_PX } from "./types";
 
@@ -21,6 +22,8 @@ export type ImportResult = {
 };
 
 type ProgressFn = (percent: number, message: string) => void;
+
+const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function makeImageObject(
   assetId: string,
@@ -245,28 +248,39 @@ async function importTiff(
     );
     const ifd = pages[i];
     try {
+      await yieldUi();
       UTIF.decodeImage(buffer, ifd);
-      const rgba = UTIF.toRGBA8(ifd);
+      const data = ifd.data as Uint8Array | undefined;
       const width = Number(ifd.width);
       const height = Number(ifd.height);
-      if (!width || !height) throw new Error("Ógild stærð");
-      const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
-      const src = document.createElement("canvas");
-      src.width = width;
-      src.height = height;
-      const sctx = src.getContext("2d");
+      if (!width || !height || !data?.length) throw new Error("Ógild stærð");
+      onProgress(
+        Math.round(((i + 0.55) / pages.length) * 100),
+        `Minnka TIF ${i + 1} af ${pages.length}…`
+      );
+      await yieldUi();
+      let sampled;
+      try {
+        sampled = downsampleTiffData(data, width, height, maxPx);
+      } catch {
+        const rgba = UTIF.toRGBA8(ifd);
+        sampled = downsampleTiffData(rgba, width, height, maxPx);
+      }
+      if (sampled.warning) warnings.push(sampled.warning);
+      const imageData = new ImageData(sampled.rgba, sampled.width, sampled.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = sampled.width;
+      canvas.height = sampled.height;
+      const sctx = canvas.getContext("2d");
       if (!sctx) throw new Error("Gat ekki opnað canvas");
       sctx.putImageData(imageData, 0, 0);
-      const { canvas, width: w, height: h } = rasterizeToLimit(src, width, height, maxPx);
       const blob = await canvasToBlob(canvas);
         const assetId = newId();
       await putAsset(assetId, blob);
       const name =
         pages.length > 1 ? `${file.name} · síða ${i + 1}` : file.name.replace(/\.[^.]+$/, "");
-      objects.push(makeImageObject(assetId, w, h, name, cursorX, origin.y));
-      cursorX += w + 96;
-      src.width = 0;
-      src.height = 0;
+      objects.push(makeImageObject(assetId, sampled.width, sampled.height, name, cursorX, origin.y));
+      cursorX += sampled.width + 96;
       canvas.width = 0;
       canvas.height = 0;
     } catch {
