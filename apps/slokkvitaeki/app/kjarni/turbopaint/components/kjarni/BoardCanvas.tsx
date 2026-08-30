@@ -602,7 +602,8 @@ export function BoardCanvas({
     if (e.evt.button !== 0) return;
 
     const hitId = hitObjectId(e.target, stage, useBoardStore.getState().objects);
-    if (hitId && currentTool !== "eraser" && currentTool !== "crop" && e.evt.pointerType !== "mouse") {
+    const allowHold = e.evt.pointerType !== "mouse" || mobileUi;
+    if (hitId && currentTool !== "eraser" && currentTool !== "crop" && allowHold) {
       holdFiredRef.current = false;
       clearHold();
       const id = hitId;
