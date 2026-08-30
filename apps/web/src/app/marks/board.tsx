@@ -23,6 +23,12 @@ import {
   parsePastedUrls,
 } from '@/lib/marks/import-bookmarks';
 import {
+  formatKeepSummary,
+  importKeepUploads,
+  importPastedKeep,
+  type KeepImportSummary,
+} from '@/lib/marks/keep';
+import {
   addButton,
   addCategory,
   addLink,
@@ -72,6 +78,7 @@ import {
   type ButtonDraft,
   type LinkDraft,
 } from './dialogs';
+import { KeepImportDialog } from './keep-import-dialog';
 import { ACTION_GHOST, ACTION_PRIMARY, ACTION_TINY, BUTTON_CHIP, CHIP_IDLE, CHIP_ON, FIELD, LABEL, PANEL, SURFACE } from './ui';
 import { Whiteboard } from './whiteboard';
 
@@ -116,6 +123,11 @@ export function MarksBoard() {
   const [showImport, setShowImport] = useState(false);
   const [importParent, setImportParent] = useState('');
   const [importPasted, setImportPasted] = useState('');
+  const [showKeepImport, setShowKeepImport] = useState(false);
+  const [keepPasted, setKeepPasted] = useState('');
+  const [keepBusy, setKeepBusy] = useState(false);
+  const [keepSummary, setKeepSummary] = useState<KeepImportSummary | null>(null);
+  const [keepError, setKeepError] = useState('');
   const [showFilter, setShowFilter] = useState(false);
   const [filterName, setFilterName] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
@@ -363,6 +375,40 @@ export function MarksBoard() {
     toast.success(`Imported ${count.folders} folders and ${count.links} links.`);
   };
 
+  const applyKeepResult = (result: { doc: MarksDoc; summary: KeepImportSummary }, empty: string) => {
+    if (result.summary.notes === 0 && result.summary.links === 0) {
+      setKeepError(empty);
+      toast.error(empty);
+      return false;
+    }
+    patch(result.doc);
+    setKeepSummary(result.summary);
+    setKeepError('');
+    toast.success(formatKeepSummary(result.summary));
+    return true;
+  };
+
+  const importKeepFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setKeepBusy(true);
+    setKeepError('');
+    try {
+      const result = await importKeepUploads(doc, files, clock);
+      applyKeepResult(result, 'No Keep notes found in that upload.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not read that Keep export.';
+      setKeepError(message);
+      toast.error(message);
+    } finally {
+      setKeepBusy(false);
+    }
+  };
+
+  const importKeepPaste = () => {
+    const result = importPastedKeep(doc, keepPasted, clock);
+    if (applyKeepResult(result, 'Paste Keep notes or URLs first.')) setKeepPasted('');
+  };
+
   const uploadCover = async (file: File, into: 'link' | 'folder') => {
     try {
       const url = await uploadMarkCover(file, file.name);
@@ -382,7 +428,7 @@ export function MarksBoard() {
             <p className={LABEL}>Kjarni</p>
             <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
             <p className="text-sm text-stone-500">
-              Folders, links, and buttons. Structured columns — same board on your phone.
+              Whiteboard bookmarks — drag folders and links, stick covers, filter by tag. Same board on your phone.
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
@@ -451,6 +497,18 @@ export function MarksBoard() {
           <button type="button" className={ACTION_GHOST} onClick={() => setShowImport(true)}>
             <Upload className="h-3.5 w-3.5" />
             Import
+          </button>
+          <button
+            type="button"
+            className={ACTION_GHOST}
+            onClick={() => {
+              setKeepSummary(null);
+              setKeepError('');
+              setShowKeepImport(true);
+            }}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Import Google Keep
           </button>
         </div>
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1 px-4 pb-3">
@@ -718,6 +776,25 @@ export function MarksBoard() {
               setShowImport(false);
             }
           }}
+          onKeep={() => {
+            setShowImport(false);
+            setKeepSummary(null);
+            setKeepError('');
+            setShowKeepImport(true);
+          }}
+        />
+      ) : null}
+
+      {showKeepImport ? (
+        <KeepImportDialog
+          pasted={keepPasted}
+          setPasted={setKeepPasted}
+          busy={keepBusy}
+          summary={keepSummary}
+          error={keepError}
+          onClose={() => setShowKeepImport(false)}
+          onFiles={(files) => void importKeepFiles(files)}
+          onPaste={importKeepPaste}
         />
       ) : null}
 
