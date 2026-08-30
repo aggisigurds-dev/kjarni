@@ -110,6 +110,49 @@ export interface MarksFilter {
   categoryId: string;
 }
 
+export type MarksPreviewSize = 's' | 'm' | 'l';
+
+export interface MarksDisplay {
+  /** Site-wide; per-link showUrl still applies when this is on. */
+  showUrls: boolean;
+  showNames: boolean;
+  showImages: boolean;
+  previewSize: MarksPreviewSize;
+}
+
+export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
+  showUrls: true,
+  showNames: true,
+  showImages: true,
+  previewSize: 'm',
+};
+
+export function normalizePreviewSize(value: unknown): MarksPreviewSize {
+  return value === 's' || value === 'l' ? value : 'm';
+}
+
+export function normalizeDisplay(value: unknown): MarksDisplay {
+  const row = asRecord(value);
+  return {
+    showUrls: row ? asBoolean(row.showUrls, true) : true,
+    showNames: row ? asBoolean(row.showNames, true) : true,
+    showImages: row ? asBoolean(row.showImages, true) : true,
+    previewSize: normalizePreviewSize(row?.previewSize),
+  };
+}
+
+export function previewFrameClass(size: MarksPreviewSize): string {
+  if (size === 's') return 'h-8 w-8';
+  if (size === 'l') return 'h-24 w-24';
+  return 'h-14 w-14';
+}
+
+export function folderCoverClass(size: MarksPreviewSize): string {
+  if (size === 's') return 'h-10 w-10';
+  if (size === 'l') return 'h-32 w-32';
+  return 'h-24 w-24';
+}
+
 export interface MarksDoc {
   /** Site name. Home is "Home"; new sites start empty under their own title. */
   title: string;
@@ -117,6 +160,8 @@ export interface MarksDoc {
   links: MarkLink[];
   buttons: MarksButton[];
   filters: MarksFilter[];
+  display: MarksDisplay;
+  unfiledCollapsed: boolean;
   updatedAt: number;
   folders?: MarkCategory[];
 }
@@ -299,13 +344,24 @@ export function layoutMissingPositions(doc: MarksDoc): MarksDoc {
 }
 
 export function emptyDoc(now = 0, title = ''): MarksDoc {
-  return { title, categories: [], links: [], buttons: [], filters: [], updatedAt: now };
+  return {
+    title,
+    categories: [],
+    links: [],
+    buttons: [],
+    filters: [],
+    display: { ...DEFAULT_MARKS_DISPLAY },
+    unfiledCollapsed: false,
+    updatedAt: now,
+  };
 }
 
 export function persistDoc(doc: MarksDoc): MarksDoc {
   return {
     ...doc,
     title: asString(doc.title).trim(),
+    display: normalizeDisplay(doc.display),
+    unfiledCollapsed: Boolean(doc.unfiledCollapsed),
     folders: doc.categories,
     links: doc.links.map((link) => ({
       ...link,
@@ -445,6 +501,8 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
     links,
     buttons,
     filters,
+    display: normalizeDisplay(doc.display),
+    unfiledCollapsed: asBoolean(doc.unfiledCollapsed),
     updatedAt: asNumber(doc.updatedAt, now),
   });
 }
@@ -509,6 +567,8 @@ export function seedDoc(now = 1): MarksDoc {
     links,
     buttons,
     filters,
+    display: { ...DEFAULT_MARKS_DISPLAY },
+    unfiledCollapsed: false,
     updatedAt: now,
   });
 }
@@ -663,6 +723,34 @@ export function setSiteTitle(
   const trimmed = title.trim();
   if (!trimmed || doc.title === trimmed) return doc;
   return touch(doc, clock, { title: trimmed });
+}
+
+export function setDisplay(
+  doc: MarksDoc,
+  patch: Partial<MarksDisplay>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const current = normalizeDisplay(doc.display);
+  const display = { ...current, ...patch };
+  display.previewSize = normalizePreviewSize(display.previewSize);
+  if (
+    display.showUrls === current.showUrls &&
+    display.showNames === current.showNames &&
+    display.showImages === current.showImages &&
+    display.previewSize === current.previewSize
+  ) {
+    return doc;
+  }
+  return touch(doc, clock, { display });
+}
+
+export function setUnfiledCollapsed(
+  doc: MarksDoc,
+  collapsed: boolean,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (doc.unfiledCollapsed === collapsed) return doc;
+  return touch(doc, clock, { unfiledCollapsed: collapsed });
 }
 
 export function addCategory(

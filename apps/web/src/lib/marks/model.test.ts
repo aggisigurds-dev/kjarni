@@ -25,7 +25,9 @@ import {
   reorderCategory,
   reorderLink,
   seedDoc,
+  setDisplay,
   setSiteTitle,
+  setUnfiledCollapsed,
   siteTitle,
   testClock,
   updateLink,
@@ -306,6 +308,13 @@ describe('sites', () => {
     expect(blank.categories).toEqual([]);
     expect(blank.links).toEqual([]);
     expect(blank.buttons).toEqual([]);
+    expect(blank.display).toEqual({
+      showUrls: true,
+      showNames: true,
+      showImages: true,
+      previewSize: 'm',
+    });
+    expect(blank.unfiledCollapsed).toBe(false);
 
     const seeded = seedDoc(1);
     expect(seeded.title).toBe('Home');
@@ -324,6 +333,27 @@ describe('sites', () => {
     });
     expect(normalized?.title).toBe('Work');
     expect(siteTitle(normalizeDoc({ categories: [], links: [] }), 'Home')).toBe('Home');
+    expect(normalizeDoc({ categories: [], links: [] })?.display.previewSize).toBe('m');
+    expect(normalizeDoc({ categories: [], links: [] })?.display.showImages).toBe(true);
+  });
+
+  it('hides all URLs, names, and images and picks a preview size', () => {
+    const clock = testClock();
+    let doc = seedDoc(clock.now());
+    expect(doc.display.showUrls).toBe(true);
+    doc = setDisplay(doc, { showUrls: false, showNames: false, showImages: false, previewSize: 'l' }, clock);
+    expect(doc.display).toEqual({
+      showUrls: false,
+      showNames: false,
+      showImages: false,
+      previewSize: 'l',
+    });
+    const roundtrip = normalizeDoc(doc);
+    expect(roundtrip?.display.previewSize).toBe('l');
+    expect(setDisplay(doc, { previewSize: 'xl' as 's' }, clock).display.previewSize).toBe('m');
+    doc = setUnfiledCollapsed(doc, true, clock);
+    expect(doc.unfiledCollapsed).toBe(true);
+    expect(setUnfiledCollapsed(doc, true, clock)).toBe(doc);
   });
 });
 

@@ -65,7 +65,9 @@ import {
   revealFolder,
   seedDoc,
   setFolderCollapsed,
+  setDisplay,
   setSiteTitle,
+  setUnfiledCollapsed,
   siteTitle,
   updateButton,
   updateCategory,
@@ -598,7 +600,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             />
             <p className="text-sm text-stone-500">
               {isHome
-                ? 'Drag a category window by its title bar, resize from the edges. Drop a link onto another window to move it. Columns on a phone.'
+                ? 'Drag a category window by its title bar, resize from the edges. On a phone: three columns, tap ▾ to collapse. Hide URLs, names, or images for the whole site.'
                 : 'Clean site — a different topic from Home. Jump back from the site chips.'}
             </p>
           </div>
@@ -619,6 +621,50 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             <Plus className="h-3 w-3" />
             New site
           </button>
+        </div>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1 px-4 pb-2">
+          <span className={LABEL}>Show</span>
+          {(
+            [
+              ['showUrls', 'URLs'],
+              ['showNames', 'Names'],
+              ['showImages', 'Images'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={doc.display[key] ? CHIP_ON : CHIP_IDLE}
+              aria-pressed={doc.display[key]}
+              onClick={() =>
+                apply(
+                  setDisplay(doc, { [key]: !doc.display[key] }, clock),
+                  doc.display[key] ? `${label} off.` : `${label} on.`,
+                  'Could not update the view.'
+                )
+              }
+            >
+              {label}
+            </button>
+          ))}
+          <span className={`${LABEL} ml-2`}>Size</span>
+          {(['s', 'm', 'l'] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              className={doc.display.previewSize === size ? CHIP_ON : CHIP_IDLE}
+              aria-pressed={doc.display.previewSize === size}
+              onClick={() =>
+                apply(
+                  setDisplay(doc, { previewSize: size }, clock),
+                  `Preview ${size.toUpperCase()}.`,
+                  'Could not update the view.'
+                )
+              }
+            >
+              {size.toUpperCase()}
+            </button>
+          ))}
         </div>
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 pb-3">
           <label className="relative min-w-[12rem] flex-1">
@@ -848,6 +894,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
               apply(moveCategory(doc, id, parentId, clock), 'Moved folder.', 'Could not nest that folder.')
             }
             onToggleFolder={(id, collapsed) => patch(setFolderCollapsed(doc, id, collapsed, clock))}
+            onToggleUnfiled={(collapsed) => patch(setUnfiledCollapsed(doc, collapsed, clock))}
             onDeleteFolder={(category) =>
               apply(
                 removeCategory(doc, category.id, clock),
