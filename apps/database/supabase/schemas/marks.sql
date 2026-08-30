@@ -2,8 +2,10 @@
 -- links open on a phone or another computer. Same company Supabase as
 -- TurboPaint / 3dwork (osfdzskyvisifcwyjkuk).
 --
--- One row (id = 'home') holds the whole board as jsonb. RLS on; anon
--- select/insert/update like turbopaint_boards — no DELETE policy.
+-- Each row is a site. id = 'home' is the kjarni starter board; extra
+-- rows (id like site_…) are clean boards for different topics. Extra
+-- rows already work — no migration. RLS on; anon select/insert/update
+-- like turbopaint_boards — no DELETE policy.
 
 create table if not exists public.marks_boards (
   id text primary key,

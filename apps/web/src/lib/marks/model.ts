@@ -110,6 +110,49 @@ export interface MarksFilter {
   categoryId: string;
 }
 
+export type MarksPreviewSize = 's' | 'm' | 'l';
+
+export interface MarksDisplay {
+  /** Site-wide; per-link showUrl still applies when this is on. */
+  showUrls: boolean;
+  showNames: boolean;
+  showImages: boolean;
+  previewSize: MarksPreviewSize;
+}
+
+export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
+  showUrls: true,
+  showNames: true,
+  showImages: true,
+  previewSize: 'm',
+};
+
+export function normalizePreviewSize(value: unknown): MarksPreviewSize {
+  return value === 's' || value === 'l' ? value : 'm';
+}
+
+export function normalizeDisplay(value: unknown): MarksDisplay {
+  const row = asRecord(value);
+  return {
+    showUrls: row ? asBoolean(row.showUrls, true) : true,
+    showNames: row ? asBoolean(row.showNames, true) : true,
+    showImages: row ? asBoolean(row.showImages, true) : true,
+    previewSize: normalizePreviewSize(row?.previewSize),
+  };
+}
+
+export function previewFrameClass(size: MarksPreviewSize): string {
+  if (size === 's') return 'h-8 w-8';
+  if (size === 'l') return 'h-24 w-24';
+  return 'h-14 w-14';
+}
+
+export function folderCoverClass(size: MarksPreviewSize): string {
+  if (size === 's') return 'h-10 w-10';
+  if (size === 'l') return 'h-32 w-32';
+  return 'h-24 w-24';
+}
+
 export type WhiteboardItemKind = 'image' | 'icon';
 
 export interface WhiteboardItem {
@@ -135,13 +178,39 @@ export interface MarkWhiteboard {
 }
 
 export interface MarksDoc {
+  /** Site name. Home is "Home"; new sites start empty under their own title. */
+  title: string;
   categories: MarkCategory[];
   links: MarkLink[];
   buttons: MarksButton[];
   filters: MarksFilter[];
+  display: MarksDisplay;
+  unfiledCollapsed: boolean;
   whiteboards: MarkWhiteboard[];
   updatedAt: number;
   folders?: MarkCategory[];
+}
+
+const SITE_ID_RE = /^site_[a-z0-9]+$/i;
+
+export function isMarksBoardId(id: string): boolean {
+  return id === MARKS_BOARD_ID || SITE_ID_RE.test(id);
+}
+
+export function marksHref(id: string): string {
+  return !id || id === MARKS_BOARD_ID ? '/marks' : `/marks/${id}`;
+}
+
+export function createSiteId(clock: MarksClock = fallbackClock): string {
+  return clock.nextId('site');
+}
+
+export function siteTitle(
+  doc: Pick<MarksDoc, 'title'> | null | undefined,
+  fallback = 'Untitled'
+): string {
+  const title = doc?.title?.trim() ?? '';
+  return title || fallback;
 }
 
 export const BUTTON_COLORS = ['#047857', '#1d4ed8', '#b45309', '#be123c', '#6d28d9', '#44403c'] as const;
@@ -343,13 +412,26 @@ export function layoutMissingPositions(doc: MarksDoc): MarksDoc {
   };
 }
 
-export function emptyDoc(now = 0): MarksDoc {
-  return { categories: [], links: [], buttons: [], filters: [], whiteboards: [], updatedAt: now };
+export function emptyDoc(now = 0, title = ''): MarksDoc {
+  return {
+    title,
+    categories: [],
+    links: [],
+    buttons: [],
+    filters: [],
+    display: { ...DEFAULT_MARKS_DISPLAY },
+    unfiledCollapsed: false,
+    whiteboards: [],
+    updatedAt: now,
+  };
 }
 
 export function persistDoc(doc: MarksDoc): MarksDoc {
   return {
     ...doc,
+    title: asString(doc.title).trim(),
+    display: normalizeDisplay(doc.display),
+    unfiledCollapsed: Boolean(doc.unfiledCollapsed),
     folders: doc.categories,
     whiteboards: doc.whiteboards ?? [],
     links: doc.links.map((link) => ({
@@ -528,10 +610,13 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
     .map((row, index) => normalizeWhiteboardRow(row, index))
     .filter((row): row is MarkWhiteboard => Boolean(row));
   return persistDoc({
+    title: asString(doc.title).trim(),
     categories,
     links,
     buttons,
     filters,
+    display: normalizeDisplay(doc.display),
+    unfiledCollapsed: asBoolean(doc.unfiledCollapsed),
     whiteboards,
     updatedAt: asNumber(doc.updatedAt, now),
   });
@@ -592,10 +677,13 @@ export function seedDoc(now = 1): MarksDoc {
     }),
   ];
   return persistDoc({
+    title: 'Home',
     categories: [kjarni, apps, shop],
     links,
     buttons,
     filters,
+    display: { ...DEFAULT_MARKS_DISPLAY },
+    unfiledCollapsed: false,
     whiteboards: [],
     updatedAt: now,
   });
@@ -741,6 +829,44 @@ export function filterDoc(doc: MarksDoc, query: string): MarksDoc {
 
 function touch(doc: MarksDoc, clock: MarksClock, patch: Partial<MarksDoc>): MarksDoc {
   return persistDoc({ ...doc, ...patch, updatedAt: clock.now() });
+}
+
+export function setSiteTitle(
+  doc: MarksDoc,
+  title: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const trimmed = title.trim();
+  if (!trimmed || doc.title === trimmed) return doc;
+  return touch(doc, clock, { title: trimmed });
+}
+
+export function setDisplay(
+  doc: MarksDoc,
+  patch: Partial<MarksDisplay>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const current = normalizeDisplay(doc.display);
+  const display = { ...current, ...patch };
+  display.previewSize = normalizePreviewSize(display.previewSize);
+  if (
+    display.showUrls === current.showUrls &&
+    display.showNames === current.showNames &&
+    display.showImages === current.showImages &&
+    display.previewSize === current.previewSize
+  ) {
+    return doc;
+  }
+  return touch(doc, clock, { display });
+}
+
+export function setUnfiledCollapsed(
+  doc: MarksDoc,
+  collapsed: boolean,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (doc.unfiledCollapsed === collapsed) return doc;
+  return touch(doc, clock, { unfiledCollapsed: collapsed });
 }
 
 export function addCategory(
