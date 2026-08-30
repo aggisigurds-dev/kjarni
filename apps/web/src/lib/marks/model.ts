@@ -241,13 +241,31 @@ export function siteTitle(
 
 export const BUTTON_COLORS = ['#047857', '#1d4ed8', '#b45309', '#be123c', '#6d28d9', '#44403c'] as const;
 
+const NETLIFY_KJARNI = 'https://slokkvitaeki.netlify.app/kjarni';
+const VERCEL_KJARNI = 'https://slokkvitaeki.vercel.app/kjarni';
+
+/** Kjarni/TurboPaint moved off Netlify. Rewrite so existing Marks boards do not 404. */
+export function rewriteRetiredKjarniUrl(url: string): string {
+  if (
+    url === NETLIFY_KJARNI ||
+    url.startsWith(`${NETLIFY_KJARNI}/`) ||
+    url.startsWith(`${NETLIFY_KJARNI}?`) ||
+    url.startsWith(`${NETLIFY_KJARNI}#`)
+  ) {
+    return VERCEL_KJARNI + url.slice(NETLIFY_KJARNI.length);
+  }
+  return url;
+}
+
 export function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
-  if (trimmed.startsWith('//')) return `https:${trimmed}`;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
+  let url = trimmed;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) url = trimmed;
+  else if (trimmed.startsWith('//')) url = `https:${trimmed}`;
+  else if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) url = trimmed;
+  else url = `https://${trimmed}`;
+  return rewriteRetiredKjarniUrl(url);
 }
 
 export function hostOf(url: string): string {
@@ -571,7 +589,7 @@ function normalizeButtonRow(value: unknown, index: number): MarksButton | null {
     label,
     folderId: asString(row.folderId),
     kind,
-    url: asString(row.url),
+    url: kind === 'url' ? normalizeUrl(asString(row.url)) : asString(row.url),
     tag: asString(row.tag).trim().toLowerCase(),
     targetFolderId: asString(row.targetFolderId),
     icon: asString(row.icon),
@@ -747,12 +765,12 @@ export function seedDoc(now = 1): MarksDoc {
       'lnk_paint',
       kjarni.id,
       'TurboPaint',
-      'https://slokkvitaeki.netlify.app/kjarni/turbopaint',
+      'https://slokkvitaeki.vercel.app/kjarni/turbopaint',
       'Floor plans',
       2,
       ['kjarni']
     ),
-    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', 'https://slokkvitaeki.netlify.app/kjarni', 'Stjórnstöð', 3, [
+    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', 'https://slokkvitaeki.vercel.app/kjarni', 'Stjórnstöð', 3, [
       'kjarni',
     ]),
     linkAt('lnk_slokk', apps.id, 'Slökkvitæki', 'https://slokkvitaeki.netlify.app', '', 0, ['app']),
@@ -771,7 +789,7 @@ export function seedDoc(now = 1): MarksDoc {
       id: 'btn_hub',
       label: 'Hub',
       kind: 'url',
-      url: 'https://slokkvitaeki.netlify.app/kjarni',
+      url: 'https://slokkvitaeki.vercel.app/kjarni',
       color: BUTTON_COLORS[0],
     }),
   ];
