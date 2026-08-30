@@ -13,6 +13,8 @@ import {
   type MarksButtonKind,
   type MarksDoc,
 } from '@/lib/marks/model';
+import { screenshotCoverUrl } from '@/lib/marks/preview';
+import { imageFileFromClipboard } from '@/lib/marks/square-cover';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL } from './ui';
 
 function Toggle({
@@ -90,6 +92,8 @@ export function LinkDialog({
   onSubmit,
   onDelete,
   onUploadCover,
+  onFetchPreview,
+  previewBusy = false,
 }: {
   doc: MarksDoc;
   editing: MarkLink | null;
@@ -99,8 +103,15 @@ export function LinkDialog({
   onSubmit: () => void;
   onDelete?: () => void;
   onUploadCover: (file: File) => void;
+  onFetchPreview?: () => void;
+  previewBusy?: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const applyPageShot = () => {
+    const coverUrl = screenshotCoverUrl(draft.url);
+    if (!coverUrl) return;
+    setDraft({ ...draft, coverUrl, showImage: true });
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/40 p-0 sm:items-center sm:p-4">
       <form
@@ -108,6 +119,13 @@ export function LinkDialog({
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();
+        }}
+        onPaste={(event) => {
+          if (event.clipboardData.getData('text').trim()) return;
+          const file = imageFileFromClipboard(event.clipboardData);
+          if (!file) return;
+          event.preventDefault();
+          onUploadCover(file);
         }}
       >
         <h2 className="text-sm font-bold">{editing ? 'Edit bookmark' : 'Add bookmark'}</h2>
@@ -130,6 +148,7 @@ export function LinkDialog({
             onChange={(event) => setDraft({ ...draft, url: event.target.value })}
             placeholder="brunaholf.netlify.app"
             autoFocus={!draft.many}
+            onBlur={() => onFetchPreview?.()}
           />
         </label>
         <label className="mt-3 block">
@@ -211,7 +230,43 @@ export function LinkDialog({
             <button type="button" className={ACTION_GHOST} onClick={() => fileRef.current?.click()}>
               Attach
             </button>
+            <button
+              type="button"
+              className={ACTION_GHOST}
+              disabled={!screenshotCoverUrl(draft.url)}
+              onClick={applyPageShot}
+            >
+              Screenshot
+            </button>
+            {onFetchPreview ? (
+              <button type="button" className={ACTION_GHOST} disabled={previewBusy} onClick={onFetchPreview}>
+                {previewBusy ? 'Fetching…' : 'Fetch cover'}
+              </button>
+            ) : null}
           </div>
+          <p className="mt-1 text-[0.65rem] text-stone-400">
+            Paste a screenshot, or grab the first screen. It fits the square well.
+          </p>
+          {draft.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={draft.coverUrl}
+              alt=""
+              className="mt-2 aspect-square h-24 w-24 rounded-md object-cover"
+              data-mark-cover-shape="square"
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="mt-2 flex aspect-square h-24 w-24 items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 text-[0.65rem] font-bold uppercase tracking-wide text-stone-400"
+              onClick={() => fileRef.current?.click()}
+            >
+              Square
+            </button>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap gap-3">
           <Toggle
@@ -260,6 +315,7 @@ export function FolderDialog({
   onSave,
   onDelete,
   onUploadCover,
+  screenshotUrl = '',
 }: {
   category: MarkCategory;
   name: string;
@@ -272,8 +328,10 @@ export function FolderDialog({
   onSave: () => void;
   onDelete: () => void;
   onUploadCover: (file: File) => void;
+  screenshotUrl?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const pageShot = screenshotCoverUrl(screenshotUrl);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/40 p-0 sm:items-center sm:p-4">
       <form
@@ -288,7 +346,16 @@ export function FolderDialog({
           <span className={`${LABEL} mb-1 block`}>Name</span>
           <input className={FIELD} value={name} onChange={(event) => setName(event.target.value)} />
         </label>
-        <div className="mt-3">
+        <div
+          className="mt-3"
+          onPaste={(event) => {
+            if (event.clipboardData.getData('text').trim()) return;
+            const file = imageFileFromClipboard(event.clipboardData);
+            if (!file) return;
+            event.preventDefault();
+            onUploadCover(file);
+          }}
+        >
           <span className={`${LABEL} mb-1 block`}>Cover</span>
           <div className="flex gap-2">
             <input
@@ -311,7 +378,32 @@ export function FolderDialog({
             <button type="button" className={ACTION_GHOST} onClick={() => fileRef.current?.click()}>
               Attach
             </button>
+            <button
+              type="button"
+              className={ACTION_GHOST}
+              disabled={!pageShot}
+              onClick={() => {
+                if (!pageShot) return;
+                setCoverUrl(pageShot);
+                setShowCover(true);
+              }}
+            >
+              Screenshot
+            </button>
           </div>
+          <p className="mt-1 text-[0.65rem] text-stone-400">Paste a screenshot — it crops to the square.</p>
+          {coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={coverUrl}
+              alt=""
+              className="mt-2 aspect-square h-24 w-24 rounded-md object-cover"
+              data-mark-cover-shape="square"
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : null}
         </div>
         <div className="mt-3">
           <Toggle label="Show cover" checked={showCover} onChange={setShowCover} />

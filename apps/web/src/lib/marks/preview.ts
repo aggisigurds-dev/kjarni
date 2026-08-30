@@ -1,4 +1,5 @@
 import { normalizeUrl } from './model';
+import { SQUARE_COVER_PX } from './square-cover';
 
 export interface LinkPreviewMeta {
   title: string;
@@ -64,7 +65,7 @@ export function extractLinkPreview(html: string, pageUrl = ''): LinkPreviewMeta 
 export function screenshotCoverUrl(pageUrl: string): string {
   const absolute = normalizeUrl(pageUrl);
   if (!absolute || absolute.startsWith('/')) return '';
-  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(absolute)}?w=800`;
+  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(absolute)}?w=${SQUARE_COVER_PX}&h=${SQUARE_COVER_PX}`;
 }
 
 export function isHttpUrl(url: string): boolean {
