@@ -87,7 +87,9 @@ function readLocal(): MarksDoc | null {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
     if (!raw) return null;
-    return normalizeDoc(JSON.parse(raw));
+    const parsed = JSON.parse(raw) as unknown;
+    const doc = normalizeDoc(parsed);
+    return doc ? layoutMissingWindows(doc, parsed) : null;
   } catch {
     return null;
   }
