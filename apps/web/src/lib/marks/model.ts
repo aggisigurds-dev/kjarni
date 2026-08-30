@@ -1,32 +1,124 @@
 /**
- * Marks — categorized bookmarks for the kjarni start page.
+ * Marks — folders, links, buttons, and filter chips on a structured board.
+ *
+ * Stored as jsonb on `marks_boards.doc`. Older docs used flat `categories` +
+ * `links[].note`. `normalizeDoc` lifts those fields.
+ *
+ * Folder delete default: the folder row is removed; its links, buttons, and
+ * child folders move to the parent (or Unfiled when the folder was top-level).
+ * Nested grandchildren stay inside the promoted child folders.
+ *
+ * `categories` is the persisted folder list (`parentId: null` = top-level).
+ * Root folders and unfiled links use `x`/`y` on the whiteboard canvas.
  */
+
+export const MARKS_BOARD_ID = 'home';
+
+export type MarksClock = {
+  now: () => number;
+  nextId: (prefix: string) => string;
+};
+
+let idSeq = 0;
+
+/** Incrementing ids. Safe to define at import time — nothing calls Date.now. */
+export function createId(prefix: string): string {
+  idSeq += 1;
+  return `${prefix}_n${idSeq}`;
+}
+
+export function testClock(now = 1_700_000_000_000): MarksClock {
+  let seq = 0;
+  return {
+    now: () => now,
+    nextId: (prefix) => `${prefix}_t${++seq}`,
+  };
+}
+
+export function createClientClock(): MarksClock {
+  return {
+    now: () => Date.now(),
+    nextId: (prefix) => createId(prefix),
+  };
+}
+
+const fallbackClock: MarksClock = {
+  now: () => Date.now(),
+  nextId: (prefix) => createId(prefix),
+};
 
 export interface MarkCategory {
   id: string;
   name: string;
   sort: number;
+  parentId: string | null;
+  collapsed: boolean;
+  coverUrl: string;
+  showCover: boolean;
+  x: number;
+  y: number;
 }
+
+export type MarksFolder = MarkCategory;
 
 export interface MarkLink {
   id: string;
+  /** Empty string = unfiled. */
   categoryId: string;
   title: string;
   url: string;
   note: string;
   sort: number;
+  tags: string[];
+  videoUrl: string;
+  coverUrl: string;
+  showImage: boolean;
+  showUrl: boolean;
+  showDescription: boolean;
+  x: number;
+  y: number;
+  /** Aliases written so newer readers can use folder language. */
+  folderId?: string;
+  description?: string;
+  cover?: string;
+  hideUrl?: boolean;
+  hideDescription?: boolean;
+}
+
+export type MarksButtonKind = 'url' | 'filter-tag' | 'open-folder';
+
+export interface MarksButton {
+  id: string;
+  /** Empty = board toolbar. */
+  folderId: string;
+  label: string;
+  kind: MarksButtonKind;
+  url: string;
+  tag: string;
+  targetFolderId: string;
+  icon: string;
+  color: string;
+  sort: number;
+}
+
+export interface MarksFilter {
+  id: string;
+  name: string;
+  query: string;
+  tag: string;
+  categoryId: string;
 }
 
 export interface MarksDoc {
   categories: MarkCategory[];
   links: MarkLink[];
+  buttons: MarksButton[];
+  filters: MarksFilter[];
   updatedAt: number;
+  folders?: MarkCategory[];
 }
 
-export const MARKS_BOARD_ID = 'home';
-
-const newId = (prefix: string) =>
-  `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+export const BUTTON_COLORS = ['#047857', '#1d4ed8', '#b45309', '#be123c', '#6d28d9', '#44403c'] as const;
 
 export function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -51,86 +143,382 @@ export function faviconUrl(url: string): string {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
 }
 
+export function looksLikeUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return true;
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('//')) return true;
+  return /^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(trimmed);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function asBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function nextSort(items: { sort: number }[]): number {
+  return items.reduce((max, item) => Math.max(max, item.sort), -1) + 1;
+}
+
+export function defaultCategory(
+  partial: Partial<MarkCategory> & Pick<MarkCategory, 'id' | 'name'>
+): MarkCategory {
+  return {
+    sort: 0,
+    collapsed: false,
+    coverUrl: '',
+    showCover: true,
+    x: 0,
+    y: 0,
+    ...partial,
+    parentId: partial.parentId === undefined ? null : partial.parentId,
+  };
+}
+
+export function defaultLink(partial: Partial<MarkLink> & Pick<MarkLink, 'id' | 'url'>): MarkLink {
+  const url = normalizeUrl(partial.url);
+  const note = asString(partial.note) || asString(partial.description);
+  const categoryId =
+    partial.categoryId !== undefined ? asString(partial.categoryId) : asString(partial.folderId);
+  const showUrl = partial.showUrl ?? (partial.hideUrl != null ? !partial.hideUrl : true);
+  const showDescription =
+    partial.showDescription ?? (partial.hideDescription != null ? !partial.hideDescription : true);
+  return {
+    title: (partial.title ?? '').trim() || hostOf(url) || url,
+    sort: 0,
+    tags: Array.isArray(partial.tags) ? partial.tags : [],
+    videoUrl: asString(partial.videoUrl),
+    coverUrl: asString(partial.coverUrl) || asString(partial.cover),
+    showImage: partial.showImage ?? true,
+    showUrl,
+    showDescription,
+    ...partial,
+    url,
+    categoryId,
+    note,
+    x: typeof partial.x === 'number' ? partial.x : 0,
+    y: typeof partial.y === 'number' ? partial.y : 0,
+    folderId: categoryId,
+    description: note,
+    cover: asString(partial.coverUrl) || asString(partial.cover),
+    hideUrl: !showUrl,
+    hideDescription: !showDescription,
+  };
+}
+
+export function defaultFilter(
+  partial: Partial<MarksFilter> & Pick<MarksFilter, 'id' | 'name'>
+): MarksFilter {
+  return {
+    query: '',
+    tag: '',
+    categoryId: '',
+    ...partial,
+  };
+}
+
+export function defaultButton(
+  partial: Partial<MarksButton> & Pick<MarksButton, 'id' | 'label'>
+): MarksButton {
+  return {
+    folderId: '',
+    kind: 'url',
+    url: '',
+    tag: '',
+    targetFolderId: '',
+    icon: '',
+    color: BUTTON_COLORS[0],
+    sort: 0,
+    ...partial,
+  };
+}
+
+export function latestAdded<T extends { id: string }>(before: T[], after: T[]): T | undefined {
+  const known = new Set(before.map((row) => row.id));
+  return after.find((row) => !known.has(row.id));
+}
+
+const SLOT_W = 340;
+const SLOT_H = 280;
+
+export function nextBoardSlot(doc: MarksDoc): { x: number; y: number } {
+  const roots = doc.categories.filter((category) => !category.parentId);
+  const n = roots.length;
+  return { x: (n % 3) * SLOT_W, y: Math.floor(n / 3) * SLOT_H };
+}
+
+export function layoutMissingPositions(doc: MarksDoc): MarksDoc {
+  let n = 0;
+  return {
+    ...doc,
+    categories: doc.categories.map((category) => {
+      if (category.parentId) return category;
+      if (category.x || category.y) return category;
+      const x = (n % 3) * SLOT_W;
+      const y = Math.floor(n / 3) * SLOT_H;
+      n += 1;
+      return { ...category, x, y };
+    }),
+  };
+}
+
 export function emptyDoc(now = 0): MarksDoc {
-  return { categories: [], links: [], updatedAt: now };
+  return { categories: [], links: [], buttons: [], filters: [], updatedAt: now };
+}
+
+export function persistDoc(doc: MarksDoc): MarksDoc {
+  return {
+    ...doc,
+    folders: doc.categories,
+    links: doc.links.map((link) => ({
+      ...link,
+      folderId: link.categoryId,
+      description: link.note,
+      cover: link.coverUrl,
+      hideUrl: !link.showUrl,
+      hideDescription: !link.showDescription,
+    })),
+  };
+}
+
+export function isMarksDoc(value: unknown): value is MarksDoc {
+  const doc = asRecord(value);
+  if (!doc) return false;
+  const folders = doc.categories ?? doc.folders;
+  return Array.isArray(folders) && Array.isArray(doc.links);
+}
+
+function normalizeCategory(value: unknown, index: number): MarkCategory | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id);
+  const name = asString(row.name).trim();
+  if (!id || !name) return null;
+  const parentRaw = row.parentId;
+  const parentId =
+    parentRaw == null || parentRaw === '' ? null : asString(parentRaw);
+  return defaultCategory({
+    id,
+    name,
+    sort: asNumber(row.sort, index),
+    parentId,
+    collapsed: asBoolean(row.collapsed),
+    coverUrl: asString(row.coverUrl),
+    showCover: asBoolean(row.showCover),
+    x: asNumber(row.x),
+    y: asNumber(row.y),
+  });
+}
+
+function normalizeLinkRow(value: unknown, index: number): MarkLink | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id);
+  const url = normalizeUrl(asString(row.url));
+  if (!id || !url) return null;
+  const tags = Array.isArray(row.tags)
+    ? [...new Set(row.tags.map((tag) => asString(tag).trim().toLowerCase()).filter(Boolean))]
+    : [];
+  return defaultLink({
+    id,
+    url,
+    title: asString(row.title),
+    note: asString(row.note) || asString(row.description),
+    categoryId: asString(row.categoryId) || asString(row.folderId),
+    sort: asNumber(row.sort, index),
+    tags,
+    videoUrl: asString(row.videoUrl),
+    coverUrl: asString(row.coverUrl) || asString(row.cover),
+    showImage: asBoolean(row.showImage, true),
+    showUrl: row.showUrl != null ? asBoolean(row.showUrl, true) : !asBoolean(row.hideUrl),
+    showDescription:
+      row.showDescription != null ? asBoolean(row.showDescription, true) : !asBoolean(row.hideDescription),
+    x: asNumber(row.x),
+    y: asNumber(row.y),
+  });
+}
+
+function normalizeButtonRow(value: unknown, index: number): MarksButton | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id);
+  const label = asString(row.label).trim();
+  if (!id || !label) return null;
+  const kindRaw = asString(row.kind);
+  const kind: MarksButtonKind =
+    kindRaw === 'filter-tag' || kindRaw === 'open-folder' ? kindRaw : 'url';
+  return defaultButton({
+    id,
+    label,
+    folderId: asString(row.folderId),
+    kind,
+    url: asString(row.url),
+    tag: asString(row.tag).trim().toLowerCase(),
+    targetFolderId: asString(row.targetFolderId),
+    icon: asString(row.icon),
+    color: asString(row.color, BUTTON_COLORS[0]),
+    sort: asNumber(row.sort, index),
+  });
+}
+
+function normalizeFilterRow(value: unknown, index: number): MarksFilter | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id) || `flt_${index}`;
+  const name = asString(row.name).trim();
+  if (!name) return null;
+  return defaultFilter({
+    id,
+    name,
+    query: asString(row.query),
+    tag: asString(row.tag).trim().toLowerCase(),
+    categoryId: asString(row.categoryId),
+  });
+}
+
+export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
+  const doc = asRecord(value);
+  if (!doc) return null;
+  const folderSource = Array.isArray(doc.categories)
+    ? doc.categories
+    : Array.isArray(doc.folders)
+      ? doc.folders
+      : null;
+  if (!folderSource || !Array.isArray(doc.links)) return null;
+  const categories = folderSource
+    .map((row, index) => normalizeCategory(row, index))
+    .filter((row): row is MarkCategory => Boolean(row));
+  const ids = new Set(categories.map((category) => category.id));
+  const links = doc.links
+    .map((row, index) => normalizeLinkRow(row, index))
+    .filter((row): row is MarkLink => Boolean(row))
+    .map((link) => ({
+      ...link,
+      categoryId: !link.categoryId || ids.has(link.categoryId) ? link.categoryId : '',
+    }));
+  const buttons = (Array.isArray(doc.buttons) ? doc.buttons : [])
+    .map((row, index) => normalizeButtonRow(row, index))
+    .filter((row): row is MarksButton => Boolean(row));
+  const filters = (Array.isArray(doc.filters) ? doc.filters : [])
+    .map((row, index) => normalizeFilterRow(row, index))
+    .filter((row): row is MarksFilter => Boolean(row));
+  return persistDoc({
+    categories,
+    links,
+    buttons,
+    filters,
+    updatedAt: asNumber(doc.updatedAt, now),
+  });
+}
+
+function linkAt(
+  id: string,
+  categoryId: string,
+  title: string,
+  url: string,
+  note: string,
+  sort: number,
+  tags: string[]
+): MarkLink {
+  return defaultLink({ id, categoryId, title, url, note, sort, tags });
 }
 
 /** First-run kjarni sites, grouped so the front page is useful immediately. */
 export function seedDoc(now = 1): MarksDoc {
-  const kjarni = { id: 'cat_kjarni', name: 'Kjarni', sort: 0 };
-  const apps = { id: 'cat_apps', name: 'Apps', sort: 1 };
-  const shop = { id: 'cat_build', name: 'Build', sort: 2 };
+  const kjarni = defaultCategory({ id: 'cat_kjarni', name: 'Kjarni', sort: 0, x: 0, y: 0 });
+  const apps = defaultCategory({ id: 'cat_apps', name: 'Apps', sort: 1, x: SLOT_W, y: 0 });
+  const shop = defaultCategory({ id: 'cat_build', name: 'Build', sort: 2, x: SLOT_W * 2, y: 0 });
   const links: MarkLink[] = [
-    {
-      id: 'lnk_3dwork',
-      categoryId: kjarni.id,
-      title: '3dwork',
-      url: 'https://kjarni-3dwork.vercel.app/3dwork',
-      note: 'STL / 3MF bench',
-      sort: 0,
-    },
-    {
-      id: 'lnk_marks',
-      categoryId: kjarni.id,
-      title: 'Marks',
-      url: '/marks',
-      note: 'This start page',
-      sort: 1,
-    },
-    {
-      id: 'lnk_paint',
-      categoryId: kjarni.id,
-      title: 'TurboPaint',
-      url: 'https://slokkvitaeki.netlify.app/kjarni/turbopaint',
-      note: 'Floor plans',
-      sort: 2,
-    },
-    {
-      id: 'lnk_hub',
-      categoryId: kjarni.id,
-      title: 'Kjarni hub',
-      url: 'https://slokkvitaeki.netlify.app/kjarni',
-      note: 'Stjórnstöð',
-      sort: 3,
-    },
-    {
-      id: 'lnk_slokk',
-      categoryId: apps.id,
-      title: 'Slökkvitæki',
-      url: 'https://slokkvitaeki.netlify.app',
-      note: '',
-      sort: 0,
-    },
-    {
-      id: 'lnk_bruna',
-      categoryId: apps.id,
-      title: 'Brunahólf',
-      url: 'https://brunaholf.netlify.app',
-      note: '',
-      sort: 1,
-    },
-    {
-      id: 'lnk_github',
-      categoryId: shop.id,
-      title: 'GitHub · kjarni',
-      url: 'https://github.com/aggisigurds-dev/kjarni',
-      note: 'Website code',
-      sort: 0,
-    },
-    {
-      id: 'lnk_vercel',
-      categoryId: shop.id,
-      title: 'Vercel',
-      url: 'https://vercel.com/kjarni',
-      note: '',
-      sort: 1,
-    },
+    linkAt('lnk_3dwork', kjarni.id, '3dwork', 'https://kjarni-3dwork.vercel.app/3dwork', 'STL / 3MF bench', 0, [
+      'kjarni',
+    ]),
+    linkAt('lnk_marks', kjarni.id, 'Marks', '/marks', 'This start page', 1, ['kjarni']),
+    linkAt(
+      'lnk_paint',
+      kjarni.id,
+      'TurboPaint',
+      'https://slokkvitaeki.netlify.app/kjarni/turbopaint',
+      'Floor plans',
+      2,
+      ['kjarni']
+    ),
+    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', 'https://slokkvitaeki.netlify.app/kjarni', 'Stjórnstöð', 3, [
+      'kjarni',
+    ]),
+    linkAt('lnk_slokk', apps.id, 'Slökkvitæki', 'https://slokkvitaeki.netlify.app', '', 0, ['app']),
+    linkAt('lnk_bruna', apps.id, 'Brunahólf', 'https://brunaholf.netlify.app', '', 1, ['app']),
+    linkAt('lnk_github', shop.id, 'GitHub · kjarni', 'https://github.com/aggisigurds-dev/kjarni', 'Website code', 0, [
+      'code',
+    ]),
+    linkAt('lnk_vercel', shop.id, 'Vercel', 'https://vercel.com/kjarni', '', 1, []),
   ];
-  return { categories: [kjarni, apps, shop], links, updatedAt: now };
+  const filters: MarksFilter[] = [
+    defaultFilter({ id: 'flt_apps', name: 'Apps', categoryId: apps.id }),
+    defaultFilter({ id: 'flt_kjarni', name: 'Kjarni', tag: 'kjarni' }),
+  ];
+  const buttons: MarksButton[] = [
+    defaultButton({
+      id: 'btn_hub',
+      label: 'Hub',
+      kind: 'url',
+      url: 'https://slokkvitaeki.netlify.app/kjarni',
+      color: BUTTON_COLORS[0],
+    }),
+  ];
+  return persistDoc({
+    categories: [kjarni, apps, shop],
+    links,
+    buttons,
+    filters,
+    updatedAt: now,
+  });
+}
+
+export const UNFILED_ID = '';
+
+export function categoryById(doc: MarksDoc, id: string): MarkCategory | undefined {
+  return doc.categories.find((category) => category.id === id);
+}
+
+export function folderById(doc: MarksDoc, id: string): MarkCategory | undefined {
+  return categoryById(doc, id);
+}
+
+export function rootCategories(doc: MarksDoc): MarkCategory[] {
+  return childCategories(doc, null);
+}
+
+export function looseLinks(doc: MarksDoc): MarkLink[] {
+  return linksInCategory(doc, '');
+}
+
+export function childCategories(doc: MarksDoc, parentId: string | null): MarkCategory[] {
+  return doc.categories
+    .filter((category) => (category.parentId ?? null) === (parentId ?? null))
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+}
+
+export function foldersWithParent(doc: MarksDoc, parentId: string): MarkCategory[] {
+  return childCategories(doc, parentId || null);
 }
 
 export function sortedCategories(doc: MarksDoc): MarkCategory[] {
   return [...doc.categories].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+}
+
+export function sortedFolders(doc: MarksDoc): MarkCategory[] {
+  return sortedCategories(doc);
 }
 
 export function linksInCategory(doc: MarksDoc, categoryId: string): MarkLink[] {
@@ -139,112 +527,458 @@ export function linksInCategory(doc: MarksDoc, categoryId: string): MarkLink[] {
     .sort((a, b) => a.sort - b.sort || a.title.localeCompare(b.title));
 }
 
+export function linksInFolder(doc: MarksDoc, folderId: string): MarkLink[] {
+  return linksInCategory(doc, folderId);
+}
+
+export function buttonsInFolder(doc: MarksDoc, folderId: string): MarksButton[] {
+  return (doc.buttons ?? [])
+    .filter((button) => button.folderId === folderId)
+    .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label));
+}
+
+export function ancestorIds(doc: MarksDoc, id: string): string[] {
+  const ids: string[] = [];
+  let current = categoryById(doc, id);
+  const seen = new Set<string>();
+  while (current?.parentId && !seen.has(current.parentId)) {
+    seen.add(current.parentId);
+    ids.push(current.parentId);
+    current = categoryById(doc, current.parentId);
+  }
+  return ids;
+}
+
+export function descendantIds(doc: MarksDoc, id: string): string[] {
+  const ids: string[] = [];
+  const walk = (parentId: string) => {
+    for (const child of childCategories(doc, parentId)) {
+      ids.push(child.id);
+      walk(child.id);
+    }
+  };
+  walk(id);
+  return ids;
+}
+
+export function wouldCycle(doc: MarksDoc, movingId: string, newParentId: string | null): boolean {
+  if (!newParentId) return false;
+  if (movingId === newParentId) return true;
+  return descendantIds(doc, movingId).includes(newParentId);
+}
+
+export function isFolderDescendant(doc: MarksDoc, ancestorId: string, maybeChildId: string): boolean {
+  if (!ancestorId || !maybeChildId) return false;
+  return ancestorId === maybeChildId || descendantIds(doc, ancestorId).includes(maybeChildId);
+}
+
+export function folderOptions(
+  doc: MarksDoc,
+  opts?: { includeUnfiled?: boolean; excludeId?: string }
+): { id: string; name: string; depth: number }[] {
+  const rows: { id: string; name: string; depth: number }[] = [];
+  if (opts?.includeUnfiled) rows.push({ id: '', name: 'Unfiled', depth: 0 });
+  const walk = (parentId: string | null, depth: number) => {
+    for (const folder of childCategories(doc, parentId)) {
+      if (opts?.excludeId && isFolderDescendant(doc, opts.excludeId, folder.id)) continue;
+      rows.push({ id: folder.id, name: folder.name, depth });
+      walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, opts?.includeUnfiled ? 1 : 0);
+  return rows;
+}
+
 export function filterDoc(doc: MarksDoc, query: string): MarksDoc {
   const q = query.trim().toLowerCase();
   if (!q) return doc;
   const links = doc.links.filter((link) => {
-    const hay = `${link.title} ${link.url} ${link.note}`.toLowerCase();
+    const hay = `${link.title} ${link.url} ${link.note} ${link.tags.join(' ')}`.toLowerCase();
     return hay.includes(q);
   });
-  const used = new Set(links.map((link) => link.categoryId));
+  const buttons = (doc.buttons ?? []).filter((button) =>
+    `${button.label} ${button.url} ${button.tag}`.toLowerCase().includes(q)
+  );
+  const keep = new Set<string>();
+  const mark = (id: string) => {
+    if (!id || keep.has(id)) return;
+    keep.add(id);
+    for (const ancestor of ancestorIds(doc, id)) keep.add(ancestor);
+  };
+  for (const link of links) mark(link.categoryId);
+  for (const button of buttons) mark(button.folderId);
+  for (const category of doc.categories) {
+    if (category.name.toLowerCase().includes(q)) {
+      mark(category.id);
+      for (const child of descendantIds(doc, category.id)) keep.add(child);
+    }
+  }
   return {
     ...doc,
     links,
-    categories: doc.categories.filter((category) => used.has(category.id)),
+    buttons,
+    categories: doc.categories
+      .filter((category) => keep.has(category.id))
+      .map((category) => ({ ...category, collapsed: false })),
   };
 }
 
-export function addCategory(doc: MarksDoc, name: string): MarksDoc {
-  const trimmed = name.trim();
-  if (!trimmed) return doc;
-  const sort = doc.categories.reduce((max, category) => Math.max(max, category.sort), -1) + 1;
-  return {
-    ...doc,
-    updatedAt: Date.now(),
-    categories: [...doc.categories, { id: newId('cat'), name: trimmed, sort }],
-  };
+function touch(doc: MarksDoc, clock: MarksClock, patch: Partial<MarksDoc>): MarksDoc {
+  return persistDoc({ ...doc, ...patch, updatedAt: clock.now() });
 }
 
-export function renameCategory(doc: MarksDoc, id: string, name: string): MarksDoc {
+export function addCategory(
+  doc: MarksDoc,
+  name: string,
+  parentId: string | null = null,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
   const trimmed = name.trim();
   if (!trimmed) return doc;
-  return {
-    ...doc,
-    updatedAt: Date.now(),
+  if (parentId && !categoryById(doc, parentId)) return doc;
+  const siblings = childCategories(doc, parentId);
+  const slot = parentId ? { x: 0, y: 0 } : nextBoardSlot(doc);
+  const category = defaultCategory({
+    id: clock.nextId('cat'),
+    name: trimmed,
+    parentId,
+    sort: nextSort(siblings),
+    x: slot.x,
+    y: slot.y,
+  });
+  return touch(doc, clock, { categories: [...doc.categories, category] });
+}
+
+export function addFolder(
+  doc: MarksDoc,
+  input: { name: string; parentId?: string | null },
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  return addCategory(doc, input.name, input.parentId ?? null, clock);
+}
+
+export function renameCategory(
+  doc: MarksDoc,
+  id: string,
+  name: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const trimmed = name.trim();
+  if (!trimmed || !categoryById(doc, id)) return doc;
+  return touch(doc, clock, {
     categories: doc.categories.map((category) =>
       category.id === id ? { ...category, name: trimmed } : category
     ),
-  };
+  });
 }
 
-export function removeCategory(doc: MarksDoc, id: string): MarksDoc {
-  return {
-    ...doc,
-    updatedAt: Date.now(),
-    categories: doc.categories.filter((category) => category.id !== id),
-    links: doc.links.filter((link) => link.categoryId !== id),
-  };
-}
-
-export function addLink(
+export function renameFolder(
   doc: MarksDoc,
-  input: { categoryId: string; title: string; url: string; note?: string }
+  id: string,
+  name: string,
+  clock: MarksClock = fallbackClock
 ): MarksDoc {
+  return renameCategory(doc, id, name, clock);
+}
+
+export function updateCategory(
+  doc: MarksDoc,
+  id: string,
+  patch: Partial<Pick<MarkCategory, 'name' | 'coverUrl' | 'showCover' | 'collapsed' | 'parentId'>>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (!categoryById(doc, id)) return doc;
+  return touch(doc, clock, {
+    categories: doc.categories.map((category) => (category.id === id ? { ...category, ...patch } : category)),
+  });
+}
+
+export function setFolderCollapsed(
+  doc: MarksDoc,
+  id: string,
+  collapsed: boolean,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  return updateCategory(doc, id, { collapsed }, clock);
+}
+
+export function revealFolder(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  if (!categoryById(doc, id)) return doc;
+  const open = new Set([id, ...ancestorIds(doc, id)]);
+  return touch(doc, clock, {
+    categories: doc.categories.map((category) =>
+      open.has(category.id) ? { ...category, collapsed: false } : category
+    ),
+  });
+}
+
+export function moveCategory(
+  doc: MarksDoc,
+  id: string,
+  parentId: string | null,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const category = categoryById(doc, id);
+  if (!category) return doc;
+  if (parentId && !categoryById(doc, parentId)) return doc;
+  if (wouldCycle(doc, id, parentId)) return doc;
+  const siblings = childCategories(doc, parentId).filter((row) => row.id !== id);
+  return touch(doc, clock, {
+    categories: doc.categories.map((row) =>
+      row.id === id ? { ...row, parentId, sort: nextSort(siblings) } : row
+    ),
+  });
+}
+
+export function moveFolder(
+  doc: MarksDoc,
+  id: string,
+  parentId: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  return moveCategory(doc, id, parentId || null, clock);
+}
+
+/**
+ * Deletes the folder only. Links, buttons, and child folders move to the
+ * parent (Unfiled when this was a top-level folder).
+ */
+export function removeCategory(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  const category = categoryById(doc, id);
+  if (!category) return doc;
+  const parentId = category.parentId ?? '';
+  const parentKey = category.parentId;
+  return touch(doc, clock, {
+    categories: doc.categories
+      .filter((row) => row.id !== id)
+      .map((row) => (row.parentId === id ? { ...row, parentId: parentKey } : row)),
+    links: doc.links.map((link) => (link.categoryId === id ? { ...link, categoryId: parentId } : link)),
+    buttons: (doc.buttons ?? []).map((button) =>
+      button.folderId === id ? { ...button, folderId: parentId } : button
+    ),
+  });
+}
+
+export function removeFolder(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  return removeCategory(doc, id, clock);
+}
+
+export type LinkInput = {
+  categoryId?: string;
+  folderId?: string;
+  title?: string;
+  url: string;
+  note?: string;
+  description?: string;
+  tags?: string[] | string;
+  videoUrl?: string;
+  coverUrl?: string;
+  cover?: string;
+  showImage?: boolean;
+  showUrl?: boolean;
+  showDescription?: boolean;
+  hideUrl?: boolean;
+  hideDescription?: boolean;
+  x?: number;
+  y?: number;
+};
+
+function tagsFrom(value: string[] | string | undefined): string[] {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+  }
+  if (!value) return [];
+  return [
+    ...new Set(
+      value
+        .split(/[,#\s]+/g)
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+}
+
+export function addLink(doc: MarksDoc, input: LinkInput, clock: MarksClock = fallbackClock): MarksDoc {
   const url = normalizeUrl(input.url);
-  const title = input.title.trim() || hostOf(url) || url;
-  if (!url || !doc.categories.some((category) => category.id === input.categoryId)) return doc;
-  const siblings = doc.links.filter((link) => link.categoryId === input.categoryId);
-  const sort = siblings.reduce((max, link) => Math.max(max, link.sort), -1) + 1;
-  return {
-    ...doc,
-    updatedAt: Date.now(),
-    links: [
-      ...doc.links,
-      {
-        id: newId('lnk'),
-        categoryId: input.categoryId,
-        title,
-        url,
-        note: (input.note ?? '').trim(),
-        sort,
-      },
-    ],
-  };
+  const categoryId = input.categoryId ?? input.folderId ?? '';
+  if (!url) return doc;
+  if (categoryId && !categoryById(doc, categoryId)) return doc;
+  const siblings = linksInCategory(doc, categoryId);
+  const link = defaultLink({
+    id: clock.nextId('lnk'),
+    categoryId,
+    url,
+    title: input.title,
+    note: input.note ?? input.description,
+    sort: nextSort(siblings),
+    tags: tagsFrom(input.tags),
+    videoUrl: input.videoUrl,
+    coverUrl: input.coverUrl ?? input.cover,
+    showImage: input.showImage,
+    showUrl: input.showUrl ?? (input.hideUrl != null ? !input.hideUrl : undefined),
+    showDescription:
+      input.showDescription ?? (input.hideDescription != null ? !input.hideDescription : undefined),
+  });
+  return touch(doc, clock, { links: [...doc.links, link] });
 }
 
 export function updateLink(
   doc: MarksDoc,
   id: string,
-  patch: Partial<Pick<MarkLink, 'title' | 'url' | 'note' | 'categoryId'>>
+  patch: Partial<LinkInput>,
+  clock: MarksClock = fallbackClock
 ): MarksDoc {
-  return {
-    ...doc,
-    updatedAt: Date.now(),
+  if (!doc.links.some((link) => link.id === id)) return doc;
+  const nextCategory = patch.categoryId ?? patch.folderId;
+  if (nextCategory && !categoryById(doc, nextCategory)) return doc;
+  return touch(doc, clock, {
     links: doc.links.map((link) => {
       if (link.id !== id) return link;
-      const url = patch.url != null ? normalizeUrl(patch.url) : link.url;
-      const title = patch.title != null ? patch.title.trim() || hostOf(url) || url : link.title;
-      return {
+      return defaultLink({
         ...link,
-        ...patch,
-        url,
-        title,
-        note: patch.note != null ? patch.note.trim() : link.note,
-      };
+        url: patch.url ?? link.url,
+        title: patch.title ?? link.title,
+        note: patch.note ?? patch.description ?? link.note,
+        categoryId: nextCategory ?? link.categoryId,
+        tags: patch.tags != null ? tagsFrom(patch.tags) : link.tags,
+        videoUrl: patch.videoUrl ?? link.videoUrl,
+        coverUrl: patch.coverUrl ?? patch.cover ?? link.coverUrl,
+        showImage: patch.showImage ?? link.showImage,
+        showUrl: patch.showUrl ?? (patch.hideUrl != null ? !patch.hideUrl : link.showUrl),
+        showDescription:
+          patch.showDescription ??
+          (patch.hideDescription != null ? !patch.hideDescription : link.showDescription),
+        x: patch.x ?? link.x,
+        y: patch.y ?? link.y,
+      });
     }),
-  };
+  });
 }
 
-export function removeLink(doc: MarksDoc, id: string): MarksDoc {
-  return {
-    ...doc,
-    updatedAt: Date.now(),
-    links: doc.links.filter((link) => link.id !== id),
-  };
+export function moveLink(
+  doc: MarksDoc,
+  id: string,
+  categoryId: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (categoryId && !categoryById(doc, categoryId)) return doc;
+  return updateLink(doc, id, { categoryId }, clock);
 }
 
-export function isMarksDoc(value: unknown): value is MarksDoc {
-  if (!value || typeof value !== 'object') return false;
-  const doc = value as MarksDoc;
-  return Array.isArray(doc.categories) && Array.isArray(doc.links);
+export function setCategoryPos(
+  doc: MarksDoc,
+  id: string,
+  x: number,
+  y: number,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (!categoryById(doc, id)) return doc;
+  return touch(doc, clock, {
+    categories: doc.categories.map((category) => (category.id === id ? { ...category, x, y } : category)),
+  });
+}
+
+export function setLinkPos(
+  doc: MarksDoc,
+  id: string,
+  x: number,
+  y: number,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  return updateLink(doc, id, { x, y }, clock);
+}
+
+export function removeLink(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  if (!doc.links.some((link) => link.id === id)) return doc;
+  return touch(doc, clock, { links: doc.links.filter((link) => link.id !== id) });
+}
+
+export type ButtonInput = {
+  folderId?: string;
+  label: string;
+  kind?: MarksButtonKind;
+  url?: string;
+  tag?: string;
+  targetFolderId?: string;
+  icon?: string;
+  color?: string;
+};
+
+function buttonFromInput(input: ButtonInput, id: string, sort: number): MarksButton | null {
+  const label = input.label.trim();
+  if (!label) return null;
+  const kind = input.kind ?? 'url';
+  const url = kind === 'url' ? normalizeUrl(input.url ?? '') : '';
+  if (kind === 'url' && !url) return null;
+  const tag = (input.tag ?? '').trim().toLowerCase();
+  if (kind === 'filter-tag' && !tag) return null;
+  const targetFolderId = input.targetFolderId ?? '';
+  if (kind === 'open-folder' && !targetFolderId) return null;
+  return defaultButton({
+    id,
+    folderId: input.folderId ?? '',
+    label,
+    kind,
+    url,
+    tag,
+    targetFolderId,
+    icon: (input.icon ?? '').trim(),
+    color: (input.color ?? BUTTON_COLORS[0]).trim() || BUTTON_COLORS[0],
+    sort,
+  });
+}
+
+export function addButton(doc: MarksDoc, input: ButtonInput, clock: MarksClock = fallbackClock): MarksDoc {
+  const folderId = input.folderId ?? '';
+  if (folderId && !categoryById(doc, folderId)) return doc;
+  if (input.kind === 'open-folder' && input.targetFolderId && !categoryById(doc, input.targetFolderId)) {
+    return doc;
+  }
+  const button = buttonFromInput(input, clock.nextId('btn'), nextSort(buttonsInFolder(doc, folderId)));
+  if (!button) return doc;
+  return touch(doc, clock, { buttons: [...(doc.buttons ?? []), button] });
+}
+
+export function updateButton(
+  doc: MarksDoc,
+  id: string,
+  patch: Partial<ButtonInput>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const current = (doc.buttons ?? []).find((button) => button.id === id);
+  if (!current) return doc;
+  const folderId = patch.folderId ?? current.folderId;
+  if (folderId && !categoryById(doc, folderId)) return doc;
+  const next = buttonFromInput(
+    {
+      folderId,
+      label: patch.label ?? current.label,
+      kind: patch.kind ?? current.kind,
+      url: patch.url ?? current.url,
+      tag: patch.tag ?? current.tag,
+      targetFolderId: patch.targetFolderId ?? current.targetFolderId,
+      icon: patch.icon ?? current.icon,
+      color: patch.color ?? current.color,
+    },
+    current.id,
+    current.sort
+  );
+  if (!next) return doc;
+  return touch(doc, clock, {
+    buttons: (doc.buttons ?? []).map((button) => (button.id === id ? next : button)),
+  });
+}
+
+export function moveButton(
+  doc: MarksDoc,
+  id: string,
+  folderId: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  return updateButton(doc, id, { folderId }, clock);
+}
+
+export function removeButton(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  if (!(doc.buttons ?? []).some((button) => button.id === id)) return doc;
+  return touch(doc, clock, { buttons: (doc.buttons ?? []).filter((button) => button.id !== id) });
 }

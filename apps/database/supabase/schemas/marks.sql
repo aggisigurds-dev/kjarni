@@ -24,3 +24,16 @@ create policy "marks_boards_update" on public.marks_boards
 
 create index if not exists marks_boards_updated_idx
   on public.marks_boards (deleted, updated_at desc);
+
+-- Cover / screenshot cache. Public like turbopaint / work3d; anon can
+-- read, insert, and replace. No DELETE policy.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('marks', 'marks', true, 5242880)
+on conflict (id) do nothing;
+
+create policy "marks_objects_select" on storage.objects
+  for select using (bucket_id = 'marks');
+create policy "marks_objects_insert" on storage.objects
+  for insert with check (bucket_id = 'marks');
+create policy "marks_objects_update" on storage.objects
+  for update using (bucket_id = 'marks') with check (bucket_id = 'marks');

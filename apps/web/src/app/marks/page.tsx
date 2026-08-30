@@ -4,7 +4,7 @@ import { MarksBoard } from './board';
 
 export const metadata: Metadata = {
   title: 'Marks — kjarni bookmarks',
-  description: 'Frontpage bookmark organizer. Categories follow you to your phone.',
+  description: 'Whiteboard bookmark organizer. Folders, covers, tags — same board on your phone.',
 };
 
 export default function MarksPage() {
