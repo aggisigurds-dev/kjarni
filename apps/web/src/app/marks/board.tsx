@@ -11,6 +11,7 @@ import {
   Plus,
   PanelsTopLeft,
   Search,
+  Table2,
   Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,6 +42,9 @@ import {
   addButton,
   addCategory,
   addLink,
+  addTable,
+  addTableCol,
+  addTableRow,
   addWhiteboard,
   addWhiteboardItem,
   buttonsInFolder,
@@ -63,8 +67,12 @@ import {
   removeButton,
   removeCategory,
   removeLink,
+  removeTable,
+  removeTableCol,
+  removeTableRow,
   removeWhiteboard,
   removeWhiteboardItem,
+  renameTable,
   renameWhiteboard,
   reorderCategory,
   reorderLink,
@@ -73,6 +81,8 @@ import {
   setFolderCollapsed,
   setDisplay,
   setSiteTitle,
+  setTableCell,
+  setTableCells,
   setUnfiledCollapsed,
   siteTitle,
   updateButton,
@@ -89,6 +99,7 @@ import {
   UNFILED_WINDOW_ID,
   layoutMissingWindows,
   setCategoryLayout,
+  setTableLayout,
   setUnfiledLayout,
   setWhiteboardLayout,
 } from '@/lib/marks/windows';
@@ -117,7 +128,8 @@ function hasBoardContent(doc: MarksDoc): boolean {
     doc.links.length > 0 ||
     doc.categories.length > 0 ||
     (doc.buttons ?? []).length > 0 ||
-    (doc.whiteboards ?? []).length > 0
+    (doc.whiteboards ?? []).length > 0 ||
+    (doc.tables ?? []).length > 0
   );
 }
 
@@ -311,7 +323,8 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
     doc.categories.length === 0 &&
     doc.links.length === 0 &&
     (doc.buttons ?? []).length === 0 &&
-    (doc.whiteboards ?? []).length === 0;
+    (doc.whiteboards ?? []).length === 0 &&
+    (doc.tables ?? []).length === 0;
 
   const apply = (next: MarksDoc, ok: string, fail: string) => {
     if (next === doc) {
@@ -655,7 +668,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             />
             <p className="text-sm text-stone-500">
               {isHome
-                ? 'Drag a window by its title bar, resize from any edge or corner. Create a whiteboard to paste images. On a phone: three columns, tap ▾ to collapse. Hide URLs, names, or images for the whole site.'
+                ? 'Drag a window by its title bar, resize from any edge or corner. Tables run Excel-like formulas; whiteboards take pasted images. On a phone: three columns, tap ▾ to collapse. Hide URLs, names, or images for the whole site.'
                 : 'Clean site — a different topic from Home. Jump back from the site chips.'}
             </p>
           </div>
@@ -785,6 +798,15 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
           <button
             type="button"
             className={ACTION_GHOST}
+            data-marks-add-table
+            onClick={() => apply(addTable(doc, 'Table', clock), 'Table added.', 'Could not add a table.')}
+          >
+            <Table2 className="h-3.5 w-3.5" />
+            Table
+          </button>
+          <button
+            type="button"
+            className={ACTION_GHOST}
             onClick={() => apply(addWhiteboard(doc, {}, clock), 'Whiteboard added.', 'Could not add whiteboard.')}
           >
             <PanelsTopLeft className="h-3.5 w-3.5" />
@@ -865,14 +887,14 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             <Loader2 className="h-4 w-4 animate-spin" />
             Opening Marks…
           </p>
-        ) : query.trim() && topFolders.length === 0 && unfiledLinks.length === 0 && !saved ? (
+        ) : query.trim() && topFolders.length === 0 && unfiledLinks.length === 0 && (doc.tables ?? []).length === 0 && !saved ? (
           <p className={`${PANEL} mx-auto max-w-xl px-4 py-8 text-sm text-stone-500`}>Nothing matches that filter.</p>
         ) : emptyBoard ? (
           <div className={`${PANEL} col-span-full flex flex-col items-start gap-3 px-4 py-8`}>
             <p className="text-sm text-stone-500">
               {isHome
-                ? 'Empty board. Add a folder, a link, a button, or a whiteboard — or paste a URL above.'
-                : 'Clean screen. Start from nothing — a completely different topic. Jump back to Home from the header.'}
+                ? 'Empty board. Add a folder, a link, a button, a table, or a whiteboard — or paste a URL above.'
+                : 'Clean screen. Start from nothing — a completely different topic. Add a table for calculations, or jump back to Home from the header.'}
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -904,6 +926,15 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
               >
                 <MousePointerClick className="h-3.5 w-3.5" />
                 Button
+              </button>
+              <button
+                type="button"
+                className={ACTION_GHOST}
+                data-marks-add-table
+                onClick={() => apply(addTable(doc, 'Table', clock), 'Table added.', 'Could not add a table.')}
+              >
+                <Table2 className="h-3.5 w-3.5" />
+                Table
               </button>
               <button
                 type="button"
@@ -995,9 +1026,21 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
               apply(next, 'Link moved.', 'Could not move that link.');
             }}
             onScreenshotLink={applyPageScreenshot}
+            onRenameTable={(id, title) => patch(renameTable(doc, id, title, clock))}
+            onTableCell={(id, key, raw) => patch(setTableCell(doc, id, key, raw, clock))}
+            onTableCells={(id, entries) => patch(setTableCells(doc, id, entries, clock))}
+            onAddTableRow={(id) => apply(addTableRow(doc, id, clock), 'Row added.', 'Row limit reached.')}
+            onAddTableCol={(id) => apply(addTableCol(doc, id, clock), 'Column added.', 'Column limit reached.')}
+            onRemoveTableRow={(id) => apply(removeTableRow(doc, id, clock), 'Row removed.', 'Need at least one row.')}
+            onRemoveTableCol={(id) => apply(removeTableCol(doc, id, clock), 'Column removed.', 'Need at least one column.')}
+            onDeleteTable={(id) => apply(removeTable(doc, id, clock), 'Table removed.', 'Could not remove table.')}
             onLayout={(id, rect) => {
               if (id === UNFILED_WINDOW_ID) {
                 patch(setUnfiledLayout(doc, rect, clock.now()));
+                return;
+              }
+              if ((doc.tables ?? []).some((table) => table.id === id)) {
+                patch(setTableLayout(doc, id, rect, clock.now()));
                 return;
               }
               if ((doc.whiteboards ?? []).some((board) => board.id === id)) {

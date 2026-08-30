@@ -15,6 +15,7 @@ import {
   linksInCategory,
   type MarkCategory,
   type MarkLink,
+  type MarkTable,
   type MarkWhiteboard,
   type MarksButton,
   type MarksDisplay,
@@ -24,6 +25,7 @@ import {
 import { screenshotCoverUrl } from '@/lib/marks/preview';
 import { videoSourceForLink } from '@/lib/marks/video';
 import { BookmarkMedia } from './bookmark-media';
+import { TableGrid } from './table-window';
 import { WhiteboardCanvas } from './whiteboard-canvas';
 import { MarksWindowDesk } from './windows-board';
 import { ACTION_TINY, BUTTON_CHIP, PANEL } from './ui';
@@ -76,6 +78,14 @@ export function Whiteboard({
   onDeleteFolder,
   onDrop,
   onScreenshotLink,
+  onRenameTable,
+  onTableCell,
+  onTableCells,
+  onAddTableRow,
+  onAddTableCol,
+  onRemoveTableRow,
+  onRemoveTableCol,
+  onDeleteTable,
   onLayout,
   onToggleUnfiled,
   onRenameWhiteboard,
@@ -110,6 +120,14 @@ export function Whiteboard({
     index?: number
   ) => void;
   onScreenshotLink?: (link: MarkLink) => void;
+  onRenameTable?: (id: string, title: string) => void;
+  onTableCell?: (id: string, key: string, raw: string) => void;
+  onTableCells?: (id: string, entries: Record<string, string>) => void;
+  onAddTableRow?: (id: string) => void;
+  onAddTableCol?: (id: string) => void;
+  onRemoveTableRow?: (id: string) => void;
+  onRemoveTableCol?: (id: string) => void;
+  onDeleteTable?: (id: string) => void;
   onLayout?: (id: string, rect: MarksWindowRect) => void;
   onToggleUnfiled?: (collapsed: boolean) => void;
   onRenameWhiteboard?: (id: string, title: string) => void;
@@ -130,6 +148,7 @@ export function Whiteboard({
   const roots = childCategories(doc, null);
   const unfiled = linksInCategory(doc, '');
   const display = doc.display ?? DEFAULT_MARKS_DISPLAY;
+  const tables = doc.tables ?? [];
   const boards = doc.whiteboards ?? [];
 
   const renderCanvas = (board: MarkWhiteboard) => (
@@ -285,23 +304,45 @@ export function Whiteboard({
           <div className="h-72">{renderCanvas(board)}</div>
         </section>
       ))}
+      {tables.map((table) => (
+        <section key={table.id} className={`${PANEL} overflow-hidden`} data-marks-table={table.id}>
+          <TableTitle table={table} onRename={onRenameTable} onDelete={onDeleteTable} />
+          <div className="h-[28rem]">
+            <TableSheet
+              table={table}
+              onTableCell={onTableCell}
+              onTableCells={onTableCells}
+              onAddTableRow={onAddTableRow}
+              onAddTableCol={onAddTableCol}
+              onRemoveTableRow={onRemoveTableRow}
+              onRemoveTableCol={onRemoveTableCol}
+              onRenameTable={onRenameTable}
+            />
+          </div>
+        </section>
+      ))}
     </div>
       <MarksWindowDesk
         doc={doc}
         onLayout={onLayout}
-        renderTitle={(id, name, kind) =>
-          kind === 'whiteboard' && onRenameWhiteboard ? (
-            <input
-              className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
-              value={name}
-              aria-label="Whiteboard name"
-              data-no-drag
-              onChange={(event) => onRenameWhiteboard(id, event.target.value)}
-            />
-          ) : (
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{name}</span>
-          )
-        }
+        renderTitle={(id, name, kind) => {
+          if (kind === 'table') {
+            const table = tables.find((row) => row.id === id);
+            if (table) return <TableTitle table={table} onRename={onRenameTable} onDelete={onDeleteTable} />;
+          }
+          if (kind === 'whiteboard' && onRenameWhiteboard) {
+            return (
+              <input
+                className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
+                value={name}
+                aria-label="Whiteboard name"
+                data-no-drag
+                onChange={(event) => onRenameWhiteboard(id, event.target.value)}
+              />
+            );
+          }
+          return <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{name}</span>;
+        }}
         renderTitleExtra={(id, kind) =>
           kind === 'whiteboard' && onDeleteWhiteboard ? (
             <button
@@ -314,7 +355,23 @@ export function Whiteboard({
             </button>
           ) : null
         }
-        renderWindow={(id) => {
+        renderWindow={(id, kind) => {
+          if (kind === 'table') {
+            const table = tables.find((row) => row.id === id);
+            if (!table) return null;
+            return (
+              <TableSheet
+                table={table}
+                onTableCell={onTableCell}
+                onTableCells={onTableCells}
+                onAddTableRow={onAddTableRow}
+                onAddTableCol={onAddTableCol}
+                onRemoveTableRow={onRemoveTableRow}
+                onRemoveTableCol={onRemoveTableCol}
+                onRenameTable={onRenameTable}
+              />
+            );
+          }
           if (id === UNFILED_WINDOW_ID) {
             return (
               <section
@@ -398,6 +455,65 @@ export function Whiteboard({
         }}
       />
     </>
+  );
+}
+
+
+function TableTitle({
+  table,
+  onDelete,
+}: {
+  table: MarkTable;
+  onRename?: (id: string, title: string) => void;
+  onDelete?: (id: string) => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-1">
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{table.title}</span>
+      {onDelete ? (
+        <button
+          type="button"
+          className="rounded px-1 text-[0.6rem] font-bold text-rose-600"
+          data-no-drag
+          onClick={() => onDelete(table.id)}
+        >
+          Delete
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function TableSheet({
+  table,
+  onTableCell,
+  onTableCells,
+  onAddTableRow,
+  onAddTableCol,
+  onRemoveTableRow,
+  onRemoveTableCol,
+  onRenameTable,
+}: {
+  table: MarkTable;
+  onTableCell?: (id: string, key: string, raw: string) => void;
+  onTableCells?: (id: string, entries: Record<string, string>) => void;
+  onAddTableRow?: (id: string) => void;
+  onAddTableCol?: (id: string) => void;
+  onRemoveTableRow?: (id: string) => void;
+  onRemoveTableCol?: (id: string) => void;
+  onRenameTable?: (id: string, title: string) => void;
+}) {
+  return (
+    <TableGrid
+      table={table}
+      onCell={(key, raw) => onTableCell?.(table.id, key, raw)}
+      onCells={(entries) => onTableCells?.(table.id, entries)}
+      onAddRow={() => onAddTableRow?.(table.id)}
+      onAddCol={() => onAddTableCol?.(table.id)}
+      onRemoveRow={() => onRemoveTableRow?.(table.id)}
+      onRemoveCol={() => onRemoveTableCol?.(table.id)}
+      onRename={(title) => onRenameTable?.(table.id, title)}
+    />
   );
 }
 

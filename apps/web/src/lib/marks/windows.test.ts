@@ -3,6 +3,7 @@ import { addWhiteboard, emptyDoc, normalizeDoc, seedDoc } from './model';
 import {
   DEFAULT_WINDOW_H,
   DEFAULT_WINDOW_W,
+  MIN_TABLE_W,
   MIN_WINDOW_H,
   MIN_WINDOW_W,
   applyMove,
@@ -75,6 +76,28 @@ describe('category window layout', () => {
     });
     const next = setUnfiledLayout(moved, { x: 24, y: 16, w: 264, h: 184 }, 10);
     expect((next as { unfiledLayout?: unknown }).unfiledLayout).toEqual({ x: 24, y: 16, w: 264, h: 184 });
+  });
+
+  it('lays out table windows from jsonb and keeps them on normalize', () => {
+    const raw = {
+      updatedAt: 4,
+      categories: [{ id: 'cat_kjarni', name: 'Kjarni', sort: 0 }],
+      links: [{ id: 'lnk_hub', categoryId: 'cat_kjarni', title: 'Hub', url: '/kjarni', note: '', sort: 0 }],
+      tables: [
+        {
+          id: 'tbl_demo',
+          title: 'Budget',
+          colCount: 4,
+          rowCount: 6,
+          cells: { A1: { raw: '2' }, B1: { raw: '=A1*3' } },
+        },
+      ],
+    };
+    const doc = layoutMissingWindows(normalizeDoc(raw)!, raw);
+    expect(doc.tables).toHaveLength(1);
+    expect(doc.tables[0]).toMatchObject({ id: 'tbl_demo', title: 'Budget', colCount: 4, rowCount: 6 });
+    expect(doc.tables[0]?.cells.B1?.raw).toBe('=A1*3');
+    expect(doc.tables[0]?.w).toBeGreaterThanOrEqual(MIN_TABLE_W);
   });
 
   it('lays out missing whiteboard windows and persists a resize', () => {
