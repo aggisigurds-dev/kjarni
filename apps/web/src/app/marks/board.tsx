@@ -668,7 +668,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             />
             <p className="text-sm text-stone-500">
               {isHome
-                ? 'Drag a window by its title bar, resize from any edge or corner. Tables run Excel-like formulas; whiteboards take pasted images. On a phone: three columns, tap ▾ to collapse. Hide URLs, names, or images for the whole site.'
+                ? 'Drag a window by its title bar, resize from any edge or corner. Tables run Excel-like formulas; whiteboards take pasted images. On a phone: three columns, tap ▾ to collapse. Hold a link to move it. Hide URLs, names, or images for the whole site.'
                 : 'Clean site — a different topic from Home. Jump back from the site chips.'}
             </p>
           </div>

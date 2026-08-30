@@ -6,6 +6,7 @@
  */
 
 import { useState, type DragEvent } from 'react';
+import { useHoldToMoveLink } from '@/lib/marks/hold-move';
 import {
   buttonsInFolder,
   childCategories,
@@ -180,8 +181,24 @@ export function Whiteboard({
     if (overFolder !== folderId) setOverFolder(folderId);
   };
 
+  const holdOver = (key: string) => setOverFolder(key);
+  const holdClear = () => {
+    setOverFolder('');
+    setOverLink('');
+  };
+  const holdDrop = (linkId: string, folderId: string | null) => {
+    holdClear();
+    const dest = folderId ?? '';
+    const link = doc.links.find((row) => row.id === linkId);
+    if (link && link.categoryId === dest) return;
+    onDrop('link', linkId, folderId);
+  };
+
   return (
     <>
+    <p className="mb-1 px-1 text-[0.65rem] text-stone-400 md:hidden">
+      Hold a link, then drag it into another folder.
+    </p>
     <div
       className="mx-auto grid grid-cols-3 items-start gap-1.5 px-1 md:hidden"
       data-marks-layout="columns"
@@ -215,6 +232,9 @@ export function Whiteboard({
           onMarkOver={markOver}
           onOverLink={setOverLink}
           onDrop={acceptDrop}
+          onHoldOver={holdOver}
+          onHoldClear={holdClear}
+          onHoldDrop={holdDrop}
           onScreenshotLink={onScreenshotLink}
         />
       ))}
@@ -269,6 +289,9 @@ export function Whiteboard({
                       setOverLink(link.id);
                     }}
                     onDrop={(event) => acceptDrop(null, event, index)}
+                    onHoldOver={holdOver}
+                    onHoldClear={holdClear}
+                    onHoldDrop={holdDrop}
                     onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
                   />
                 ))}
@@ -406,6 +429,9 @@ export function Whiteboard({
                           setOverLink(link.id);
                         }}
                         onDrop={(event) => acceptDrop(null, event, index)}
+                        onHoldOver={holdOver}
+                        onHoldClear={holdClear}
+                        onHoldDrop={holdDrop}
                         onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
                       />
                     ))}
@@ -449,6 +475,9 @@ export function Whiteboard({
               onMarkOver={markOver}
               onOverLink={setOverLink}
               onDrop={acceptDrop}
+              onHoldOver={holdOver}
+              onHoldClear={holdClear}
+              onHoldDrop={holdDrop}
               onScreenshotLink={onScreenshotLink}
             />
           );
@@ -571,6 +600,9 @@ function Column({
   onMarkOver,
   onOverLink,
   onDrop,
+  onHoldOver,
+  onHoldClear,
+  onHoldDrop,
   onScreenshotLink,
 }: {
   doc: MarksDoc;
@@ -598,6 +630,9 @@ function Column({
   onMarkOver: (folderId: string, event: DragEvent) => void;
   onOverLink: (id: string) => void;
   onDrop: (folderId: string | null, event: DragEvent, index?: number) => void;
+  onHoldOver: (key: string) => void;
+  onHoldClear: () => void;
+  onHoldDrop: (linkId: string, folderId: string | null) => void;
   onScreenshotLink?: (link: MarkLink) => void;
 }) {
   const links = linksInCategory(doc, folder.id);
@@ -743,6 +778,9 @@ function Column({
                   onOverLink(link.id);
                 }}
                 onDrop={(event) => onDrop(folder.id, event, index)}
+                onHoldOver={onHoldOver}
+                onHoldClear={onHoldClear}
+                onHoldDrop={onHoldDrop}
                 onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
               />
             ))}
@@ -775,6 +813,9 @@ function Column({
                 onMarkOver={onMarkOver}
                 onOverLink={onOverLink}
                 onDrop={onDrop}
+                onHoldOver={onHoldOver}
+                onHoldClear={onHoldClear}
+                onHoldDrop={onHoldDrop}
                 onScreenshotLink={onScreenshotLink}
               />
             </div>
@@ -807,6 +848,9 @@ function LinkRow({
   onMove,
   onDragOver,
   onDrop,
+  onHoldOver,
+  onHoldClear,
+  onHoldDrop,
   onScreenshot,
 }: {
   link: MarkLink;
@@ -820,10 +864,19 @@ function LinkRow({
   onMove?: (id: string, categoryId: string) => void;
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
+  onHoldOver: (key: string) => void;
+  onHoldClear: () => void;
+  onHoldDrop: (linkId: string, folderId: string | null) => void;
   onScreenshot?: () => void;
 }) {
   const video = videoSourceForLink(link);
   const canShot = Boolean(!compact && onScreenshot && screenshotCoverUrl(link.url));
+  const hold = useHoldToMoveLink({
+    title: link.title,
+    onOver: onHoldOver,
+    onClearOver: onHoldClear,
+    onDrop: (folderId) => onHoldDrop(link.id, folderId),
+  });
   const showImage = display.showImages && (link.showImage || Boolean(video));
   const showName = display.showNames;
   const showUrl = display.showUrls && link.showUrl;
@@ -836,8 +889,8 @@ function LinkRow({
       onDrop={onDrop}
     >
       <div
-        className="group flex items-stretch gap-1 rounded-lg hover:bg-stone-50"
-        draggable
+        className={`group flex items-stretch gap-1 rounded-lg hover:bg-stone-50 ${hold.moving ? 'opacity-40' : ''}`}
+        draggable={hold.html5Drag}
         onDragStart={(event) => startDrag(event, 'link', link.id)}
         onMouseEnter={() => onHover?.(link.id)}
         onMouseLeave={() => onHover?.('')}
@@ -846,7 +899,11 @@ function LinkRow({
           href={link.url}
           target={link.url.startsWith('/') ? undefined : '_blank'}
           rel="noreferrer"
-          className={`flex min-w-0 flex-1 items-center ${compact ? 'gap-1.5 px-0.5 py-1' : 'gap-3 px-2 py-2'}`}
+          className={`flex min-w-0 flex-1 touch-pan-y select-none items-center ${compact ? 'gap-1.5 px-0.5 py-1' : 'gap-3 px-2 py-2'}`}
+          style={{ WebkitTouchCallout: 'none' }}
+          onPointerDown={hold.onPointerDown}
+          onContextMenu={hold.onContextMenu}
+          onClick={hold.guardClick}
         >
           {showImage ? (
             <BookmarkMedia
@@ -916,6 +973,15 @@ function LinkRow({
           </button>
         )}
       </div>
+      {hold.ghost ? (
+        <div
+          data-marks-hold-ghost=""
+          className="pointer-events-none fixed z-[80] max-w-[16rem] truncate rounded-lg border border-emerald-600 bg-white px-3 py-2 text-sm font-medium text-stone-900 shadow-lg"
+          style={{ left: hold.ghost.x - 24, top: hold.ghost.y - 48 }}
+        >
+          {hold.ghost.title}
+        </div>
+      ) : null}
     </li>
   );
 }
