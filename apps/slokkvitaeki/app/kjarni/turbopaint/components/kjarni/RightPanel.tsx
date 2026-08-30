@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Lock, Trash2, Unlock } from "lucide-react";
 import { isFirewallMark } from "../../lib/board/detect-firewalls";
+import { isCleanWall } from "../../lib/board/simplify-plan";
 import { isMvsMark } from "../../lib/board/mvs165";
 import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS, type BoardObject } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
@@ -13,10 +14,11 @@ import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 
-type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "annad";
+type LayerGroupId = "teikning" | "veggir" | "eldveggur" | "mvs" | "takn" | "annad";
 
 const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
-  { id: "teikning", label: "Teikningar" },
+  { id: "teikning", label: "Teikning" },
+  { id: "veggir", label: "Veggir" },
   { id: "eldveggur", label: "Eldveggir" },
   { id: "mvs", label: "165.BR1" },
   { id: "takn", label: "Tákn" },
@@ -25,6 +27,7 @@ const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
 
 function layerGroupOf(obj: BoardObject): LayerGroupId {
   if (obj.type === "image") return "teikning";
+  if (isCleanWall(obj)) return "veggir";
   if (isFirewallMark(obj)) return "eldveggur";
   if (isMvsMark(obj)) return "mvs";
   if (obj.type === "symbol") return "takn";
@@ -209,9 +212,33 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
               if (!items.length) return null;
               return (
                 <details key={group.id} open className="rounded-md bg-white/4">
-                  <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-semibold tracking-wide text-stone-400">
-                    {group.label}
-                    <span className="pl-1.5 font-normal text-stone-600">{items.length}</span>
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-[11px] font-semibold tracking-wide text-stone-400">
+                    <span>
+                      {group.label}
+                      <span className="pl-1.5 font-normal text-stone-600">{items.length}</span>
+                    </span>
+                    <span
+                      role="presentation"
+                      className="rounded p-0.5 hover:bg-white/10"
+                      title={items.every((o) => o.hidden) ? "Sýna lag" : "Fela lag"}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const hide = !items.every((o) => o.hidden);
+                        useBoardStore
+                          .getState()
+                          .updateObjects(
+                            items.map((o) => o.id),
+                            (o) => ({ ...o, hidden: hide })
+                          );
+                      }}
+                    >
+                      {items.every((o) => o.hidden) ? (
+                        <EyeOff className="size-3.5" />
+                      ) : (
+                        <Eye className="size-3.5" />
+                      )}
+                    </span>
                   </summary>
                   <div className="space-y-0.5 pb-1">
                     {items.map((obj) => (

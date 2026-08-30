@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import type Konva from "konva";
 import { blobToDataUrl, getAssetBlob } from "./assets";
+import { serializeCleanPlanJson, serializeCleanPlanSvg } from "./export-clean";
 import { boardBounds } from "./geometry";
 import type { BoardDocument, BoardObject } from "./types";
 
@@ -111,6 +112,20 @@ export async function exportBoardJson(doc: BoardDocument, objects: BoardObject[]
   };
   const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
   downloadBlob(blob, `${slug(doc.name)}.kjarni.json`);
+}
+
+export function exportCleanPlan(
+  doc: BoardDocument,
+  objects: BoardObject[],
+  kind: "json" | "svg"
+) {
+  if (kind === "svg") {
+    const svg = serializeCleanPlanSvg(objects);
+    downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${slug(doc.name)}-hreint.svg`);
+    return;
+  }
+  const json = serializeCleanPlanJson(doc, objects);
+  downloadBlob(new Blob([json], { type: "application/json" }), `${slug(doc.name)}-hreint.kjarni.json`);
 }
 
 export function slug(name: string) {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { downloadBlob, exportBoardJson, exportPdf, exportPngBlob, slug } from "../../lib/board/export-board";
+import { downloadBlob, exportBoardJson, exportCleanPlan, exportPdf, exportPngBlob, slug } from "../../lib/board/export-board";
 import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
 import {
   canvasToAsset,
@@ -16,6 +16,7 @@ import { cropPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
+import { isCleanWall, redrawWallsFromPlan } from "../../lib/board/simplify-plan";
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
 import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
@@ -28,6 +29,7 @@ import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
+import { PlanLayerToggle } from "./PlanLayerToggle";
 import { TopBar } from "./TopBar";
 import { Button } from "../ui/button";
 import {
@@ -347,6 +349,45 @@ export function WhiteboardApp() {
     []
   );
 
+  const runRedrawWalls = useCallback(async (planId: string) => {
+    const plan = useBoardStore.getState().objects.find((o) => o.id === planId);
+    if (!plan || plan.type !== "image") return;
+    try {
+      useBoardStore.getState().setImportProgress({
+        fileName: plan.name,
+        percent: 6,
+        message: "Endurteikna veggi — les teikningu…",
+      });
+      const { objects: walls } = await redrawWallsFromPlan(plan, {
+        onProgress: (message, percent) =>
+          useBoardStore.getState().setImportProgress({
+            fileName: plan.name,
+            percent,
+            message,
+          }),
+      });
+      const stale = useBoardStore
+        .getState()
+        .objects.filter((o) => isCleanWall(o) && o.parentId === plan.id)
+        .map((o) => o.id);
+      if (stale.length) useBoardStore.getState().deleteIds(stale);
+      if (!walls.length) {
+        useBoardStore.getState().setImportProgress(null);
+        toast.message("Fann enga þykka veggi — prófaðu hærri innflutningsgæði");
+        return;
+      }
+      useBoardStore.getState().addObjects(walls, false);
+      useBoardStore.getState().patchObject(plan.id, { hidden: true }, false);
+      useBoardStore.getState().setImportProgress(null);
+      toast.success(
+        `Hreint grunnplan — ${walls.length} veggir. Fela/sýna teikningu og veggi í lagalistanum.`
+      );
+    } catch (err) {
+      useBoardStore.getState().setImportProgress(null);
+      toast.error(err instanceof Error ? err.message : "Gat ekki endurteiknað veggi");
+    }
+  }, []);
+
   const runCrop = useCallback(
     async (rect: { x: number; y: number; width: number; height: number }) => {
       const state = useBoardStore.getState();
@@ -599,6 +640,14 @@ export function WhiteboardApp() {
           }
           setStripPlanId(plan.id);
         }}
+        onRedrawWalls={() => {
+          const plan = resolvePlan();
+          if (!plan) {
+            toast.error("Engin teikning fannst — veldu teikninguna fyrst");
+            return;
+          }
+          void runRedrawWalls(plan.id);
+        }}
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
@@ -662,7 +711,8 @@ export function WhiteboardApp() {
                 </button>
               </div>
             ) : null}
-            <div className="absolute top-3 left-1/2 -translate-x-1/2">
+            <div className="absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+              <PlanLayerToggle />
               <SelectionBar
                 onExportSelection={() => {
                   setExportTarget("selection");
@@ -957,7 +1007,7 @@ function ExportDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTarget]);
 
-  async function run(kind: "png" | "pdf" | "json") {
+  async function run(kind: "png" | "pdf" | "json" | "clean-json" | "clean-svg") {
     const stage = getRegisteredStage();
     const state = useBoardStore.getState();
     const exportObjects =
@@ -984,6 +1034,21 @@ function ExportDialog({
           },
           state.objects
         );
+      } else if (kind === "clean-json" || kind === "clean-svg") {
+        exportCleanPlan(
+          {
+            version: 2,
+            name: state.name,
+            objects: state.objects,
+            camera: state.camera,
+            pixelsPerMeter: state.pixelsPerMeter,
+            grid: state.grid,
+            snap: state.snap,
+            assetIds: [],
+          },
+          state.objects,
+          kind === "clean-svg" ? "svg" : "json"
+        );
       } else if (!stage) {
         toast.error("Borðið er ekki tilbúið");
       } else if (kind === "png") {
@@ -1005,10 +1070,10 @@ function ExportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Flytja út í háum gæðum</DialogTitle>
+          <DialogTitle>Flytja út</DialogTitle>
           <DialogDescription>
-            PNG og PDF eru teiknuð af öllu borðinu eða því sem þú sérð. JSON vistar borðið með
-            innfelldum gólfplönum.
+            PNG og PDF eru rastar. JSON með innfelldum teikningum er þungt. Fyrir fyrirtækjasnið:
+            vistaðu hreint plan án frumteikningar (vektorar, tuga KB).
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 text-sm">
@@ -1040,11 +1105,22 @@ function ExportDialog({
             </select>
           </label>
         </div>
-        <DialogFooter className="sm:justify-between">
-          <Button variant="outline" disabled={busy} onClick={() => void run("json")}>
-            JSON afrit
+        <DialogFooter className="flex-col gap-2 sm:flex-col sm:justify-stretch">
+          <Button
+            variant="default"
+            disabled={busy}
+            className="w-full bg-[#FE653F] text-white hover:bg-[#E8553F]"
+            onClick={() => void run("clean-json")}
+          >
+            Vista hreint plan (án frumteikningar)
           </Button>
-          <div className="flex gap-2">
+          <Button variant="outline" disabled={busy} className="w-full" onClick={() => void run("clean-svg")}>
+            Hreint plan sem SVG
+          </Button>
+          <div className="flex w-full flex-wrap justify-end gap-2">
+            <Button variant="outline" disabled={busy} onClick={() => void run("json")}>
+              JSON með teikningu
+            </Button>
             <Button variant="outline" disabled={busy} onClick={() => void run("pdf")}>
               PDF
             </Button>
@@ -1099,8 +1175,10 @@ function HelpDialog({
           ))}
         </ul>
         <p className="text-xs text-muted-foreground">
-          Við innflutning merkir TurboPaint E-30/E-60 eldveggi og staðsetur slökkvitæki, brunaslöngur og
-          skilti skv. leiðbeiningum Brunamálastofnunar{" "}
+          Flæðið er Teikning → Endurteikna veggi → Hreint grunnplan. Veggirnir eru vektorar sem hægt
+          er að vista án frumteikningar (létt fyrir mörg fyrirtæki). Við innflutning merkir TurboPaint
+          E-30/E-60 eldveggi og staðsetur slökkvitæki, brunaslöngur og skilti skv. leiðbeiningum
+          Brunamálastofnunar{" "}
           <a className="underline" href="/docs/MVS-165_BR1.pdf" target="_blank" rel="noreferrer">
             165.BR1
           </a>

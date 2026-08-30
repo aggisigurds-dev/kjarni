@@ -11,6 +11,7 @@ import {
   Layers,
   ListTree,
   Magnet,
+  Pentagon,
   Redo2,
   RotateCcw,
   Undo2,
@@ -60,6 +61,7 @@ export function TopBar({
   onOpenSample,
   onMarkFirewalls,
   onStrip,
+  onRedrawWalls,
   onImportUrl,
   onVeljaTeikningu,
   onOpenLayers,
@@ -71,6 +73,7 @@ export function TopBar({
   onOpenSample?: () => void;
   onMarkFirewalls?: () => void;
   onStrip?: () => void;
+  onRedrawWalls?: () => void;
   onImportUrl?: () => void;
   /** Teikning valin úr heimilisfangaleitinni — `.info` permalink. */
   onVeljaTeikningu?: (infoUrl: string) => void;
@@ -325,7 +328,17 @@ export function TopBar({
         title="Hreinsa teikningu — hvítur grunnur, bara veggir og blek"
       >
         <Eraser className="size-4" />
-        <span className="hidden lg:inline">Hreinsa</span>
+        <span className="hidden xl:inline">Hreinsa</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
+        onClick={() => onRedrawWalls?.()}
+        title="Endurteikna veggi — hreint vektor grunnplan ofan á teikningunni"
+      >
+        <Pentagon className="size-4" />
+        <span className="hidden lg:inline">Endurteikna veggi</span>
       </Button>
       <Button
         size="sm"
@@ -406,6 +419,9 @@ export function TopBar({
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onMarkFirewalls?.()}>
             Merkja eldveggi og 165.BR1 (SLT / slöngur / skilti)
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onRedrawWalls?.()}>
+            Endurteikna veggi — hreint grunnplan
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void clearBoard()}>Tómt borð</DropdownMenuItem>
           <DropdownMenuSeparator />
