@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Folder, HardDrive, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  CLIENT_ID_KEY,
   DEFAULT_DRIVE_FOLDER_ID,
   DEFAULT_DRIVE_FOLDER_NAME,
   DRIVE_SCOPE,
@@ -367,9 +366,12 @@ export function DriveBrowser({
                 Connect Drive
               </button>
               <p className="text-[0.7rem] text-slate-500 sm:col-span-2">
-                One-time: Google Cloud → APIs → enable Drive API → OAuth client (Web), authorized
-                JavaScript origin {typeof window !== 'undefined' ? window.location.origin : ''}. The
-                id is stored in this browser ({CLIENT_ID_KEY}). Scope is read-only.
+                Connect Drive signs you in with Google (read-only). If Google says the origin is
+                not allowed, add{' '}
+                <code className="font-mono">
+                  {typeof window !== 'undefined' ? window.location.origin : 'this site'}
+                </code>{' '}
+                under that Web client → Authorized JavaScript origins.
               </p>
             </div>
           ) : (
