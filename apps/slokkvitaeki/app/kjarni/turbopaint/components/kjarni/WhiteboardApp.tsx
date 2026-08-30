@@ -699,7 +699,11 @@ export function WhiteboardApp() {
           {importProgress ? (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#0f1117]/50 backdrop-blur-[2px]">
               <div className="w-[min(92vw,420px)] rounded-2xl border border-white/10 bg-[#1a1d2e] p-5 shadow-2xl">
-                <div className="text-sm font-medium">Flyt inn {importProgress.fileName}</div>
+                <div className="text-sm font-medium">
+                  {/165\.BR1|Les teikningu|eldvegg/i.test(importProgress.message)
+                    ? `Greini ${importProgress.fileName}`
+                    : `Flyt inn ${importProgress.fileName}`}
+                </div>
                 <div className="mt-1 text-xs text-stone-400">{importProgress.message}</div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
                   <div
