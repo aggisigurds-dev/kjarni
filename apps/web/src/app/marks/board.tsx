@@ -6,6 +6,7 @@ import {
   FolderPlus,
   Loader2,
   MousePointerClick,
+  PanelsTopLeft,
   Search,
   Upload,
 } from 'lucide-react';
@@ -29,6 +30,8 @@ import {
   addButton,
   addCategory,
   addLink,
+  addWhiteboard,
+  addWhiteboardItem,
   buttonsInFolder,
   childCategories,
   createClientClock,
@@ -47,6 +50,9 @@ import {
   removeButton,
   removeCategory,
   removeLink,
+  removeWhiteboard,
+  removeWhiteboardItem,
+  renameWhiteboard,
   reorderCategory,
   reorderLink,
   revealFolder,
@@ -55,13 +61,20 @@ import {
   updateButton,
   updateCategory,
   updateLink,
+  updateWhiteboardItem,
   type MarkCategory,
   type MarkLink,
   type MarksButton,
   type MarksClock,
   type MarksDoc,
 } from '@/lib/marks/model';
-import { UNFILED_WINDOW_ID, layoutMissingWindows, setCategoryLayout, setUnfiledLayout } from '@/lib/marks/windows';
+import {
+  UNFILED_WINDOW_ID,
+  layoutMissingWindows,
+  setCategoryLayout,
+  setUnfiledLayout,
+  setWhiteboardLayout,
+} from '@/lib/marks/windows';
 import { screenshotCoverUrl } from '@/lib/marks/preview';
 import { cropImageToSquare } from '@/lib/marks/square-cover';
 import {
@@ -136,6 +149,7 @@ export function MarksBoard() {
   const [filterFolder, setFilterFolder] = useState('');
   const [highlightFolder, setHighlightFolder] = useState('');
   const [hoverLink, setHoverLink] = useState('');
+  const [activeWhiteboard, setActiveWhiteboard] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const loaded = useRef(false);
   const docRef = useRef(doc);
@@ -150,7 +164,13 @@ export function MarksBoard() {
     let cancelled = false;
     (async () => {
       const local = readLocal();
-      if (local && (local.links.length > 0 || local.categories.length > 0 || local.buttons.length > 0)) {
+      if (
+        local &&
+        (local.links.length > 0 ||
+          local.categories.length > 0 ||
+          local.buttons.length > 0 ||
+          (local.whiteboards?.length ?? 0) > 0)
+      ) {
         setDoc(layoutMissingWindows(local, local));
       }
       try {
@@ -238,7 +258,11 @@ export function MarksBoard() {
   const unfiledLinks = linksInCategory(shown, '');
   const toolbarButtons = buttonsInFolder(shown, '');
   const tags = allTags(doc);
-  const emptyBoard = doc.categories.length === 0 && doc.links.length === 0 && (doc.buttons ?? []).length === 0;
+  const emptyBoard =
+    doc.categories.length === 0 &&
+    doc.links.length === 0 &&
+    (doc.buttons ?? []).length === 0 &&
+    (doc.whiteboards ?? []).length === 0;
 
   const apply = (next: MarksDoc, ok: string, fail: string) => {
     if (next === doc) {
@@ -470,6 +494,38 @@ export function MarksBoard() {
     if (applyKeepResult(result, 'Paste Keep notes or URLs first.')) setKeepPasted('');
   };
 
+  const uploadWhiteboardFiles = async (whiteboardId: string, files: File[], at?: { x: number; y: number }) => {
+    let next = docRef.current;
+    let added = 0;
+    for (const [index, file] of files.entries()) {
+      if (!file.type.startsWith('image/')) continue;
+      try {
+        const url = await uploadMarkCover(file, file.name || 'image.png', 'whiteboards');
+        const placed = addWhiteboardItem(
+          next,
+          whiteboardId,
+          {
+            src: url,
+            kind: file.size < 12_000 ? 'icon' : 'image',
+            x: (at?.x ?? 16) + index * 24,
+            y: (at?.y ?? 16) + index * 24,
+          },
+          clock
+        );
+        if (placed !== next) {
+          next = placed;
+          added += 1;
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Upload failed.');
+      }
+    }
+    if (added) {
+      patch(next);
+      toast.success(added === 1 ? 'Image added.' : `${added} images added.`);
+    }
+  };
+
   const uploadCover = async (file: File, into: 'link' | 'folder') => {
     try {
       const cropped = await cropImageToSquare(file);
@@ -506,8 +562,9 @@ export function MarksBoard() {
             <p className={LABEL}>Kjarni</p>
             <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
             <p className="text-sm text-stone-500">
-              Drag a category window by its title bar, resize from the edges. Drop a link onto
-              another window to move it. Columns on a phone.
+              Drag a window by its title bar, resize from any edge or corner. Create a whiteboard
+              to paste images. Drop a link onto another folder window to move it. Columns on a
+              phone.
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
@@ -572,6 +629,14 @@ export function MarksBoard() {
           >
             <MousePointerClick className="h-3.5 w-3.5" />
             Button
+          </button>
+          <button
+            type="button"
+            className={ACTION_GHOST}
+            onClick={() => apply(addWhiteboard(doc, {}, clock), 'Whiteboard added.', 'Could not add whiteboard.')}
+          >
+            <PanelsTopLeft className="h-3.5 w-3.5" />
+            Whiteboard
           </button>
           <button type="button" className={ACTION_GHOST} onClick={() => setShowImport(true)}>
             <Upload className="h-3.5 w-3.5" />
@@ -653,7 +718,7 @@ export function MarksBoard() {
         ) : emptyBoard ? (
           <div className={`${PANEL} col-span-full flex flex-col items-start gap-3 px-4 py-8`}>
             <p className="text-sm text-stone-500">
-              Empty board. Add a folder, a link, or a button — or paste a URL above.
+              Empty board. Add a folder, a link, a button, or a whiteboard — or paste a URL above.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -685,6 +750,14 @@ export function MarksBoard() {
               >
                 <MousePointerClick className="h-3.5 w-3.5" />
                 Button
+              </button>
+              <button
+                type="button"
+                className={ACTION_GHOST}
+                onClick={() => apply(addWhiteboard(doc, {}, clock), 'Whiteboard added.', 'Could not add whiteboard.')}
+              >
+                <PanelsTopLeft className="h-3.5 w-3.5" />
+                Whiteboard
               </button>
             </div>
           </div>
@@ -772,8 +845,32 @@ export function MarksBoard() {
                 patch(setUnfiledLayout(doc, rect, clock.now()));
                 return;
               }
+              if ((doc.whiteboards ?? []).some((board) => board.id === id)) {
+                patch(setWhiteboardLayout(doc, id, rect, clock.now()));
+                return;
+              }
               patch(setCategoryLayout(doc, id, rect, clock.now()));
             }}
+            onRenameWhiteboard={(id, title) => patch(renameWhiteboard(doc, id, title, clock))}
+            onDeleteWhiteboard={(id) =>
+              apply(removeWhiteboard(doc, id, clock), 'Whiteboard removed.', 'Could not remove whiteboard.')
+            }
+            activeWhiteboard={activeWhiteboard}
+            onActiveWhiteboard={setActiveWhiteboard}
+            onAddWhiteboardFiles={(id, files, at) => void uploadWhiteboardFiles(id, files, at)}
+            onAddWhiteboardUrl={(id, src, at) => {
+              apply(
+                addWhiteboardItem(doc, id, { src, x: at?.x, y: at?.y }, clock),
+                'Image added.',
+                'Could not add that image.'
+              );
+            }}
+            onMoveWhiteboardItem={(whiteboardId, itemId, rect) =>
+              patch(updateWhiteboardItem(doc, whiteboardId, itemId, rect, clock))
+            }
+            onRemoveWhiteboardItem={(whiteboardId, itemId) =>
+              patch(removeWhiteboardItem(doc, whiteboardId, itemId, clock))
+            }
           />
         )}
       </main>

@@ -43,13 +43,13 @@ export function createMarksServerClient(): SupabaseClient {
   });
 }
 
-export async function loadMarksBoard(): Promise<MarksDoc | null> {
+export async function loadMarksBoard(id = MARKS_BOARD_ID): Promise<MarksDoc | null> {
   const sb = getMarksSupabase();
   if (!sb) return null;
   const { data, error } = await sb
     .from(TABLE)
     .select('doc, deleted')
-    .eq('id', MARKS_BOARD_ID)
+    .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || data.deleted) return null;
@@ -57,11 +57,11 @@ export async function loadMarksBoard(): Promise<MarksDoc | null> {
   return normalized ? layoutMissingWindows(normalized, data.doc) : null;
 }
 
-export async function saveMarksBoard(doc: MarksDoc): Promise<void> {
+export async function saveMarksBoard(doc: MarksDoc, id = MARKS_BOARD_ID): Promise<void> {
   const sb = getMarksSupabase();
   if (!sb) throw new Error('Supabase is only available in the browser.');
   const { error } = await sb.from(TABLE).upsert({
-    id: MARKS_BOARD_ID,
+    id,
     doc,
     deleted: false,
     updated_at: new Date(doc.updatedAt || Date.now()).toISOString(),
@@ -69,11 +69,16 @@ export async function saveMarksBoard(doc: MarksDoc): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export async function uploadMarkCover(file: Blob, fileName = 'cover.jpg'): Promise<string> {
+export async function uploadMarkCover(
+  file: Blob,
+  fileName = 'cover.jpg',
+  folder = 'covers'
+): Promise<string> {
   const sb = getMarksSupabase();
   if (!sb) throw new Error('Supabase is only available in the browser.');
   const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : '.jpg';
-  const path = `covers/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+  const prefix = folder.replace(/\/+$/, '') || 'covers';
+  const path = `${prefix}/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}${ext}`;
   const { error } = await sb.storage.from(MARKS_BUCKET).upload(path, file, {
     contentType: file.type || 'image/jpeg',
     upsert: true,
