@@ -7,6 +7,7 @@ import {
   addButton,
   addCategory,
   addLink,
+  addTable,
   addWhiteboard,
   addWhiteboardItem,
   childCategories,
@@ -371,6 +372,8 @@ describe('sites', () => {
     expect(blank.categories).toEqual([]);
     expect(blank.links).toEqual([]);
     expect(blank.buttons).toEqual([]);
+    expect(blank.tables).toEqual([]);
+    expect(blank.whiteboards).toEqual([]);
     expect(blank.display).toEqual({
       showUrls: true,
       showNames: true,
@@ -398,6 +401,7 @@ describe('sites', () => {
     expect(siteTitle(normalizeDoc({ categories: [], links: [] }), 'Home')).toBe('Home');
     expect(normalizeDoc({ categories: [], links: [] })?.display.previewSize).toBe('m');
     expect(normalizeDoc({ categories: [], links: [] })?.display.showImages).toBe(true);
+    expect(normalizeDoc({ categories: [], links: [] })?.tables).toEqual([]);
   });
 
   it('hides all URLs, names, and images and picks a preview size', () => {
@@ -417,6 +421,28 @@ describe('sites', () => {
     doc = setUnfiledCollapsed(doc, true, clock);
     expect(doc.unfiledCollapsed).toBe(true);
     expect(setUnfiledCollapsed(doc, true, clock)).toBe(doc);
+  });
+
+  it('adds an excel table and keeps cells through normalize', () => {
+    const clock = testClock();
+    const doc = addTable(emptyDoc(clock.now(), 'Work'), 'Budget', clock);
+    expect(doc.tables).toHaveLength(1);
+    expect(doc.tables[0]?.title).toBe('Budget');
+    expect(doc.tables[0]?.id.startsWith('tbl_')).toBe(true);
+    const roundtrip = normalizeDoc({
+      ...doc,
+      tables: [
+        {
+          id: 'tbl_demo',
+          title: 'Budget',
+          colCount: 4,
+          rowCount: 6,
+          cells: { A1: { raw: '2' }, B1: { raw: '=A1*3' } },
+        },
+      ],
+    });
+    expect(roundtrip?.tables[0]).toMatchObject({ id: 'tbl_demo', title: 'Budget', colCount: 4, rowCount: 6 });
+    expect(roundtrip?.tables[0]?.cells.B1?.raw).toBe('=A1*3');
   });
 });
 
