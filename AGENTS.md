@@ -33,7 +33,9 @@ Follow these steps to get the repo running locally end-to-end. This is a pnpm + 
 
 ## Cursor Cloud specific instructions
 
-Cloud Agents see this repo at `/agent/repos/kjarni`. Open that folder. Daily work is one repo per window; the 8-root workspace is only when the task crosses repos.
+Kjarni is the future platform-monorepo. Live ops today are brunaholf (parent / hub) + slokkvitaeki (acquired app) on the same Supabase `osfdzskyvisifcwyjkuk`. Do not merge kjarni into that hub+app pair.
+
+Cloud Agents see this repo at `/agent/repos/kjarni`. Open that folder. One-repo window is fine for kjarni-local work. Shared DB, kúnnar, Drive, or Payday still belong in the brunaholf + slokkvitaeki pair.
 
 **Verkefnalisti** still applies: `GET https://brunaholf.netlify.app/api/verkefnalisti` (beidni/i_vinnu) before starting new work.
 
