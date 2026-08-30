@@ -110,13 +110,63 @@ export interface MarksFilter {
   categoryId: string;
 }
 
+export interface MarkTableCell {
+  raw: string;
+}
+
+export interface MarkTable {
+  id: string;
+  title: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z?: number;
+  colCount: number;
+  rowCount: number;
+  cols?: { width: number }[];
+  cells: Record<string, MarkTableCell>;
+}
+
 export interface MarksDoc {
+  /** Site name. Home is "Home"; new sites start empty under their own title. */
+  title: string;
   categories: MarkCategory[];
   links: MarkLink[];
   buttons: MarksButton[];
   filters: MarksFilter[];
+  tables: MarkTable[];
   updatedAt: number;
   folders?: MarkCategory[];
+}
+
+export const DEFAULT_TABLE_COL_COUNT = 8;
+export const DEFAULT_TABLE_ROW_COUNT = 14;
+export const MAX_TABLE_COL_COUNT = 30;
+export const MAX_TABLE_ROW_COUNT = 50;
+export const DEFAULT_TABLE_W = 560;
+export const DEFAULT_TABLE_H = 420;
+
+const SITE_ID_RE = /^site_[a-z0-9]+$/i;
+
+export function isMarksBoardId(id: string): boolean {
+  return id === MARKS_BOARD_ID || SITE_ID_RE.test(id);
+}
+
+export function marksHref(id: string): string {
+  return !id || id === MARKS_BOARD_ID ? '/marks' : `/marks/${id}`;
+}
+
+export function createSiteId(clock: MarksClock = fallbackClock): string {
+  return clock.nextId('site');
+}
+
+export function siteTitle(
+  doc: Pick<MarksDoc, 'title'> | null | undefined,
+  fallback = 'Untitled'
+): string {
+  const title = doc?.title?.trim() ?? '';
+  return title || fallback;
 }
 
 export const BUTTON_COLORS = ['#047857', '#1d4ed8', '#b45309', '#be123c', '#6d28d9', '#44403c'] as const;
@@ -274,13 +324,44 @@ export function layoutMissingPositions(doc: MarksDoc): MarksDoc {
   };
 }
 
-export function emptyDoc(now = 0): MarksDoc {
-  return { categories: [], links: [], buttons: [], filters: [], updatedAt: now };
+export function emptyDoc(now = 0, title = ''): MarksDoc {
+  return { title, categories: [], links: [], buttons: [], filters: [], tables: [], updatedAt: now };
+}
+
+function clampInt(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function defaultTable(partial: Partial<MarkTable> & Pick<MarkTable, 'id'>): MarkTable {
+  const incoming = partial.cells ?? {};
+  const cells: Record<string, MarkTableCell> = {};
+  for (const [key, cell] of Object.entries(incoming)) {
+    const raw = typeof cell === 'string' ? cell : asString(cell?.raw);
+    if (raw) cells[key.toUpperCase()] = { raw };
+  }
+  return {
+    title: 'Table',
+    x: 0,
+    y: 0,
+    w: DEFAULT_TABLE_W,
+    h: DEFAULT_TABLE_H,
+    colCount: DEFAULT_TABLE_COL_COUNT,
+    rowCount: DEFAULT_TABLE_ROW_COUNT,
+    cells,
+    ...partial,
+    title: (partial.title ?? 'Table').trim() || 'Table',
+    colCount: clampInt(partial.colCount ?? DEFAULT_TABLE_COL_COUNT, 1, MAX_TABLE_COL_COUNT, DEFAULT_TABLE_COL_COUNT),
+    rowCount: clampInt(partial.rowCount ?? DEFAULT_TABLE_ROW_COUNT, 1, MAX_TABLE_ROW_COUNT, DEFAULT_TABLE_ROW_COUNT),
+    cells,
+  };
 }
 
 export function persistDoc(doc: MarksDoc): MarksDoc {
   return {
     ...doc,
+    title: asString(doc.title).trim(),
+    tables: doc.tables ?? [],
     folders: doc.categories,
     links: doc.links.map((link) => ({
       ...link,
@@ -373,6 +454,46 @@ function normalizeButtonRow(value: unknown, index: number): MarksButton | null {
   });
 }
 
+function normalizeTableRow(value: unknown, index: number): MarkTable | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const id = asString(row.id) || `tbl_${index}`;
+  if (!id) return null;
+  const cells: Record<string, MarkTableCell> = {};
+  const rawCells = asRecord(row.cells);
+  if (rawCells) {
+    for (const [key, cell] of Object.entries(rawCells)) {
+      const a1 = key.toUpperCase();
+      if (!/^[A-Z]+[1-9]\d*$/.test(a1)) continue;
+      const rec = asRecord(cell);
+      const raw = rec ? asString(rec.raw) : asString(cell);
+      if (raw) cells[a1] = { raw };
+    }
+  }
+  const cols = Array.isArray(row.cols)
+    ? row.cols
+        .map((col) => {
+          const rec = asRecord(col);
+          const width = rec ? asNumber(rec.width, 0) : 0;
+          return width > 0 ? { width } : null;
+        })
+        .filter((col): col is { width: number } => Boolean(col))
+    : undefined;
+  return defaultTable({
+    id,
+    title: asString(row.title, 'Table'),
+    x: asNumber(row.x),
+    y: asNumber(row.y),
+    w: asNumber(row.w, DEFAULT_TABLE_W),
+    h: asNumber(row.h, DEFAULT_TABLE_H),
+    z: row.z == null ? undefined : asNumber(row.z),
+    colCount: asNumber(row.colCount, DEFAULT_TABLE_COL_COUNT),
+    rowCount: asNumber(row.rowCount, DEFAULT_TABLE_ROW_COUNT),
+    cols: cols?.length ? cols : undefined,
+    cells,
+  });
+}
+
 function normalizeFilterRow(value: unknown, index: number): MarksFilter | null {
   const row = asRecord(value);
   if (!row) return null;
@@ -414,11 +535,16 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
   const filters = (Array.isArray(doc.filters) ? doc.filters : [])
     .map((row, index) => normalizeFilterRow(row, index))
     .filter((row): row is MarksFilter => Boolean(row));
+  const tables = (Array.isArray(doc.tables) ? doc.tables : [])
+    .map((row, index) => normalizeTableRow(row, index))
+    .filter((row): row is MarkTable => Boolean(row));
   return persistDoc({
+    title: asString(doc.title).trim(),
     categories,
     links,
     buttons,
     filters,
+    tables,
     updatedAt: asNumber(doc.updatedAt, now),
   });
 }
@@ -478,10 +604,12 @@ export function seedDoc(now = 1): MarksDoc {
     }),
   ];
   return persistDoc({
+    title: 'Home',
     categories: [kjarni, apps, shop],
     links,
     buttons,
     filters,
+    tables: [],
     updatedAt: now,
   });
 }
@@ -626,6 +754,16 @@ export function filterDoc(doc: MarksDoc, query: string): MarksDoc {
 
 function touch(doc: MarksDoc, clock: MarksClock, patch: Partial<MarksDoc>): MarksDoc {
   return persistDoc({ ...doc, ...patch, updatedAt: clock.now() });
+}
+
+export function setSiteTitle(
+  doc: MarksDoc,
+  title: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const trimmed = title.trim();
+  if (!trimmed || doc.title === trimmed) return doc;
+  return touch(doc, clock, { title: trimmed });
 }
 
 export function addCategory(
@@ -1020,4 +1158,147 @@ export function moveButton(
 export function removeButton(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
   if (!(doc.buttons ?? []).some((button) => button.id === id)) return doc;
   return touch(doc, clock, { buttons: (doc.buttons ?? []).filter((button) => button.id !== id) });
+}
+
+function tablesOf(doc: MarksDoc): MarkTable[] {
+  return doc.tables ?? [];
+}
+
+export function tableById(doc: MarksDoc, id: string): MarkTable | undefined {
+  return tablesOf(doc).find((table) => table.id === id);
+}
+
+export function nextTableSlot(doc: MarksDoc): { x: number; y: number } {
+  const n = rootCategories(doc).length + 1 + tablesOf(doc).length;
+  return { x: (n % 3) * SLOT_W, y: Math.floor(n / 3) * SLOT_H };
+}
+
+export function addTable(
+  doc: MarksDoc,
+  title = 'Table',
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const slot = nextTableSlot(doc);
+  const table = defaultTable({
+    id: clock.nextId('tbl'),
+    title,
+    x: slot.x,
+    y: slot.y,
+    w: DEFAULT_TABLE_W,
+    h: DEFAULT_TABLE_H,
+  });
+  return touch(doc, clock, { tables: [...tablesOf(doc), table] });
+}
+
+export function renameTable(
+  doc: MarksDoc,
+  id: string,
+  title: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (!tableById(doc, id)) return doc;
+  const trimmed = title.trim() || 'Table';
+  return touch(doc, clock, {
+    tables: tablesOf(doc).map((table) => (table.id === id ? { ...table, title: trimmed } : table)),
+  });
+}
+
+export function updateTable(
+  doc: MarksDoc,
+  id: string,
+  patch: Partial<Pick<MarkTable, 'title' | 'colCount' | 'rowCount' | 'cols' | 'cells' | 'z'>>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const current = tableById(doc, id);
+  if (!current) return doc;
+  return touch(doc, clock, {
+    tables: tablesOf(doc).map((table) =>
+      table.id === id
+        ? defaultTable({
+            ...table,
+            ...patch,
+            cells: patch.cells ?? table.cells,
+          })
+        : table
+    ),
+  });
+}
+
+export function setTableCell(
+  doc: MarksDoc,
+  tableId: string,
+  key: string,
+  raw: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const table = tableById(doc, tableId);
+  const a1 = key.toUpperCase();
+  if (!table || !/^[A-Z]+[1-9]\d*$/.test(a1)) return doc;
+  const cells = { ...table.cells };
+  if (raw) cells[a1] = { raw };
+  else delete cells[a1];
+  return updateTable(doc, tableId, { cells }, clock);
+}
+
+export function setTableCells(
+  doc: MarksDoc,
+  tableId: string,
+  entries: Record<string, string>,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const table = tableById(doc, tableId);
+  if (!table) return doc;
+  const cells = { ...table.cells };
+  for (const [key, raw] of Object.entries(entries)) {
+    const a1 = key.toUpperCase();
+    if (!/^[A-Z]+[1-9]\d*$/.test(a1)) continue;
+    if (raw) cells[a1] = { raw };
+    else delete cells[a1];
+  }
+  return updateTable(doc, tableId, { cells }, clock);
+}
+
+function pruneCells(table: MarkTable, colCount: number, rowCount: number): Record<string, MarkTableCell> {
+  const cells: Record<string, MarkTableCell> = {};
+  for (const [key, cell] of Object.entries(table.cells)) {
+    const match = /^([A-Z]+)(\d+)$/.exec(key);
+    if (!match) continue;
+    let col = 0;
+    for (const ch of match[1] ?? '') col = col * 26 + (ch.charCodeAt(0) - 64);
+    const row = Number(match[2]);
+    if (col < 1 || col > colCount || row < 1 || row > rowCount) continue;
+    cells[key] = cell;
+  }
+  return cells;
+}
+
+export function addTableRow(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  const table = tableById(doc, id);
+  if (!table || table.rowCount >= MAX_TABLE_ROW_COUNT) return doc;
+  return updateTable(doc, id, { rowCount: table.rowCount + 1 }, clock);
+}
+
+export function addTableCol(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  const table = tableById(doc, id);
+  if (!table || table.colCount >= MAX_TABLE_COL_COUNT) return doc;
+  return updateTable(doc, id, { colCount: table.colCount + 1 }, clock);
+}
+
+export function removeTableRow(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  const table = tableById(doc, id);
+  if (!table || table.rowCount <= 1) return doc;
+  const rowCount = table.rowCount - 1;
+  return updateTable(doc, id, { rowCount, cells: pruneCells(table, table.colCount, rowCount) }, clock);
+}
+
+export function removeTableCol(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  const table = tableById(doc, id);
+  if (!table || table.colCount <= 1) return doc;
+  const colCount = table.colCount - 1;
+  return updateTable(doc, id, { colCount, cells: pruneCells(table, colCount, table.rowCount) }, clock);
+}
+
+export function removeTable(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {
+  if (!tableById(doc, id)) return doc;
+  return touch(doc, clock, { tables: tablesOf(doc).filter((table) => table.id !== id) });
 }

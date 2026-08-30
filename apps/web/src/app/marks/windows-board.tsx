@@ -3,12 +3,15 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { childCategories, type MarksDoc } from '@/lib/marks/model';
 import {
+  MIN_TABLE_H,
+  MIN_TABLE_W,
   UNFILED_WINDOW_ID,
   applyMove,
   applyResize,
   boardExtent,
   folderWindowRect,
   snapWindowRect,
+  tableWindowRect,
   unfiledWindowRect,
   type MarksWindowRect,
   type ResizeEdge,
@@ -46,10 +49,12 @@ export function MarksWindowDesk({
   doc,
   onLayout,
   renderWindow,
+  renderTitle,
 }: {
   doc: MarksDoc;
   onLayout?: (id: string, rect: MarksWindowRect) => void;
   renderWindow: (id: string) => ReactNode;
+  renderTitle?: (id: string, name: string) => ReactNode;
 }) {
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const gestureRef = useRef<Gesture | null>(null);
@@ -59,6 +64,7 @@ export function MarksWindowDesk({
 
   const roots = childCategories(doc, null);
   const unfiledOrigin = unfiledWindowRect(doc, roots.length);
+  const tables = doc.tables ?? [];
 
   const items = useMemo(() => {
     const rows = roots.map((folder, index) => {
@@ -66,18 +72,36 @@ export function MarksWindowDesk({
       return {
         id: folder.id,
         name: folder.name,
+        kind: 'folder' as const,
         origin,
         rect: preview?.id === folder.id ? preview.rect : origin,
+        minW: undefined as number | undefined,
+        minH: undefined as number | undefined,
       };
     });
     rows.push({
       id: UNFILED_WINDOW_ID,
       name: 'Unfiled',
+      kind: 'unfiled',
       origin: unfiledOrigin,
       rect: preview?.id === UNFILED_WINDOW_ID ? preview.rect : unfiledOrigin,
+      minW: undefined,
+      minH: undefined,
+    });
+    tables.forEach((table, index) => {
+      const origin = tableWindowRect(table, roots.length + 1 + index);
+      rows.push({
+        id: table.id,
+        name: table.title,
+        kind: 'table',
+        origin,
+        rect: preview?.id === table.id ? preview.rect : origin,
+        minW: MIN_TABLE_W,
+        minH: MIN_TABLE_H,
+      });
     });
     return rows;
-  }, [preview, roots, unfiledOrigin]);
+  }, [preview, roots, tables, unfiledOrigin]);
 
   const extent = boardExtent(items.map((item) => item.rect));
   const raise = (id: string) => setStack((current) => [...current.filter((row) => row !== id), id]);
@@ -98,9 +122,13 @@ export function MarksWindowDesk({
     if (!current || event.pointerId !== current.pointerId) return;
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
+    const mins = items.find((item) => item.id === current.id);
     setPreview({
       id: current.id,
-      rect: current.type === 'move' ? applyMove(current.origin, dx, dy) : applyResize(current.origin, current.edge, dx, dy),
+      rect:
+        current.type === 'move'
+          ? applyMove(current.origin, dx, dy)
+          : applyResize(current.origin, current.edge, dx, dy, { w: mins?.minW, h: mins?.minH }),
     });
   };
 
@@ -109,13 +137,16 @@ export function MarksWindowDesk({
     if (!current || event.pointerId !== current.pointerId) return;
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
+    const mins = items.find((item) => item.id === current.id);
     const rect =
-      current.type === 'move' ? applyMove(current.origin, dx, dy) : applyResize(current.origin, current.edge, dx, dy);
+      current.type === 'move'
+        ? applyMove(current.origin, dx, dy)
+        : applyResize(current.origin, current.edge, dx, dy, { w: mins?.minW, h: mins?.minH });
     gestureRef.current = null;
     setGesture(null);
     setPreview(null);
     if (current.type === 'resize' || Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-      onLayout?.(current.id, snapWindowRect(rect));
+      onLayout?.(current.id, snapWindowRect(rect, undefined, { w: mins?.minW, h: mins?.minH }));
     }
   };
 
@@ -156,8 +187,15 @@ export function MarksWindowDesk({
               });
             }}
           >
-            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-600" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{item.name}</span>
+            <span
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${item.kind === 'table' ? 'bg-sky-600' : 'bg-emerald-600'}`}
+              aria-hidden
+            />
+            {renderTitle ? (
+              renderTitle(item.id, item.name)
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{item.name}</span>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto">{renderWindow(item.id)}</div>
           {RESIZE_HANDLES.map((handle) => (

@@ -5,10 +5,19 @@
  * does not list them — persistDoc spreads the category objects as-is.
  */
 
-import { persistDoc, type MarkCategory, type MarksDoc } from './model';
+import {
+  DEFAULT_TABLE_H,
+  DEFAULT_TABLE_W,
+  persistDoc,
+  type MarkCategory,
+  type MarkTable,
+  type MarksDoc,
+} from './model';
 
 export const MIN_WINDOW_W = 220;
 export const MIN_WINDOW_H = 160;
+export const MIN_TABLE_W = 360;
+export const MIN_TABLE_H = 240;
 export const DEFAULT_WINDOW_W = 320;
 export const DEFAULT_WINDOW_H = 380;
 export const WINDOW_SLOT_W = 348;
@@ -32,9 +41,16 @@ export function snapCoord(n: number, grid = SNAP_GRID): number {
   return Math.round(n / grid) * grid;
 }
 
-export function clampWindowRect(rect: Partial<MarksWindowRect> & Pick<MarksWindowRect, 'x' | 'y'>): MarksWindowRect {
-  const w = Math.max(MIN_WINDOW_W, Math.round(Number.isFinite(rect.w) ? (rect.w as number) : DEFAULT_WINDOW_W));
-  const h = Math.max(MIN_WINDOW_H, Math.round(Number.isFinite(rect.h) ? (rect.h as number) : DEFAULT_WINDOW_H));
+export function clampWindowRect(
+  rect: Partial<MarksWindowRect> & Pick<MarksWindowRect, 'x' | 'y'>,
+  mins?: { w?: number; h?: number }
+): MarksWindowRect {
+  const minW = mins?.w ?? MIN_WINDOW_W;
+  const minH = mins?.h ?? MIN_WINDOW_H;
+  const fallbackW = minW > MIN_WINDOW_W ? DEFAULT_TABLE_W : DEFAULT_WINDOW_W;
+  const fallbackH = minH > MIN_WINDOW_H ? DEFAULT_TABLE_H : DEFAULT_WINDOW_H;
+  const w = Math.max(minW, Math.round(Number.isFinite(rect.w) ? (rect.w as number) : fallbackW));
+  const h = Math.max(minH, Math.round(Number.isFinite(rect.h) ? (rect.h as number) : fallbackH));
   return {
     x: Math.max(0, Math.round(Number.isFinite(rect.x) ? rect.x : 0)),
     y: Math.max(0, Math.round(Number.isFinite(rect.y) ? rect.y : 0)),
@@ -43,13 +59,22 @@ export function clampWindowRect(rect: Partial<MarksWindowRect> & Pick<MarksWindo
   };
 }
 
-export function snapWindowRect(rect: MarksWindowRect, grid = SNAP_GRID): MarksWindowRect {
-  return clampWindowRect({
-    x: snapCoord(rect.x, grid),
-    y: snapCoord(rect.y, grid),
-    w: Math.max(MIN_WINDOW_W, snapCoord(rect.w, grid)),
-    h: Math.max(MIN_WINDOW_H, snapCoord(rect.h, grid)),
-  });
+export function snapWindowRect(
+  rect: MarksWindowRect,
+  grid = SNAP_GRID,
+  mins?: { w?: number; h?: number }
+): MarksWindowRect {
+  const minW = mins?.w ?? MIN_WINDOW_W;
+  const minH = mins?.h ?? MIN_WINDOW_H;
+  return clampWindowRect(
+    {
+      x: snapCoord(rect.x, grid),
+      y: snapCoord(rect.y, grid),
+      w: Math.max(minW, snapCoord(rect.w, grid)),
+      h: Math.max(minH, snapCoord(rect.h, grid)),
+    },
+    mins
+  );
 }
 
 export function tileRect(index: number): MarksWindowRect {
@@ -71,7 +96,15 @@ export function applyMove(orig: MarksWindowRect, dx: number, dy: number): MarksW
   return clampWindowRect({ x: orig.x + dx, y: orig.y + dy, w: orig.w, h: orig.h });
 }
 
-export function applyResize(orig: MarksWindowRect, edge: ResizeEdge, dx: number, dy: number): MarksWindowRect {
+export function applyResize(
+  orig: MarksWindowRect,
+  edge: ResizeEdge,
+  dx: number,
+  dy: number,
+  mins?: { w?: number; h?: number }
+): MarksWindowRect {
+  const minW = mins?.w ?? MIN_WINDOW_W;
+  const minH = mins?.h ?? MIN_WINDOW_H;
   let { x, y, w, h } = orig;
   if (edge.includes('e')) w = orig.w + dx;
   if (edge.includes('w')) {
@@ -83,15 +116,15 @@ export function applyResize(orig: MarksWindowRect, edge: ResizeEdge, dx: number,
     h = orig.h - dy;
     y = orig.y + dy;
   }
-  if (w < MIN_WINDOW_W) {
-    if (edge.includes('w')) x = orig.x + orig.w - MIN_WINDOW_W;
-    w = MIN_WINDOW_W;
+  if (w < minW) {
+    if (edge.includes('w')) x = orig.x + orig.w - minW;
+    w = minW;
   }
-  if (h < MIN_WINDOW_H) {
-    if (edge.includes('n')) y = orig.y + orig.h - MIN_WINDOW_H;
-    h = MIN_WINDOW_H;
+  if (h < minH) {
+    if (edge.includes('n')) y = orig.y + orig.h - minH;
+    h = minH;
   }
-  return clampWindowRect({ x, y, w, h });
+  return clampWindowRect({ x, y, w, h }, mins);
 }
 
 export function boardExtent(rects: MarksWindowRect[], minW = 960, minH = 640): { width: number; height: number } {
@@ -175,7 +208,35 @@ export function layoutMissingWindows(doc: MarksDoc, raw?: unknown): MarksDoc {
     : hasWindowOrigin((doc as MarksDoc & { unfiledLayout?: MarksWindowRect }).unfiledLayout)
       ? clampWindowRect((doc as MarksDoc & { unfiledLayout?: MarksWindowRect }).unfiledLayout as MarksWindowRect)
       : tileRect(n);
-  return persistDoc({ ...doc, categories, unfiledLayout } as MarksDoc);
+  n += 1;
+  const tableSource = Array.isArray(source?.tables) ? source.tables : doc.tables;
+  const tableRaw = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(tableSource)) {
+    for (const row of tableSource) {
+      const rec = asRecord(row);
+      if (rec?.id) tableRaw.set(String(rec.id), rec);
+    }
+  }
+  const tables = (doc.tables ?? []).map((table) => {
+    const rawRow = tableRaw.get(table.id);
+    const layout = rawRow ? readLayoutFields(rawRow) : { x: table.x, y: table.y, w: table.w, h: table.h };
+    const origin = hasWindowOrigin({ x: layout.x || table.x, y: layout.y || table.y });
+    const tiled = tileRect(n);
+    n += 1;
+    return {
+      ...table,
+      ...clampWindowRect(
+        {
+          x: origin ? layout.x || table.x : tiled.x,
+          y: origin ? layout.y || table.y : tiled.y,
+          w: layout.w || table.w || DEFAULT_TABLE_W,
+          h: layout.h || table.h || DEFAULT_TABLE_H,
+        },
+        { w: MIN_TABLE_W, h: MIN_TABLE_H }
+      ),
+    };
+  });
+  return persistDoc({ ...doc, categories, tables, unfiledLayout } as MarksDoc);
 }
 
 export function setCategoryLayout(doc: MarksDoc, id: string, rect: MarksWindowRect, now: number): MarksDoc {
@@ -201,4 +262,32 @@ export function setUnfiledLayout(doc: MarksDoc, rect: MarksWindowRect, now: numb
 export function unfiledWindowRect(doc: MarksDoc, rootCount: number): MarksWindowRect {
   const stored = (doc as MarksDoc & { unfiledLayout?: MarksWindowRect }).unfiledLayout;
   return stored ? clampWindowRect(stored) : tileRect(rootCount);
+}
+
+export function tableWindowRect(table: MarkTable, index = 0): MarksWindowRect {
+  const tiled = tileRect(index);
+  return clampWindowRect(
+    {
+      x: hasWindowOrigin(table) ? table.x : tiled.x,
+      y: hasWindowOrigin(table) ? table.y : tiled.y,
+      w: table.w || DEFAULT_TABLE_W,
+      h: table.h || DEFAULT_TABLE_H,
+    },
+    { w: MIN_TABLE_W, h: MIN_TABLE_H }
+  );
+}
+
+export function setTableLayout(doc: MarksDoc, id: string, rect: MarksWindowRect, now: number): MarksDoc {
+  if (!(doc.tables ?? []).some((row) => row.id === id)) return doc;
+  const next = snapWindowRect(clampWindowRect(rect, { w: MIN_TABLE_W, h: MIN_TABLE_H }), SNAP_GRID, {
+    w: MIN_TABLE_W,
+    h: MIN_TABLE_H,
+  });
+  return persistDoc({
+    ...doc,
+    updatedAt: now,
+    tables: (doc.tables ?? []).map((row) =>
+      row.id === id ? { ...row, x: next.x, y: next.y, w: next.w, h: next.h } : row
+    ),
+  });
 }

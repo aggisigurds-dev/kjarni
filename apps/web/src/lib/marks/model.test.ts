@@ -8,11 +8,15 @@ import {
   addCategory,
   addLink,
   childCategories,
+  createSiteId,
   descendantIds,
   emptyDoc,
   hostOf,
+  isMarksBoardId,
   layoutMissingPositions,
   linksInCategory,
+  MARKS_BOARD_ID,
+  marksHref,
   moveCategory,
   moveLink,
   normalizeDoc,
@@ -21,6 +25,9 @@ import {
   reorderCategory,
   reorderLink,
   seedDoc,
+  setSiteTitle,
+  siteTitle,
+  testClock,
   updateLink,
   wouldCycle,
 } from './model';
@@ -277,6 +284,46 @@ describe('buttons', () => {
     expect(next.buttons.some((button) => button.folderId === 'cat_apps' && button.kind === 'filter-tag')).toBe(
       true
     );
+  });
+});
+
+describe('sites', () => {
+  it('creates an empty named site and keeps Home on its own href', () => {
+    const clock = testClock();
+    const id = createSiteId(clock);
+    expect(id).toBe('site_t1');
+    expect(isMarksBoardId(MARKS_BOARD_ID)).toBe(true);
+    expect(isMarksBoardId(id)).toBe(true);
+    expect(isMarksBoardId('site_')).toBe(false);
+    expect(isMarksBoardId('nope')).toBe(false);
+    expect(isMarksBoardId('../home')).toBe(false);
+    expect(isMarksBoardId('site_foo/bar')).toBe(false);
+    expect(marksHref(MARKS_BOARD_ID)).toBe('/marks');
+    expect(marksHref(id)).toBe(`/marks/${id}`);
+
+    const blank = emptyDoc(clock.now(), 'Recipes');
+    expect(blank.title).toBe('Recipes');
+    expect(blank.categories).toEqual([]);
+    expect(blank.links).toEqual([]);
+    expect(blank.buttons).toEqual([]);
+
+    const seeded = seedDoc(1);
+    expect(seeded.title).toBe('Home');
+    expect(siteTitle(seeded)).toBe('Home');
+
+    const named = setSiteTitle(blank, 'Travel', clock);
+    expect(named.title).toBe('Travel');
+    expect(siteTitle(named)).toBe('Travel');
+    expect(setSiteTitle(named, '  ', clock)).toBe(named);
+
+    const normalized = normalizeDoc({
+      title: '  Work  ',
+      updatedAt: 4,
+      categories: [],
+      links: [],
+    });
+    expect(normalized?.title).toBe('Work');
+    expect(siteTitle(normalizeDoc({ categories: [], links: [] }), 'Home')).toBe('Home');
   });
 });
 
