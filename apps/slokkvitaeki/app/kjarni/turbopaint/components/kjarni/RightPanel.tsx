@@ -15,7 +15,7 @@ import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
 
-type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "kalt" | "heitt" | "skolp" | "loftræsting" | "hitakerfi" | "annad";
+type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "kalt" | "heitt" | "skolp" | "loftræsting" | "hitakerfi" | "gegnumtak" | "annad";
 
 const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
   { id: "teikning", label: "Teikningar" },
@@ -27,10 +27,12 @@ const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
   { id: "skolp", label: "Skolp / fráveita" },
   { id: "loftræsting", label: "Loftræsting" },
   { id: "hitakerfi", label: "Hitakerfi" },
+  { id: "gegnumtak", label: "Gegnumtök" },
   { id: "annad", label: "Annað" },
 ];
 
 function layerGroupOf(obj: BoardObject): LayerGroupId {
+  if (obj.name.startsWith("Gegnumtak")) return "gegnumtak";
   const lid = objectLayerId(obj);
   if (lid === "kalt" || lid === "heitt" || lid === "skolp" || lid === "loftræsting" || lid === "hitakerfi") {
     return lid;

@@ -92,3 +92,36 @@ test("replaceBoard migrates older objects onto almennt / teikning", () => {
   assert.ok(useBoardStore.getState().layers.some((l) => l.id === "kalt"));
   assert.equal(useBoardStore.getState().activeLayerId, LAYER_ALMENNT);
 });
+
+test("addObjects stamps gegnumtök where a pipe crosses a wall", () => {
+  emptyBoard();
+  useBoardStore.getState().addObjects(
+    [
+      {
+        id: "wall",
+        type: "polyline",
+        x: 0,
+        y: 0,
+        points: [0, 20, 80, 20],
+        stroke: "#111",
+        strokeWidth: 4,
+        dash: "solid",
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        hidden: false,
+        name: "Veggir",
+      },
+    ],
+    false
+  );
+  useBoardStore.getState().setActiveLayer("kalt");
+  useBoardStore.getState().addObjects(
+    [pen("pipe", { type: "pen", points: [40, 0, 40, 40], layerId: "kalt", stroke: "#2563eb" })],
+    false
+  );
+  const marks = useBoardStore.getState().objects.filter((o) => o.name.startsWith("Gegnumtak"));
+  assert.equal(marks.length, 1);
+  assert.equal(marks[0].layerId, "kalt");
+});
+

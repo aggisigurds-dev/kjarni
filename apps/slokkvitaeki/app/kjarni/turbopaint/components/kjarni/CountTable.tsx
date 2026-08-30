@@ -81,6 +81,7 @@ export function CountTable() {
         continue;
       }
       if (o.name.startsWith("Eldveggir")) continue;
+      if (o.name.startsWith("Gegnumtak")) continue;
       // 🏠 rými eiga sinn eigin RÝMI-kafla — ekki telja þau sem "Ferningar"
       if (o.type === "rect" && o.isRoom) continue;
       const label = GENERIC_LABELS[o.type];

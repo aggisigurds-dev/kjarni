@@ -1,6 +1,8 @@
 "use client";
 
 import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
+import { toast } from "sonner";
+import { isCrossingMark } from "../../lib/board/crossings";
 import { objectLayerId, type BoardLayer } from "../../lib/board/layers";
 import { useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
@@ -22,8 +24,8 @@ export function LayerList() {
     <div>
       <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">LAGNIR</div>
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
-        Nýjar strokur og form lenda á virka laginu. Lagnir nota liti pípara: kalt blátt, heitt rautt,
-        skolp brúnt, loftræsting græn.
+        Lagnir liggja ofan á teikningunni — feldu Teikning til að sjá bara veggi og lagnir, eða hafðu
+        skönnunina sýnilega. Nýjar strokur lenda á virka laginu.
       </p>
       <div className="space-y-0.5">
         {drawing.map((layer) => (
@@ -52,6 +54,23 @@ export function LayerList() {
           />
         ))}
       </div>
+      <button
+        type="button"
+        className="mt-3 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-left text-[11px] text-stone-300 hover:bg-white/10 hover:text-white"
+        onClick={() => {
+          const n = useBoardStore.getState().refreshCrossings();
+          toast.message(
+            n
+              ? `Gegnumtök: ${n} krossar vegg${n === 1 ? "" : "i"} — EI-30/EI-60 fá sterkari merkingu`
+              : "Engin lagnir krossa vegg. Teiknaðu lagnir yfir veggi eða EI-veggi."
+          );
+        }}
+      >
+        Krossar vegg · Gegnumtök
+        <span className="ml-1 text-stone-600">
+          {objects.filter(isCrossingMark).length || ""}
+        </span>
+      </button>
     </div>
   );
 }

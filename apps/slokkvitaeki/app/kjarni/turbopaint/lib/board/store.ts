@@ -18,6 +18,7 @@ import type {
   ImportQuality,
   Tool,
 } from "./types";
+import { crossingSignature, isCrossingMark, replaceCrossingMarks } from "./crossings";
 import { GRID_GAP, snapValue } from "./geometry";
 
 const MAX_HISTORY = 80;
@@ -96,6 +97,8 @@ interface BoardStore {
   groupSelected: () => void;
   ungroupSelected: () => void;
   lockSelected: (locked: boolean) => void;
+  /** Recompute pipe/wall gegnumtök. Returns how many crossings were stamped. */
+  refreshCrossings: (recordHistory?: boolean) => number;
   undo: () => void;
   redo: () => void;
   commitHistory: () => void;
@@ -223,7 +226,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const rest = stamped.filter((o) => o.type !== "image");
     const existingImages = objects.filter((o) => o.type === "image");
     const existingRest = objects.filter((o) => o.type !== "image");
-    const next = [...existingImages, ...images, ...existingRest, ...rest];
+    const next = replaceCrossingMarks([...existingImages, ...images, ...existingRest, ...rest]);
     set({
       objects: next,
       selectedIds: select ? incoming.map((o) => o.id) : [],
@@ -249,7 +252,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     pushHistory(set, get);
     const idSet = new Set(ids);
     set({
-      objects: get().objects.filter((o) => !idSet.has(o.id)),
+      objects: replaceCrossingMarks(get().objects.filter((o) => !idSet.has(o.id))),
       selectedIds: get().selectedIds.filter((id) => !idSet.has(id)),
     });
   },
@@ -311,6 +314,16 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         idSet.has(o.id) && o.groupId ? { ...o, groupId: undefined } : o
       ),
     });
+  },
+  refreshCrossings: (recordHistory = true) => {
+    const current = get().objects;
+    const next = replaceCrossingMarks(current);
+    if (crossingSignature(current) === crossingSignature(next)) {
+      return next.filter(isCrossingMark).length;
+    }
+    if (recordHistory) pushHistory(set, get);
+    set({ objects: next });
+    return next.filter(isCrossingMark).length;
   },
   lockSelected: (locked) => {
     const { selectedIds } = get();

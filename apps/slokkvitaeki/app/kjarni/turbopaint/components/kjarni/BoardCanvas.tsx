@@ -847,9 +847,11 @@ export function BoardCanvas({
         (patch as { meters?: number }).meters = undefined;
       }
       useBoardStore.getState().patchObject(id, patch, false);
+      useBoardStore.getState().refreshCrossings(false);
       return;
     }
     useBoardStore.getState().patchObject(id, { x: node.x, y: node.y, rotation: node.rotation }, false);
+    useBoardStore.getState().refreshCrossings(false);
   };
 
   const beginDocumentDrag = (id: string) => {
@@ -906,6 +908,7 @@ export function BoardCanvas({
     useBoardStore.getState().commitHistory();
     if (!drag || drag.imageId !== id) {
       useBoardStore.getState().patchObject(id, { x: snapped.x, y: snapped.y }, false);
+      useBoardStore.getState().refreshCrossings(false);
       documentDragRef.current = null;
       return;
     }
@@ -920,6 +923,7 @@ export function BoardCanvas({
       },
       false
     );
+    useBoardStore.getState().refreshCrossings(false);
     documentDragRef.current = null;
   };
 
