@@ -706,7 +706,7 @@ export function WhiteboardApp() {
               </div>
             ) : null}
             {mobileUi ? (
-              <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 pb-[env(safe-area-inset-bottom,0px)]">
+              <div className="pointer-events-auto absolute inset-x-0 bottom-3 z-20 flex flex-col items-center gap-2 px-3 pb-[env(safe-area-inset-bottom,0px)]">
                 <MobileController onOpenProperties={() => setPanelOpen(true)} />
               </div>
             ) : (

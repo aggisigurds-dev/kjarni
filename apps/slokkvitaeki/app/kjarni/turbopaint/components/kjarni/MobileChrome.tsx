@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -274,14 +275,16 @@ function Pill({
 }
 
 function Sheet({ children, onClose }: { children: ReactNode; onClose: () => void }) {
-  return (
-    <div className="pointer-events-auto fixed inset-0 z-40">
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="pointer-events-auto fixed inset-0 z-[80]">
       <button type="button" className="absolute inset-0 bg-black/45" aria-label="Loka" onClick={onClose} />
       <div className="absolute inset-x-0 bottom-0 max-h-[70vh] overflow-y-auto rounded-t-3xl bg-[#1c1c1e] px-5 pb-8 pt-3 text-white shadow-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -300,6 +303,7 @@ function SheetBtn({
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
       className={cn(
         "flex flex-col items-center gap-1.5 rounded-xl py-2 text-[11px] text-white/80",
         active && "bg-white/10 text-white"
