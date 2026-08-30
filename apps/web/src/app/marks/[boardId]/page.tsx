@@ -9,18 +9,22 @@ export const metadata: Metadata = {
   description: 'A clean Marks site for a different topic.',
 };
 
-export default async function MarksSitePage({
+export default function MarksSitePage({
   params,
 }: {
   params: Promise<{ boardId: string }>;
 }) {
+  return (
+    <Suspense fallback={null}>
+      <MarksSite params={params} />
+    </Suspense>
+  );
+}
+
+async function MarksSite({ params }: { params: Promise<{ boardId: string }> }) {
   const { boardId } = await params;
   if (!isMarksBoardId(boardId) || boardId === MARKS_BOARD_ID) {
     redirect('/marks');
   }
-  return (
-    <Suspense fallback={null}>
-      <MarksBoard key={boardId} boardId={boardId} />
-    </Suspense>
-  );
+  return <MarksBoard key={boardId} boardId={boardId} />;
 }
