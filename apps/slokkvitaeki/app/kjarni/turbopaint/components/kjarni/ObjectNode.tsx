@@ -12,7 +12,7 @@ import {
   Rect,
   Text as KonvaText,
 } from "react-konva";
-import { isHoleRoom, roomHoles, solidHex } from "../../lib/board/room-rules";
+import { isHoleRoom, roomHoles } from "../../lib/board/room-rules";
 import { getAssetUrl } from "../../lib/board/assets";
 import { dashArray, formatLength, formatM2, formatMm, lineLength } from "../../lib/board/geometry";
 import { isDrawnVisible } from "../../lib/board/layers";
@@ -167,9 +167,10 @@ export function ObjectNode({
       showDims ? `${formatMm(wM)} × ${formatMm(hM)} mm` : "",
       showDims ? `${negative ? "−" : ""}${formatM2(wM * hM)}${obj.roomExcluded ? " (frátalið)" : ""}` : "",
     ].filter(Boolean);
-    const badgeR = 13;
+    const badgeR = 15;
     const badgeX = Math.max(badgeR + 4, obj.width - badgeR - 8);
-    const badgeY = Math.min(obj.height / 2, badgeR + 8);
+    const badgeY = Math.min(Math.max(badgeR + 6, 18), obj.height / 2);
+    const badgeFill = holes && holes.left === 0 ? "#166534" : "#1c1917";
     return (
       <Group {...common}>
         <Rect
@@ -204,7 +205,7 @@ export function ObjectNode({
               x={badgeX}
               y={badgeY}
               radius={badgeR}
-              fill={holes.left === 0 ? "#166534" : solidHex(obj.fill)}
+              fill={badgeFill}
               stroke="#ffffff"
               strokeWidth={2}
               onMouseDown={(e) => {

@@ -269,7 +269,7 @@ function RoomSettingsDialog({
                           maxLeft: Math.max(0, Math.round(Number(e.target.value) || 0)),
                         })
                       }
-                      className="h-7 w-14"
+                      className="h-7 w-20"
                     />
                   </label>
                   <button
