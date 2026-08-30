@@ -14,6 +14,7 @@ import {
 } from "../../lib/board/strip";
 import { cropPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
+import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
@@ -691,7 +692,7 @@ export function WhiteboardApp() {
             <div className="pointer-events-none absolute inset-4 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#FE653F] bg-[#FE653F]/10">
               <div className="rounded-xl bg-[#1a1d2e] px-6 py-4 text-center text-sm text-white shadow-xl">
                 Sleppið PDF, TIF eða mynd hér
-                <div className="mt-1 text-xs text-stone-400">Stórar skrár 5–30 MB eru unnar í vafranum</div>
+                <div className="mt-1 text-xs text-stone-400">{IMPORT_SIZE_HINT}</div>
               </div>
             </div>
           ) : null}

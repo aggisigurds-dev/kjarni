@@ -23,6 +23,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
+import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import {
   clearBoard,
   createBoard,
@@ -270,7 +271,7 @@ export function TopBar({
           useBoardStore.getState().setImportQuality(e.target.value as typeof quality)
         }
         className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 2xl:block"
-        title="Innflutningsgæði fyrir stór PDF/TIF"
+        title="Innflutningsgæði. Stórar síður eru klemmdar í 40 MP (~160 MB) svo vafrinn fari ekki úr minni."
       >
         <option value="fast">Flýti · 3.2k</option>
         <option value="standard">Staðall · 7.2k</option>
@@ -292,12 +293,15 @@ export function TopBar({
         size="sm"
         variant="ghost"
         className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
-        title="Flytja inn PDF, TIF eða mynd"
+        title={IMPORT_SIZE_HINT}
         onClick={() => fileRef.current?.click()}
       >
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
       </Button>
+      <span className="hidden max-w-[10.5rem] text-[10px] leading-tight text-stone-500 2xl:inline">
+        Í vafranum · engin 20 MB hömlun
+      </span>
       {/* Á síma búa þessir þrír í ⟳ valmyndinni — annars kremja þeir nafnareitinn. */}
       <Button
         size="sm"
