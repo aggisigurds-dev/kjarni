@@ -352,7 +352,6 @@ export function Whiteboard({
 
 function TableTitle({
   table,
-  onRename,
   onDelete,
 }: {
   table: MarkTable;
