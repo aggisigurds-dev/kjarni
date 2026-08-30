@@ -60,7 +60,7 @@ const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "🔔", nafn: "Tilkynningaborði", desc: "Borði efst", tag: "Vefur", ready: true, href: "/stjorn" },
       { icon: "🗂️", nafn: "Skjalarinn", desc: "Skjöl · pdf · skrár", tag: "Tól", ready: true, href: "/skjalarinn" },
       { icon: "🧊", nafn: "3dwork", desc: "STL/mesh vinnustöð", tag: "Tól", ready: true, href: "/3dwork" },
-      { icon: "🔖", nafn: "Marks", desc: "Bókamerki · flokkar · forsíða", tag: "Tól", ready: true, href: "/marks" },
+      { icon: "🔖", nafn: "Marks", desc: "Whiteboard · möppur · covers", tag: "Tól", ready: true, href: "/marks" },
       { icon: "✎", nafn: "Prufusvæði", desc: "Blokkir · þemu · skikt", tag: "Tól", ready: true, href: "/draft" },
       { icon: "🖌️", nafn: "TurboPaint", desc: "Gólfplön · PDF/TIF hvítu borð", tag: "Tól", ready: true, href: "/kjarni/turbopaint" },
       { icon: "💳", nafn: "Payday", desc: "Reikningar", tag: "Verkfæri", ready: false },
