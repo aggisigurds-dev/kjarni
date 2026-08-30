@@ -301,7 +301,7 @@ export function TopBar({
         variant="ghost"
         className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
         onClick={() => onImportUrl?.()}
-        title="Sækja af permalink (skjalasafn.reykjavik.is) — eða bara Ctrl+V á borðið"
+        title="Sækja af permalink (Reykjavík) eða PDF (Hafnarfjörður) — eða Ctrl+V á borðið"
       >
         <Link2 className="size-4" />
         <span className="hidden xl:inline">Af slóð</span>

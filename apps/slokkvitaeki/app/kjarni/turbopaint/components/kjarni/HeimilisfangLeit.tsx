@@ -10,9 +10,11 @@ import { Search, X, ExternalLink, MapPin } from "lucide-react";
  * finna réttu teikninguna, afrita permalinkinn, „Af slóð", líma. Sjö skref í
  * þremur flipum. Núna: skrifa „Skútuvogur 4", smella á mynd.
  *
- * Utan Reykjavíkur er ENGINN teikningalisti til hér — skjalasafnið nær aðeins
- * yfir Reykjavík. Þá sýnum við hnitatengil á kortasjá sveitarfélagsins í stað
- * þess að skila tómum lista, sem liti út eins og bilun.
+ * Utan Reykjavíkur er ENGINN teikningalisti til HÉR — FotoWeb-safnið nær
+ * aðeins yfir Reykjavík. Þá sýnum við hnitatengil á kortasjá sveitarfélagsins
+ * (Kópavogur, Garðabær, Hafnarfjörður) í stað tómra lista. Á korti
+ * Hafnarfjarðar eru samþykktir uppdrættir undir „Teikningar af byggingum";
+ * PDF-slóðina má svo líma í „Af slóð" (teikningar.hafnarfjordur.is).
  */
 
 type Eign = {

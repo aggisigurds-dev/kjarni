@@ -18,9 +18,11 @@ import { NextRequest, NextResponse } from "next/server";
 //    28.08.2026 — "Skútuvogur 4" skilar tveimur eignum, "Skutuvogur 4" engri.
 //
 // ⚠️ AÐEINS REYKJAVÍK Á TEIKNINGAR HÉR. Skjalasafn Reykjavíkur nær aðeins yfir
-//    Reykjavík. Kópavogur og Garðabær eru á map.is með eigin kortum; fyrir þau
-//    skilum við djúptengli á hnitin í stað teikningalista, svo notandinn lendi
-//    á réttum stað í stað þess að fá tóman lista og halda að kerfið sé bilað.
+//    Reykjavík. Kópavogur, Garðabær og Hafnarfjörður eru á map.is með eigin
+//    kortum; fyrir þau skilum við djúptengli á hnitin í stað teikningalista, svo
+//    notandinn lendi á réttum stað í stað þess að fá tóman lista og halda að
+//    kerfið sé bilað. Á korti Hafnarfjarðar eru samþykktir uppdrættir undir
+//    „Teikningar af byggingum“ (PDF á teikningar.hafnarfjordur.is).
 
 export const maxDuration = 30;
 
@@ -38,6 +40,7 @@ const RVK_ARCHIVE = "/fotoweb/archives/5000-A%C3%B0aluppdr%C3%A6ttir/";
 const MAP_IS: { slug: string; nafn: string; postnr: number[] }[] = [
   { slug: "kopavogur", nafn: "Kópavogur", postnr: [200, 201, 202, 203] },
   { slug: "gardabaer", nafn: "Garðabær", postnr: [210, 211, 212, 225] },
+  { slug: "hafnarfjordur", nafn: "Hafnarfjörður", postnr: [220, 221] },
 ];
 const RVK_POSTNR = new Set([
   101, 102, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 116,

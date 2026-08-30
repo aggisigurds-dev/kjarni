@@ -5,10 +5,16 @@ import { fotowebDownloadOrder, type FotowebAsset } from "../fotoweb-pick";
 // vafranum að gera það sjálfur). Skilur FotoWeb-permalink skjalasafns
 // Reykjavíkur (…/<skrá>.tif.info): les asset-JSON og velur cache-JPEG
 // (t.d. 6006 px) á undan ORIGINAL TIF svo síminn frjósi ekki við afþjöppun.
+// Einnig bein PDF/mynd af teikningar.hafnarfjordur.is (byggingarfulltrúi).
 
 export const maxDuration = 60;
 
-const ALLOWED_HOSTS = new Set(["skjalasafn.reykjavik.is"]);
+const ALLOWED_HOSTS = new Set([
+  "skjalasafn.reykjavik.is",
+  // Samþykktir uppdrættir byggingarfulltrúa Hafnarfjarðar. Bein PDF-slóð
+  // (t.d. teikningar.hafnarfjordur.is/data/….pdf) má líma í „Af slóð".
+  "teikningar.hafnarfjordur.is",
+]);
 const MAX_BYTES = 80 * 1024 * 1024;
 const OK_TYPES = /^(image\/|application\/pdf)/i;
 
@@ -88,7 +94,10 @@ export async function GET(req: NextRequest) {
   }
   if (target.protocol !== "https:") return bad(400, "Aðeins https-slóðir");
   if (!ALLOWED_HOSTS.has(target.hostname)) {
-    return bad(403, `Hýsillinn ${target.hostname} er ekki á leyfilistanum (skjalasafn.reykjavik.is)`);
+    return bad(
+      403,
+      `Hýsillinn ${target.hostname} er ekki á leyfilistanum (skjalasafn.reykjavik.is eða teikningar.hafnarfjordur.is)`
+    );
   }
 
   try {
