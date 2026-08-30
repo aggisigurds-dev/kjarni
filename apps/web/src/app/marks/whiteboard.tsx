@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Structured folder columns. File name is whiteboard.tsx only because
- * board.tsx imports it — this is not a free-position canvas.
+ * Desktop: category windows (title-bar move, edge resize).
+ * Phone: the same folders as columns. Drag a link row between folders.
  */
 
 import { useState, type DragEvent } from 'react';
@@ -13,13 +13,18 @@ import {
   linksInCategory,
   type MarkCategory,
   type MarkLink,
+  type MarkWhiteboard,
   type MarksButton,
   type MarksDoc,
+  type WhiteboardItem,
 } from '@/lib/marks/model';
 import { screenshotCoverUrl } from '@/lib/marks/preview';
 import { videoSourceForLink } from '@/lib/marks/video';
 import { BookmarkMedia } from './bookmark-media';
+import { WhiteboardCanvas } from './whiteboard-canvas';
+import { MarksWindowDesk } from './windows-board';
 import { ACTION_TINY, BUTTON_CHIP, PANEL } from './ui';
+import { UNFILED_WINDOW_ID, type MarksWindowRect } from '@/lib/marks/windows';
 
 export type MarksDragKind = 'folder' | 'link' | 'button';
 
@@ -68,6 +73,15 @@ export function Whiteboard({
   onDeleteFolder,
   onDrop,
   onScreenshotLink,
+  onLayout,
+  onRenameWhiteboard,
+  onDeleteWhiteboard,
+  onAddWhiteboardFiles,
+  onAddWhiteboardUrl,
+  onMoveWhiteboardItem,
+  onRemoveWhiteboardItem,
+  activeWhiteboard,
+  onActiveWhiteboard,
 }: {
   doc: MarksDoc;
   highlightFolder?: string;
@@ -92,11 +106,37 @@ export function Whiteboard({
     index?: number
   ) => void;
   onScreenshotLink?: (link: MarkLink) => void;
+  onLayout?: (id: string, rect: MarksWindowRect) => void;
+  onRenameWhiteboard?: (id: string, title: string) => void;
+  onDeleteWhiteboard?: (id: string) => void;
+  onAddWhiteboardFiles?: (id: string, files: File[], at?: { x: number; y: number }) => void;
+  onAddWhiteboardUrl?: (id: string, src: string, at?: { x: number; y: number }) => void;
+  onMoveWhiteboardItem?: (
+    whiteboardId: string,
+    itemId: string,
+    rect: Pick<WhiteboardItem, 'x' | 'y' | 'w' | 'h' | 'z'>
+  ) => void;
+  onRemoveWhiteboardItem?: (whiteboardId: string, itemId: string) => void;
+  activeWhiteboard?: string;
+  onActiveWhiteboard?: (id: string) => void;
 }) {
   const [overFolder, setOverFolder] = useState('');
   const [overLink, setOverLink] = useState('');
   const roots = childCategories(doc, null);
   const unfiled = linksInCategory(doc, '');
+  const boards = doc.whiteboards ?? [];
+
+  const renderCanvas = (board: MarkWhiteboard) => (
+    <WhiteboardCanvas
+      board={board}
+      active={activeWhiteboard === board.id}
+      onActive={onActiveWhiteboard}
+      onAddFiles={(files, at) => onAddWhiteboardFiles?.(board.id, files, at)}
+      onAddUrl={(src, at) => onAddWhiteboardUrl?.(board.id, src, at)}
+      onMoveItem={(itemId, rect) => onMoveWhiteboardItem?.(board.id, itemId, rect)}
+      onRemoveItem={onRemoveWhiteboardItem ? (itemId) => onRemoveWhiteboardItem(board.id, itemId) : undefined}
+    />
+  );
 
   const acceptDrop = (folderId: string | null, event: DragEvent, index?: number) => {
     event.preventDefault();
@@ -116,7 +156,8 @@ export function Whiteboard({
   };
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-2 xl:grid-cols-3" data-marks-layout="columns">
+    <>
+    <div className="mx-auto grid max-w-6xl gap-4 md:hidden" data-marks-layout="columns">
       {roots.map((folder) => (
         <Column
           key={folder.id}
@@ -196,7 +237,139 @@ export function Whiteboard({
           onButton={onAddButton ? () => onAddButton('') : undefined}
         />
       </section>
+      {boards.map((board) => (
+        <section key={board.id} className={`${PANEL} overflow-hidden`} data-marks-whiteboard-mobile={board.id}>
+          <div className="flex items-center gap-2 border-b border-stone-100 bg-[#efece4] px-3 py-2">
+            <input
+              className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
+              value={board.title}
+              aria-label="Whiteboard name"
+              onChange={(event) => onRenameWhiteboard?.(board.id, event.target.value)}
+            />
+            {onDeleteWhiteboard ? (
+              <button
+                type="button"
+                className="rounded px-1 text-[0.6rem] font-bold text-rose-600"
+                onClick={() => onDeleteWhiteboard(board.id)}
+              >
+                Delete
+              </button>
+            ) : null}
+          </div>
+          <div className="h-72">{renderCanvas(board)}</div>
+        </section>
+      ))}
     </div>
+      <MarksWindowDesk
+        doc={doc}
+        onLayout={onLayout}
+        renderTitle={(id, name, kind) =>
+          kind === 'whiteboard' && onRenameWhiteboard ? (
+            <input
+              className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-stone-300 focus:border-emerald-600"
+              value={name}
+              aria-label="Whiteboard name"
+              data-no-drag
+              onChange={(event) => onRenameWhiteboard(id, event.target.value)}
+            />
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{name}</span>
+          )
+        }
+        renderTitleExtra={(id, kind) =>
+          kind === 'whiteboard' && onDeleteWhiteboard ? (
+            <button
+              type="button"
+              className="rounded px-1 text-[0.6rem] font-bold text-rose-600"
+              data-no-drag
+              onClick={() => onDeleteWhiteboard(id)}
+            >
+              Delete
+            </button>
+          ) : null
+        }
+        renderWindow={(id) => {
+          if (id === UNFILED_WINDOW_ID) {
+            return (
+              <section
+                className={`${PANEL} flex h-full flex-col p-3`}
+                data-drop-folder=""
+                onDragOver={(event) => markOver('__unfiled__', event)}
+                onDrop={(event) => acceptDrop(null, event)}
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <h2 className="min-w-0 flex-1 text-sm font-semibold">Unfiled</h2>
+                  <span className="text-[0.65rem] text-stone-400">{unfiled.length}</span>
+                </div>
+                {unfiled.length === 0 ? (
+                  <p className="px-1 py-3 text-[0.75rem] text-stone-400">
+                    Links with no folder land here. Drop a link or folder to move it out.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-1">
+                    {unfiled.map((link, index) => (
+                      <LinkRow
+                        key={link.id}
+                        link={link}
+                        folders={doc.categories}
+                        hovering={hoverLink === link.id}
+                        insertBefore={overLink === link.id}
+                        onHover={onHoverLink}
+                        onEdit={() => onEditLink(link)}
+                        onMove={onMoveLink}
+                        onDragOver={(event) => {
+                          markOver('__unfiled__', event);
+                          setOverLink(link.id);
+                        }}
+                        onDrop={(event) => acceptDrop(null, event, index)}
+                        onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
+                      />
+                    ))}
+                  </ul>
+                )}
+                <AddRow
+                  onFolder={onAddFolder ? () => onAddFolder(null) : undefined}
+                  onLink={() => onAddLink('')}
+                  onButton={onAddButton ? () => onAddButton('') : undefined}
+                />
+              </section>
+            );
+          }
+          const whiteboard = boards.find((row) => row.id === id);
+          if (whiteboard) return renderCanvas(whiteboard);
+          const folder = roots.find((row) => row.id === id);
+          if (!folder) return null;
+          return (
+            <Column
+              doc={doc}
+              folder={folder}
+              nested={false}
+              highlightFolder={highlightFolder}
+              hoverLink={hoverLink}
+              overFolder={overFolder}
+              overLink={overLink}
+              onHoverLink={onHoverLink}
+              onRenameFolder={onRenameFolder}
+              onEditLink={onEditLink}
+              onAddLink={onAddLink}
+              onAddFolder={onAddFolder}
+              onAddButton={onAddButton}
+              onEditFolder={onEditFolder}
+              onEditButton={onEditButton}
+              onRunButton={onRunButton}
+              onMoveLink={onMoveLink}
+              onMoveFolder={onMoveFolder}
+              onToggleFolder={onToggleFolder}
+              onDeleteFolder={onDeleteFolder}
+              onMarkOver={markOver}
+              onOverLink={setOverLink}
+              onDrop={acceptDrop}
+              onScreenshotLink={onScreenshotLink}
+            />
+          );
+        }}
+      />
+    </>
   );
 }
 
@@ -253,6 +426,7 @@ function Column({
   onOverLink,
   onDrop,
   onScreenshotLink,
+  onLayout,
 }: {
   doc: MarksDoc;
   folder: MarkCategory;
@@ -278,6 +452,7 @@ function Column({
   onOverLink: (id: string) => void;
   onDrop: (folderId: string | null, event: DragEvent, index?: number) => void;
   onScreenshotLink?: (link: MarkLink) => void;
+  onLayout?: (id: string, rect: MarksWindowRect) => void;
 }) {
   const links = linksInCategory(doc, folder.id);
   const buttons = buttonsInFolder(doc, folder.id);

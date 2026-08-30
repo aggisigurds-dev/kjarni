@@ -7,6 +7,8 @@ import {
   addButton,
   addCategory,
   addLink,
+  addWhiteboard,
+  addWhiteboardItem,
   childCategories,
   descendantIds,
   emptyDoc,
@@ -17,11 +19,16 @@ import {
   moveLink,
   normalizeDoc,
   normalizeUrl,
+  raiseWhiteboardItem,
   removeCategory,
+  removeWhiteboard,
+  renameWhiteboard,
   reorderCategory,
   reorderLink,
   seedDoc,
+  testClock,
   updateLink,
+  updateWhiteboardItem,
   wouldCycle,
 } from './model';
 
@@ -89,6 +96,63 @@ describe('organizer', () => {
     expect(doc?.links[0]?.tags).toEqual([]);
     const laid = layoutMissingPositions(doc!);
     expect(laid.categories[0]?.x).toBeGreaterThanOrEqual(0);
+    expect(doc?.whiteboards).toEqual([]);
+    expect(seedDoc(1).whiteboards).toEqual([]);
+    expect(emptyDoc(0).whiteboards).toEqual([]);
+  });
+});
+
+describe('whiteboards', () => {
+  it('adds a window, an image item, then moves and resizes it', () => {
+    const clock = testClock();
+    let doc = addWhiteboard(emptyDoc(0), {}, clock);
+    expect(doc.whiteboards).toHaveLength(1);
+    expect(doc.whiteboards[0]?.id.startsWith('wb_')).toBe(true);
+    expect(doc.whiteboards[0]?.title).toBe('Whiteboard');
+    expect(doc.whiteboards[0]?.items).toEqual([]);
+
+    doc = addWhiteboardItem(doc, doc.whiteboards[0]!.id, { src: 'https://example.com/a.png' }, clock);
+    const item = doc.whiteboards[0]?.items[0];
+    expect(item?.id.startsWith('wbi_')).toBe(true);
+    expect(item?.src).toBe('https://example.com/a.png');
+    expect(item?.w).toBeGreaterThan(0);
+
+    doc = updateWhiteboardItem(doc, doc.whiteboards[0]!.id, item!.id, { x: 40, y: 24, w: 200, h: 140 }, clock);
+    expect(doc.whiteboards[0]?.items[0]).toMatchObject({ x: 40, y: 24, w: 200, h: 140 });
+
+    const raised = raiseWhiteboardItem(doc, doc.whiteboards[0]!.id, item!.id, clock);
+    expect(raised.whiteboards[0]?.items[0]?.z).toBeGreaterThanOrEqual(item!.z ?? 1);
+
+    doc = renameWhiteboard(doc, doc.whiteboards[0]!.id, 'Moodboard', clock);
+    expect(doc.whiteboards[0]?.title).toBe('Moodboard');
+    expect(removeWhiteboard(doc, doc.whiteboards[0]!.id, clock).whiteboards).toEqual([]);
+  });
+
+  it('normalizes missing whiteboards and drops items without a src', () => {
+    const doc = normalizeDoc({
+      updatedAt: 2,
+      categories: [{ id: 'cat_a', name: 'A', sort: 0 }],
+      links: [],
+      whiteboards: [
+        {
+          id: 'wb_keep',
+          title: '  ',
+          x: 12,
+          y: 8,
+          w: 300,
+          h: 220,
+          items: [
+            { id: 'wbi_ok', src: '/icon.svg', kind: 'icon', x: 4, y: 4, w: 48, h: 48 },
+            { id: 'wbi_bad', src: '' },
+          ],
+        },
+        { title: 'no id' },
+      ],
+    });
+    expect(doc?.whiteboards).toHaveLength(1);
+    expect(doc?.whiteboards[0]?.title).toBe('Whiteboard');
+    expect(doc?.whiteboards[0]?.items.map((item) => item.id)).toEqual(['wbi_ok']);
+    expect(doc?.whiteboards[0]?.items[0]?.kind).toBe('icon');
   });
 });
 
