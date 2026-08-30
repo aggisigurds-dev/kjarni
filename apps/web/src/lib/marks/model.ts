@@ -111,12 +111,36 @@ export interface MarksFilter {
 }
 
 export interface MarksDoc {
+  /** Site name. Home is "Home"; new sites start empty under their own title. */
+  title: string;
   categories: MarkCategory[];
   links: MarkLink[];
   buttons: MarksButton[];
   filters: MarksFilter[];
   updatedAt: number;
   folders?: MarkCategory[];
+}
+
+const SITE_ID_RE = /^site_[a-z0-9]+$/i;
+
+export function isMarksBoardId(id: string): boolean {
+  return id === MARKS_BOARD_ID || SITE_ID_RE.test(id);
+}
+
+export function marksHref(id: string): string {
+  return !id || id === MARKS_BOARD_ID ? '/marks' : `/marks/${id}`;
+}
+
+export function createSiteId(clock: MarksClock = fallbackClock): string {
+  return clock.nextId('site');
+}
+
+export function siteTitle(
+  doc: Pick<MarksDoc, 'title'> | null | undefined,
+  fallback = 'Untitled'
+): string {
+  const title = doc?.title?.trim() ?? '';
+  return title || fallback;
 }
 
 export const BUTTON_COLORS = ['#047857', '#1d4ed8', '#b45309', '#be123c', '#6d28d9', '#44403c'] as const;
@@ -274,13 +298,14 @@ export function layoutMissingPositions(doc: MarksDoc): MarksDoc {
   };
 }
 
-export function emptyDoc(now = 0): MarksDoc {
-  return { categories: [], links: [], buttons: [], filters: [], updatedAt: now };
+export function emptyDoc(now = 0, title = ''): MarksDoc {
+  return { title, categories: [], links: [], buttons: [], filters: [], updatedAt: now };
 }
 
 export function persistDoc(doc: MarksDoc): MarksDoc {
   return {
     ...doc,
+    title: asString(doc.title).trim(),
     folders: doc.categories,
     links: doc.links.map((link) => ({
       ...link,
@@ -415,6 +440,7 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
     .map((row, index) => normalizeFilterRow(row, index))
     .filter((row): row is MarksFilter => Boolean(row));
   return persistDoc({
+    title: asString(doc.title).trim(),
     categories,
     links,
     buttons,
@@ -478,6 +504,7 @@ export function seedDoc(now = 1): MarksDoc {
     }),
   ];
   return persistDoc({
+    title: 'Home',
     categories: [kjarni, apps, shop],
     links,
     buttons,
@@ -626,6 +653,16 @@ export function filterDoc(doc: MarksDoc, query: string): MarksDoc {
 
 function touch(doc: MarksDoc, clock: MarksClock, patch: Partial<MarksDoc>): MarksDoc {
   return persistDoc({ ...doc, ...patch, updatedAt: clock.now() });
+}
+
+export function setSiteTitle(
+  doc: MarksDoc,
+  title: string,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  const trimmed = title.trim();
+  if (!trimmed || doc.title === trimmed) return doc;
+  return touch(doc, clock, { title: trimmed });
 }
 
 export function addCategory(
