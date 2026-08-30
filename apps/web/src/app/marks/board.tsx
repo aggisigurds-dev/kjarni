@@ -504,8 +504,8 @@ export function MarksBoard() {
             <p className={LABEL}>Kjarni</p>
             <h1 className="text-2xl font-semibold tracking-tight">Marks</h1>
             <p className="text-sm text-stone-500">
-              Folders, links, and buttons in columns — drag a link or folder onto another column.
-              Same board on your phone.
+              Folders, links, and buttons in columns. On a phone, hold a link, then drag it
+              into another folder.
             </p>
           </div>
           <p className="text-[0.7rem] text-stone-400">{ready ? note : 'Loading…'}</p>
