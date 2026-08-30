@@ -343,6 +343,7 @@ export function ImportDialog({
   onClose,
   onFile,
   onPaste,
+  onKeep,
 }: {
   doc: MarksDoc;
   parentId: string;
@@ -352,6 +353,7 @@ export function ImportDialog({
   onClose: () => void;
   onFile: (file: File) => void;
   onPaste: () => void;
+  onKeep?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   return (
@@ -402,7 +404,12 @@ export function ImportDialog({
             placeholder={'https://brunaholf.netlify.app\nhttps://slokkvitaeki.netlify.app'}
           />
         </label>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {onKeep ? (
+            <button type="button" className={`${ACTION_GHOST} mr-auto`} onClick={onKeep}>
+              Import Google Keep
+            </button>
+          ) : null}
           <button type="button" className={ACTION_GHOST} onClick={onClose}>
             Close
           </button>
