@@ -10,6 +10,8 @@ export type RoomEntry = {
   counted: boolean;
   color: string;
   opacity: number;
+  /** Remaining "gata" guide for this room (shared by every box in the group). */
+  gataCount: number;
 };
 
 export const DEFAULT_ROOM_NAME = "Rými";
@@ -89,6 +91,7 @@ export function listRooms(objects: BoardObject[]): RoomEntry[] {
       counted: parts.every((p) => p.roomCounted !== false),
       color: solidHex(first.stroke || first.fill || DEFAULT_ROOM_COLOR),
       opacity: first.roomOpacity ?? opacityFromFill(first.fill),
+      gataCount: clampRoomGataCount(first.roomGataCount ?? 0),
     });
   }
   return rooms;
@@ -140,6 +143,17 @@ export function setRoomExcluded(objects: BoardObject[], key: string, excluded: b
 
 export function setRoomCounted(objects: BoardObject[], key: string, counted: boolean): BoardObject[] {
   return mapRoom(objects, key, (obj) => ({ ...obj, roomCounted: counted }));
+}
+
+export function clampRoomGataCount(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n));
+}
+
+/** Remaining-gata guide. Patches every box in the grouped room. Clamped at 0. */
+export function setRoomGataCount(objects: BoardObject[], key: string, n: number): BoardObject[] {
+  const count = clampRoomGataCount(n);
+  return mapRoom(objects, key, (obj) => ({ ...obj, roomGataCount: count }));
 }
 
 export function styleRoomObjects(

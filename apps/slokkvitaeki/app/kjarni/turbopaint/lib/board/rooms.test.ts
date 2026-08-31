@@ -9,8 +9,10 @@ import {
   roomAreaPx,
   roomCounterIndex,
   roomOfSelection,
+  clampRoomGataCount,
   setRoomCounted,
   setRoomExcluded,
+  setRoomGataCount,
   solidHex,
   styleRoomObjects,
 } from "./rooms";
@@ -91,4 +93,25 @@ test("uncounted rooms drop out of the magntafla numbering", () => {
   assert.equal(roomCounterIndex(next, "g1"), null);
   assert.equal(roomCounterIndex(next, "b"), 1);
   assert.equal(listRooms(next).find((r) => r.key === "g1")?.counted, false);
+});
+
+test("gata remaining-count is shared by every box and clamped at zero", () => {
+  const objects: BoardObject[] = [
+    box("a", { groupId: "g1", name: "Eldhús" }),
+    box("b", { groupId: "g1", name: "Eldhús", width: 5, height: 4 }),
+  ];
+  assert.equal(listRooms(objects).find((r) => r.key === "g1")?.gataCount, 0);
+  const next = setRoomGataCount(objects, "g1", 5);
+  for (const obj of next) {
+    if (obj.type !== "rect") continue;
+    assert.equal(obj.roomGataCount, 5);
+  }
+  assert.equal(listRooms(next).find((r) => r.key === "g1")?.gataCount, 5);
+  const clamped = setRoomGataCount(next, "g1", -3);
+  assert.equal(
+    clamped.filter((o) => o.type === "rect").every((o) => o.type === "rect" && o.roomGataCount === 0),
+    true
+  );
+  assert.equal(clampRoomGataCount(2.6), 3);
+  assert.equal(clampRoomGataCount(Number.NaN), 0);
 });

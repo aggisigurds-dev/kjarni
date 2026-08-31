@@ -27,6 +27,7 @@ import {
   renameRoomObjects,
   setRoomCounted as applyRoomCounted,
   setRoomExcluded as applyRoomExcluded,
+  setRoomGataCount as applyRoomGataCount,
   styleRoomObjects,
   type RoomAppearance,
 } from "./rooms";
@@ -65,6 +66,7 @@ interface BoardStore {
   renameRoom: (key: string, name: string) => void;
   applyRoomAppearance: (key: string | null, patch: RoomAppearance, recordHistory?: boolean) => void;
   setRoomCounted: (key: string, counted: boolean) => void;
+  setRoomGataCount: (key: string, n: number) => void;
   setRoomExcluded: (key: string, excluded: boolean) => void;
   /** Cloud sync status for the current board (shown in the TopBar). */
   syncState: "idle" | "saving" | "synced" | "error";
@@ -216,6 +218,10 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       roomStyle: { ...get().roomStyle, counted },
       objects: applyRoomCounted(get().objects, key, counted),
     });
+  },
+  setRoomGataCount: (key, n) => {
+    pushHistory(set, get);
+    set({ objects: applyRoomGataCount(get().objects, key, n) });
   },
   setRoomExcluded: (key, excluded) => {
     pushHistory(set, get);

@@ -86,3 +86,25 @@ test("rename and restyle apply to the whole irregular room", () => {
     assert.equal(obj.roomCounted, false);
   }
 });
+
+test("setRoomGataCount patches every box in the irregular room", () => {
+  emptyBoard();
+  useBoardStore.getState().replaceBoard({
+    name: "próf",
+    objects: [roomBox("a", { groupId: "g1" }), roomBox("b", { groupId: "g1", x: 40 })],
+    camera: { x: 0, y: 0, scale: 1 },
+    pixelsPerMeter: null,
+    grid: true,
+    snap: true,
+  });
+  useBoardStore.getState().setRoomGataCount("g1", 4);
+  for (const obj of useBoardStore.getState().objects) {
+    if (obj.type !== "rect") continue;
+    assert.equal(obj.roomGataCount, 4);
+  }
+  useBoardStore.getState().setRoomGataCount("g1", -2);
+  for (const obj of useBoardStore.getState().objects) {
+    if (obj.type !== "rect") continue;
+    assert.equal(obj.roomGataCount, 0);
+  }
+});

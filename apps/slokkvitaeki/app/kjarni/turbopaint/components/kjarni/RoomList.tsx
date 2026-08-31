@@ -11,6 +11,7 @@ import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
+import { RoomGataStepper } from "./RoomGataStepper";
 
 export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => void }) {
   const objects = useBoardStore((s) => s.objects);
@@ -32,7 +33,8 @@ export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => vo
     <div className="mb-5 border-b border-white/8 pb-4">
       <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">RÝMI</div>
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
-        Óreglulegt rými: teiknaðu nokkra kassa, svo Búa til. Nafn, litur og teljari stillast hér.
+        Óreglulegt rými: teiknaðu nokkra kassa, svo Búa til. Nafn, litur og gata eftir stillast
+        hér.
       </p>
       {drafting ? (
         <div className="mb-2 space-y-2 rounded-md border border-[#FE653F]/40 bg-[#FE653F]/10 px-2 py-2">
@@ -116,6 +118,20 @@ export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => vo
               }}
             />
           </label>
+          {editorKey && editor ? (
+            <div className="space-y-1">
+              <div className="text-[11px] text-stone-500">Gata eftir</div>
+              <div className="flex items-center gap-2">
+                <RoomGataStepper
+                  value={editor.gataCount}
+                  onChange={(n) => useBoardStore.getState().setRoomGataCount(editorKey, n)}
+                />
+                <span className="text-[11px] leading-snug text-stone-500">
+                  Leiðbeinandi um fjölda gata sem eftir eru.
+                </span>
+              </div>
+            </div>
+          ) : null}
           <label className="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 text-[12px] text-stone-300 hover:bg-white/5">
             <input
               type="checkbox"
@@ -128,9 +144,9 @@ export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => vo
               }}
             />
             <span>
-              <span className="block text-stone-200">Teljari · magntafla</span>
+              <span className="block text-stone-200">Telja í magntöflu</span>
               <span className="block text-[11px] leading-snug text-stone-500">
-                Númer á rýminu og línan í magntöflu Brunahólfs (m²).
+                Númer 1, 2, 3 á rýminu og m²-línan í magntöflu. Ekki fjöldi gata eftir.
               </span>
             </span>
           </label>
@@ -170,6 +186,11 @@ export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => vo
                 <span className="w-4 shrink-0" />
               )}
               <span className="min-w-0 flex-1 truncate">{room.name}</span>
+              {room.gataCount > 0 ? (
+                <span className="shrink-0 text-[10px] tabular-nums text-stone-500">
+                  {room.gataCount} gata
+                </span>
+              ) : null}
               {room.ids.length > 1 ? (
                 <span className="text-[10px] text-stone-600">{room.ids.length} kassar</span>
               ) : null}

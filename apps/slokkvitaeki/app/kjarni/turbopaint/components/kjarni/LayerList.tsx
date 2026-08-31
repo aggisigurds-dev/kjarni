@@ -21,8 +21,12 @@ export function LayerList() {
   const piping = layers.filter((l) => l.kind === "piping");
 
   return (
-    <div>
-      <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">LAGNIR</div>
+    <details className="group">
+      <summary className="mb-2 flex cursor-pointer list-none items-center justify-between select-none text-[11px] font-medium tracking-[0.12em] text-[#FE653F] [&::-webkit-details-marker]:hidden">
+        <span>LAGNIR</span>
+        <span className="font-normal tracking-normal text-stone-600 group-open:hidden">opna</span>
+        <span className="hidden font-normal tracking-normal text-stone-600 group-open:inline">fella</span>
+      </summary>
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
         Lagnir liggja ofan á teikningunni — feldu Teikning til að sjá bara veggi og lagnir, eða hafðu
         skönnunina sýnilega. Nýjar strokur lenda á virka laginu.
@@ -71,7 +75,7 @@ export function LayerList() {
           {objects.filter(isCrossingMark).length || ""}
         </span>
       </button>
-    </div>
+    </details>
   );
 }
 

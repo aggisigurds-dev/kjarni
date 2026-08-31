@@ -14,6 +14,7 @@ import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rat
 import { DEFAULT_ROOM_NAME, fillAlpha, roomOfSelection } from "../../lib/board/rooms";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
+import { RoomGataOverlays } from "./RoomGataStepper";
 
 /** Brunahólfun er RAUÐ og hálfgegnsæ — sjá FIREWALL_PALETTE í firewall-rating.
  * Litirnir koma ÞAÐAN svo handvirku takkarnir og sjálfvirka greiningin noti
@@ -227,6 +228,8 @@ export function BoardCanvas({
                 groupId: gid,
                 roomCounted: rs.counted,
                 roomOpacity: rs.opacity,
+                roomGataCount:
+                  sibling && sibling.type === "rect" ? sibling.roomGataCount ?? 0 : 0,
               },
             ],
             false
@@ -1192,6 +1195,7 @@ export function BoardCanvas({
           />
         </Layer>
       </Stage>
+      <RoomGataOverlays width={width} height={height} />
       {tool === "room" ? (
         <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/10 bg-[#1a1d2e]/90 px-3 py-1.5 text-[12px] text-stone-100 shadow-lg">
           Teiknaðu kassa fyrir rýmið · Enter = búa til · Esc = hætta
