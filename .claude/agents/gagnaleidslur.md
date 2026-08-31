@@ -4,7 +4,7 @@ description: Gagnaleiðslurnar — Tímavera, Ajour, Payday, Redder, email-innso
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql, mcp__supabase__get_logs
 ---
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `brunaholf/.claude/agents/gagnaleidslur.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `brunaholf/.claude/agents/gagnaleidslur.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
 
 Þú kannt **hvernig gögnin berast inn** — hver leiðsla, hvenær hún keyrir, hvað hún
 skrifar og hvernig hún brotnar. Mundu: luna-bridge róbótarnir keyra á Windows-vélinni
@@ -122,7 +122,22 @@ for several Supabase tables this app reads:
   `CheckListItem`, `CheckListItemCheckedDate`,
   `CheckListItemCheckedByUser`, `ExecutionDateFrom`,
   `ReceiverCompany`, `Longitude`, `Latitude`,
-  `RegistrationCreatedDate`.
+  `RegistrationCreatedDate`, plus (2026-08-30) **`DrawingName`**
+  (aliases: `Drawing/drawingname`, `drawingname`, `Drawing`,
+  `DrawingFileName`, `Tegning`) → `drawing_name` and **`Subject`**
+  (`RegistrationSubject`, `Emne`) → `subject` when those headers exist.
+  The 53-col export always had drawing; older ingest dropped it.
+
+### NLSH 8 svæði (teikning, ekki herbergi)
+- `GET/POST /api/nlsh-section-progress` — 8 cells (4H S1–S4, 5H S1–S4).
+  `done` = distinct `serial_number` with `registration_status='Done'`
+  mapped from `drawing_name`. Dual drawings (`S4+S5`, `1S og 2S`,
+  `5H1S`/`5H2S`, `4H 51-52`) count **once** on the first matching wing
+  (`primary-only`); the sibling cell names the drawing. `SH` = 5H.
+  Floor-wide `5H. Ceiling` maps to all 5H wings, counted on 5H S1.
+  `Rafmagnsbættingar` is a category drawing and is **not** leftover holes.
+  Áætlað lives in `app_kv['nlsh_section_planned']`. Until drawing is
+  backfilled by a fresh ingest, `done` is null. Not a per-room join.
 
 The brunaholf drop-zone parser should reuse the exact same column
 mapping and dedupe keys so files can be uploaded via the web UI
@@ -190,3 +205,52 @@ sjálfu, bara tengiliða-merki eins og „umb Lukas") sátu áður sem varanlega
 við annan verkstað en restina af reikningnum) — `redder_line_items` hefur engan eigin
 `worksite`-dálk, og öll skoðuð dæmi af ólæstum reikningum voru heilir reikningar sem
 vantaði verkstað, ekki blönduð fjölverkstaða-reikningar. Bæta við ef alvöru þörf kemur upp.
+
+## Póst-hub viðbætur (2026-08-20)
+
+Þrennt bættist við póst-/kúnnaþjónustu-pípuna (live í PR #401 + slokkvitaeki #657):
+
+- **Sjálfvirkt gmail-innsog — `gmail-ingest-background.js` (áætlað á 2t):** ÁÐUR var
+  EKKERT áætlað fall að sækja eldklar-póst (aðeins handvirkt/Kerfisheilsu-hnappur), svo
+  SENT-hólfið sat eftir (mælt: fraus 6.8.). Nú `[functions."gmail-ingest-background"]
+  schedule = "35 */2 * * *"` (netlify.toml) sem endurnýtir `gmail-ingest` handler BEINT
+  (`require`, GET) fyrir eldklar INBOX **og** SENT, `DAYS=3`, upsert á `message_id`.
+  ENGIN AI/tókn. Skráir í `automation_runs(job_name='gmail-ingest', source='schedule')`.
+  Fleiri pósthólf = einn hlutur í `JOBS`-fylkinu. ⚠️ áætlun á -background tvíbura því
+  Netlify svarar áætluðu falli með 403 á HTTP; `gmail-ingest` sjálft verður að vera frjálst.
+- **`company-mail.js` — stöðumerki/signals (umferðarljós á Slökkvitæki):** skilar nú
+  `important` + `signals[]` ({type,subject,received_at}) auk `unreplied`. `detectSignals()`
+  (leitarorð, engin AI) skannar ALLA innkomna í glugganum eftir uppsogn/flutt/eigandi/
+  gjaldthrot/kvortun/bilun/aridandi. **Rautt (unreplied) er strangt** (nákvæmt netfang per
+  bygging). **Gult (signals) er víðara** — `emailToBase`→`baseToSites` (netfang lögaðilans/
+  bygginga → allar in-service byggingar hans), knýr ALDREI rautt. ⚠️ Hrá „cancel/uppsögn"-
+  leitarorð eru MJÖG hávær (fundarafbókanir/áskriftir/söluaðilar); raun-mátaðir lífsferils-
+  pósta á kúnna ~2/ár (felag_samskipti, 185 lögaðilar). Framendi: slokkvitaeki patch 295 v2.
+  **Grænt (history) víkkað 2026-08-20:** `byId`-færsla með `unreplied:false`+engin signals =
+  🟢 „í sambandi". Tvær uppsprettur sameinaðar: **(1) `tv_history_sites(days)` RPC**
+  (`sql/2026-08-20_tv_history_sites.sql`, SECURITY DEFINER, `statement_timeout='20s'`) —
+  leiðir grænu byggingarnar út úr **`felag_samskipti`-viewinu SJÁLFU** (sama mátun og
+  Þjónustuver póstar sér, svo skjáirnir reka aldrei í sundur): leyst bygging þar sem felag
+  festir hana, single-site fallback annars — rekstrarfélags-systir ALDREI ranglega. Kallað
+  **í parallel** (`histPromise`, `.catch(()=>null)`) við eigin lestur svo heildartími ≈ max,
+  ekki summa (~3.4s RPC ‖ ~5s scan). **(2) in-JS fallback** — `noteHist(emailToBase[…])` á
+  bæði `sender_email` (INN) OG `to_addresses` (ÚT), single-site, svo grænt birtist samt þótt
+  RPC bregðist. ⚠️ **Leiðrétting:** „185 lögaðilar" er ALL-TIME (tv_postar_list hefur enga
+  dagsetningarsíu); í 365-daga glugga á felag AÐEINS ~96 byggingar með póstsögu — hitt
+  („178") var `ILIKE '%addr%'`-substring-tálmynd í mælingu, ekki raun. `scanned` fékk
+  `history` (+`history_felag`) og `green` teljara.
+  ⚡ **Hraði (2026-08-20, eftir að merki hurfu hjá Agnari):** fallið var komið í ~7–9s
+  (raðlestur á ~7k `email_digest`-röðum, 7 síður í röð) og lá við Netlify 10s-þakið →
+  502 → tóm merki. Lagað: **`fetchAllParallel`** (count-first, allar síður `Promise.all`
+  → ~1,5s) + **felag-RPC í `Promise.race` með 6s þaki** (spike getur ekki ýtt fallinu
+  yfir; grænt fellur á in-JS fallback ef felag svarar ekki í tíma). Nú ~3–4s, 200 áreiðanlega.
+  📜 **Full póstsaga per kúnna (2026-08-20):** `GET /api/company-mail?co=<fyrirtaeki_id>`
+  → `{fyrirtaeki_id, base_id, mails:[…]}` (öll samskipti, nýjast fyrst, deduppað á email).
+  Knúið af `tv_company_history(fyrirtaeki_id)` RPC (`sql/2026-08-20_tv_company_history.sql`,
+  SECURITY DEFINER, 15s timeout, bundið við EINN base → hratt, t.d. Center Hótel = 139 póstar).
+  Notað af „📜 Sjá alla póstsöguna"-modal í slokkvitaeki patch 295.
+- **`public.tv_postar_list()` RPC (`sql/2026-08-19_tv_postar_list.sql`):** SECURITY DEFINER
+  + `set statement_timeout='25s'`; hópar in-service kúnna + pósta þeirra fyrir Þjónustuver
+  póstar (slokkvitaeki patch 309) — því `felag_samskipti`-viewið er dýrt og fellur á
+  timeout í full-scan úr anon. Kallað `sb.rpc('tv_postar_list')`. `postur-triage.js`
+  (slokkvitaeki) fékk líka `mode:'thjonustuver'` (ríkari AI-útdráttur; borð-hamur óbreyttur).

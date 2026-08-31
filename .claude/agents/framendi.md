@@ -4,7 +4,7 @@ description: Framendi og flipar — hvaða síður eru til í hub-num, hvað hve
 tools: Bash, Read, Grep, Glob, Edit
 ---
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `brunaholf/.claude/agents/framendi.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `brunaholf/.claude/agents/framendi.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
 
 Þú kannt **viðmótið** — alla flipa hub-sins, hvað hver gerir og hvar hann býr.
 Grunnregla: `index.html` er EIN risaskrá (1,29 MB). Notaðu **aldrei** heilan lestur —
@@ -152,7 +152,11 @@ Defined in `DEFAULT_STATE.tabs`. Render functions in `index.html`:
   reason.
 - `nlsh` — Landsspítalinn (NLSH) dashboard (renderNLSH): tekjur/mánuð
   (contract heildir × taxti, uppsafnað), lokuð göt per viku, vinnustundir +
-  göt per starfsmann, samningsstaða per verkliður. Data: `/api/nlsh-dashboard`
+  göt per starfsmann, samningsstaða per verkliður. Data: `/api/nlsh-dashboard`.
+  **8 svæði** (4H/5H × S1–S4): áætlað vs Ajour-lokið per teikningu —
+  `/api/nlsh-section-progress` + `js/nlsh-sections.js`. Tvíteikning
+  (1S og 2S o.fl.) sýnir teikningarnafn á systurreit. Rafmagnsbættingar
+  er flokkateikning, ekki göt. Ekki herbergi.
 - `maeting`, `verkefnastada` — sheet-CSV-backed generic tabs
 - `verdskra` — Verðskrá (rate editor for pricing_guide + hole_size_rates + read-only NLSH contract)
 - `april` — Apríl reikningar punch list
@@ -248,6 +252,15 @@ les `/api/fjarmal-yfirlit` + `/api/nlsh-dashboard`) er nú líka alvöru hub-fli
 sannleik og lifir áfram óbreytt sem sjálfstæð slóð og app-síða í
 slökkvitæki-öppunum (`br-fjarmalyfirlit` í patch 261). Deep-link:
 `/#fjarmalyfirlit` (líka í `?embed=1`).
+
+## Brunakerfi yfirlit — 2026-08-25
+
+Flipi **`brunayfirlit`** (🔔 Brunakerfi yfirlit, rétt á eftir `skodanir`) —
+`/brunakerfi.html` innfellt í iframe (`renderBrunakerfiYfirlit`, `?v=Date.now()`).
+Les `/api/brunakerfi-yfirlit`. Ein röð per stað; **Skoðað YYYY** aðeins ef
+brunakerfi-PDF er á þessum `fyrirtaeki_id`. Deep-link: `/#brunayfirlit`.
+Eldri handskráði `CUSTOMERS`-listinn (eitt spjald fyrir alla Center Hótel-keðjuna)
+var fjarlægður — hann málaði 2026-skýrslu Granda/Arnarhvolls á Klöpp.
 
 ## Skýrslur-flipi + CG (Calculation Group) — 2026-08-02
 

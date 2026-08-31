@@ -4,7 +4,7 @@ description: Sala/POS, reikningagerð, dkPlus/Payday, afslættir, sjálfvirk PDF
 tools: Bash, Read, Grep, Glob, Edit
 ---
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/sala-reikningar.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/sala-reikningar.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
 
 Þú kannt **sölu- og reikningahliðina** — POS-inn, dkPlus/Payday, afsláttar-konvensjónina og PDF-vistun. Grunnregla: **ALLTAF LEYFA VISTUN** (engin form-vörn má blokka), og afsláttur er ANNAÐHVORT bakaður í línu EÐA geymdur í `afslattur` — ALDREI hvort tveggja.
 
@@ -242,3 +242,29 @@ en hluti krafna er stofnaður beint í Payday (bókari/mánaðaruppgjör) og á 
   PD-merkið á SÍNA röð í stað tvítekningar. Samantektarlínan sýnir
   „+ N Payday-kröfur · X kr".
 
+
+## Reikningsupphæðir: skráarheitið er uppsprettan, ekki endurlestur á PDF
+
+Mælt 29.08.2026 við að fylla 278 vantandi upphæðir.
+
+**Kanóníska Drive-heitið ber upphæðina** — `drive-sort.js` `nameInvoice()`
+skrifar `Fyrirtæki - heimilisfang - kt - R-nnnnnn - ár - N.NNN kr.pdf` og setti
+þá tölu ÞEGAR það hafði lesið PDF-ið rétt. Hún er því ekki ágiskun heldur gildi
+sem kerfið reiknaði áður. Í einu tilviki sem tókst að sannreyna sjálfstætt
+(R-000544) var HEITIÐ rétt og talan í gagnagrunninum röng.
+
+**`/api/efnislisti-amount` má EKKI nota í fjöldafyllingu.** Hún tekur hæstu tölu
+í skjalinu og skilaði **kennitölunni** (450905) fyrir 6 af 9 prófuðum
+Center-reikningum. Endapunkturinn segir það sjálfur í haus: „only a suggestion —
+the user confirms it with one click." Prófaðu alltaf á sýnishorni áður en skrifað
+er — það eitt kom í veg fyrir að kennitala yrði sett sem reikningsupphæð á
+viðskiptavinavefinn.
+
+**Þrjár varnir sem allar reyndust nauðsynlegar:**
+  1. R-númerið í heitinu VERÐUR að stemma við `invoice_number` — eitt skjal bar
+     upphæð af öðrum reikningi.
+  2. KREDITREIKNINGAR eru geymdir NEIKVÆÐIR í grunni en heitið ber jákvæða tölu.
+  3. Skynsemismörk (1.000–50.000.000) svo kennitala eða ártal rati ekki inn.
+
+**Afturkræft:** afrit í `backup_20260829_amount_fill` (venja repósins).
+Reikningar án upphæðar fóru úr 381 í 103 af 1.464.

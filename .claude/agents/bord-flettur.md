@@ -4,7 +4,7 @@ description: Flettur, borð og navigation — Verkborð, Bakendi, Bílstjóri, A
 tools: Bash, Read, Grep, Glob, Edit
 ---
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/bord-flettur.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/bord-flettur.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
 
 Þú kannt **viðmótsgrindina** — hvernig flipar/borð eru skráð (DEFAULT_STATE.tabs + renderXxx + dispatcher), URL-routing og bakk-takkann. GILDRA: bakk er á ÞREMUR lögum (18 afvirkur, 276, 277) — ekki blanda þeim.
 
@@ -279,3 +279,64 @@ fóru líka í einskiptis-`insertOnce`-migrations (`__rf1`, `__jv1`, `__jv1b`) �
 mynstur og `__brky1`/`__vkp1`. Þær bætast við ÞEGAR-vistaðar stillingar EINU SINNI;
 af-haki notandinn þær eftirá troða þær sér ekki inn aftur.
 
+
+## Þjónustuver póstar (síða patch 309, 2026-08-20)
+
+Ný SJÁLFSTÆÐ síða fyrir kúnnaþjónustu Í PÓSTI — aðskilin frá Þjónustuborði
+(patch 231, sem er áfram innra skipulag). Nákvæmt 231-mynstur: `NAV_KEY=
+'thjonustuver-postar'`, view `view-thjonustuver-postar`; `injectNav()` bætir
+`.vnav-btn`, `ensureView()` klónar `.view`-klasann inn í content-panel,
+`patchSwitchView()` grípur `App.switchView('thjonustuver-postar')`, deep-link
+`#thjonustuver-postar` (patch 218 leysir sjálfkrafa því view-ið er búið til við
+boot). Sidebar-röð (patch 68) við hlið Reikninga-pósts. `waitForSB()` bíður eftir
+`DB.sb` — síðan opnast stundum (deep-link á síma) á undan `DB.init()`.
+
+- **Gögn:** `sb.rpc('tv_postar_list')` (Brunahólf SQL `public.tv_postar_list()`,
+  SECURITY DEFINER + hækkað `statement_timeout`) hópar in-service kúnna
+  (`er_i_thjonustu`) + pósta þeirra server-hlið — því `felag_samskipti`-viewið
+  fellur á statement_timeout í full-scan úr anon.
+- **✨ AI-yfirlit:** `/api/postur-triage` `mode:'thjonustuver'` (Haiku, server-hlið)
+  → summary/ask/details[]/contact/needs_action/reply_hint. ⚠️ briefs eru lyklaðar á
+  STRENG (Object.keys) en póst-id úr RPC er tala → nota `String(id)` við get/has/set.
+- **Svarstaða:** cutOf (patch 286) + eigin „svarað"-merki í `localStorage.tvp_handled`
+  (lifir innsognstöf) + AI `needs_action` (þaggar „takk"-pósta) + 150 d. recency-gólf.
+- **Aðgerðir:** ✍️ Svara (uppkast `/api/postur-reply` → sending gegnum AppMail/
+  email-send eins og patch 240), → Flytja á Þjónustuborð (`thjonustubeidni`,
+  `channel_ref='email:<id>'`, ekki tvítak), ✓ Merki svarað. Public:
+  `window.ThjonustuverPostar = {open, reload}`.
+
+---
+
+## Öpp-fylkið og símaramminn (29.08.2026)
+
+**Fylkið** á Öpp-síðunni (`view-opp`, patch 261) listar síður sem raðir og öpp
+sem dálka, með haki á hverjum skurðpunkti. Útgáfur (v1/v2/v3) raðast undir
+móðursíðuna gegnum `VARIANT_OF`.
+
+**↗-hnappurinn FLAKKAR EKKI LENGUR BURT.** Hann opnar símaramma (patch 320)
+ofan á fylkinu, svo röðin sem verið er að meta tapast ekki:
+
+- síða með eigin `url` (Brunahólfs-flipi) → römmuð óbreytt
+- síða inni í appinu → römmuð sem RAUNVERULEG app-síða:
+  `/?app=<lykill>&devframe=simi&page=<síða>`
+
+`SlokkDevFrame.open(devKey, { url, title })` tekur við slóð; án hennar er
+hegðunin sú gamla (núverandi síða). `?page=<lykill>` verður að stillast Á UNDAN
+`buildShell()` — verndarinn í `patchSwitchView` snappar aftur á `_curPage`
+fyrstu 12 sekúndurnar, svo `switchView` EFTIR shellið er kastað til baka.
+
+### ⚠️ Pappanúmer — athugaðu áður en þú býrð til nýjan
+
+Þrjú handoff-skjöl í röð lögðu til númer sem voru upptekin. Staðan 29.08:
+
+```
+312 canon-stadur      315 fjarmal-app-compact
+313 contrast-clarity  316 simi-boards
+314 simi-compact-layer + 314-arsskodun-mobile-compact  ← TVÆR skrár
+317 arsskodun-bilstjori   318 honnunarhamur
+```
+
+`314-arsskodun-mobile-compact.js` er **aftengd úr index.html** (skráin er kyrr):
+hún þjappaði skjáborðstöflunni sem birtist ekki lengur í síma, en reglur hennar
+á `._ars-mo` og `._ars-filterstrip` voru enn virkar og unnu inline-stíla tvisvar
+sama daginn. Tvö lög á sama borði — ekki endurtengja hana.

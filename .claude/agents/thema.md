@@ -4,7 +4,7 @@ description: theme.css hönnunarkerfið + per-page skeletons (endursköpun síð
 tools: Bash, Read, Grep, Glob, Edit
 ---
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/thema.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/thema.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
 
 Þú kannt **þemað** — class-based theme.css, scoped undir `.thm`. GILDRA: patch 245 (Brunastál) berst við theme.css (whitear `[class*=-card]`) — þarf hærri sérhæfni.
 
@@ -31,6 +31,34 @@ grunnstillingu, eyða öðrum þemum og þemu-veseninu"):
   öryggisventil gegn akkerislausum selectorum (sjá c6fc57c).
 - Vilji menn þemaskipti aftur: endurvekja 220/230 úr git fyrir 2026-08-17
   (commit cd54337 hefur gömlu skrárnar í foreldra sínum).
+
+### Samræming þemans — mælt og skjalfest, bíður ákvörðunar (29.08.2026)
+
+Agnar: „kanski bara henda þessu þemabulli út… skrá litina, delete, hreinsa og
+enduraetja." Fyrri hlutinn er BÚINN — grunnlínan er mæld í báðar áttir svo enginn
+þurfi að mæla hana aftur:
+
+- **`docs/LITASKRA.md`** (28.08) — litirnir eins og þeir ERU: 15 textalitir undir
+  ólíkum nöfnum (`--ink1`/`--ink-on-card`/`--ink-on-steel` eru SAMI litur),
+  5 rauðir, þrír bakgrunnar sem stangast á, 85 CSS-breytur, 135 stílblöð
+  samtímis. Þrír raunverulegir gallar mældust: 100 innsláttarreitir með
+  GEGNSÆJAN bakgrunn, 24 af 26 fellilistum með `#94a3b8` sem textalit (2,8:1),
+  og 6 töfluhausar með nær-hvítan texta á gegnsæju.
+- **`docs/DESIGN.md`** (29.08) — MARKMIÐIÐ í DESIGN.md-sniði, með „Leiðin
+  þangað" í sex skrefum sem má taka eitt og eitt. Formin mældust líka:
+  **9 radíusar, 11 leturstærðir, 7 þyngdir, 9 bil-gildi** í virkri notkun.
+  Rammar eru 1px í 287 af 288 tilvikum — eina víddin sem er þegar öguð.
+- Tvennt sem mældist og stóð hvergi áður: letrið er **IBM Plex Sans** (10.547
+  hlutir), ekki Inter. Og bakgrunnurinn `#f5f4ef` er ekki slys — hann liggur í
+  sömu fjölskyldu og Intercom (`#f5f1ec`) og PostHog (`#eeefe9`), svo hlýi
+  off-white flöturinn HELDUR SÉR í endurstillingunni.
+- Viðmiðunarkerfi í `docs/honnun/` (Stripe, Supabase, Notion, Intercom — ljós og
+  gagnaþétt, úr awesome-design-md, MIT). **Viðmið um uppbyggingu, ekki auðkenni
+  sem á að afrita.**
+
+⚠️ **Ekkert af þessu er komið í framkvæmd og þemað er ENN FROSIÐ.** Agnar hefur
+ekki gefið grænt ljós á samræminguna — skjölin eru til svo hún sé möguleg, ekki
+af því að hún sé hafin. Ekki byrja á henni óumbeðið.
 
 
 ---

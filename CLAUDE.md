@@ -26,7 +26,8 @@ kjarna-sessions hafi sömu viðskiptaþekkingu (sama Supabase-verkefnið,
 
 ⚠️ **Afrit, ekki frumrit.** Kanóníska eintak hvers sérfræðings býr í repo-inu í
 „Heim"-dálknum — file:line vísanir þeirra eiga við ÞAÐ repo, ekki kjarna.
-Breytingar fara þangað fyrst og eru svo endurafritaðar hingað. Afritað 2026-08-20.
+Breytingar fara þangað fyrst og eru svo endurafritaðar hingað. Afritað 2026-08-20,
+samstillt aftur 2026-08-31 (níu eintök höfðu dregist aftur úr — joker vantaði 353 línur).
 
 | Spurningin snýst um … | → Sérfræðingur | Heim |
 |---|---|---|
@@ -50,6 +51,7 @@ Breytingar fara þangað fyrst og eru svo endurafritaðar hingað. Afritað 2026
 | Útlit, farsímaskjái, endurhönnun — hönnuðurinn 🃏 | `joker` | slokkvitaeki |
 | QR-merki, miðaprentun (Brother PT-P750W), raðnúmer | `prentun` | slokkvitaeki |
 | Kort, Leaflet, mapfix, geocode/Nominatim | `kort` | slokkvitaeki |
+| Staðreyndayfirferð — kerfið segir eitt, gögnin annað (factcheck_bord) | `natalie` 🌸 | slokkvitaeki |
 
 `kunnaskra` er brunaholf-útgáfan (kúnna-líkanið sjálft — brunaholf á
 `customers_base`); app-hliðar útgáfa slokkvitaeki var ekki afrituð til að forðast
