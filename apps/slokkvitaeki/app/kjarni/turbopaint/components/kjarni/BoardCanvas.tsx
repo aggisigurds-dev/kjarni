@@ -11,6 +11,7 @@ import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
+import { DEFAULT_ROOM_NAME, fillAlpha, roomOfSelection } from "../../lib/board/rooms";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
 
@@ -108,6 +109,7 @@ export function BoardCanvas({
   const grid = useBoardStore((s) => s.grid);
   const spacePan = useBoardStore((s) => s.spacePan);
   const style = useBoardStore((s) => s.style);
+  const roomStyle = useBoardStore((s) => s.roomStyle);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   /* Shift = frjáls halli meðan hornalæsingin er á. Hreyfi-handlerinn fær aðeins
    * hnitin, ekki atburðinn, svo staðan er geymd hér og uppfærð af glugganum. */
@@ -194,6 +196,43 @@ export function BoardCanvas({
       const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       if (box.width < 4 && box.height < 4) return;
       if (d.kind === "rect") {
+        const live = useBoardStore.getState();
+        const asRoom = live.tool === "room" || Boolean(live.roomDraftGroupId);
+        if (asRoom) {
+          let gid = live.roomDraftGroupId;
+          if (!gid) {
+            gid = newId();
+            useBoardStore.setState({ roomDraftGroupId: gid, tool: "room" });
+          }
+          const { roomStyle: rs, addObjects, objects: liveObjects } = useBoardStore.getState();
+          const sibling = liveObjects.find(
+            (o) => o.type === "rect" && o.isRoom && o.groupId === gid
+          );
+          addObjects(
+            [
+              {
+                id: newId(),
+                type: "rect",
+                ...box,
+                fill: fillAlpha(rs.color, rs.opacity),
+                stroke: rs.color,
+                strokeWidth: 2,
+                cornerRadius: 0,
+                rotation: 0,
+                opacity: 1,
+                locked: false,
+                hidden: false,
+                name: sibling?.name || DEFAULT_ROOM_NAME,
+                isRoom: true,
+                groupId: gid,
+                roomCounted: rs.counted,
+                roomOpacity: rs.opacity,
+              },
+            ],
+            false
+          );
+          return;
+        }
         addObjects([
           {
             id: newId(),
@@ -444,7 +483,8 @@ export function BoardCanvas({
     }
     commitShape(d);
     setDraftState(null);
-    if (useBoardStore.getState().tool !== "pen") {
+    const nextTool = useBoardStore.getState().tool;
+    if (nextTool !== "pen" && nextTool !== "room") {
       useBoardStore.getState().setTool("select");
     }
   }, [commitShape, onCalibrate, onCropRect, setDraftState]);
@@ -659,8 +699,14 @@ export function BoardCanvas({
       return;
     }
 
-    if (currentTool === "rect" || currentTool === "ellipse" || currentTool === "sticky") {
-      setDraftState({ kind: currentTool, ax: snapped.x, ay: snapped.y, bx: snapped.x, by: snapped.y });
+    if (currentTool === "rect" || currentTool === "room" || currentTool === "ellipse" || currentTool === "sticky") {
+      setDraftState({
+        kind: currentTool === "room" ? "rect" : currentTool,
+        ax: snapped.x,
+        ay: snapped.y,
+        bx: snapped.x,
+        by: snapped.y,
+      });
       return;
     }
 
@@ -720,6 +766,14 @@ export function BoardCanvas({
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       if (e.key === "Escape") {
+        if (useBoardStore.getState().tool === "room") {
+          polyRef.current = null;
+          panRef.current = null;
+          eraseRef.current = false;
+          setDraftState(null);
+          useBoardStore.getState().cancelRoomDraft();
+          return;
+        }
         // Esc heldur veggnum sem er í vinnslu — lýkur honum og fer í Velja
         // (áður datt allt út).
         if (polyRef.current && polyRef.current.length >= 4) {
@@ -735,6 +789,10 @@ export function BoardCanvas({
       if ((e.key === "Enter" || e.key === " ") && polyRef.current) {
         e.preventDefault();
         finishPolyline();
+      }
+      if (e.key === "Enter" && useBoardStore.getState().tool === "room") {
+        e.preventDefault();
+        useBoardStore.getState().commitRoomDraft();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1074,10 +1132,18 @@ export function BoardCanvas({
           {draft && (draft.kind === "rect" || draft.kind === "ellipse" || draft.kind === "sticky") ? (
             <Rect
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
-              stroke={style.stroke}
-              strokeWidth={style.strokeWidth}
+              stroke={tool === "room" ? roomStyle.color : style.stroke}
+              strokeWidth={tool === "room" ? 2 : style.strokeWidth}
               dash={[8, 6]}
-              fill={draft.kind === "sticky" ? style.stickyFill : style.fill === "transparent" ? undefined : style.fill}
+              fill={
+                draft.kind === "sticky"
+                  ? style.stickyFill
+                  : tool === "room"
+                    ? fillAlpha(roomStyle.color, roomStyle.opacity)
+                    : style.fill === "transparent"
+                      ? undefined
+                      : style.fill
+              }
               cornerRadius={draft.kind === "sticky" ? 4 : 0}
               listening={false}
               name="ui-only"
@@ -1126,6 +1192,11 @@ export function BoardCanvas({
           />
         </Layer>
       </Stage>
+      {tool === "room" ? (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/10 bg-[#1a1d2e]/90 px-3 py-1.5 text-[12px] text-stone-100 shadow-lg">
+          Teiknaðu kassa fyrir rýmið · Enter = búa til · Esc = hætta
+        </div>
+      ) : null}
       {menu
         ? (() => {
             const target = objects.find((o) => o.id === menu.targetId) ?? null;
@@ -1245,16 +1316,21 @@ export function BoardCanvas({
                           type="button"
                           className={item}
                           onClick={act(() => {
-                            // Rými í fermetratöku: fer í RÝMI-kafla Magntöflunnar
-                            // með nafni og m² — nafnið breytist í Eiginleikum.
                             const on = !target.isRoom;
+                            const room = roomOfSelection(useBoardStore.getState().objects, [target.id]);
+                            if (!on && room) {
+                              useBoardStore.getState().updateObjects(room.ids, (o) =>
+                                o.type === "rect" ? { ...o, isRoom: false } : o
+                              );
+                              return;
+                            }
                             useBoardStore.getState().patchObject(target.id, {
-                              isRoom: on,
-                              ...(on && (target.name === "Ferningur" || !target.name)
-                                ? { name: "Rými" }
-                                : {}),
-                              ...(on && target.fill !== "transparent"
-                                ? { fill: "#16a34a33" }
+                              isRoom: true,
+                              roomCounted: true,
+                              roomOpacity: 0.22,
+                              ...(target.name === "Ferningur" || !target.name ? { name: "Rými" } : {}),
+                              ...(target.fill === "transparent" || !target.fill
+                                ? { fill: "#FE653F38", stroke: "#FE653F" }
                                 : {}),
                             } as never);
                           })}
@@ -1265,11 +1341,13 @@ export function BoardCanvas({
                           <button
                             type="button"
                             className={item}
-                            onClick={act(() =>
-                              useBoardStore.getState().patchObject(target.id, {
-                                roomExcluded: !target.roomExcluded,
-                              } as never)
-                            )}
+                            onClick={act(() => {
+                              const room = roomOfSelection(useBoardStore.getState().objects, [target.id]);
+                              useBoardStore.getState().setRoomExcluded(
+                                room?.key ?? target.id,
+                                !target.roomExcluded
+                              );
+                            })}
                           >
                             {target.roomExcluded
                               ? "☑ Telja með í nettó"

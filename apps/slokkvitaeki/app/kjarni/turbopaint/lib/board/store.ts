@@ -20,6 +20,16 @@ import type {
 } from "./types";
 import { crossingSignature, isCrossingMark, replaceCrossingMarks } from "./crossings";
 import { GRID_GAP, snapValue } from "./geometry";
+import {
+  DEFAULT_ROOM_COLOR,
+  DEFAULT_ROOM_OPACITY,
+  listRooms,
+  renameRoomObjects,
+  setRoomCounted as applyRoomCounted,
+  setRoomExcluded as applyRoomExcluded,
+  styleRoomObjects,
+  type RoomAppearance,
+} from "./rooms";
 
 const MAX_HISTORY = 80;
 
@@ -46,6 +56,16 @@ interface BoardStore {
   importQuality: ImportQuality;
   importProgress: ImportProgress | null;
   spacePan: boolean;
+  /** While set, new room boxes join this group (L-shaped / irregular rými). */
+  roomDraftGroupId: string | null;
+  roomStyle: { color: string; opacity: number; counted: boolean };
+  startRoomDraft: () => void;
+  commitRoomDraft: () => void;
+  cancelRoomDraft: () => void;
+  renameRoom: (key: string, name: string) => void;
+  applyRoomAppearance: (key: string | null, patch: RoomAppearance, recordHistory?: boolean) => void;
+  setRoomCounted: (key: string, counted: boolean) => void;
+  setRoomExcluded: (key: string, excluded: boolean) => void;
   /** Cloud sync status for the current board (shown in the TopBar). */
   syncState: "idle" | "saving" | "synced" | "error";
   setSyncState: (s: "idle" | "saving" | "synced" | "error") => void;
@@ -128,6 +148,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   importQuality: "standard",
   importProgress: null,
   spacePan: false,
+  roomDraftGroupId: null,
+  roomStyle: { color: DEFAULT_ROOM_COLOR, opacity: DEFAULT_ROOM_OPACITY, counted: true },
   syncState: "idle",
   setSyncState: (syncState) => set({ syncState }),
   gridGap: GRID_GAP,
@@ -147,7 +169,58 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   future: [],
   setHydrated: (hydrated) => set({ hydrated }),
   setName: (name) => set({ name }),
-  setTool: (tool) => set({ tool, selectedIds: tool === "select" ? get().selectedIds : [] }),
+  setTool: (tool) => {
+    if (get().tool === "room" && tool !== "room" && get().roomDraftGroupId) {
+      get().commitRoomDraft();
+    }
+    set({ tool, selectedIds: tool === "select" ? get().selectedIds : [] });
+  },
+  startRoomDraft: () => {
+    if (get().roomDraftGroupId) get().commitRoomDraft();
+    set({ roomDraftGroupId: newId(), tool: "room", selectedIds: [] });
+  },
+  commitRoomDraft: () => {
+    const gid = get().roomDraftGroupId;
+    if (!gid) {
+      set({ tool: "select" });
+      return;
+    }
+    const ids = listRooms(get().objects).find((r) => r.key === gid)?.ids ?? [];
+    set({ roomDraftGroupId: null, tool: "select", selectedIds: ids });
+  },
+  cancelRoomDraft: () => {
+    const gid = get().roomDraftGroupId;
+    const ids = gid ? (listRooms(get().objects).find((r) => r.key === gid)?.ids ?? []) : [];
+    set({ roomDraftGroupId: null, tool: "select", selectedIds: [] });
+    if (ids.length) get().deleteIds(ids);
+  },
+  renameRoom: (key, name) => {
+    pushHistory(set, get);
+    set({ objects: renameRoomObjects(get().objects, key, name) });
+  },
+  applyRoomAppearance: (key, patch, recordHistory = true) => {
+    const roomStyle = { ...get().roomStyle, ...patch };
+    if (!key) {
+      set({ roomStyle });
+      return;
+    }
+    if (recordHistory) pushHistory(set, get);
+    set({
+      roomStyle,
+      objects: styleRoomObjects(get().objects, key, patch),
+    });
+  },
+  setRoomCounted: (key, counted) => {
+    pushHistory(set, get);
+    set({
+      roomStyle: { ...get().roomStyle, counted },
+      objects: applyRoomCounted(get().objects, key, counted),
+    });
+  },
+  setRoomExcluded: (key, excluded) => {
+    pushHistory(set, get);
+    set({ objects: applyRoomExcluded(get().objects, key, excluded) });
+  },
   setCamera: (camera) => set({ camera }),
   setPixelsPerMeter: (pixelsPerMeter) => set({ pixelsPerMeter }),
   toggleGrid: () => set({ grid: !get().grid }),
@@ -216,6 +289,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       selectedIds: [],
       past: [],
       future: [],
+      roomDraftGroupId: null,
     });
   },
   addObjects: (incoming, select = true) => {

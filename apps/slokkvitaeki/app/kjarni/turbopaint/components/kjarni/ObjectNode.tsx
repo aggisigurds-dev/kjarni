@@ -14,6 +14,12 @@ import {
 import { getAssetUrl } from "../../lib/board/assets";
 import { dashArray, formatLength, formatM2, formatMm, lineLength } from "../../lib/board/geometry";
 import { isDrawnVisible } from "../../lib/board/layers";
+import {
+  listRooms,
+  primaryRoomBoxId,
+  roomCounterIndex,
+  roomKeyOf,
+} from "../../lib/board/rooms";
 import { snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
 import { SymbolNode } from "./SymbolNode";
@@ -148,15 +154,39 @@ export function ObjectNode({
   }
 
   if (obj.type === "rect") {
+    const objects = useBoardStore.getState().objects;
+    const room =
+      obj.isRoom ? listRooms(objects).find((r) => r.ids.includes(obj.id)) : undefined;
+    const isPrimary = room ? primaryRoomBoxId(objects, room.ids) === obj.id : true;
+    const counter = room?.counted ? roomCounterIndex(objects, roomKeyOf(obj)) : null;
     // Gegnsær ferningur eða 🏠 rými á kvörðuðu borði sýnir b × h og m² —
     // litaðir venjulegir ferningar eru merking án mála.
     // "Frádráttur…" telst neikvætt; frátalin rými sýna "(frátalið)".
-    const showDims = (obj.fill === "transparent" || obj.isRoom) && pixelsPerMeter && pixelsPerMeter > 0;
+    const showDims =
+      isPrimary &&
+      (obj.fill === "transparent" || obj.isRoom) &&
+      pixelsPerMeter &&
+      pixelsPerMeter > 0;
     const negative = obj.name.startsWith("Frádráttur");
     const roomName =
-      obj.isRoom && obj.name && obj.name !== "Rými" && obj.name !== "Ferningur" ? obj.name : "";
-    const wM = showDims ? obj.width / pixelsPerMeter : 0;
-    const hM = showDims ? obj.height / pixelsPerMeter : 0;
+      isPrimary && obj.isRoom && obj.name && obj.name !== "Rými" && obj.name !== "Ferningur"
+        ? obj.name
+        : "";
+    const wM = showDims && pixelsPerMeter ? obj.width / pixelsPerMeter : 0;
+    const hM = showDims && pixelsPerMeter ? obj.height / pixelsPerMeter : 0;
+    const areaM2 =
+      showDims && pixelsPerMeter && room
+        ? objects
+            .filter((o): o is typeof obj => o.type === "rect" && room.ids.includes(o.id))
+            .reduce((s, r) => s + (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter), 0)
+        : wM * hM;
+    const labelLines = [
+      roomName,
+      showDims && !(room && room.ids.length > 1) ? `${formatMm(wM)} × ${formatMm(hM)} mm` : "",
+      showDims
+        ? `${negative ? "−" : ""}${formatM2(areaM2)}${obj.roomExcluded ? " (frátalið)" : ""}`
+        : "",
+    ].filter(Boolean);
     return (
       <Group {...common}>
         <Rect
@@ -167,12 +197,37 @@ export function ObjectNode({
           strokeWidth={obj.strokeWidth}
           cornerRadius={obj.cornerRadius}
         />
-        {showDims ? (
+        {counter != null && isPrimary ? (
+          <>
+            <Rect
+              x={8}
+              y={8}
+              width={24}
+              height={24}
+              cornerRadius={12}
+              fill={obj.stroke || "#FE653F"}
+              listening={false}
+            />
+            <KonvaText
+              x={8}
+              y={12}
+              width={24}
+              text={String(counter)}
+              fontSize={13}
+              fontStyle="bold"
+              align="center"
+              fill="#ffffff"
+              fontFamily="Inter, sans-serif"
+              listening={false}
+            />
+          </>
+        ) : null}
+        {labelLines.length ? (
           <KonvaText
             width={Math.max(80, obj.width)}
             x={obj.width < 80 ? (obj.width - 80) / 2 : 0}
-            y={Math.max(4, obj.height / 2 - (roomName ? 27 : 18))}
-            text={`${roomName ? `${roomName}\n` : ""}${formatMm(wM)} × ${formatMm(hM)} mm\n${negative ? "−" : ""}${formatM2(wM * hM)}${obj.roomExcluded ? " (frátalið)" : ""}`}
+            y={Math.max(counter != null ? 36 : 4, obj.height / 2 - labelLines.length * 9)}
+            text={labelLines.join("\n")}
             fontSize={15}
             fontStyle="bold"
             align="center"

@@ -14,11 +14,25 @@ import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
+import { RoomList } from "./RoomList";
 
-type LayerGroupId = "teikning" | "eldveggur" | "mvs" | "takn" | "kalt" | "heitt" | "skolp" | "loftræsting" | "hitakerfi" | "gegnumtak" | "annad";
+type LayerGroupId =
+  | "teikning"
+  | "rými"
+  | "eldveggur"
+  | "mvs"
+  | "takn"
+  | "kalt"
+  | "heitt"
+  | "skolp"
+  | "loftræsting"
+  | "hitakerfi"
+  | "gegnumtak"
+  | "annad";
 
 const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
   { id: "teikning", label: "Teikningar" },
+  { id: "rými", label: "Rými" },
   { id: "eldveggur", label: "Eldveggir" },
   { id: "mvs", label: "165.BR1" },
   { id: "takn", label: "Tákn" },
@@ -32,6 +46,7 @@ const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
 ];
 
 function layerGroupOf(obj: BoardObject): LayerGroupId {
+  if (obj.type === "rect" && obj.isRoom) return "rými";
   if (obj.name.startsWith("Gegnumtak")) return "gegnumtak";
   const lid = objectLayerId(obj);
   if (lid === "kalt" || lid === "heitt" || lid === "skolp" || lid === "loftræsting" || lid === "hitakerfi") {
@@ -50,6 +65,7 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
   const selectedIds = useBoardStore((s) => s.selectedIds);
   const selected = objects.filter((o) => selectedIds.includes(o.id));
   const primary = selected[0];
+  const roomSelected = primary?.type === "rect" && Boolean(primary.isRoom);
 
   // Lög heita „tegund + númer" í sköpunarröð (Slökkvitæki 1, 2 …) í stað þess
   // að allt heiti „Tákn". Númer bætist aðeins við þegar fleiri en eitt deila nafni.
@@ -88,6 +104,7 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        <RoomList onFocusObject={onFocusObject} />
         {primary ? (
           <div className="space-y-4">
             {primary.type === "symbol" ? (
@@ -132,7 +149,7 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                 </Button>
               </>
             ) : null}
-            {"stroke" in primary ? (
+            {"stroke" in primary && !roomSelected ? (
               <Field label="Strokulitur">
                 <Swatches
                   colors={STROKE_PRESETS}
@@ -143,7 +160,7 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                 />
               </Field>
             ) : null}
-            {"fill" in primary ? (
+            {"fill" in primary && !roomSelected ? (
               <Field label="Fylling">
                 <Swatches
                   colors={primary.type === "sticky" ? STICKY_COLORS : FILL_PRESETS}
@@ -154,6 +171,7 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                 />
               </Field>
             ) : null}
+            {!roomSelected ? (
             <Field label={`Gegnsæi · ${Math.round(primary.opacity * 100)}%`}>
               <Slider
                 min={0.15}
@@ -166,6 +184,7 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                 }}
               />
             </Field>
+            ) : null}
             <div className="flex gap-2">
               <Button
                 size="sm"
