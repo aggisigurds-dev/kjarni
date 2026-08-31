@@ -39,7 +39,7 @@ export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => vo
           <p className="text-[11px] leading-relaxed text-stone-200">
             {draftBoxes === 0
               ? "Dragðu kassa á plönið. Þarf fleiri horn? Teiknaðu annan."
-              : `${draftBoxes} kassi${draftBoxes === 1 ? "" : "ar"} — teiknaðu fleiri eða búðu til rýmið.`}
+              : `${draftBoxes} ${draftBoxes === 1 ? "kassi" : "kassar"} — teiknaðu fleiri eða búðu til rýmið.`}
           </p>
           <div className="flex gap-1.5">
             <Button
