@@ -1,7 +1,9 @@
 "use client";
 
+import { toast } from "sonner";
 import {
   Cloud,
+  Crosshair,
   Download,
   Eraser,
   Flame,
@@ -18,9 +20,10 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
+import { IMPORT_FILE_ACCEPT, IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import {
   clearBoard,
   createBoard,
@@ -88,15 +91,6 @@ export function TopBar({
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
-  const [compactSearch, setCompactSearch] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const apply = () => setCompactSearch(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
   // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
@@ -213,8 +207,8 @@ export function TopBar({
         placeholder="Nafn á borði"
       />
       {onVeljaTeikningu && (
-        <div className="shrink-0">
-          <HeimilisfangLeit onVelja={onVeljaTeikningu} compact={compactSearch} />
+        <div className="min-w-0 shrink">
+          <HeimilisfangLeit onVelja={onVeljaTeikningu} />
         </div>
       )}
       <span className={`hidden shrink-0 sm:inline ${syncLook.color}`} title={syncLook.label}>
@@ -268,18 +262,19 @@ export function TopBar({
           useBoardStore.getState().setImportQuality(e.target.value as typeof quality)
         }
         className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 2xl:block"
-        title="Innflutningsgæði fyrir stór PDF/TIF"
+        title="Innflutningsgæði. Stórar síður eru klemmdar í 40 MP (~160 MB) svo vafrinn fari ekki úr minni."
       >
         <option value="fast">Flýti · 3.2k</option>
         <option value="standard">Staðall · 7.2k</option>
         <option value="print">Há gæði · 12.5k</option>
       </select>
       <input
+        id="tp-import-input"
         ref={fileRef}
         type="file"
         hidden
         multiple
-        accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,.webp,.svg,.gif,.kjarni.json,application/pdf,image/*"
+        accept={IMPORT_FILE_ACCEPT}
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];
           if (files.length) onImport(files);
@@ -289,20 +284,24 @@ export function TopBar({
       <Button
         size="sm"
         variant="ghost"
-        className="text-stone-200 hover:bg-white/10 hover:text-white max-sm:size-9 max-sm:px-0"
-        title="Flytja inn PDF, TIF eða mynd"
+        className="text-stone-200 hover:bg-white/10 hover:text-white"
+        title={IMPORT_SIZE_HINT}
         onClick={() => fileRef.current?.click()}
       >
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
+        <span className="sm:hidden">PDF</span>
       </Button>
+      <span className="hidden max-w-[10.5rem] text-[10px] leading-tight text-stone-500 2xl:inline">
+        Í vafranum · engin 20 MB hömlun
+      </span>
       {/* Á síma búa þessir þrír í ⟳ valmyndinni — annars kremja þeir nafnareitinn. */}
       <Button
         size="sm"
         variant="ghost"
         className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
         onClick={() => onImportUrl?.()}
-        title="Sækja af permalink (skjalasafn.reykjavik.is) — eða bara Ctrl+V á borðið"
+        title="Sækja af permalink (Reykjavík) eða PDF (Hafnarfjörður) — eða Ctrl+V á borðið"
       >
         <Link2 className="size-4" />
         <span className="hidden xl:inline">Af slóð</span>
@@ -316,6 +315,20 @@ export function TopBar({
       >
         <Flame className="size-4 text-[#FE653F]" />
         <span className="hidden lg:inline">E-30 / E-60</span>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
+        onClick={() => {
+          const n = useBoardStore.getState().refreshCrossings();
+          if (n) toast.message(`Gegnumtök: ${n} krossar vegg`);
+          else toast.message("Engin lagnir krossa vegg");
+        }}
+        title="Merkja þar sem lagnir krossa veggi — sterkari merki á EI-30 / EI-60"
+      >
+        <Crosshair className="size-4" />
+        <span className="hidden xl:inline">Gegnumtök</span>
       </Button>
       <Button
         size="sm"
@@ -406,6 +419,14 @@ export function TopBar({
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onMarkFirewalls?.()}>
             Merkja eldveggi og 165.BR1 (SLT / slöngur / skilti)
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              const n = useBoardStore.getState().refreshCrossings();
+              toast.message(n ? `Gegnumtök: ${n} krossar vegg` : "Engin lagnir krossa vegg");
+            }}
+          >
+            Gegnumtök — krossar vegg
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void clearBoard()}>Tómt borð</DropdownMenuItem>
           <DropdownMenuSeparator />

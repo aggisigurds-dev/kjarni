@@ -13,6 +13,7 @@ import {
 } from "react-konva";
 import { getAssetUrl } from "../../lib/board/assets";
 import { dashArray, formatLength, formatM2, formatMm, lineLength } from "../../lib/board/geometry";
+import { isDrawnVisible } from "../../lib/board/layers";
 import { snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
 import { SymbolNode } from "./SymbolNode";
@@ -72,6 +73,7 @@ export function ObjectNode({
   onClick: (id: string, shift: boolean) => void;
   onDblClick: (id: string) => void;
 }) {
+  const layers = useBoardStore((s) => s.layers);
   const selGlow = isSelected
     ? { shadowColor: "#FE653F", shadowBlur: 22, shadowOpacity: 0.85, shadowEnabled: true }
     : { shadowEnabled: false };
@@ -84,7 +86,7 @@ export function ObjectNode({
     rotation: obj.rotation,
     opacity: obj.opacity,
     ...selGlow,
-    visible: !obj.hidden,
+    visible: isDrawnVisible(obj, layers),
     draggable,
     listening,
     // „Festa við grind": hluturinn smellur á sýnilegu grindina MEÐAN dregið

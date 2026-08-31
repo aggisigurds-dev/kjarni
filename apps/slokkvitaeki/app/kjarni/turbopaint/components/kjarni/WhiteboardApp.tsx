@@ -14,6 +14,7 @@ import {
 } from "../../lib/board/strip";
 import { cropPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
+import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
@@ -21,6 +22,13 @@ import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
+import {
+  isDrawnLocked,
+  isDrawnVisible,
+  LAYER_ALMENNT,
+  selectableIds,
+  withLayerId,
+} from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
@@ -167,7 +175,7 @@ export function WhiteboardApp() {
           if (equipment.pixelsPerMeter && !useBoardStore.getState().pixelsPerMeter) {
             useBoardStore.getState().setPixelsPerMeter(equipment.pixelsPerMeter);
           }
-          const incomingMarks = [...marks, ...equipment.objects];
+          const incomingMarks = withLayerId([...marks, ...equipment.objects], LAYER_ALMENNT);
           if (incomingMarks.length) useBoardStore.getState().addObjects(incomingMarks, false);
           total += hits.length;
           gear += equipment.objects.filter((o) => o.type === "symbol").length;
@@ -192,7 +200,11 @@ export function WhiteboardApp() {
     []
   );
 
-  const runImport = useCallback(async (files: File[], world?: { x: number; y: number }) => {
+  const runImport = useCallback(async (
+    files: File[],
+    world?: { x: number; y: number },
+    opts?: { asPlan?: boolean }
+  ) => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
       await importKjarniJson(json);
@@ -208,7 +220,7 @@ export function WhiteboardApp() {
       y: boardBounds(useBoardStore.getState().objects).y + boardBounds(useBoardStore.getState().objects).height + 80,
     };
     try {
-      const { objects: incoming, warnings, textByObjectId } = await importFiles(
+      const { objects: incoming, warnings } = await importFiles(
         supported,
         useBoardStore.getState().importQuality,
         origin,
@@ -220,11 +232,11 @@ export function WhiteboardApp() {
         toast.error(warnings[0] || "Ekkert kom inn");
         return;
       }
-      const isPlan = supported.some((f) => {
+      const isPlan = opts?.asPlan || supported.some((f) => {
         const kind = classifyFile(f);
         return kind === "pdf" || kind === "tiff";
       });
-      const kit = isPlan ? incoming.flatMap((img) => markupKitForPlan(img)) : [];
+      const kit = isPlan ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
       useBoardStore.getState().addObjects([...incoming, ...kit], false);
       useBoardStore.getState().setTool("select");
       const bounds = boardBounds([...incoming, ...kit]);
@@ -232,22 +244,22 @@ export function WhiteboardApp() {
       if (view) {
         useBoardStore.getState().setCamera(cameraFit(bounds, view.clientWidth, view.clientHeight));
       }
+      useBoardStore.getState().setImportProgress(null);
       toast.success(
         isPlan
-          ? "Gólfplön tilbúið — merki nú E-30 / E-60 eldveggi"
+          ? "Gólfplön á borðinu — smelltu E-30 / E-60 til að merkja eldveggi"
           : incoming.length === 1
             ? `${incoming[0].name} er á borðinu`
             : `${incoming.length} síður settar á borðið`
       );
       warnings.forEach((w) => toast.message(w));
-      if (isPlan) {
-        await markFirewalls(incoming, textByObjectId);
-      }
+      // Ekki keyra OCR sjálfkrafa. Á TIF (og JPEG af skjalasafninu) tók
+      // Tesseract svo langan tíma að innflutningurinn virtist stoppa.
     } catch (err) {
       useBoardStore.getState().setImportProgress(null);
       toast.error(err instanceof Error ? err.message : "Innflutningur mistókst");
     }
-  }, [markFirewalls]);
+  }, []);
 
   const dropSymbol = useCallback((symbolId: string, world: { x: number; y: number }) => {
     if (symbolId === "firewall") {
@@ -327,7 +339,7 @@ export function WhiteboardApp() {
                 .objects.filter((o) => isFirewallMark(o) && o.parentId === plan.id)
                 .map((o) => o.id);
               if (stale.length) useBoardStore.getState().deleteIds(stale);
-              useBoardStore.getState().addObjects(res.objects, false);
+              useBoardStore.getState().addObjects(withLayerId(res.objects, LAYER_ALMENNT), false);
             }
           }
         }
@@ -382,8 +394,8 @@ export function WhiteboardApp() {
     []
   );
 
-  // Sækja teikningu beint af permalink (t.d. skjalasafn.reykjavik.is FotoWeb)
-  // gegnum /api/turbopaint/fetch-plan proxy-ið — CORS bannar beina sókn.
+  // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
+  // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
     async (raw: string) => {
       const trimmed = raw.trim();
@@ -393,9 +405,9 @@ export function WhiteboardApp() {
       }
       try {
         useBoardStore.getState().setImportProgress({
-          fileName: "permalink",
+          fileName: "skjalasafn",
           percent: 10,
-          message: "Sæki teikningu af skjalasafninu…",
+          message: "Sæki teikningu…",
         });
         const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}`);
         if (!res.ok) {
@@ -409,7 +421,7 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        await runImport([file]);
+        await runImport([file], undefined, { asPlan: true });
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         toast.error(err instanceof Error ? err.message : "Gat ekki sótt af slóðinni");
@@ -417,6 +429,18 @@ export function WhiteboardApp() {
     },
     [runImport]
   );
+
+  const planFromQuery = useRef(false);
+  useEffect(() => {
+    if (planFromQuery.current) return;
+    const raw = new URLSearchParams(window.location.search).get("plan");
+    if (!raw) return;
+    planFromQuery.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("plan");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    void runUrlImport(raw);
+  }, [runUrlImport]);
 
   // Copy → paste permalink beint á borðið.
   useEffect(() => {
@@ -429,7 +453,8 @@ export function WhiteboardApp() {
       } catch {
         return;
       }
-      const archive = host === "skjalasafn.reykjavik.is";
+      const archive =
+        host === "skjalasafn.reykjavik.is" || host === "teikningar.hafnarfjordur.is";
       // Skjalasafns-permalink er ALLTAF innflutningur — líka þótt fókusinn
       // sitji óvart í nafnareitnum (slóðin límdist þar inn og skemmdi nafnið).
       if (isTyping(e.target) && !archive) return;
@@ -501,7 +526,7 @@ export function WhiteboardApp() {
       }
       if (meta && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        store.setSelected(store.objects.filter((o) => !o.locked && !o.hidden).map((o) => o.id));
+        store.setSelected(selectableIds(store.objects, store.layers));
       }
       if (meta && e.key === "0") {
         e.preventDefault();
@@ -510,7 +535,12 @@ export function WhiteboardApp() {
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        store.deleteIds(store.selectedIds.filter((id) => !store.objects.find((o) => o.id === id)?.locked));
+        store.deleteIds(
+          store.selectedIds.filter((id) => {
+            const obj = store.objects.find((o) => o.id === id);
+            return obj && !isDrawnLocked(obj, store.layers);
+          })
+        );
       }
       if (!meta && !e.altKey) {
         const map: Record<string, Parameters<typeof store.setTool>[0]> = {
@@ -575,7 +605,7 @@ export function WhiteboardApp() {
         onVeljaTeikningu={(infoUrl) => void runUrlImport(infoUrl)}
         onImportUrl={() => {
           const raw = window.prompt(
-            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða beina skráaslóð:"
+            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða PDF af teikningar.hafnarfjordur.is:"
           );
           if (raw) void runUrlImport(raw);
         }}
@@ -679,14 +709,18 @@ export function WhiteboardApp() {
             <div className="pointer-events-none absolute inset-4 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#FE653F] bg-[#FE653F]/10">
               <div className="rounded-xl bg-[#1a1d2e] px-6 py-4 text-center text-sm text-white shadow-xl">
                 Sleppið PDF, TIF eða mynd hér
-                <div className="mt-1 text-xs text-stone-400">Stórar skrár 5–30 MB eru unnar í vafranum</div>
+                <div className="mt-1 text-xs text-stone-400">{IMPORT_SIZE_HINT}</div>
               </div>
             </div>
           ) : null}
           {importProgress ? (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#0f1117]/50 backdrop-blur-[2px]">
               <div className="w-[min(92vw,420px)] rounded-2xl border border-white/10 bg-[#1a1d2e] p-5 shadow-2xl">
-                <div className="text-sm font-medium">Flyt inn {importProgress.fileName}</div>
+                <div className="text-sm font-medium">
+                  {/165\.BR1|Les teikningu|eldvegg/i.test(importProgress.message)
+                    ? `Greini ${importProgress.fileName}`
+                    : `Flyt inn ${importProgress.fileName}`}
+                </div>
                 <div className="mt-1 text-xs text-stone-400">{importProgress.message}</div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
                   <div
@@ -701,13 +735,18 @@ export function WhiteboardApp() {
             <TextEditor obj={editing} camera={camera} onClose={() => setEditingId(null)} />
           ) : null}
           {!objects.length && hydrated ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="rounded-2xl border border-stone-300 bg-white/90 px-8 py-6 text-center shadow-lg">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <button
+                type="button"
+                className="pointer-events-auto rounded-2xl border border-stone-300 bg-white/90 px-8 py-6 text-center shadow-lg"
+                onClick={() => document.getElementById("tp-import-input")?.click()}
+              >
                 <div className="text-base font-medium text-stone-800">Tómt hvítu borð</div>
                 <div className="mt-1 max-w-sm text-sm text-stone-500">
-                  Dragðu inn gólfplön sem PDF eða TIF — síðan teiknarðu línur, örvar og brunavarnatákn ofan á.
+                  Ýttu hér eða á <span className="font-medium text-stone-700">PDF</span> til að
+                  flytja inn gólfplön. Síðan teiknarðu línur, örvar og brunavarnatákn ofan á.
                 </div>
-              </div>
+              </button>
             </div>
           ) : null}
         </div>
@@ -962,7 +1001,7 @@ function ExportDialog({
     const state = useBoardStore.getState();
     const exportObjects =
       target === "selection"
-        ? state.objects.filter((o) => state.selectedIds.includes(o.id) && !o.hidden)
+        ? state.objects.filter((o) => state.selectedIds.includes(o.id) && isDrawnVisible(o, state.layers))
         : state.objects;
     if (target === "selection" && !exportObjects.length) {
       toast.error("Ekkert valið til að flytja út");
@@ -1138,6 +1177,8 @@ async function importKjarniJson(file: File) {
     pixelsPerMeter: data.pixelsPerMeter,
     grid: data.grid ?? true,
     snap: data.snap ?? true,
+    layers: data.layers,
+    activeLayerId: data.activeLayerId,
   });
   toast.success("Borð opnað");
 }

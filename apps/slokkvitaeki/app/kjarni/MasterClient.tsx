@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbRpc, sbSelect } from "../lib/supabase";
 import { StationChrome, useStationSkin } from "./StationChrome";
 import { SKINS } from "./skins";
+import { HeimilisfangLeit } from "./turbopaint/components/kjarni/HeimilisfangLeit";
 
 type Order = { id: number; buid_til: string; nafn: string; samtals: number };
 type Inq = { id: number; buid_til: string; nafn: string; skilabod: string };
@@ -62,7 +63,7 @@ const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "🧊", nafn: "3dwork", desc: "STL/mesh vinnustöð", tag: "Tól", ready: true, href: "/3dwork" },
       { icon: "🔖", nafn: "Marks", desc: "Whiteboard · möppur · covers", tag: "Tól", ready: true, href: "/marks" },
       { icon: "✎", nafn: "Prufusvæði", desc: "Blokkir · þemu · skikt", tag: "Tól", ready: true, href: "/draft" },
-      { icon: "🖌️", nafn: "TurboPaint", desc: "Gólfplön · PDF/TIF hvítu borð", tag: "Tól", ready: true, href: "/kjarni/turbopaint" },
+      { icon: "🖌️", nafn: "TurboPaint", desc: "Gólfplön — leita eftir heimilisfangi, svo teikning á borð", tag: "Tól", ready: true, href: "/kjarni/turbopaint" },
       { icon: "💳", nafn: "Payday", desc: "Reikningar", tag: "Verkfæri", ready: false },
       { icon: "📘", nafn: "Facebook", desc: "Tenging", tag: "Verkfæri", ready: false },
     ],
@@ -287,6 +288,26 @@ export default function MasterClient() {
     <StationChrome tool="kjarni">
     <StationShell showNav>
       <section id="ms-yfirlit" className="ms-section">
+        <div className="ms-card" style={{ marginBottom: 18, padding: 14, background: "#1a1d2e", color: "#f5f5f4" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <h2 className="ms-h2" style={{ color: "#fff", margin: 0 }}>Teikningar — heimilisfang</h2>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#a8a29e" }}>
+                Leitaðu hér og smelltu á teikningu — hún opnast á TurboPaint-borðinu.
+              </p>
+            </div>
+            <a href="/kjarni/turbopaint" style={{ color: "#fdba74", fontWeight: 700, fontSize: 13 }}>
+              Opna borðið →
+            </a>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <HeimilisfangLeit
+              onVelja={(infoUrl) => {
+                window.location.href = `/kjarni/turbopaint?plan=${encodeURIComponent(infoUrl)}`;
+              }}
+            />
+          </div>
+        </div>
         <div className="ms-kpis">
           <div className="ms-kpi"><span>Vefir &amp; kerfi</span><b>{sites.length}</b></div>
           <div className="ms-kpi"><span>Einingar tilbúnar</span><b>{readyCount}<small>/{totalCount}</small></b></div>

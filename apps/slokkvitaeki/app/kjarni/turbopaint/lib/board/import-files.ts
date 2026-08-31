@@ -1,13 +1,18 @@
-import { getDocument, GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from "pdfjs-dist";
 import * as UTIF from "utif";
 import { canvasToBlob, fitSize, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
+import { fileSizeWarning, planPdfRaster, PDF_SAFE_AREA } from "./import-limits";
+import { PDFJS_WORKER_SRC, classifyFile, pdfJsDocumentOptions } from "./pdfjs-setup";
+import { downsampleTiffData } from "./tiff-raster";
 import type { ImageObject, ImportQuality } from "./types";
 import { IMPORT_MAX_PX } from "./types";
 
+export { classifyFile, PDFJS_WASM_URL, PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
+
 if (typeof window !== "undefined") {
-  GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
+  GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
 }
 
 export type ImportResult = {
@@ -17,6 +22,8 @@ export type ImportResult = {
 };
 
 type ProgressFn = (percent: number, message: string) => void;
+
+const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function makeImageObject(
   assetId: string,
@@ -72,34 +79,15 @@ function rasterizeToLimit(
  * gæðunum inn í turbopaint".
  *
  * Hér er miðað við RAUNVERULEGA upplausn (DPI) í staðinn. Tvö þök halda þessu í
- * skefjum: langhliðin (IMPORT_MAX_PX, óbreytt) og heildarflatarmál — vafrar hafa
- * efri mörk á striga (Chrome ~268 MP, MUN lægri í símum) og innflutningur á að
- * hægjast, ekki springa.
+ * skefjum: langhliðin (IMPORT_MAX_PX, óbreytt) og PDF_SAFE_AREA (40 MP ≈ 160 MB
+ * RGBA). Print miðaði áður við 100 MP (~400 MB) og gat sprungið á 30 MB A1 á
+ * 600 DPI. Allar gæðaútgáfur deila nú 40 MP-þakinu; lægri DPI fær íslenska
+ * viðvörun í stað hljóðlauss falls.
  *
  * ATH stærðin á borðinu breytist EKKI: Konva skalar myndina í obj.width/height,
  * svo hlutnum er áfram gefin gamla stærðin og aðeins strigann er teiknaður
  * stærri. Þess vegna helst pixelsPerPdfPoint líka óbreytt — mælitólið (Kvarða)
  * reiknar í heimshnitum og má ekki hliðrast. */
-const PDF_DPI: Record<ImportQuality, number> = { fast: 150, standard: 300, print: 600 };
-const PDF_MAX_AREA: Record<ImportQuality, number> = {
-  fast: 24_000_000,
-  standard: 40_000_000,
-  print: 100_000_000,
-};
-
-function pdfRenderScale(baseW: number, baseH: number, quality: ImportQuality) {
-  const longest = Math.max(baseW, baseH, 1);
-  let scale = PDF_DPI[quality] / 72;
-  const maxPx = IMPORT_MAX_PX[quality];
-  if (longest * scale > maxPx) scale = maxPx / longest;
-  const maxArea = PDF_MAX_AREA[quality];
-  const area = baseW * baseH * scale * scale;
-  if (area > maxArea) scale = Math.sqrt(maxArea / Math.max(1, baseW * baseH));
-  // EKKI klemma upp í 1 hér: risastór síða (A0 og stærri) á áfram að MINNKA niður
-  // í þökin, nákvæmlega eins og áður. DPI-markmiðið lyftir aðeins litlum síðum;
-  // þökin lækka þær stóru. Neðri vörnin er bara til að scale verði aldrei 0.
-  return Math.max(0.05, scale);
-}
 
 async function importPdf(
   file: File,
@@ -109,8 +97,9 @@ async function importPdf(
 ): Promise<ImportResult> {
   const maxPx = IMPORT_MAX_PX[quality];
   const data = await file.arrayBuffer();
-  const pdf = await getDocument({ data, disableRange: true }).promise;
+  const pdf = await getDocument(pdfJsDocumentOptions(data)).promise;
   const objects: ImageObject[] = [];
+  const warnings: string[] = [];
   const textByObjectId: Record<string, OcrWord[]> = {};
   let cursorX = origin.x;
 
@@ -121,21 +110,14 @@ async function importPdf(
     );
     const page = await pdf.getPage(i);
     const base = page.getViewport({ scale: 1 });
-    // Stærðin á BORÐINU — óbreytt frá því sem var (PDF-punktar, klemmt við þakið).
     const target = fitSize(base.width, base.height, maxPx);
-    // Upplausnin sem teiknað er í — ný, miðuð við DPI.
-    const viewport = page.getViewport({ scale: pdfRenderScale(base.width, base.height, quality) });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(viewport.width));
-    canvas.height = Math.max(1, Math.round(viewport.height));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Gat ekki teiknað PDF");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-    // Textareitirnir verða að vera í HEIMSHNITUM hlutarins, ekki í upplausn
-    // strigans — annars hliðrast þeir um sama hlutfall og upplausnin hækkaði
-    // (OCR/EI-greiningin les þessa reiti og myndi þá benda á rangan stað).
+    const { canvas, warnings: rasterWarnings } = await rasterizePdfPage(
+      page,
+      base.width,
+      base.height,
+      quality
+    );
+    warnings.push(...rasterWarnings);
     const worldViewport = page.getViewport({ scale: target.scale });
     const words = await extractPdfWords(page, worldViewport);
     const blob = await canvasToBlob(canvas);
@@ -143,7 +125,6 @@ async function importPdf(
     await putAsset(assetId, blob);
     const name =
       pdf.numPages > 1 ? `${file.name} · síða ${i}` : file.name.replace(/\.[^.]+$/, "");
-    // Stærðin á borðinu er ÓBREYTT (target), aðeins myndin á bak við er skarpari.
     const obj = makeImageObject(assetId, target.width, target.height, name, cursorX, origin.y, {
       pixelsPerPdfPoint: target.scale,
     });
@@ -155,7 +136,52 @@ async function importPdf(
   }
 
   onProgress(100, "PDF tilbúið");
-  return { objects, warnings: [], textByObjectId };
+  return { objects, warnings, textByObjectId };
+}
+
+function openRasterCanvas(width: number, height: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx || canvas.width < width * 0.9 || canvas.height < height * 0.9) {
+    canvas.width = 0;
+    canvas.height = 0;
+    throw new Error("canvas-too-large");
+  }
+  return { canvas, ctx };
+}
+
+async function rasterizePdfPage(
+  page: PDFPageProxy,
+  baseW: number,
+  baseH: number,
+  quality: ImportQuality
+) {
+  const warnings: string[] = [];
+  const attempts: { quality: ImportQuality; maxArea: number }[] = [
+    { quality, maxArea: PDF_SAFE_AREA },
+    { quality: "fast", maxArea: Math.floor(PDF_SAFE_AREA / 2) },
+  ];
+  let lastErr: unknown;
+  for (const attempt of attempts) {
+    const plan = planPdfRaster(baseW, baseH, attempt.quality, attempt.maxArea);
+    if (plan.warning) warnings.push(plan.warning);
+    try {
+      const { canvas, ctx } = openRasterCanvas(plan.width, plan.height);
+      const viewport = page.getViewport({ scale: plan.scale });
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      return { canvas, warnings: [...new Set(warnings)] };
+    } catch (err) {
+      lastErr = err;
+      warnings.push(
+        "Gat ekki teiknað PDF í fullri upplausn — prófaði lægri DPI svo vafrinn færi ekki úr minni."
+      );
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Gat ekki teiknað PDF");
 }
 
 async function extractPdfWords(
@@ -222,28 +248,40 @@ async function importTiff(
     );
     const ifd = pages[i];
     try {
+      await yieldUi();
       UTIF.decodeImage(buffer, ifd);
-      const rgba = UTIF.toRGBA8(ifd);
+      const data = ifd.data as Uint8Array | undefined;
       const width = Number(ifd.width);
       const height = Number(ifd.height);
-      if (!width || !height) throw new Error("Ógild stærð");
-      const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
-      const src = document.createElement("canvas");
-      src.width = width;
-      src.height = height;
-      const sctx = src.getContext("2d");
+      if (!width || !height || !data?.length) throw new Error("Ógild stærð");
+      onProgress(
+        Math.round(((i + 0.55) / pages.length) * 100),
+        `Minnka TIF ${i + 1} af ${pages.length}…`
+      );
+      await yieldUi();
+      let sampled;
+      try {
+        sampled = downsampleTiffData(data, width, height, maxPx);
+      } catch {
+        const rgba = UTIF.toRGBA8(ifd);
+        sampled = downsampleTiffData(rgba, width, height, maxPx);
+      }
+      if (sampled.warning) warnings.push(sampled.warning);
+      const imageData = new ImageData(sampled.width, sampled.height);
+      imageData.data.set(sampled.rgba);
+      const canvas = document.createElement("canvas");
+      canvas.width = sampled.width;
+      canvas.height = sampled.height;
+      const sctx = canvas.getContext("2d");
       if (!sctx) throw new Error("Gat ekki opnað canvas");
       sctx.putImageData(imageData, 0, 0);
-      const { canvas, width: w, height: h } = rasterizeToLimit(src, width, height, maxPx);
       const blob = await canvasToBlob(canvas);
         const assetId = newId();
       await putAsset(assetId, blob);
       const name =
         pages.length > 1 ? `${file.name} · síða ${i + 1}` : file.name.replace(/\.[^.]+$/, "");
-      objects.push(makeImageObject(assetId, w, h, name, cursorX, origin.y));
-      cursorX += w + 96;
-      src.width = 0;
-      src.height = 0;
+      objects.push(makeImageObject(assetId, sampled.width, sampled.height, name, cursorX, origin.y));
+      cursorX += sampled.width + 96;
       canvas.width = 0;
       canvas.height = 0;
     } catch {
@@ -306,27 +344,6 @@ function loadHtmlImage(url: string) {
   });
 }
 
-export function classifyFile(file: File): "pdf" | "tiff" | "raster" | "unknown" {
-  const name = file.name.toLowerCase();
-  const type = file.type.toLowerCase();
-  if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
-  if (
-    type.includes("tiff") ||
-    type.includes("tif") ||
-    name.endsWith(".tif") ||
-    name.endsWith(".tiff")
-  ) {
-    return "tiff";
-  }
-  if (
-    type.startsWith("image/") ||
-    /\.(png|jpe?g|webp|gif|svg|bmp)$/.test(name)
-  ) {
-    return "raster";
-  }
-  return "unknown";
-}
-
 export async function importFiles(
   files: File[],
   quality: ImportQuality,
@@ -344,6 +361,8 @@ export async function importFiles(
       warnings.push(`Óþekkt skráarsnið: ${file.name}`);
       continue;
     }
+    const sizeNote = fileSizeWarning(file);
+    if (sizeNote) warnings.push(sizeNote);
     const report: ProgressFn = (percent, message) =>
       onProgress(file.name, percent, message);
     let result: ImportResult;

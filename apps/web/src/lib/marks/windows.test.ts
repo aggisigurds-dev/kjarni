@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeDoc, seedDoc } from './model';
+import { addWhiteboard, emptyDoc, normalizeDoc, seedDoc } from './model';
 import {
   DEFAULT_WINDOW_H,
   DEFAULT_WINDOW_W,
+  MIN_TABLE_W,
   MIN_WINDOW_H,
   MIN_WINDOW_W,
   applyMove,
@@ -11,6 +12,7 @@ import {
   layoutMissingWindows,
   setCategoryLayout,
   setUnfiledLayout,
+  setWhiteboardLayout,
   snapWindowRect,
   tileRect,
 } from './windows';
@@ -74,5 +76,53 @@ describe('category window layout', () => {
     });
     const next = setUnfiledLayout(moved, { x: 24, y: 16, w: 264, h: 184 }, 10);
     expect((next as { unfiledLayout?: unknown }).unfiledLayout).toEqual({ x: 24, y: 16, w: 264, h: 184 });
+  });
+
+  it('lays out table windows from jsonb and keeps them on normalize', () => {
+    const raw = {
+      updatedAt: 4,
+      categories: [{ id: 'cat_kjarni', name: 'Kjarni', sort: 0 }],
+      links: [{ id: 'lnk_hub', categoryId: 'cat_kjarni', title: 'Hub', url: '/kjarni', note: '', sort: 0 }],
+      tables: [
+        {
+          id: 'tbl_demo',
+          title: 'Budget',
+          colCount: 4,
+          rowCount: 6,
+          cells: { A1: { raw: '2' }, B1: { raw: '=A1*3' } },
+        },
+      ],
+    };
+    const doc = layoutMissingWindows(normalizeDoc(raw)!, raw);
+    expect(doc.tables).toHaveLength(1);
+    expect(doc.tables[0]).toMatchObject({ id: 'tbl_demo', title: 'Budget', colCount: 4, rowCount: 6 });
+    expect(doc.tables[0]?.cells.B1?.raw).toBe('=A1*3');
+    expect(doc.tables[0]?.w).toBeGreaterThanOrEqual(MIN_TABLE_W);
+  });
+
+  it('lays out missing whiteboard windows and persists a resize', () => {
+    const raw = {
+      updatedAt: 1,
+      categories: [],
+      links: [],
+      whiteboards: [{ id: 'wb_one', title: 'Whiteboard', items: [] }],
+    };
+    const laid = layoutMissingWindows(normalizeDoc(raw)!, raw);
+    expect(laid.whiteboards[0]?.w).toBeGreaterThanOrEqual(MIN_WINDOW_W - 20);
+    expect(laid.whiteboards[0]?.h).toBeGreaterThanOrEqual(MIN_WINDOW_H);
+    const moved = setWhiteboardLayout(laid, 'wb_one', { x: 48, y: 24, w: 280, h: 200 }, 3);
+    expect(moved.whiteboards[0]).toMatchObject({ x: 48, y: 24, w: 280, h: 200 });
+    expect(addWhiteboard(emptyDoc(0)).whiteboards[0]?.id.startsWith('wb_')).toBe(true);
+  });
+
+  it('resizes from every edge and corner', () => {
+    const origin = { x: 80, y: 80, w: 240, h: 200 };
+    expect(applyResize(origin, 'n', 0, -16)).toMatchObject({ y: 64, h: 216 });
+    expect(applyResize(origin, 's', 0, 16)).toMatchObject({ h: 216 });
+    expect(applyResize(origin, 'e', 16, 0)).toMatchObject({ w: 256 });
+    expect(applyResize(origin, 'w', -16, 0)).toMatchObject({ x: 64, w: 256 });
+    expect(applyResize(origin, 'ne', 16, -16)).toMatchObject({ y: 64, w: 256, h: 216 });
+    expect(applyResize(origin, 'nw', -16, -16)).toMatchObject({ x: 64, y: 64, w: 256, h: 216 });
+    expect(applyResize(origin, 'sw', -16, 16)).toMatchObject({ x: 64, w: 256, h: 216 });
   });
 });

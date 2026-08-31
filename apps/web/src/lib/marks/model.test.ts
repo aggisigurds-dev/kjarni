@@ -7,21 +7,37 @@ import {
   addButton,
   addCategory,
   addLink,
+  addTable,
+  addWhiteboard,
+  addWhiteboardItem,
   childCategories,
+  createSiteId,
   descendantIds,
   emptyDoc,
   hostOf,
+  isMarksBoardId,
   layoutMissingPositions,
   linksInCategory,
+  MARKS_BOARD_ID,
+  marksHref,
   moveCategory,
   moveLink,
   normalizeDoc,
   normalizeUrl,
+  raiseWhiteboardItem,
   removeCategory,
+  removeWhiteboard,
+  renameWhiteboard,
   reorderCategory,
   reorderLink,
   seedDoc,
+  setDisplay,
+  setSiteTitle,
+  setUnfiledCollapsed,
+  siteTitle,
+  testClock,
   updateLink,
+  updateWhiteboardItem,
   wouldCycle,
 } from './model';
 
@@ -41,6 +57,36 @@ describe('normalizeUrl', () => {
   it('promotes protocol-relative URLs', () => {
     expect(normalizeUrl('//example.com/a')).toBe('https://example.com/a');
   });
+
+  it('rewrites retired and alias Kjarni/TurboPaint URLs to kjarni.vercel.app', () => {
+    expect(normalizeUrl('https://slokkvitaeki.netlify.app/kjarni/turbopaint')).toBe(
+      'https://kjarni.vercel.app/kjarni/turbopaint'
+    );
+    expect(normalizeUrl('https://slokkvitaeki.vercel.app/kjarni')).toBe(
+      'https://kjarni.vercel.app/kjarni'
+    );
+    expect(normalizeUrl('https://kjarni-3dwork.vercel.app/kjarni/turbopaint')).toBe(
+      'https://kjarni.vercel.app/kjarni/turbopaint'
+    );
+    expect(normalizeUrl('https://slokkvitaeki.netlify.app')).toBe('https://slokkvitaeki.netlify.app');
+  });
+});
+
+describe('retired Kjarni hosts', () => {
+  it('rewrites a saved TurboPaint bookmark when the Marks board loads', () => {
+    const doc = normalizeDoc({
+      categories: [{ id: 'cat_kjarni', name: 'Kjarni' }],
+      links: [
+        {
+          id: 'lnk_paint',
+          categoryId: 'cat_kjarni',
+          title: 'TurboPaint',
+          url: 'https://slokkvitaeki.netlify.app/kjarni/turbopaint',
+        },
+      ],
+    });
+    expect(doc?.links[0]?.url).toBe('https://kjarni.vercel.app/kjarni/turbopaint');
+  });
 });
 
 describe('hostOf', () => {
@@ -55,6 +101,9 @@ describe('organizer', () => {
     expect(seeded.categories.map((category) => category.name)).toEqual(['Kjarni', 'Apps', 'Build']);
     expect(seeded.links.length).toBeGreaterThan(3);
     expect(seeded.filters.length).toBeGreaterThan(0);
+    expect(seeded.links.find((link) => link.id === 'lnk_paint')?.url).toBe(
+      'https://kjarni.vercel.app/kjarni/turbopaint'
+    );
 
     const withCat = addCategory(seeded, 'Personal');
     const personal = withCat.categories.find((category) => category.name === 'Personal');
@@ -89,6 +138,63 @@ describe('organizer', () => {
     expect(doc?.links[0]?.tags).toEqual([]);
     const laid = layoutMissingPositions(doc!);
     expect(laid.categories[0]?.x).toBeGreaterThanOrEqual(0);
+    expect(doc?.whiteboards).toEqual([]);
+    expect(seedDoc(1).whiteboards).toEqual([]);
+    expect(emptyDoc(0).whiteboards).toEqual([]);
+  });
+});
+
+describe('whiteboards', () => {
+  it('adds a window, an image item, then moves and resizes it', () => {
+    const clock = testClock();
+    let doc = addWhiteboard(emptyDoc(0), {}, clock);
+    expect(doc.whiteboards).toHaveLength(1);
+    expect(doc.whiteboards[0]?.id.startsWith('wb_')).toBe(true);
+    expect(doc.whiteboards[0]?.title).toBe('Whiteboard');
+    expect(doc.whiteboards[0]?.items).toEqual([]);
+
+    doc = addWhiteboardItem(doc, doc.whiteboards[0]!.id, { src: 'https://example.com/a.png' }, clock);
+    const item = doc.whiteboards[0]?.items[0];
+    expect(item?.id.startsWith('wbi_')).toBe(true);
+    expect(item?.src).toBe('https://example.com/a.png');
+    expect(item?.w).toBeGreaterThan(0);
+
+    doc = updateWhiteboardItem(doc, doc.whiteboards[0]!.id, item!.id, { x: 40, y: 24, w: 200, h: 140 }, clock);
+    expect(doc.whiteboards[0]?.items[0]).toMatchObject({ x: 40, y: 24, w: 200, h: 140 });
+
+    const raised = raiseWhiteboardItem(doc, doc.whiteboards[0]!.id, item!.id, clock);
+    expect(raised.whiteboards[0]?.items[0]?.z).toBeGreaterThanOrEqual(item!.z ?? 1);
+
+    doc = renameWhiteboard(doc, doc.whiteboards[0]!.id, 'Moodboard', clock);
+    expect(doc.whiteboards[0]?.title).toBe('Moodboard');
+    expect(removeWhiteboard(doc, doc.whiteboards[0]!.id, clock).whiteboards).toEqual([]);
+  });
+
+  it('normalizes missing whiteboards and drops items without a src', () => {
+    const doc = normalizeDoc({
+      updatedAt: 2,
+      categories: [{ id: 'cat_a', name: 'A', sort: 0 }],
+      links: [],
+      whiteboards: [
+        {
+          id: 'wb_keep',
+          title: '  ',
+          x: 12,
+          y: 8,
+          w: 300,
+          h: 220,
+          items: [
+            { id: 'wbi_ok', src: '/icon.svg', kind: 'icon', x: 4, y: 4, w: 48, h: 48 },
+            { id: 'wbi_bad', src: '' },
+          ],
+        },
+        { title: 'no id' },
+      ],
+    });
+    expect(doc?.whiteboards).toHaveLength(1);
+    expect(doc?.whiteboards[0]?.title).toBe('Whiteboard');
+    expect(doc?.whiteboards[0]?.items.map((item) => item.id)).toEqual(['wbi_ok']);
+    expect(doc?.whiteboards[0]?.items[0]?.kind).toBe('icon');
   });
 });
 
@@ -277,6 +383,99 @@ describe('buttons', () => {
     expect(next.buttons.some((button) => button.folderId === 'cat_apps' && button.kind === 'filter-tag')).toBe(
       true
     );
+  });
+});
+
+describe('sites', () => {
+  it('creates an empty named site and keeps Home on its own href', () => {
+    const clock = testClock();
+    const id = createSiteId(clock);
+    expect(id).toBe('site_t1');
+    expect(isMarksBoardId(MARKS_BOARD_ID)).toBe(true);
+    expect(isMarksBoardId(id)).toBe(true);
+    expect(isMarksBoardId('site_')).toBe(false);
+    expect(isMarksBoardId('nope')).toBe(false);
+    expect(isMarksBoardId('../home')).toBe(false);
+    expect(isMarksBoardId('site_foo/bar')).toBe(false);
+    expect(marksHref(MARKS_BOARD_ID)).toBe('/marks');
+    expect(marksHref(id)).toBe(`/marks/${id}`);
+
+    const blank = emptyDoc(clock.now(), 'Recipes');
+    expect(blank.title).toBe('Recipes');
+    expect(blank.categories).toEqual([]);
+    expect(blank.links).toEqual([]);
+    expect(blank.buttons).toEqual([]);
+    expect(blank.tables).toEqual([]);
+    expect(blank.whiteboards).toEqual([]);
+    expect(blank.display).toEqual({
+      showUrls: true,
+      showNames: true,
+      showImages: true,
+      previewSize: 'm',
+    });
+    expect(blank.unfiledCollapsed).toBe(false);
+
+    const seeded = seedDoc(1);
+    expect(seeded.title).toBe('Home');
+    expect(siteTitle(seeded)).toBe('Home');
+
+    const named = setSiteTitle(blank, 'Travel', clock);
+    expect(named.title).toBe('Travel');
+    expect(siteTitle(named)).toBe('Travel');
+    expect(setSiteTitle(named, '  ', clock)).toBe(named);
+
+    const normalized = normalizeDoc({
+      title: '  Work  ',
+      updatedAt: 4,
+      categories: [],
+      links: [],
+    });
+    expect(normalized?.title).toBe('Work');
+    expect(siteTitle(normalizeDoc({ categories: [], links: [] }), 'Home')).toBe('Home');
+    expect(normalizeDoc({ categories: [], links: [] })?.display.previewSize).toBe('m');
+    expect(normalizeDoc({ categories: [], links: [] })?.display.showImages).toBe(true);
+    expect(normalizeDoc({ categories: [], links: [] })?.tables).toEqual([]);
+  });
+
+  it('hides all URLs, names, and images and picks a preview size', () => {
+    const clock = testClock();
+    let doc = seedDoc(clock.now());
+    expect(doc.display.showUrls).toBe(true);
+    doc = setDisplay(doc, { showUrls: false, showNames: false, showImages: false, previewSize: 'l' }, clock);
+    expect(doc.display).toEqual({
+      showUrls: false,
+      showNames: false,
+      showImages: false,
+      previewSize: 'l',
+    });
+    const roundtrip = normalizeDoc(doc);
+    expect(roundtrip?.display.previewSize).toBe('l');
+    expect(setDisplay(doc, { previewSize: 'xl' as 's' }, clock).display.previewSize).toBe('m');
+    doc = setUnfiledCollapsed(doc, true, clock);
+    expect(doc.unfiledCollapsed).toBe(true);
+    expect(setUnfiledCollapsed(doc, true, clock)).toBe(doc);
+  });
+
+  it('adds an excel table and keeps cells through normalize', () => {
+    const clock = testClock();
+    const doc = addTable(emptyDoc(clock.now(), 'Work'), 'Budget', clock);
+    expect(doc.tables).toHaveLength(1);
+    expect(doc.tables[0]?.title).toBe('Budget');
+    expect(doc.tables[0]?.id.startsWith('tbl_')).toBe(true);
+    const roundtrip = normalizeDoc({
+      ...doc,
+      tables: [
+        {
+          id: 'tbl_demo',
+          title: 'Budget',
+          colCount: 4,
+          rowCount: 6,
+          cells: { A1: { raw: '2' }, B1: { raw: '=A1*3' } },
+        },
+      ],
+    });
+    expect(roundtrip?.tables[0]).toMatchObject({ id: 'tbl_demo', title: 'Budget', colCount: 4, rowCount: 6 });
+    expect(roundtrip?.tables[0]?.cells.B1?.raw).toBe('=A1*3');
   });
 });
 

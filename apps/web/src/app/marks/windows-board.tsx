@@ -3,17 +3,23 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { childCategories, type MarksDoc } from '@/lib/marks/model';
 import {
+  MIN_TABLE_H,
+  MIN_TABLE_W,
   UNFILED_WINDOW_ID,
   applyMove,
   applyResize,
   boardExtent,
   folderWindowRect,
   snapWindowRect,
+  tableWindowRect,
   unfiledWindowRect,
+  whiteboardWindowRect,
   type MarksWindowRect,
   type ResizeEdge,
 } from '@/lib/marks/windows';
 import { PANEL, WINDOW_BOARD } from './ui';
+
+export type DeskWindowKind = 'folder' | 'unfiled' | 'whiteboard' | 'table';
 
 type Gesture =
   | { type: 'move'; id: string; pointerId: number; startX: number; startY: number; origin: MarksWindowRect }
@@ -42,14 +48,24 @@ function isChromeInteractive(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('input, button, select, textarea, a, [data-no-drag]'));
 }
 
+function windowDotClass(kind: DeskWindowKind) {
+  if (kind === 'table') return 'bg-sky-600';
+  if (kind === 'whiteboard') return 'bg-stone-500';
+  return 'bg-emerald-600';
+}
+
 export function MarksWindowDesk({
   doc,
   onLayout,
   renderWindow,
+  renderTitle,
+  renderTitleExtra,
 }: {
   doc: MarksDoc;
-  onLayout?: (id: string, rect: MarksWindowRect) => void;
-  renderWindow: (id: string) => ReactNode;
+  onLayout?: (id: string, rect: MarksWindowRect, kind: DeskWindowKind) => void;
+  renderWindow: (id: string, kind: DeskWindowKind) => ReactNode;
+  renderTitle?: (id: string, name: string, kind: DeskWindowKind) => ReactNode;
+  renderTitleExtra?: (id: string, kind: DeskWindowKind) => ReactNode;
 }) {
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const gestureRef = useRef<Gesture | null>(null);
@@ -59,13 +75,25 @@ export function MarksWindowDesk({
 
   const roots = childCategories(doc, null);
   const unfiledOrigin = unfiledWindowRect(doc, roots.length);
+  const tables = doc.tables ?? [];
+  const boards = doc.whiteboards ?? [];
 
   const items = useMemo(() => {
-    const rows = roots.map((folder, index) => {
+    type DeskItem = {
+      id: string;
+      name: string;
+      kind: DeskWindowKind;
+      origin: MarksWindowRect;
+      rect: MarksWindowRect;
+      minW?: number;
+      minH?: number;
+    };
+    const rows: DeskItem[] = roots.map((folder, index) => {
       const origin = folderWindowRect(folder, index);
       return {
         id: folder.id,
         name: folder.name,
+        kind: 'folder',
         origin,
         rect: preview?.id === folder.id ? preview.rect : origin,
       };
@@ -73,11 +101,34 @@ export function MarksWindowDesk({
     rows.push({
       id: UNFILED_WINDOW_ID,
       name: 'Unfiled',
+      kind: 'unfiled',
       origin: unfiledOrigin,
       rect: preview?.id === UNFILED_WINDOW_ID ? preview.rect : unfiledOrigin,
     });
+    tables.forEach((table, index) => {
+      const origin = tableWindowRect(table, roots.length + 1 + index);
+      rows.push({
+        id: table.id,
+        name: table.title,
+        kind: 'table',
+        origin,
+        rect: preview?.id === table.id ? preview.rect : origin,
+        minW: MIN_TABLE_W,
+        minH: MIN_TABLE_H,
+      });
+    });
+    boards.forEach((board, index) => {
+      const origin = whiteboardWindowRect(board, roots.length + 1 + tables.length + index);
+      rows.push({
+        id: board.id,
+        name: board.title,
+        kind: 'whiteboard',
+        origin,
+        rect: preview?.id === board.id ? preview.rect : origin,
+      });
+    });
     return rows;
-  }, [preview, roots, unfiledOrigin]);
+  }, [boards, preview, roots, tables, unfiledOrigin]);
 
   const extent = boardExtent(items.map((item) => item.rect));
   const raise = (id: string) => setStack((current) => [...current.filter((row) => row !== id), id]);
@@ -98,9 +149,13 @@ export function MarksWindowDesk({
     if (!current || event.pointerId !== current.pointerId) return;
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
+    const mins = items.find((item) => item.id === current.id);
     setPreview({
       id: current.id,
-      rect: current.type === 'move' ? applyMove(current.origin, dx, dy) : applyResize(current.origin, current.edge, dx, dy),
+      rect:
+        current.type === 'move'
+          ? applyMove(current.origin, dx, dy)
+          : applyResize(current.origin, current.edge, dx, dy, { w: mins?.minW, h: mins?.minH }),
     });
   };
 
@@ -109,13 +164,17 @@ export function MarksWindowDesk({
     if (!current || event.pointerId !== current.pointerId) return;
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
+    const mins = items.find((item) => item.id === current.id);
     const rect =
-      current.type === 'move' ? applyMove(current.origin, dx, dy) : applyResize(current.origin, current.edge, dx, dy);
+      current.type === 'move'
+        ? applyMove(current.origin, dx, dy)
+        : applyResize(current.origin, current.edge, dx, dy, { w: mins?.minW, h: mins?.minH });
     gestureRef.current = null;
     setGesture(null);
     setPreview(null);
     if (current.type === 'resize' || Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-      onLayout?.(current.id, snapWindowRect(rect));
+      const kind = items.find((row) => row.id === current.id)?.kind ?? 'folder';
+      onLayout?.(current.id, snapWindowRect(rect, undefined, { w: mins?.minW, h: mins?.minH }), kind);
     }
   };
 
@@ -132,15 +191,18 @@ export function MarksWindowDesk({
         <section
           key={item.id}
           data-marks-window={item.id}
-          className={`${PANEL} absolute flex flex-col overflow-hidden`}
+          className={`${PANEL} absolute flex flex-col overflow-hidden ${
+            item.kind === 'whiteboard' ? 'border-stone-300 shadow-md' : ''
+          }`}
           style={{ left: item.rect.x, top: item.rect.y, width: item.rect.w, height: item.rect.h, zIndex: zOf(item.id) }}
+          data-window-kind={item.kind}
           onPointerDown={() => raise(item.id)}
         >
           <div
             data-marks-titlebar={item.id}
-            className={`flex shrink-0 items-center gap-1.5 border-b border-stone-100 bg-stone-50 px-2 py-1.5 ${
-              gesture?.id === item.id && gesture.type === 'move' ? 'cursor-grabbing' : 'cursor-grab'
-            }`}
+            className={`flex shrink-0 items-center gap-1.5 border-b border-stone-100 px-2 py-1.5 ${
+              item.kind === 'whiteboard' ? 'bg-[#efece4]' : 'bg-stone-50'
+            } ${gesture?.id === item.id && gesture.type === 'move' ? 'cursor-grabbing' : 'cursor-grab'}`}
             style={{ touchAction: 'none' }}
             onPointerDown={(event) => {
               if (event.button !== 0 || isChromeInteractive(event.target)) return;
@@ -156,10 +218,21 @@ export function MarksWindowDesk({
               });
             }}
           >
-            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-600" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{item.name}</span>
+            <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${windowDotClass(item.kind)}`} aria-hidden />
+            {renderTitle ? (
+              renderTitle(item.id, item.name, item.kind)
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{item.name}</span>
+            )}
+            {renderTitleExtra?.(item.id, item.kind)}
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">{renderWindow(item.id)}</div>
+          <div
+            className={`min-h-0 flex-1 ${
+              item.kind === 'whiteboard' || item.kind === 'table' ? 'overflow-hidden' : 'overflow-auto'
+            }`}
+          >
+            {renderWindow(item.id, item.kind)}
+          </div>
           {RESIZE_HANDLES.map((handle) => (
             <div
               key={handle.edge}

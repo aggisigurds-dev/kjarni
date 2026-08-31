@@ -2,6 +2,7 @@ import { del, get, set } from "idb-keyval";
 import { getAssetBlob, hydrateAssets, putAsset } from "./assets";
 import { createDemoBoard } from "./demo-board";
 import { newId } from "./ids";
+import { isDuplicateStorageError } from "./storage-errors";
 import { assetPublicUrl, getSupabase } from "./supabase";
 import { useBoardStore } from "./store";
 import type { BoardDocument, BoardObject } from "./types";
@@ -58,6 +59,8 @@ function contentSnapshot() {
     pixelsPerMeter: state.pixelsPerMeter,
     grid: state.grid,
     snap: state.snap,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
   });
 }
 
@@ -100,6 +103,8 @@ function docFromState(): BoardDocument {
     pixelsPerMeter: state.pixelsPerMeter,
     grid: state.grid,
     snap: state.snap,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
     assetIds: [...new Set(assetIds)],
     boardId: currentBoardId ?? undefined,
     updatedAt: lastUpdatedAt || new Date().toISOString(),
@@ -115,6 +120,8 @@ function applyDoc(doc: BoardDocument) {
     pixelsPerMeter: doc.pixelsPerMeter,
     grid: doc.grid ?? true,
     snap: doc.snap ?? true,
+    layers: doc.layers,
+    activeLayerId: doc.activeLayerId,
   });
 }
 
@@ -148,11 +155,14 @@ async function pushAssets(doc: BoardDocument) {
     if (uploaded.has(id)) continue;
     const blob = getAssetBlob(id);
     if (!blob) continue;
-    const { error } = await sb.storage
-      .from("turbopaint")
-      .upload(`${id}.png`, blob, { contentType: blob.type || "image/png", upsert: false });
-    // "already exists" telst upphlaðið — asset eru ódauðanleg per id.
-    if (!error || `${error.message}`.toLowerCase().includes("exist")) {
+    const { error } = await sb.storage.from("turbopaint").upload(`${id}.png`, blob, {
+      contentType: blob.type || "image/png",
+      upsert: true,
+    });
+    // Duplicate (HTTP 400 + body 409 KeyAlreadyExists) er ekki villa — myndin
+    // er þegar í bucketinu. Innflutningurinn er þá þegar á borðinu; ský-villa
+    // má ekki líta út eins og PDF hafi mistekist.
+    if (!error || isDuplicateStorageError(error)) {
       uploaded.add(id);
       await set(UPLOADED_KEY, [...uploaded]);
     } else {

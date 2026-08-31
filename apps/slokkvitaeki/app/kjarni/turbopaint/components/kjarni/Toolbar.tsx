@@ -115,6 +115,11 @@ export function StyleStrip() {
   const style = useBoardStore((s) => s.style);
   const setStyle = useBoardStore((s) => s.setStyle);
   const tool = useBoardStore((s) => s.tool);
+  const layers = useBoardStore((s) => s.layers);
+  const activeLayerId = useBoardStore((s) => s.activeLayerId);
+  const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
+  const drawableLayers = layers.filter((l) => l.kind !== "background");
+  const activeLayer = layers.find((l) => l.id === activeLayerId);
 
   // Style choices also restyle whatever is selected (walls included), so an
   // existing eldveggur can be recoloured or thinned after the fact.
@@ -136,14 +141,48 @@ export function StyleStrip() {
 
   if (tool === "symbol") {
     return (
-      <div className="pointer-events-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
-        Smelltu á gólfplönið til að stimpla tákn — svo geturðu dregið það til
+      <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+        <span className="hidden sm:inline text-stone-500">Lag</span>
+        {drawableLayers.map((layer) => (
+          <button
+            key={layer.id}
+            type="button"
+            title={layer.name}
+            onClick={() => setActiveLayer(layer.id)}
+            className={cn(
+              "size-5 rounded-full border",
+              activeLayerId === layer.id ? "ring-2 ring-white" : "border-white/20",
+              !layer.visible && "opacity-35"
+            )}
+            style={{ background: layer.color }}
+          />
+        ))}
+        <span className="text-stone-400">Stimplaðu tákn á {activeLayer?.name ?? "Almennt"}</span>
       </div>
     );
   }
 
   return (
     <div className="tp-stylestrip pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+      <span className="hidden sm:inline text-stone-500">Lag</span>
+      {drawableLayers.map((layer) => (
+        <button
+          key={layer.id}
+          type="button"
+          title={layer.name}
+          onClick={() => setActiveLayer(layer.id)}
+          className={cn(
+            "size-5 rounded-full border",
+            activeLayerId === layer.id ? "ring-2 ring-white" : "border-white/20",
+            !layer.visible && "opacity-35"
+          )}
+          style={{ background: layer.color }}
+        />
+      ))}
+      <span className="hidden max-w-[7rem] truncate sm:inline text-stone-400">
+        {activeLayer?.name ?? "Almennt"}
+      </span>
+      <div className="mx-1 h-4 w-px bg-white/10" />
       <span className="hidden sm:inline text-stone-500">Litur</span>
       {["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"].map((color) => (
         <button
