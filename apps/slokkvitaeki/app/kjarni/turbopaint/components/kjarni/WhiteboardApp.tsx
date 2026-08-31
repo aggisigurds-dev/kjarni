@@ -1114,7 +1114,8 @@ function HelpDialog({
         <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
           {[
             ["V", "Velja"],
-            ["H / space", "Færa borð (✋: hægri-drag færir, vinstri velur)"],
+            ["H / space", "Færa borð (✋: vinstri velur)"],
+            ["Hægri-drag", "Færa borð í allar áttir (í öllum tólum)"],
             ["R / O", "Ferningur / hringur"],
             ["L / A", "Lína / ör"],
             ["W", "Veggir (smelltu, Enter til að loka)"],
