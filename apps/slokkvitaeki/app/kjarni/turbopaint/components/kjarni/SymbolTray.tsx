@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { TRAY_SYMBOLS, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
-import { getSymbol, symbolColors } from "../../lib/board/symbols";
+import { getSymbol, symbolPaint } from "../../lib/board/symbols";
 import {
   getSymbolSettings,
   loadSymbolSettings,
@@ -27,7 +27,11 @@ export function SymbolTray() {
     return off;
   }, []);
   const settings = getSymbolSettings();
-  const visible = TRAY_SYMBOLS.filter((id) => !settings.overrides[id]?.hidden);
+  // Innbyggða úrvalið fyrst, svo táknin sem Agnar bjó til sjálfur — þau eiga
+  // alltaf heima í slánni, annars fyndust þau hvergi eftir að þau voru búin til.
+  const visible = [...TRAY_SYMBOLS, ...settings.custom.map((c) => c.id)].filter(
+    (id) => !settings.overrides[id]?.hidden
+  );
 
   return (
     <div className="pointer-events-auto flex max-w-[min(96vw,820px)] items-center gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-2 py-1.5 shadow-2xl">
@@ -50,7 +54,7 @@ export function SymbolTray() {
       ) : null}
       {visible.map((id) => {
         const s = getSymbol(id);
-        const c = symbolColors(s.kind);
+        const c = symbolPaint(s);
         const ov = settings.overrides[id] ?? {};
         const active = style.symbolId === id;
         return (

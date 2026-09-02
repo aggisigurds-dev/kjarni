@@ -9,6 +9,7 @@ import { registerStage } from "../../lib/board/stage-ref";
 import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
+import { getStampSize } from "../../lib/board/symbol-settings";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { isRightMouseButton, shouldPanView } from "../../lib/board/pan";
@@ -597,13 +598,14 @@ export function BoardCanvas({
         setDraftState({ kind: "polyline", points: [world.x, world.y] });
         return;
       }
+      const stampPx = getStampSize();
       addObjects([
         {
           id: newId(),
           type: "symbol",
-          x: snapped.x - 28,
-          y: snapped.y - 28,
-          size: 56,
+          x: snapped.x - stampPx / 2,
+          y: snapped.y - stampPx / 2,
+          size: stampPx,
           symbolId: st.symbolId,
           label: "",
           rotation: 0,

@@ -16,6 +16,9 @@ import { cropPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
+import { getStampSize } from "../../lib/board/symbol-settings";
+import * as symbolSettingsApi from "../../lib/board/symbol-settings";
+import * as symbolsApi from "../../lib/board/symbols";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
 import type { OcrWord } from "../../lib/board/firewall-rating";
@@ -79,7 +82,13 @@ export function WhiteboardApp() {
     void loadBoard();
     // Prófunar-krókur: reykprófin (tools/turbopaint-smoke.cjs) lesa raun-stöðu
     // borðsins gegnum window.__tpStore í stað þess að giska út frá DOM.
-    (window as unknown as { __tpStore?: typeof useBoardStore }).__tpStore = useBoardStore;
+    // Táknin fylgja með svo hægt sé að sanna litina, stimpilstærðina og
+    // endurnefninguna á raunverulegu stillingunum en ekki afriti af þeim.
+    const w = window as unknown as Record<string, unknown>;
+    w.__tpStore = useBoardStore;
+    w.__tpSymbols = symbolsApi;
+    w.__tpSettings = symbolSettingsApi;
+    w.__tpKit = { makeSymbol };
   }, []);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
@@ -268,7 +277,10 @@ export function WhiteboardApp() {
       toast.message("Eldveggur: smelltu horn af horni — Enter lýkur vegg, Esc hættir og heldur veggnum");
       return;
     }
-    const spot = snapPoint(world.x - 32, world.y - 32);
+    // Miðjar á stimpilstærðinni, ekki fastri 32 — annars lenti táknið út undan
+    // bendlinum um leið og stærðin var stillt.
+    const half = getStampSize() / 2;
+    const spot = snapPoint(world.x - half, world.y - half);
     const obj = makeSymbol(symbolId, spot.x, spot.y);
     useBoardStore.getState().addObjects([obj], true);
     useBoardStore.getState().setTool("select");
