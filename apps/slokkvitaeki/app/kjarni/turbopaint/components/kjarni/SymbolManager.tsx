@@ -17,7 +17,10 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import {
+  addCustomSymbol,
+  deleteCustomSymbol,
   getSymbolSettings,
+  renameSymbol,
   resetAllSymbolOverrides,
   resetSymbolOverride,
   setSymbolOverride,
@@ -25,7 +28,7 @@ import {
   uploadSymbolImage,
   type SymbolFit,
 } from "../../lib/board/symbol-settings";
-import { SAFETY_SYMBOLS, SYMBOL_CATEGORIES, symbolColors } from "../../lib/board/symbols";
+import { allSymbols, SYMBOL_CATEGORIES, symbolPaint } from "../../lib/board/symbols";
 
 /** Endurteiknar þegar stillingarnar breytast, hvaðan sem breytingin kom. */
 function useSymbolSettings() {
@@ -45,7 +48,19 @@ export function SymbolManager({
   const [busy, setBusy] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const shown = SAFETY_SYMBOLS.filter((s) => !settings.overrides[s.id]?.hidden).length;
+  const symbols = allSymbols();
+  const shown = symbols.filter((s) => !settings.overrides[s.id]?.hidden).length;
+
+  async function createSymbol() {
+    const name = window.prompt("Heiti á nýja tákninu?", "");
+    if (name === null) return;
+    if (!name.trim()) {
+      toast.error("Táknið þarf heiti");
+      return;
+    }
+    await addCustomSymbol(name);
+    toast.success(`„${name.trim()}" bætt í slána — settu mynd á það hér að neðan`);
+  }
 
   async function pickImage(id: string, file: File | undefined) {
     if (!file) return;
@@ -75,7 +90,7 @@ export function SymbolManager({
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden border-stone-200 bg-white p-0 text-stone-900">
         <DialogHeader className="border-b border-stone-200 px-5 py-4">
           <DialogTitle className="text-base font-semibold text-stone-900">
-            Táknin — {shown} af {SAFETY_SYMBOLS.length} sýnileg í slánni
+            Táknin — {shown} af {symbols.length} sýnileg í slánni
           </DialogTitle>
           <p className="mt-1 text-[12.5px] text-stone-500">
             Stillingarnar gilda á öllum borðum og fylgja þér milli tækja. Að fela tákn tekur það
@@ -85,7 +100,7 @@ export function SymbolManager({
 
         <div className="max-h-[62vh] overflow-y-auto px-5 py-3">
           {SYMBOL_CATEGORIES.map((cat) => {
-            const rows = SAFETY_SYMBOLS.filter((s) => s.category === cat.id);
+            const rows = symbols.filter((s) => s.category === cat.id);
             if (!rows.length) return null;
             return (
               <section key={cat.id} className="mb-4">
@@ -95,7 +110,7 @@ export function SymbolManager({
                 <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200">
                   {rows.map((s) => {
                     const ov = settings.overrides[s.id] ?? {};
-                    const c = symbolColors(s.kind);
+                    const c = symbolPaint(s);
                     const custom = !!ov.imageUrl;
                     return (
                       <li key={s.id} className="flex items-center gap-3 px-3 py-2">
@@ -126,9 +141,32 @@ export function SymbolManager({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13.5px] font-medium">{s.name}</span>
-                          <span className="block truncate text-[11px] text-stone-400">
+                          <input
+                            key={s.name}
+                            defaultValue={s.name}
+                            aria-label={`Heiti á ${s.name}`}
+                            title="Smelltu til að endurnefna"
+                            maxLength={60}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.currentTarget.blur();
+                              if (e.key === "Escape") {
+                                e.currentTarget.value = s.name;
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const next = e.target.value.trim();
+                              if (!next || next === s.name) {
+                                e.target.value = s.name;
+                                return;
+                              }
+                              void renameSymbol(s.id, next);
+                            }}
+                            className="block w-full truncate rounded border border-transparent bg-transparent px-1 py-0.5 text-[13.5px] font-medium hover:border-stone-200 focus:border-stone-400 focus:bg-white focus:outline-none"
+                          />
+                          <span className="block truncate px-1 text-[11px] text-stone-400">
                             {s.short}
+                            {s.userMade ? " · eigið tákn" : ""}
                             {custom ? " · eigin mynd" : ""}
                             {ov.hidden ? " · falið" : ""}
                           </span>
@@ -178,6 +216,24 @@ export function SymbolManager({
                             ↺
                           </button>
                         ) : null}
+                        {s.userMade ? (
+                          <button
+                            type="button"
+                            title="Eyða tákninu úr slánni"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Eyða tákninu „${s.name}"? Tákn sem þegar eru komin á borð hverfa ekki.`
+                                )
+                              ) {
+                                void deleteCustomSymbol(s.id);
+                              }
+                            }}
+                            className="rounded-md px-1.5 py-1 text-[11px] text-stone-400 hover:text-red-600"
+                          >
+                            🗑
+                          </button>
+                        ) : null}
                       </li>
                     );
                   })}
@@ -198,6 +254,13 @@ export function SymbolManager({
             className="text-[12px] text-stone-500 hover:text-stone-900"
           >
             Endurstilla allt
+          </button>
+          <button
+            type="button"
+            onClick={() => void createSymbol()}
+            className="ml-auto mr-3 rounded-lg border border-stone-300 px-3 py-1.5 text-[12.5px] font-semibold text-stone-700 hover:bg-stone-50"
+          >
+            ➕ Nýtt tákn
           </button>
           <button
             type="button"

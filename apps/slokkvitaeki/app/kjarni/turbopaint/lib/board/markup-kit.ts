@@ -1,5 +1,6 @@
 import { newId } from "./ids";
 import { getSymbol } from "./symbols";
+import { getStampSize } from "./symbol-settings";
 import type { BoardObject, ImageObject, StickyObject, SymbolObject } from "./types";
 
 export function makeSymbol(
@@ -7,8 +8,9 @@ export function makeSymbol(
   x: number,
   y: number,
   label?: string,
-  size = 64
+  size?: number
 ): SymbolObject {
+  const px = size ?? getStampSize();
   const def = getSymbol(symbolId);
   const text = label ?? def.name;
   return {
@@ -17,7 +19,7 @@ export function makeSymbol(
     symbolId,
     x,
     y,
-    size,
+    size: px,
     label: text,
     rotation: 0,
     opacity: 1,
@@ -59,6 +61,9 @@ export function markupKitForPlan(plan: Pick<ImageObject, "id" | "x" | "y" | "wid
 
 export const TRAY_SYMBOLS = [
   "extinguisher",
+  "extinguisher-duft",
+  "extinguisher-co2",
+  "extinguisher-lettvatn",
   "sign-extinguisher",
   "hose",
   "sign-hose",

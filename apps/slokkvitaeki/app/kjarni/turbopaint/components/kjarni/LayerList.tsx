@@ -1,10 +1,11 @@
 "use client";
 
-import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
+import { useEffect } from "react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { isCrossingMark } from "../../lib/board/crossings";
 import { objectLayerId, type BoardLayer } from "../../lib/board/layers";
-import { useBoardStore } from "../../lib/board/store";
+import { PIPES_OPEN_KEY, useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
 import { cn } from "../../lib/utils";
 
@@ -15,10 +16,23 @@ export function LayerList() {
   const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
   const toggleLayerVisible = useBoardStore((s) => s.toggleLayerVisible);
   const toggleLayerLocked = useBoardStore((s) => s.toggleLayerLocked);
+  const pipesOpen = useBoardStore((s) => s.pipesOpen);
+  const setPipesOpen = useBoardStore((s) => s.setPipesOpen);
+
+  // Geymda valið les eftir hleðslu, ekki í store-inu sjálfu — annars stangaðist
+  // fyrsta teikning vafrans á við þjóninn.
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(PIPES_OPEN_KEY) === "1") setPipesOpen(true);
+    } catch {
+      /* privat gluggi — sjálfgefið lokað */
+    }
+  }, [setPipesOpen]);
 
   const counts = countByLayer(objects);
   const drawing = layers.filter((l) => l.kind !== "piping");
   const piping = layers.filter((l) => l.kind === "piping");
+  const pipingCount = piping.reduce((n, l) => n + (counts.get(l.id) ?? 0), 0);
 
   return (
     <div>
@@ -40,20 +54,37 @@ export function LayerList() {
           />
         ))}
       </div>
-      <div className="mt-3 mb-1 text-[11px] font-medium tracking-[0.12em] text-stone-500">Lagnir</div>
-      <div className="space-y-0.5">
-        {piping.map((layer) => (
-          <LayerRow
-            key={layer.id}
-            layer={layer}
-            count={counts.get(layer.id) ?? 0}
-            active={layer.id === activeLayerId}
-            onActivate={() => setActiveLayer(layer.id)}
-            onToggleVisible={() => toggleLayerVisible(layer.id)}
-            onToggleLocked={() => toggleLayerLocked(layer.id)}
-          />
-        ))}
-      </div>
+      <button
+        type="button"
+        onClick={() => setPipesOpen(!pipesOpen)}
+        aria-expanded={pipesOpen}
+        title={pipesOpen ? "Fella lagnir saman" : "Opna lagnir — Lag-veljarinn birtist þá líka í botnstikunni"}
+        className="mt-3 mb-1 flex w-full items-center gap-1 text-[11px] font-medium tracking-[0.12em] text-stone-500 hover:text-stone-300"
+      >
+        {pipesOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        Lagnir
+        {pipesOpen ? null : (
+          <span className="ml-1 tracking-normal text-stone-600">
+            {pipingCount || ""} · samanbrotið
+          </span>
+        )}
+      </button>
+      {pipesOpen ? (
+        <div className="space-y-0.5">
+          {piping.map((layer) => (
+            <LayerRow
+              key={layer.id}
+              layer={layer}
+              count={counts.get(layer.id) ?? 0}
+              active={layer.id === activeLayerId}
+              onActivate={() => setActiveLayer(layer.id)}
+              onToggleVisible={() => toggleLayerVisible(layer.id)}
+              onToggleLocked={() => toggleLayerLocked(layer.id)}
+            />
+          ))}
+        </div>
+      ) : null}
+      {pipesOpen ? (
       <button
         type="button"
         className="mt-3 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-left text-[11px] text-stone-300 hover:bg-white/10 hover:text-white"
@@ -71,6 +102,7 @@ export function LayerList() {
           {objects.filter(isCrossingMark).length || ""}
         </span>
       </button>
+      ) : null}
     </div>
   );
 }

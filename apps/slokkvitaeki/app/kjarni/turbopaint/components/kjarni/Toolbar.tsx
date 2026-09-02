@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   ArrowUpRight,
@@ -18,7 +18,14 @@ import {
   Type,
 } from "lucide-react";
 import { getSymbol, symbolColors } from "../../lib/board/symbols";
-import { useBoardStore } from "../../lib/board/store";
+import { SYMBOL_OPACITY_KEY, useBoardStore } from "../../lib/board/store";
+import {
+  getStampSize,
+  setStampSize,
+  subscribeSymbolSettings,
+  STAMP_SIZE_MAX,
+  STAMP_SIZE_MIN,
+} from "../../lib/board/symbol-settings";
 import type { Tool } from "../../lib/board/types";
 import { cn } from "../../lib/utils";
 
@@ -111,14 +118,110 @@ function ToolButton({
   );
 }
 
+/* Lag-veljarinn — birtist aðeins þegar lagnirnar eru opnar í hliðarstikunni. */
+function LagPicker() {
+  const layers = useBoardStore((s) => s.layers);
+  const activeLayerId = useBoardStore((s) => s.activeLayerId);
+  const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
+  return (
+    <>
+      <span className="hidden sm:inline text-stone-500">Lag</span>
+      {layers
+        .filter((l) => l.kind !== "background")
+        .map((layer) => (
+          <button
+            key={layer.id}
+            type="button"
+            title={layer.name}
+            onClick={() => setActiveLayer(layer.id)}
+            className={cn(
+              "size-5 rounded-full border",
+              activeLayerId === layer.id ? "ring-2 ring-white" : "border-white/20",
+              !layer.visible && "opacity-35"
+            )}
+            style={{ background: layer.color }}
+          />
+        ))}
+    </>
+  );
+}
+
+/* Merkinga-stikan: stærð nýrra tákna og sameiginleg dofnun þeirra allra.
+ * Agnar 02.09.2026 — stærðin á heima í plássinu sem Lagnir losuðu, og dofnunin
+ * er til að geta „kíkt á merkingar bak við merkin á teikningunni".            */
+function MerkingarStrip({ withSize }: { withSize: boolean }) {
+  const [px, setPx] = useState(getStampSize());
+  const symbolOpacity = useBoardStore((s) => s.symbolOpacity);
+  const setSymbolOpacity = useBoardStore((s) => s.setSymbolOpacity);
+  // Stimpilstærðin er sameiginleg öllum borðum og berst milli tækja, svo sláin
+  // verður að endurteikna þegar hún kemur að utan.
+  useEffect(() => subscribeSymbolSettings(() => setPx(getStampSize())), []);
+  // Dofnunin er sjónstilling þessa tækis — lesin eftir hleðslu, ekki í store-inu
+  // sjálfu, svo fyrsta teikning vafrans stangist ekki á við þjóninn.
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SYMBOL_OPACITY_KEY));
+      if (saved > 0 && saved < 1) setSymbolOpacity(saved);
+    } catch {
+      /* privat gluggi — full skerpa */
+    }
+  }, [setSymbolOpacity]);
+
+  return (
+    <>
+      <span className="hidden shrink-0 sm:inline text-stone-500">Merkingar</span>
+      {withSize ? (
+        <label
+          className="flex shrink-0 items-center gap-1.5"
+          title="Stærð á NÝJUM táknum — breytir engu sem þegar er komið á borðið"
+        >
+          <input
+            type="range"
+            min={STAMP_SIZE_MIN}
+            max={STAMP_SIZE_MAX}
+            step={2}
+            value={px}
+            aria-label="Stærð nýrra tákna"
+            // Rennur mjúkt í viðmótinu, vistast þegar sleppt er.
+            onChange={(e) => setPx(Number(e.target.value))}
+            onPointerUp={() => void setStampSize(px)}
+            onKeyUp={() => void setStampSize(px)}
+            onBlur={() => void setStampSize(px)}
+            className="h-1 w-20 cursor-pointer accent-[#FE653F] sm:w-28"
+          />
+          <span className="w-9 shrink-0 tabular-nums text-stone-400">{px}px</span>
+        </label>
+      ) : null}
+      <label
+        className="flex shrink-0 items-center gap-1.5"
+        title="Dofnar ÖLL tákn jafnt svo merkingar teikningarinnar sjáist undir þeim"
+      >
+        <span className="text-[13px] leading-none">◐</span>
+        <input
+          type="range"
+          min={15}
+          max={100}
+          step={5}
+          value={Math.round(symbolOpacity * 100)}
+          aria-label="Skyggni tákna"
+          onChange={(e) => setSymbolOpacity(Number(e.target.value) / 100)}
+          className="h-1 w-20 cursor-pointer accent-[#FE653F] sm:w-24"
+        />
+        <span className="w-9 shrink-0 tabular-nums text-stone-400">
+          {Math.round(symbolOpacity * 100)}%
+        </span>
+      </label>
+    </>
+  );
+}
+
 export function StyleStrip() {
   const style = useBoardStore((s) => s.style);
   const setStyle = useBoardStore((s) => s.setStyle);
   const tool = useBoardStore((s) => s.tool);
   const layers = useBoardStore((s) => s.layers);
   const activeLayerId = useBoardStore((s) => s.activeLayerId);
-  const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
-  const drawableLayers = layers.filter((l) => l.kind !== "background");
+  const pipesOpen = useBoardStore((s) => s.pipesOpen);
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 
   // Style choices also restyle whatever is selected (walls included), so an
@@ -142,46 +245,24 @@ export function StyleStrip() {
   if (tool === "symbol") {
     return (
       <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
-        <span className="hidden sm:inline text-stone-500">Lag</span>
-        {drawableLayers.map((layer) => (
-          <button
-            key={layer.id}
-            type="button"
-            title={layer.name}
-            onClick={() => setActiveLayer(layer.id)}
-            className={cn(
-              "size-5 rounded-full border",
-              activeLayerId === layer.id ? "ring-2 ring-white" : "border-white/20",
-              !layer.visible && "opacity-35"
-            )}
-            style={{ background: layer.color }}
-          />
-        ))}
-        <span className="text-stone-400">Stimplaðu tákn á {activeLayer?.name ?? "Almennt"}</span>
+        {pipesOpen ? <LagPicker /> : null}
+        <MerkingarStrip withSize />
       </div>
     );
   }
 
   return (
     <div className="tp-stylestrip pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
-      <span className="hidden sm:inline text-stone-500">Lag</span>
-      {drawableLayers.map((layer) => (
-        <button
-          key={layer.id}
-          type="button"
-          title={layer.name}
-          onClick={() => setActiveLayer(layer.id)}
-          className={cn(
-            "size-5 rounded-full border",
-            activeLayerId === layer.id ? "ring-2 ring-white" : "border-white/20",
-            !layer.visible && "opacity-35"
-          )}
-          style={{ background: layer.color }}
-        />
-      ))}
-      <span className="hidden max-w-[7rem] truncate sm:inline text-stone-400">
-        {activeLayer?.name ?? "Almennt"}
-      </span>
+      {pipesOpen ? (
+        <>
+          <LagPicker />
+          <span className="hidden max-w-[7rem] truncate sm:inline text-stone-400">
+            {activeLayer?.name ?? "Almennt"}
+          </span>
+          <div className="mx-1 h-4 w-px bg-white/10" />
+        </>
+      ) : null}
+      <MerkingarStrip withSize={false} />
       <div className="mx-1 h-4 w-px bg-white/10" />
       <span className="hidden sm:inline text-stone-500">Litur</span>
       {["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"].map((color) => (

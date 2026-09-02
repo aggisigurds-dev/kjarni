@@ -55,6 +55,12 @@ interface BoardStore {
   style: StyleState;
   layers: BoardLayer[];
   activeLayerId: string;
+  /** Eru pípulagnirnar opnar í hliðarstikunni? Lokað = Lag-veljarinn í
+   *  botnstikunni hverfur líka og allt lendir á Almennt (Agnar 02.09.2026). */
+  pipesOpen: boolean;
+  /** Sameiginlegt ógegnsæi ALLRA tákna, 0,15–1. Sjónstilling: dofnar merkingarnar
+   *  svo teikningin undir sjáist. Breytir engum hlut — allir dofna jafnt. */
+  symbolOpacity: number;
   past: BoardObject[][];
   future: BoardObject[][];
   setHydrated: (v: boolean) => void;
@@ -69,6 +75,8 @@ interface BoardStore {
   setSpacePan: (v: boolean) => void;
   setStyle: (partial: Partial<StyleState>) => void;
   setActiveLayer: (id: string) => void;
+  setPipesOpen: (v: boolean) => void;
+  setSymbolOpacity: (v: number) => void;
   toggleLayerVisible: (id: string) => void;
   toggleLayerLocked: (id: string) => void;
   startFirewall: () => void;
@@ -108,6 +116,9 @@ function cloneObjects(objects: BoardObject[]) {
   return structuredClone(objects);
 }
 
+export const PIPES_OPEN_KEY = "turbopaint:pipes-open";
+export const SYMBOL_OPACITY_KEY = "turbopaint:symbol-opacity";
+
 export const useBoardStore = create<BoardStore>((set, get) => ({
   hydrated: false,
   name: "TurboPaint",
@@ -143,6 +154,10 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
   layers: DEFAULT_LAYERS.map((l) => ({ ...l })),
   activeLayerId: LAYER_ALMENNT,
+  // Sjálfgefið lokað. LayerList les geymdu stillinguna eftir hleðslu — að lesa
+  // localStorage hér myndi stangast á við þjóns-teikninguna.
+  pipesOpen: false,
+  symbolOpacity: 1,
   past: [],
   future: [],
   setHydrated: (hydrated) => set({ hydrated }),
@@ -164,6 +179,27 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       activeLayerId: id,
       style: stroke ? { ...get().style, stroke } : get().style,
     });
+  },
+  setPipesOpen: (pipesOpen) => {
+    // Lokist lagnirnar meðan lagnalag er virkt færist teiknunin á Almennt —
+    // annars lentu nýir strokar á földu lagi án sýnilegs veljara.
+    const cur = get().layers.find((l) => l.id === get().activeLayerId);
+    if (!pipesOpen && cur?.kind === "piping") get().setActiveLayer(LAYER_ALMENNT);
+    set({ pipesOpen });
+    try {
+      window.localStorage.setItem(PIPES_OPEN_KEY, pipesOpen ? "1" : "0");
+    } catch {
+      /* privat gluggi — stillingin lifir þá bara lotuna */
+    }
+  },
+  setSymbolOpacity: (v) => {
+    const symbolOpacity = Math.min(1, Math.max(0.15, v));
+    set({ symbolOpacity });
+    try {
+      window.localStorage.setItem(SYMBOL_OPACITY_KEY, String(symbolOpacity));
+    } catch {
+      /* privat gluggi — stillingin lifir þá bara lotuna */
+    }
   },
   toggleLayerVisible: (id) => {
     const layers = get().layers.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l));

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Circle, Group, Image as KonvaImage, Line, Rect, Text as KonvaText } from "react-konva";
-import { getSymbol, symbolColors } from "../../lib/board/symbols";
+import { getSymbol, symbolPaint } from "../../lib/board/symbols";
 import { subscribeSymbolSettings, symbolOverride } from "../../lib/board/symbol-settings";
 
 /* Eigin mynd á tákni (Agnar 29.08). Konva teiknar aðeins hlaðin HTMLImageElement,
@@ -35,12 +35,18 @@ function useSymbolImage(url: string | undefined) {
 function Glyph({
   id,
   color,
+  outline,
 }: {
   id: string;
   color: string;
+  outline?: string;
 }) {
   const s = { stroke: color, strokeWidth: 1.6, fillEnabled: false, lineCap: "round" as const, lineJoin: "round" as const };
-  const f = { fill: color, strokeEnabled: false };
+  // Útlínan er það eina sem heldur dökkrauðu CO₂-teikningunni læsilegri á
+  // rauða reitnum — fyllt form fá hana, strikuð teikna sig sjálf.
+  const f = outline
+    ? { fill: color, stroke: outline, strokeWidth: 0.9, strokeEnabled: true }
+    : { fill: color, strokeEnabled: false };
 
   switch (id) {
     case "extinguisher":
@@ -249,7 +255,7 @@ export function SymbolNode({
   label: string;
 }) {
   const def = getSymbol(symbolId);
-  const colors = symbolColors(def.kind);
+  const colors = symbolPaint(def);
   const scale = size / 24;
   // Endurteiknar þegar stillingarnar berast/breytast (líka úr öðru tæki).
   const [, bump] = useState(0);
@@ -316,7 +322,7 @@ export function SymbolNode({
         })()
       ) : (
         <Group x={0} y={0} scaleX={scale} scaleY={scale}>
-          <Glyph id={def.id} color={colors.fg} />
+          <Glyph id={def.glyphId ?? def.id} color={colors.fg} outline={colors.outline} />
         </Group>
       )}
       {label ? (
