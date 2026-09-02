@@ -60,6 +60,7 @@ import {
   MARKS_BOARD_ID,
   marksHref,
   moveButton,
+  MARKS_PREVIEW_SIZES,
   moveCategory,
   moveLink,
   normalizeUrl,
@@ -176,6 +177,9 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
   const [folderEdit, setFolderEdit] = useState<MarkCategory | null>(null);
   const [folderName, setFolderName] = useState('');
   const [folderCover, setFolderCover] = useState('');
+  // Parent folder picked in the Folder dialog ('' = top level). The per-row
+  // "move" dropdowns were removed from the desk (2026-09-02) — moving lives here.
+  const [folderParent, setFolderParent] = useState('');
   const [folderShowCover, setFolderShowCover] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importParent, setImportParent] = useState('');
@@ -716,7 +720,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             </button>
           ))}
           <span className={`${LABEL} ml-2`}>Size</span>
-          {(['s', 'm', 'l'] as const).map((size) => (
+          {MARKS_PREVIEW_SIZES.map((size) => (
             <button
               key={size}
               type="button"
@@ -983,18 +987,13 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
               setFolderName(category.name);
               setFolderCover(category.coverUrl);
               setFolderShowCover(category.showCover);
+              setFolderParent(category.parentId ?? '');
             }}
             onEditButton={(button) => {
               setEditingButton(button);
               setButtonDraft(draftFromButton(button));
             }}
             onRunButton={runButton}
-            onMoveLink={(id, categoryId) =>
-              apply(moveLink(doc, id, categoryId, clock), 'Moved link.', 'Could not move that link.')
-            }
-            onMoveFolder={(id, parentId) =>
-              apply(moveCategory(doc, id, parentId, clock), 'Moved folder.', 'Could not nest that folder.')
-            }
             onToggleFolder={(id, collapsed) => patch(setFolderCollapsed(doc, id, collapsed, clock))}
             onToggleUnfiled={(collapsed) => patch(setUnfiledCollapsed(doc, collapsed, clock))}
             onDeleteFolder={(category) =>
@@ -1124,6 +1123,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
 
       {folderEdit ? (
         <FolderDialog
+          doc={doc}
           category={folderEdit}
           name={folderName}
           setName={setFolderName}
@@ -1131,16 +1131,20 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
           setCoverUrl={setFolderCover}
           showCover={folderShowCover}
           setShowCover={setFolderShowCover}
+          parentId={folderParent}
+          setParentId={setFolderParent}
           onClose={() => setFolderEdit(null)}
           onSave={() => {
+            const parentChanged = folderParent !== (folderEdit.parentId ?? '');
+            const base = parentChanged ? moveCategory(doc, folderEdit.id, folderParent || null, clock) : doc;
             apply(
               updateCategory(
-                doc,
+                base,
                 folderEdit.id,
                 { name: folderName, coverUrl: folderCover, showCover: folderShowCover },
                 clock
               ),
-              'Folder saved.',
+              parentChanged ? 'Folder saved and moved.' : 'Folder saved.',
               'Name the folder first.'
             );
             setFolderEdit(null);

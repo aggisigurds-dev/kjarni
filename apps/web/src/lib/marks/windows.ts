@@ -27,7 +27,12 @@ export const DEFAULT_WINDOW_W = 320;
 export const DEFAULT_WINDOW_H = 380;
 export const WINDOW_SLOT_W = 348;
 export const WINDOW_SLOT_H = 408;
-export const SNAP_GRID = 8;
+/**
+ * Snap step for window position/size. Matches the 16px dot grid painted by
+ * WINDOW_BOARD (ui.ts) so a dragged window visibly "magnets" onto the dots;
+ * the desk also snaps live while dragging, not only on release (2026-09-02).
+ */
+export const SNAP_GRID = 16;
 export const UNFILED_WINDOW_ID = '__unfiled';
 
 export type MarksWindowRect = {

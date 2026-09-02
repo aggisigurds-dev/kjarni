@@ -304,6 +304,7 @@ export function LinkDialog({
 }
 
 export function FolderDialog({
+  doc,
   category,
   name,
   setName,
@@ -311,12 +312,15 @@ export function FolderDialog({
   setCoverUrl,
   showCover,
   setShowCover,
+  parentId,
+  setParentId,
   onClose,
   onSave,
   onDelete,
   onUploadCover,
   screenshotUrl = '',
 }: {
+  doc: MarksDoc;
   category: MarkCategory;
   name: string;
   setName: (value: string) => void;
@@ -324,6 +328,9 @@ export function FolderDialog({
   setCoverUrl: (value: string) => void;
   showCover: boolean;
   setShowCover: (value: boolean) => void;
+  /** '' = top level. Replaces the old per-row "move folder" dropdown on the desk. */
+  parentId: string;
+  setParentId: (value: string) => void;
   onClose: () => void;
   onSave: () => void;
   onDelete: () => void;
@@ -345,6 +352,17 @@ export function FolderDialog({
         <label className="mt-3 block">
           <span className={`${LABEL} mb-1 block`}>Name</span>
           <input className={FIELD} value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="mt-3 block">
+          <span className={`${LABEL} mb-1 block`}>Inside</span>
+          <select className={FIELD} value={parentId} onChange={(event) => setParentId(event.target.value)}>
+            <option value="">Top level</option>
+            {folderOptions(doc, { includeUnfiled: false, excludeId: category.id }).map((option) => (
+              <option key={option.id} value={option.id}>
+                {`${'· '.repeat(option.depth)}${option.name}`}
+              </option>
+            ))}
+          </select>
         </label>
         <div
           className="mt-3"

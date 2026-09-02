@@ -12,7 +12,6 @@ import {
   childCategories,
   DEFAULT_MARKS_DISPLAY,
   folderCoverClass,
-  folderOptions,
   linksInCategory,
   type MarkCategory,
   type MarkLink,
@@ -73,8 +72,6 @@ export function Whiteboard({
   onEditFolder,
   onEditButton,
   onRunButton,
-  onMoveLink,
-  onMoveFolder,
   onToggleFolder,
   onDeleteFolder,
   onDrop,
@@ -110,8 +107,6 @@ export function Whiteboard({
   onEditFolder: (category: MarkCategory) => void;
   onEditButton?: (button: MarksButton) => void;
   onRunButton?: (button: MarksButton) => void;
-  onMoveLink?: (id: string, categoryId: string) => void;
-  onMoveFolder?: (id: string, parentId: string | null) => void;
   onToggleFolder?: (id: string, collapsed: boolean) => void;
   onDeleteFolder?: (category: MarkCategory) => void;
   onDrop: (
@@ -224,10 +219,7 @@ export function Whiteboard({
           onAddButton={onAddButton}
           onEditFolder={onEditFolder}
           onEditButton={onEditButton}
-          onRunButton={onRunButton}
-          onMoveLink={onMoveLink}
-          onMoveFolder={onMoveFolder}
-          onToggleFolder={onToggleFolder}
+          onRunButton={onRunButton}          onToggleFolder={onToggleFolder}
           onDeleteFolder={onDeleteFolder}
           onMarkOver={markOver}
           onOverLink={setOverLink}
@@ -275,16 +267,12 @@ export function Whiteboard({
                 {unfiled.map((link, index) => (
                   <LinkRow
                     key={link.id}
-                    link={link}
-                    folders={doc.categories}
-                    display={display}
+                    link={link}                    display={display}
                     compact
                     hovering={hoverLink === link.id}
                     insertBefore={overLink === link.id}
                     onHover={onHoverLink}
-                    onEdit={() => onEditLink(link)}
-                    onMove={onMoveLink}
-                    onDragOver={(event) => {
+                    onEdit={() => onEditLink(link)}                    onDragOver={(event) => {
                       markOver('__unfiled__', event);
                       setOverLink(link.id);
                     }}
@@ -416,15 +404,11 @@ export function Whiteboard({
                     {unfiled.map((link, index) => (
                       <LinkRow
                         key={link.id}
-                        link={link}
-                        folders={doc.categories}
-                        display={display}
+                        link={link}                        display={display}
                         hovering={hoverLink === link.id}
                         insertBefore={overLink === link.id}
                         onHover={onHoverLink}
-                        onEdit={() => onEditLink(link)}
-                        onMove={onMoveLink}
-                        onDragOver={(event) => {
+                        onEdit={() => onEditLink(link)}                        onDragOver={(event) => {
                           markOver('__unfiled__', event);
                           setOverLink(link.id);
                         }}
@@ -467,10 +451,7 @@ export function Whiteboard({
               onAddButton={onAddButton}
               onEditFolder={onEditFolder}
               onEditButton={onEditButton}
-              onRunButton={onRunButton}
-              onMoveLink={onMoveLink}
-              onMoveFolder={onMoveFolder}
-              onToggleFolder={onToggleFolder}
+              onRunButton={onRunButton}              onToggleFolder={onToggleFolder}
               onDeleteFolder={onDeleteFolder}
               onMarkOver={markOver}
               onOverLink={setOverLink}
@@ -593,8 +574,6 @@ function Column({
   onEditFolder,
   onEditButton,
   onRunButton,
-  onMoveLink,
-  onMoveFolder,
   onToggleFolder,
   onDeleteFolder,
   onMarkOver,
@@ -623,8 +602,6 @@ function Column({
   onEditFolder: (category: MarkCategory) => void;
   onEditButton?: (button: MarksButton) => void;
   onRunButton?: (button: MarksButton) => void;
-  onMoveLink?: (id: string, categoryId: string) => void;
-  onMoveFolder?: (id: string, parentId: string | null) => void;
   onToggleFolder?: (id: string, collapsed: boolean) => void;
   onDeleteFolder?: (category: MarkCategory) => void;
   onMarkOver: (folderId: string, event: DragEvent) => void;
@@ -688,21 +665,8 @@ function Column({
         <span className={`shrink-0 text-stone-400 ${compact ? 'text-[0.55rem]' : 'text-[0.65rem]'}`}>{count}</span>
         {compact ? null : (
           <>
-            {onMoveFolder ? (
-              <select
-                className="max-w-[7rem] bg-transparent text-[0.6rem] text-stone-400"
-                value={folder.parentId ?? ''}
-                aria-label="Move folder"
-                onChange={(event) => onMoveFolder(folder.id, event.target.value || null)}
-              >
-                <option value="">Top level</option>
-                {folderOptions(doc, { includeUnfiled: false, excludeId: folder.id }).map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {`${'· '.repeat(option.depth)}${option.name}`}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+            {/* Folder moving lives in the Edit dialog ("Inside"), not as a
+                dropdown on every row — the desk stays clean (2026-09-02). */}
             <button
               type="button"
               className="rounded px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase text-stone-400"
@@ -764,16 +728,12 @@ function Column({
             {links.map((link, index) => (
               <LinkRow
                 key={link.id}
-                link={link}
-                folders={doc.categories}
-                display={display}
+                link={link}                display={display}
                 compact={compact}
                 hovering={hoverLink === link.id}
                 insertBefore={overLink === link.id}
                 onHover={onHoverLink}
-                onEdit={() => onEditLink(link)}
-                onMove={onMoveLink}
-                onDragOver={(event) => {
+                onEdit={() => onEditLink(link)}                onDragOver={(event) => {
                   onMarkOver(folder.id, event);
                   onOverLink(link.id);
                 }}
@@ -805,10 +765,7 @@ function Column({
                 onAddButton={onAddButton}
                 onEditFolder={onEditFolder}
                 onEditButton={onEditButton}
-                onRunButton={onRunButton}
-                onMoveLink={onMoveLink}
-                onMoveFolder={onMoveFolder}
-                onToggleFolder={onToggleFolder}
+                onRunButton={onRunButton}                onToggleFolder={onToggleFolder}
                 onDeleteFolder={onDeleteFolder}
                 onMarkOver={onMarkOver}
                 onOverLink={onOverLink}
@@ -838,14 +795,12 @@ function Column({
 
 function LinkRow({
   link,
-  folders,
   display,
   compact = false,
   hovering,
   insertBefore,
   onHover,
   onEdit,
-  onMove,
   onDragOver,
   onDrop,
   onHoldOver,
@@ -854,14 +809,12 @@ function LinkRow({
   onScreenshot,
 }: {
   link: MarkLink;
-  folders: MarkCategory[];
   display: MarksDisplay;
   compact?: boolean;
   hovering?: boolean;
   insertBefore?: boolean;
   onHover?: (id: string) => void;
   onEdit: () => void;
-  onMove?: (id: string, categoryId: string) => void;
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
   onHoldOver: (key: string) => void;
@@ -952,21 +905,7 @@ function LinkRow({
             Shot
           </button>
         ) : null}
-        {compact ? null : onMove ? (
-          <select
-            className="max-w-[6rem] self-center bg-transparent text-[0.6rem] text-stone-400"
-            value={link.categoryId}
-            aria-label="Move to folder"
-            onChange={(event) => onMove(link.id, event.target.value)}
-          >
-            <option value="">Unfiled</option>
-            {folders.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.name}
-              </option>
-            ))}
-          </select>
-        ) : null}
+        {/* Moving a link to another folder: Edit dialog (Folder field) or hold-to-drag. */}
         {compact ? null : (
           <button type="button" className="px-2 text-[0.65rem] font-bold uppercase text-stone-400" onClick={onEdit}>
             Edit
