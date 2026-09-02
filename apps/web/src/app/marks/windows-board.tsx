@@ -191,62 +191,56 @@ export function MarksWindowDesk({
     }
   };
 
-  // Column layout (2026-09-02): windows stacked in N columns, round-robin in
-  // desk order, each column its own flex stack — so collapsing a window lets
-  // the one beneath move straight up. No dragging here; positions come from
-  // the free desk.
+  // Column layout (2026-09-02): windows flow into N CSS columns (desk order,
+  // top-to-bottom then next column). Columns balance themselves so they fill
+  // up evenly, and a collapsed window lets the one beneath move straight up.
+  // No dragging here; positions come from the free desk.
   const display = doc.display ?? DEFAULT_MARKS_DISPLAY;
   if (display.layout === 'columns') {
     const cols = Math.min(4, Math.max(2, display.columns || 3));
-    const buckets: (typeof items)[] = Array.from({ length: cols }, () => []);
-    items.forEach((item, index) => buckets[index % cols]!.push(item));
     return (
       <div
-        className="hidden items-start gap-4 md:grid"
+        className="hidden md:block [column-gap:1rem] [&>*]:mb-4 [&>*]:break-inside-avoid"
         data-marks-layout="desk-columns"
         data-marks-cols={cols}
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        style={{ columnCount: cols }}
       >
-        {buckets.map((bucket, col) => (
-          <div key={col} className="flex min-w-0 flex-col gap-4">
-            {bucket.map((item) => {
-              const fixed = item.kind === 'table' || item.kind === 'whiteboard';
-              return (
-                <section
-                  key={item.id}
-                  data-marks-window={item.id}
-                  data-window-kind={item.kind}
-                  data-window-hidden={item.hidden ? 'true' : undefined}
-                  data-window-collapsed={item.collapsed ? 'true' : undefined}
-                  className={`${PANEL} flex min-w-0 flex-col overflow-hidden ${
-                    item.kind === 'whiteboard' ? 'border-stone-300 shadow-md' : ''
-                  } ${item.hidden ? 'border-dashed border-amber-400 opacity-75' : ''} ${
-                    fixed || item.collapsed ? '' : 'max-h-[85vh]'
-                  }`}
-                  style={{ height: fixed && !item.collapsed ? item.rect.h : undefined }}
-                >
-                  <div
-                    data-marks-titlebar={item.id}
-                    className={`flex shrink-0 items-center gap-1.5 border-b border-stone-100 px-2 py-1.5 ${
-                      item.kind === 'whiteboard' ? 'bg-[#efece4]' : 'bg-stone-50'
-                    }`}
-                  >
-                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${windowDotClass(item.kind)}`} aria-hidden />
-                    {renderTitle ? (
-                      renderTitle(item.id, item.name, item.kind)
-                    ) : (
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{item.name}</span>
-                    )}
-                    {renderTitleExtra?.(item.id, item.kind)}
-                  </div>
-                  <div className={`min-h-0 flex-1 ${fixed ? 'overflow-hidden' : 'overflow-auto'}`}>
-                    {renderWindow(item.id, item.kind)}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        ))}
+        {items.map((item) => {
+          const fixed = item.kind === 'table' || item.kind === 'whiteboard';
+          return (
+            <section
+              key={item.id}
+              data-marks-window={item.id}
+              data-window-kind={item.kind}
+              data-window-hidden={item.hidden ? 'true' : undefined}
+              data-window-collapsed={item.collapsed ? 'true' : undefined}
+              className={`${PANEL} flex min-w-0 flex-col overflow-hidden ${
+                item.kind === 'whiteboard' ? 'border-stone-300 shadow-md' : ''
+              } ${item.hidden ? 'border-dashed border-amber-400 opacity-75' : ''} ${
+                fixed || item.collapsed ? '' : 'max-h-[85vh]'
+              }`}
+              style={{ height: fixed && !item.collapsed ? item.rect.h : undefined }}
+            >
+              <div
+                data-marks-titlebar={item.id}
+                className={`flex shrink-0 items-center gap-1.5 border-b border-stone-100 px-2 py-1.5 ${
+                  item.kind === 'whiteboard' ? 'bg-[#efece4]' : 'bg-stone-50'
+                }`}
+              >
+                <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${windowDotClass(item.kind)}`} aria-hidden />
+                {renderTitle ? (
+                  renderTitle(item.id, item.name, item.kind)
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{item.name}</span>
+                )}
+                {renderTitleExtra?.(item.id, item.kind)}
+              </div>
+              <div className={`min-h-0 flex-1 ${fixed ? 'overflow-hidden' : 'overflow-auto'}`}>
+                {renderWindow(item.id, item.kind)}
+              </div>
+            </section>
+          );
+        })}
       </div>
     );
   }
