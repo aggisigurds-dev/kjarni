@@ -229,7 +229,8 @@ export function Whiteboard({
           onAddButton={onAddButton}
           onEditFolder={onEditFolder}
           onEditButton={onEditButton}
-          onRunButton={onRunButton}          onToggleFolder={onToggleFolder}
+          onRunButton={onRunButton}
+          onToggleFolder={onToggleFolder}
           onDeleteFolder={onDeleteFolder}
           onMarkOver={markOver}
           onOverLink={setOverLink}
@@ -278,12 +279,14 @@ export function Whiteboard({
                 {unfiled.map((link, index) => (
                   <LinkRow
                     key={link.id}
-                    link={link}                    display={display}
+                    link={link}
+                    display={display}
                     compact
                     hovering={hoverLink === link.id}
                     insertBefore={overLink === link.id}
                     onHover={onHoverLink}
-                    onEdit={() => onEditLink(link)}                    onDragOver={(event) => {
+                    onEdit={() => onEditLink(link)}
+                    onDragOver={(event) => {
                       markOver('__unfiled__', event);
                       setOverLink(link.id);
                     }}
@@ -434,11 +437,13 @@ export function Whiteboard({
                     {unfiled.map((link, index) => (
                       <LinkRow
                         key={link.id}
-                        link={link}                        display={display}
+                        link={link}
+                        display={display}
                         hovering={hoverLink === link.id}
                         insertBefore={overLink === link.id}
                         onHover={onHoverLink}
-                        onEdit={() => onEditLink(link)}                        onDragOver={(event) => {
+                        onEdit={() => onEditLink(link)}
+                        onDragOver={(event) => {
                           markOver('__unfiled__', event);
                           setOverLink(link.id);
                         }}
@@ -482,7 +487,8 @@ export function Whiteboard({
               onAddButton={onAddButton}
               onEditFolder={onEditFolder}
               onEditButton={onEditButton}
-              onRunButton={onRunButton}              onToggleFolder={onToggleFolder}
+              onRunButton={onRunButton}
+              onToggleFolder={onToggleFolder}
               onDeleteFolder={onDeleteFolder}
               onMarkOver={markOver}
               onOverLink={setOverLink}
@@ -762,12 +768,14 @@ function Column({
             {links.map((link, index) => (
               <LinkRow
                 key={link.id}
-                link={link}                display={display}
+                link={link}
+                display={display}
                 compact={compact}
                 hovering={hoverLink === link.id}
                 insertBefore={overLink === link.id}
                 onHover={onHoverLink}
-                onEdit={() => onEditLink(link)}                onDragOver={(event) => {
+                onEdit={() => onEditLink(link)}
+                onDragOver={(event) => {
                   onMarkOver(folder.id, event);
                   onOverLink(link.id);
                 }}
@@ -800,7 +808,8 @@ function Column({
                 onAddButton={onAddButton}
                 onEditFolder={onEditFolder}
                 onEditButton={onEditButton}
-                onRunButton={onRunButton}                onToggleFolder={onToggleFolder}
+                onRunButton={onRunButton}
+                onToggleFolder={onToggleFolder}
                 onDeleteFolder={onDeleteFolder}
                 onMarkOver={onMarkOver}
                 onOverLink={onOverLink}
