@@ -154,6 +154,7 @@ export function Whiteboard({
   const roots = childCategories(doc, null).filter((folder) => showHidden || !folder.hidden);
   const unfiled = linksInCategory(doc, '');
   const display = doc.display ?? DEFAULT_MARKS_DISPLAY;
+  const phoneCols = Math.min(4, Math.max(2, display.columns || 3));
   const tables = doc.tables ?? [];
   const boards = doc.whiteboards ?? [];
 
@@ -204,10 +205,13 @@ export function Whiteboard({
     <p className="mb-1 px-1 text-[0.65rem] text-stone-400 md:hidden">
       Hold a link, then drag it into another folder.
     </p>
+    {/* Phone: 2/3/4 columns (Layout chips). CSS multi-column with break-inside-avoid
+        fills the columns evenly and lets a collapsed card's neighbour move straight up. */}
     <div
-      className="mx-auto grid grid-cols-3 items-start gap-1.5 px-1 md:hidden"
+      className="mx-auto px-1 md:hidden [column-gap:0.375rem] [&>*]:mb-1.5 [&>*]:break-inside-avoid"
+      style={{ columnCount: phoneCols }}
       data-marks-layout="columns"
-      data-marks-cols="3"
+      data-marks-cols={phoneCols}
     >
       {roots.map((folder) => (
         <Column
@@ -229,7 +233,8 @@ export function Whiteboard({
           onAddButton={onAddButton}
           onEditFolder={onEditFolder}
           onEditButton={onEditButton}
-          onRunButton={onRunButton}          onToggleFolder={onToggleFolder}
+          onRunButton={onRunButton}
+          onToggleFolder={onToggleFolder}
           onDeleteFolder={onDeleteFolder}
           onMarkOver={markOver}
           onOverLink={setOverLink}
@@ -278,12 +283,14 @@ export function Whiteboard({
                 {unfiled.map((link, index) => (
                   <LinkRow
                     key={link.id}
-                    link={link}                    display={display}
+                    link={link}
+                    display={display}
                     compact
                     hovering={hoverLink === link.id}
                     insertBefore={overLink === link.id}
                     onHover={onHoverLink}
-                    onEdit={() => onEditLink(link)}                    onDragOver={(event) => {
+                    onEdit={() => onEditLink(link)}
+                    onDragOver={(event) => {
                       markOver('__unfiled__', event);
                       setOverLink(link.id);
                     }}
@@ -292,7 +299,7 @@ export function Whiteboard({
                     onHoldClear={holdClear}
                     onHoldDrop={holdDrop}
                     onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
-                onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
+                    onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
                   />
                 ))}
               </ul>
@@ -434,11 +441,13 @@ export function Whiteboard({
                     {unfiled.map((link, index) => (
                       <LinkRow
                         key={link.id}
-                        link={link}                        display={display}
+                        link={link}
+                        display={display}
                         hovering={hoverLink === link.id}
                         insertBefore={overLink === link.id}
                         onHover={onHoverLink}
-                        onEdit={() => onEditLink(link)}                        onDragOver={(event) => {
+                        onEdit={() => onEditLink(link)}
+                        onDragOver={(event) => {
                           markOver('__unfiled__', event);
                           setOverLink(link.id);
                         }}
@@ -447,7 +456,7 @@ export function Whiteboard({
                         onHoldClear={holdClear}
                         onHoldDrop={holdDrop}
                         onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
-                onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
+                        onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
                       />
                     ))}
                   </ul>
@@ -482,7 +491,8 @@ export function Whiteboard({
               onAddButton={onAddButton}
               onEditFolder={onEditFolder}
               onEditButton={onEditButton}
-              onRunButton={onRunButton}              onToggleFolder={onToggleFolder}
+              onRunButton={onRunButton}
+              onToggleFolder={onToggleFolder}
               onDeleteFolder={onDeleteFolder}
               onMarkOver={markOver}
               onOverLink={setOverLink}
@@ -491,7 +501,7 @@ export function Whiteboard({
               onHoldClear={holdClear}
               onHoldDrop={holdDrop}
               onScreenshotLink={onScreenshotLink}
-          onRemoveLink={onRemoveLink}
+              onRemoveLink={onRemoveLink}
             />
           );
         }}
@@ -762,12 +772,14 @@ function Column({
             {links.map((link, index) => (
               <LinkRow
                 key={link.id}
-                link={link}                display={display}
+                link={link}
+                display={display}
                 compact={compact}
                 hovering={hoverLink === link.id}
                 insertBefore={overLink === link.id}
                 onHover={onHoverLink}
-                onEdit={() => onEditLink(link)}                onDragOver={(event) => {
+                onEdit={() => onEditLink(link)}
+                onDragOver={(event) => {
                   onMarkOver(folder.id, event);
                   onOverLink(link.id);
                 }}
@@ -800,7 +812,8 @@ function Column({
                 onAddButton={onAddButton}
                 onEditFolder={onEditFolder}
                 onEditButton={onEditButton}
-                onRunButton={onRunButton}                onToggleFolder={onToggleFolder}
+                onRunButton={onRunButton}
+                onToggleFolder={onToggleFolder}
                 onDeleteFolder={onDeleteFolder}
                 onMarkOver={onMarkOver}
                 onOverLink={onOverLink}
@@ -809,7 +822,7 @@ function Column({
                 onHoldClear={onHoldClear}
                 onHoldDrop={onHoldDrop}
                 onScreenshotLink={onScreenshotLink}
-          onRemoveLink={onRemoveLink}
+                onRemoveLink={onRemoveLink}
               />
             </div>
           ))}
