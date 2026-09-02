@@ -10,6 +10,7 @@ import {
   applyResize,
   clampWindowRect,
   layoutMissingWindows,
+  packWindows,
   setCategoryLayout,
   setUnfiledLayout,
   setWhiteboardLayout,
@@ -113,6 +114,27 @@ describe('category window layout', () => {
     const moved = setWhiteboardLayout(laid, 'wb_one', { x: 48, y: 32, w: 288, h: 208 }, 3);
     expect(moved.whiteboards[0]).toMatchObject({ x: 48, y: 32, w: 288, h: 208 });
     expect(addWhiteboard(emptyDoc(0)).whiteboards[0]?.id.startsWith('wb_')).toBe(true);
+  });
+
+  it('packs overlapping windows into rows without overlap', () => {
+    let doc = layoutMissingWindows(seedDoc(1));
+    // Pile every folder onto the same spot.
+    for (const folder of doc.categories) doc = setCategoryLayout(doc, folder.id, { x: 32, y: 32, w: 320, h: 240 }, 2);
+    const packed = packWindows(doc, 3, 700);
+    const rects = packed.categories
+      .filter((row) => !row.parentId)
+      .map((row) => row as typeof row & { w: number; h: number });
+    for (let i = 0; i < rects.length; i += 1) {
+      for (let j = i + 1; j < rects.length; j += 1) {
+        const a = rects[i]!;
+        const b = rects[j]!;
+        const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        expect(overlap).toBe(false);
+      }
+    }
+    // 700px row fits two 320px windows, so the third wraps to a new row.
+    expect(rects.some((row) => row.y > 32)).toBe(true);
+    expect(packWindows(packed, 4, 700)).toBe(packed);
   });
 
   it('resizes from every edge and corner', () => {

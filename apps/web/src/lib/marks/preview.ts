@@ -62,10 +62,47 @@ export function extractLinkPreview(html: string, pageUrl = ''): LinkPreviewMeta 
   };
 }
 
+/**
+ * Page-screenshot image URL. 2026-09-02: s.wordpress.com/mshots answers 403 to
+ * everything now (the old "Generating preview…" placeholder was all anyone got),
+ * so this points at Microlink, which renders the page — YouTube video frames
+ * included. Free tier is ~25 renders/day per caller, so callers fetch the image
+ * ONCE (fetchScreenshotBlob) and store it in our own bucket instead of using
+ * this URL as a permanent <img src>.
+ */
 export function screenshotCoverUrl(pageUrl: string): string {
   const absolute = normalizeUrl(pageUrl);
   if (!absolute || absolute.startsWith('/')) return '';
-  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(absolute)}?w=${SQUARE_COVER_PX}&h=${SQUARE_COVER_PX}`;
+  return `https://api.microlink.io/?url=${encodeURIComponent(absolute)}&screenshot=true&meta=false&embed=screenshot.url`;
+}
+
+/** Second opinion when Microlink is rate-limited or down. */
+export function screenshotFallbackUrl(pageUrl: string): string {
+  const absolute = normalizeUrl(pageUrl);
+  if (!absolute || absolute.startsWith('/')) return '';
+  return `https://image.thum.io/get/width/${SQUARE_COVER_PX * 2}/crop/${SQUARE_COVER_PX * 2}/noanimate/${absolute}`;
+}
+
+/** Fetch a page screenshot as an image blob (Microlink first, thum.io as fallback). */
+export async function fetchScreenshotBlob(pageUrl: string): Promise<Blob> {
+  const primary = screenshotCoverUrl(pageUrl);
+  if (!primary) throw new Error('Need a web URL for a screenshot.');
+  const grab = async (url: string): Promise<Blob> => {
+    const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    if (!response.ok) throw new Error(`Screenshot service answered ${response.status}.`);
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/') || blob.size < 1_000) throw new Error('Screenshot service returned no image.');
+    return blob;
+  };
+  try {
+    return await grab(primary);
+  } catch (error) {
+    try {
+      return await grab(screenshotFallbackUrl(pageUrl));
+    } catch {
+      throw error instanceof Error ? error : new Error('Screenshot failed.');
+    }
+  }
 }
 
 export function isHttpUrl(url: string): boolean {

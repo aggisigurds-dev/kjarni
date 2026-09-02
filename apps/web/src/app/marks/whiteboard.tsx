@@ -12,6 +12,7 @@ import {
   childCategories,
   DEFAULT_MARKS_DISPLAY,
   folderCoverClass,
+  isWindowHidden,
   linksInCategory,
   type MarkCategory,
   type MarkLink,
@@ -94,6 +95,9 @@ export function Whiteboard({
   onRemoveWhiteboardItem,
   activeWhiteboard,
   onActiveWhiteboard,
+  showHidden = false,
+  onHideWindow,
+  onRemoveLink,
 }: {
   doc: MarksDoc;
   highlightFolder?: string;
@@ -138,10 +142,16 @@ export function Whiteboard({
   onRemoveWhiteboardItem?: (whiteboardId: string, itemId: string) => void;
   activeWhiteboard?: string;
   onActiveWhiteboard?: (id: string) => void;
+  /** Show → Hidden chip: reveal hidden windows (dashed amber frame, "Show" in the title bar). */
+  showHidden?: boolean;
+  /** Hide/Show button in every window title bar (folder, table, whiteboard). */
+  onHideWindow?: (id: string, hidden: boolean) => void;
+  /** "Remove" under Edit on every link row (asks first). */
+  onRemoveLink?: (link: MarkLink) => void;
 }) {
   const [overFolder, setOverFolder] = useState('');
   const [overLink, setOverLink] = useState('');
-  const roots = childCategories(doc, null);
+  const roots = childCategories(doc, null).filter((folder) => showHidden || !folder.hidden);
   const unfiled = linksInCategory(doc, '');
   const display = doc.display ?? DEFAULT_MARKS_DISPLAY;
   const tables = doc.tables ?? [];
@@ -228,6 +238,7 @@ export function Whiteboard({
           onHoldClear={holdClear}
           onHoldDrop={holdDrop}
           onScreenshotLink={onScreenshotLink}
+          onRemoveLink={onRemoveLink}
         />
       ))}
       <section
@@ -281,6 +292,7 @@ export function Whiteboard({
                     onHoldClear={holdClear}
                     onHoldDrop={holdDrop}
                     onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
+                onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
                   />
                 ))}
               </ul>
@@ -335,6 +347,7 @@ export function Whiteboard({
     </div>
       <MarksWindowDesk
         doc={doc}
+        showHidden={showHidden}
         onLayout={onLayout}
         renderTitle={(id, name, kind) => {
           if (kind === 'table') {
@@ -354,18 +367,35 @@ export function Whiteboard({
           }
           return <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{name}</span>;
         }}
-        renderTitleExtra={(id, kind) =>
-          kind === 'whiteboard' && onDeleteWhiteboard ? (
-            <button
-              type="button"
-              className="rounded px-1 text-[0.6rem] font-bold text-rose-600"
-              data-no-drag
-              onClick={() => onDeleteWhiteboard(id)}
-            >
-              Delete
-            </button>
-          ) : null
-        }
+        renderTitleExtra={(id, kind) => {
+          const hidden = isWindowHidden(doc, id);
+          const canHide = onHideWindow && kind !== 'unfiled';
+          return (
+            <>
+              {canHide ? (
+                <button
+                  type="button"
+                  className={`rounded px-1 text-[0.6rem] font-bold uppercase ${hidden ? 'text-amber-700' : 'text-stone-400 hover:text-stone-700'}`}
+                  data-no-drag
+                  title={hidden ? 'Show this window on the desk again' : 'Hide this window (Show → Hidden brings it back)'}
+                  onClick={() => onHideWindow(id, !hidden)}
+                >
+                  {hidden ? 'Show' : 'Hide'}
+                </button>
+              ) : null}
+              {kind === 'whiteboard' && onDeleteWhiteboard ? (
+                <button
+                  type="button"
+                  className="rounded px-1 text-[0.6rem] font-bold text-rose-600"
+                  data-no-drag
+                  onClick={() => onDeleteWhiteboard(id)}
+                >
+                  Delete
+                </button>
+              ) : null}
+            </>
+          );
+        }}
         renderWindow={(id, kind) => {
           if (kind === 'table') {
             const table = tables.find((row) => row.id === id);
@@ -417,6 +447,7 @@ export function Whiteboard({
                         onHoldClear={holdClear}
                         onHoldDrop={holdDrop}
                         onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
+                onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
                       />
                     ))}
                   </ul>
@@ -460,6 +491,7 @@ export function Whiteboard({
               onHoldClear={holdClear}
               onHoldDrop={holdDrop}
               onScreenshotLink={onScreenshotLink}
+          onRemoveLink={onRemoveLink}
             />
           );
         }}
@@ -583,6 +615,7 @@ function Column({
   onHoldClear,
   onHoldDrop,
   onScreenshotLink,
+  onRemoveLink,
 }: {
   doc: MarksDoc;
   folder: MarkCategory;
@@ -611,6 +644,7 @@ function Column({
   onHoldClear: () => void;
   onHoldDrop: (linkId: string, folderId: string | null) => void;
   onScreenshotLink?: (link: MarkLink) => void;
+  onRemoveLink?: (link: MarkLink) => void;
 }) {
   const links = linksInCategory(doc, folder.id);
   const buttons = buttonsInFolder(doc, folder.id);
@@ -742,6 +776,7 @@ function Column({
                 onHoldClear={onHoldClear}
                 onHoldDrop={onHoldDrop}
                 onScreenshot={onScreenshotLink ? () => onScreenshotLink(link) : undefined}
+                onRemove={onRemoveLink ? () => onRemoveLink(link) : undefined}
               />
             ))}
           </ul>
@@ -774,6 +809,7 @@ function Column({
                 onHoldClear={onHoldClear}
                 onHoldDrop={onHoldDrop}
                 onScreenshotLink={onScreenshotLink}
+          onRemoveLink={onRemoveLink}
               />
             </div>
           ))}
@@ -807,6 +843,7 @@ function LinkRow({
   onHoldClear,
   onHoldDrop,
   onScreenshot,
+  onRemove,
 }: {
   link: MarkLink;
   display: MarksDisplay;
@@ -821,6 +858,7 @@ function LinkRow({
   onHoldClear: () => void;
   onHoldDrop: (linkId: string, folderId: string | null) => void;
   onScreenshot?: () => void;
+  onRemove?: () => void;
 }) {
   const video = videoSourceForLink(link);
   const canShot = Boolean(!compact && onScreenshot && screenshotCoverUrl(link.url));
@@ -891,25 +929,42 @@ function LinkRow({
             </span>
           ) : null}
         </a>
-        {canShot ? (
-          <button
-            type="button"
-            className="self-center px-1.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-stone-400 hover:text-emerald-800"
-            title="First-screen screenshot, square-fit"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onScreenshot?.();
-            }}
-          >
-            Shot
-          </button>
-        ) : null}
-        {/* Moving a link to another folder: Edit dialog (Folder field) or hold-to-drag. */}
+        {/* Moving a link to another folder: Edit dialog (Folder field) or hold-to-drag.
+            Edit on top, Shot underneath (Agnar 2026-09-02) — one narrow column. */}
         {compact ? null : (
-          <button type="button" className="px-2 text-[0.65rem] font-bold uppercase text-stone-400" onClick={onEdit}>
-            Edit
-          </button>
+          <span className="flex shrink-0 flex-col items-center justify-center">
+            <button type="button" className="px-2 text-[0.65rem] font-bold uppercase text-stone-400" onClick={onEdit}>
+              Edit
+            </button>
+            {canShot ? (
+              <button
+                type="button"
+                className="px-2 text-[0.6rem] font-extrabold uppercase tracking-wide text-stone-400 hover:text-emerald-800"
+                title="First-screen screenshot, square-fit"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onScreenshot?.();
+                }}
+              >
+                Shot
+              </button>
+            ) : null}
+            {onRemove ? (
+              <button
+                type="button"
+                className="px-2 text-[0.6rem] font-bold uppercase text-stone-300 hover:text-rose-700"
+                title="Remove this link"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onRemove();
+                }}
+              >
+                Remove
+              </button>
+            ) : null}
+          </span>
         )}
       </div>
       {hold.ghost ? (

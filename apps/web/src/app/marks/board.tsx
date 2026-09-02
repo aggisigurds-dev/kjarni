@@ -53,6 +53,7 @@ import {
   createSiteId,
   emptyDoc,
   filterDoc,
+  hiddenWindowCount,
   hostOf,
   latestAdded,
   linksInCategory,
@@ -85,6 +86,7 @@ import {
   setTableCell,
   setTableCells,
   setUnfiledCollapsed,
+  setWindowHidden,
   siteTitle,
   updateButton,
   updateCategory,
@@ -99,12 +101,13 @@ import {
 import {
   UNFILED_WINDOW_ID,
   layoutMissingWindows,
+  packWindows,
   setCategoryLayout,
   setTableLayout,
   setUnfiledLayout,
   setWhiteboardLayout,
 } from '@/lib/marks/windows';
-import { screenshotCoverUrl } from '@/lib/marks/preview';
+import { fetchScreenshotBlob, screenshotCoverUrl } from '@/lib/marks/preview';
 import { cropImageToSquare } from '@/lib/marks/square-cover';
 import {
   ButtonDialog,
@@ -197,6 +200,9 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
   const [highlightFolder, setHighlightFolder] = useState('');
   const [hoverLink, setHoverLink] = useState('');
   const [activeWhiteboard, setActiveWhiteboard] = useState('');
+  // Show → Hidden chip: reveal windows hidden from their title bar (not persisted).
+  const [showHidden, setShowHidden] = useState(false);
+  const [shotBusy, setShotBusy] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const loaded = useRef(false);
   const docRef = useRef(doc);
@@ -638,17 +644,53 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
     }
   };
 
-  const applyPageScreenshot = (link: MarkLink) => {
-    const coverUrl = screenshotCoverUrl(link.url);
-    if (!coverUrl) {
+  // Page screenshot → square crop → our bucket → cover. Stored once, so the
+  // screenshot service (rate-limited) is never used as a live <img src>.
+  const grabScreenshot = async (pageUrl: string): Promise<string> => {
+    const blob = await fetchScreenshotBlob(pageUrl);
+    const cropped = await cropImageToSquare(blob);
+    return uploadMarkCover(cropped.blob, cropped.fileName || 'shot.jpg');
+  };
+
+  const applyPageScreenshot = async (link: MarkLink) => {
+    if (!screenshotCoverUrl(link.url)) {
       toast.error('Need a web URL for a screenshot.');
       return;
     }
-    apply(
-      updateLink(doc, link.id, { coverUrl, showImage: true }, clock),
-      'Screenshot in the square.',
-      'Could not set that screenshot.'
-    );
+    const id = toast.loading('Taking screenshot…');
+    try {
+      const coverUrl = await grabScreenshot(link.url);
+      toast.dismiss(id);
+      apply(
+        updateLink(docRef.current, link.id, { coverUrl, showImage: true }, clock),
+        'Screenshot in the square.',
+        'Could not set that screenshot.'
+      );
+    } catch (error) {
+      toast.dismiss(id);
+      toast.error(error instanceof Error ? error.message : 'Screenshot failed.');
+    }
+  };
+
+  const fetchScreenshotCover = async (pageUrl: string, into: 'link' | 'folder') => {
+    if (!screenshotCoverUrl(pageUrl)) {
+      toast.error('Need a web URL for a screenshot.');
+      return;
+    }
+    setShotBusy(true);
+    try {
+      const url = await grabScreenshot(pageUrl);
+      if (into === 'link') setLinkDraft((current) => (current ? { ...current, coverUrl: url, showImage: true } : current));
+      if (into === 'folder') {
+        setFolderCover(url);
+        setFolderShowCover(true);
+      }
+      toast.success('Screenshot in the square.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Screenshot failed.');
+    } finally {
+      setShotBusy(false);
+    }
   };
 
   return (
@@ -719,6 +761,34 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
               {label}
             </button>
           ))}
+          {(() => {
+            const hiddenCount = hiddenWindowCount(doc);
+            return hiddenCount > 0 || showHidden ? (
+              <button
+                type="button"
+                className={showHidden ? CHIP_ON : CHIP_IDLE}
+                aria-pressed={showHidden}
+                title="Windows hidden from their title bar. Turn on to see them (dashed frame) and press Show on one to bring it back."
+                onClick={() => setShowHidden((current) => !current)}
+              >
+                Hidden ({hiddenCount})
+              </button>
+            ) : null;
+          })()}
+          <button
+            type="button"
+            className={doc.display.noOverlap ? CHIP_ON : CHIP_IDLE}
+            aria-pressed={doc.display.noOverlap}
+            title="Keep windows from overlapping: packs them into rows now and again after every move or resize."
+            onClick={() => {
+              const on = !doc.display.noOverlap;
+              let next = setDisplay(doc, { noOverlap: on }, clock);
+              if (on) next = packWindows(next, clock.now());
+              apply(next, on ? 'Windows packed — no overlap.' : 'Overlap allowed again.', 'Could not update the view.');
+            }}
+          >
+            No overlap
+          </button>
           <span className={`${LABEL} ml-2`}>Size</span>
           {MARKS_PREVIEW_SIZES.map((size) => (
             <button
@@ -1034,19 +1104,19 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             onRemoveTableCol={(id) => apply(removeTableCol(doc, id, clock), 'Column removed.', 'Need at least one column.')}
             onDeleteTable={(id) => apply(removeTable(doc, id, clock), 'Table removed.', 'Could not remove table.')}
             onLayout={(id, rect) => {
-              if (id === UNFILED_WINDOW_ID) {
-                patch(setUnfiledLayout(doc, rect, clock.now()));
-                return;
-              }
-              if ((doc.tables ?? []).some((table) => table.id === id)) {
-                patch(setTableLayout(doc, id, rect, clock.now()));
-                return;
-              }
-              if ((doc.whiteboards ?? []).some((board) => board.id === id)) {
-                patch(setWhiteboardLayout(doc, id, rect, clock.now()));
-                return;
-              }
-              patch(setCategoryLayout(doc, id, rect, clock.now()));
+              const now = clock.now();
+              let next: MarksDoc;
+              if (id === UNFILED_WINDOW_ID) next = setUnfiledLayout(doc, rect, now);
+              else if ((doc.tables ?? []).some((table) => table.id === id)) next = setTableLayout(doc, id, rect, now);
+              else if ((doc.whiteboards ?? []).some((board) => board.id === id)) next = setWhiteboardLayout(doc, id, rect, now);
+              else next = setCategoryLayout(doc, id, rect, now);
+              // "No overlap" on → re-pack after every move/resize so nothing lands on top of another window.
+              if (doc.display.noOverlap) next = packWindows(next, now);
+              patch(next);
+            }}
+            onRemoveLink={(link) => {
+              if (!confirm(`Remove "${link.title || link.url}"?`)) return;
+              apply(removeLink(doc, link.id, clock), 'Link removed.', 'Could not delete.');
             }}
             onRenameWhiteboard={(id, title) => patch(renameWhiteboard(doc, id, title, clock))}
             onDeleteWhiteboard={(id) =>
@@ -1054,6 +1124,14 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             }
             activeWhiteboard={activeWhiteboard}
             onActiveWhiteboard={setActiveWhiteboard}
+            showHidden={showHidden}
+            onHideWindow={(id, hidden) =>
+              apply(
+                setWindowHidden(doc, id, hidden, clock),
+                hidden ? 'Window hidden — Show → Hidden brings it back.' : 'Window shown.',
+                'Could not update the window.'
+              )
+            }
             onAddWhiteboardFiles={(id, files, at) => void uploadWhiteboardFiles(id, files, at)}
             onAddWhiteboardUrl={(id, src, at) => {
               apply(
@@ -1095,6 +1173,8 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
           onUploadCover={(file) => void uploadCover(file, 'link')}
           onFetchPreview={() => void fetchDraftPreview()}
           previewBusy={previewBusy}
+          onFetchScreenshot={() => void fetchScreenshotCover(linkDraft.url, 'link')}
+          shotBusy={shotBusy}
         />
       ) : null}
 
@@ -1159,6 +1239,8 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
           }}
           onUploadCover={(file) => void uploadCover(file, 'folder')}
           screenshotUrl={linksInCategory(doc, folderEdit.id).find((link) => screenshotCoverUrl(link.url))?.url ?? ''}
+          onFetchScreenshot={(pageUrl) => void fetchScreenshotCover(pageUrl, 'folder')}
+          shotBusy={shotBusy}
         />
       ) : null}
 

@@ -15,11 +15,13 @@ describe('square covers', () => {
     expect(squareCropRect(400, 400)).toEqual({ sx: 0, sy: 0, size: 400 });
   });
 
-  it('requests a square first-screen screenshot', () => {
+  it('requests a page screenshot from Microlink (mShots went 403 in 2026-09)', () => {
     const url = screenshotCoverUrl('https://example.com/app');
-    expect(url).toContain('mshots');
-    expect(url).toContain(`w=${SQUARE_COVER_PX}`);
-    expect(url).toContain(`h=${SQUARE_COVER_PX}`);
+    expect(url).toContain('api.microlink.io');
+    expect(url).toContain('screenshot=true');
+    expect(url).toContain(encodeURIComponent('https://example.com/app'));
+    expect(screenshotCoverUrl('/marks')).toBe('');
+    expect(SQUARE_COVER_PX).toBeGreaterThan(0);
   });
 
   it('ignores clipboard paste that is only text', () => {

@@ -57,12 +57,15 @@ function windowDotClass(kind: DeskWindowKind) {
 
 export function MarksWindowDesk({
   doc,
+  showHidden = false,
   onLayout,
   renderWindow,
   renderTitle,
   renderTitleExtra,
 }: {
   doc: MarksDoc;
+  /** Hidden windows leave the desk unless this is on (Show → Hidden chip). */
+  showHidden?: boolean;
   onLayout?: (id: string, rect: MarksWindowRect, kind: DeskWindowKind) => void;
   renderWindow: (id: string, kind: DeskWindowKind) => ReactNode;
   renderTitle?: (id: string, name: string, kind: DeskWindowKind) => ReactNode;
@@ -74,10 +77,11 @@ export function MarksWindowDesk({
   const [preview, setPreview] = useState<{ id: string; rect: MarksWindowRect } | null>(null);
   const [stack, setStack] = useState<string[]>([]);
 
-  const roots = childCategories(doc, null);
+  const visible = <T extends { hidden?: boolean }>(rows: T[]) => rows.filter((row) => showHidden || !row.hidden);
+  const roots = visible(childCategories(doc, null));
   const unfiledOrigin = unfiledWindowRect(doc, roots.length);
-  const tables = doc.tables ?? [];
-  const boards = doc.whiteboards ?? [];
+  const tables = visible(doc.tables ?? []);
+  const boards = visible(doc.whiteboards ?? []);
 
   const items = useMemo(() => {
     type DeskItem = {
@@ -88,6 +92,9 @@ export function MarksWindowDesk({
       rect: MarksWindowRect;
       minW?: number;
       minH?: number;
+      hidden?: boolean;
+      /** Collapsed folder: the whole window shrinks to its header (2026-09-02). */
+      collapsed?: boolean;
     };
     const rows: DeskItem[] = roots.map((folder, index) => {
       const origin = folderWindowRect(folder, index);
@@ -97,6 +104,8 @@ export function MarksWindowDesk({
         kind: 'folder',
         origin,
         rect: preview?.id === folder.id ? preview.rect : origin,
+        hidden: folder.hidden,
+        collapsed: folder.collapsed,
       };
     });
     rows.push({
@@ -105,6 +114,7 @@ export function MarksWindowDesk({
       kind: 'unfiled',
       origin: unfiledOrigin,
       rect: preview?.id === UNFILED_WINDOW_ID ? preview.rect : unfiledOrigin,
+      collapsed: Boolean(doc.unfiledCollapsed),
     });
     tables.forEach((table, index) => {
       const origin = tableWindowRect(table, roots.length + 1 + index);
@@ -116,6 +126,7 @@ export function MarksWindowDesk({
         rect: preview?.id === table.id ? preview.rect : origin,
         minW: MIN_TABLE_W,
         minH: MIN_TABLE_H,
+        hidden: table.hidden,
       });
     });
     boards.forEach((board, index) => {
@@ -126,6 +137,7 @@ export function MarksWindowDesk({
         kind: 'whiteboard',
         origin,
         rect: preview?.id === board.id ? preview.rect : origin,
+        hidden: board.hidden,
       });
     });
     return rows;
@@ -194,9 +206,19 @@ export function MarksWindowDesk({
           data-marks-window={item.id}
           className={`${PANEL} absolute flex flex-col overflow-hidden ${
             item.kind === 'whiteboard' ? 'border-stone-300 shadow-md' : ''
-          }`}
-          style={{ left: item.rect.x, top: item.rect.y, width: item.rect.w, height: item.rect.h, zIndex: zOf(item.id) }}
+          } ${item.hidden ? 'border-dashed border-amber-400 opacity-75' : ''}`}
+          style={{
+            left: item.rect.x,
+            top: item.rect.y,
+            width: item.rect.w,
+            // Collapsed → the frame hugs the title bar + folder header instead of
+            // leaving an empty box the size of the open window.
+            height: item.collapsed ? undefined : item.rect.h,
+            zIndex: zOf(item.id),
+          }}
           data-window-kind={item.kind}
+          data-window-hidden={item.hidden ? 'true' : undefined}
+          data-window-collapsed={item.collapsed ? 'true' : undefined}
           onPointerDown={() => raise(item.id)}
         >
           <div
@@ -234,7 +256,7 @@ export function MarksWindowDesk({
           >
             {renderWindow(item.id, item.kind)}
           </div>
-          {RESIZE_HANDLES.map((handle) => (
+          {(item.collapsed ? RESIZE_HANDLES.filter((handle) => handle.edge === 'e' || handle.edge === 'w') : RESIZE_HANDLES).map((handle) => (
             <div
               key={handle.edge}
               data-resize={handle.edge}

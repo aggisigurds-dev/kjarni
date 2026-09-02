@@ -58,6 +58,8 @@ export interface MarkCategory {
   sort: number;
   parentId: string | null;
   collapsed: boolean;
+  /** Hidden windows leave the desk until "Show → Hidden" is on (2026-09-02). */
+  hidden: boolean;
   coverUrl: string;
   showCover: boolean;
   x: number;
@@ -126,6 +128,7 @@ export interface MarkTable {
   w: number;
   h: number;
   z?: number;
+  hidden?: boolean;
   colCount: number;
   rowCount: number;
   cols?: { width: number }[];
@@ -142,6 +145,8 @@ export interface MarksDisplay {
   showNames: boolean;
   showImages: boolean;
   previewSize: MarksPreviewSize;
+  /** Keep desk windows from overlapping: packed into rows after every move (2026-09-02). */
+  noOverlap: boolean;
 }
 
 export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
@@ -149,6 +154,7 @@ export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
   showNames: true,
   showImages: true,
   previewSize: 'm',
+  noOverlap: false,
 };
 
 export function normalizePreviewSize(value: unknown): MarksPreviewSize {
@@ -162,6 +168,7 @@ export function normalizeDisplay(value: unknown): MarksDisplay {
     showNames: row ? asBoolean(row.showNames, true) : true,
     showImages: row ? asBoolean(row.showImages, true) : true,
     previewSize: normalizePreviewSize(row?.previewSize),
+    noOverlap: row ? asBoolean(row.noOverlap) : false,
   };
 }
 
@@ -202,6 +209,7 @@ export interface MarkWhiteboard {
   w: number;
   h: number;
   z?: number;
+  hidden?: boolean;
   items: WhiteboardItem[];
 }
 
@@ -310,6 +318,7 @@ export function defaultCategory(
   return {
     sort: 0,
     collapsed: false,
+    hidden: false,
     coverUrl: '',
     showCover: true,
     x: 0,
@@ -485,6 +494,7 @@ export function defaultTable(partial: Partial<MarkTable> & Pick<MarkTable, 'id'>
     w: typeof partial.w === 'number' && partial.w > 0 ? partial.w : DEFAULT_TABLE_W,
     h: typeof partial.h === 'number' && partial.h > 0 ? partial.h : DEFAULT_TABLE_H,
     z: partial.z,
+    hidden: partial.hidden === true ? true : undefined,
     colCount: clampInt(partial.colCount ?? DEFAULT_TABLE_COL_COUNT, 1, MAX_TABLE_COL_COUNT, DEFAULT_TABLE_COL_COUNT),
     rowCount: clampInt(partial.rowCount ?? DEFAULT_TABLE_ROW_COUNT, 1, MAX_TABLE_ROW_COUNT, DEFAULT_TABLE_ROW_COUNT),
     cols: partial.cols,
@@ -534,6 +544,7 @@ function normalizeCategory(value: unknown, index: number): MarkCategory | null {
     sort: asNumber(row.sort, index),
     parentId,
     collapsed: asBoolean(row.collapsed),
+    hidden: asBoolean(row.hidden),
     coverUrl: asString(row.coverUrl),
     showCover: asBoolean(row.showCover),
     x: asNumber(row.x),
@@ -625,6 +636,7 @@ function normalizeTableRow(value: unknown, index: number): MarkTable | null {
     w: asNumber(row.w, DEFAULT_TABLE_W),
     h: asNumber(row.h, DEFAULT_TABLE_H),
     z: row.z == null ? undefined : asNumber(row.z),
+    hidden: asBoolean(row.hidden),
     colCount: asNumber(row.colCount, DEFAULT_TABLE_COL_COUNT),
     rowCount: asNumber(row.rowCount, DEFAULT_TABLE_ROW_COUNT),
     cols: cols?.length ? cols : undefined,
@@ -683,6 +695,7 @@ function normalizeWhiteboardRow(value: unknown, index: number): MarkWhiteboard |
     w: asNumber(row.w, DEFAULT_WHITEBOARD_W),
     h: asNumber(row.h, DEFAULT_WHITEBOARD_H),
     z: asNumber(row.z, index + 1),
+    hidden: asBoolean(row.hidden),
     items,
   });
 }
@@ -955,7 +968,8 @@ export function setDisplay(
     display.showUrls === current.showUrls &&
     display.showNames === current.showNames &&
     display.showImages === current.showImages &&
-    display.previewSize === current.previewSize
+    display.previewSize === current.previewSize &&
+    display.noOverlap === current.noOverlap
   ) {
     return doc;
   }
@@ -1044,6 +1058,52 @@ export function setFolderCollapsed(
   clock: MarksClock = fallbackClock
 ): MarksDoc {
   return updateCategory(doc, id, { collapsed }, clock);
+}
+
+/**
+ * Hide/show a desk window (top-level folder, table, or whiteboard) by id.
+ * Hidden windows stay in the doc — they just leave the desk until the
+ * "Hidden" chip in the Show row reveals them (Agnar, 2026-09-02).
+ */
+export function setWindowHidden(
+  doc: MarksDoc,
+  id: string,
+  hidden: boolean,
+  clock: MarksClock = fallbackClock
+): MarksDoc {
+  if (doc.categories.some((row) => row.id === id)) {
+    return touch(doc, clock, {
+      categories: doc.categories.map((row) => (row.id === id ? { ...row, hidden } : row)),
+    });
+  }
+  if ((doc.tables ?? []).some((row) => row.id === id)) {
+    return touch(doc, clock, {
+      tables: (doc.tables ?? []).map((row) => (row.id === id ? { ...row, hidden } : row)),
+    });
+  }
+  if ((doc.whiteboards ?? []).some((row) => row.id === id)) {
+    return touch(doc, clock, {
+      whiteboards: (doc.whiteboards ?? []).map((row) => (row.id === id ? { ...row, hidden } : row)),
+    });
+  }
+  return doc;
+}
+
+export function isWindowHidden(doc: MarksDoc, id: string): boolean {
+  return Boolean(
+    doc.categories.find((row) => row.id === id)?.hidden ||
+      (doc.tables ?? []).find((row) => row.id === id)?.hidden ||
+      (doc.whiteboards ?? []).find((row) => row.id === id)?.hidden
+  );
+}
+
+/** Count of hidden desk windows: top-level folders + tables + whiteboards. */
+export function hiddenWindowCount(doc: MarksDoc): number {
+  return (
+    doc.categories.filter((row) => !row.parentId && row.hidden).length +
+    (doc.tables ?? []).filter((row) => row.hidden).length +
+    (doc.whiteboards ?? []).filter((row) => row.hidden).length
+  );
 }
 
 export function revealFolder(doc: MarksDoc, id: string, clock: MarksClock = fallbackClock): MarksDoc {

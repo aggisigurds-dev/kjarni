@@ -94,6 +94,8 @@ export function LinkDialog({
   onUploadCover,
   onFetchPreview,
   previewBusy = false,
+  onFetchScreenshot,
+  shotBusy = false,
 }: {
   doc: MarksDoc;
   editing: MarkLink | null;
@@ -105,9 +107,17 @@ export function LinkDialog({
   onUploadCover: (file: File) => void;
   onFetchPreview?: () => void;
   previewBusy?: boolean;
+  /** Fetch + store a page screenshot as the cover (board does the work). */
+  onFetchScreenshot?: () => void;
+  shotBusy?: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  // Board fetches + stores the screenshot (onFetchScreenshot); the raw service URL is only a last resort.
   const applyPageShot = () => {
+    if (onFetchScreenshot) {
+      onFetchScreenshot();
+      return;
+    }
     const coverUrl = screenshotCoverUrl(draft.url);
     if (!coverUrl) return;
     setDraft({ ...draft, coverUrl, showImage: true });
@@ -233,10 +243,10 @@ export function LinkDialog({
             <button
               type="button"
               className={ACTION_GHOST}
-              disabled={!screenshotCoverUrl(draft.url)}
+              disabled={!screenshotCoverUrl(draft.url) || shotBusy}
               onClick={applyPageShot}
             >
-              Screenshot
+              {shotBusy ? 'Screenshot…' : 'Screenshot'}
             </button>
             {onFetchPreview ? (
               <button type="button" className={ACTION_GHOST} disabled={previewBusy} onClick={onFetchPreview}>
@@ -319,6 +329,8 @@ export function FolderDialog({
   onDelete,
   onUploadCover,
   screenshotUrl = '',
+  onFetchScreenshot,
+  shotBusy = false,
 }: {
   doc: MarksDoc;
   category: MarkCategory;
@@ -336,6 +348,9 @@ export function FolderDialog({
   onDelete: () => void;
   onUploadCover: (file: File) => void;
   screenshotUrl?: string;
+  /** Fetch + store a screenshot of `screenshotUrl` as the cover (board does the work). */
+  onFetchScreenshot?: (pageUrl: string) => void;
+  shotBusy?: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const pageShot = screenshotCoverUrl(screenshotUrl);
@@ -399,14 +414,18 @@ export function FolderDialog({
             <button
               type="button"
               className={ACTION_GHOST}
-              disabled={!pageShot}
+              disabled={!pageShot || shotBusy}
               onClick={() => {
                 if (!pageShot) return;
+                if (onFetchScreenshot) {
+                  onFetchScreenshot(screenshotUrl);
+                  return;
+                }
                 setCoverUrl(pageShot);
                 setShowCover(true);
               }}
             >
-              Screenshot
+              {shotBusy ? 'Screenshot…' : 'Screenshot'}
             </button>
           </div>
           <p className="mt-1 text-[0.65rem] text-stone-400">Paste a screenshot — it crops to the square.</p>
