@@ -1129,6 +1129,7 @@ function HelpDialog({
             ["H / space", "Færa borð (✋: vinstri velur)"],
             ["Hægri-drag", "Færa borð í allar áttir (í öllum tólum)"],
             ["R / O", "Ferningur / hringur"],
+            ["+ rými", "Rými: kassar, Enter = búa til, Esc = hætta"],
             ["L / A", "Lína / ör"],
             ["W", "Veggir (smelltu, Enter til að loka)"],
             ["P / T / N", "Penni / texti / minnismiði"],

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { formatM2, objectsOnDocument } from "../../lib/board/geometry";
 import { newId } from "../../lib/board/ids";
 import { LAYER_ALMENNT } from "../../lib/board/layers";
+import { listRooms, roomAreaPx } from "../../lib/board/rooms";
 import { useBoardStore } from "../../lib/board/store";
 import { NOTKUNARFLOKKAR, greinaTharfir, type Notkunarflokkur } from "../../lib/board/krofur";
 import { getSymbol } from "../../lib/board/symbols";
@@ -102,31 +103,31 @@ export function CountTable() {
   // gegnsæir ferningar án rýmis-merkingar teljast beint (eldra lagið);
   // "Frádráttur…" dregst frá hvoru tveggja. Nettó = hakað; brúttó = öll rými.
   const { rooms, netM2, grossM2, uncalibratedRooms } = useMemo(() => {
-    const empty = { rooms: [] as { id: string; name: string; m2: number; excluded: boolean }[], netM2: 0, grossM2: 0, uncalibratedRooms: false };
+    const empty = {
+      rooms: [] as { id: string; name: string; m2: number; excluded: boolean }[],
+      netM2: 0,
+      grossM2: 0,
+      uncalibratedRooms: false,
+    };
     if (!plan) return empty;
-    const rects = objectsOnDocument(plan, objects).filter(
-      (o): o is Extract<typeof o, { type: "rect" }> => o.type === "rect" && !o.hidden
-    );
+    const onPlan = objectsOnDocument(plan, objects).filter((o) => !o.hidden);
+    const grouped = listRooms(onPlan).filter((r) => r.counted);
     if (!pixelsPerMeter || pixelsPerMeter <= 0) {
-      return { ...empty, uncalibratedRooms: rects.some((r) => r.isRoom) };
+      return { ...empty, uncalibratedRooms: grouped.length > 0 };
     }
-    const area = (r: { width: number; height: number }) =>
-      (r.width / pixelsPerMeter) * (r.height / pixelsPerMeter);
-    const roomRects = rects.filter((r) => r.isRoom);
-    const seen = new Map<string, number>();
-    const roomList = roomRects.map((r) => {
-      const base = r.name && r.name !== "Ferningur" ? r.name : "Rými";
-      const n = (seen.get(base) ?? 0) + 1;
-      seen.set(base, n);
-      const dup = roomRects.filter((x) => (x.name && x.name !== "Ferningur" ? x.name : "Rými") === base).length > 1;
-      return { id: r.id, name: dup ? `${base} ${n}` : base, m2: area(r), excluded: !!r.roomExcluded };
-    });
+    const ppm2 = pixelsPerMeter * pixelsPerMeter;
+    const roomList = grouped.map((r, i) => ({
+      id: r.key,
+      name: `${i + 1} · ${r.name}`,
+      m2: roomAreaPx(onPlan, r.ids) / ppm2,
+      excluded: r.excluded,
+    }));
     let net = roomList.reduce((s, r) => s + (r.excluded ? 0 : r.m2), 0);
     let gross = roomList.reduce((s, r) => s + r.m2, 0);
-    for (const r of rects) {
-      if (r.isRoom || r.fill !== "transparent") continue;
-      const a = area(r);
-      if (r.name.startsWith("Frádráttur")) {
+    for (const o of onPlan) {
+      if (o.type !== "rect" || o.isRoom || o.fill !== "transparent") continue;
+      const a = (o.width / pixelsPerMeter) * (o.height / pixelsPerMeter);
+      if (o.name.startsWith("Frádráttur")) {
         net -= a;
         gross -= a;
       } else {
@@ -290,7 +291,7 @@ export function CountTable() {
                         type="checkbox"
                         checked={!r.excluded}
                         onChange={() =>
-                          useBoardStore.getState().patchObject(r.id, { roomExcluded: !r.excluded } as never)
+                          useBoardStore.getState().setRoomExcluded(r.id, !r.excluded)
                         }
                       />
                       <span className="min-w-0 flex-1 truncate">{r.name}</span>

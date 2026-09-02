@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Lock, Unlock } from "lucide-react";
+import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { isCrossingMark } from "../../lib/board/crossings";
 import { objectLayerId, type BoardLayer } from "../../lib/board/layers";
@@ -35,8 +35,18 @@ export function LayerList() {
   const pipingCount = piping.reduce((n, l) => n + (counts.get(l.id) ?? 0), 0);
 
   return (
-    <div>
-      <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">LAGNIR</div>
+    <details
+      className="group"
+      open={pipesOpen}
+      onToggle={(e) => setPipesOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary className="mb-2 flex cursor-pointer list-none items-center justify-between select-none text-[11px] font-medium tracking-[0.12em] text-[#FE653F] [&::-webkit-details-marker]:hidden">
+        <span>LAGNIR</span>
+        <span className="font-normal tracking-normal text-stone-600 group-open:hidden">
+          {pipingCount || ""} opna
+        </span>
+        <span className="hidden font-normal tracking-normal text-stone-600 group-open:inline">fella</span>
+      </summary>
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
         Lagnir liggja ofan á teikningunni — feldu Teikning til að sjá bara veggi og lagnir, eða hafðu
         skönnunina sýnilega. Nýjar strokur lenda á virka laginu.
@@ -54,37 +64,20 @@ export function LayerList() {
           />
         ))}
       </div>
-      <button
-        type="button"
-        onClick={() => setPipesOpen(!pipesOpen)}
-        aria-expanded={pipesOpen}
-        title={pipesOpen ? "Fella lagnir saman" : "Opna lagnir — Lag-veljarinn birtist þá líka í botnstikunni"}
-        className="mt-3 mb-1 flex w-full items-center gap-1 text-[11px] font-medium tracking-[0.12em] text-stone-500 hover:text-stone-300"
-      >
-        {pipesOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-        Lagnir
-        {pipesOpen ? null : (
-          <span className="ml-1 tracking-normal text-stone-600">
-            {pipingCount || ""} · samanbrotið
-          </span>
-        )}
-      </button>
-      {pipesOpen ? (
-        <div className="space-y-0.5">
-          {piping.map((layer) => (
-            <LayerRow
-              key={layer.id}
-              layer={layer}
-              count={counts.get(layer.id) ?? 0}
-              active={layer.id === activeLayerId}
-              onActivate={() => setActiveLayer(layer.id)}
-              onToggleVisible={() => toggleLayerVisible(layer.id)}
-              onToggleLocked={() => toggleLayerLocked(layer.id)}
-            />
-          ))}
-        </div>
-      ) : null}
-      {pipesOpen ? (
+      <div className="mt-3 mb-1 text-[11px] font-medium tracking-[0.12em] text-stone-500">Lagnir</div>
+      <div className="space-y-0.5">
+        {piping.map((layer) => (
+          <LayerRow
+            key={layer.id}
+            layer={layer}
+            count={counts.get(layer.id) ?? 0}
+            active={layer.id === activeLayerId}
+            onActivate={() => setActiveLayer(layer.id)}
+            onToggleVisible={() => toggleLayerVisible(layer.id)}
+            onToggleLocked={() => toggleLayerLocked(layer.id)}
+          />
+        ))}
+      </div>
       <button
         type="button"
         className="mt-3 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-left text-[11px] text-stone-300 hover:bg-white/10 hover:text-white"
@@ -102,8 +95,7 @@ export function LayerList() {
           {objects.filter(isCrossingMark).length || ""}
         </span>
       </button>
-      ) : null}
-    </div>
+    </details>
   );
 }
 

@@ -14,7 +14,8 @@ export type Tool =
   | "calibrate"
   | "firewall"
   | "eraser"
-  | "crop";
+  | "crop"
+  | "room";
 
 export type ImportQuality = "fast" | "standard" | "print";
 
@@ -72,6 +73,12 @@ export interface RectObject extends BaseObject {
   isRoom?: boolean;
   /** Rými sem telst EKKI með í nettó (svalir, geymsla, bílskúr …). */
   roomExcluded?: boolean;
+  /** False = sleppa rýminu úr magntöflu (númer 1, 2, 3 og m²-lína). Vantar = talið. */
+  roomCounted?: boolean;
+  /** Fill-alpha for the room wash (0–1). Stroke and labels stay solid. */
+  roomOpacity?: number;
+  /** Leiðbeinandi fjöldi gata sem eftir eru í rýminu (heil tala ≥ 0). */
+  roomGataCount?: number;
 }
 
 export interface EllipseObject extends BaseObject {
