@@ -128,6 +128,20 @@ describe('organizer', () => {
     expect(gone.links.some((link) => link.categoryId === personal!.id)).toBe(false);
   });
 
+  it('drops a folder that appears twice with the same id (first wins)', () => {
+    const doc = normalizeDoc({
+      updatedAt: 1,
+      categories: [
+        { id: 'cat_n1', name: 'Keep', sort: 0 },
+        { id: 'cat_n2', name: 'Apps', sort: 1 },
+        { id: 'cat_n1', name: 'Untitled', sort: 2 },
+      ],
+      links: [],
+    });
+    expect(doc?.categories.map((row) => row.id)).toEqual(['cat_n1', 'cat_n2']);
+    expect(doc?.categories[0]?.name).toBe('Keep');
+  });
+
   it('normalizes an old flat home board without filters or positions', () => {
     const raw = {
       updatedAt: 4,
@@ -416,6 +430,8 @@ describe('sites', () => {
       showImages: true,
       previewSize: 'm',
       noOverlap: false,
+      layout: 'desk',
+      columns: 3,
     });
     expect(blank.unfiledCollapsed).toBe(false);
 
@@ -452,9 +468,15 @@ describe('sites', () => {
       showImages: false,
       previewSize: 'l',
       noOverlap: false,
+      layout: 'desk',
+      columns: 3,
     });
     const roundtrip = normalizeDoc(doc);
     expect(roundtrip?.display.previewSize).toBe('l');
+    const cols = setDisplay(doc, { layout: 'columns', columns: 4 }, clock);
+    expect(cols.display).toMatchObject({ layout: 'columns', columns: 4 });
+    expect(normalizeDoc(cols)?.display).toMatchObject({ layout: 'columns', columns: 4 });
+    expect(setDisplay(doc, { columns: 7 as 2 }, clock).display.columns).toBe(3);
     expect(setDisplay(doc, { previewSize: 'xl' }, clock).display.previewSize).toBe('xl');
     expect(setDisplay(doc, { previewSize: 'xxl' }, clock).display.previewSize).toBe('xxl');
     expect(setDisplay(doc, { previewSize: 'huge' as 's' }, clock).display.previewSize).toBe('m');
