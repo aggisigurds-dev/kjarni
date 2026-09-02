@@ -14,8 +14,10 @@ import {
   createSiteId,
   descendantIds,
   emptyDoc,
+  hiddenWindowCount,
   hostOf,
   isMarksBoardId,
+  isWindowHidden,
   layoutMissingPositions,
   linksInCategory,
   MARKS_BOARD_ID,
@@ -34,6 +36,7 @@ import {
   setDisplay,
   setSiteTitle,
   setUnfiledCollapsed,
+  setWindowHidden,
   siteTitle,
   testClock,
   updateLink,
@@ -366,7 +369,7 @@ describe('preview meta', () => {
     expect(resolvePreviewUrl('//cdn.example.com/a.jpg', 'https://example.com')).toBe(
       'https://cdn.example.com/a.jpg'
     );
-    expect(screenshotCoverUrl('example.com')).toContain('mshots');
+    expect(screenshotCoverUrl('example.com')).toContain('api.microlink.io');
   });
 });
 
@@ -412,6 +415,7 @@ describe('sites', () => {
       showNames: true,
       showImages: true,
       previewSize: 'm',
+      noOverlap: false,
     });
     expect(blank.unfiledCollapsed).toBe(false);
 
@@ -447,6 +451,7 @@ describe('sites', () => {
       showNames: false,
       showImages: false,
       previewSize: 'l',
+      noOverlap: false,
     });
     const roundtrip = normalizeDoc(doc);
     expect(roundtrip?.display.previewSize).toBe('l');
@@ -456,6 +461,24 @@ describe('sites', () => {
     doc = setUnfiledCollapsed(doc, true, clock);
     expect(doc.unfiledCollapsed).toBe(true);
     expect(setUnfiledCollapsed(doc, true, clock)).toBe(doc);
+  });
+
+  it('hides and shows desk windows and keeps the flag through normalize', () => {
+    const clock = testClock();
+    let doc = addTable(seedDoc(clock.now()), 'Budget', clock);
+    const tableId = doc.tables[0]!.id;
+    expect(hiddenWindowCount(doc)).toBe(0);
+    doc = setWindowHidden(doc, 'cat_kjarni', true, clock);
+    doc = setWindowHidden(doc, tableId, true, clock);
+    expect(isWindowHidden(doc, 'cat_kjarni')).toBe(true);
+    expect(isWindowHidden(doc, tableId)).toBe(true);
+    expect(hiddenWindowCount(doc)).toBe(2);
+    const roundtrip = normalizeDoc(doc)!;
+    expect(roundtrip.categories.find((row) => row.id === 'cat_kjarni')?.hidden).toBe(true);
+    expect(roundtrip.tables[0]?.hidden).toBe(true);
+    doc = setWindowHidden(doc, 'cat_kjarni', false, clock);
+    expect(isWindowHidden(doc, 'cat_kjarni')).toBe(false);
+    expect(setWindowHidden(doc, 'nope', true, clock)).toBe(doc);
   });
 
   it('adds an excel table and keeps cells through normalize', () => {

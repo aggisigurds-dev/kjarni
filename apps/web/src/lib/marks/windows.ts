@@ -10,6 +10,7 @@ import {
   DEFAULT_TABLE_W,
   DEFAULT_WHITEBOARD_H,
   DEFAULT_WHITEBOARD_W,
+  childCategories,
   persistDoc,
   type MarkCategory,
   type MarkTable,
@@ -332,6 +333,86 @@ export function whiteboardWindowRect(board: MarkWhiteboard, index = 0): MarksWin
     w: Math.max(MIN_WHITEBOARD_W, Math.round(board.w || DEFAULT_WHITEBOARD_W)),
     h: Math.max(MIN_WHITEBOARD_H, Math.round(board.h || DEFAULT_WHITEBOARD_H)),
   };
+}
+
+export const PACK_GAP = 16;
+export const PACK_ROW_W = 1120;
+/** Height a collapsed folder window takes on the desk (title bar + folder header + "N items"). */
+export const COLLAPSED_WINDOW_H = 112;
+
+/**
+ * "No overlap" (Agnar, 2026-09-02): shelf-pack every visible desk window —
+ * top-level folders, Unfiled, tables, whiteboards — into rows so none overlap.
+ * Sizes are kept; order follows the current top-to-bottom, left-to-right
+ * position, so a window dragged elsewhere keeps its new neighbourhood.
+ * Hidden windows are left where they are.
+ */
+export function packWindows(doc: MarksDoc, now: number, rowWidth = PACK_ROW_W): MarksDoc {
+  type Row = { id: string; kind: 'folder' | 'unfiled' | 'table' | 'whiteboard'; rect: MarksWindowRect };
+  const roots = childCategories(doc, null);
+  const tables = doc.tables ?? [];
+  const boards = doc.whiteboards ?? [];
+  const rows: Row[] = [];
+  // Collapsed windows only occupy their header height, so the next row moves up.
+  const shrink = (rect: MarksWindowRect, collapsed: boolean) =>
+    collapsed ? { ...rect, h: Math.min(rect.h, COLLAPSED_WINDOW_H) } : rect;
+  roots.forEach((folder, index) => {
+    if (!folder.hidden) {
+      rows.push({ id: folder.id, kind: 'folder', rect: shrink(folderWindowRect(folder, index), folder.collapsed) });
+    }
+  });
+  rows.push({
+    id: UNFILED_WINDOW_ID,
+    kind: 'unfiled',
+    rect: shrink(unfiledWindowRect(doc, roots.length), Boolean(doc.unfiledCollapsed)),
+  });
+  tables.forEach((table, index) => {
+    if (!table.hidden) rows.push({ id: table.id, kind: 'table', rect: tableWindowRect(table, roots.length + 1 + index) });
+  });
+  boards.forEach((board, index) => {
+    if (!board.hidden) {
+      rows.push({
+        id: board.id,
+        kind: 'whiteboard',
+        rect: whiteboardWindowRect(board, roots.length + 1 + tables.length + index),
+      });
+    }
+  });
+  const fullRect = (row: Row): MarksWindowRect => {
+    if (row.kind === 'unfiled') return unfiledWindowRect(doc, roots.length);
+    const index = roots.findIndex((folder) => folder.id === row.id);
+    return folderWindowRect(roots[index]!, index);
+  };
+  // Visual reading order: rows of ~48px, then left to right.
+  rows.sort(
+    (a, b) => Math.round(a.rect.y / 48) - Math.round(b.rect.y / 48) || a.rect.x - b.rect.x || a.id.localeCompare(b.id)
+  );
+  // Start at (gap, gap): (0,0) would read as "no origin" and fall back to tiling.
+  let x = PACK_GAP;
+  let y = PACK_GAP;
+  let rowH = 0;
+  let next = doc;
+  for (const row of rows) {
+    const { w, h } = row.rect;
+    if (x > PACK_GAP && x + w > rowWidth) {
+      x = PACK_GAP;
+      y += rowH + PACK_GAP;
+      rowH = 0;
+    }
+    const placedX = x;
+    const placedY = y;
+    x += w + PACK_GAP;
+    rowH = Math.max(rowH, h);
+    if (placedX === row.rect.x && placedY === row.rect.y) continue;
+    // Keep the stored (open) size — only the position changes.
+    const stored = row.kind === 'folder' || row.kind === 'unfiled' ? fullRect(row) : row.rect;
+    const rect = { x: placedX, y: placedY, w: stored.w, h: stored.h };
+    if (row.kind === 'folder') next = setCategoryLayout(next, row.id, rect, now);
+    else if (row.kind === 'unfiled') next = setUnfiledLayout(next, rect, now);
+    else if (row.kind === 'table') next = setTableLayout(next, row.id, rect, now);
+    else next = setWhiteboardLayout(next, row.id, rect, now);
+  }
+  return next;
 }
 
 export function setWhiteboardLayout(doc: MarksDoc, id: string, rect: MarksWindowRect, now: number): MarksDoc {
