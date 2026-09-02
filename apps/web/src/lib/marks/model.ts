@@ -147,6 +147,19 @@ export interface MarksDisplay {
   previewSize: MarksPreviewSize;
   /** Keep desk windows from overlapping: packed into rows after every move (2026-09-02). */
   noOverlap: boolean;
+  /**
+   * Desktop layout: free-position desk, or windows stacked in N columns so a
+   * collapsed window lets the next one move up (Agnar, 2026-09-02).
+   */
+  layout: MarksLayout;
+  columns: MarksColumns;
+}
+
+export type MarksLayout = 'desk' | 'columns';
+export type MarksColumns = 2 | 3 | 4;
+
+export function normalizeColumns(value: unknown): MarksColumns {
+  return value === 2 || value === 4 ? value : 3;
 }
 
 export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
@@ -155,6 +168,8 @@ export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
   showImages: true,
   previewSize: 'm',
   noOverlap: false,
+  layout: 'desk',
+  columns: 3,
 };
 
 export function normalizePreviewSize(value: unknown): MarksPreviewSize {
@@ -169,6 +184,8 @@ export function normalizeDisplay(value: unknown): MarksDisplay {
     showImages: row ? asBoolean(row.showImages, true) : true,
     previewSize: normalizePreviewSize(row?.previewSize),
     noOverlap: row ? asBoolean(row.noOverlap) : false,
+    layout: row?.layout === 'columns' ? 'columns' : 'desk',
+    columns: normalizeColumns(row?.columns),
   };
 }
 
@@ -306,6 +323,15 @@ function asNumber(value: unknown, fallback = 0): number {
 
 function asBoolean(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function dedupeById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
 }
 
 function nextSort(items: { sort: number }[]): number {
@@ -709,9 +735,14 @@ export function normalizeDoc(value: unknown, now = 0): MarksDoc | null {
       ? doc.folders
       : null;
   if (!folderSource || !Array.isArray(doc.links)) return null;
-  const categories = folderSource
-    .map((row, index) => normalizeCategory(row, index))
-    .filter((row): row is MarkCategory => Boolean(row));
+  // Dedupe by id (first wins): a doc with the same folder twice rendered one
+  // folder's content under two windows and tripped React's duplicate-key
+  // warning on every paint (seen on the Home board, 2026-09-02).
+  const categories = dedupeById(
+    folderSource
+      .map((row, index) => normalizeCategory(row, index))
+      .filter((row): row is MarkCategory => Boolean(row))
+  );
   const ids = new Set(categories.map((category) => category.id));
   const links = doc.links
     .map((row, index) => normalizeLinkRow(row, index))
@@ -964,12 +995,16 @@ export function setDisplay(
   const current = normalizeDisplay(doc.display);
   const display = { ...current, ...patch };
   display.previewSize = normalizePreviewSize(display.previewSize);
+  display.layout = display.layout === 'columns' ? 'columns' : 'desk';
+  display.columns = normalizeColumns(display.columns);
   if (
     display.showUrls === current.showUrls &&
     display.showNames === current.showNames &&
     display.showImages === current.showImages &&
     display.previewSize === current.previewSize &&
-    display.noOverlap === current.noOverlap
+    display.noOverlap === current.noOverlap &&
+    display.layout === current.layout &&
+    display.columns === current.columns
   ) {
     return doc;
   }

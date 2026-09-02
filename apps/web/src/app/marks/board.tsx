@@ -644,6 +644,13 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
     }
   };
 
+  // Row width for "No overlap" packing = the visible desk width (the desk is its
+  // own scroll box), so a 2560px screen fills the screen instead of 1120px.
+  const deskRowWidth = (): number | undefined => {
+    const desk = document.querySelector<HTMLElement>('[data-marks-layout="windows"]');
+    return desk && desk.clientWidth > 0 ? Math.max(480, desk.clientWidth - 16) : undefined;
+  };
+
   // Page screenshot → square crop → our bucket → cover. Stored once, so the
   // screenshot service (rate-limited) is never used as a live <img src>.
   const grabScreenshot = async (pageUrl: string): Promise<string> => {
@@ -783,12 +790,48 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
             onClick={() => {
               const on = !doc.display.noOverlap;
               let next = setDisplay(doc, { noOverlap: on }, clock);
-              if (on) next = packWindows(next, clock.now());
+              if (on) next = packWindows(next, clock.now(), deskRowWidth());
               apply(next, on ? 'Windows packed — no overlap.' : 'Overlap allowed again.', 'Could not update the view.');
             }}
           >
             No overlap
           </button>
+          <span className={`${LABEL} ml-2`}>Layout</span>
+          {(
+            [
+              ['desk', 'Desk', 'Free desk: drag windows anywhere.'],
+              ['2', '2 cols', 'Windows stacked in 2 columns — collapse one and the next moves up.'],
+              ['3', '3 cols', 'Windows stacked in 3 columns — collapse one and the next moves up.'],
+              ['4', '4 cols', 'Windows stacked in 4 columns — collapse one and the next moves up.'],
+            ] as const
+          ).map(([key, label, title]) => {
+            const on =
+              key === 'desk'
+                ? doc.display.layout !== 'columns'
+                : doc.display.layout === 'columns' && doc.display.columns === Number(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={on ? CHIP_ON : CHIP_IDLE}
+                aria-pressed={on}
+                title={title}
+                onClick={() =>
+                  apply(
+                    setDisplay(
+                      doc,
+                      key === 'desk' ? { layout: 'desk' } : { layout: 'columns', columns: Number(key) as 2 | 3 | 4 },
+                      clock
+                    ),
+                    key === 'desk' ? 'Free desk.' : `${key} columns.`,
+                    'Could not update the view.'
+                  )
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
           <span className={`${LABEL} ml-2`}>Size</span>
           {MARKS_PREVIEW_SIZES.map((size) => (
             <button
@@ -1111,7 +1154,7 @@ export function MarksBoard({ boardId = MARKS_BOARD_ID }: { boardId?: string }) {
               else if ((doc.whiteboards ?? []).some((board) => board.id === id)) next = setWhiteboardLayout(doc, id, rect, now);
               else next = setCategoryLayout(doc, id, rect, now);
               // "No overlap" on → re-pack after every move/resize so nothing lands on top of another window.
-              if (doc.display.noOverlap) next = packWindows(next, now);
+              if (doc.display.noOverlap) next = packWindows(next, now, deskRowWidth());
               patch(next);
             }}
             onRemoveLink={(link) => {
