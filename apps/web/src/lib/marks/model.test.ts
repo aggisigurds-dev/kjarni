@@ -450,7 +450,9 @@ describe('sites', () => {
     });
     const roundtrip = normalizeDoc(doc);
     expect(roundtrip?.display.previewSize).toBe('l');
-    expect(setDisplay(doc, { previewSize: 'xl' as 's' }, clock).display.previewSize).toBe('m');
+    expect(setDisplay(doc, { previewSize: 'xl' }, clock).display.previewSize).toBe('xl');
+    expect(setDisplay(doc, { previewSize: 'xxl' }, clock).display.previewSize).toBe('xxl');
+    expect(setDisplay(doc, { previewSize: 'huge' as 's' }, clock).display.previewSize).toBe('m');
     doc = setUnfiledCollapsed(doc, true, clock);
     expect(doc.unfiledCollapsed).toBe(true);
     expect(setUnfiledCollapsed(doc, true, clock)).toBe(doc);

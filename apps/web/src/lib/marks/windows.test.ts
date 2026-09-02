@@ -26,11 +26,11 @@ describe('category window layout', () => {
     expect(rect.h).toBe(MIN_WINDOW_H);
   });
 
-  it('snaps to the 8px grid', () => {
+  it('snaps to the 16px dot grid', () => {
     expect(snapWindowRect({ x: 13, y: 19, w: 327, h: 401 })).toEqual({
       x: 16,
       y: 16,
-      w: 328,
+      w: 320,
       h: 400,
     });
   });
@@ -75,7 +75,7 @@ describe('category window layout', () => {
       h: 240,
     });
     const next = setUnfiledLayout(moved, { x: 24, y: 16, w: 264, h: 184 }, 10);
-    expect((next as { unfiledLayout?: unknown }).unfiledLayout).toEqual({ x: 24, y: 16, w: 264, h: 184 });
+    expect((next as { unfiledLayout?: unknown }).unfiledLayout).toEqual({ x: 32, y: 16, w: 272, h: 192 });
   });
 
   it('lays out table windows from jsonb and keeps them on normalize', () => {
@@ -110,8 +110,8 @@ describe('category window layout', () => {
     const laid = layoutMissingWindows(normalizeDoc(raw)!, raw);
     expect(laid.whiteboards[0]?.w).toBeGreaterThanOrEqual(MIN_WINDOW_W - 20);
     expect(laid.whiteboards[0]?.h).toBeGreaterThanOrEqual(MIN_WINDOW_H);
-    const moved = setWhiteboardLayout(laid, 'wb_one', { x: 48, y: 24, w: 280, h: 200 }, 3);
-    expect(moved.whiteboards[0]).toMatchObject({ x: 48, y: 24, w: 280, h: 200 });
+    const moved = setWhiteboardLayout(laid, 'wb_one', { x: 48, y: 32, w: 288, h: 208 }, 3);
+    expect(moved.whiteboards[0]).toMatchObject({ x: 48, y: 32, w: 288, h: 208 });
     expect(addWhiteboard(emptyDoc(0)).whiteboards[0]?.id.startsWith('wb_')).toBe(true);
   });
 

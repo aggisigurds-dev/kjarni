@@ -5,6 +5,7 @@ import { childCategories, type MarksDoc } from '@/lib/marks/model';
 import {
   MIN_TABLE_H,
   MIN_TABLE_W,
+  SNAP_GRID,
   UNFILED_WINDOW_ID,
   applyMove,
   applyResize,
@@ -150,13 +151,13 @@ export function MarksWindowDesk({
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
     const mins = items.find((item) => item.id === current.id);
-    setPreview({
-      id: current.id,
-      rect:
-        current.type === 'move'
-          ? applyMove(current.origin, dx, dy)
-          : applyResize(current.origin, current.edge, dx, dy, { w: mins?.minW, h: mins?.minH }),
-    });
+    // Magnet to the dot grid WHILE dragging (not only on release) so the window
+    // visibly lands on the grid as it moves.
+    const raw =
+      current.type === 'move'
+        ? applyMove(current.origin, dx, dy)
+        : applyResize(current.origin, current.edge, dx, dy, { w: mins?.minW, h: mins?.minH });
+    setPreview({ id: current.id, rect: snapWindowRect(raw, SNAP_GRID, { w: mins?.minW, h: mins?.minH }) });
   };
 
   const endGesture = (event: ReactPointerEvent<HTMLDivElement>) => {

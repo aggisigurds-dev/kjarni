@@ -132,7 +132,9 @@ export interface MarkTable {
   cells: Record<string, MarkTableCell>;
 }
 
-export type MarksPreviewSize = 's' | 'm' | 'l';
+/** Preview thumbnail size. `xl` is twice `l`, `xxl` four times `l` (Agnar, 2026-09-02). */
+export type MarksPreviewSize = 's' | 'm' | 'l' | 'xl' | 'xxl';
+export const MARKS_PREVIEW_SIZES: readonly MarksPreviewSize[] = ['s', 'm', 'l', 'xl', 'xxl'];
 
 export interface MarksDisplay {
   /** Site-wide; per-link showUrl still applies when this is on. */
@@ -150,7 +152,7 @@ export const DEFAULT_MARKS_DISPLAY: MarksDisplay = {
 };
 
 export function normalizePreviewSize(value: unknown): MarksPreviewSize {
-  return value === 's' || value === 'l' ? value : 'm';
+  return value === 's' || value === 'l' || value === 'xl' || value === 'xxl' ? value : 'm';
 }
 
 export function normalizeDisplay(value: unknown): MarksDisplay {
@@ -166,12 +168,16 @@ export function normalizeDisplay(value: unknown): MarksDisplay {
 export function previewFrameClass(size: MarksPreviewSize): string {
   if (size === 's') return 'h-8 w-8';
   if (size === 'l') return 'h-24 w-24';
+  if (size === 'xl') return 'h-48 w-48';
+  if (size === 'xxl') return 'h-96 w-96';
   return 'h-14 w-14';
 }
 
 export function folderCoverClass(size: MarksPreviewSize): string {
   if (size === 's') return 'h-10 w-10';
   if (size === 'l') return 'h-32 w-32';
+  if (size === 'xl') return 'h-64 w-64';
+  if (size === 'xxl') return 'h-[32rem] w-[32rem]';
   return 'h-24 w-24';
 }
 
