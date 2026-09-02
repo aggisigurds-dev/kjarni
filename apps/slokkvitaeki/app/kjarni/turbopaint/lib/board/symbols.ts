@@ -8,6 +8,17 @@ export interface SafetySymbol {
   short: string;
   category: SymbolCategory;
   kind: SymbolKind;
+  /** Teikningin sem táknið notar — sjálfgefið id-ið sjálft. Tækjategundirnar
+   *  þrjár deila slökkvitækja-teikningunni og skilja sig að með lit einum. */
+  glyphId?: string;
+  /** Reitalitur, víki hann frá flokkslitnum. */
+  bg?: string;
+  /** Litur teikningarinnar, víki hann frá flokkslitnum. */
+  fg?: string;
+  /** Útlína utan um teikninguna — CO₂ er dökkrautt með svartri útlínu. */
+  outline?: string;
+  /** Táknið var búið til í Táknastjóranum, ekki innbyggt. */
+  userMade?: boolean;
 }
 
 export const SYMBOL_CATEGORIES: { id: SymbolCategory; label: string }[] = [
@@ -19,6 +30,9 @@ export const SYMBOL_CATEGORIES: { id: SymbolCategory; label: string }[] = [
 
 export const SAFETY_SYMBOLS: SafetySymbol[] = [
   { id: "extinguisher", name: "Slökkvitæki", short: "SLT", category: "eldur", kind: "fire" },
+  { id: "extinguisher-duft", name: "Slökkvitæki · Duft", short: "DFT", category: "eldur", kind: "fire", glyphId: "extinguisher", fg: "#1d4ed8" },
+  { id: "extinguisher-co2", name: "Slökkvitæki · CO₂", short: "CO2", category: "eldur", kind: "fire", glyphId: "extinguisher", fg: "#7f1d1d", outline: "#0c0a09" },
+  { id: "extinguisher-lettvatn", name: "Slökkvitæki · Léttvatn", short: "LÉT", category: "eldur", kind: "fire", glyphId: "extinguisher", fg: "#0d9488" },
   { id: "sign-extinguisher", name: "Skilti slökkvitækis", short: "SKL", category: "eldur", kind: "fire" },
   { id: "hose", name: "Brunaslanga / slöngukefli", short: "BRSL", category: "eldur", kind: "fire" },
   { id: "sign-hose", name: "Skilti brunaslöngu", short: "SLS", category: "eldur", kind: "fire" },
@@ -45,8 +59,34 @@ export const SAFETY_SYMBOLS: SafetySymbol[] = [
   { id: "pin", name: "Staðsetning", short: "PIN", category: "bygging", kind: "neutral" },
 ];
 
+let userSymbols: SafetySymbol[] = [];
+let renames: Record<string, string> = {};
+
+/** Táknastillingarnar kalla þetta þegar þær hlaðast eða breytast. */
+export function applySymbolCustomisation(custom: SafetySymbol[], names: Record<string, string>) {
+  userSymbols = custom;
+  renames = names;
+}
+
+function renamed(s: SafetySymbol): SafetySymbol {
+  const n = renames[s.id];
+  return n && n !== s.name ? { ...s, name: n } : s;
+}
+
+/** Innbyggð tákn OG þau sem notandinn bjó til, með gildandi nöfnum. */
+export function allSymbols(): SafetySymbol[] {
+  return [...SAFETY_SYMBOLS, ...userSymbols].map(renamed);
+}
+
 export function getSymbol(id: string): SafetySymbol {
-  return SAFETY_SYMBOLS.find((s) => s.id === id) ?? SAFETY_SYMBOLS[0];
+  const hit = SAFETY_SYMBOLS.find((s) => s.id === id) ?? userSymbols.find((s) => s.id === id);
+  return renamed(hit ?? SAFETY_SYMBOLS[0]);
+}
+
+/** Litirnir sem táknið teiknast með — eigin litir ganga fyrir flokkslitnum. */
+export function symbolPaint(sym: SafetySymbol): { bg: string; fg: string; outline?: string } {
+  const base = symbolColors(sym.kind);
+  return { bg: sym.bg ?? base.bg, fg: sym.fg ?? base.fg, outline: sym.outline };
 }
 
 export function symbolColors(kind: SymbolKind): { bg: string; fg: string } {

@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { isCrossingMark } from "../../lib/board/crossings";
 import { objectLayerId, type BoardLayer } from "../../lib/board/layers";
-import { useBoardStore } from "../../lib/board/store";
+import { PIPES_OPEN_KEY, useBoardStore } from "../../lib/board/store";
 import type { BoardObject } from "../../lib/board/types";
 import { cn } from "../../lib/utils";
 
@@ -15,16 +16,35 @@ export function LayerList() {
   const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
   const toggleLayerVisible = useBoardStore((s) => s.toggleLayerVisible);
   const toggleLayerLocked = useBoardStore((s) => s.toggleLayerLocked);
+  const pipesOpen = useBoardStore((s) => s.pipesOpen);
+  const setPipesOpen = useBoardStore((s) => s.setPipesOpen);
+
+  // Geymda valið les eftir hleðslu, ekki í store-inu sjálfu — annars stangaðist
+  // fyrsta teikning vafrans á við þjóninn.
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(PIPES_OPEN_KEY) === "1") setPipesOpen(true);
+    } catch {
+      /* privat gluggi — sjálfgefið lokað */
+    }
+  }, [setPipesOpen]);
 
   const counts = countByLayer(objects);
   const drawing = layers.filter((l) => l.kind !== "piping");
   const piping = layers.filter((l) => l.kind === "piping");
+  const pipingCount = piping.reduce((n, l) => n + (counts.get(l.id) ?? 0), 0);
 
   return (
-    <details className="group">
+    <details
+      className="group"
+      open={pipesOpen}
+      onToggle={(e) => setPipesOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
       <summary className="mb-2 flex cursor-pointer list-none items-center justify-between select-none text-[11px] font-medium tracking-[0.12em] text-[#FE653F] [&::-webkit-details-marker]:hidden">
         <span>LAGNIR</span>
-        <span className="font-normal tracking-normal text-stone-600 group-open:hidden">opna</span>
+        <span className="font-normal tracking-normal text-stone-600 group-open:hidden">
+          {pipingCount || ""} opna
+        </span>
         <span className="hidden font-normal tracking-normal text-stone-600 group-open:inline">fella</span>
       </summary>
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">

@@ -9,9 +9,11 @@ import { registerStage } from "../../lib/board/stage-ref";
 import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
+import { getStampSize } from "../../lib/board/symbol-settings";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { DEFAULT_ROOM_NAME, fillAlpha, roomOfSelection } from "../../lib/board/rooms";
+import { isRightMouseButton, shouldPanView } from "../../lib/board/pan";
 import { GridLayer } from "./GridLayer";
 import { ObjectNode } from "./ObjectNode";
 import { RoomGataOverlays } from "./RoomGataStepper";
@@ -153,8 +155,9 @@ export function BoardCanvas({
     useBoardStore.getState().setGridGap(effectiveGridGap(camera, width, height));
   }, [camera, width, height]);
 
-  // Hand mode: left button behaves like select ("choose"), the pan itself
-  // lives on right-button drag (touch/pen still pan with the primary pointer).
+  // Hand mode: left button behaves like select ("choose"). Right-button drag
+  // always pans the board in any tool (touch/pen still pan with the primary
+  // pointer while the hand tool is active).
   const selectLike = tool === "select" || tool === "hand";
 
   const selectedNodes = useMemo(
@@ -445,6 +448,7 @@ export function BoardCanvas({
 
   const endGesture = useCallback(() => {
     panRef.current = null;
+    if (wrapRef.current) wrapRef.current.style.cursor = "";
     eraseRef.current = false;
     const d = draftRef.current;
     if (!d) return;
@@ -572,7 +576,7 @@ export function BoardCanvas({
     if (!stage || pinchRef.current) return;
     if (e.evt.button === 2) {
       // Kyrrstæður hægri-smellur opnar hraðvalmyndina (sjá onContextMenu);
-      // hægri-DRAG í ✋ færir borðið áfram — fjarlægðin sker úr.
+      // hægri-DRAG færir borðið í allar áttir, óháð tóli — fjarlægðin sker úr.
       rightDownRef.current = { x: e.evt.clientX, y: e.evt.clientY };
     }
     const world = clientToWorld(e.evt.clientX, e.evt.clientY);
@@ -585,14 +589,17 @@ export function BoardCanvas({
       currentTool === "firewall" || currentTool === "measure" || currentTool === "calibrate";
     const snapped = freehand ? world : snapPoint(world.x, world.y);
 
-    const mousePointer = e.evt.pointerType === "mouse";
     if (
-      e.evt.button === 1 ||
-      useBoardStore.getState().spacePan ||
-      (currentTool === "hand" && (!mousePointer || e.evt.button === 2))
+      shouldPanView({
+        button: e.evt.button,
+        pointerType: e.evt.pointerType,
+        tool: currentTool,
+        spacePan: useBoardStore.getState().spacePan,
+      })
     ) {
       e.evt.preventDefault();
       panRef.current = { x: e.evt.clientX, y: e.evt.clientY, cx: cam.x, cy: cam.y };
+      if (wrapRef.current) wrapRef.current.style.cursor = "grabbing";
       return;
     }
     if (e.evt.button !== 0) return;
@@ -634,13 +641,14 @@ export function BoardCanvas({
         setDraftState({ kind: "polyline", points: [world.x, world.y] });
         return;
       }
+      const stampPx = getStampSize();
       addObjects([
         {
           id: newId(),
           type: "symbol",
-          x: snapped.x - 28,
-          y: snapped.y - 28,
-          size: 56,
+          x: snapped.x - stampPx / 2,
+          y: snapped.y - stampPx / 2,
+          size: stampPx,
           symbolId: st.symbolId,
           label: "",
           rotation: 0,
@@ -1046,6 +1054,17 @@ export function BoardCanvas({
       }}
       onDrop={onDrop}
       onContextMenu={onContextMenu}
+      onPointerDownCapture={(e) => {
+        if (!isRightMouseButton(e.button, e.pointerType)) return;
+        // Catch the right button before Konva objects start a left-style drag,
+        // so pan works over symbols, lines, and empty canvas alike.
+        e.preventDefault();
+        e.stopPropagation();
+        rightDownRef.current = { x: e.clientX, y: e.clientY };
+        const cam = useBoardStore.getState().camera;
+        panRef.current = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y };
+        e.currentTarget.style.cursor = "grabbing";
+      }}
     >
       <Stage
         width={width}

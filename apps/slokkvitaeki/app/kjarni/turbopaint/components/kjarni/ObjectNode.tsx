@@ -80,6 +80,7 @@ export function ObjectNode({
   onDblClick: (id: string) => void;
 }) {
   const layers = useBoardStore((s) => s.layers);
+  const symbolOpacity = useBoardStore((s) => s.symbolOpacity);
   const selGlow = isSelected
     ? { shadowColor: "#FE653F", shadowBlur: 22, shadowOpacity: 0.85, shadowEnabled: true }
     : { shadowEnabled: false };
@@ -361,6 +362,9 @@ export function ObjectNode({
     return (
       <Group
         {...common}
+        // Sameiginlega dofnunin margfaldast við ógegnsæi hlutarins sjálfs, svo
+        // tákn sem var handdofnað verður aldrei skýrara en það var.
+        opacity={obj.opacity * symbolOpacity}
         onTransformEnd={(e) => {
           const node = e.target as Konva.Node;
           const scale = (Math.abs(node.scaleX()) + Math.abs(node.scaleY())) / 2;
