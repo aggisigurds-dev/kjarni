@@ -856,18 +856,9 @@ export function BoardCanvas({
         height: Math.max(8, obj.height * Math.abs(node.scaleY || 1)),
       };
       if (obj.type === "image") {
-        const dx = next.x - obj.x;
-        const dy = next.y - obj.y;
-        const followers = objectsOnDocument(obj, useBoardStore.getState().objects);
-        const ids = [id, ...followers.map((f) => f.id)];
-        useBoardStore.getState().updateObjects(
-          ids,
-          (item) => {
-            if (item.id === id) return { ...item, ...next } as BoardObject;
-            return translateObject(item, dx, dy);
-          },
-          false
-        );
+        // Fylgihlutirnir voru áður aðeins hliðraðir með teikningunni; nú
+        // kvarðast þeir líka svo þeir haldi stað á plani (store.resizeDocument).
+        useBoardStore.getState().resizeDocument(id, next);
         return;
       }
       useBoardStore.getState().patchObject(id, next as Partial<BoardObject>, false);

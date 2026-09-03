@@ -303,3 +303,40 @@ export function objectsOnDocument(image: ImageObject, objects: BoardObject[]): B
 export function translateObject(obj: BoardObject, dx: number, dy: number): BoardObject {
   return { ...obj, x: obj.x + dx, y: obj.y + dy };
 }
+
+export interface Frame {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Færir og kvarðar hlut sem situr á teikningu þegar teikningin sjálf er
+ *  stækkuð eða minnkuð úr `from` í `to` — hann heldur sama stað Á plani og
+ *  stækkar með (Agnar 03.09.2026). Punktar lína eru afstæðir við x/y hlutarins
+ *  og kvarðast því sér; tákn halda hlutföllum með jafnri kvörðun. */
+export function rescaleObject(obj: BoardObject, from: Frame, to: Frame): BoardObject {
+  const sx = from.width > 0 ? to.width / from.width : 1;
+  const sy = from.height > 0 ? to.height / from.height : 1;
+  const uniform = Math.sqrt(Math.abs(sx * sy)) || 1;
+  const x = to.x + (obj.x - from.x) * sx;
+  const y = to.y + (obj.y - from.y) * sy;
+  switch (obj.type) {
+    case "symbol":
+      return { ...obj, x, y, size: Math.max(8, obj.size * uniform) };
+    case "rect":
+    case "ellipse":
+    case "sticky":
+      return { ...obj, x, y, width: Math.max(4, obj.width * sx), height: Math.max(4, obj.height * sy) };
+    case "text":
+      return { ...obj, x, y, width: Math.max(8, obj.width * sx), fontSize: Math.max(6, obj.fontSize * uniform) };
+    case "line":
+    case "arrow":
+    case "polyline":
+    case "pen":
+    case "measure":
+      return { ...obj, x, y, points: obj.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)) };
+    default:
+      return { ...obj, x, y };
+  }
+}

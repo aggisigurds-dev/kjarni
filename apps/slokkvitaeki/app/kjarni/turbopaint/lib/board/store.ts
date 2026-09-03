@@ -19,7 +19,7 @@ import type {
   Tool,
 } from "./types";
 import { crossingSignature, isCrossingMark, replaceCrossingMarks } from "./crossings";
-import { GRID_GAP, snapValue } from "./geometry";
+import { GRID_GAP, objectsOnDocument, rescaleObject, snapValue } from "./geometry";
 import {
   DEFAULT_ROOM_COLOR,
   DEFAULT_ROOM_OPACITY,
@@ -98,6 +98,12 @@ interface BoardStore {
   setStyle: (partial: Partial<StyleState>) => void;
   setActiveLayer: (id: string) => void;
   setPipesOpen: (v: boolean) => void;
+  /** Stækkar/minnkar teikningu og tekur fylgihlutina með — þeir halda stað
+   *  á plani og kvarðast hlutfallslega. */
+  resizeDocument: (
+    id: string,
+    next: { x: number; y: number; rotation: number; width: number; height: number }
+  ) => void;
   setSymbolOpacity: (v: number) => void;
   toggleLayerVisible: (id: string) => void;
   toggleLayerLocked: (id: string) => void;
@@ -258,6 +264,22 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       activeLayerId: id,
       style: stroke ? { ...get().style, stroke } : get().style,
     });
+  },
+  resizeDocument: (id, next) => {
+    const objects = get().objects;
+    const image = objects.find((o) => o.id === id);
+    if (!image || image.type !== "image") return;
+    const from = { x: image.x, y: image.y, width: image.width, height: image.height };
+    const to = { x: next.x, y: next.y, width: next.width, height: next.height };
+    const followers = new Set(objectsOnDocument(image, objects).map((f) => f.id));
+    get().updateObjects(
+      [id, ...followers],
+      (item) => {
+        if (item.id === id) return { ...item, ...next };
+        return rescaleObject(item, from, to);
+      },
+      false
+    );
   },
   setPipesOpen: (pipesOpen) => {
     // Lokist lagnirnar meðan lagnalag er virkt færist teiknunin á Almennt —
