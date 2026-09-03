@@ -1,5 +1,6 @@
 import { newId } from "./ids";
 import { makeSymbol } from "./markup-kit";
+import { getStampSize } from "./symbol-settings";
 import type { OcrWord } from "./firewall-rating";
 import type { BoardObject, EllipseObject, ImageObject, StickyObject } from "./types";
 
@@ -154,6 +155,15 @@ export function placeMvs165Equipment(
     ppm = pixelsPerMeterFromScale(scale, plan.pixelsPerPdfPoint);
   }
 
+  // Stærðirnar voru fastar (56/36/44) og komu því alltaf eins út, sama hvað stóð
+  // í Merkingar-stikunni — Agnar þurfti að minnka hvert merki handvirkt eftir á.
+  // Núna kvarðast þær allar af stimpilstærðinni með ÓBREYTTUM innbyrðis
+  // hlutföllum og uppstillingu (56 var gamla viðmiðið).
+  const S = getStampSize();
+  const px = (n: number) => Math.round((n * S) / 56);
+  const signPx = px(36);
+  const markPx = px(44);
+
   const objects: BoardObject[] = [];
   const toWorld = (word: OcrWord) => ({
     x: plan.x + (word.x + word.width / 2) * sx,
@@ -163,10 +173,10 @@ export function placeMvs165Equipment(
   slt.forEach((word, i) => {
     const p = toWorld(word);
     const label = `SLT-${i + 1}`;
-    const ext = makeSymbol("extinguisher", p.x - 28, p.y - 28, label, 56);
+    const ext = makeSymbol("extinguisher", p.x - S / 2, p.y - S / 2, label, S);
     ext.name = `165.BR1 ${label}`;
     objects.push(ext);
-    const sign = makeSymbol("sign-extinguisher", p.x - 18, p.y - 78, "Skilti SLT", 36);
+    const sign = makeSymbol("sign-extinguisher", p.x - signPx / 2, p.y - px(78), "Skilti SLT", signPx);
     sign.name = `165.BR1 skilti ${label}`;
     objects.push(sign);
     if (ppm) {
@@ -179,15 +189,15 @@ export function placeMvs165Equipment(
   hoses.forEach((word, i) => {
     const p = toWorld(word);
     const label = `BRSL-${i + 1}`;
-    const hose = makeSymbol("hose", p.x - 28, p.y - 28, label, 56);
+    const hose = makeSymbol("hose", p.x - S / 2, p.y - S / 2, label, S);
     hose.name = `165.BR1 ${label}`;
     objects.push(hose);
-    const sign = makeSymbol("sign-hose", p.x + 22, p.y - 78, "Skilti slöngu", 36);
+    const sign = makeSymbol("sign-hose", p.x + px(22), p.y - px(78), "Skilti slöngu", signPx);
     sign.name = `165.BR1 skilti ${label}`;
     objects.push(sign);
     const paired = slt.some((s) => nearby(word, s, 110));
     if (paired) {
-      const alarm = makeSymbol("alarm", p.x + 36, p.y + 8, "Varnarstaður", 44);
+      const alarm = makeSymbol("alarm", p.x + px(36), p.y + px(8), "Varnarstaður", markPx);
       alarm.name = `165.BR1 varnarstaður ${label}`;
       objects.push(alarm);
     }
@@ -195,7 +205,7 @@ export function placeMvs165Equipment(
 
   exits.forEach((word, i) => {
     const p = toWorld(word);
-    const exit = makeSymbol("exit", p.x - 22, p.y - 22, "ÚT", 44);
+    const exit = makeSymbol("exit", p.x - markPx / 2, p.y - markPx / 2, "ÚT", markPx);
     exit.name = `165.BR1 útgangur ${i + 1}`;
     objects.push(exit);
   });

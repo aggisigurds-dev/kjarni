@@ -146,11 +146,30 @@ function LagPicker() {
   );
 }
 
+/* Stærðin á líka við tákn sem ERU valin — sama mynstur og litur/breidd nota. */
+function resizeSelectedSymbols(next: number) {
+  const { selectedIds, objects, updateObjects } = useBoardStore.getState();
+  if (!selectedIds.length) return 0;
+  const ids = objects.filter((o) => selectedIds.includes(o.id) && o.type === "symbol").map((o) => o.id);
+  if (!ids.length) return 0;
+  // Miðjan helst kyrr — annars hlypu táknin til því x/y er efra vinstra hornið.
+  updateObjects(ids, (o) => {
+    if (o.type !== "symbol") return o;
+    const d = (o.size - next) / 2;
+    return { ...o, size: next, x: o.x + d, y: o.y + d };
+  });
+  return ids.length;
+}
+
 /* Merkinga-stikan: stærð nýrra tákna og sameiginleg dofnun þeirra allra.
  * Agnar 02.09.2026 — stærðin á heima í plássinu sem Lagnir losuðu, og dofnunin
  * er til að geta „kíkt á merkingar bak við merkin á teikningunni".            */
 function MerkingarStrip({ withSize }: { withSize: boolean }) {
   const [px, setPx] = useState(getStampSize());
+  const commitSize = () => {
+    void setStampSize(px);
+    resizeSelectedSymbols(px);
+  };
   const symbolOpacity = useBoardStore((s) => s.symbolOpacity);
   const setSymbolOpacity = useBoardStore((s) => s.setSymbolOpacity);
   // Stimpilstærðin er sameiginleg öllum borðum og berst milli tækja, svo sláin
@@ -173,7 +192,7 @@ function MerkingarStrip({ withSize }: { withSize: boolean }) {
       {withSize ? (
         <label
           className="flex shrink-0 items-center gap-1.5"
-          title="Stærð á NÝJUM táknum — breytir engu sem þegar er komið á borðið"
+          title="Stærð á nýjum táknum — líka á sjálfgerðum merkingum (E-30/E-60). Séu tákn valin breytast ÞAU líka; annars stendur borðið óbreytt."
         >
           <input
             type="range"
@@ -184,9 +203,9 @@ function MerkingarStrip({ withSize }: { withSize: boolean }) {
             aria-label="Stærð nýrra tákna"
             // Rennur mjúkt í viðmótinu, vistast þegar sleppt er.
             onChange={(e) => setPx(Number(e.target.value))}
-            onPointerUp={() => void setStampSize(px)}
-            onKeyUp={() => void setStampSize(px)}
-            onBlur={() => void setStampSize(px)}
+            onPointerUp={commitSize}
+            onKeyUp={commitSize}
+            onBlur={commitSize}
             className="h-1 w-20 cursor-pointer accent-[#FE653F] sm:w-28"
           />
           <span className="w-9 shrink-0 tabular-nums text-stone-400">{px}px</span>
@@ -222,6 +241,9 @@ export function StyleStrip() {
   const layers = useBoardStore((s) => s.layers);
   const activeLayerId = useBoardStore((s) => s.activeLayerId);
   const pipesOpen = useBoardStore((s) => s.pipesOpen);
+  const selectedIds = useBoardStore((s) => s.selectedIds);
+  const objects = useBoardStore((s) => s.objects);
+  const symbolsSelected = objects.some((o) => o.type === "symbol" && selectedIds.includes(o.id));
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 
   // Style choices also restyle whatever is selected (walls included), so an
@@ -262,7 +284,7 @@ export function StyleStrip() {
           <div className="mx-1 h-4 w-px bg-white/10" />
         </>
       ) : null}
-      <MerkingarStrip withSize={false} />
+      <MerkingarStrip withSize={symbolsSelected} />
       <div className="mx-1 h-4 w-px bg-white/10" />
       <span className="hidden sm:inline text-stone-500">Litur</span>
       {["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"].map((color) => (

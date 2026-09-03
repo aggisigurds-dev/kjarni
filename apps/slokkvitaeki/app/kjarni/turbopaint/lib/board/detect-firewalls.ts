@@ -11,6 +11,7 @@ import {
   type OcrWord,
 } from "./firewall-rating";
 import { makeSymbol } from "./markup-kit";
+import { getStampSize } from "./symbol-settings";
 import type { BoardObject, ImageObject, LineObject, RectObject, TextObject } from "./types";
 
 export const FIREWALL_MARK_NAMES = ["Eldveggur", "Eldhurð", "Eldveggir"] as const;
@@ -573,12 +574,15 @@ export async function detectFirewallsOnPlan(
     const by = plan.y + (hit.y + hit.height / 2) * sy - 28;
     objects.push(...badge(bx, by, hit.rating));
     if (hit.rating.smoke) {
+      // Sama regla og í 165.BR1-merkingunni: eldhurðin fylgir stimpilstærðinni
+      // í stað fastrar 44, svo öll sjálfgerð merki komi út í valinni stærð.
+      const doorPx = Math.round((44 * getStampSize()) / 56);
       const door = makeSymbol(
         "firedoor",
-        plan.x + (hit.x + hit.width / 2) * sx - 22,
-        plan.y + (hit.y + hit.height / 2) * sy - 22,
+        plan.x + (hit.x + hit.width / 2) * sx - doorPx / 2,
+        plan.y + (hit.y + hit.height / 2) * sy - doorPx / 2,
         hit.rating.label,
-        44
+        doorPx
       );
       door.name = `Eldhurð ${hit.rating.label}`;
       objects.push(door);
