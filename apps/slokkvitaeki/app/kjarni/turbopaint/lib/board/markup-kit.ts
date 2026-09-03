@@ -12,7 +12,12 @@ export function makeSymbol(
 ): SymbolObject {
   const px = size ?? getStampSize();
   const def = getSymbol(symbolId);
-  const text = label ?? def.name;
+  // Enginn merkimiði nema kallarinn biðji um hann. Áður fékk dregið tákn fulla
+  // heitið („Slökkvitæki · Léttvatn") undir sér en stimplað ekkert — Agnar:
+  // „sometimes there comes a text and sometimes not.. just skip the text".
+  // Sjálfvirka merkingin (SLT-1, ÚT …) sendir sinn merkimiða áfram sjálf.
+  // Heitið í lagalistanum og magntöflunni er alltaf heiti táknsins, svo
+  // flokkunin þar haldist óháð því hvort merkimiði sést á borðinu.
   return {
     id: newId(),
     type: "symbol",
@@ -20,12 +25,12 @@ export function makeSymbol(
     x,
     y,
     size: px,
-    label: text,
+    label: label ?? "",
     rotation: 0,
     opacity: 1,
     locked: false,
     hidden: false,
-    name: text,
+    name: def.name,
   };
 }
 
