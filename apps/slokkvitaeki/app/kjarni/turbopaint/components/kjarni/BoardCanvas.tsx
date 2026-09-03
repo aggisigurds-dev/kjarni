@@ -642,12 +642,15 @@ export function BoardCanvas({
         return;
       }
       const stampPx = getStampSize();
+      // Stimplað þar sem smellt var, ekki á næsta grindarpunkt — sama regla og
+      // í drættinum: tákn eru sett á vegg eða hurð, ekki á grind.
+      const at = world;
       addObjects([
         {
           id: newId(),
           type: "symbol",
-          x: snapped.x - stampPx / 2,
-          y: snapped.y - stampPx / 2,
+          x: at.x - stampPx / 2,
+          y: at.y - stampPx / 2,
           size: stampPx,
           symbolId: st.symbolId,
           label: "",
@@ -973,7 +976,13 @@ export function BoardCanvas({
 
   const endDocumentDrag = (id: string, x: number, y: number) => {
     const drag = documentDragRef.current;
-    const snapped = snapPoint(x, y);
+    // Tákn festast ekki við grindina — sama regla og í dragBoundFunc. Þetta var
+    // hinn helmingur festingarinnar: dragBoundFunc stýrir hreyfingunni MEÐAN
+    // dregið er, en þessi vistar lokastöðuna, svo táknið small aftur á grind
+    // við sleppingu þótt hitt væri lagað.
+    const isSymbol =
+      useBoardStore.getState().objects.find((o) => o.id === id)?.type === "symbol";
+    const snapped = isSymbol ? { x, y } : snapPoint(x, y);
     useBoardStore.getState().commitHistory();
     if (!drag || drag.imageId !== id) {
       useBoardStore.getState().patchObject(id, { x: snapped.x, y: snapped.y }, false);
