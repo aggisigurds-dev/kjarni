@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { downloadBlob, exportBoardJson, exportPdf, exportPngBlob, slug } from "../../lib/board/export-board";
+import {
+  downloadBlob,
+  exportBoardJson,
+  exportPdf,
+  exportPngBlob,
+  exportTiledPdf,
+  slug,
+  tiledAreaMm,
+  type TileLayout,
+  type TileOrientation,
+} from "../../lib/board/export-board";
 import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
 import {
   canvasToAsset,
@@ -88,7 +98,7 @@ export function WhiteboardApp() {
     w.__tpStore = useBoardStore;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
-    w.__tpKit = { makeSymbol, placeMvs165Equipment };
+    w.__tpKit = { makeSymbol, placeMvs165Equipment, exportTiledPdf, getRegisteredStage };
   }, []);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
@@ -1001,15 +1011,19 @@ function ExportDialog({
   const [target, setTarget] = useState<"board" | "viewport" | "selection">("board");
   const [scale, setScale] = useState<ExportScale>(3);
   const [busy, setBusy] = useState(false);
+  // A4-flísar: hve mörg blöð og hvernig þau snúa. Sjálfgefið 2 lárétt hlið við
+  // hlið — það sem hentar löngu hústeikningunum sem Agnar prentar mest.
+  const [tiles, setTiles] = useState<TileLayout>({ cols: 2, rows: 1, orientation: "landscape" });
   const name = useBoardStore((s) => s.name);
   const hasSelection = useBoardStore((s) => s.selectedIds.length > 0);
+  const area = tiledAreaMm(tiles);
 
   useEffect(() => {
     if (open) setTarget(initialTarget === "selection" && !hasSelection ? "board" : initialTarget);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTarget]);
 
-  async function run(kind: "png" | "pdf" | "json") {
+  async function run(kind: "png" | "pdf" | "json" | "tiles") {
     const stage = getRegisteredStage();
     const state = useBoardStore.getState();
     const exportObjects =
@@ -1041,6 +1055,12 @@ function ExportDialog({
       } else if (kind === "png") {
         const blob = await exportPngBlob(stage, exportObjects, target, scale);
         downloadBlob(blob, `${slug(name)}.png`);
+      } else if (kind === "tiles") {
+        const { blob, pages } = await exportTiledPdf(stage, exportObjects, target, scale, name, tiles);
+        downloadBlob(blob, `${slug(name)}-a4-${tiles.cols}x${tiles.rows}-${tiles.orientation === "landscape" ? "larett" : "lodrett"}.pdf`);
+        toast.success(`${pages} A4-blöð tilbúin — prentaðu 100% (ekki „fit to page"), skerðu eftir merkjunum`);
+        onOpenChange(false);
+        return;
       } else {
         await exportPdf(stage, exportObjects, target, scale, name);
       }
@@ -1091,6 +1111,85 @@ function ExportDialog({
               <option value={4}>4× hámark</option>
             </select>
           </label>
+
+          <div className="mt-1 grid gap-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Skipta á A4-blöð</span>
+              <span className="text-xs text-muted-foreground">
+                {tiles.cols * tiles.rows} blöð · {Math.round(area.w)} × {Math.round(area.h)} mm
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Fyrir stór kort: hvert blað prentast sér með skurðarmerkjum og yfirlitsreit, svo þú
+              plastar og límir saman.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["2 lárétt hlið við hlið", { cols: 2, rows: 1, orientation: "landscape" }],
+                  ["3 lóðrétt hlið við hlið", { cols: 3, rows: 1, orientation: "portrait" }],
+                  ["2×2 lárétt", { cols: 2, rows: 2, orientation: "landscape" }],
+                ] as [string, TileLayout][]
+              ).map(([label, preset]) => {
+                const active =
+                  preset.cols === tiles.cols && preset.rows === tiles.rows && preset.orientation === tiles.orientation;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setTiles(preset)}
+                    className={
+                      "rounded-md border px-2 py-1 text-xs " +
+                      (active ? "border-foreground bg-foreground text-background" : "hover:bg-muted")
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="grid gap-1">
+                <span className="text-xs text-muted-foreground">Dálkar</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={tiles.cols}
+                  aria-label="Dálkar A4-blaða"
+                  onChange={(e) => setTiles({ ...tiles, cols: Math.max(1, Math.min(6, Number(e.target.value) || 1)) })}
+                  className="h-8 rounded-lg border bg-background px-2"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs text-muted-foreground">Raðir</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={tiles.rows}
+                  aria-label="Raðir A4-blaða"
+                  onChange={(e) => setTiles({ ...tiles, rows: Math.max(1, Math.min(6, Number(e.target.value) || 1)) })}
+                  className="h-8 rounded-lg border bg-background px-2"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs text-muted-foreground">Snúningur</span>
+                <select
+                  value={tiles.orientation}
+                  aria-label="Snúningur A4-blaða"
+                  onChange={(e) => setTiles({ ...tiles, orientation: e.target.value as TileOrientation })}
+                  className="h-8 rounded-lg border bg-background px-2"
+                >
+                  <option value="landscape">Lárétt</option>
+                  <option value="portrait">Lóðrétt</option>
+                </select>
+              </label>
+            </div>
+            <Button variant="secondary" disabled={busy} onClick={() => void run("tiles")}>
+              Prenta á {tiles.cols * tiles.rows} A4-blöð (PDF)
+            </Button>
+          </div>
         </div>
         <DialogFooter className="sm:justify-between">
           <Button variant="outline" disabled={busy} onClick={() => void run("json")}>

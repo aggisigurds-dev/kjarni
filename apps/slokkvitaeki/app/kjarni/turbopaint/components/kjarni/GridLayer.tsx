@@ -15,6 +15,10 @@ export function GridLayer({
 }) {
   return (
     <Shape
+      // Grindin er viðmót, ekki innihald — útflutningur (PNG/PDF/A4-flísar)
+      // felur allt sem heitir ui-only, en grindin vantaði nafnið og prentaðist
+      // því með á hvert einasta kort.
+      name="ui-only"
       listening={false}
       sceneFunc={(ctx) => {
         const worldLeft = -camera.x / camera.scale;
