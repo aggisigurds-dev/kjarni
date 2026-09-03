@@ -88,7 +88,7 @@ export function WhiteboardApp() {
     w.__tpStore = useBoardStore;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
-    w.__tpKit = { makeSymbol };
+    w.__tpKit = { makeSymbol, placeMvs165Equipment };
   }, []);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
