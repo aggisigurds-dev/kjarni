@@ -32,7 +32,7 @@ import {
   selectableIds,
   withLayerId,
 } from "../../lib/board/layers";
-import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
+import { newId, useBoardStore } from "../../lib/board/store";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
@@ -280,7 +280,8 @@ export function WhiteboardApp() {
     // Miðjar á stimpilstærðinni, ekki fastri 32 — annars lenti táknið út undan
     // bendlinum um leið og stærðin var stillt.
     const half = getStampSize() / 2;
-    const spot = snapPoint(world.x - half, world.y - half);
+    // Engin grind-festing: táknið lendir þar sem því var sleppt (sbr. dráttinn).
+    const spot = { x: world.x - half, y: world.y - half };
     const obj = makeSymbol(symbolId, spot.x, spot.y);
     useBoardStore.getState().addObjects([obj], true);
     useBoardStore.getState().setTool("select");

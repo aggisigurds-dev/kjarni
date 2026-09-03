@@ -100,7 +100,11 @@ export function ObjectNode({
     // er (ekki bara við sleppingu). dragBoundFunc fær absolute/skjá-hnit.
     dragBoundFunc(pos: { x: number; y: number }) {
       const s = useBoardStore.getState();
-      if (!s.snap) return pos;
+      // Tákn festast ALDREI við grindina. Grindarbilið tvöfaldast eftir því sem
+      // þysjað er út (effectiveGridGap heldur punktafjöldanum í skefjum), svo á
+      // heilli hústeikningu var stökkið orðið margir metrar — ómögulegt að hitta
+      // á vegg eða hurð. Veggir og form halda festingunni óbreyttri.
+      if (!s.snap || obj.type === "symbol") return pos;
       const cam = s.camera;
       const sn = snapPoint((pos.x - cam.x) / cam.scale, (pos.y - cam.y) / cam.scale);
       return { x: sn.x * cam.scale + cam.x, y: sn.y * cam.scale + cam.y };
