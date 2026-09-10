@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { newId } from "./ids";
+import { cloneForPaste, objectsOrigin } from "./clipboard";
 import {
   DEFAULT_LAYERS,
   LAYER_ALMENNT,
@@ -130,6 +131,20 @@ interface BoardStore {
   bringForward: () => void;
   sendBackward: () => void;
   duplicateSelected: () => void;
+  /** ⌘C — what was copied last (also written to the system clipboard by the app). */
+  clipboard: BoardObject[];
+  /** Pastes since the last copy; each one lands a step further so they do not stack. */
+  pasteCount: number;
+  copySelected: () => BoardObject[];
+  cutSelected: () => BoardObject[];
+  /**
+   * ⌘V. `incoming` is what the system clipboard held (another board/tab);
+   * without it the store's own clipboard is used. `at` puts the top-left of
+   * the pasted set under that board point (right-click → Líma).
+   */
+  pasteObjects: (incoming?: BoardObject[], at?: { x: number; y: number }) => BoardObject[];
+  /** Gátreitur: flip the tick (whole area turns green when checked). */
+  toggleChecked: (id: string) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
   lockSelected: (locked: boolean) => void;
@@ -411,6 +426,41 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const moving = objects.filter((o) => idSet.has(o.id));
     const staying = objects.filter((o) => !idSet.has(o.id));
     set({ objects: [...moving, ...staying] });
+  },
+  toggleChecked: (id) => {
+    const target = get().objects.find((o) => o.id === id);
+    if (!target || target.type !== "rect" || !target.isCheckbox) return;
+    pushHistory(set, get);
+    set({
+      objects: get().objects.map((o) =>
+        o.id === id && o.type === "rect" ? { ...o, checked: !o.checked } : o
+      ),
+    });
+  },
+  clipboard: [],
+  pasteCount: 0,
+  copySelected: () => {
+    const { objects, selectedIds } = get();
+    const idSet = new Set(selectedIds);
+    const copied = cloneObjects(objects.filter((o) => idSet.has(o.id) && !o.locked));
+    if (copied.length) set({ clipboard: copied, pasteCount: 0 });
+    return copied;
+  },
+  cutSelected: () => {
+    const copied = get().copySelected();
+    if (copied.length) get().deleteIds(copied.map((o) => o.id));
+    return copied;
+  },
+  pasteObjects: (incoming, at) => {
+    const source = incoming?.length ? incoming : get().clipboard;
+    if (!source.length) return [];
+    const step = 24 * (get().pasteCount + 1);
+    const origin = objectsOrigin(source);
+    const offset = at ? { x: at.x - origin.x, y: at.y - origin.y } : { x: step, y: step };
+    const copies = cloneForPaste(source, offset);
+    get().addObjects(copies, true);
+    set({ pasteCount: get().pasteCount + 1, tool: "select" });
+    return copies;
   },
   duplicateSelected: () => {
     const { objects, selectedIds } = get();

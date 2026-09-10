@@ -15,6 +15,8 @@ import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
 import { RoomList } from "./RoomList";
+import { CustomColorSwatch } from "./ColorPicker";
+import { useCustomColors, withAlpha } from "../../lib/board/custom-colors";
 
 type LayerGroupId =
   | "teikning"
@@ -149,11 +151,29 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                 </Button>
               </>
             ) : null}
+            {primary.type === "rect" && primary.isCheckbox ? (
+              <Field label="Gátreitur">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`w-full border-white/10 ${primary.checked ? "bg-emerald-600 text-white hover:bg-emerald-500" : "bg-white/5 text-stone-200"}`}
+                  onClick={() => useBoardStore.getState().toggleChecked(primary.id)}
+                >
+                  {primary.checked ? "☑ Hakað — smelltu til að afhaka" : "☐ Óhakað — smelltu til að haka við"}
+                </Button>
+                <p className="text-[11px] leading-relaxed text-stone-500">
+                  Smelltu líka á ✓ í horni reitsins á borðinu. Hakað = allur reiturinn grænn.
+                </p>
+              </Field>
+            ) : null}
             {"stroke" in primary && !roomSelected ? (
               <Field label="Strokulitur">
                 <Swatches
                   colors={STROKE_PRESETS}
                   value={primary.stroke}
+                  onPreview={(stroke) =>
+                    useBoardStore.getState().patchObject(primary.id, { stroke } as never, false)
+                  }
                   onChange={(stroke) =>
                     useBoardStore.getState().patchObject(primary.id, { stroke } as never)
                   }
@@ -165,6 +185,12 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
                 <Swatches
                   colors={primary.type === "sticky" ? STICKY_COLORS : FILL_PRESETS}
                   value={primary.fill}
+                  // A custom fill is half-transparent, like the tinted presets,
+                  // so the drawing underneath stays readable.
+                  customAlpha={primary.type === "sticky" ? undefined : "66"}
+                  onPreview={(fill) =>
+                    useBoardStore.getState().patchObject(primary.id, { fill } as never, false)
+                  }
                   onChange={(fill) =>
                     useBoardStore.getState().patchObject(primary.id, { fill } as never)
                   }
@@ -307,12 +333,23 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function Swatches({
   colors,
   value,
+  onPreview,
   onChange,
+  customAlpha,
 }: {
   colors: readonly string[];
   value: string;
+  /** Live while the colour picker is open — applied without a history step. */
+  onPreview?: (c: string) => void;
   onChange: (c: string) => void;
+  /** Alpha appended to a picked custom colour (fills), e.g. "66". */
+  customAlpha?: string;
 }) {
+  const recent = useCustomColors();
+  const custom = recent
+    .map((c) => withAlpha(c, customAlpha))
+    .filter((c) => !colors.some((preset) => preset.toLowerCase() === c.toLowerCase()));
+  const active = (c: string) => value.toLowerCase() === c.toLowerCase();
   return (
     <div className="flex flex-wrap gap-1.5">
       {colors.map((c) => (
@@ -320,7 +357,7 @@ function Swatches({
           key={c}
           type="button"
           onClick={() => onChange(c)}
-          className={`size-6 rounded-md border ${value === c ? "ring-2 ring-white" : "border-white/15"}`}
+          className={`size-6 rounded-md border ${active(c) ? "ring-2 ring-white" : "border-white/15"}`}
           style={{
             background:
               c === "transparent"
@@ -329,6 +366,21 @@ function Swatches({
           }}
         />
       ))}
+      {custom.map((c) => (
+        <button
+          key={`custom-${c}`}
+          type="button"
+          title="Sérsniðinn litur"
+          onClick={() => onChange(c)}
+          className={`size-6 rounded-md border ${active(c) ? "ring-2 ring-white" : "border-dashed border-white/40"}`}
+          style={{ background: c }}
+        />
+      ))}
+      <CustomColorSwatch
+        value={value}
+        onPreview={onPreview ? (hex) => onPreview(withAlpha(hex, customAlpha)) : undefined}
+        onChange={(hex) => onChange(withAlpha(hex, customAlpha))}
+      />
     </div>
   );
 }

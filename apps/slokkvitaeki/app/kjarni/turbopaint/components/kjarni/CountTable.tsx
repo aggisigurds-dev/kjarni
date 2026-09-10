@@ -85,6 +85,10 @@ export function CountTable() {
       if (o.name.startsWith("Gegnumtak")) continue;
       // 🏠 rými eiga sinn eigin RÝMI-kafla — ekki telja þau sem "Ferningar"
       if (o.type === "rect" && o.isRoom) continue;
+      if (o.type === "rect" && o.isCheckbox) {
+        bump(o.checked ? "t:checkbox:on" : "t:checkbox:off", o.checked ? "Gátreitir — hakað ☑" : "Gátreitir — óhakað ☐", 2);
+        continue;
+      }
       const label = GENERIC_LABELS[o.type];
       if (label) bump(`t:${o.type}`, label, 2);
     }
@@ -125,7 +129,7 @@ export function CountTable() {
     let net = roomList.reduce((s, r) => s + (r.excluded ? 0 : r.m2), 0);
     let gross = roomList.reduce((s, r) => s + r.m2, 0);
     for (const o of onPlan) {
-      if (o.type !== "rect" || o.isRoom || o.fill !== "transparent") continue;
+      if (o.type !== "rect" || o.isRoom || o.isCheckbox || o.fill !== "transparent") continue;
       const a = (o.width / pixelsPerMeter) * (o.height / pixelsPerMeter);
       if (o.name.startsWith("Frádráttur")) {
         net -= a;

@@ -8,6 +8,12 @@ import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument,
 import { registerStage } from "../../lib/board/stage-ref";
 import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
+import { serializeClipboard } from "../../lib/board/clipboard";
+import {
+  CHECKBOX_FILL,
+  CHECKBOX_STROKE,
+  checkboxBoxFromClick,
+} from "../../lib/board/checkbox";
 import { getSymbol } from "../../lib/board/symbols";
 import { getStampSize } from "../../lib/board/symbol-settings";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
@@ -197,8 +203,32 @@ export function BoardCanvas({
     const { style: st, addObjects } = useBoardStore.getState();
     if (d.kind === "marquee" || d.kind === "crop") return;
     if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
-      const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
+      let box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
+      const asCheckbox = d.kind === "rect" && useBoardStore.getState().tool === "checkbox";
+      // A plain click with the Gátreitur tool stamps a default-size box.
+      if (asCheckbox && box.width < 4 && box.height < 4) box = checkboxBoxFromClick(d.ax, d.ay);
       if (box.width < 4 && box.height < 4) return;
+      if (asCheckbox) {
+        addObjects([
+          {
+            id: newId(),
+            type: "rect",
+            ...box,
+            fill: CHECKBOX_FILL,
+            stroke: CHECKBOX_STROKE,
+            strokeWidth: 2,
+            cornerRadius: 8,
+            rotation: 0,
+            opacity: 1,
+            locked: false,
+            hidden: false,
+            name: "Gátreitur",
+            isCheckbox: true,
+            checked: false,
+          },
+        ]);
+        return;
+      }
       if (d.kind === "rect") {
         const live = useBoardStore.getState();
         const asRoom = live.tool === "room" || Boolean(live.roomDraftGroupId);
@@ -713,9 +743,15 @@ export function BoardCanvas({
       return;
     }
 
-    if (currentTool === "rect" || currentTool === "room" || currentTool === "ellipse" || currentTool === "sticky") {
+    if (
+      currentTool === "rect" ||
+      currentTool === "room" ||
+      currentTool === "checkbox" ||
+      currentTool === "ellipse" ||
+      currentTool === "sticky"
+    ) {
       setDraftState({
-        kind: currentTool === "room" ? "rect" : currentTool,
+        kind: currentTool === "room" || currentTool === "checkbox" ? "rect" : currentTool,
         ax: snapped.x,
         ay: snapped.y,
         bx: snapped.x,
@@ -1154,19 +1190,21 @@ export function BoardCanvas({
           {draft && (draft.kind === "rect" || draft.kind === "ellipse" || draft.kind === "sticky") ? (
             <Rect
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
-              stroke={tool === "room" ? roomStyle.color : style.stroke}
-              strokeWidth={tool === "room" ? 2 : style.strokeWidth}
+              stroke={tool === "room" ? roomStyle.color : tool === "checkbox" ? CHECKBOX_STROKE : style.stroke}
+              strokeWidth={tool === "room" || tool === "checkbox" ? 2 : style.strokeWidth}
               dash={[8, 6]}
               fill={
                 draft.kind === "sticky"
                   ? style.stickyFill
                   : tool === "room"
                     ? fillAlpha(roomStyle.color, roomStyle.opacity)
-                    : style.fill === "transparent"
-                      ? undefined
-                      : style.fill
+                    : tool === "checkbox"
+                      ? CHECKBOX_FILL
+                      : style.fill === "transparent"
+                        ? undefined
+                        : style.fill
               }
-              cornerRadius={draft.kind === "sticky" ? 4 : 0}
+              cornerRadius={draft.kind === "sticky" ? 4 : tool === "checkbox" ? 8 : 0}
               listening={false}
               name="ui-only"
             />
@@ -1241,8 +1279,43 @@ export function BoardCanvas({
                 onPointerDown={(e) => e.stopPropagation()}
                 onContextMenu={(e) => e.preventDefault()}
               >
+                {useBoardStore.getState().clipboard.length ? (
+                  <button
+                    type="button"
+                    className={item}
+                    onClick={act(() => {
+                      const { camera } = useBoardStore.getState();
+                      useBoardStore.getState().pasteObjects(undefined, {
+                        x: (menu.x - camera.x) / camera.scale,
+                        y: (menu.y - camera.y) / camera.scale,
+                      });
+                    })}
+                  >
+                    📥 Líma hér (⌘V)
+                  </button>
+                ) : null}
                 {target ? (
                   <>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => {
+                        const copied = useBoardStore.getState().copySelected();
+                        if (copied.length) void navigator.clipboard?.writeText(serializeClipboard(copied)).catch(() => {});
+                      })}
+                    >
+                      📋 Afrita (⌘C)
+                    </button>
+                    <button
+                      type="button"
+                      className={item}
+                      onClick={act(() => {
+                        const copied = useBoardStore.getState().cutSelected();
+                        if (copied.length) void navigator.clipboard?.writeText(serializeClipboard(copied)).catch(() => {});
+                      })}
+                    >
+                      ✂ Klippa (⌘X)
+                    </button>
                     <button
                       type="button"
                       className={item}
@@ -1257,8 +1330,17 @@ export function BoardCanvas({
                       className={item}
                       onClick={act(() => useBoardStore.getState().duplicateSelected())}
                     >
-                      ⧉ Afrita (⌘D)
+                      ⧉ Tvöfalda (⌘D)
                     </button>
+                    {target.type === "rect" && target.isCheckbox ? (
+                      <button
+                        type="button"
+                        className={item}
+                        onClick={act(() => useBoardStore.getState().toggleChecked(target.id))}
+                      >
+                        {target.checked ? "☐ Afhaka" : "☑ Haka við"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className={item}
