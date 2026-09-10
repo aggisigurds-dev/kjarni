@@ -14,11 +14,14 @@ import {
   Pentagon,
   Ruler,
   Square,
+  SquareCheckBig,
   StickyNote,
   Type,
 } from "lucide-react";
 import { getSymbol, symbolColors } from "../../lib/board/symbols";
 import { SYMBOL_OPACITY_KEY, useBoardStore } from "../../lib/board/store";
+import { CustomColorSwatch } from "./ColorPicker";
+import { useCustomColors } from "../../lib/board/custom-colors";
 import {
   getStampSize,
   setStampSize,
@@ -40,6 +43,12 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
   { id: "pen", label: "Penni", shortcut: "P", icon: <Pencil className="size-4" /> },
   { id: "text", label: "Texti", shortcut: "T", icon: <Type className="size-4" /> },
   { id: "sticky", label: "Minnispunktur", shortcut: "N", icon: <StickyNote className="size-4" /> },
+  {
+    id: "checkbox",
+    label: "Gátreitur — hakreitur sem grænkar þegar hakað er",
+    shortcut: "X",
+    icon: <SquareCheckBig className="size-4" />,
+  },
   { id: "measure", label: "Mæla", shortcut: "M", icon: <Ruler className="size-4" /> },
   {
     id: "calibrate",
@@ -245,6 +254,7 @@ export function StyleStrip() {
   const objects = useBoardStore((s) => s.objects);
   const symbolsSelected = objects.some((o) => o.type === "symbol" && selectedIds.includes(o.id));
   const activeLayer = layers.find((l) => l.id === activeLayerId);
+  const customColors = useCustomColors();
 
   // Style choices also restyle whatever is selected (walls included), so an
   // existing eldveggur can be recoloured or thinned after the fact.
@@ -287,7 +297,12 @@ export function StyleStrip() {
       <MerkingarStrip withSize={symbolsSelected} />
       <div className="mx-1 h-4 w-px bg-white/10" />
       <span className="hidden sm:inline text-stone-500">Litur</span>
-      {["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"].map((color) => (
+      {[
+        ...["#1c1917", "#FE653F", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"],
+        ...customColors.filter(
+          (c) => !["#1c1917", "#fe653f", "#16a34a", "#2563eb", "#ca8a04", "#ffffff"].includes(c)
+        ),
+      ].map((color) => (
         <button
           key={color}
           type="button"
@@ -295,10 +310,23 @@ export function StyleStrip() {
             setStyle({ stroke: color });
             applyToSelection({ stroke: color });
           }}
-          className={cn("size-5 rounded-full border", style.stroke === color ? "ring-2 ring-white" : "border-white/20")}
+          className={cn(
+            "size-5 rounded-full border",
+            style.stroke.toLowerCase() === color.toLowerCase() ? "ring-2 ring-white" : "border-white/20"
+          )}
           style={{ background: color }}
         />
       ))}
+      <CustomColorSwatch
+        value={style.stroke}
+        className="size-5"
+        title="Sérsniðinn strokulitur"
+        onPreview={(stroke) => applyToSelection({ stroke })}
+        onChange={(stroke) => {
+          setStyle({ stroke });
+          applyToSelection({ stroke });
+        }}
+      />
       <div className="mx-1 h-4 w-px bg-white/10" />
       {[2, 4, 8, 12].map((w) => (
         <button

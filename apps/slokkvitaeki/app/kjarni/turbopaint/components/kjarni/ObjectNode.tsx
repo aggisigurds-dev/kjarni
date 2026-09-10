@@ -21,6 +21,7 @@ import {
   roomKeyOf,
 } from "../../lib/board/rooms";
 import { snapPoint, useBoardStore } from "../../lib/board/store";
+import { checkboxBadge, checkboxPaint, isCheckbox, tickPoints } from "../../lib/board/checkbox";
 import type { BoardObject } from "../../lib/board/types";
 import { SymbolNode } from "./SymbolNode";
 
@@ -154,6 +155,46 @@ export function ObjectNode({
         }}
       >
         <FloorplanImage obj={obj} />
+      </Group>
+    );
+  }
+
+  if (isCheckbox(obj)) {
+    const paint = checkboxPaint(obj);
+    const badge = checkboxBadge(obj.width, obj.height);
+    const toggle = (e: { cancelBubble: boolean }) => {
+      e.cancelBubble = true;
+      useBoardStore.getState().toggleChecked(obj.id);
+    };
+    return (
+      <Group {...common} width={obj.width} height={obj.height}>
+        <Rect
+          width={obj.width}
+          height={obj.height}
+          fill={paint.fill}
+          stroke={paint.stroke}
+          strokeWidth={obj.strokeWidth}
+          cornerRadius={obj.cornerRadius}
+        />
+        {/* Hakreiturinn í horninu — smellur hér hakar við án þess að velja/draga. */}
+        <Group x={badge.x} y={badge.y} name="checkbox-badge" onClick={toggle} onTap={toggle}>
+          <Rect
+            width={badge.size}
+            height={badge.size}
+            cornerRadius={Math.round(badge.size / 5)}
+            fill={paint.badgeFill}
+            stroke={paint.badgeStroke}
+            strokeWidth={1.5}
+          />
+          <Line
+            points={tickPoints(badge.size)}
+            stroke={paint.tick}
+            strokeWidth={Math.max(2, badge.size / 8)}
+            lineCap="round"
+            lineJoin="round"
+            listening={false}
+          />
+        </Group>
       </Group>
     );
   }

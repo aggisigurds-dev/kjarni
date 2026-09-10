@@ -134,7 +134,22 @@ import {
   githubStatus,
   type GithubStatus,
 } from '@/lib/3dwork/github-cloud';
-import { listCloudProjects, loadFromCloud, saveToCloud } from '@/lib/3dwork/supabase-sync';
+import {
+  cloudProjectStamp,
+  deleteFromCloud,
+  listCloudDeletedIds,
+  listCloudProjects,
+  loadFromCloud,
+  saveToCloud,
+} from '@/lib/3dwork/supabase-sync';
+import {
+  cloudIsNewer,
+  mergeGeometries,
+  mergeProjectLists,
+  mergeProjects,
+  sinceLabel,
+  type ProjectListEntry,
+} from '@/lib/3dwork/project-sync';
 import { slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
@@ -263,10 +278,11 @@ export function Workbench({
   });
   const isMobile = useIsMobile();
 
-  const [projectList, setProjectList] = useState<{ id: string; name: string; parts: number }[]>([]);
+  const [projectList, setProjectList] = useState<ProjectListEntry[]>([]);
   const [showGallery, setShowGallery] = useState(true);
   const [showInspector, setShowInspector] = useState(true);
-  const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part } | null>(null);
+  /** Copied parts (⌘C) — every marked part, with the mesh you could see at the time. */
+  const [clipboard, setClipboard] = useState<{ soup: Float32Array; part: Part }[]>([]);
 
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const [xray, setXray] = useState(false);
@@ -289,8 +305,10 @@ export function Workbench({
     mode: null,
   });
   const [githubNote, setGithubNote] = useState<string>('Not connected');
-  const [cloudNote, setCloudNote] = useState<string>('Not saved to Supabase yet');
-  const [cloudAttached, setCloudAttached] = useState(false);
+  const [cloudNote, setCloudNote] = useState<string>('Saves to Supabase as you work');
+  // Every project with parts is kept on Supabase, so it opens on the next
+  // computer. The flag only drives the badge now; there is no opt-in.
+  const [cloudAttached, setCloudAttached] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadedRef = useRef(false);
@@ -301,18 +319,29 @@ export function Workbench({
   const githubRef = useRef(github);
   githubRef.current = github;
   const githubBusyRef = useRef(false);
-  const cloudAttachedRef = useRef(false);
+  const cloudAttachedRef = useRef(true);
   const cloudBusyRef = useRef(false);
   const attachCloud = useCallback((note?: string) => {
     cloudAttachedRef.current = true;
     setCloudAttached(true);
     if (note) setCloudNote(note);
   }, []);
-  const detachCloud = useCallback(() => {
-    cloudAttachedRef.current = false;
-    setCloudAttached(false);
-    setCloudNote('Not saved to Supabase yet');
-  }, []);
+  // Cloud bookkeeping. `dirty` = edited here since the last push. `lastCloudSync`
+  // = the Supabase stamp this browser last pushed or pulled, so a newer stamp
+  // means another computer saved. `cleanState` = the exact objects that came
+  // from disk or Supabase: seeing them in the autosync effect means "nothing
+  // changed yet", not "push this".
+  const cloudDirtyRef = useRef(false);
+  const lastCloudSyncRef = useRef<{ id: string; at: number }>({ id: '', at: 0 });
+  const cleanStateRef = useRef<{
+    project: Project | null;
+    geometries: Map<string, Float32Array> | null;
+  }>({ project: null, geometries: null });
+  const lastCloudCheckRef = useRef(0);
+  const projectListRef = useRef<ProjectListEntry[]>([]);
+  // Set once createProjectFolder exists; lets the list refresh move off a
+  // project that was deleted on another computer.
+  const startFreshProjectRef = useRef<(reason?: string) => void>(() => {});
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -323,51 +352,77 @@ export function Workbench({
   }, []);
 
   const refreshProjectList = useCallback(async () => {
-    const saved = await listProjects();
-    const local = saved.map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      parts: entry.parts.length,
-    }));
-    const byId = new Map(local.map((entry) => [entry.id, entry]));
+    let saved = await listProjects();
+    let cloud: Awaited<ReturnType<typeof listCloudProjects>> = [];
     try {
-      const cloud = await listCloudProjects();
-      for (const entry of cloud) {
-        const existing = byId.get(entry.id);
-        if (!existing || entry.updatedAt >= (saved.find((row) => row.id === entry.id)?.updatedAt ?? 0)) {
-          byId.set(entry.id, { id: entry.id, name: entry.name, parts: entry.parts });
+      cloud = await listCloudProjects();
+      // Deleted on another computer → drop the copy here too. The one being
+      // edited right now is kept: its next push brings it back on purpose.
+      const gone = await listCloudDeletedIds(saved.map((entry) => entry.id));
+      const removable = gone.filter(
+        (id) => !(id === projectRef.current.id && cloudDirtyRef.current)
+      );
+      for (const id of removable) {
+        const target = saved.find((entry) => entry.id === id);
+        for (const part of target?.parts ?? []) {
+          for (const version of part.versions ?? []) void deleteGeometry(version.id);
+        }
+        await deleteProject(id);
+      }
+      if (removable.length > 0) {
+        saved = saved.filter((entry) => !removable.includes(entry.id));
+        if (removable.includes(projectRef.current.id)) {
+          startFreshProjectRef.current(
+            `${projectRef.current.name} was deleted on another computer.`
+          );
         }
       }
     } catch {
       /* cloud list is optional — local still shows */
     }
+    const local = saved.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      parts: entry.parts.length,
+      updatedAt: entry.updatedAt ?? 0,
+    }));
+    const merged = mergeProjectLists(local, cloud);
     if (githubRef.current.connected) {
       try {
         const remote = await githubListProjects();
         for (const entry of remote) {
-          const existing = byId.get(entry.id);
-          if (!existing || entry.updatedAt >= (saved.find((row) => row.id === entry.id)?.updatedAt ?? 0)) {
-            byId.set(entry.id, { id: entry.id, name: entry.name, parts: entry.parts });
+          if (!merged.some((row) => row.id === entry.id)) {
+            merged.push({ ...entry, cloud: false, local: false });
           }
         }
       } catch {
         /* keep what we have */
       }
     }
-    setProjectList([...byId.values()]);
+    projectListRef.current = merged;
+    setProjectList(merged);
   }, []);
 
-  const persistLocal = useCallback(async (next: Project, meshes: Map<string, Float32Array>) => {
-    await saveProject(next);
-    for (const [id, soup] of meshes) await saveGeometry(id, soup);
-  }, []);
+  const persistLocal = useCallback(
+    async (next: Project, meshes: Map<string, Float32Array>, stamp?: number) => {
+      await saveProject(next, stamp);
+      for (const [id, soup] of meshes) await saveGeometry(id, soup);
+    },
+    []
+  );
 
+  /** Show a Supabase copy as-is: it is the newest state, nothing to push back. */
   const applyCloudProject = useCallback(
     async (cloud: { project: Project; geometries: Map<string, Float32Array> }, note: string) => {
+      cleanStateRef.current = { project: cloud.project, geometries: cloud.geometries };
+      cloudDirtyRef.current = false;
+      lastCloudSyncRef.current = { id: cloud.project.id, at: cloud.project.updatedAt || Date.now() };
       setProject(cloud.project);
       setGeometries(cloud.geometries);
+      setSelectedId(null);
+      setMarked(new Set());
       setFrameToken((token) => token + 1);
-      await persistLocal(cloud.project, cloud.geometries);
+      await persistLocal(cloud.project, cloud.geometries, cloud.project.updatedAt || undefined);
       attachCloud(note);
     },
     [persistLocal, attachCloud]
@@ -376,6 +431,7 @@ export function Workbench({
   const pushCloud = useCallback(
     async (reason: 'auto' | 'manual' = 'auto') => {
       if (!loadedRef.current || cloudBusyRef.current) return;
+      if (reason === 'auto' && !cloudDirtyRef.current) return;
       if (projectRef.current.parts.length === 0) {
         if (reason === 'manual') toast.error('Add a part before saving to Supabase.');
         return;
@@ -383,12 +439,42 @@ export function Workbench({
       cloudBusyRef.current = true;
       setCloudNote('Saving to Supabase…');
       try {
-        const result = await saveToCloud(projectRef.current, geometriesRef.current);
-        projectRef.current = { ...projectRef.current, updatedAt: result.updatedAt };
+        // Another computer may have pushed this project since this browser last
+        // synced it. Fold its parts in first, so neither side's upload is lost;
+        // a part edited here keeps this computer's version.
+        const id = projectRef.current.id;
+        const known =
+          lastCloudSyncRef.current.id === id ? lastCloudSyncRef.current.at : projectRef.current.updatedAt;
+        const stamp = await cloudProjectStamp(id).catch(() => null);
+        if (stamp !== null && cloudIsNewer(known, stamp)) {
+          const cloud = await loadFromCloud(id);
+          const merged = mergeProjects(projectRef.current, cloud.project);
+          if (merged.addedFromCloud.length > 0) {
+            const meshes = mergeGeometries(geometriesRef.current, cloud.geometries);
+            cleanStateRef.current = { project: merged.project, geometries: meshes };
+            projectRef.current = merged.project;
+            geometriesRef.current = meshes;
+            setProject(merged.project);
+            setGeometries(meshes);
+            setFrameToken((token) => token + 1);
+            const count = merged.addedFromCloud.length;
+            toast.success(`${count} part${count === 1 ? '' : 's'} from another computer added to ${merged.project.name}.`);
+          }
+        }
+        const pushedProject = projectRef.current;
+        const pushedGeometries = geometriesRef.current;
+        const result = await saveToCloud(pushedProject, pushedGeometries);
+        lastCloudSyncRef.current = { id: pushedProject.id, at: result.updatedAt };
+        if (projectRef.current === pushedProject && geometriesRef.current === pushedGeometries) {
+          cloudDirtyRef.current = false;
+        }
+        // Mirror the cloud stamp onto the local copy, so the next start does not
+        // mistake this computer's copy for a newer one and push it all over again.
+        await saveProject(pushedProject, result.updatedAt);
         attachCloud(
           reason === 'manual'
             ? 'Saved to Supabase — open this on your phone'
-            : `Cloud saved ${new Date().toLocaleTimeString()}`
+            : `Saved to Supabase ${new Date().toLocaleTimeString()}`
         );
         if (reason === 'manual') toast.success('Saved to Supabase. Same build on your phone or another computer.');
         void refreshProjectList();
@@ -479,10 +565,16 @@ export function Workbench({
       const saved = await listProjects();
       if (cancelled) return;
 
+      let current: Project;
       if (saved.length === 0) {
         // Nothing to restore: give the blank draft a real id now that we are
         // on the client, so autosave has something stable to write against.
-        setProject((current) => ({ ...current, id: newProjectId() }));
+        const draft = { ...projectRef.current, id: newProjectId() };
+        const none = new Map<string, Float32Array>();
+        cleanStateRef.current = { project: draft, geometries: none };
+        setProject(draft);
+        setGeometries(none);
+        current = draft;
       } else {
         const restored = saved[0];
         const loaded = new Map<string, Float32Array>();
@@ -493,9 +585,11 @@ export function Workbench({
           }
         }
         if (cancelled) return;
+        cleanStateRef.current = { project: restored, geometries: loaded };
         setProject(restored);
         setGeometries(loaded);
         setFrameToken((token) => token + 1);
+        current = restored;
       }
 
       loadedRef.current = true;
@@ -505,11 +599,12 @@ export function Workbench({
       try {
         const remote = await listCloudProjects();
         if (cancelled) return;
-        const current = projectRef.current;
         const remoteThis = remote.find((entry) => entry.id === current.id);
         const newest = remote[0];
+        // Another computer saved this build more recently → show that copy.
+        // A blank bench → open whatever was worked on last, wherever that was.
         const takeId =
-          remoteThis && remoteThis.updatedAt > (current.updatedAt ?? 0)
+          remoteThis && cloudIsNewer(current.updatedAt, remoteThis.updatedAt)
             ? current.id
             : current.parts.length === 0 && newest
               ? newest.id
@@ -522,9 +617,18 @@ export function Workbench({
           setBusy(null);
           usedCloud = true;
         } else if (remoteThis) {
+          lastCloudSyncRef.current = { id: current.id, at: remoteThis.updatedAt };
+          // Edited here after the last push (offline, or the tab was closed
+          // inside the debounce) → push it now.
+          cloudDirtyRef.current = cloudIsNewer(remoteThis.updatedAt, current.updatedAt);
           attachCloud('Supabase · this build');
-        } else if (current.parts.length === 0 && remote.length === 0) {
-          setCloudNote('Not saved to Supabase yet');
+          if (cloudDirtyRef.current) void pushCloudRef.current('auto');
+        } else if (current.parts.length > 0) {
+          // On this computer only so far — push it, so the others get it too.
+          cloudDirtyRef.current = true;
+          void pushCloudRef.current('auto');
+        } else {
+          setCloudNote('Saves to Supabase once it has parts');
         }
         void refreshProjectList();
       } catch (error) {
@@ -578,15 +682,77 @@ export function Workbench({
   // Autosave, debounced so dragging a slider does not hammer IndexedDB.
   useEffect(() => {
     if (!loadedRef.current) return;
-    const timer = setTimeout(() => void saveProject(project), 800);
+    const timer = setTimeout(() => {
+      void saveProject(project).then(() => {
+        // A brand-new project shows up in the switcher as soon as it is on
+        // disk, not only once Supabase has it.
+        if (!projectListRef.current.some((entry) => entry.id === project.id)) {
+          void refreshProjectList();
+        }
+      });
+    }, 800);
     return () => clearTimeout(timer);
-  }, [project]);
+  }, [project, refreshProjectList]);
 
   useEffect(() => {
-    if (!loadedRef.current || !cloudAttachedRef.current) return;
+    if (!loadedRef.current) return;
+    // The objects that came from disk or Supabase are not an edit.
+    if (
+      project === cleanStateRef.current.project &&
+      geometries === cleanStateRef.current.geometries
+    ) {
+      return;
+    }
+    cloudDirtyRef.current = true;
     const timer = setTimeout(() => void pushCloud('auto'), 2500);
     return () => clearTimeout(timer);
   }, [project, geometries, pushCloud]);
+
+  /**
+   * Another computer may have saved this build while this tab sat in the
+   * background. Coming back to the tab pulls that copy in — unless something
+   * was edited here meanwhile, in which case the next push folds both together.
+   */
+  const pullNewerFromCloud = useCallback(async () => {
+    if (!loadedRef.current || cloudBusyRef.current) return;
+    const now = Date.now();
+    if (now - lastCloudCheckRef.current < 8000) return;
+    lastCloudCheckRef.current = now;
+    const current = projectRef.current;
+    try {
+      const stamp = await cloudProjectStamp(current.id);
+      void refreshProjectList();
+      if (stamp === null) return;
+      const known =
+        lastCloudSyncRef.current.id === current.id ? lastCloudSyncRef.current.at : current.updatedAt;
+      if (!cloudIsNewer(known, stamp)) return;
+      if (cloudDirtyRef.current) {
+        void pushCloud('auto');
+        return;
+      }
+      if (projectRef.current !== current) return;
+      const cloud = await loadFromCloud(current.id);
+      if (projectRef.current !== current || cloudDirtyRef.current) return;
+      await applyCloudProject(cloud, `Updated from another computer ${new Date().toLocaleTimeString()}`);
+      toast.success(`${cloud.project.name}: updated from another computer.`);
+    } catch {
+      /* offline — the local copy stays */
+    }
+  }, [pushCloud, applyCloudProject, refreshProjectList]);
+  const pullNewerRef = useRef(pullNewerFromCloud);
+  pullNewerRef.current = pullNewerFromCloud;
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void pullNewerRef.current();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, []);
 
   useEffect(() => {
     if (!loadedRef.current || !github.connected) return;
@@ -633,13 +799,34 @@ export function Workbench({
       const saved = await listProjects();
       let target = saved.find((entry) => entry.id === projectId);
       const loaded = new Map<string, Float32Array>();
+      let cloudAt = 0;
+
+      if (target) {
+        // The copy on this computer can be older than what another computer
+        // saved since — in that case the Supabase copy is the one to open.
+        try {
+          const stamp = await cloudProjectStamp(projectId);
+          cloudAt = stamp ?? 0;
+          if (stamp !== null && cloudIsNewer(target.updatedAt, stamp)) {
+            const cloud = await loadFromCloud(projectId);
+            target = cloud.project;
+            for (const [id, soup] of cloud.geometries) loaded.set(id, soup);
+            await persistLocal(cloud.project, cloud.geometries, cloud.project.updatedAt || undefined);
+            cloudAt = cloud.project.updatedAt || stamp;
+            attachCloud(`Loaded from Supabase · ${cloud.project.name}`);
+          }
+        } catch {
+          /* offline — the local copy is what we have */
+        }
+      }
 
       if (!target) {
         try {
           const cloud = await loadFromCloud(projectId);
           target = cloud.project;
           for (const [id, soup] of cloud.geometries) loaded.set(id, soup);
-          await persistLocal(cloud.project, cloud.geometries);
+          await persistLocal(cloud.project, cloud.geometries, cloud.project.updatedAt || undefined);
+          cloudAt = cloud.project.updatedAt || Date.now();
           attachCloud(`Loaded from Supabase · ${cloud.project.name}`);
         } catch {
           /* fall through */
@@ -677,6 +864,10 @@ export function Workbench({
 
       // Keep every part (see the restore-on-mount note) — a geometry that did
       // not load back is hidden by the viewport, never deleted from the build.
+      cleanStateRef.current = { project: target, geometries: loaded };
+      lastCloudSyncRef.current = { id: projectId, at: cloudAt };
+      // Newer here than on Supabase (or not there at all) → push once opened.
+      cloudDirtyRef.current = cloudIsNewer(cloudAt, target.updatedAt) || (cloudAt === 0 && target.parts.length > 0);
       setProject(target);
       setGeometries(loaded);
       setSelectedId(null);
@@ -686,25 +877,45 @@ export function Workbench({
       setSimplifyReport(null);
       setFrameToken((token) => token + 1);
       setBusy(null);
+      if (cloudDirtyRef.current) setTimeout(() => void pushCloudRef.current('auto'), 1200);
     },
-    [project.id, persistLocal]
+    [project.id, persistLocal, attachCloud]
   );
 
-  const createProjectFolder = useCallback(() => {
-    // The current project is already saved by the autosave effect.
-    detachCloud();
-    setProject({ ...createProject('New build', newProjectId()) });
-    setGeometries(new Map());
-    setSelectedId(null);
-    setOutline(null);
-    setCutItems([]);
-    setSketch(emptySketch());
-    toast.success('Started a new project.');
-    void refreshProjectList();
-  }, [refreshProjectList, detachCloud]);
+  const createProjectFolder = useCallback(
+    (reason?: string) => {
+      // The current project is already saved by the autosave effect.
+      const fresh = { ...createProject('New build', newProjectId()) };
+      const none = new Map<string, Float32Array>();
+      cleanStateRef.current = { project: fresh, geometries: none };
+      cloudDirtyRef.current = false;
+      lastCloudSyncRef.current = { id: fresh.id, at: 0 };
+      setCloudNote('New build — saved to Supabase once it has parts');
+      setProject(fresh);
+      setGeometries(none);
+      setSelectedId(null);
+      setOutline(null);
+      setCutItems([]);
+      setSketch(emptySketch());
+      if (reason) toast.info(`${reason} Started a new project.`);
+      else toast.success('Started a new project.');
+      void refreshProjectList();
+    },
+    [refreshProjectList]
+  );
+  startFreshProjectRef.current = createProjectFolder;
 
   const deleteProjectFolder = useCallback(
     async (projectId: string) => {
+      const name =
+        projectList.find((entry) => entry.id === projectId)?.name ??
+        (projectId === project.id ? project.name : 'this project');
+      if (
+        typeof window !== 'undefined' &&
+        !window.confirm(`Delete “${name}” here and on Supabase? It disappears from every computer.`)
+      ) {
+        return;
+      }
       const saved = await listProjects();
       const target = saved.find((entry) => entry.id === projectId);
       if (target) {
@@ -713,12 +924,17 @@ export function Workbench({
         }
       }
       await deleteProject(projectId);
+      try {
+        await deleteFromCloud(projectId);
+      } catch {
+        toast.error('Deleted on this computer, but Supabase did not answer — it may still show up in the list.');
+      }
       await refreshProjectList();
 
       if (projectId === project.id) createProjectFolder();
-      else toast.success('Project deleted.');
+      else toast.success(`Deleted ${name}.`);
     },
-    [project.id, refreshProjectList, createProjectFolder]
+    [project.id, project.name, projectList, refreshProjectList, createProjectFolder]
   );
 
   const connectGithub = useCallback(async () => {
@@ -3589,57 +3805,70 @@ export function Workbench({
     [patchPart, updateActiveGeometry]
   );
 
+  /** ⌘C: the selected part plus everything marked alongside it. */
   const copySelected = useCallback(() => {
-    if (!selectedPart || !selectedSoup) return;
-    setClipboard({ soup: selectedSoup, part: selectedPart });
-    toast.success(`Copied ${selectedPart.name}.`);
-  }, [selectedPart, selectedSoup]);
+    const copied = selection
+      .map((part) => ({ part, soup: geometries.get(part.activeVersionId) ?? null }))
+      .filter((entry): entry is { part: Part; soup: Float32Array } => Boolean(entry.soup));
+    if (copied.length === 0) return;
+    setClipboard(copied);
+    toast.success(copied.length === 1 ? `Copied ${copied[0].part.name}.` : `Copied ${copied.length} parts.`);
+  }, [selection, geometries]);
 
   /**
-   * Paste the copied part as a new one. It shares nothing with the original —
-   * the geometry is written under a fresh version so editing one never touches
-   * the other.
+   * Paste the copied parts as new ones. They share nothing with the originals —
+   * each mesh is written under a fresh version so editing one never touches
+   * the other — and they land 20 mm to the side, so a paste is visible instead
+   * of hiding exactly on top of what was copied.
    */
   const pasteClipboard = useCallback(() => {
-    if (!clipboard) return;
+    if (clipboard.length === 0) return;
 
-    const id = newPartId();
-    const versionId = newVersionId();
-    const source = clipboard.part;
+    const fresh = clipboard.map(({ part: source, soup }) => {
+      const id = newPartId();
+      const versionId = newVersionId();
+      const copy: Part = {
+        ...source,
+        id,
+        name: `${source.name} copy`,
+        transform: {
+          position: { ...source.transform.position, x: source.transform.position.x + 20 },
+          rotation: { ...source.transform.rotation },
+          scale: { ...source.transform.scale },
+        },
+        freePos: source.freePos ? { ...source.freePos, x: source.freePos.x + 20 } : undefined,
+        versions: [
+          {
+            id: versionId,
+            label: 'v1 pasted',
+            note: `Pasted from ${source.name}`,
+            triangles: Math.floor(soup.length / 9),
+            createdAt: Date.now(),
+          },
+        ],
+        activeVersionId: versionId,
+        addedAt: Date.now(),
+      };
+      return { copy, versionId, soup };
+    });
 
-    setGeometries((current) => new Map(current).set(versionId, clipboard.soup));
-    void saveGeometry(versionId, clipboard.soup);
+    setGeometries((current) => {
+      const next = new Map(current);
+      for (const { versionId, soup } of fresh) next.set(versionId, soup);
+      return next;
+    });
+    for (const { versionId, soup } of fresh) void saveGeometry(versionId, soup);
 
     patchProject((current) => ({
       ...current,
-      parts: [
-        ...current.parts,
-        {
-          ...source,
-          id,
-          name: `${source.name} copy`,
-          transform: {
-            position: { ...source.transform.position },
-            rotation: { ...source.transform.rotation },
-            scale: { ...source.transform.scale },
-          },
-          versions: [
-            {
-              id: versionId,
-              label: 'v1 pasted',
-              note: `Pasted from ${source.name}`,
-              triangles: Math.floor(clipboard.soup.length / 9),
-              createdAt: Date.now(),
-            },
-          ],
-          activeVersionId: versionId,
-          addedAt: Date.now(),
-        },
-      ],
+      parts: [...current.parts, ...fresh.map((entry) => entry.copy)],
     }));
 
-    setSelectedId(id);
-    toast.success(`Pasted ${source.name}.`);
+    setSelectedId(fresh[0].copy.id);
+    setMarked(new Set(fresh.slice(1).map((entry) => entry.copy.id)));
+    toast.success(
+      fresh.length === 1 ? `Pasted ${fresh[0].copy.name}.` : `Pasted ${fresh.length} parts.`
+    );
   }, [clipboard, patchProject]);
 
   // Keyboard shortcuts. Anything typed into a field belongs to the field.
@@ -3875,8 +4104,45 @@ export function Workbench({
         </div>
 
         <MenuBar>
+          <Menu label={`Projects · ${projectList.length}`} width={300}>
+            <MenuItem
+              onClick={() => createProjectFolder()}
+              icon={FolderPlus}
+              tone="primary"
+              hint="Empty at first — saved to Supabase once it has parts"
+            >
+              New project
+            </MenuItem>
+            <MenuSeparator />
+            <MenuLabel>Jump to</MenuLabel>
+            <MenuScroll>
+              {projectList.length === 0 && (
+                <div className="px-3 py-1.5 text-[0.7rem] text-slate-500">
+                  Nothing saved yet — import a part and it lands on Supabase by itself.
+                </div>
+              )}
+              {projectList.map((entry) => (
+                <MenuCheckItem
+                  key={entry.id}
+                  checked={entry.id === project.id}
+                  onClick={() => void openProject(entry.id)}
+                  shortcut={sinceLabel(entry.updatedAt)}
+                >
+                  {entry.name} · {entry.parts}
+                  {entry.cloud ? (
+                    <Cloud className="ml-1 inline h-3 w-3 text-emerald-600" aria-label="On Supabase" />
+                  ) : (
+                    <span className="ml-1 text-[0.6rem] font-semibold text-amber-600">this computer only</span>
+                  )}
+                </MenuCheckItem>
+              ))}
+            </MenuScroll>
+            <MenuSeparator />
+            <div className="px-3 py-1.5 text-[0.65rem] text-slate-500">{cloudNote}</div>
+          </Menu>
+
           <Menu label="Project">
-            <MenuItem onClick={createProjectFolder} icon={FolderPlus}>
+            <MenuItem onClick={() => createProjectFolder()} icon={FolderPlus}>
               New project
             </MenuItem>
             <MenuItem
@@ -4055,11 +4321,11 @@ export function Workbench({
             >
               Emboss printable texture
             </MenuItem>
-            <MenuItem onClick={copySelected} disabled={!selectedId} shortcut="⌘C">
-              Copy
+            <MenuItem onClick={copySelected} disabled={selection.length === 0} shortcut="⌘C">
+              Copy{selection.length > 1 ? ` ${selection.length} parts` : ''}
             </MenuItem>
-            <MenuItem onClick={pasteClipboard} disabled={!clipboard} shortcut="⌘V">
-              Paste
+            <MenuItem onClick={pasteClipboard} disabled={clipboard.length === 0} shortcut="⌘V">
+              Paste{clipboard.length > 1 ? ` ${clipboard.length} parts` : ''}
             </MenuItem>
             <MenuSeparator />
             <MenuItem

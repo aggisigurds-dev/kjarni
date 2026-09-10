@@ -8,6 +8,7 @@ import {
   roomOfSelection,
 } from "../../lib/board/rooms";
 import { useBoardStore } from "../../lib/board/store";
+import { CustomColorSwatch } from "./ColorPicker";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
@@ -101,6 +102,11 @@ export function RoomList({ onFocusObject }: { onFocusObject?: (id: string) => vo
                   style={{ background: c }}
                 />
               ))}
+              <CustomColorSwatch
+                value={color}
+                title="Sérsniðinn rýmislitur"
+                onChange={(c) => useBoardStore.getState().applyRoomAppearance(editorKey, { color: c })}
+              />
             </div>
           </div>
           <label className="block space-y-1.5">

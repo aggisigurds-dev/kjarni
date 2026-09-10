@@ -15,7 +15,8 @@ export type Tool =
   | "firewall"
   | "eraser"
   | "crop"
-  | "room";
+  | "room"
+  | "checkbox";
 
 export type ImportQuality = "fast" | "standard" | "print";
 
@@ -79,6 +80,9 @@ export interface RectObject extends BaseObject {
   roomOpacity?: number;
   /** Leiðbeinandi fjöldi gata sem eftir eru í rýminu (heil tala ≥ 0). */
   roomGataCount?: number;
+  /** Gátreitur: hakreitur með ✓-merki í horni sem grænkar þegar hakað er. */
+  isCheckbox?: boolean;
+  checked?: boolean;
 }
 
 export interface EllipseObject extends BaseObject {

@@ -43,6 +43,7 @@ import {
   withLayerId,
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
+import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
 import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
@@ -465,10 +466,57 @@ export function WhiteboardApp() {
     void runUrlImport(raw);
   }, [runUrlImport]);
 
-  // Copy → paste permalink beint á borðið.
+  // ⌘C / ⌘X / ⌘V on the board itself. The browser's own copy/cut/paste
+  // events carry the data (no clipboard permission prompts); the keydown
+  // fallbacks below cover a browser that does not fire them without a text
+  // selection, and stand down as soon as the real event shows up.
+  const nativeClipboardSeen = useRef({ copy: 0, cut: 0, paste: 0 });
+  useEffect(() => {
+    const announce = (verb: string, n: number) =>
+      toast.message(`${verb} ${n} hlut${n === 1 ? "" : "i"}`, { duration: 1500 });
+    const onCopyOrCut = (e: ClipboardEvent) => {
+      const kind = e.type === "cut" ? "cut" : "copy";
+      nativeClipboardSeen.current[kind] = Date.now();
+      if (isTyping(e.target)) return;
+      const store = useBoardStore.getState();
+      const copied = kind === "cut" ? store.cutSelected() : store.copySelected();
+      if (!copied.length) return;
+      e.preventDefault();
+      e.clipboardData?.setData("text/plain", serializeClipboard(copied));
+      announce(kind === "cut" ? "Klippti" : "Afritaði", copied.length);
+    };
+    window.addEventListener("copy", onCopyOrCut);
+    window.addEventListener("cut", onCopyOrCut);
+    return () => {
+      window.removeEventListener("copy", onCopyOrCut);
+      window.removeEventListener("cut", onCopyOrCut);
+    };
+  }, []);
+
+  // Copy → paste permalink beint á borðið — og ⌘V á afritaða hluti.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      nativeClipboardSeen.current.paste = Date.now();
       const text = e.clipboardData?.getData("text")?.trim() ?? "";
+      const copiedObjects = text ? parseClipboard(text) : null;
+      if (copiedObjects) {
+        // Our own JSON never belongs in a text field — paste the objects even
+        // when the focus happens to sit in the name box.
+        e.preventDefault();
+        const pasted = useBoardStore.getState().pasteObjects(copiedObjects);
+        toast.message(`Límdi ${pasted.length} hlut${pasted.length === 1 ? "" : "i"}`, { duration: 1500 });
+        return;
+      }
+      if (!text) {
+        // Empty (or hidden) system clipboard — fall back to what was copied here.
+        if (isTyping(e.target)) return;
+        const pasted = useBoardStore.getState().pasteObjects();
+        if (pasted.length) {
+          e.preventDefault();
+          toast.message(`Límdi ${pasted.length} hlut${pasted.length === 1 ? "" : "i"}`, { duration: 1500 });
+        }
+        return;
+      }
       if (!/^https?:\/\//i.test(text)) return;
       let host = "";
       try {
@@ -542,6 +590,24 @@ export function WhiteboardApp() {
         e.preventDefault();
         store.duplicateSelected();
       }
+      if (meta && !e.altKey && ["c", "x", "v"].includes(e.key.toLowerCase())) {
+        // Do not preventDefault: the native copy/cut/paste event must follow.
+        const kind = e.key.toLowerCase() === "c" ? "copy" : e.key.toLowerCase() === "x" ? "cut" : "paste";
+        const pressedAt = Date.now();
+        window.setTimeout(() => {
+          if (nativeClipboardSeen.current[kind] >= pressedAt) return; // the browser handled it
+          const s = useBoardStore.getState();
+          if (kind === "paste") {
+            const pasted = s.pasteObjects();
+            if (pasted.length) toast.message(`Límdi ${pasted.length} hlut${pasted.length === 1 ? "" : "i"}`, { duration: 1500 });
+            return;
+          }
+          const copied = kind === "cut" ? s.cutSelected() : s.copySelected();
+          if (!copied.length) return;
+          toast.message(`${kind === "cut" ? "Klippti" : "Afritaði"} ${copied.length} hlut${copied.length === 1 ? "" : "i"}`, { duration: 1500 });
+          void navigator.clipboard?.writeText(serializeClipboard(copied)).catch(() => {});
+        }, 250);
+      }
       if (meta && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (e.shiftKey) store.ungroupSelected();
@@ -581,6 +647,7 @@ export function WhiteboardApp() {
           s: "symbol",
           k: "calibrate",
           e: "eraser",
+          x: "checkbox",
         };
         const tool = map[e.key.toLowerCase()];
         if (tool) store.setTool(tool);
@@ -1233,12 +1300,14 @@ function HelpDialog({
             ["L / A", "Lína / ör"],
             ["W", "Veggir (smelltu, Enter til að loka)"],
             ["P / T / N", "Penni / texti / minnismiði"],
+            ["X", "Gátreitur — hakreitur; smelltu á ✓ í horninu og reiturinn grænkar"],
             ["S", "Brunavarnatákn"],
             ["M / K", "Mæla / kvarða (stimpla inn raunlengd)"],
             ["E", "Strokleður — strjúka yfir til að eyða"],
             ["Esc", "Hætta í tóli (veggur í vinnslu helst)"],
             ["⌘Z / ⌘⇧Z", "Afturkalla / endurtaka"],
-            ["⌘D", "Afrita val"],
+            ["⌘C / ⌘X / ⌘V", "Afrita / klippa / líma val (líka milli borða)"],
+            ["⌘D", "Tvöfalda val"],
             ["⌘G / ⌘⇧G", "Hópa / afhópa val"],
             ["Delete", "Eyða"],
             ["⌘0", "Passa á skjá"],
