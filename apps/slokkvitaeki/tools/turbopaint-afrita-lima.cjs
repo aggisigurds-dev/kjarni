@@ -2,14 +2,25 @@
  *   NODE_PATH=/opt/node22/lib/node_modules node tools/turbopaint-afrita-lima.cjs [http://localhost:4142]
  */
 const { chromium } = require("playwright");
+const fs = require("fs");
 const BASE = process.argv[2] || "http://localhost:4142";
+// Framleiðslu-slóð úr Claude Code web/remote session: Chromium kemst ekki
+// beint út (ECH GREASE → ERR_CONNECTION_RESET) — nota TLS-relay slokkvitaeki-repósins.
+const RELAY = "/home/user/slokkvitaeki/tools/bh-browser.cjs";
+async function launchBrowser() {
+  if (/^https:/i.test(BASE) && fs.existsSync(RELAY)) {
+    const { context, cleanup } = await require(RELAY).launch();
+    return { browser: context.browser(), ctx: context, cleanup };
+  }
+  const browser = await chromium.launch({ headless: true });
+  return { browser, ctx: await browser.newContext(), cleanup: () => browser.close() };
+}
 const ok = [], bad = [];
 const check = (n, c, extra) => (c ? ok : bad).push(n + (c ? "" : `   ← ${extra}`));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  const b = await chromium.launch({ headless: true });
-  const ctx = await b.newContext();
+  const { browser: b, ctx, cleanup } = await launchBrowser();
   const page = await ctx.newPage();
   await page.setViewportSize({ width: 1600, height: 950 });
   const errs = []; page.on("pageerror", (e) => errs.push(e.message));
@@ -140,7 +151,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   st = await state();
   const cb = st.objs.find((o) => o.isCheckbox);
   check("smellur stimplar 120×120 gátreit miðjaðan á smellinn", cb && cb.width === 120 && cb.height === 120 && cb.x === 640 && cb.y === 440 && cb.checked === false && cb.name === "Gátreitur", JSON.stringify(cb));
-  if (!cb) { console.log(bad.map((n) => "  ✘ " + n).join("\n")); console.log("tool:", st.tool, "objs:", JSON.stringify(st.objs.map((o) => o.name))); await b.close(); process.exit(1); }
+  if (!cb) { console.log(bad.map((n) => "  ✘ " + n).join("\n")); console.log("tool:", st.tool, "objs:", JSON.stringify(st.objs.map((o) => o.name))); await b.close().catch(() => {}); process.exit(1); }
   // dregin stærð (tólið fer aftur í Velja eftir hvern reit, eins og ferningurinn — veljum það aftur)
   await page.evaluate(() => window.__tpStore.getState().setTool("checkbox"));
   await wait(200);
@@ -205,6 +216,6 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   if (bad.length) console.log(bad.map((n) => "  ✘ " + n).join("\n"));
   if (errs.length) console.log("pageerrors:", errs.slice(0, 5).join(" | "));
   console.log(`${ok.length}/${ok.length + bad.length} passed`);
-  await b.close();
+  await Promise.race([cleanup(), new Promise((r) => setTimeout(r, 8000))]).catch(() => {});
   process.exit(bad.length ? 1 : 0);
 })();

@@ -85,8 +85,24 @@ async function cloudRow(name) {
 
 async function openBench(page) {
   await page.goto(`${BASE}/3dwork`, { waitUntil: 'domcontentloaded', timeout: 90000 });
-  await page.getByRole('button', { name: /^3D bench$/i }).click({ timeout: 30000 });
-  await page.getByRole('button', { name: /^Projects · \d+$/ }).waitFor({ timeout: 60000 });
+  // Over a slow link (production through the TLS relay) the first click can
+  // land before React has hydrated and is simply lost — click until the bench
+  // answers.
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await page.getByRole('button', { name: /^3D bench$/i }).click({ timeout: 30000 }).catch(() => {});
+    const opened = await page
+      .getByRole('button', { name: /^Projects · \d+$/ })
+      .waitFor({ timeout: attempt === 7 ? 60000 : 8000 })
+      .then(() => true)
+      .catch(() => false);
+    if (opened) return;
+    if (await page.getByText('Starting the 3D bench').isVisible().catch(() => false)) {
+      await page.getByRole('button', { name: /^Projects · \d+$/ }).waitFor({ timeout: 60000 });
+      return;
+    }
+  }
+  throw new Error('3D bench did not open');
 }
 
 async function projectsMenu(page) {
@@ -170,9 +186,18 @@ async function waitFor(fn, ms, every = 1000) {
 
     // ---------- Computer B: fresh profile sees and opens it ----------
     await openBench(B);
+    // The switcher fills once Supabase answers — over a slow link that can be
+    // a few seconds after the bench is up, so look again until it is there.
     menu = await projectsMenu(B);
-    const entryB = menu.getByText(new RegExp(`^${TAG} · 1`));
-    const listed = await entryB.count();
+    let entryB = menu.getByText(new RegExp(`^${TAG} · 1`));
+    let listed = await entryB.count();
+    for (let i = 0; i < 10 && !listed; i++) {
+      await B.keyboard.press('Escape');
+      await B.waitForTimeout(1500);
+      menu = await projectsMenu(B);
+      entryB = menu.getByText(new RegExp(`^${TAG} · 1`));
+      listed = await entryB.count();
+    }
     check('B: fresh computer lists the project from Supabase', listed > 0);
     const badge = listed ? await menu.locator('svg[aria-label="On Supabase"]').count() : 0;
     check('B: entry carries the Supabase badge', badge > 0, `${badge} badge(s)`);
@@ -191,7 +216,11 @@ async function waitFor(fn, ms, every = 1000) {
     await B.evaluate(() => { window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); });
     const sawBarrel = await waitFor(() => B.getByText(/barrel/).first().isVisible().catch(() => false), 20000);
     check('B: part uploaded on A appears on B when the tab regains focus', Boolean(sawBarrel));
-    const toastB = await B.evaluate(() => (window.__toasts || []).join(' | '));
+    // The toast follows the local persist step, a moment after the part shows.
+    const toastB = (await waitFor(async () => {
+      const all = await B.evaluate(() => (window.__toasts || []).join(' | '));
+      return /another computer/i.test(all) ? all : null;
+    }, 15000)) || (await B.evaluate(() => (window.__toasts || []).join(' | ')));
     check('B: says it was updated from another computer', /another computer/i.test(toastB), toastB.slice(0, 120));
 
     // ---------- B jumps to another project and back ----------
