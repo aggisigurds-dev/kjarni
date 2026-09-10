@@ -1,14 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Folder, HardDrive, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DEFAULT_DRIVE_FOLDER_ID,
   DEFAULT_DRIVE_FOLDER_NAME,
   DRIVE_SCOPE,
+  DriveRequestError,
   PREVIEW_BYTES,
+  activeGoogleClientId,
   clearToken,
+  defaultGoogleClientId,
+  describeDriveFailure,
+  describeSignInError,
   driveDownload,
   driveFolderMeta,
   driveItemMeta,
@@ -16,12 +21,13 @@ import {
   drivePeek3mfThumbnail,
   driveRange,
   formatDriveBytes,
+  isGoogleClientId,
   parseDriveId,
+  readClientIdOverride,
   readRememberedFolder,
-  readStoredClientId,
   readStoredToken,
   rememberFolder,
-  storeClientId,
+  storeClientIdOverride,
   storeToken,
   type DriveItem,
 } from '@/lib/3dwork/drive';
@@ -43,6 +49,17 @@ interface Preview {
   file?: File;
 }
 
+interface TokenResponse {
+  access_token?: string;
+  expires_in?: number | string;
+  error?: string;
+  error_description?: string;
+}
+
+interface TokenClient {
+  requestAccessToken: (opts?: { prompt?: string }) => void;
+}
+
 declare global {
   interface Window {
     google?: {
@@ -51,8 +68,10 @@ declare global {
           initTokenClient: (cfg: {
             client_id: string;
             scope: string;
-            callback: (resp: { access_token?: string; error?: string; error_description?: string }) => void;
-          }) => { requestAccessToken: (opts?: { prompt?: string }) => void };
+            callback: (resp: TokenResponse) => void;
+            /** Pop-up blocked or closed — GIS reports it here, not in callback. */
+            error_callback?: (err: { type?: string; message?: string }) => void;
+          }) => TokenClient;
         };
       };
     };
@@ -85,7 +104,8 @@ export function DriveBrowser({
   onClose: () => void;
   onImport: (files: File[], folderHint?: string) => void;
 }) {
-  const [clientId, setClientId] = useState('');
+  const [clientOverride, setClientOverride] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [token, setToken] = useState('');
   const [link, setLink] = useState('');
   const [folderId, setFolderId] = useState(DEFAULT_DRIVE_FOLDER_ID);
@@ -99,10 +119,19 @@ export function DriveBrowser({
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
 
+  // One GIS token client per client id — re-created only if the id changes.
+  const tokenClientRef = useRef<{ id: string; client: TokenClient } | null>(null);
+
   useEffect(() => {
-    setClientId(readStoredClientId());
+    const override = readClientIdOverride();
+    setClientOverride(override);
+    setShowAdvanced(Boolean(override));
     setToken(readStoredToken());
     setFolderId(readRememberedFolder());
+    // Fetch Google's script now, so the click on Connect Drive can open the
+    // pop-up synchronously — a pop-up opened after an await is what browsers
+    // (Safari and mobile Chrome above all) silently block.
+    void loadGis().catch(() => {});
   }, []);
 
   const openFolder = useCallback(
@@ -125,12 +154,22 @@ export function DriveBrowser({
           return [...current, { id, name: meta.name }];
         });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not open that folder.');
+        const folderName =
+          id === DEFAULT_DRIVE_FOLDER_ID
+            ? DEFAULT_DRIVE_FOLDER_NAME
+            : crumbs.find((crumb) => crumb.id === id)?.name;
+        toast.error(
+          error instanceof DriveRequestError
+            ? describeDriveFailure(error.status, error.message, folderName)
+            : error instanceof Error
+              ? error.message
+              : 'Could not open that folder.'
+        );
       } finally {
         setBusy(null);
       }
     },
-    [token]
+    [token, crumbs]
   );
 
   useEffect(() => {
@@ -139,41 +178,64 @@ export function DriveBrowser({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const connect = async () => {
-    const id = clientId.trim();
-    if (!id) {
-      toast.error('Paste a Google OAuth client ID first (Web application).');
+  const onToken = useCallback((response: TokenResponse) => {
+    setBusy(null);
+    if (response.error || !response.access_token) {
+      toast.error(describeSignInError(response.error, response.error_description));
       return;
     }
-    storeClientId(id);
-    setBusy('Waiting for Google…');
-    try {
-      await loadGis();
-      await new Promise<void>((resolve, reject) => {
-        const client = window.google?.accounts.oauth2.initTokenClient({
+    storeToken(response.access_token, Number(response.expires_in) || undefined);
+    setToken(response.access_token);
+  }, []);
+
+  const onSignInError = useCallback((err: { type?: string; message?: string }) => {
+    setBusy(null);
+    toast.error(describeSignInError(err.type, err.message));
+  }, []);
+
+  /**
+   * Opens Google's account pop-up. When the GIS script is already here the
+   * pop-up opens inside this click, which is what pop-up blockers require; on
+   * the very first click in a fresh browser it has to wait for the script.
+   */
+  const connect = () => {
+    if (clientOverride.trim() && !isGoogleClientId(clientOverride)) {
+      toast.error('That does not look like a Google OAuth client id (…apps.googleusercontent.com). Clear it to use the company client.');
+      return;
+    }
+    storeClientIdOverride(clientOverride);
+    const id = activeGoogleClientId();
+
+    const start = () => {
+      const gis = window.google?.accounts?.oauth2;
+      if (!gis) {
+        setBusy(null);
+        toast.error('Google sign-in is not available in this browser.');
+        return;
+      }
+      let client = tokenClientRef.current?.id === id ? tokenClientRef.current.client : null;
+      if (!client) {
+        client = gis.initTokenClient({
           client_id: id,
           scope: DRIVE_SCOPE,
-          callback: (response) => {
-            if (response.error || !response.access_token) {
-              reject(new Error(response.error_description || response.error || 'Sign-in cancelled'));
-              return;
-            }
-            storeToken(response.access_token);
-            setToken(response.access_token);
-            resolve();
-          },
+          callback: onToken,
+          error_callback: onSignInError,
         });
-        if (!client) {
-          reject(new Error('Google sign-in is not available in this browser.'));
-          return;
-        }
-        client.requestAccessToken({ prompt: '' });
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Google sign-in failed.');
-    } finally {
-      setBusy(null);
+        tokenClientRef.current = { id, client };
+      }
+      setBusy('Waiting for Google…');
+      client.requestAccessToken({ prompt: '' });
+    };
+
+    if (window.google?.accounts?.oauth2) {
+      start();
+      return;
     }
+    setBusy('Loading Google sign-in…');
+    loadGis().then(start, (error: unknown) => {
+      setBusy(null);
+      toast.error(error instanceof Error ? error.message : 'Could not load Google sign-in.');
+    });
   };
 
   const disconnect = () => {
@@ -351,28 +413,45 @@ export function DriveBrowser({
 
         <div className="space-y-2 border-b border-slate-200 px-3 py-2">
           {!token ? (
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <label className="block min-w-0">
-                <span className={`${LABEL} mb-1 block`}>Google OAuth client ID</span>
-                <input
-                  className={FIELD}
-                  value={clientId}
-                  onChange={(event) => setClientId(event.target.value)}
-                  placeholder="….apps.googleusercontent.com"
-                  autoComplete="off"
-                />
-              </label>
-              <button type="button" className={`${ACTION_PRIMARY} sm:self-end`} onClick={() => void connect()}>
-                Connect Drive
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className={ACTION_PRIMARY} onClick={connect} disabled={Boolean(busy)}>
+                  Connect Drive
+                </button>
+                <p className="min-w-0 flex-1 text-[0.7rem] text-slate-500">
+                  Signs you in with Google, read-only. Use the Google account that can open{' '}
+                  <strong>{DEFAULT_DRIVE_FOLDER_NAME}</strong>. If a pop-up is blocked, allow pop-ups for
+                  this site and press again.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-[0.65rem] font-bold uppercase tracking-wide text-slate-400 hover:text-slate-700"
+                onClick={() => setShowAdvanced((value) => !value)}
+              >
+                {showAdvanced ? 'Hide advanced' : 'Advanced…'}
               </button>
-              <p className="text-[0.7rem] text-slate-500 sm:col-span-2">
-                Connect Drive signs you in with Google (read-only). If Google says the origin is
-                not allowed, add{' '}
-                <code className="font-mono">
-                  {typeof window !== 'undefined' ? window.location.origin : 'this site'}
-                </code>{' '}
-                under that Web client → Authorized JavaScript origins.
-              </p>
+              {showAdvanced ? (
+                <label className="block min-w-0">
+                  <span className={`${LABEL} mb-1 block`}>Other Google OAuth client (optional)</span>
+                  <input
+                    className={FIELD}
+                    value={clientOverride}
+                    onChange={(event) => setClientOverride(event.target.value)}
+                    onBlur={() => storeClientIdOverride(clientOverride)}
+                    placeholder={defaultGoogleClientId()}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <span className="mt-1 block text-[0.65rem] text-slate-500">
+                    Leave empty for the company client. A Web client used here must list{' '}
+                    <code className="font-mono">
+                      {typeof window !== 'undefined' ? window.location.origin : 'this site'}
+                    </code>{' '}
+                    under Authorized JavaScript origins.
+                  </span>
+                </label>
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-col gap-2 sm:flex-row">

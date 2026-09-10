@@ -14,21 +14,41 @@ export const DEFAULT_DRIVE_FOLDER_NAME = 'Top model 3';
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 export const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 
-export const CLIENT_ID_KEY = 'kjarni_3dwork_google_client';
+/**
+ * Old key: the dialog once let anyone paste a client id here, and a hand-typed
+ * id (one swapped `1`/`l`) made Google answer "invalid_client" forever after,
+ * because the pasted value silently beat the baked one. It is ignored now and
+ * wiped on the next open.
+ */
+export const LEGACY_CLIENT_ID_KEY = 'kjarni_3dwork_google_client';
+/** Explicit override, only written from the "advanced" field. */
+export const CLIENT_ID_OVERRIDE_KEY = 'kjarni_3dwork_google_client_override';
 export const TOKEN_KEY = 'kjarni_3dwork_drive_token';
 export const FOLDER_KEY = 'kjarni_3dwork_drive_folder';
 
 /**
  * Company Web OAuth client (public by design — same class of id as GIS
  * `client_id` in the browser). Override with NEXT_PUBLIC_GOOGLE_CLIENT_ID.
- * Authorized JavaScript origins on this client must include the 3dwork URL.
+ * Authorized JavaScript origins on this client include the 3dwork URL
+ * (checked 2026-09-04: Google goes straight to sign-in for
+ * https://kjarni-3dwork.vercel.app).
  */
 export const DEFAULT_GOOGLE_CLIENT_ID =
   '708215000553-7sc6vb83g2manolct21l7gh45tk442es.apps.googleusercontent.com';
 
+/** Deleted in Google Cloud — Google answers "deleted_client" for it. */
 const LEGACY_GOOGLE_CLIENT_IDS = new Set([
   '708215000553-77htigi4tkqdr00bfak0j2e539h9bc2d.apps.googleusercontent.com',
 ]);
+
+const CLIENT_ID_SHAPE = /^\d{6,}-[a-z0-9]{16,}\.apps\.googleusercontent\.com$/;
+
+/** Access tokens from GIS last about an hour; keep one across reloads until then. */
+export interface StoredDriveToken {
+  token: string;
+  /** Epoch ms after which the token must not be used. */
+  expiresAt: number;
+}
 
 /** Auto-mesh a file for a preview only when it is this small. */
 export const PREVIEW_BYTES = 12 * 1024 * 1024;
@@ -86,29 +106,154 @@ export function defaultGoogleClientId(): string {
   return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() || DEFAULT_GOOGLE_CLIENT_ID;
 }
 
-export function readStoredClientId(): string {
+export function isGoogleClientId(value: string): boolean {
+  const id = value.trim();
+  return CLIENT_ID_SHAPE.test(id) && !LEGACY_GOOGLE_CLIENT_IDS.has(id);
+}
+
+/**
+ * The client id Connect Drive uses: an explicit, well-formed override wins,
+ * otherwise the env/baked company client. Anything left in the old free-text
+ * key is dropped rather than trusted.
+ */
+export function activeGoogleClientId(): string {
   const baked = defaultGoogleClientId();
   if (typeof window === 'undefined') return baked;
-  const stored = window.localStorage.getItem(CLIENT_ID_KEY)?.trim();
-  if (!stored || LEGACY_GOOGLE_CLIENT_IDS.has(stored)) return baked;
-  return stored;
+  try {
+    window.localStorage.removeItem(LEGACY_CLIENT_ID_KEY);
+    const override = window.localStorage.getItem(CLIENT_ID_OVERRIDE_KEY)?.trim() ?? '';
+    if (override && isGoogleClientId(override)) return override;
+    if (override) window.localStorage.removeItem(CLIENT_ID_OVERRIDE_KEY);
+  } catch {
+    /* storage blocked — the baked id still works */
+  }
+  return baked;
 }
 
-export function storeClientId(id: string) {
-  window.localStorage.setItem(CLIENT_ID_KEY, id.trim());
+/** Kept for older call sites — same answer as activeGoogleClientId. */
+export function readStoredClientId(): string {
+  return activeGoogleClientId();
 }
 
-export function readStoredToken(): string {
+export function readClientIdOverride(): string {
   if (typeof window === 'undefined') return '';
-  return sessionStorage.getItem(TOKEN_KEY) ?? '';
+  try {
+    const override = window.localStorage.getItem(CLIENT_ID_OVERRIDE_KEY)?.trim() ?? '';
+    return isGoogleClientId(override) ? override : '';
+  } catch {
+    return '';
+  }
 }
 
-export function storeToken(token: string) {
-  sessionStorage.setItem(TOKEN_KEY, token);
+/** Empty (or the baked id) clears the override. */
+export function storeClientIdOverride(id: string) {
+  const value = id.trim();
+  try {
+    if (!value || value === defaultGoogleClientId() || !isGoogleClientId(value)) {
+      window.localStorage.removeItem(CLIENT_ID_OVERRIDE_KEY);
+    } else {
+      window.localStorage.setItem(CLIENT_ID_OVERRIDE_KEY, value);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function parseStoredToken(raw: string | null, now = Date.now()): string {
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredDriveToken>;
+    if (typeof parsed.token !== 'string' || !parsed.token) return '';
+    if (typeof parsed.expiresAt !== 'number' || parsed.expiresAt <= now) return '';
+    return parsed.token;
+  } catch {
+    // Pre-2026-09 format was the bare token with no expiry — treat as expired.
+    return '';
+  }
+}
+
+export function readStoredToken(now = Date.now()): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return parseStoredToken(localStorage.getItem(TOKEN_KEY), now);
+  } catch {
+    return '';
+  }
+}
+
+/** Token lifetime from Google, less a minute so a request never starts on a dying token. */
+export function tokenExpiry(expiresInSeconds: number | undefined, now = Date.now()): number {
+  const seconds = Number.isFinite(expiresInSeconds) && (expiresInSeconds ?? 0) > 120 ? (expiresInSeconds as number) : 3600;
+  return now + (seconds - 60) * 1000;
+}
+
+export function storeToken(token: string, expiresInSeconds?: number) {
+  try {
+    const stored: StoredDriveToken = { token, expiresAt: tokenExpiry(expiresInSeconds) };
+    localStorage.setItem(TOKEN_KEY, JSON.stringify(stored));
+    // Older builds kept the token here; leave nothing stale behind.
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function clearToken() {
-  sessionStorage.removeItem(TOKEN_KEY);
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Turn Google's sign-in errors into one line that says what to do. GIS hands
+ * back `error` codes from the token response or from error_callback.
+ */
+export function describeSignInError(code: string | undefined, description?: string): string {
+  switch (code) {
+    case 'popup_failed_to_open':
+      return 'The browser blocked the Google sign-in window. Allow pop-ups for this site, then press Connect Drive again.';
+    case 'popup_closed':
+      return 'The Google sign-in window was closed before it finished. Press Connect Drive and pick your account.';
+    case 'access_denied':
+      return 'Google did not allow this account. Sign in with the account that owns Top model 3 — and while the kjarni app is in Testing, that account must be on its test-user list (Google Cloud → OAuth consent screen → Test users).';
+    case 'invalid_client':
+    case 'deleted_client':
+      return 'Google does not recognise the OAuth client id. Clear the advanced client-id field so the company client is used.';
+    case 'invalid_request':
+    case 'redirect_uri_mismatch':
+      return `Google refused this site's origin. Add ${typeof window !== 'undefined' ? window.location.origin : 'this site'} under Authorized JavaScript origins on the Web client.`;
+    case 'interaction_required':
+    case 'login_required':
+    case 'consent_required':
+      return 'Google needs you to pick an account and allow read-only Drive access. Press Connect Drive again.';
+    default:
+      return description || code || 'Google sign-in failed.';
+  }
+}
+
+/** Drive REST failures, read for the person rather than the developer. */
+export function describeDriveFailure(status: number, body: string, folderName?: string): string {
+  if (status === 404) {
+    return folderName
+      ? `This Google account cannot see “${folderName}”. Connect with the account that owns the folder, or paste a link to a folder it can open.`
+      : 'Drive could not find that folder or file with this Google account.';
+  }
+  if (status === 403) {
+    return 'Google Drive refused (403). The token has no Drive access — Disconnect, then Connect Drive again and tick the Drive permission.';
+  }
+  if (status === 401) return 'Google Drive sign-in expired. Connect again.';
+  const text = body.trim();
+  let message = '';
+  try {
+    const parsed = JSON.parse(text) as { error?: { message?: string } };
+    message = parsed.error?.message ?? '';
+  } catch {
+    message = text;
+  }
+  return (message || `Drive request failed (${status})`).slice(0, 180);
 }
 
 export function readRememberedFolder(): string {
@@ -145,6 +290,15 @@ function toItem(file: DriveFileJson): DriveItem | null {
   };
 }
 
+export class DriveRequestError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'DriveRequestError';
+    this.status = status;
+  }
+}
+
 async function driveGet<T>(
   token: string,
   path: string,
@@ -161,7 +315,7 @@ async function driveGet<T>(
   }
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text.slice(0, 180) || `Drive request failed (${response.status})`);
+    throw new DriveRequestError(response.status, describeDriveFailure(response.status, text));
   }
   return (await response.json()) as T;
 }

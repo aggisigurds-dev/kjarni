@@ -123,7 +123,9 @@ export async function listCloudProjects(): Promise<CloudProjectIndexEntry[]> {
 
 export async function saveToCloud(
   project: Project,
-  geometries: Map<string, Float32Array>
+  geometries: Map<string, Float32Array>,
+  /** Stamp for this push — defaults to now so another computer sees it as newer. */
+  stamp = Date.now()
 ): Promise<{ updatedAt: number }> {
   const sb = getWork3dSupabase();
   if (!sb) throw new Error('Supabase is only available in the browser.');
@@ -154,7 +156,7 @@ export async function saveToCloud(
     if (error) throw new Error(error.message);
   }
 
-  const updatedAt = project.updatedAt || Date.now();
+  const updatedAt = Math.max(stamp, project.updatedAt || 0);
   const { error } = await sb.from(WORK3D_TABLE).upsert({
     id: project.id,
     name: project.name,
@@ -176,13 +178,15 @@ export async function loadFromCloud(
 
   const { data, error } = await sb
     .from(WORK3D_TABLE)
-    .select('id, name, project, manifest, deleted')
+    .select('id, name, project, manifest, deleted, updated_at')
     .eq('id', projectId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || data.deleted) throw new Error('That cloud build was not found.');
 
-  const project = data.project as Project;
+  // The row's stamp is the truth; the JSON's updatedAt is whatever the
+  // pushing browser had in memory, often older.
+  const project = { ...(data.project as Project), updatedAt: asUpdatedAt(data.updated_at) };
   const manifest = (data.manifest as CloudManifest) ?? {};
   const geometries = new Map<string, Float32Array>();
   const ids = Object.keys(manifest);
@@ -202,4 +206,49 @@ export async function loadFromCloud(
 export async function newestCloudProject(): Promise<CloudProjectIndexEntry | null> {
   const list = await listCloudProjects();
   return list[0] ?? null;
+}
+
+/** When the cloud copy of one project was last pushed, or null if it is not there. */
+export async function cloudProjectStamp(projectId: string): Promise<number | null> {
+  const sb = getWork3dSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from(WORK3D_TABLE)
+    .select('updated_at, deleted')
+    .eq('id', projectId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.deleted) return null;
+  return asUpdatedAt(data.updated_at);
+}
+
+/**
+ * Soft delete: the row stays (so nothing can resurrect it from a stale
+ * computer) but every project list skips it.
+ */
+export async function deleteFromCloud(projectId: string): Promise<void> {
+  const sb = getWork3dSupabase();
+  if (!sb) return;
+  const { error } = await sb
+    .from(WORK3D_TABLE)
+    .update({ deleted: true, updated_at: new Date().toISOString() })
+    .eq('id', projectId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Which of these projects were deleted on another computer. A soft-deleted row
+ * is invisible to listCloudProjects, so a local copy would otherwise linger as
+ * "this computer only" forever.
+ */
+export async function listCloudDeletedIds(ids: string[]): Promise<string[]> {
+  const sb = getWork3dSupabase();
+  if (!sb || ids.length === 0) return [];
+  const { data, error } = await sb
+    .from(WORK3D_TABLE)
+    .select('id')
+    .in('id', ids)
+    .eq('deleted', true);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id as string);
 }

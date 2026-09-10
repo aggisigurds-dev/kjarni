@@ -55,9 +55,15 @@ function run<T>(
   );
 }
 
-export async function saveProject(project: Project): Promise<void> {
+/**
+ * `stamp` mirrors a Supabase save time onto the local copy, so the next start
+ * can tell "same as the cloud" from "edited here since" by comparing stamps.
+ */
+export async function saveProject(project: Project, stamp?: number): Promise<void> {
   try {
-    await run(PROJECTS, 'readwrite', (store) => store.put({ ...project, updatedAt: Date.now() }));
+    await run(PROJECTS, 'readwrite', (store) =>
+      store.put({ ...project, updatedAt: stamp ?? Date.now() })
+    );
   } catch {
     // Storage is a convenience here, never a precondition for editing.
   }
