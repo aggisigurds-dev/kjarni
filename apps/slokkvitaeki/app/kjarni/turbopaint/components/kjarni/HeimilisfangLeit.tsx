@@ -82,7 +82,7 @@ export function HeimilisfangLeit({
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [opid, setOpid] = useState(false);
-  const [panelPos, setPanelPos] = useState({ top: 0, left: 8, width: 390 });
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 8, width: 390, maxH: 0 });
   const wrap = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
@@ -180,7 +180,11 @@ export function HeimilisfangLeit({
       let left = r.left;
       if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
       if (left < 8) left = 8;
-      setPanelPos({ top: r.bottom + 8, left, width });
+      // Spjaldið má ekki ná niður fyrir gluggann. Á TurboPaint situr reiturinn
+      // efst og 70vh passar; á Stjórnstöðinni er hann ~320px niðri og 70vh skar
+      // neðstu ~70px af spjaldinu burt. Hæðin er nú líka bundin við plássið.
+      const topPx = r.bottom + 8;
+      setPanelPos({ top: topPx, left, width, maxH: Math.max(220, window.innerHeight - topPx - 12) });
     };
     place();
     window.addEventListener("resize", place);
@@ -248,7 +252,7 @@ export function HeimilisfangLeit({
   const panel = showPanel && typeof document !== "undefined" ? createPortal(
     <div
       ref={panelRef} data-hleit=""
-      style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
+      style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width, maxHeight: panelPos.maxH ? `min(70vh, calc(100dvh - 5rem), ${panelPos.maxH}px)` : undefined }}
       className="fixed z-[80] max-h-[min(70vh,calc(100dvh-5rem))] overflow-auto rounded-xl border border-stone-300 bg-white p-2 text-stone-800 shadow-2xl"
     >
       {compact && (
