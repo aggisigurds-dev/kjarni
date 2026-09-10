@@ -1,0 +1,47 @@
+/* Heimilisfangaleitin (HeimilisfangLeit) á Stjórnstöðinni.
+ *
+ * Íhluturinn er skrifaður í Tailwind, en Tailwind er aðeins hlaðið á
+ * TurboPaint-síðunni (turbopaint/styles.css). Á /kjarni vantaði því alla
+ * klasa hans: reiturinn varð hvítur vafra-kassi, ✕ grár vafrahnappur, og
+ * niðurstöðuspjaldið (portal sem á að vera position:fixed undir reitnum)
+ * datt neðst á síðuna — 26 teikningar á ~3.000 px dýpi þar sem enginn sá þær.
+ *
+ * Tailwind ÁN preflight: preflight er alþjóðleg endurstilling (h1, p, a,
+ * button …) og myndi hnika öllu ms-útlitinu. Í staðinn fær aðeins tré
+ * íhlutarins ([data-hleit] — reiturinn og portal-spjaldið) þá endurstillingu
+ * sem klasarnir gera ráð fyrir. source(none) + @source: aðeins klasar
+ * íhlutarins verða til, ekkert annað á síðunni fær nýja merkingu.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./turbopaint/components/kjarni/HeimilisfangLeit.tsx";
+
+@layer base {
+  [data-hleit],
+  [data-hleit] *,
+  [data-hleit] *::before,
+  [data-hleit] *::after {
+    box-sizing: border-box;
+    border: 0 solid;
+    margin: 0;
+    padding: 0;
+  }
+  [data-hleit] :where(button, input) {
+    font: inherit;
+    color: inherit;
+    background-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  [data-hleit] button {
+    cursor: pointer;
+  }
+  [data-hleit] :where(img, svg) {
+    display: block;
+    vertical-align: middle;
+  }
+  [data-hleit] img {
+    max-width: 100%;
+  }
+}

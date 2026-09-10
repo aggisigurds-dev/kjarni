@@ -247,7 +247,7 @@ export function HeimilisfangLeit({
 
   const panel = showPanel && typeof document !== "undefined" ? createPortal(
     <div
-      ref={panelRef}
+      ref={panelRef} data-hleit=""
       style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
       className="fixed z-[80] max-h-[min(70vh,calc(100dvh-5rem))] overflow-auto rounded-xl border border-stone-300 bg-white p-2 text-stone-800 shadow-2xl"
     >
@@ -400,7 +400,7 @@ export function HeimilisfangLeit({
   ) : null;
 
   return (
-    <div ref={wrap} className="relative">
+    <div ref={wrap} className="relative" data-hleit="">
       {compact ? (
         <button
           type="button"

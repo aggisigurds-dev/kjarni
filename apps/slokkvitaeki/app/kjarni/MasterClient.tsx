@@ -5,6 +5,7 @@ import { SUPABASE_URL, SUPABASE_KEY, sbRpc, sbSelect } from "../lib/supabase";
 import { StationChrome, useStationSkin } from "./StationChrome";
 import { SKINS } from "./skins";
 import { HeimilisfangLeit } from "./turbopaint/components/kjarni/HeimilisfangLeit";
+import "./heimilisfang-leit.css";
 
 type Order = { id: number; buid_til: string; nafn: string; samtals: number };
 type Inq = { id: number; buid_til: string; nafn: string; skilabod: string };

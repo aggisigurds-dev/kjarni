@@ -2497,6 +2497,12 @@ a.ms-gitem:hover { border-color:var(--m-navy); }
   background-size:28px 28px;
 }
 .ms > * { position:relative; z-index:1; }
+/* Hausinn (Kjarni · Stjórnstöð + flipar) á að vera sticky. Reglan hér að ofan
+   (þemu, 26.08) er jafn-sértæk og .ms-head en kemur síðar, svo position:relative
+   vann — og þá færði top:var(--stn-h) hausinn 58px NIÐUR yfir efnið: Teikningar-
+   spjaldið huldi flipana (> 1380px, þar sem --stn-h er 58px). */
+.ms > .ms-head { position:sticky; z-index:30; }
+html[data-desk-lock] .ms > .ms-head { position:relative; top:auto; }
 .ms[data-skin="command"] .ms-head {
   border-top:2px solid var(--m-hud);
   box-shadow:0 0 24px -8px color-mix(in srgb, var(--m-hud) 55%, transparent);
