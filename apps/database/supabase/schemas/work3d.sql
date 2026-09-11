@@ -7,7 +7,13 @@
 --
 -- RLS is on (kjarni rule). 3dwork has no login, so policies allow anon like
 -- turbopaint_boards — but no DELETE policy: rows are only soft-deleted
--- (deleted=true). Mesh objects live in the public `work3d` bucket.
+-- (deleted=true). Anyone holding the publishable key can still read and
+-- overwrite builds; closing that needs a login.
+--
+-- What does not need a login is closed (2026-09-11): the `work3d` bucket is
+-- private (read through the key, no keyless public links), takes only
+-- application/octet-stream at prj_<id>/ver_<id>.bin, and rows must carry a
+-- prj_ id and a project document of at most 1 MB.
 
 create table if not exists public.work3d_projects (
   id text primary key,
@@ -17,7 +23,9 @@ create table if not exists public.work3d_projects (
   part_count integer not null default 0,
   deleted boolean not null default false,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint work3d_projects_id_shape check (id ~ '^prj_[0-9a-z_]+$'),
+  constraint work3d_projects_project_size check (octet_length(project::text) <= 1048576)
 );
 
 alter table public.work3d_projects enable row level security;
@@ -32,13 +40,20 @@ create policy "work3d_projects_update" on public.work3d_projects
 create index if not exists work3d_projects_updated_idx
   on public.work3d_projects (deleted, updated_at desc);
 
-insert into storage.buckets (id, name, public, file_size_limit)
-values ('work3d', 'work3d', true, 83886080)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('work3d', 'work3d', false, 83886080, array['application/octet-stream'])
 on conflict (id) do nothing;
 
 create policy "work3d_objects_select" on storage.objects
   for select using (bucket_id = 'work3d');
 create policy "work3d_objects_insert" on storage.objects
-  for insert with check (bucket_id = 'work3d');
+  for insert with check (
+    bucket_id = 'work3d'
+    and name ~ '^prj_[0-9a-z_]+/ver_[0-9a-z_]+\.bin$'
+  );
 create policy "work3d_objects_update" on storage.objects
-  for update using (bucket_id = 'work3d') with check (bucket_id = 'work3d');
+  for update using (bucket_id = 'work3d')
+  with check (
+    bucket_id = 'work3d'
+    and name ~ '^prj_[0-9a-z_]+/ver_[0-9a-z_]+\.bin$'
+  );

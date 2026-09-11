@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   aabbOverlap,
@@ -154,5 +155,47 @@ describe('orientedAabb', () => {
     });
     expect(box.max[0] - box.min[0]).toBeGreaterThan(12);
     expect(box.max[2] - box.min[2]).toBeCloseTo(10, 5);
+  });
+
+  it('turns a 10 mm rod along X onto Z for (90°, 0, 90°), as the viewport does', () => {
+    const rod: Aabb = { min: [0, -0.5, -0.5], max: [10, 0.5, 0.5] };
+    const box = orientedAabb(rod, { x: 0, y: 0, z: 0 }, { x: 90, y: 0, z: 90 }, { x: 1, y: 1, z: 1 });
+    expect(box.max[2] - box.min[2]).toBeCloseTo(10, 6);
+    expect(box.max[0] - box.min[0]).toBeCloseTo(1, 6);
+  });
+
+  it('matches the box three.js draws for any rotation, position and mirrored scale', () => {
+    const local = cube(-3, 2, -7, 10);
+    const position = { x: 3, y: -4, z: 5 };
+    const cases = [
+      { rotation: { x: 90, y: 0, z: 90 }, scale: { x: 1, y: 1, z: 1 } },
+      { rotation: { x: 30, y: 45, z: 60 }, scale: { x: 1, y: 1, z: 1 } },
+      { rotation: { x: -20, y: 110, z: 5 }, scale: { x: 1, y: -2, z: 0.5 } },
+    ];
+    const deg = Math.PI / 180;
+
+    for (const { rotation, scale } of cases) {
+      const matrix = new THREE.Matrix4().compose(
+        new THREE.Vector3(position.x, position.y, position.z),
+        new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(rotation.x * deg, rotation.y * deg, rotation.z * deg, 'XYZ')
+        ),
+        new THREE.Vector3(scale.x, scale.y, scale.z)
+      );
+      const expected = new THREE.Box3();
+      for (const x of [local.min[0], local.max[0]]) {
+        for (const y of [local.min[1], local.max[1]]) {
+          for (const z of [local.min[2], local.max[2]]) {
+            expected.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(matrix));
+          }
+        }
+      }
+
+      const box = orientedAabb(local, position, rotation, scale);
+      for (let axis = 0; axis < 3; axis++) {
+        expect(box.min[axis]).toBeCloseTo(expected.min.getComponent(axis), 6);
+        expect(box.max[axis]).toBeCloseTo(expected.max.getComponent(axis), 6);
+      }
+    }
   });
 });
