@@ -110,8 +110,10 @@ import {
 import {
   deleteGeometry,
   deleteProject,
+  lastOpenProjectId,
   listProjects,
   loadGeometry,
+  rememberOpenProject,
   saveGeometry,
   saveProject,
 } from '@/lib/3dwork/storage';
@@ -151,6 +153,7 @@ import { runOnePiece } from '@/lib/3dwork/one-piece-client';
 import type { OnePieceBody, OnePiecePipe, OnePieceReport } from '@/lib/3dwork/one-piece';
 import {
   cloudIsNewer,
+  localSaveStamp,
   mergeGeometries,
   mergeProjectLists,
   mergeProjects,
@@ -371,12 +374,14 @@ export function Workbench({
   // = the Supabase stamp this browser last pushed or pulled, so a newer stamp
   // means another computer saved. `cleanState` = the exact objects that came
   // from disk or Supabase: seeing them in the autosync effect means "nothing
-  // changed yet", not "push this".
+  // changed yet", not "push this". Its stamp is the one that copy already has
+  // on disk, so saving it again here does not make it look edited.
   const cloudDirtyRef = useRef(false);
   const lastCloudSyncRef = useRef<{ id: string; at: number }>({ id: '', at: 0 });
   const cleanStateRef = useRef<{
     project: Project | null;
     geometries: Map<string, Float32Array> | null;
+    stamp?: number;
   }>({ project: null, geometries: null });
   const lastCloudCheckRef = useRef(0);
   const projectListRef = useRef<ProjectListEntry[]>([]);
@@ -455,7 +460,11 @@ export function Workbench({
   /** Show a Supabase copy as-is: it is the newest state, nothing to push back. */
   const applyCloudProject = useCallback(
     async (cloud: { project: Project; geometries: Map<string, Float32Array> }, note: string) => {
-      cleanStateRef.current = { project: cloud.project, geometries: cloud.geometries };
+      cleanStateRef.current = {
+        project: cloud.project,
+        geometries: cloud.geometries,
+        stamp: cloud.project.updatedAt || undefined,
+      };
       cloudDirtyRef.current = false;
       lastCloudSyncRef.current = { id: cloud.project.id, at: cloud.project.updatedAt || Date.now() };
       setProject(cloud.project);
@@ -534,7 +543,7 @@ export function Workbench({
         // What the cloud holds now is the clean state. Measured against the copy
         // first loaded instead, undoing back to it never pushed — and the cloud
         // kept the edits that had just been undone.
-        cleanStateRef.current = { project: pushedProject, geometries: pushedGeometries };
+        cleanStateRef.current = { project: pushedProject, geometries: pushedGeometries, stamp: result.updatedAt };
         if (
           projectRef.current === pushedProject &&
           renderedGeometriesRef.current === pushedGeometries
@@ -651,7 +660,10 @@ export function Workbench({
         setGeometries(none);
         current = draft;
       } else {
-        const restored = saved[0];
+        // The build that was on the bench last. Only an edit moves a stamp, so
+        // the newest stamp is not always the build that was left open.
+        const lastOpen = lastOpenProjectId();
+        const restored = saved.find((entry) => entry.id === lastOpen) ?? saved[0];
         const loaded = new Map<string, Float32Array>();
         for (const part of restored.parts) {
           for (const version of part.versions ?? []) {
@@ -660,7 +672,7 @@ export function Workbench({
           }
         }
         if (cancelled) return;
-        cleanStateRef.current = { project: restored, geometries: loaded };
+        cleanStateRef.current = { project: restored, geometries: loaded, stamp: restored.updatedAt || undefined };
         setProject(restored);
         setGeometries(loaded);
         setFrameToken((token) => token + 1);
@@ -767,7 +779,7 @@ export function Workbench({
   useEffect(() => {
     if (!loadedRef.current) return;
     const timer = setTimeout(() => {
-      void saveProject(project).then(() => {
+      void saveProject(project, localSaveStamp(project, cleanStateRef.current)).then(() => {
         // A brand-new project shows up in the switcher as soon as it is on
         // disk, not only once Supabase has it.
         if (!projectListRef.current.some((entry) => entry.id === project.id)) {
@@ -855,7 +867,8 @@ export function Workbench({
   useEffect(() => {
     const flush = () => {
       if (loadedRef.current) {
-        void saveProject(projectRef.current);
+        rememberOpenProject(projectRef.current.id);
+        void saveProject(projectRef.current, localSaveStamp(projectRef.current, cleanStateRef.current));
         if (cloudAttachedRef.current) void pushCloudRef.current('auto');
         if (githubRef.current.connected) void pushGithubRef.current('auto');
       }
@@ -948,7 +961,7 @@ export function Workbench({
 
       // Keep every part (see the restore-on-mount note) — a geometry that did
       // not load back is hidden by the viewport, never deleted from the build.
-      cleanStateRef.current = { project: target, geometries: loaded };
+      cleanStateRef.current = { project: target, geometries: loaded, stamp: target.updatedAt || undefined };
       lastCloudSyncRef.current = { id: projectId, at: cloudAt };
       // Newer here than on Supabase (or not there at all) → push once opened.
       cloudDirtyRef.current = cloudIsNewer(cloudAt, target.updatedAt) || (cloudAt === 0 && target.parts.length > 0);

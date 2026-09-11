@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { cloudIsNewer, mergeGeometries, mergeProjectLists, mergeProjects, sinceLabel } from './project-sync';
+import {
+  cloudIsNewer,
+  localSaveStamp,
+  mergeGeometries,
+  mergeProjectLists,
+  mergeProjects,
+  sinceLabel,
+} from './project-sync';
 import type { Part, Project } from './project';
 
 const part = (id: string, overrides: Partial<Part> = {}): Part => ({
@@ -47,6 +54,26 @@ describe('cloudIsNewer', () => {
     expect(cloudIsNewer(10_000, 20_000)).toBe(true);
     expect(cloudIsNewer(undefined, 20_000)).toBe(true);
     expect(cloudIsNewer(10_000, undefined)).toBe(false);
+  });
+});
+
+describe('localSaveStamp', () => {
+  it('keeps an untouched build level with the cloud copy it came from', () => {
+    const fromCloud = project({ updatedAt: 50_000 });
+    const stamp = localSaveStamp(fromCloud, { project: fromCloud, stamp: 50_000 });
+    expect(stamp).toBe(50_000);
+    expect(cloudIsNewer(50_000, stamp)).toBe(false);
+  });
+
+  it('stamps an edit made here with the save time', () => {
+    const fromCloud = project({ updatedAt: 50_000 });
+    const edited = { ...fromCloud, name: 'Renamed here' };
+    expect(localSaveStamp(edited, { project: fromCloud, stamp: 50_000 })).toBeUndefined();
+  });
+
+  it('stamps a blank draft with the save time', () => {
+    const draft = project();
+    expect(localSaveStamp(draft, { project: draft })).toBeUndefined();
   });
 });
 

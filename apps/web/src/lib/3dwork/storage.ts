@@ -13,6 +13,7 @@ const DB_NAME = 'kjarni-3dwork';
 const DB_VERSION = 1;
 const PROJECTS = 'projects';
 const GEOMETRY = 'geometry';
+const LAST_OPEN_KEY = 'kjarni3d_last_project';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -75,6 +76,27 @@ export async function listProjects(): Promise<Project[]> {
     return projects.sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
+  }
+}
+
+/**
+ * The build that was on the bench last, so a start restores it. Kept apart
+ * from the project stamps: those say when a copy last changed or synced, and
+ * merely having a build open must not move them.
+ */
+export function rememberOpenProject(id: string): void {
+  try {
+    localStorage.setItem(LAST_OPEN_KEY, id);
+  } catch {
+    /* private mode or no window — a start falls back to the newest stamp */
+  }
+}
+
+export function lastOpenProjectId(): string | null {
+  try {
+    return localStorage.getItem(LAST_OPEN_KEY);
+  } catch {
+    return null;
   }
 }
 

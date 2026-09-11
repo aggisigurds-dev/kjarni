@@ -33,6 +33,20 @@ export function cloudIsNewer(localUpdatedAt: number | undefined, cloudUpdatedAt:
   return cloud > local + STAMP_SLACK_MS;
 }
 
+/**
+ * The stamp a local save should carry. The copy that came from disk or
+ * Supabase, or was just pushed, keeps the stamp it already has. Stamping it
+ * "now" on every autosave made an untouched build look edited here, and the
+ * next start pushed it over whatever another computer had saved since.
+ * Anything else is an edit made here: undefined, so the save stamps now.
+ */
+export function localSaveStamp(
+  project: Project,
+  clean: { project: Project | null; stamp?: number }
+): number | undefined {
+  return project === clean.project ? clean.stamp : undefined;
+}
+
 export function mergeProjectLists(
   local: { id: string; name: string; parts: number; updatedAt: number }[],
   cloud: { id: string; name: string; parts: number; updatedAt: number }[]
