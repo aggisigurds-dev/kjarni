@@ -77,6 +77,7 @@
     "input-otp": "^1.4.2",
     "jsdom": "^29.1.1",
     "lucide-react": "^0.577.0",
+    "manifold-3d": "3.5.3",
     "next": "^16.2.6",
     "next-nprogress-bar": "^2.4.7",
     "next-safe-action": "^8.5.2",

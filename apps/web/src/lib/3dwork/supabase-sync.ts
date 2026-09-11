@@ -14,6 +14,7 @@ import type { Part, Project } from './project';
 import {
   buildManifest,
   geometryUploads,
+  mergeManifest,
   projectVersionIds,
   type CloudManifest,
   type CloudProjectIndexEntry,
@@ -130,12 +131,13 @@ export async function saveToCloud(
   const sb = getWork3dSupabase();
   if (!sb) throw new Error('Supabase is only available in the browser.');
 
+  const referenced = projectVersionIds(project);
   const wanted = new Map<string, Float32Array>();
-  for (const id of projectVersionIds(project)) {
+  for (const id of referenced) {
     const soup = geometries.get(id);
     if (soup) wanted.set(id, soup);
   }
-  const manifest = buildManifest(wanted.entries());
+  const fresh = buildManifest(wanted.entries());
 
   const { data: existing, error: existingError } = await sb
     .from(WORK3D_TABLE)
@@ -144,7 +146,9 @@ export async function saveToCloud(
     .maybeSingle();
   if (existingError) throw new Error(existingError.message);
   const previous = (existing?.manifest as CloudManifest | null) ?? null;
-  const uploads = geometryUploads(manifest, previous);
+  const uploads = geometryUploads(fresh, previous);
+  // Meshes this tab never loaded stay listed: they are still in the bucket.
+  const manifest = mergeManifest(fresh, previous, referenced);
 
   for (const id of uploads) {
     const soup = wanted.get(id);
@@ -201,6 +205,32 @@ export async function loadFromCloud(
     })
   );
   return { project: { ...project, id: projectId, name: project.name || (data.name as string) }, geometries };
+}
+
+/**
+ * One mesh of a cloud project, for a part whose geometry never reached this tab.
+ *
+ * Null means the bucket has no such file — a definite answer. A network or
+ * server failure throws instead, so the caller can try again later rather than
+ * give up on a mesh that is actually there.
+ */
+export async function loadCloudGeometry(
+  projectId: string,
+  versionId: string
+): Promise<Float32Array | null> {
+  const sb = getWork3dSupabase();
+  if (!sb) return null;
+  const { data: file, error } = await sb.storage
+    .from(WORK3D_BUCKET)
+    .download(geometryPath(projectId, versionId));
+  if (error) {
+    // Storage answers a missing object with 400 ("not_found") or 404.
+    const status = (error as { status?: number }).status;
+    if (status === 400 || status === 404) return null;
+    throw error;
+  }
+  if (!file) return null;
+  return new Float32Array(await file.arrayBuffer());
 }
 
 export async function newestCloudProject(): Promise<CloudProjectIndexEntry | null> {
