@@ -39,6 +39,27 @@ export function buildManifest(geometries: Iterable<[string, Float32Array]>): Clo
   return manifest;
 }
 
+/**
+ * The manifest to store after a push.
+ *
+ * Meshes this computer holds take their fresh fingerprints. A mesh the project
+ * still uses but this computer never loaded keeps the entry it already had —
+ * so a push from a tab that is still loading, or that lost a mesh to a race,
+ * can never make every other computer lose that part.
+ */
+export function mergeManifest(
+  next: CloudManifest,
+  previous: CloudManifest | null,
+  referenced: Iterable<string>
+): CloudManifest {
+  const merged: CloudManifest = { ...next };
+  if (!previous) return merged;
+  for (const id of referenced) {
+    if (!(id in merged) && previous[id]) merged[id] = previous[id];
+  }
+  return merged;
+}
+
 export function geometryUploads(
   next: CloudManifest,
   previous: CloudManifest | null
@@ -56,6 +77,23 @@ export function upsertIndex(
 ): CloudProjectIndexEntry[] {
   const without = index.filter((item) => item.id !== entry.id);
   return [entry, ...without].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/**
+ * The meshes a project needs in memory to be worked on: each part's live
+ * version, and the live versions of group members (joining a group into one
+ * piece works member by member).
+ */
+export function activeVersionIds(project: Project): string[] {
+  const ids: string[] = [];
+  const walk = (parts: Project['parts']) => {
+    for (const part of parts) {
+      if (part.activeVersionId) ids.push(part.activeVersionId);
+      if (part.group?.members) walk(part.group.members);
+    }
+  };
+  walk(project.parts);
+  return ids;
 }
 
 export function projectVersionIds(project: Project): string[] {

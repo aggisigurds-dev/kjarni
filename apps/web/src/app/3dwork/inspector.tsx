@@ -89,6 +89,15 @@ interface InspectorProps {
   onToggleMeasuring: () => void;
   onClearMeasure: () => void;
   assemblyTotals: { parts: number; triangles: number; volume: number; mass: number };
+  /** Blaster slots on: shows which mount a part is a candidate for. */
+  assembly?: boolean;
+  /**
+   * Where the selected part sits on the table, when the layout places parts by
+   * hand (the plain bench, or Free). The position fields then edit this spot
+   * instead of the part's offset from a mount.
+   */
+  tablePosition?: { x: number; y: number; z: number } | null;
+  onPatchTablePosition?: (partId: string, position: { x: number; y: number; z: number }) => void;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -166,6 +175,9 @@ function ModifyTab({
   onEmbossTexture,
   measurement,
   busy,
+  assembly,
+  tablePosition,
+  onPatchTablePosition,
 }: {
   project: Project;
   part: Part;
@@ -179,6 +191,9 @@ function ModifyTab({
   onEmbossTexture: InspectorProps['onEmbossTexture'];
   measurement: PartMeasurement | null;
   busy: boolean;
+  assembly: boolean;
+  tablePosition: InspectorProps['tablePosition'];
+  onPatchTablePosition: InspectorProps['onPatchTablePosition'];
 }) {
   const { transform } = part;
   const defaults = textureForFinish(part.finishId);
@@ -299,22 +314,24 @@ function ModifyTab({
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="block">
-          <span className={`${LABEL} mb-1 block`}>Slot</span>
-          <select
-            className={FIELD}
-            value={part.slotId}
-            onChange={(event) => onPatchPart(part.id, { slotId: event.target.value })}
-          >
-            <option value="">Unassigned</option>
-            {project.slots.map((slot) => (
-              <option key={slot.id} value={slot.id}>
-                {slot.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className={assembly ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
+        {assembly && (
+          <label className="block">
+            <span className={`${LABEL} mb-1 block`}>Slot</span>
+            <select
+              className={FIELD}
+              value={part.slotId}
+              onChange={(event) => onPatchPart(part.id, { slotId: event.target.value })}
+            >
+              <option value="">Unassigned</option>
+              {project.slots.map((slot) => (
+                <option key={slot.id} value={slot.id}>
+                  {slot.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="block">
           <span className={`${LABEL} mb-1 block`}>Material</span>
@@ -455,14 +472,20 @@ function ModifyTab({
       </div>
 
       <div>
-        <span className={`${LABEL} mb-1 block`}>Offset from mount point (mm)</span>
+        <span className={`${LABEL} mb-1 block`}>
+          {tablePosition ? 'Position on the table (mm)' : 'Offset from mount point (mm)'}
+        </span>
         <div className="grid grid-cols-3 gap-2">
           {(['x', 'y', 'z'] as const).map((axis) => (
             <NumberField
               key={axis}
               label={axis.toUpperCase()}
-              value={transform.position[axis]}
-              onChange={(value) => patchVec('position', axis, value)}
+              value={(tablePosition ?? transform.position)[axis]}
+              onChange={(value) =>
+                tablePosition && onPatchTablePosition
+                  ? onPatchTablePosition(part.id, { ...tablePosition, [axis]: value })
+                  : patchVec('position', axis, value)
+              }
               step={0.1}
             />
           ))}
@@ -557,21 +580,22 @@ function ModifyTab({
           Drop to table
         </button>
         <button type="button" className={ACTION_GHOST} onClick={() => onCenter(part.id)}>
-          Centre on mount
+          {assembly ? 'Centre on mount' : 'Centre on origin'}
         </button>
         <button type="button" className={ACTION_GHOST} onClick={() => onDuplicate(part.id)}>
-          Duplicate as variant
+          {assembly ? 'Duplicate as variant' : 'Duplicate'}
         </button>
         <button
           type="button"
           className={ACTION_GHOST}
-          onClick={() =>
+          onClick={() => {
             onPatchTransform(part.id, {
               position: { x: 0, y: 0, z: 0 },
               rotation: { x: 0, y: 0, z: 0 },
               scale: { x: 1, y: 1, z: 1 },
-            })
-          }
+            });
+            if (tablePosition) onPatchTablePosition?.(part.id, { x: 0, y: 0, z: 0 });
+          }}
         >
           Reset transform
         </button>
@@ -1352,6 +1376,9 @@ export function Inspector(props: InspectorProps) {
             onEmbossTexture={props.onEmbossTexture}
             measurement={measurement}
             busy={props.busy}
+            assembly={props.assembly ?? true}
+            tablePosition={props.tablePosition ?? null}
+            onPatchTablePosition={props.onPatchTablePosition}
           />
         ) : tab === 'measure' && measurement && scaledSoup ? (
           <MeasureTab

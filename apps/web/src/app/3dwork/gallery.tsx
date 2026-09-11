@@ -32,6 +32,8 @@ interface GalleryProps {
   onAssignSlot: (partId: string, slotId: string) => void;
   /** Part currently soloed on the table (View → Focus). */
   focusId?: string | null;
+  /** Blaster slots on: a lane per mount point. Off: one plain list of parts. */
+  assembly?: boolean;
 }
 
 function PartCard({
@@ -227,6 +229,7 @@ export function Gallery({
   fixBusy,
   onAssignSlot,
   focusId = null,
+  assembly = true,
 }: GalleryProps) {
   const loose = project.parts.filter(
     (part) => !project.slots.some((slot) => slot.id === part.slotId)
@@ -236,7 +239,7 @@ export function Gallery({
   return (
     <div className={`${PANEL} flex h-full flex-col overflow-hidden`}>
       <div className="flex items-center justify-between gap-2 border-b border-slate-300 px-3 py-2">
-        <span className={LABEL}>Parts gallery</span>
+        <span className={LABEL}>{assembly ? 'Parts gallery' : 'Parts'}</span>
         <span className="font-mono text-[0.6rem] text-slate-500">
           {formatCount(project.parts.length)} loaded
           {hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ''}
@@ -244,6 +247,11 @@ export function Gallery({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {project.parts.length === 0 && !assembly && (
+          <p className="px-3 py-4 text-[0.75rem] text-slate-400">
+            No parts yet. Drop STL or 3MF files on the table, or open them from Drive.
+          </p>
+        )}
         {project.parts.length > 0 && (
           <div className="border-b border-slate-200">
             <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -299,9 +307,21 @@ export function Gallery({
                           <EyeOff className="h-4 w-4" />
                         )}
                       </button>
+                      {!assembly && (
+                        // Without slot lanes this list is the only place the pictures show.
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded bg-slate-200">
+                          {part.thumbnail ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={part.thumbnail} alt="" className="h-full w-full object-contain" />
+                          ) : (
+                            <Layers className="h-4 w-4 text-slate-400" />
+                          )}
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="min-h-11 min-w-0 flex-1 truncate rounded px-1 text-left text-[0.75rem] font-semibold text-slate-800 hover:bg-slate-100"
+                        title={part.name}
                         onClick={(event) => {
                           if (event.metaKey || event.ctrlKey || event.shiftKey || multiSelect) {
                             onMark(part.id);
@@ -342,7 +362,7 @@ export function Gallery({
             </ul>
           </div>
         )}
-        {project.slots.map((slot) => (
+        {assembly && project.slots.map((slot) => (
           <SlotLane
             key={slot.id}
             slot={slot}
@@ -358,7 +378,7 @@ export function Gallery({
           />
         ))}
 
-        {loose.length > 0 && (
+        {assembly && loose.length > 0 && (
           <div className="border-t border-slate-200 px-3 py-2">
             <div className="mb-1.5 flex items-center justify-between">
               <span className={LABEL}>Unassigned</span>

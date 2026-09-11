@@ -1,12 +1,59 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
 import {
+  activeVersionIds,
   buildManifest,
   geometryUploads,
+  mergeManifest,
   projectVersionIds,
   soupFingerprint,
   upsertIndex,
 } from './github-sync';
+import { createProject, type Part } from './project';
+
+describe('mergeManifest', () => {
+  it('keeps meshes the project still uses but this tab never loaded', () => {
+    const previous = { ver_a: 'aa', ver_b: 'bb', ver_gone: 'zz' };
+    const fresh = { ver_a: 'a2' };
+    expect(mergeManifest(fresh, previous, ['ver_a', 'ver_b'])).toEqual({ ver_a: 'a2', ver_b: 'bb' });
+  });
+
+  it('is just the fresh manifest on a first save', () => {
+    expect(mergeManifest({ ver_a: 'aa' }, null, ['ver_a', 'ver_b'])).toEqual({ ver_a: 'aa' });
+  });
+});
+
+describe('activeVersionIds', () => {
+  const part = (id: string, extra: Partial<Part> = {}): Part => ({
+    id,
+    name: id,
+    fileName: '',
+    slotId: '',
+    color: '#000',
+    visible: true,
+    transform: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    },
+    triangles: 1,
+    materialId: 'pla',
+    notes: '',
+    versions: [
+      { id: `ver_${id}_1`, label: 'v1', note: '', triangles: 1, createdAt: 1 },
+      { id: `ver_${id}_2`, label: 'v2', note: '', triangles: 1, createdAt: 2 },
+    ],
+    activeVersionId: `ver_${id}_2`,
+    addedAt: 1,
+    ...extra,
+  });
+
+  it('lists only the live version of each part, group members included', () => {
+    const project = createProject();
+    project.parts = [part('a'), part('g', { group: { members: [part('m')], fitted: [] } })];
+    expect(activeVersionIds(project)).toEqual(['ver_a_2', 'ver_g_2', 'ver_m_2']);
+  });
+});
 
 describe('soupFingerprint', () => {
   it('is stable for the same soup', () => {

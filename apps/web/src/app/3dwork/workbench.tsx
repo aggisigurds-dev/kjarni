@@ -90,6 +90,8 @@ import {
 } from '@/lib/3dwork/shell';
 import {
   assembledPlacement,
+  assemblyOn,
+  benchPlacement,
   createProject,
   guessKit,
   guessSlot,
@@ -97,6 +99,7 @@ import {
   nextColor,
   scatterPlacement,
   freePlacement,
+  setAssembly,
   type Part,
   type PartSize,
   type Placement,
@@ -139,9 +142,13 @@ import {
   deleteFromCloud,
   listCloudDeletedIds,
   listCloudProjects,
+  loadCloudGeometry,
   loadFromCloud,
   saveToCloud,
 } from '@/lib/3dwork/supabase-sync';
+import { activeVersionIds } from '@/lib/3dwork/github-sync';
+import { runOnePiece } from '@/lib/3dwork/one-piece-client';
+import type { OnePieceBody, OnePiecePipe, OnePieceReport } from '@/lib/3dwork/one-piece';
 import {
   cloudIsNewer,
   mergeGeometries,
@@ -181,6 +188,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { DriveBrowser } from './drive-browser';
 import { KitBoard } from './kit-board';
 import { CloudPicker } from './cloud-picker';
+import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
@@ -203,6 +211,24 @@ function download(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Whether several meshes together span the same box as one mesh, to half a millimetre. */
+function sameBounds(pieces: Float32Array[], whole: Float32Array): boolean {
+  const target = computeBounds(whole);
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const soup of pieces) {
+    const bounds = computeBounds(soup);
+    for (let axis = 0; axis < 3; axis++) {
+      min[axis] = Math.min(min[axis], bounds.min[axis]);
+      max[axis] = Math.max(max[axis], bounds.max[axis]);
+    }
+  }
+  return [0, 1, 2].every(
+    (axis) =>
+      Math.abs(min[axis] - target.min[axis]) < 0.5 && Math.abs(max[axis] - target.max[axis]) < 0.5
+  );
+}
+
 /** One point on the undo timeline: the project, and the meshes it referred to. */
 interface HistoryStep {
   project: Project;
@@ -222,7 +248,12 @@ export function Workbench({
 } = {}) {
   const [project, setProject] = useState<Project>(() => createProject());
   const [geometries, setGeometries] = useState<Map<string, Float32Array>>(() => new Map());
-  const [mode, setMode] = useState<Mode>('scattered');
+  const [layoutChoice, setMode] = useState<Mode>('scattered');
+  // With the blaster slots off there is one layout — every part where it was
+  // put — and everything below that branches on the layout treats it as
+  // 'free': each part at its own table position, mounts and offsets untouched.
+  const assembly = assemblyOn(project);
+  const mode: Mode = assembly ? layoutChoice : 'free';
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<InspectorTab>('modify');
   const [wireframe, setWireframe] = useState(false);
@@ -242,7 +273,6 @@ export function Workbench({
   const [misalignReport, setMisalignReport] = useState<MisalignReport | null>(null);
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [solidReport, setSolidReport] = useState<SolidifyReport | null>(null);
-  const [showWeld, setShowWeld] = useState(false);
   const [showSlice, setShowSlice] = useState(false);
   const [showBore, setShowBore] = useState(false);
   const [showBend, setShowBend] = useState(false);
@@ -259,7 +289,13 @@ export function Workbench({
   const [bendSpec, setBendSpec] = useState<BendSpec>(DEFAULT_BEND);
   const [sliceSpec, setSliceSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', position: 0, keepBoth: true });
   const [boreSpec, setBoreSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', diameter: 28, cu: 0, cv: 0 });
-  const [weldBore, setWeldBore] = useState({ diameter: 28, axis: 'x' as 'x' | 'y' | 'z' });
+  const [showOnePiece, setShowOnePiece] = useState(false);
+  /** What the one-piece worker is doing; null while it is not running. */
+  const [onePieceProgress, setOnePieceProgress] = useState<string | null>(null);
+  const [onePieceReport, setOnePieceReport] = useState<OnePieceReport | null>(null);
+  const [onePieceError, setOnePieceError] = useState<string | null>(null);
+  /** The part the last run made, so the dialog can download it. */
+  const [onePieceResultId, setOnePieceResultId] = useState<string | null>(null);
   const [frameToken, setFrameToken] = useState(0);
   const [dragging, setDragging] = useState(false);
   /** The part currently in move mode (double-tapped), and how a grab acts. */
@@ -312,6 +348,11 @@ export function Workbench({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadedRef = useRef(false);
+  // Flips once this tab's saved project is back in state. A part opened from
+  // the kit board waits for it, so the restore cannot land on top of the import.
+  const [restored, setRestored] = useState(false);
+  const pendingImportRef = useRef(pendingImport);
+  pendingImportRef.current = pendingImport;
   // Always points at the latest project, so a flush save (tab hidden/closed or
   // unmount) writes the current state without waiting on the debounce timer.
   const projectRef = useRef(project);
@@ -436,6 +477,24 @@ export function Workbench({
         if (reason === 'manual') toast.error('Add a part before saving to Supabase.');
         return;
       }
+      // Never push a part list whose meshes this tab does not hold yet — that
+      // is how a build once reached the cloud with its parts and no geometry.
+      // Only the meshes on the table count: a group's member meshes may live on
+      // the computer that imported it, and must not hold every push hostage —
+      // nor may a mesh already confirmed missing everywhere.
+      const unloaded = () =>
+        projectRef.current.parts.filter(
+          (part) =>
+            !renderedGeometriesRef.current.has(part.activeVersionId) &&
+            !missingVersionsRef.current.has(part.activeVersionId)
+        ).length;
+      if (unloaded() > 0) {
+        if (reason === 'manual') {
+          const count = unloaded();
+          toast.error(`Still loading ${count} mesh${count === 1 ? '' : 'es'} — try again in a moment.`);
+        }
+        return;
+      }
       cloudBusyRef.current = true;
       setCloudNote('Saving to Supabase…');
       try {
@@ -450,10 +509,11 @@ export function Workbench({
           const cloud = await loadFromCloud(id);
           const merged = mergeProjects(projectRef.current, cloud.project);
           if (merged.addedFromCloud.length > 0) {
-            const meshes = mergeGeometries(geometriesRef.current, cloud.geometries);
+            const meshes = mergeGeometries(renderedGeometriesRef.current, cloud.geometries);
             cleanStateRef.current = { project: merged.project, geometries: meshes };
             projectRef.current = merged.project;
             geometriesRef.current = meshes;
+            renderedGeometriesRef.current = meshes;
             setProject(merged.project);
             setGeometries(meshes);
             setFrameToken((token) => token + 1);
@@ -462,10 +522,23 @@ export function Workbench({
           }
         }
         const pushedProject = projectRef.current;
-        const pushedGeometries = geometriesRef.current;
+        const pushedGeometries = renderedGeometriesRef.current;
+        if (unloaded() > 0) {
+          // A part landed while the stamp was being checked and its mesh is not
+          // in this render yet. The push that follows its mesh carries both.
+          setCloudNote('Waiting for meshes to load…');
+          return;
+        }
         const result = await saveToCloud(pushedProject, pushedGeometries);
         lastCloudSyncRef.current = { id: pushedProject.id, at: result.updatedAt };
-        if (projectRef.current === pushedProject && geometriesRef.current === pushedGeometries) {
+        // What the cloud holds now is the clean state. Measured against the copy
+        // first loaded instead, undoing back to it never pushed — and the cloud
+        // kept the edits that had just been undone.
+        cleanStateRef.current = { project: pushedProject, geometries: pushedGeometries };
+        if (
+          projectRef.current === pushedProject &&
+          renderedGeometriesRef.current === pushedGeometries
+        ) {
           cloudDirtyRef.current = false;
         }
         // Mirror the cloud stamp onto the local copy, so the next start does not
@@ -558,10 +631,12 @@ export function Workbench({
           if (!cancelled) setBusy(null);
         }
         loadedRef.current = true;
+        setRestored(true);
         void refreshProjectList();
         return;
       }
 
+      const importing = Boolean(pendingImportRef.current?.files.length);
       const saved = await listProjects();
       if (cancelled) return;
 
@@ -593,6 +668,7 @@ export function Workbench({
       }
 
       loadedRef.current = true;
+      setRestored(true);
       void refreshProjectList();
 
       let usedCloud = false;
@@ -603,19 +679,27 @@ export function Workbench({
         const newest = remote[0];
         // Another computer saved this build more recently → show that copy.
         // A blank bench → open whatever was worked on last, wherever that was.
+        // A part being opened from the kit board belongs on this bench, so the
+        // newest cloud build is not swapped in underneath it.
         const takeId =
           remoteThis && cloudIsNewer(current.updatedAt, remoteThis.updatedAt)
             ? current.id
-            : current.parts.length === 0 && newest
+            : current.parts.length === 0 && newest && !importing
               ? newest.id
               : null;
         if (takeId) {
           setBusy('Loading from Supabase…');
           const cloud = await loadFromCloud(takeId);
           if (cancelled) return;
-          await applyCloudProject(cloud, `Loaded from Supabase · ${cloud.project.name}`);
-          setBusy(null);
-          usedCloud = true;
+          if (projectRef.current !== current) {
+            // Edited while the download ran — an import landed, a part moved.
+            // Keep that work; the next push folds the cloud's parts in.
+            setBusy(null);
+          } else {
+            await applyCloudProject(cloud, `Loaded from Supabase · ${cloud.project.name}`);
+            setBusy(null);
+            usedCloud = true;
+          }
         } else if (remoteThis) {
           lastCloudSyncRef.current = { id: current.id, at: remoteThis.updatedAt };
           // Edited here after the last push (offline, or the tab was closed
@@ -1037,13 +1121,14 @@ export function Workbench({
   const placements = useMemo<Placement[]>(
     () => {
       if (workspace !== 'bench') return [];
+      if (!assembly) return benchPlacement(project);
       return mode === 'assembled'
         ? assembledPlacement(project)
         : mode === 'free'
           ? freePlacement(project)
           : scatterPlacement(project, sizes);
     },
-    [mode, project, sizes, workspace]
+    [assembly, mode, project, sizes, workspace]
   );
 
   const viewportParts = useMemo<ViewportPart[]>(() => {
@@ -1077,13 +1162,13 @@ export function Workbench({
     (part: Part) => {
       const placement = placements.find((entry) => entry.partId === part.id);
       if (placement) return placement.position;
-      if (mode === 'free') return part.freePos ?? { x: 0, y: 0, z: 0 };
       const anchor = project.slots.find((slot) => slot.activePartId === part.id)?.anchor;
-      return {
+      const mounted = {
         x: part.transform.position.x + (anchor?.x ?? 0),
         y: part.transform.position.y + (anchor?.y ?? 0),
         z: part.transform.position.z + (anchor?.z ?? 0),
       };
+      return mode === 'free' ? (part.freePos ?? mounted) : mounted;
     },
     [placements, mode, project.slots]
   );
@@ -1113,8 +1198,8 @@ export function Workbench({
   );
 
   const snapAnchors = useMemo(
-    () => project.slots.map((slot) => slot.anchor),
-    [project.slots]
+    () => (assembly ? project.slots.map((slot) => slot.anchor) : []),
+    [assembly, project.slots]
   );
 
   // Volume and mass are expensive (they weld the mesh), so results are cached
@@ -1194,6 +1279,85 @@ export function Workbench({
   useEffect(() => {
     geometriesRef.current = geometries;
   }, [geometries]);
+  // The meshes as of the latest render, in step with projectRef. geometriesRef
+  // above lags a render behind on purpose, for undo snapshots, so a push must
+  // not read it: between a render and its effects it would pair a new part list
+  // with the old meshes.
+  const renderedGeometriesRef = useRef(geometries);
+  renderedGeometriesRef.current = geometries;
+
+  /**
+   * Fetch any mesh the project points at that this tab does not hold — after
+   * an import raced the restore, a cloud download that skipped a file, or an
+   * undo back past a delete. This computer's store first, then Supabase. It
+   * only ever adds to the map, so it cannot knock out anything already loaded.
+   */
+  const fetchingVersions = useRef(new Set<string>());
+  /** Meshes looked for everywhere and not found. A push does not wait for these. */
+  const missingVersionsRef = useRef(new Set<string>());
+  const [meshRetry, setMeshRetry] = useState(0);
+  useEffect(() => {
+    const missing = activeVersionIds(project).filter(
+      (id) => !geometries.has(id) && !fetchingVersions.current.has(id)
+    );
+    if (missing.length === 0) return;
+    for (const id of missing) fetchingVersions.current.add(id);
+    const projectId = project.id;
+    const onTable = new Set(project.parts.map((part) => part.activeVersionId));
+
+    void (async () => {
+      const found = new Map<string, Float32Array>();
+      let retry = false;
+      let lost = 0;
+      for (const id of missing) {
+        let soup: Float32Array | null;
+        try {
+          soup = await loadGeometry(id);
+          if (!soup) {
+            soup = await loadCloudGeometry(projectId, id);
+            if (soup) void saveGeometry(id, soup);
+          }
+        } catch {
+          // Offline, or the server stumbled: not an answer. Try again shortly.
+          fetchingVersions.current.delete(id);
+          retry = true;
+          continue;
+        }
+        if (soup) {
+          found.set(id, soup);
+        } else if (!missingVersionsRef.current.has(id)) {
+          // Stays marked, so a mesh that exists nowhere is not re-fetched on every render.
+          missingVersionsRef.current.add(id);
+          if (onTable.has(id)) lost++;
+        }
+      }
+      if (retry) setTimeout(() => setMeshRetry((count) => count + 1), 15_000);
+      if (lost > 0) {
+        toast.error(
+          lost === 1
+            ? 'A part has no mesh saved on this computer or in the cloud. Import it again, or remove it.'
+            : `${lost} parts have no mesh saved on this computer or in the cloud. Import them again, or remove them.`
+        );
+      }
+      if (found.size === 0) return;
+      for (const id of found.keys()) fetchingVersions.current.delete(id);
+
+      setGeometries((current) => {
+        let next = current;
+        for (const [id, soup] of found) {
+          if (next.has(id)) continue;
+          if (next === current) next = new Map(current);
+          next.set(id, soup);
+        }
+        // Filling meshes in is not an edit: if the map was the clean copy from
+        // disk or Supabase, the filled one is the clean copy now.
+        if (next !== current && cleanStateRef.current.geometries === current) {
+          cleanStateRef.current = { ...cleanStateRef.current, geometries: next };
+        }
+        return next;
+      });
+    })();
+  }, [project, geometries, meshRetry]);
 
   const patchProject = useCallback(
     (patch: (current: Project) => Project, options?: { history?: boolean }) => {
@@ -1474,6 +1638,27 @@ export function Workbench({
       }
 
       if (addedParts.length > 0) {
+        if (!assemblyOn(project)) {
+          // A plain bench has no lanes to spread parts into, so new parts line
+          // up to the right of what is already there instead of piling up at
+          // the origin. The first part on an empty bench stays centred.
+          let right = snapNeighbors.reduce(
+            (edge, entry) => Math.max(edge, entry.box.max[0]),
+            Number.NEGATIVE_INFINITY
+          );
+          for (const part of addedParts) {
+            const soup = addedGeometry.get(part.activeVersionId);
+            const width = soup ? computeBounds(soup).size[0] : 0;
+            if (!Number.isFinite(right)) {
+              right = width / 2;
+              continue;
+            }
+            // A table position, not a mount offset: switching the slots on later
+            // still fits the part straight onto its mount.
+            part.freePos = { x: right + 40 + width / 2, y: 0, z: 0 };
+            right += 40 + width;
+          }
+        }
         setGeometries((current) => {
           const next = new Map(current);
           for (const [id, soup] of addedGeometry) next.set(id, soup);
@@ -1481,7 +1666,7 @@ export function Workbench({
         });
 
         patchProject((current) => {
-          const autoFit = opts?.autoFit !== false;
+          const autoFit = opts?.autoFit !== false && assemblyOn(current);
           const slots = autoFit
             ? current.slots.map((slot) => {
                 if (slot.activePartId) return slot;
@@ -1502,12 +1687,12 @@ export function Workbench({
       if (addedParts.length > 0) toast.success(`Added ${addedParts.length} part(s).`);
       return addedParts;
     },
-    [project, patchProject, zUp]
+    [project, patchProject, zUp, snapNeighbors]
   );
 
   const pendingConsumed = useRef(false);
   useEffect(() => {
-    if (pendingConsumed.current || !pendingImport?.files.length) return;
+    if (!restored || pendingConsumed.current || !pendingImport?.files.length) return;
     pendingConsumed.current = true;
     void (async () => {
       const added = await importFiles(pendingImport.files, {
@@ -1520,7 +1705,7 @@ export function Workbench({
       setMode('assembled');
       setShowGallery(true);
     })();
-  }, [importFiles, pendingImport, onPendingConsumed]);
+  }, [restored, importFiles, pendingImport, onPendingConsumed]);
 
   const patchPart = useCallback(
     (partId: string, patch: Partial<Part>) => {
@@ -1616,7 +1801,8 @@ export function Workbench({
         parts: current.parts.map((part) => {
           if (part.id !== id) return part;
           if (mode === 'free') {
-            const fp = part.freePos ?? { x: 0, y: 0, z: 0 };
+            // A part never placed by hand starts from where it is drawn, not the origin.
+            const fp = part.freePos ?? partWorldPos(part);
             return { ...part, freePos: { x: fp.x + delta.x, y: fp.y + delta.y, z: fp.z + delta.z } };
           }
           return {
@@ -1633,7 +1819,7 @@ export function Workbench({
         }),
       }));
     },
-    [patchProject, mode]
+    [patchProject, mode, partWorldPos]
   );
 
   /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
@@ -1711,10 +1897,11 @@ export function Workbench({
       setSelectedId(partId);
       if (!partId) return;
 
+      if (!assembly) return;
       const part = project.parts.find((candidate) => candidate.id === partId);
       if (part?.slotId) fitPart(part.slotId, partId);
     },
-    [project.parts, fitPart]
+    [assembly, project.parts, fitPart]
   );
 
   const removePart = useCallback(
@@ -2076,7 +2263,7 @@ export function Workbench({
         return {
           ...current,
           parts: current.parts.map((part) => {
-            const seated = part.freePos ?? posById.get(part.id) ?? { x: 0, y: 0, z: 0 };
+            const seated = part.freePos ?? posById.get(part.id) ?? partWorldPos(part);
             if (part.id !== movingPart.id) {
               return part.freePos ? part : { ...part, freePos: seated };
             }
@@ -2163,7 +2350,7 @@ export function Workbench({
               }
               return entry.freePos
                 ? entry
-                : { ...entry, freePos: posById.get(entry.id) ?? { x: 0, y: 0, z: 0 } };
+                : { ...entry, freePos: posById.get(entry.id) ?? partWorldPos(entry) };
             }),
           };
         });
@@ -2548,7 +2735,7 @@ export function Workbench({
 
   /** Slot callouts for the gunsmith overlay, anchored at each mount point. */
   const callouts = useMemo<ViewportCallout[]>(() => {
-    if (!showCallouts || mode !== 'assembled') return [];
+    if (!assembly || !showCallouts || mode !== 'assembled') return [];
 
     return project.slots.flatMap((slot) => {
       if (focusId) {
@@ -2567,7 +2754,7 @@ export function Workbench({
         variants: variants.length,
       };
     });
-  }, [project.slots, project.parts, showCallouts, mode, focusId]);
+  }, [assembly, project.slots, project.parts, showCallouts, mode, focusId]);
 
   const cycleSlot = useCallback(
     (slotId: string, direction: 1 | -1) => {
@@ -2600,8 +2787,10 @@ export function Workbench({
       if (!soup) return;
       updateActiveGeometry(partId, recenter(soup, true));
       patchTransform(partId, { position: { x: 0, y: 0, z: 0 } });
+      // Placed by hand, the part itself goes to the origin — not just its offset.
+      if (mode === 'free') patchPart(partId, { freePos: { x: 0, y: 0, z: 0 } });
     },
-    [soupOfPart, updateActiveGeometry, patchTransform]
+    [soupOfPart, updateActiveGeometry, patchTransform, mode, patchPart]
   );
 
   const centerPart = useCallback(
@@ -2610,8 +2799,9 @@ export function Workbench({
       if (!soup) return;
       updateActiveGeometry(partId, recenter(soup));
       patchTransform(partId, { position: { x: 0, y: 0, z: 0 } });
+      if (mode === 'free') patchPart(partId, { freePos: { x: 0, y: 0, z: 0 } });
     },
-    [soupOfPart, updateActiveGeometry, patchTransform]
+    [soupOfPart, updateActiveGeometry, patchTransform, mode, patchPart]
   );
 
   const runSimplify = useCallback(
@@ -3195,20 +3385,6 @@ export function Workbench({
     return soup ? computeBounds(soup) : null;
   }, [selectedPart, soupOfPart]);
 
-  /** Bounding box of the fitted assembly, used to centre a bore through it. */
-  const assemblyBounds = useCallback(() => {
-    const baked = bakedAssembly();
-    let total = 0;
-    for (const entry of baked) total += entry.soup.length;
-    const merged = new Float32Array(total);
-    let offset = 0;
-    for (const entry of baked) {
-      merged.set(entry.soup, offset);
-      offset += entry.soup.length;
-    }
-    return computeBounds(merged);
-  }, [bakedAssembly]);
-
   const exportCombined = useCallback(() => {
     const baked = bakedAssembly();
     if (baked.length === 0) {
@@ -3551,7 +3727,7 @@ export function Workbench({
    * spec rather than a file, so its numbers stay editable afterwards.
    */
   const addHardware = useCallback(
-    (spec: HardwareSpec) => {
+    (spec: HardwareSpec, transform?: Transform) => {
       const soup = hardwareMesh(spec);
       const id = newPartId();
       const versionId = newVersionId();
@@ -3571,11 +3747,13 @@ export function Workbench({
             slotId: '',
             color,
             visible: true,
-            transform: {
+            transform: transform ?? {
               position: { x: 0, y: 0, z: 0 },
               rotation: { x: 0, y: 0, z: 0 },
               scale: { x: 1, y: 1, z: 1 },
             },
+            // Placed by hand: the same spot on the plain bench and in Free.
+            ...(transform ? { freePos: { ...transform.position } } : {}),
             triangles: Math.floor(soup.length / 9),
             materialId: 'steel',
             notes: '',
@@ -3602,6 +3780,328 @@ export function Workbench({
     },
     [project, patchProject]
   );
+
+  /**
+   * Put a pipe straight through the bodies — the selection, or everything
+   * visible — along their longest side, centred, 40 mm proud of both ends.
+   * From then on it is ordinary hardware: move it, change its numbers, and One
+   * piece bores wherever it ends up.
+   */
+  const addPipeThrough = useCallback(
+    (diameter: number, wall: number) => {
+      const isBody = (part: Part) =>
+        part.visible && !part.hardware && geometries.has(part.activeVersionId);
+      // The pipe just added stays selected, so the selection often holds no body
+      // at all — then every body on the table is what the pipe goes through.
+      const picked = selection.filter(isBody);
+      const bodies = picked.length > 0 ? picked : project.parts.filter(isBody);
+
+      // Measured in the layout the pipe will be seen in. Lanes ignore a part's
+      // own position, so a bench in Scattered is switched to Assembled below.
+      const layout = new Map(
+        (!assembly
+          ? benchPlacement(project)
+          : mode === 'free'
+            ? freePlacement(project)
+            : assembledPlacement(project)
+        ).map((entry) => [entry.partId, entry.position])
+      );
+      const min = [Infinity, Infinity, Infinity];
+      const max = [-Infinity, -Infinity, -Infinity];
+      for (const part of bodies) {
+        const at = layout.get(part.id);
+        // A spare variant is not drawn in Assembled, so it must not stretch the box.
+        if (!at) continue;
+        const local = computeBounds(geometries.get(part.activeVersionId) as Float32Array);
+        // The matrix the viewport draws with, so a part rotated on two axes measures true.
+        const e = transformMatrix({ ...part.transform, position: at }).elements;
+        for (const x of [local.min[0], local.max[0]]) {
+          for (const y of [local.min[1], local.max[1]]) {
+            for (const z of [local.min[2], local.max[2]]) {
+              const corner = [
+                e[0] * x + e[4] * y + e[8] * z + e[12],
+                e[1] * x + e[5] * y + e[9] * z + e[13],
+                e[2] * x + e[6] * y + e[10] * z + e[14],
+              ];
+              for (let axis = 0; axis < 3; axis++) {
+                min[axis] = Math.min(min[axis], corner[axis]);
+                max[axis] = Math.max(max[axis], corner[axis]);
+              }
+            }
+          }
+        }
+      }
+      if (!Number.isFinite(min[0])) {
+        addHardware({ kind: 'pipe', length: 300, diameter, wall });
+        return;
+      }
+
+      const size = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+      const axis = size[0] >= size[1] && size[0] >= size[2] ? 0 : size[1] >= size[2] ? 1 : 2;
+      // Stock is built along +X; turn it onto the long side.
+      const rotation = [
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 90 },
+        { x: 0, y: -90, z: 0 },
+      ][axis];
+      if (assembly && mode === 'scattered') setMode('assembled');
+      addHardware(
+        { kind: 'pipe', length: Math.round(size[axis] + 80), diameter, wall },
+        {
+          position: {
+            x: (min[0] + max[0]) / 2,
+            y: (min[1] + max[1]) / 2,
+            z: (min[2] + max[2]) / 2,
+          },
+          rotation,
+          scale: { x: 1, y: 1, z: 1 },
+        }
+      );
+      toast.info(
+        'The pipe runs through the middle. Double-tap it to move it, or type its position under Modify — then One piece.'
+      );
+    },
+    [selection, project, geometries, assembly, mode, addHardware]
+  );
+
+  /** Switch the blaster slots on or off. Nothing on the table moves either way. */
+  const toggleAssembly = useCallback(() => {
+    const turningOn = !assembly;
+    patchProject((current) => {
+      const on = assemblyOn(current);
+      const drawn = !on
+        ? benchPlacement(current)
+        : mode === 'free'
+          ? freePlacement(current)
+          : mode === 'scattered'
+            ? scatterPlacement(current, sizes)
+            : assembledPlacement(current);
+      return setAssembly(current, !on, drawn);
+    });
+    setMoveModeId(null);
+    if (turningOn) setMode('assembled');
+    toast.success(
+      turningOn
+        ? 'Assembly on: parts can be fitted to blaster mounts again.'
+        : 'Assembly off: a plain bench. Every part stayed where it was.'
+    );
+  }, [assembly, mode, sizes, patchProject]);
+
+  /** What One piece can join: visible parts with a mesh that are not pipe or bolt stock. */
+  const onePieceBodies = useMemo(
+    () =>
+      project.parts.filter(
+        (part) => part.visible && !part.hardware && geometries.has(part.activeVersionId)
+      ),
+    [project.parts, geometries]
+  );
+  /** What it can bore with: visible stock, cut from its numbers rather than its mesh. */
+  const onePiecePipes = useMemo(
+    () => project.parts.filter((part) => part.visible && part.hardware),
+    [project.parts]
+  );
+  const onePiecePreselected = useMemo(() => {
+    const picked = selection
+      .filter((part) => onePieceBodies.includes(part))
+      .map((part) => part.id);
+    return picked.length > 0 ? picked : onePieceBodies.map((part) => part.id);
+  }, [selection, onePieceBodies]);
+
+  const openOnePiece = useCallback(() => {
+    setOnePieceReport(null);
+    setOnePieceError(null);
+    setShowOnePiece(true);
+  }, []);
+
+  const runOnePieceJob = useCallback(
+    async (settings: OnePieceSettings) => {
+      const bodyParts = project.parts.filter((part) => settings.bodyIds.includes(part.id));
+      const pipeParts = project.parts.filter(
+        (part) => settings.pipeIds.includes(part.id) && part.hardware
+      );
+      if (bodyParts.length === 0) {
+        toast.error('Tick at least one body.');
+        return;
+      }
+
+      // Everything goes to the worker in world millimetres, exactly as drawn.
+      const bodies: OnePieceBody[] = [];
+      for (const part of bodyParts) {
+        const world: Transform = { ...part.transform, position: partWorldPos(part) };
+        const members = flattenGroupMembers([part]);
+        // A group still on its first version is exactly its members, and those
+        // are the separate solids worth joining — not the overlapping bundle.
+        const groupSoup = geometries.get(part.activeVersionId);
+        let memberBodies: OnePieceBody[] | null = null;
+        if (
+          members.length > 1 &&
+          groupSoup &&
+          part.activeVersionId === part.versions[0]?.id &&
+          members.every((member) => geometries.has(member.activeVersionId))
+        ) {
+          const inner = members.map((member) => {
+            const fitted = part.group?.fitted.find((entry) => entry.partId === member.id);
+            const anchor = fitted
+              ? project.slots.find((slot) => slot.id === fitted.slotId)?.anchor
+              : undefined;
+            return {
+              name: member.name,
+              soup: bakeTransform(geometries.get(member.activeVersionId) as Float32Array, {
+                ...member.transform,
+                position: {
+                  x: member.transform.position.x + (anchor?.x ?? 0),
+                  y: member.transform.position.y + (anchor?.y ?? 0),
+                  z: member.transform.position.z + (anchor?.z ?? 0),
+                },
+              }),
+            };
+          });
+          // Members rebuild the group exactly only when it came straight from a
+          // file. A group made on the bench baked its layout into the group mesh
+          // but not into its members, so they are checked before being trusted.
+          if (sameBounds(inner.map((entry) => entry.soup), groupSoup)) {
+            memberBodies = inner.map((entry) => ({
+              name: entry.name,
+              soup: bakeTransform(entry.soup, world),
+            }));
+          }
+        }
+        if (memberBodies) bodies.push(...memberBodies);
+        else if (groupSoup) bodies.push({ name: part.name, soup: bakeTransform(groupSoup, world) });
+      }
+
+      const pipes: OnePiecePipe[] = pipeParts.map((part) => {
+        const spec = part.hardware as HardwareSpec;
+        const { scale } = part.transform;
+        return {
+          name: part.name,
+          diameter: spec.diameter * Math.max(Math.abs(scale.y), Math.abs(scale.z)),
+          length: spec.length * Math.abs(scale.x),
+          matrix: Array.from(
+            transformMatrix({
+              ...part.transform,
+              position: partWorldPos(part),
+              scale: { x: 1, y: 1, z: 1 },
+            }).elements
+          ),
+        };
+      });
+
+      setOnePieceReport(null);
+      setOnePieceError(null);
+      setOnePieceProgress('Starting…');
+      try {
+        const result = await runOnePiece(
+          {
+            bodies,
+            pipes,
+            options: {
+              gapMm: settings.gapMm,
+              crumbMm3: settings.crumbMm3,
+              seamMm: settings.seamMm,
+            },
+          },
+          setOnePieceProgress
+        );
+
+        // Kept centred on its own origin and placed where it was built, so it
+        // holds its spot in every layout.
+        const soup = result.soup;
+        const [cx, cy, cz] = computeBounds(soup).center;
+        for (let i = 0; i + 2 < soup.length; i += 3) {
+          soup[i] -= cx;
+          soup[i + 1] -= cy;
+          soup[i + 2] -= cz;
+        }
+
+        const id = newPartId();
+        const versionId = newVersionId();
+        const color = nextColor(project);
+        const triangles = Math.floor(soup.length / 9);
+        const name = `${bodyParts.length === 1 ? bodyParts[0].name : project.name} · one piece`;
+        const hidden = new Set(settings.hideSources ? bodyParts.map((part) => part.id) : []);
+        const centre = { x: cx, y: cy, z: cz };
+
+        setGeometries((current) => new Map(current).set(versionId, soup));
+        void saveGeometry(versionId, soup);
+        patchProject((current) => ({
+          ...current,
+          parts: [
+            ...current.parts.map((part) =>
+              hidden.has(part.id) ? { ...part, visible: false } : part
+            ),
+            {
+              id,
+              name,
+              fileName: '',
+              slotId: '',
+              color,
+              visible: true,
+              transform: {
+                position: { ...centre },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+              },
+              freePos: { ...centre },
+              triangles,
+              materialId: bodyParts[0].materialId,
+              notes: [
+                `Joined: ${bodyParts.map((part) => part.name).join(', ')}`,
+                pipeParts.length > 0
+                  ? `Bored for: ${pipeParts.map((part) => part.name).join(', ')} (+${settings.gapMm} mm fit gap)`
+                  : 'No pipe bores',
+              ].join('\n'),
+              versions: [
+                {
+                  id: versionId,
+                  label: 'v1 one piece',
+                  note: `${result.report.pieces} piece(s) · ${pipeParts.length} bore(s)`,
+                  triangles,
+                  createdAt: Date.now(),
+                },
+              ],
+              activeVersionId: versionId,
+              thumbnail: renderThumbnail(soup, color),
+              addedAt: Date.now(),
+            },
+          ],
+        }));
+
+        setMarked(new Set());
+        setSelectedId(id);
+        setOnePieceResultId(id);
+        setOnePieceReport(result.report);
+        setFrameToken((token) => token + 1);
+      } catch (error) {
+        setOnePieceError(error instanceof Error ? error.message : 'One piece failed.');
+      } finally {
+        setOnePieceProgress(null);
+      }
+    },
+    [project, geometries, partWorldPos, patchProject]
+  );
+
+  const downloadOnePiece = useCallback(() => {
+    const part = project.parts.find((candidate) => candidate.id === onePieceResultId);
+    const soup = part ? geometries.get(part.activeVersionId) : undefined;
+    if (!part || !soup) {
+      toast.error('That piece is no longer on the bench.');
+      return;
+    }
+    // Written as it sits on the table, so the file matches the screen.
+    const baked = bakeTransform(soup, { ...part.transform, position: partWorldPos(part) });
+    download(
+      new Blob([exportBinaryStl([baked], part.name)], { type: 'model/stl' }),
+      `${part.name.replace(/[^\w.-]+/g, '_')}.stl`
+    );
+  }, [project.parts, onePieceResultId, geometries, partWorldPos]);
+
+  const onePieceMass = useMemo(() => {
+    if (!onePieceReport) return null;
+    const part = project.parts.find((candidate) => candidate.id === onePieceResultId);
+    const density = materialById(part?.materialId ?? project.materialId).density;
+    return formatMass(massGrams(onePieceReport.volume, density));
+  }, [onePieceReport, onePieceResultId, project.parts, project.materialId]);
 
   /** Drop in a primitive shape (box / cylinder / sphere / cone) as a part. */
   const addPrimitive = useCallback(
@@ -4015,7 +4515,9 @@ export function Workbench({
           setWireframe((value) => !value);
           break;
         case 'a':
-          setMode((current) => (current === 'assembled' ? 'scattered' : 'assembled'));
+          if (assemblyOn(projectRef.current)) {
+            setMode((current) => (current === 'assembled' ? 'scattered' : 'assembled'));
+          }
           break;
         case '/':
           event.preventDefault();
@@ -4428,12 +4930,13 @@ export function Workbench({
               Weld into one solid
             </MenuItem>
             <MenuItem
-              onClick={() => setShowWeld(true)}
-              disabled={Boolean(busy) || tableTotals.parts === 0}
+              onClick={openOnePiece}
+              disabled={Boolean(busy) || onePieceBodies.length === 0}
               icon={Cylinder}
-              hint="Weld the body, then bore a pipe hole through the whole thing — default ⌀28 mm"
+              tone="primary"
+              hint="Join the bodies and bore every pipe through them — an exact cut, no voxels"
             >
-              Pipe through body…
+              One piece with pipe bores…
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Cut the selected part</MenuLabel>
@@ -4579,9 +5082,14 @@ export function Workbench({
             >
               Focus
             </MenuCheckItem>
-            <MenuCheckItem checked={showCallouts} onClick={() => setShowCallouts((v) => !v)}>
-              Mount-point callouts
+            <MenuCheckItem checked={assembly} onClick={toggleAssembly}>
+              Assembly (blaster slots)
             </MenuCheckItem>
+            {assembly && (
+              <MenuCheckItem checked={showCallouts} onClick={() => setShowCallouts((v) => !v)}>
+                Mount-point callouts
+              </MenuCheckItem>
+            )}
             <MenuCheckItem
               checked={painting}
               onClick={() => {
@@ -4792,15 +5300,30 @@ export function Workbench({
           </button>
         </div>
 
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          {[28, 20].map((diameter) => (
+            <button
+              key={diameter}
+              type="button"
+              onClick={() => addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2)}
+              disabled={Boolean(busy)}
+              title={`Put a ⌀${diameter} mm pipe straight through the selected body, or everything on the table`}
+              className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 first:border-l-0 hover:bg-slate-100 disabled:text-slate-300"
+            >
+              <Cylinder className="mx-auto mb-0.5 h-3.5 w-3.5" />+ ⌀{diameter}
+            </button>
+          ))}
+        </div>
+
         <button
           type="button"
-          onClick={() => setShowWeld(true)}
-          disabled={Boolean(busy) || tableTotals.parts === 0}
-          title="Weld the body and bore a pipe through the whole length — default ⌀28 mm"
+          onClick={openOnePiece}
+          disabled={Boolean(busy) || onePieceBodies.length === 0}
+          title="Join the bodies into one solid and bore the pipes through — ready to print"
           className={TOOL_BTN_PRIMARY}
         >
-          <Cylinder className="h-3.5 w-3.5" />
-          Pipe ⌀{weldBore.diameter}
+          <Combine className="h-3.5 w-3.5" />
+          One piece
         </button>
 
         <button
@@ -4920,6 +5443,26 @@ export function Workbench({
           Multi
         </button>
 
+          <button
+            type="button"
+            onClick={toggleAssembly}
+            aria-pressed={assembly}
+            title={
+              assembly
+                ? 'Blaster slots are on. Turn them off for a plain bench — every part stays exactly where it is.'
+                : 'Plain bench. Turn on to fit parts to blaster mount points (body, barrel, grip…).'
+            }
+            className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
+              assembly
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Boxes className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Assembly {assembly ? 'on' : 'off'}
+          </button>
+
+          {assembly && (
           <div className="flex overflow-hidden rounded border border-slate-300">
             {(['assembled', 'scattered', 'free'] as Mode[]).map((option) => (
               <button
@@ -4937,16 +5480,19 @@ export function Workbench({
               </button>
             ))}
           </div>
+          )}
 
         <div className="ml-auto hidden items-center gap-3 pr-1 font-mono text-[0.65rem] text-slate-500 lg:flex">
           <span>
             <span className={LABEL}>parts </span>
             {formatCount(tableTotals.parts)}
           </span>
-          <span>
-            <span className={LABEL}>fitted </span>
-            {fittedCount}/{project.slots.length}
-          </span>
+          {assembly && (
+            <span>
+              <span className={LABEL}>fitted </span>
+              {fittedCount}/{project.slots.length}
+            </span>
+          )}
           <span>
             <span className={LABEL}>mass </span>
             {formatMass(tableTotals.mass)}
@@ -4981,12 +5527,28 @@ export function Workbench({
           </button>
           <button
             type="button"
-            className={TOOL_BTN_PRIMARY}
-            onClick={() => setShowWeld(true)}
-            disabled={Boolean(busy) || tableTotals.parts === 0}
+            className={TOOL_BTN}
+            onClick={() => addPipeThrough(28, 1.5)}
+            disabled={Boolean(busy)}
           >
-            <Cylinder className="h-3.5 w-3.5" />
-            Pipe ⌀{weldBore.diameter}
+            <Cylinder className="h-3.5 w-3.5" />+ ⌀28
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={() => addPipeThrough(20, 2)}
+            disabled={Boolean(busy)}
+          >
+            <Cylinder className="h-3.5 w-3.5" />+ ⌀20
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN_PRIMARY}
+            onClick={openOnePiece}
+            disabled={Boolean(busy) || onePieceBodies.length === 0}
+          >
+            <Combine className="h-3.5 w-3.5" />
+            One piece
           </button>
           <button
             type="button"
@@ -5093,6 +5655,7 @@ export function Workbench({
             fixBusy={Boolean(busy)}
             onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
             focusId={focusId}
+            assembly={assembly}
           />
         </div>
         )}
@@ -5210,8 +5773,8 @@ export function Workbench({
           )}
 
           {project.parts.length > 0 && selectedId && !moveModeId && !painting && !focusId && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
-              Double-tap a part to move (1 mm) or rotate (1°) · drag snaps to neighbours · Y-axis rotate by default
+            <div className="pointer-events-none absolute top-3 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
+              Double-tap a part to move or rotate it · drags snap to neighbours
             </div>
           )}
 
@@ -5221,7 +5784,7 @@ export function Workbench({
               <p className="text-sm font-bold text-slate-500">Drop STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
                 Drop the body parts — or open Drive to preview the STL / 3MF Google will not
-                show — then Multi and Pipe ⌀28.
+                show — then + ⌀28 for the pipe and One piece.
               </p>
             </div>
           )}
@@ -5278,10 +5841,12 @@ export function Workbench({
               <span className={LABEL}>mass </span>
               {formatMass(tableTotals.mass)}
             </span>
-            <span>
-              <span className={LABEL}>fitted </span>
-              {fittedCount}/{project.slots.length}
-            </span>
+            {assembly && (
+              <span>
+                <span className={LABEL}>fitted </span>
+                {fittedCount}/{project.slots.length}
+              </span>
+            )}
           </div>
 
           {busy && (
@@ -5322,6 +5887,7 @@ export function Workbench({
                   fixBusy={Boolean(busy)}
                   onAssignSlot={(partId, slotId) => patchPart(partId, { slotId })}
                   focusId={focusId}
+                  assembly={assembly}
                 />
               </div>
             </div>
@@ -5355,6 +5921,9 @@ export function Workbench({
             unit={unit}
             tab={tab}
             onTabChange={setTab}
+            assembly={assembly}
+            tablePosition={mode === 'free' && selectedPart ? partWorldPos(selectedPart) : null}
+            onPatchTablePosition={(partId, position) => patchPart(partId, { freePos: position })}
             onPatchPart={patchPart}
             onPatchTransform={patchTransform}
             onDropToTable={dropToTable}
@@ -5902,89 +6471,36 @@ export function Workbench({
         </div>
       )}
 
-      {showWeld && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className={`${PANEL} w-full max-w-md p-4`}>
-            <h2 className="mb-1 text-sm font-bold text-slate-900">Pipe through the body</h2>
-            <p className="mb-3 text-[0.7rem] text-slate-500">
-              Welds the parts on the table — or just the ones you have selected — into one solid,
-              then bores a round hole through the whole length. Use this for a four-piece body that
-              needs a 28 mm pipe down the middle. The result stays on the bench.
-            </p>
-
-            <div className="mb-3 grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className={`${LABEL} mb-1 block`}>Bore ⌀ (mm)</span>
-                <input
-                  type="number"
-                  className={FIELD}
-                  value={weldBore.diameter}
-                  onChange={(event) =>
-                    setWeldBore((current) => ({
-                      ...current,
-                      diameter: Number(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label className="block">
-                <span className={`${LABEL} mb-1 block`}>Along axis</span>
-                <select
-                  className={FIELD}
-                  value={weldBore.axis}
-                  onChange={(event) =>
-                    setWeldBore((current) => ({
-                      ...current,
-                      axis: event.target.value as 'x' | 'y' | 'z',
-                    }))
-                  }
-                >
-                  <option value="x">X — along the barrel</option>
-                  <option value="y">Y — vertical</option>
-                  <option value="z">Z — across</option>
-                </select>
-              </label>
-            </div>
-
-            <p className="mb-3 text-[0.7rem] text-slate-500">
-              {selection.length >= 2
-                ? `${selection.length} selected parts will be welded, then bored.`
-                : `${tableTotals.parts} visible part${tableTotals.parts === 1 ? '' : 's'} on the table will be welded, then bored.`}
-            </p>
-
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className={ACTION_GHOST}
-                onClick={() => setShowWeld(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={ACTION_PRIMARY}
-                onClick={() => {
-                  setShowWeld(false);
-                  const index = { x: 0, y: 1, z: 2 }[weldBore.axis];
-                  const others = [0, 1, 2].filter((i) => i !== index);
-                  const box = assemblyBounds();
-                  weldAssembly({
-                    resolution: 200,
-                    sealMm: 0.8,
-                    bore: {
-                      axis: weldBore.axis,
-                      diameter: weldBore.diameter,
-                      center: [box.center[others[0]], box.center[others[1]]],
-                    },
-                  });
-                }}
-              >
-                Weld &amp; bore ⌀{weldBore.diameter}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OnePieceDialog
+        open={showOnePiece}
+        bodies={onePieceBodies.map((part) => ({
+          id: part.id,
+          name: part.name,
+          detail: part.group
+            ? `${part.group.members.length} bodies · ${formatCount(part.triangles)} tri`
+            : `${formatCount(part.triangles)} tri`,
+        }))}
+        pipes={onePiecePipes.map((part) => ({
+          id: part.id,
+          name: part.name,
+          detail: part.hardware ? `⌀${part.hardware.diameter} · ${part.hardware.length} mm` : '',
+        }))}
+        preselectedBodyIds={onePiecePreselected}
+        progress={onePieceProgress}
+        report={onePieceReport}
+        error={onePieceError}
+        massLabel={onePieceMass}
+        onRun={(settings) => void runOnePieceJob(settings)}
+        onDownload={downloadOnePiece}
+        onAddPipe={(diameter) => {
+          setShowOnePiece(false);
+          addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2);
+        }}
+        onClose={() => {
+          if (onePieceProgress !== null) return;
+          setShowOnePiece(false);
+        }}
+      />
 
       <CloudPicker
         open={showCloud}

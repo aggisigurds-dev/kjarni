@@ -128,6 +128,17 @@ export interface Project {
   parts: Part[];
   materialId: string;
   updatedAt: number;
+  /**
+   * Blaster slots. On: parts fit named mount points and the table offers the
+   * assembled, scattered and free layouts. Off — the default — is a plain bench
+   * where every part sits exactly where its own position puts it.
+   */
+  assembly?: boolean;
+}
+
+/** Whether the blaster slot system is switched on for this project. */
+export function assemblyOn(project: Project): boolean {
+  return project.assembly === true;
 }
 
 export const identityTransform = (): Transform => ({
@@ -234,22 +245,86 @@ export interface Placement {
   dimmed: boolean;
 }
 
+const offsetFrom = (anchor: Vec3 | undefined, position: Vec3): Vec3 =>
+  anchor
+    ? { x: anchor.x + position.x, y: anchor.y + position.y, z: anchor.z + position.z }
+    : { x: position.x, y: position.y, z: position.z };
+
+/**
+ * The blaster as built, plus everything that is not competing for a mount.
+ *
+ * A fitted part sits on its mount. A part with no slot, or whose slot is still
+ * empty, sits at its own position — it must never drop off the table just
+ * because nobody assigned it. Only the spare variants of a filled slot are left
+ * out; Scattered is where those line up.
+ */
 export function assembledPlacement(project: Project): Placement[] {
   const placements: Placement[] = [];
+  const fitted = new Set<string>();
   for (const slot of project.slots) {
     const part = activePart(project, slot);
     if (!part) continue;
+    fitted.add(part.id);
     placements.push({
       partId: part.id,
-      position: {
-        x: slot.anchor.x + part.transform.position.x,
-        y: slot.anchor.y + part.transform.position.y,
-        z: slot.anchor.z + part.transform.position.z,
-      },
+      position: offsetFrom(slot.anchor, part.transform.position),
+      dimmed: false,
+    });
+  }
+  for (const part of project.parts) {
+    if (fitted.has(part.id)) continue;
+    const slot = project.slots.find((candidate) => candidate.id === part.slotId);
+    if (slot?.activePartId) continue;
+    placements.push({
+      partId: part.id,
+      position: offsetFrom(undefined, part.transform.position),
       dimmed: false,
     });
   }
   return placements;
+}
+
+/** Where a part's mount puts it: the mount plus its offset, or the offset alone if unfitted. */
+function mountPosition(project: Project, part: Part): Vec3 {
+  const slot = project.slots.find((candidate) => candidate.activePartId === part.id);
+  return offsetFrom(slot?.anchor, part.transform.position);
+}
+
+/**
+ * Assembly off: every part sits at its own spot on the table — `freePos`, the
+ * same table position the Free layout uses. A part not yet placed on the plain
+ * bench sits where its mount would put it, so a project saved with slots looks
+ * the same the first time it opens without them.
+ */
+export function benchPlacement(project: Project): Placement[] {
+  return project.parts.map((part) => ({
+    partId: part.id,
+    position: part.freePos ?? mountPosition(project, part),
+    dimmed: false,
+  }));
+}
+
+/**
+ * Switch the slot system on or off without moving anything on the table.
+ *
+ * The plain bench keeps each part's spot in `freePos` and never touches the
+ * mounts or mount offsets. Turning the slots off records where every part is
+ * drawn right now; turning them back on returns to exactly the assembly it
+ * left, so nothing is re-fitted and no offset is added twice.
+ */
+export function setAssembly(project: Project, on: boolean, placements: Placement[]): Project {
+  if (assemblyOn(project) === on) return project;
+  if (on) return { ...project, assembly: true };
+
+  const drawnAt = new Map(placements.map((placement) => [placement.partId, placement.position]));
+  return {
+    ...project,
+    assembly: false,
+    parts: project.parts.map((part) => {
+      const at = drawnAt.get(part.id) ?? part.freePos ?? mountPosition(project, part);
+      return { ...part, freePos: { ...at } };
+    }),
+  };
 }
 
 const GAP = 40;
@@ -308,11 +383,13 @@ export function scatterPlacement(project: Project, sizes: Map<string, PartSize>)
  * sub-assembly — an inner engine, a cluster of internals — piece by piece.
  */
 export function freePlacement(project: Project): Placement[] {
+  // A part never placed by hand sits where its mount would put it, rather than
+  // jumping to the origin the moment the layout changes.
   return project.parts
     .filter((part) => part.visible)
     .map((part) => ({
       partId: part.id,
-      position: part.freePos ?? { x: 0, y: 0, z: 0 },
+      position: part.freePos ?? mountPosition(project, part),
       dimmed: false,
     }));
 }
