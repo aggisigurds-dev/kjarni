@@ -216,20 +216,23 @@ export function orientedAabb(
         let px = x * scale.x;
         let py = y * scale.y;
         let pz = z * scale.z;
-        // Euler XYZ, same order the viewport uses.
-        let y1 = py * cx - pz * sx;
-        let z1 = py * sx + pz * cx;
-        py = y1;
-        pz = z1;
-        let x2 = px * cy + pz * sy;
-        z1 = -px * sy + pz * cy;
-        px = x2;
-        pz = z1;
-        x2 = px * cz - py * sz;
-        y1 = px * sz + py * cz;
-        px = x2 + position.x;
-        py = y1 + position.y;
-        pz = pz + position.z;
+        // three.js Euler 'XYZ' — what the viewport and bake.ts use — builds the
+        // matrix Rx·Ry·Rz, so a point turns about Z first, then Y, then X.
+        // Turning it in the opposite order agrees only while a single axis is
+        // rotated, and boxed a part turned about two axes in the wrong place.
+        let nx = px * cz - py * sz;
+        let ny = px * sz + py * cz;
+        px = nx;
+        py = ny;
+        nx = px * cy + pz * sy;
+        let nz = -px * sy + pz * cy;
+        px = nx;
+        pz = nz;
+        ny = py * cx - pz * sx;
+        nz = py * sx + pz * cx;
+        px = px + position.x;
+        py = ny + position.y;
+        pz = nz + position.z;
         if (px < min[0]) min[0] = px;
         if (py < min[1]) min[1] = py;
         if (pz < min[2]) min[2] = pz;
