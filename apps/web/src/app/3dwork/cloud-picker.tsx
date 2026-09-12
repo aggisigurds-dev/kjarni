@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Cloud, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { listCloudProjects } from '@/lib/3dwork/supabase-sync';
+import { buildLabel, partsLine } from '@/lib/3dwork/project-sync';
 import type { CloudProjectIndexEntry } from '@/lib/3dwork/github-sync';
 import { ACTION_GHOST, ACTION_PRIMARY, LABEL, PANEL } from './ui';
 
@@ -91,10 +92,11 @@ export function CloudPicker({
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-slate-900">
-                        {row.name}
+                        {buildLabel(row.name, row.partNames)}
                       </span>
-                      <span className="text-[0.65rem] text-slate-500">
+                      <span className="block truncate text-[0.65rem] text-slate-500">
                         {row.parts} part{row.parts === 1 ? '' : 's'}
+                        {row.partNames?.length ? ` · ${partsLine(row.partNames)}` : ''}
                       </span>
                     </span>
                     <span className="shrink-0 text-[0.65rem] text-slate-400">

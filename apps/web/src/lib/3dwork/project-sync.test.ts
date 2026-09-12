@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildLabel,
   cloudIsNewer,
   localSaveStamp,
   mergeGeometries,
   mergeProjectLists,
   mergeProjects,
+  nameFromFirstParts,
+  partsLine,
   sinceLabel,
 } from './project-sync';
 import type { Part, Project } from './project';
@@ -74,6 +77,48 @@ describe('localSaveStamp', () => {
   it('stamps a blank draft with the save time', () => {
     const draft = project();
     expect(localSaveStamp(draft, { project: draft })).toBeUndefined();
+  });
+});
+
+describe('buildLabel', () => {
+  it('calls a build that still has a placeholder name by its parts', () => {
+    expect(
+      buildLabel('New build', ['Shape-Cylinder.stl33', '- GW16 loftsystem efri hluti2_260207_182331'])
+    ).toBe('Shape-Cylinder + GW16 loftsystem efri hluti2');
+    expect(buildLabel('Untitled blaster', ['- A - BT4 - Valken g15 receiver'])).toBe(
+      'A - BT4 - Valken g15 receiver'
+    );
+  });
+
+  it('keeps a name someone chose', () => {
+    expect(buildLabel('GW16 upper', ['Shape-Cylinder.stl33'])).toBe('GW16 upper');
+  });
+
+  it('counts the parts it does not name', () => {
+    expect(buildLabel('New build', ['grip', 'barrel', 'stock', 'mag'])).toBe('grip + barrel +2');
+  });
+
+  it('keeps the placeholder for an empty build', () => {
+    expect(buildLabel('New build', [])).toBe('New build');
+  });
+});
+
+describe('partsLine', () => {
+  it('lists the first few parts and counts the rest', () => {
+    expect(partsLine(['grip-test', 'Box 30 mm'])).toBe('grip-test · Box 30 mm');
+    expect(partsLine(['a', 'b', 'c', 'd', 'e'])).toBe('a · b · c · +2 more');
+  });
+});
+
+describe('nameFromFirstParts', () => {
+  it('names a new build after the first thing put in it', () => {
+    expect(nameFromFirstParts('New build', ['- A - BT4 - Valken g15 receiver', 'grip'])).toBe(
+      'A - BT4 - Valken g15 receiver'
+    );
+  });
+
+  it('leaves a chosen name alone', () => {
+    expect(nameFromFirstParts('My receiver', ['grip-test'])).toBe('My receiver');
   });
 });
 

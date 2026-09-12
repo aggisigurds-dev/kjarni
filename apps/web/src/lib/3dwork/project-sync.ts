@@ -15,6 +15,8 @@ export interface ProjectListEntry {
   name: string;
   parts: number;
   updatedAt: number;
+  /** Names of the parts on the bench, so builds with the same name can be told apart. */
+  partNames?: string[];
   /** Saved on Supabase, so it opens on other computers too. */
   cloud: boolean;
   /** Present in this browser's IndexedDB. */
@@ -47,10 +49,9 @@ export function localSaveStamp(
   return project === clean.project ? clean.stamp : undefined;
 }
 
-export function mergeProjectLists(
-  local: { id: string; name: string; parts: number; updatedAt: number }[],
-  cloud: { id: string; name: string; parts: number; updatedAt: number }[]
-): ProjectListEntry[] {
+type ListedProject = { id: string; name: string; parts: number; updatedAt: number; partNames?: string[] };
+
+export function mergeProjectLists(local: ListedProject[], cloud: ListedProject[]): ProjectListEntry[] {
   const byId = new Map<string, ProjectListEntry>();
   for (const entry of local) {
     byId.set(entry.id, { ...entry, cloud: false, local: true });
@@ -66,12 +67,50 @@ export function mergeProjectLists(
       id: entry.id,
       name: takeCloud ? entry.name : existing.name,
       parts: takeCloud ? entry.parts : existing.parts,
+      partNames: takeCloud ? (entry.partNames ?? existing.partNames) : (existing.partNames ?? entry.partNames),
       updatedAt: Math.max(existing.updatedAt, entry.updatedAt),
       cloud: true,
       local: true,
     });
   }
   return [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Names a build keeps until someone names it. */
+const PLACEHOLDER_NAMES = new Set(['Untitled blaster', 'New build']);
+
+/**
+ * A part's name as a person would say it: without the dash exports put in
+ * front, the file extension, or a trailing date stamp.
+ */
+export function cleanPartName(name: string): string {
+  const cleaned = name
+    .replace(/^[\s\-–—]+/, '')
+    .replace(/\.(stl|3mf|obj)\d*$/i, '')
+    .replace(/[_\s]\d{6}_\d{6}$/, '')
+    .trim();
+  return cleaned || name;
+}
+
+/**
+ * What to call a build in a list. One still wearing a placeholder name is
+ * called by its parts, so three "New build"s can be told apart.
+ */
+export function buildLabel(name: string, partNames: string[] = []): string {
+  if (!PLACEHOLDER_NAMES.has(name.trim()) || partNames.length === 0) return name;
+  const named = partNames.slice(0, 2).map(cleanPartName).join(' + ');
+  return partNames.length > 2 ? `${named} +${partNames.length - 2}` : named;
+}
+
+/** The parts a build holds, for the line under its name. */
+export function partsLine(partNames: string[] = [], limit = 3): string {
+  const named = partNames.slice(0, limit).map(cleanPartName).join(' · ');
+  return partNames.length > limit ? `${named} · +${partNames.length - limit} more` : named;
+}
+
+/** The name for a build that just got its first parts: its first part's, unless someone named it. */
+export function nameFromFirstParts(name: string, partNames: string[]): string {
+  return PLACEHOLDER_NAMES.has(name.trim()) && partNames.length > 0 ? cleanPartName(partNames[0]) : name;
 }
 
 function walkParts(parts: Part[], visit: (part: Part) => void) {

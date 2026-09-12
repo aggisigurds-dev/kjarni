@@ -127,7 +127,8 @@ import {
   type HardwareKind,
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
-import { makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { concatSoups, makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { findBoreAxis } from '@/lib/3dwork/bore-axis';
 import { fitTogether } from '@/lib/3dwork/fit';
 import { settleOnFloor } from '@/lib/3dwork/settle';
 import {
@@ -152,11 +153,14 @@ import { activeVersionIds } from '@/lib/3dwork/github-sync';
 import { runOnePiece } from '@/lib/3dwork/one-piece-client';
 import type { OnePieceBody, OnePiecePipe, OnePieceReport } from '@/lib/3dwork/one-piece';
 import {
+  buildLabel,
   cloudIsNewer,
   localSaveStamp,
   mergeGeometries,
   mergeProjectLists,
   mergeProjects,
+  nameFromFirstParts,
+  partsLine,
   sinceLabel,
   type ProjectListEntry,
 } from '@/lib/3dwork/project-sync';
@@ -195,6 +199,9 @@ import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
+
+/** Above this many triangles, + pipe skips looking for the bore and aims at the middle. */
+const BORE_SEARCH_MAX_TRIANGLES = 3_000_000;
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -430,6 +437,7 @@ export function Workbench({
       name: entry.name,
       parts: entry.parts.length,
       updatedAt: entry.updatedAt ?? 0,
+      partNames: entry.parts.map((part) => part.name),
     }));
     const merged = mergeProjectLists(local, cloud);
     if (githubRef.current.connected) {
@@ -1686,7 +1694,15 @@ export function Workbench({
                 return candidate ? { ...slot, activePartId: candidate.id } : slot;
               })
             : current.slots;
-          return { ...current, slots, parts: [...current.parts, ...addedParts] };
+          // A build still called "New build" is named after the first thing put in it.
+          const name =
+            current.parts.length === 0
+              ? nameFromFirstParts(
+                  current.name,
+                  addedParts.map((part) => part.name)
+                )
+              : current.name;
+          return { ...current, name, slots, parts: [...current.parts, ...addedParts] };
         });
 
         for (const [id, soup] of addedGeometry) void saveGeometry(id, soup);
@@ -3883,21 +3899,53 @@ export function Workbench({
         { x: 0, y: -90, z: 0 },
       ][axis];
       if (assembly && mode === 'scattered') setMode('assembled');
-      addHardware(
-        { kind: 'pipe', length: Math.round(size[axis] + 80), diameter, wall },
-        {
-          position: {
-            x: (min[0] + max[0]) / 2,
-            y: (min[1] + max[1]) / 2,
-            z: (min[2] + max[2]) / 2,
-          },
-          rotation,
-          scale: { x: 1, y: 1, z: 1 },
+      const centre = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+      const drawn = bodies.filter((part) => layout.has(part.id));
+      const triangles = drawn.reduce((sum, part) => sum + part.triangles, 0);
+
+      setBusy('Finding the bore…');
+      // Let the busy state paint before the synchronous look through the bodies.
+      setTimeout(() => {
+        try {
+          // Aim down the bore you can see through the bodies, not at the middle of
+          // their box: the two are rarely the same, and a bore cut off its axis
+          // thins one wall and leaves a lip at the mouth.
+          const bore =
+            triangles <= BORE_SEARCH_MAX_TRIANGLES
+              ? findBoreAxis(
+                  concatSoups(
+                    drawn.map((part) =>
+                      bakeTransform(geometries.get(part.activeVersionId) as Float32Array, {
+                        ...part.transform,
+                        position: layout.get(part.id) as Transform['position'],
+                      })
+                    )
+                  ),
+                  axis as 0 | 1 | 2
+                )
+              : null;
+          if (bore) {
+            const [u, v] = [0, 1, 2].filter((other) => other !== axis);
+            centre[u] = bore.center[0];
+            centre[v] = bore.center[1];
+          }
+          addHardware(
+            { kind: 'pipe', length: Math.round(size[axis] + 80), diameter, wall },
+            {
+              position: { x: centre[0], y: centre[1], z: centre[2] },
+              rotation,
+              scale: { x: 1, y: 1, z: 1 },
+            }
+          );
+          toast.info(
+            bore
+              ? `The pipe runs down the middle of the ⌀${bore.diameter.toFixed(1)} bore. Check it under Modify, then One piece.`
+              : 'The pipe runs through the middle. Double-tap it to move it, or type its position under Modify — then One piece.'
+          );
+        } finally {
+          setBusy(null);
         }
-      );
-      toast.info(
-        'The pipe runs through the middle. Double-tap it to move it, or type its position under Modify — then One piece.'
-      );
+      }, 30);
     },
     [selection, project, geometries, assembly, mode, addHardware]
   );
@@ -4670,12 +4718,20 @@ export function Workbench({
                   onClick={() => void openProject(entry.id)}
                   shortcut={sinceLabel(entry.updatedAt)}
                 >
-                  {entry.name} · {entry.parts}
-                  {entry.cloud ? (
-                    <Cloud className="ml-1 inline h-3 w-3 text-emerald-600" aria-label="On Supabase" />
-                  ) : (
-                    <span className="ml-1 text-[0.6rem] font-semibold text-amber-600">this computer only</span>
-                  )}
+                  <span className="block min-w-0">
+                    <span className="block truncate">
+                      {buildLabel(entry.name, entry.partNames)}
+                      {entry.cloud ? (
+                        <Cloud className="ml-1 inline h-3 w-3 text-emerald-600" aria-label="On Supabase" />
+                      ) : (
+                        <span className="ml-1 text-[0.6rem] font-semibold text-amber-600">this computer only</span>
+                      )}
+                    </span>
+                    <span className="block truncate text-[0.6rem] font-normal text-slate-500">
+                      {entry.parts} part{entry.parts === 1 ? '' : 's'}
+                      {entry.partNames?.length ? ` · ${partsLine(entry.partNames)}` : ''}
+                    </span>
+                  </span>
                 </MenuCheckItem>
               ))}
             </MenuScroll>
@@ -4722,7 +4778,7 @@ export function Workbench({
                   checked={entry.id === project.id}
                   onClick={() => void openProject(entry.id)}
                 >
-                  {entry.name} · {entry.parts}
+                  {buildLabel(entry.name, entry.partNames)} · {entry.parts}
                 </MenuCheckItem>
               ))}
             </MenuScroll>
