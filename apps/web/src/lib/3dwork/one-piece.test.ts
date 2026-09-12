@@ -215,4 +215,96 @@ describe('makeOnePiece', () => {
     expect(soup.length / 9).toBe(report.triangles);
     expect(report.triangles).toBeGreaterThanOrEqual(12);
   });
+
+  it('cuts a cutter part out exactly', () => {
+    // A 10 mm cube reaching 5 mm into the block's +X face.
+    const { report } = makeOnePiece(wasm, {
+      bodies: [{ name: 'block', soup: block() }],
+      pipes: [],
+      cutters: [{ name: 'cube', soup: moved(cubeSoup(10), 15, -5, -5) }],
+      options,
+    });
+    expect(report.volume).toBeCloseTo(64000 - 500, 2);
+    expect(report.pieces).toBe(1);
+    expect(report.cutters.map((cutter) => cutter.outcome)).toEqual(['as-is']);
+  });
+
+  it('grows the cutter by the clearance', () => {
+    const { report } = makeOnePiece(wasm, {
+      bodies: [{ name: 'block', soup: block() }],
+      pipes: [],
+      cutters: [{ name: 'cube', soup: moved(cubeSoup(10), 15, -5, -5) }],
+      options: { ...options, clearanceMm: 0.5 },
+    });
+    expect(report.volume).toBeLessThan(64000 - 500);
+    expect(report.volume).toBeGreaterThan(64000 - 5.5 * 11 * 11);
+  });
+
+  it('keeps a hollow the cutter leaves sealed inside', () => {
+    const { report } = makeOnePiece(wasm, {
+      bodies: [{ name: 'block', soup: block() }],
+      pipes: [],
+      cutters: [{ name: 'core', soup: moved(cubeSoup(10), -5, -5, -5) }],
+      options,
+    });
+    expect(report.volume).toBeCloseTo(64000 - 1000, 2);
+    expect(report.pocketsFilled).toBe(0);
+    expect(report.pieces).toBe(1);
+  });
+
+  it('caps an open cutter the same way as a body', () => {
+    const cube = moved(cubeSoup(10), 15, -5, -5);
+    const open = new Float32Array([...cube.subarray(0, 18), ...cube.subarray(36)]);
+    const { report } = makeOnePiece(wasm, {
+      bodies: [{ name: 'block', soup: block() }],
+      pipes: [],
+      cutters: [{ name: 'open cube', soup: open }],
+      options,
+    });
+    expect(report.cutters[0].outcome).toBe('capped');
+    expect(report.volume).toBeCloseTo(64000 - 500, 2);
+  });
+
+  /** A closed cube with one corner sent to infinity: no exact repair makes that a solid. */
+  function corrupt(): Float32Array {
+    const soup = cubeSoup(10);
+    for (let i = 0; i < soup.length; i += 3) {
+      if (soup[i] === 10 && soup[i + 1] === 10 && soup[i + 2] === 10) soup[i] = Infinity;
+    }
+    return soup;
+  }
+
+  it('closes cubes that share only an edge exactly, with no voxels', () => {
+    const bowtie = new Float32Array([...cubeSoup(10), ...moved(cubeSoup(10), 10, 10)]);
+    const { report } = makeOnePiece(wasm, {
+      bodies: [{ name: 'bowtie', soup: bowtie }],
+      pipes: [],
+      options: { ...options, allowRebuild: false },
+    });
+    expect(report.bodies[0].outcome).not.toBe('rebuilt');
+    expect(report.volume).toBeCloseTo(2000, 2);
+  });
+
+  it('leaves out a body it cannot close exactly when rebuilding is off, rather than melting it', () => {
+    const { report } = makeOnePiece(wasm, {
+      bodies: [
+        { name: 'block', soup: moved(cubeSoup(10), 50) },
+        { name: 'broken', soup: corrupt() },
+      ],
+      pipes: [],
+      options: { ...options, allowRebuild: false },
+    });
+    expect(report.bodies.map((body) => body.outcome)).toEqual(['as-is', 'skipped']);
+    expect(report.volume).toBeCloseTo(1000, 2);
+  });
+
+  it('names the body that could not be closed when nothing else is left', () => {
+    expect(() =>
+      makeOnePiece(wasm, {
+        bodies: [{ name: 'broken', soup: corrupt() }],
+        pipes: [],
+        options: { ...options, allowRebuild: false },
+      })
+    ).toThrow('broken could not be closed');
+  });
 });

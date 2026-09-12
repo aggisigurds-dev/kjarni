@@ -14,7 +14,7 @@ let nextId = 1;
 /**
  * Join, bore and clean up in a worker of its own.
  *
- * The body soups are handed over, not copied — pass freshly baked copies, never
+ * The body and cutter soups are handed over, not copied — pass freshly baked copies, never
  * the bench's own meshes, because a transferred buffer is gone from this side.
  */
 export function runOnePiece(
@@ -51,10 +51,10 @@ export function runOnePiece(
     };
 
     try {
-      worker.postMessage(
-        request,
-        job.bodies.map((body) => body.soup.buffer as ArrayBuffer)
+      const buffers = new Set(
+        [...job.bodies, ...(job.cutters ?? [])].map((part) => part.soup.buffer as ArrayBuffer)
       );
+      worker.postMessage(request, [...buffers]);
     } catch (error) {
       worker.terminate();
       reject(error instanceof Error ? error : new Error(String(error)));

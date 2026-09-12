@@ -14,6 +14,9 @@
  * rebuilt from voxels. Only the last one changes the shape, and the report says
  * so for that body by name.
  *
+ * Subtract, Merge and Fix run the same steps — a part with cutters, several
+ * parts, one part — so none of them resamples a surface either.
+ *
  * Pure: the caller hands in the loaded wasm module, so the same code runs in
  * the bench's worker and in the unit tests.
  */
@@ -61,11 +64,24 @@ export interface OnePieceOptions {
    * keeps any gap at all as separate pieces. 0 joins only what actually touches.
    */
   seamMm: number;
+  /**
+   * Grown onto every cutter part before the cut, mm, so a mating part slides
+   * in rather than press-fitting. Pipes take `gapMm` instead.
+   */
+  clearanceMm?: number;
+  /**
+   * Whether a body the exact repairs cannot close may be rebuilt from voxels
+   * as a last resort. That softens every surface into steps, so Fix, Subtract
+   * and Merge switch it off and name the body instead. On unless set false.
+   */
+  allowRebuild?: boolean;
 }
 
 export interface OnePieceJob {
   bodies: OnePieceBody[];
   pipes: OnePiecePipe[];
+  /** Parts cut out after the pipes, as they sit on the table — Subtract's cutter. */
+  cutters?: OnePieceBody[];
   options: OnePieceOptions;
 }
 
@@ -80,6 +96,8 @@ export interface BodyNote {
 
 export interface OnePieceReport {
   bodies: BodyNote[];
+  /** How each cutter part was brought up to a solid before it cut. */
+  cutters: BodyNote[];
   pipes: number;
   triangles: number;
   /** mm³ */
@@ -131,18 +149,20 @@ function solidOf(wasm: ManifoldToplevel, mesh: KernelMesh): Manifold | null {
     vertProperties: mesh.positions,
     triVerts: mesh.indices,
   });
-  // Closes hairline cracks between corners that should have been one vertex.
-  input.merge();
   try {
+    // Closes hairline cracks between corners that should have been one vertex.
+    input.merge();
     return new wasm.Manifold(input);
   } catch {
+    // A corrupt export (a corner at infinity, say) is a body to report, not a crash.
     return null;
   }
 }
 
 function prepareBody(
   wasm: ManifoldToplevel,
-  body: OnePieceBody
+  body: OnePieceBody,
+  allowRebuild: boolean
 ): { solid: Manifold | null; note: BodyNote } {
   const triangles = Math.floor(body.soup.length / 9);
   const note = (outcome: BodyOutcome, detail: string): BodyNote => ({
@@ -185,6 +205,13 @@ function prepareBody(
     return {
       solid,
       note: note('deduplicated', `Dropped ${plural(deduped.duplicates, 'doubled face')}${capNote}`),
+    };
+  }
+
+  if (!allowRebuild) {
+    return {
+      solid: null,
+      note: note('skipped', 'Could not be closed without rebuilding it from voxels, so it was left out'),
     };
   }
 
@@ -492,6 +519,48 @@ function boreFor(wasm: ManifoldToplevel, pipe: OnePiecePipe, gapMm: number): Man
   return placed;
 }
 
+/**
+ * Bring each part up to a solid and split it into the shells that hold
+ * material. `keep` registers every shell with the caller's cleanup.
+ */
+function solidShells(
+  wasm: ManifoldToplevel,
+  parts: OnePieceBody[],
+  allowRebuild: boolean,
+  keep: (manifold: Manifold) => Manifold,
+  progress: (part: OnePieceBody, index: number) => void
+): { notes: BodyNote[]; shells: Manifold[]; pockets: number } {
+  const notes: BodyNote[] = [];
+  const shells: Manifold[] = [];
+  let pockets = 0;
+
+  parts.forEach((part, index) => {
+    progress(part, index);
+    const prepared = prepareBody(wasm, part, allowRebuild);
+    if (!prepared.solid) {
+      notes.push(prepared.note);
+      return;
+    }
+    const split = shellsOf(wasm, prepared.solid);
+    prepared.solid.delete();
+    for (const shell of split.shells) shells.push(keep(shell));
+    pockets += split.pockets;
+
+    const extras: string[] = [];
+    if (split.shells.length > 1) extras.push(`${split.shells.length} shells`);
+    if (split.turned > 0) extras.push(`${plural(split.turned, 'inside-out shell')} turned`);
+    if (split.pockets > 0) extras.push(`${plural(split.pockets, 'pocket')} filled`);
+    if (split.slivers > 0) extras.push(`${plural(split.slivers, 'empty shell')} dropped`);
+    notes.push(
+      extras.length > 0
+        ? { ...prepared.note, detail: `${prepared.note.detail} · ${extras.join(' · ')}` }
+        : prepared.note
+    );
+  });
+
+  return { notes, shells, pockets };
+}
+
 export function makeOnePiece(
   wasm: ManifoldToplevel,
   job: OnePieceJob,
@@ -511,34 +580,19 @@ export function makeOnePiece(
   };
 
   try {
-    const notes: BodyNote[] = [];
-    const shells: Manifold[] = [];
-    let pocketsFilled = 0;
-
-    job.bodies.forEach((body, index) => {
-      onProgress?.(`Checking ${body.name} (${index + 1} of ${job.bodies.length})…`);
-      const prepared = prepareBody(wasm, body);
-      if (!prepared.solid) {
-        notes.push(prepared.note);
-        return;
-      }
-      const split = shellsOf(wasm, prepared.solid);
-      prepared.solid.delete();
-      for (const shell of split.shells) shells.push(keep(shell));
-      pocketsFilled += split.pockets;
-
-      const extras: string[] = [];
-      if (split.shells.length > 1) extras.push(`${split.shells.length} shells`);
-      if (split.turned > 0) extras.push(`${plural(split.turned, 'inside-out shell')} turned`);
-      if (split.pockets > 0) extras.push(`${plural(split.pockets, 'pocket')} filled`);
-      if (split.slivers > 0) extras.push(`${plural(split.slivers, 'empty shell')} dropped`);
-      notes.push(
-        extras.length > 0
-          ? { ...prepared.note, detail: `${prepared.note.detail} · ${extras.join(' · ')}` }
-          : prepared.note
+    const allowRebuild = job.options.allowRebuild !== false;
+    const { notes, shells, pockets } = solidShells(wasm, job.bodies, allowRebuild, keep, (body, index) =>
+      onProgress?.(`Checking ${body.name} (${index + 1} of ${job.bodies.length})…`)
+    );
+    let pocketsFilled = pockets;
+    if (shells.length === 0) {
+      const skipped = notes.find((entry) => entry.outcome === 'skipped');
+      throw new Error(
+        skipped && !allowRebuild
+          ? `${skipped.name} could not be closed into a solid without rebuilding it from voxels.`
+          : 'None of those bodies could be made into a solid.'
       );
-    });
-    if (shells.length === 0) throw new Error('None of those bodies could be made into a solid.');
+    }
 
     let piece = shells[0];
     if (shells.length > 1) {
@@ -572,14 +626,57 @@ export function makeOnePiece(
       piece = cut;
     }
 
+    const cutterNotes: BodyNote[] = [];
+    const cutterParts = job.cutters ?? [];
+    if (cutterParts.length > 0) {
+      const prepared = solidShells(wasm, cutterParts, allowRebuild, keep, (cutter) =>
+        onProgress?.(`Checking the cutter ${cutter.name}…`)
+      );
+      cutterNotes.push(...prepared.notes);
+      if (prepared.shells.length === 0) {
+        throw new Error('The cutter could not be made into a solid, so nothing was cut.');
+      }
+      let tool = prepared.shells[0];
+      if (prepared.shells.length > 1) {
+        tool = keep(wasm.Manifold.union(prepared.shells));
+        tool.numTri();
+        for (const shell of prepared.shells) drop(shell);
+      }
+      const clearance = Math.max(0, job.options.clearanceMm ?? 0);
+      if (clearance > 0) {
+        const grown = offsetSurface(wasm, tool, clearance);
+        if (grown) {
+          keep(grown);
+          drop(tool);
+          tool = grown;
+        } else {
+          const last = cutterNotes[cutterNotes.length - 1];
+          cutterNotes[cutterNotes.length - 1] = {
+            ...last,
+            detail: `${last.detail} · no room for the ${clearance} mm clearance, cut to size`,
+          };
+        }
+      }
+      onProgress?.(`Cutting ${cutterParts.map((cutter) => cutter.name).join(', ')} out…`);
+      const cut = keep(piece.subtract(tool));
+      cut.numTri();
+      drop(piece);
+      drop(tool);
+      piece = cut;
+    }
+
     onProgress?.('Sweeping up loose bits…');
     const components = piece.decompose();
     const kept: Manifold[] = [];
+    let pieces = 0;
     let crumbsRemoved = 0;
     let crumbVolume = 0;
     for (const component of components) {
       const volume = component.volume();
-      if (volume < 0) {
+      if (volume < 0 && cutterParts.length > 0) {
+        // A hollow a cutter left sealed inside was cut on purpose, so it stays.
+        kept.push(keep(component));
+      } else if (volume < 0) {
         // A pocket the join or the bore sealed off inside the material.
         pocketsFilled++;
         component.delete();
@@ -589,9 +686,10 @@ export function makeOnePiece(
         component.delete();
       } else {
         kept.push(keep(component));
+        pieces++;
       }
     }
-    if (kept.length === 0) throw new Error('Nothing solid was left once the pipes were bored.');
+    if (pieces === 0) throw new Error('Nothing solid was left after the cut.');
 
     let final = piece;
     if (kept.length < components.length) {
@@ -610,11 +708,12 @@ export function makeOnePiece(
       soup,
       report: {
         bodies: notes,
+        cutters: cutterNotes,
         pipes: job.pipes.length,
         triangles: soup.length / 9,
         volume: final.volume(),
         surfaceArea: final.surfaceArea(),
-        pieces: kept.length,
+        pieces,
         seamMm: seamsBridged > 0 ? seam : 0,
         seamsBridged,
         pocketsFilled,
