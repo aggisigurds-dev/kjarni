@@ -109,7 +109,7 @@ export async function listCloudProjects(): Promise<CloudProjectIndexEntry[]> {
   if (!sb) return [];
   const { data, error } = await sb
     .from(WORK3D_TABLE)
-    .select('id, name, part_count, updated_at, deleted')
+    .select('id, name, part_count, updated_at, deleted, parts:project->parts')
     .eq('deleted', false)
     .order('updated_at', { ascending: false })
     .limit(40);
@@ -119,6 +119,10 @@ export async function listCloudProjects(): Promise<CloudProjectIndexEntry[]> {
     name: (row.name as string) || 'Untitled blaster',
     parts: Number(row.part_count) || 0,
     updatedAt: asUpdatedAt(row.updated_at),
+    // Only the names: three builds called "New build" are told apart by what is in them.
+    partNames: Array.isArray(row.parts)
+      ? (row.parts as { name?: unknown }[]).map((part) => String(part?.name ?? '')).filter(Boolean)
+      : [],
   }));
 }
 

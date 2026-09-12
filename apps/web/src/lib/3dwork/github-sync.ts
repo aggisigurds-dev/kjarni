@@ -12,6 +12,8 @@ export interface CloudProjectIndexEntry {
   name: string;
   parts: number;
   updatedAt: number;
+  /** Names of the parts on the bench, when the list has them. */
+  partNames?: string[];
 }
 
 export interface CloudManifest {

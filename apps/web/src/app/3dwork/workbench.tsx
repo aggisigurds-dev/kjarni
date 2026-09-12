@@ -153,11 +153,14 @@ import { activeVersionIds } from '@/lib/3dwork/github-sync';
 import { runOnePiece } from '@/lib/3dwork/one-piece-client';
 import type { OnePieceBody, OnePiecePipe, OnePieceReport } from '@/lib/3dwork/one-piece';
 import {
+  buildLabel,
   cloudIsNewer,
   localSaveStamp,
   mergeGeometries,
   mergeProjectLists,
   mergeProjects,
+  nameFromFirstParts,
+  partsLine,
   sinceLabel,
   type ProjectListEntry,
 } from '@/lib/3dwork/project-sync';
@@ -434,6 +437,7 @@ export function Workbench({
       name: entry.name,
       parts: entry.parts.length,
       updatedAt: entry.updatedAt ?? 0,
+      partNames: entry.parts.map((part) => part.name),
     }));
     const merged = mergeProjectLists(local, cloud);
     if (githubRef.current.connected) {
@@ -1690,7 +1694,15 @@ export function Workbench({
                 return candidate ? { ...slot, activePartId: candidate.id } : slot;
               })
             : current.slots;
-          return { ...current, slots, parts: [...current.parts, ...addedParts] };
+          // A build still called "New build" is named after the first thing put in it.
+          const name =
+            current.parts.length === 0
+              ? nameFromFirstParts(
+                  current.name,
+                  addedParts.map((part) => part.name)
+                )
+              : current.name;
+          return { ...current, name, slots, parts: [...current.parts, ...addedParts] };
         });
 
         for (const [id, soup] of addedGeometry) void saveGeometry(id, soup);
@@ -4706,12 +4718,20 @@ export function Workbench({
                   onClick={() => void openProject(entry.id)}
                   shortcut={sinceLabel(entry.updatedAt)}
                 >
-                  {entry.name} · {entry.parts}
-                  {entry.cloud ? (
-                    <Cloud className="ml-1 inline h-3 w-3 text-emerald-600" aria-label="On Supabase" />
-                  ) : (
-                    <span className="ml-1 text-[0.6rem] font-semibold text-amber-600">this computer only</span>
-                  )}
+                  <span className="block min-w-0">
+                    <span className="block truncate">
+                      {buildLabel(entry.name, entry.partNames)}
+                      {entry.cloud ? (
+                        <Cloud className="ml-1 inline h-3 w-3 text-emerald-600" aria-label="On Supabase" />
+                      ) : (
+                        <span className="ml-1 text-[0.6rem] font-semibold text-amber-600">this computer only</span>
+                      )}
+                    </span>
+                    <span className="block truncate text-[0.6rem] font-normal text-slate-500">
+                      {entry.parts} part{entry.parts === 1 ? '' : 's'}
+                      {entry.partNames?.length ? ` · ${partsLine(entry.partNames)}` : ''}
+                    </span>
+                  </span>
                 </MenuCheckItem>
               ))}
             </MenuScroll>
@@ -4758,7 +4778,7 @@ export function Workbench({
                   checked={entry.id === project.id}
                   onClick={() => void openProject(entry.id)}
                 >
-                  {entry.name} · {entry.parts}
+                  {buildLabel(entry.name, entry.partNames)} · {entry.parts}
                 </MenuCheckItem>
               ))}
             </MenuScroll>
