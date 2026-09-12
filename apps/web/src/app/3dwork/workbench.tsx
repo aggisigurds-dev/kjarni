@@ -1759,6 +1759,46 @@ export function Workbench({
     [patchProject, geometries]
   );
 
+  // Supabase keeps no pictures, so a build opened from there — on a phone or
+  // another computer — arrives without them. Each one is drawn once its mesh
+  // is in. That is not an edit: a clean build stays clean, so nothing is pushed
+  // to Supabase and there is no step to undo.
+  const thumbnailFailed = useRef(new Set<string>());
+  useEffect(() => {
+    if (!restored) return;
+    const missing = project.parts.filter(
+      (part) =>
+        !part.thumbnail &&
+        geometries.has(part.activeVersionId) &&
+        !thumbnailFailed.current.has(part.activeVersionId)
+    );
+    if (missing.length === 0) return;
+
+    const pictures = new Map<string, string>();
+    for (const part of missing.slice(0, 4)) {
+      const look = lookFor(part);
+      const picture = renderThumbnail(geometries.get(part.activeVersionId) as Float32Array, look.color, look);
+      if (picture) pictures.set(part.id, picture);
+      else thumbnailFailed.current.add(part.activeVersionId);
+    }
+    if (pictures.size === 0) return;
+
+    const base = project;
+    const next = {
+      ...base,
+      parts: base.parts.map((part) =>
+        pictures.has(part.id) ? { ...part, thumbnail: pictures.get(part.id) } : part
+      ),
+    };
+    setProject((current) => {
+      if (current !== base) return current;
+      if (cleanStateRef.current.project === base) {
+        cleanStateRef.current = { ...cleanStateRef.current, project: next };
+      }
+      return next;
+    });
+  }, [restored, project, geometries]);
+
   const togglePartVisible = useCallback(
     (partId: string) => {
       patchProject((current) => ({

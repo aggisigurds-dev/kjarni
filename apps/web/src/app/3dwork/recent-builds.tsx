@@ -6,8 +6,9 @@
  * folder browser.
  *
  * What this computer has shows at once; Supabase fills in builds made
- * elsewhere a moment later. Pictures come from this computer's copies: a build
- * that has only ever been opened from Supabase shows its part names instead.
+ * elsewhere a moment later. Pictures come from this computer's copies, drawn
+ * the first time a build is opened here; one never opened here shows its part
+ * names instead.
  */
 
 import { useEffect, useState } from 'react';
