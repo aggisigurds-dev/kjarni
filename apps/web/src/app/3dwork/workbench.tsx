@@ -160,8 +160,6 @@ import {
   mergeProjectLists,
   mergeProjects,
   nameFromFirstParts,
-  partsLine,
-  sinceLabel,
   type ProjectListEntry,
 } from '@/lib/3dwork/project-sync';
 import { slicePlane } from '@/lib/3dwork/slice';
@@ -182,6 +180,7 @@ import {
 import { applyMatrix, bakeTransform, scaleSoup, transformMatrix } from './bake';
 import { Gallery } from './gallery';
 import { Inspector, type InspectorTab } from './inspector';
+import { ProjectListItem } from './project-list-item';
 import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
@@ -403,15 +402,6 @@ export function Workbench({
     }
   }, []);
 
-  // The next visit opens where this one is — see KitsHome.
-  useEffect(() => {
-    try {
-      localStorage.setItem('kjarni3d_start', workspace);
-    } catch {
-      /* private mode: the next visit starts on the pictures */
-    }
-  }, [workspace]);
-
   const refreshProjectList = useCallback(async () => {
     let saved = await listProjects();
     let cloud: Awaited<ReturnType<typeof listCloudProjects>> = [];
@@ -447,6 +437,10 @@ export function Workbench({
       parts: entry.parts.length,
       updatedAt: entry.updatedAt ?? 0,
       partNames: entry.parts.map((part) => part.name),
+      thumbnails: entry.parts
+        .map((part) => part.thumbnail)
+        .filter((thumbnail): thumbnail is string => Boolean(thumbnail))
+        .slice(0, 3),
     }));
     const merged = mergeProjectLists(local, cloud);
     if (githubRef.current.connected) {
@@ -4741,7 +4735,7 @@ export function Workbench({
         </div>
 
         <MenuBar>
-          <Menu label={`Projects · ${projectList.length}`} width={300}>
+          <Menu label={`Projects · ${projectList.length}`} width={460}>
             <MenuItem
               onClick={() => createProjectFolder()}
               icon={FolderPlus}
@@ -4752,36 +4746,21 @@ export function Workbench({
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Jump to</MenuLabel>
-            <MenuScroll>
+            <div className="max-h-[min(30rem,65dvh)] overflow-y-auto">
               {projectList.length === 0 && (
                 <div className="px-3 py-1.5 text-[0.7rem] text-slate-500">
                   Nothing saved yet — import a part and it lands on Supabase by itself.
                 </div>
               )}
               {projectList.map((entry) => (
-                <MenuCheckItem
+                <ProjectListItem
                   key={entry.id}
-                  checked={entry.id === project.id}
-                  onClick={() => void openProject(entry.id)}
-                  shortcut={sinceLabel(entry.updatedAt)}
-                >
-                  <span className="block min-w-0">
-                    <span className="block truncate">
-                      {buildLabel(entry.name, entry.partNames)}
-                      {entry.cloud ? (
-                        <Cloud className="ml-1 inline h-3 w-3 text-emerald-600" aria-label="On Supabase" />
-                      ) : (
-                        <span className="ml-1 text-[0.6rem] font-semibold text-amber-600">this computer only</span>
-                      )}
-                    </span>
-                    <span className="block truncate text-[0.6rem] font-normal text-slate-500">
-                      {entry.parts} part{entry.parts === 1 ? '' : 's'}
-                      {entry.partNames?.length ? ` · ${partsLine(entry.partNames)}` : ''}
-                    </span>
-                  </span>
-                </MenuCheckItem>
+                  entry={entry}
+                  current={entry.id === project.id}
+                  onOpen={() => void openProject(entry.id)}
+                />
               ))}
-            </MenuScroll>
+            </div>
             <MenuSeparator />
             <div className="px-3 py-1.5 text-[0.65rem] text-slate-500">{cloudNote}</div>
           </Menu>

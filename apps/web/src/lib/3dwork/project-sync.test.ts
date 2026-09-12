@@ -122,6 +122,17 @@ describe('nameFromFirstParts', () => {
   });
 });
 
+describe('mergeProjectLists pictures', () => {
+  it('keeps the pictures from this computer when Supabase has a newer copy of the build', () => {
+    const [entry] = mergeProjectLists(
+      [{ id: 'a', name: 'New build', parts: 1, updatedAt: 10_000, thumbnails: ['data:image/png;base64,AAAA'] }],
+      [{ id: 'a', name: 'New build', parts: 1, updatedAt: 60_000, partNames: ['grip'] }]
+    );
+    expect(entry.thumbnails).toEqual(['data:image/png;base64,AAAA']);
+    expect(entry.partNames).toEqual(['grip']);
+  });
+});
+
 describe('mergeProjectLists', () => {
   it('shows cloud-only projects so a fresh computer can jump to them', () => {
     const list = mergeProjectLists(

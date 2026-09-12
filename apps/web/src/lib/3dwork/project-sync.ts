@@ -17,6 +17,8 @@ export interface ProjectListEntry {
   updatedAt: number;
   /** Names of the parts on the bench, so builds with the same name can be told apart. */
   partNames?: string[];
+  /** Pictures of its first parts, from this computer's copy — Supabase keeps none. */
+  thumbnails?: string[];
   /** Saved on Supabase, so it opens on other computers too. */
   cloud: boolean;
   /** Present in this browser's IndexedDB. */
@@ -49,7 +51,14 @@ export function localSaveStamp(
   return project === clean.project ? clean.stamp : undefined;
 }
 
-type ListedProject = { id: string; name: string; parts: number; updatedAt: number; partNames?: string[] };
+type ListedProject = {
+  id: string;
+  name: string;
+  parts: number;
+  updatedAt: number;
+  partNames?: string[];
+  thumbnails?: string[];
+};
 
 export function mergeProjectLists(local: ListedProject[], cloud: ListedProject[]): ProjectListEntry[] {
   const byId = new Map<string, ProjectListEntry>();
@@ -68,6 +77,7 @@ export function mergeProjectLists(local: ListedProject[], cloud: ListedProject[]
       name: takeCloud ? entry.name : existing.name,
       parts: takeCloud ? entry.parts : existing.parts,
       partNames: takeCloud ? (entry.partNames ?? existing.partNames) : (existing.partNames ?? entry.partNames),
+      thumbnails: existing.thumbnails ?? entry.thumbnails,
       updatedAt: Math.max(existing.updatedAt, entry.updatedAt),
       cloud: true,
       local: true,
