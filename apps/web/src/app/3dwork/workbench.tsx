@@ -5426,7 +5426,7 @@ export function Workbench({
             runFillSolid(selectedId);
           }}
           disabled={!selectedId || Boolean(busy)}
-          title="Fill holes and rebuild as a solid so Slice / Subtract keep volume"
+          title="Fill holes and close it as a solid so Slice / Subtract keep volume"
           className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
         >
           Fill
@@ -5439,7 +5439,7 @@ export function Workbench({
           title={
             selection.length > 1
               ? `Repair the ${selection.length} selected parts only — not the whole bench`
-              : 'Fix this part only — weld cracks, fill holes, drop dust. Rebuilds as a solid if it stays open.'
+              : 'Fix this part only — weld cracks, fill holes, drop dust. Closes it as a solid if it stays open, keeping the surface.'
           }
           className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
         >
