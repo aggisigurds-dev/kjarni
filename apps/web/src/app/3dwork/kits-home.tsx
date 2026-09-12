@@ -4,11 +4,12 @@
  * First paint of 3dwork: pictures and file picks only.
  *
  * The 3D bench (Three.js / WebGL) is a separate chunk. A slow machine can sit
- * here, pick one part, and only then pay for the table.
+ * here, pick one part, and only then pay for the table. Someone who was working
+ * on the bench last time goes straight back to it instead.
  */
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Boxes, Cloud } from 'lucide-react';
 import { classifyPart } from '@/lib/3dwork/project';
 import { CloudPicker } from './cloud-picker';
@@ -36,12 +37,25 @@ export type PendingImport = {
 
 type Engine = null | 'bench' | 'sketch';
 
+/** Where the last visit ended up; the bench writes it whenever its workspace changes. */
+const START_KEY = 'kjarni3d_start';
+
 export function KitsHome() {
   const [engine, setEngine] = useState<Engine>(null);
   const [pending, setPending] = useState<PendingImport | null>(null);
   const [pendingCloudId, setPendingCloudId] = useState<string | null>(null);
   const [showDrive, setShowDrive] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
+
+  // Read after mounting, so the page the server sent and the first render agree.
+  useEffect(() => {
+    try {
+      const last = localStorage.getItem(START_KEY);
+      if (last === 'bench' || last === 'sketch') setEngine(last);
+    } catch {
+      /* private mode or no storage — start on the pictures */
+    }
+  }, []);
 
   if (engine) {
     return (

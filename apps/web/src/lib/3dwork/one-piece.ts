@@ -628,7 +628,10 @@ export function makeOnePiece(
 
     const seam = Math.max(0, job.options.seamMm || 0);
     let seamsBridged = 0;
-    if (seam > 0) {
+    // With anything to cut, seams are bridged once, after the cut (see cutWith).
+    // Bridging here as well doubled the time and the triangles on a receiver.
+    const cutsFollow = job.pipes.length > 0 || (job.cutters?.length ?? 0) > 0;
+    if (seam > 0 && !cutsFollow) {
       const bridged = bridgeSeams(wasm, piece, seam, Math.max(job.options.crumbMm3, 1), onProgress);
       if (bridged) {
         keep(bridged.solid);
