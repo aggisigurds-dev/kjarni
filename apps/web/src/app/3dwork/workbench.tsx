@@ -403,6 +403,15 @@ export function Workbench({
     }
   }, []);
 
+  // The next visit opens where this one is — see KitsHome.
+  useEffect(() => {
+    try {
+      localStorage.setItem('kjarni3d_start', workspace);
+    } catch {
+      /* private mode: the next visit starts on the pictures */
+    }
+  }, [workspace]);
+
   const refreshProjectList = useCallback(async () => {
     let saved = await listProjects();
     let cloud: Awaited<ReturnType<typeof listCloudProjects>> = [];
@@ -4110,12 +4119,14 @@ export function Workbench({
 
         setGeometries((current) => new Map(current).set(versionId, soup));
         void saveGeometry(versionId, soup);
+        // A retry takes the place of the attempt that came out in pieces.
+        const replaced = settings.replaceResult ? onePieceResultId : null;
         patchProject((current) => ({
           ...current,
           parts: [
-            ...current.parts.map((part) =>
-              hidden.has(part.id) ? { ...part, visible: false } : part
-            ),
+            ...current.parts
+              .filter((part) => part.id !== replaced)
+              .map((part) => (hidden.has(part.id) ? { ...part, visible: false } : part)),
             {
               id,
               name,
@@ -4164,23 +4175,59 @@ export function Workbench({
         setOnePieceProgress(null);
       }
     },
-    [project, geometries, partWorldPos, patchProject]
+    [project, geometries, partWorldPos, patchProject, onePieceResultId]
   );
 
-  const downloadOnePiece = useCallback(() => {
-    const part = project.parts.find((candidate) => candidate.id === onePieceResultId);
-    const soup = part ? geometries.get(part.activeVersionId) : undefined;
-    if (!part || !soup) {
-      toast.error('That piece is no longer on the bench.');
-      return;
+  const downloadPartStl = useCallback(
+    (partId: string | null) => {
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      const soup = part ? geometries.get(part.activeVersionId) : undefined;
+      if (!part || !soup) {
+        toast.error('That piece is no longer on the bench.');
+        return;
+      }
+      // Written as it sits on the table, so the file matches the screen.
+      const baked = bakeTransform(soup, { ...part.transform, position: partWorldPos(part) });
+      download(
+        new Blob([exportBinaryStl([baked], part.name)], { type: 'model/stl' }),
+        `${part.name.replace(/[^\w.-]+/g, '_')}.stl`
+      );
+    },
+    [project.parts, geometries, partWorldPos]
+  );
+  const downloadOnePiece = useCallback(
+    () => downloadPartStl(onePieceResultId),
+    [downloadPartStl, onePieceResultId]
+  );
+
+  /**
+   * The one thing to do next for the job the bench is for, shown over the table
+   * with a button — so getting from a part to a printable piece never means
+   * hunting through menus.
+   */
+  const nextStep = useMemo<{ text: string; actions: { label: string; run: () => void }[] } | null>(() => {
+    if (assembly || onePieceBodies.length === 0) return null;
+    const finished = project.parts.find((part) => part.visible && part.name.endsWith('· one piece'));
+    if (finished) {
+      return {
+        text: 'Ready to print.',
+        actions: [{ label: 'Download STL', run: () => downloadPartStl(finished.id) }],
+      };
     }
-    // Written as it sits on the table, so the file matches the screen.
-    const baked = bakeTransform(soup, { ...part.transform, position: partWorldPos(part) });
-    download(
-      new Blob([exportBinaryStl([baked], part.name)], { type: 'model/stl' }),
-      `${part.name.replace(/[^\w.-]+/g, '_')}.stl`
-    );
-  }, [project.parts, onePieceResultId, geometries, partWorldPos]);
+    if (onePiecePipes.length === 0) {
+      return {
+        text: 'Next: put a pipe down the bore.',
+        actions: [28, 20].map((diameter) => ({
+          label: `+ ⌀${diameter}`,
+          run: () => addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2),
+        })),
+      };
+    }
+    return {
+      text: 'Next: join the bodies and cut the pipe holes.',
+      actions: [{ label: 'One piece', run: openOnePiece }],
+    };
+  }, [assembly, onePieceBodies, onePiecePipes, project.parts, downloadPartStl, addPipeThrough, openOnePiece]);
 
   const onePieceMass = useMemo(() => {
     if (!onePieceReport) return null;
@@ -5330,80 +5377,13 @@ export function Workbench({
         </div>
 
         <div className="flex overflow-hidden rounded border border-slate-300">
-          <button
-            type="button"
-            onClick={groupSelection}
-            disabled={selection.length < 2 || Boolean(busy)}
-            title="Group selection — ⌘G"
-            className="min-h-11 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-          >
-            <Group className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Group
-          </button>
-          <button
-            type="button"
-            onClick={() => selectedId && ungroupPart(selectedId)}
-            disabled={!selectedPart?.group || Boolean(busy)}
-            title="Ungroup — ⌘⇧G"
-            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-          >
-            <Ungroup className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Ungroup
-          </button>
-          <button
-            type="button"
-            onClick={() => runSettle()}
-            disabled={!selectedId || Boolean(busy)}
-            title="Drop the selected part onto the table standing upright, then drag it"
-            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-          >
-            <ArrowDownToLine className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Settle
-          </button>
-          <button
-            type="button"
-            onClick={runFitTogether}
-            disabled={selection.length !== 2 || Boolean(busy)}
-            title={
-              selection.length !== 2
-                ? 'Select exactly two parts to fit together'
-                : 'Slide the other part flush onto this one — maximise face contact before Merge'
-            }
-            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-          >
-            <Magnet className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Fit
-          </button>
-          <button
-            type="button"
-            onClick={mergeSelection}
-            disabled={selection.length < 2 || Boolean(busy)}
-            title="Boolean-union the selection into one solid"
-            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-          >
-            <Combine className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Merge
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSubtract(true)}
-            disabled={!selectedId || project.parts.length < 2 || Boolean(busy)}
-            title="Cut another part out of the selected one"
-            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-          >
-            <Scissors className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Subtract
-          </button>
-        </div>
-
-        <div className="flex overflow-hidden rounded border border-slate-300">
           {[28, 20].map((diameter) => (
             <button
               key={diameter}
               type="button"
               onClick={() => addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2)}
               disabled={Boolean(busy)}
-              title={`Put a ⌀${diameter} mm pipe straight through the selected body, or everything on the table`}
+              title={`Put a ⌀${diameter} mm pipe straight down the bore of the selected body, or of everything on the table`}
               className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 first:border-l-0 hover:bg-slate-100 disabled:text-slate-300"
             >
               <Cylinder className="mx-auto mb-0.5 h-3.5 w-3.5" />+ ⌀{diameter}
@@ -5422,86 +5402,42 @@ export function Workbench({
           One piece
         </button>
 
-        <button
-          type="button"
-          onClick={() => setShowDrive(true)}
-          title="Preview STL and 3MF from Google Drive — Drive itself cannot show them"
-          className={TOOL_BTN}
-        >
-          <HardDrive className="h-3.5 w-3.5" />
-          Drive
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (!selectedId) {
-              toast.error('Select a part first.');
-              return;
+        <div className="flex overflow-hidden rounded border border-slate-300">
+          <button
+            type="button"
+            onClick={mergeSelection}
+            disabled={selection.length < 2 || Boolean(busy)}
+            title="Join the selected parts into one solid"
+            className="min-h-11 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Combine className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Merge
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSubtract(true)}
+            disabled={!selectedId || project.parts.length < 2 || Boolean(busy)}
+            title="Cut another part out of the selected one"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Scissors className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Subtract
+          </button>
+          <button
+            type="button"
+            onClick={fixSelection}
+            disabled={selection.length === 0 || Boolean(busy)}
+            title={
+              selection.length > 1
+                ? `Repair the ${selection.length} selected parts only — not the whole bench`
+                : 'Fix this part only — weld cracks, fill holes, drop dust. Closes it as a solid if it stays open, keeping the surface.'
             }
-            setPainting((value) => !value);
-            setMeasuring(false);
-            setMoveModeId(null);
-          }}
-          disabled={!selectedId}
-          title="Paint a broken edge or hole, then Align or Fill"
-          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
-            painting
-              ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-              : 'border-slate-300 text-slate-600 hover:bg-slate-100 disabled:text-slate-300'
-          }`}
-        >
-          <Paintbrush className="mx-auto mb-0.5 h-3.5 w-3.5" />
-          Paint
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (!selectedId) {
-              toast.error('Select a part first.');
-              return;
-            }
-            runAnalyze(selectedId);
-          }}
-          disabled={!selectedId || Boolean(busy)}
-          title="Find misalignment, missing faces, and face trouble"
-          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-        >
-          <ScanSearch className="mx-auto mb-0.5 h-3.5 w-3.5" />
-          Analyze
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (!selectedId) {
-              toast.error('Select a part first.');
-              return;
-            }
-            runFillSolid(selectedId);
-          }}
-          disabled={!selectedId || Boolean(busy)}
-          title="Fill holes and close it as a solid so Slice / Subtract keep volume"
-          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-        >
-          Fill
-        </button>
-
-        <button
-          type="button"
-          onClick={fixSelection}
-          disabled={selection.length === 0 || Boolean(busy)}
-          title={
-            selection.length > 1
-              ? `Repair the ${selection.length} selected parts only — not the whole bench`
-              : 'Fix this part only — weld cracks, fill holes, drop dust. Closes it as a solid if it stays open, keeping the surface.'
-          }
-          className="min-h-11 rounded border border-slate-300 px-3 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
-        >
-          <Sparkles className="mx-auto mb-0.5 h-3.5 w-3.5" />
-          {selection.length > 1 ? `Fix ${selection.length}` : 'Fix'}
-        </button>
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Sparkles className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            {selection.length > 1 ? `Fix ${selection.length}` : 'Fix'}
+          </button>
+        </div>
 
         <button
           type="button"
@@ -5526,37 +5462,81 @@ export function Workbench({
           {selectedPart?.visible === false ? 'Show' : 'Hide'}
         </button>
 
-        <button
-          type="button"
-          onClick={() => setMultiSelect((value) => !value)}
-          title="Tap extra parts to add them to the selection"
-          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
-            multiSelect
-              ? 'border-sky-500 bg-sky-50 text-sky-700'
-              : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          Multi
-        </button>
-
-          <button
-            type="button"
-            onClick={toggleAssembly}
-            aria-pressed={assembly}
-            title={
-              assembly
-                ? 'Blaster slots are on. Turn them off for a plain bench — every part stays exactly where it is.'
-                : 'Plain bench. Turn on to fit parts to blaster mount points (body, barrel, grip…).'
-            }
-            className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
-              assembly
-                ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Boxes className="mx-auto mb-0.5 h-3.5 w-3.5" />
-            Assembly {assembly ? 'on' : 'off'}
-          </button>
+        <MenuBar>
+          <Menu label="More" width={270}>
+            <MenuItem
+              onClick={groupSelection}
+              disabled={selection.length < 2 || Boolean(busy)}
+              icon={Group}
+              shortcut="⌘G"
+            >
+              Group selection
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && ungroupPart(selectedId)}
+              disabled={!selectedPart?.group || Boolean(busy)}
+              icon={Ungroup}
+              shortcut="⌘⇧G"
+            >
+              Ungroup
+            </MenuItem>
+            <MenuItem
+              onClick={() => runSettle()}
+              disabled={!selectedId || Boolean(busy)}
+              icon={ArrowDownToLine}
+              hint="Stands the selected part upright on the table"
+            >
+              Settle on the table
+            </MenuItem>
+            <MenuItem
+              onClick={runFitTogether}
+              disabled={selection.length !== 2 || Boolean(busy)}
+              icon={Magnet}
+              hint="Slides two selected parts flush onto each other"
+            >
+              Fit two parts together
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              onClick={() => selectedId && runAnalyze(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              icon={ScanSearch}
+              hint="Finds missing faces and misalignment"
+            >
+              Analyze
+            </MenuItem>
+            <MenuItem
+              onClick={() => selectedId && runFillSolid(selectedId)}
+              disabled={!selectedId || Boolean(busy)}
+              hint="Closes holes so Slice and Subtract keep volume"
+            >
+              Fill to solid
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (!selectedId) return;
+                setPainting((value) => !value);
+                setMeasuring(false);
+                setMoveModeId(null);
+              }}
+              disabled={!selectedId}
+              icon={Paintbrush}
+              hint="Paint a broken edge or hole, then Align or Fill"
+            >
+              {painting ? 'Stop painting' : 'Paint a broken edge'}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuCheckItem checked={multiSelect} onClick={() => setMultiSelect((value) => !value)}>
+              Tap to add parts to the selection
+            </MenuCheckItem>
+            <MenuCheckItem checked={assembly} onClick={toggleAssembly}>
+              Blaster assembly slots
+            </MenuCheckItem>
+            <MenuItem onClick={() => setShowDrive(true)} icon={HardDrive} hint="Preview STL and 3MF from Google Drive">
+              Google Drive
+            </MenuItem>
+          </Menu>
+        </MenuBar>
 
           {assembly && (
           <div className="flex overflow-hidden rounded border border-slate-300">
@@ -5868,19 +5848,40 @@ export function Workbench({
             </div>
           )}
 
-          {project.parts.length > 0 && selectedId && !moveModeId && !painting && !focusId && (
-            <div className="pointer-events-none absolute top-3 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
-              Double-tap a part to move or rotate it · drags snap to neighbours
+          {nextStep && !moveModeId && !painting && !focusId ? (
+            <div className="absolute top-3 left-1/2 z-10 flex max-w-[min(100%-8rem,34rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full border border-emerald-300 bg-white/95 px-3 py-1.5 text-[0.72rem] font-medium text-slate-700 shadow-sm">
+              <span>{nextStep.text}</span>
+              {nextStep.actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={action.run}
+                  disabled={Boolean(busy)}
+                  className="rounded-full bg-emerald-600 px-2.5 py-1 text-[0.68rem] font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
+                >
+                  {action.label}
+                </button>
+              ))}
             </div>
+          ) : (
+            project.parts.length > 0 &&
+            selectedId &&
+            !moveModeId &&
+            !painting &&
+            !focusId && (
+              <div className="pointer-events-none absolute top-3 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
+                Double-tap a part to move or rotate it · drags snap to neighbours
+              </div>
+            )
           )}
 
           {project.parts.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
               <Upload className="h-8 w-8 text-slate-700" />
-              <p className="text-sm font-bold text-slate-500">Drop STL or 3MF files here</p>
+              <p className="text-sm font-bold text-slate-500">Drop your STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
-                Drop the body parts — or open Drive to preview the STL / 3MF Google will not
-                show — then + ⌀28 for the pipe and One piece.
+                Or pick a saved build under Projects. Then + ⌀28 puts a pipe down the bore, and One
+                piece makes it one printable part.
               </p>
             </div>
           )}
@@ -6571,10 +6572,7 @@ export function Workbench({
         massLabel={onePieceMass}
         onRun={(settings) => void runOnePieceJob(settings)}
         onDownload={downloadOnePiece}
-        onAddPipe={(diameter) => {
-          setShowOnePiece(false);
-          addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2);
-        }}
+        onAddPipe={(diameter) => addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2)}
         onClose={() => {
           if (onePieceProgress !== null) return;
           setShowOnePiece(false);
