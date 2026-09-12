@@ -25,6 +25,16 @@ function moved(soup: Float32Array, dx: number, dy = 0, dz = 0): Float32Array {
 /** A 40 mm cube centred on the origin. */
 const block = () => moved(cubeSoup(40), -20, -20, -20);
 
+/** A closed box between two corners. */
+function box(min: [number, number, number], max: [number, number, number]): Float32Array {
+  const unit = cubeSoup(1);
+  const out = new Float32Array(unit.length);
+  for (let i = 0; i < unit.length; i += 3) {
+    for (let axis = 0; axis < 3; axis++) out[i + axis] = min[axis] + unit[i + axis] * (max[axis] - min[axis]);
+  }
+  return out;
+}
+
 /** The same triangles wound the other way, as an inside-out export has them. */
 function insideOut(soup: Float32Array): Float32Array {
   const out = soup.slice();
@@ -306,5 +316,44 @@ describe('makeOnePiece', () => {
         options: { ...options, allowRebuild: false },
       })
     ).toThrow('broken could not be closed');
+  });
+
+  // A box is all corners, and a corner grows only about 0.58 of the distance, so
+  // these seams are set a little wider than the gaps they close.
+  it('closes a seam wider than half the setting, instead of leaving a sliver floating in it', () => {
+    const { report } = makeOnePiece(wasm, {
+      bodies: [
+        { name: 'left', soup: cubeSoup(10) },
+        { name: 'right', soup: moved(cubeSoup(10), 10.15) },
+      ],
+      pipes: [],
+      options: { ...options, seamMm: 0.3 },
+    });
+    expect(report.pieces).toBe(1);
+    expect(report.seamsBridged).toBe(1);
+    expect(report.volume).toBeGreaterThan(2000);
+    expect(report.volume).toBeLessThan(2030);
+  });
+
+  it('joins halves again when the bore takes away the only thing holding them together', () => {
+    const run = (seamMm: number) =>
+      makeOnePiece(wasm, {
+        bodies: [
+          { name: 'left', soup: box([-20, -10, -10], [20, 10, -0.075]) },
+          { name: 'right', soup: box([-20, -10, 0.075], [20, 10, 10]) },
+          // The only link between the halves, right where the pipe bores through.
+          { name: 'link', soup: box([-2, -2, -1], [2, 2, 1]) },
+        ],
+        pipes: [pipe(8, 60, translate(0, 0, 0))],
+        options: { ...options, seamMm },
+      }).report;
+    expect(run(0).pieces).toBe(2);
+    const joined = run(0.3);
+    expect(joined.pieces).toBe(1);
+    // The seam is filled around the bore, not inside it.
+    const halves = 40 * 20 * 19.85;
+    const bore = Math.PI * 16 * 40;
+    expect(joined.volume).toBeGreaterThan(halves - bore);
+    expect(joined.volume).toBeLessThan(halves - bore + 480 * 0.4);
   });
 });

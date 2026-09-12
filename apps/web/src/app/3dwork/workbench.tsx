@@ -127,7 +127,8 @@ import {
   type HardwareKind,
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
-import { makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { concatSoups, makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { findBoreAxis } from '@/lib/3dwork/bore-axis';
 import { fitTogether } from '@/lib/3dwork/fit';
 import { settleOnFloor } from '@/lib/3dwork/settle';
 import {
@@ -195,6 +196,9 @@ import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
+
+/** Above this many triangles, + pipe skips looking for the bore and aims at the middle. */
+const BORE_SEARCH_MAX_TRIANGLES = 3_000_000;
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -3883,21 +3887,53 @@ export function Workbench({
         { x: 0, y: -90, z: 0 },
       ][axis];
       if (assembly && mode === 'scattered') setMode('assembled');
-      addHardware(
-        { kind: 'pipe', length: Math.round(size[axis] + 80), diameter, wall },
-        {
-          position: {
-            x: (min[0] + max[0]) / 2,
-            y: (min[1] + max[1]) / 2,
-            z: (min[2] + max[2]) / 2,
-          },
-          rotation,
-          scale: { x: 1, y: 1, z: 1 },
+      const centre = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+      const drawn = bodies.filter((part) => layout.has(part.id));
+      const triangles = drawn.reduce((sum, part) => sum + part.triangles, 0);
+
+      setBusy('Finding the bore…');
+      // Let the busy state paint before the synchronous look through the bodies.
+      setTimeout(() => {
+        try {
+          // Aim down the bore you can see through the bodies, not at the middle of
+          // their box: the two are rarely the same, and a bore cut off its axis
+          // thins one wall and leaves a lip at the mouth.
+          const bore =
+            triangles <= BORE_SEARCH_MAX_TRIANGLES
+              ? findBoreAxis(
+                  concatSoups(
+                    drawn.map((part) =>
+                      bakeTransform(geometries.get(part.activeVersionId) as Float32Array, {
+                        ...part.transform,
+                        position: layout.get(part.id) as Transform['position'],
+                      })
+                    )
+                  ),
+                  axis as 0 | 1 | 2
+                )
+              : null;
+          if (bore) {
+            const [u, v] = [0, 1, 2].filter((other) => other !== axis);
+            centre[u] = bore.center[0];
+            centre[v] = bore.center[1];
+          }
+          addHardware(
+            { kind: 'pipe', length: Math.round(size[axis] + 80), diameter, wall },
+            {
+              position: { x: centre[0], y: centre[1], z: centre[2] },
+              rotation,
+              scale: { x: 1, y: 1, z: 1 },
+            }
+          );
+          toast.info(
+            bore
+              ? `The pipe runs down the middle of the ⌀${bore.diameter.toFixed(1)} bore. Check it under Modify, then One piece.`
+              : 'The pipe runs through the middle. Double-tap it to move it, or type its position under Modify — then One piece.'
+          );
+        } finally {
+          setBusy(null);
         }
-      );
-      toast.info(
-        'The pipe runs through the middle. Double-tap it to move it, or type its position under Modify — then One piece.'
-      );
+      }, 30);
     },
     [selection, project, geometries, assembly, mode, addHardware]
   );

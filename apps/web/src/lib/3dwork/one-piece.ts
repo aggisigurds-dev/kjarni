@@ -448,12 +448,17 @@ function offsetSurface(wasm: ManifoldToplevel, solid: Manifold, distance: number
  * Fill the hairline gaps between pieces that should have been one.
  *
  * Halves cut apart and exported separately rarely touch — the Valken
- * receiver's sit 0.03–0.19 mm apart — and the kernel keeps even a 0.0001 mm gap
- * as two pieces. Each piece is grown by half the seam width, and every pair
- * that then overlaps contributes that overlap: a sliver the shape of the gap,
- * reaching a hair into both sides. Only those slivers are added. The pieces'
- * own surfaces never move, so the outside stays exactly as modelled — growing
- * everything and shrinking it back instead folds the surface in inside corners.
+ * receiver's sit up to a quarter millimetre apart — and the kernel keeps even a
+ * 0.0001 mm gap as two pieces. Each piece is grown twice, by the whole seam
+ * width and by half of it. Where one piece grown by the whole width overlaps
+ * its neighbour grown by half, and the other way round, the two overlaps
+ * together are a sliver the shape of the gap that reaches into both sides; only
+ * those slivers are added. Growing both pieces by half alone left a sliver
+ * floating in any gap wider than half the setting, touching neither side.
+ *
+ * The pieces' own surfaces never move — growing everything and shrinking it
+ * back instead folds the surface in inside corners — and where a seam meets a
+ * flush outside, a sliver stands no more than half the seam proud of it.
  *
  * Returns null when there is nothing to bridge.
  */
@@ -475,33 +480,52 @@ function bridgeSeams(
   }
 
   onProgress?.(`Closing seams up to ${seam} mm between ${pieces.length} pieces…`);
-  const grown: { shell: Manifold; box: Box }[] = [];
+  const grown: { full: Manifold; half: Manifold; box: Box }[] = [];
   const bridges: Manifold[] = [];
+  const addOverlap = (a: Manifold, b: Manifold): boolean => {
+    const overlap = wasm.Manifold.intersection([a, b]);
+    if (overlap.numTri() > 0) {
+      bridges.push(overlap);
+      return true;
+    }
+    overlap.delete();
+    return false;
+  };
   try {
     for (const piece of pieces) {
-      const bigger = offsetSurface(wasm, piece, seam / 2);
-      if (bigger) grown.push({ shell: bigger, box: bigger.boundingBox() });
+      const full = offsetSurface(wasm, piece, seam);
+      const half = offsetSurface(wasm, piece, seam / 2);
+      if (full && half) {
+        grown.push({ full, half, box: full.boundingBox() });
+      } else {
+        if (full) release(full);
+        if (half) release(half);
+      }
     }
 
+    let seams = 0;
     for (let i = 0; i < grown.length; i++) {
       for (let j = i + 1; j < grown.length; j++) {
         const a = grown[i].box;
         const b = grown[j].box;
         const apart = [0, 1, 2].some((axis) => a.max[axis] < b.min[axis] || b.max[axis] < a.min[axis]);
         if (apart) continue;
-        const overlap = wasm.Manifold.intersection([grown[i].shell, grown[j].shell]);
-        if (overlap.numTri() > 0) bridges.push(overlap);
-        else overlap.delete();
+        const one = addOverlap(grown[i].full, grown[j].half);
+        const other = addOverlap(grown[i].half, grown[j].full);
+        if (one || other) seams++;
       }
     }
     if (bridges.length === 0) return null;
 
     const joined = wasm.Manifold.union([solid, ...bridges]);
     joined.numTri();
-    return { solid: joined, bridges: bridges.length };
+    return { solid: joined, bridges: seams };
   } finally {
     for (const piece of pieces) release(piece);
-    for (const entry of grown) release(entry.shell);
+    for (const entry of grown) {
+      release(entry.full);
+      release(entry.half);
+    }
     for (const bridge of bridges) release(bridge);
   }
 }
@@ -614,16 +638,34 @@ export function makeOnePiece(
       }
     }
 
+    // A seam is only bridged between pieces that are apart. Halves held together
+    // by nothing but material inside a bore look like one piece until the bore
+    // is cut, so seams are bridged again after every cut — and the cut is made
+    // once more, so no bridge is left standing in the hole.
+    const cutWith = (tool: Manifold) => {
+      const cut = keep(piece.subtract(tool));
+      cut.numTri();
+      drop(piece);
+      piece = cut;
+      if (seam <= 0) return;
+      const bridged = bridgeSeams(wasm, piece, seam, Math.max(job.options.crumbMm3, 1), onProgress);
+      if (!bridged) return;
+      keep(bridged.solid);
+      const recut = keep(bridged.solid.subtract(tool));
+      recut.numTri();
+      drop(bridged.solid);
+      drop(piece);
+      piece = recut;
+      seamsBridged += bridged.bridges;
+    };
+
     if (job.pipes.length > 0) {
       onProgress?.(`Boring ${plural(job.pipes.length, 'pipe')} through…`);
       const cutters = job.pipes.map((pipe) => keep(boreFor(wasm, pipe, job.options.gapMm)));
       const tool = cutters.length === 1 ? cutters[0] : keep(wasm.Manifold.union(cutters));
-      const cut = keep(piece.subtract(tool));
-      cut.numTri();
-      drop(piece);
+      cutWith(tool);
       drop(tool);
       for (const cutter of cutters) drop(cutter);
-      piece = cut;
     }
 
     const cutterNotes: BodyNote[] = [];
@@ -658,11 +700,8 @@ export function makeOnePiece(
         }
       }
       onProgress?.(`Cutting ${cutterParts.map((cutter) => cutter.name).join(', ')} out…`);
-      const cut = keep(piece.subtract(tool));
-      cut.numTri();
-      drop(piece);
+      cutWith(tool);
       drop(tool);
-      piece = cut;
     }
 
     onProgress?.('Sweeping up loose bits…');
