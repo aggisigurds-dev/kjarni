@@ -942,7 +942,7 @@ function RepairTab({
             onChange={(event) => setFallbackSolid(event.target.checked)}
             className="accent-emerald-500"
           />
-          Rebuild as solid if still open
+          Close as a solid if still open
         </label>
         <button
           type="button"

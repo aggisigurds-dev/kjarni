@@ -127,7 +127,7 @@ import {
   type HardwareKind,
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
-import { makeSolid, subtractMesh, unionMesh, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import { makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
 import { fitTogether } from '@/lib/3dwork/fit';
 import { settleOnFloor } from '@/lib/3dwork/settle';
 import {
@@ -311,7 +311,6 @@ export function Workbench({
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const [multiSelect, setMultiSelect] = useState(false);
   const [subtractSpec, setSubtractSpec] = useState({
-    resolution: 220,
     clearanceMm: 0.3,
     removeTool: false,
   });
@@ -2122,21 +2121,25 @@ export function Workbench({
   );
 
   /**
-   * Fuse the selected parts into one watertight solid on the bench. Unlike
-   * grouping, the originals are not kept — undo is the way back.
+   * Fuse the selected parts into one watertight solid on the bench, with the
+   * exact kernel, so every surface stays as modelled. Unlike grouping, the
+   * originals are not kept — undo is the way back.
    */
-  const mergeSelection = useCallback(() => {
+  const mergeSelection = useCallback(async () => {
     const members = selection;
     if (members.length < 2) {
       toast.error('Pick two or more parts to merge — turn on multi-select or hold ⌘/Ctrl.');
       return;
     }
 
-    const pieces: Float32Array[] = [];
+    const pieces: OnePieceBody[] = [];
     for (const member of members) {
       const soup = soupOfPart(member.id);
       if (!soup) continue;
-      pieces.push(bakeTransform(soup, { ...member.transform, position: partWorldPos(member) }));
+      pieces.push({
+        name: member.name,
+        soup: bakeTransform(soup, { ...member.transform, position: partWorldPos(member) }),
+      });
     }
     if (pieces.length < 2) {
       toast.error('Need geometry on at least two selected parts.');
@@ -2144,79 +2147,78 @@ export function Workbench({
     }
 
     setBusy(`Merging ${pieces.length} parts…`);
-    setTimeout(() => {
-      try {
-        const result = unionMesh(pieces, { resolution: 220, sealMm: 0.6 });
-        if (result.soup.length === 0) {
-          toast.error('Merge produced an empty solid.');
-          return;
-        }
+    try {
+      const result = await runOnePiece(
+        {
+          bodies: pieces,
+          pipes: [],
+          // Seams up to 0.2 mm between parts meant to touch are closed.
+          options: { gapMm: 0, crumbMm3: 0, seamMm: 0.2, allowRebuild: false },
+        },
+        setBusy
+      );
 
-        const memberIds = new Set(members.map((part) => part.id));
-        const id = newPartId();
-        const versionId = newVersionId();
-        const color = nextColor(project);
-        const triangles = Math.floor(result.soup.length / 9);
+      const memberIds = new Set(members.map((part) => part.id));
+      const id = newPartId();
+      const versionId = newVersionId();
+      const color = nextColor(project);
+      const triangles = Math.floor(result.soup.length / 9);
 
-        setGeometries((current) => new Map(current).set(versionId, result.soup));
-        void saveGeometry(versionId, result.soup);
+      setGeometries((current) => new Map(current).set(versionId, result.soup));
+      void saveGeometry(versionId, result.soup);
 
-        patchProject((current) => ({
-          ...current,
-          slots: current.slots.map((slot) =>
-            slot.activePartId && memberIds.has(slot.activePartId)
-              ? { ...slot, activePartId: id }
-              : slot
-          ),
-          parts: [
-            ...current.parts.filter((part) => !memberIds.has(part.id)),
-            {
-              id,
-              name: `Merged (${members.length})`,
-              fileName: '',
-              slotId: members[0].slotId,
-              color,
-              visible: true,
-              transform: {
-                position: { x: 0, y: 0, z: 0 },
-                rotation: { x: 0, y: 0, z: 0 },
-                scale: { x: 1, y: 1, z: 1 },
-              },
-              triangles,
-              materialId: members[0].materialId,
-              notes: members.map((part) => part.name).join('\n'),
-              versions: [
-                {
-                  id: versionId,
-                  label: 'v1 merged',
-                  note: members.map((part) => part.name).join(', '),
-                  triangles,
-                  createdAt: Date.now(),
-                },
-              ],
-              activeVersionId: versionId,
-              thumbnail: renderThumbnail(result.soup, color),
-              addedAt: Date.now(),
+      patchProject((current) => ({
+        ...current,
+        slots: current.slots.map((slot) =>
+          slot.activePartId && memberIds.has(slot.activePartId) ? { ...slot, activePartId: id } : slot
+        ),
+        parts: [
+          ...current.parts.filter((part) => !memberIds.has(part.id)),
+          {
+            id,
+            name: `Merged (${members.length})`,
+            fileName: '',
+            slotId: members[0].slotId,
+            color,
+            visible: true,
+            transform: {
+              position: { x: 0, y: 0, z: 0 },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
             },
-          ],
-        }));
+            triangles,
+            materialId: members[0].materialId,
+            notes: members.map((part) => part.name).join('\n'),
+            versions: [
+              {
+                id: versionId,
+                label: 'v1 merged',
+                note: members.map((part) => part.name).join(', '),
+                triangles,
+                createdAt: Date.now(),
+              },
+            ],
+            activeVersionId: versionId,
+            thumbnail: renderThumbnail(result.soup, color),
+            addedAt: Date.now(),
+          },
+        ],
+      }));
 
-        for (const member of members) {
-          for (const version of member.versions) void deleteGeometry(version.id);
-        }
-
-        setMarked(new Set());
-        setSelectedId(id);
-        setFrameToken((token) => token + 1);
-        toast.success(
-          `Merged ${members.length} parts · ${formatCount(result.report.trianglesAfter)} triangles. If a seam still steps, Repair → Fix misalignment.`
-        );
-      } catch {
-        toast.error('Could not merge those parts.');
-      } finally {
-        setBusy(null);
+      for (const member of members) {
+        for (const version of member.versions) void deleteGeometry(version.id);
       }
-    }, 20);
+
+      setMarked(new Set());
+      setSelectedId(id);
+      setFrameToken((token) => token + 1);
+      const apart = result.report.pieces > 1 ? ` · ${result.report.pieces} pieces that do not touch` : '';
+      toast.success(`Merged ${members.length} parts · ${formatCount(result.report.triangles)} triangles${apart}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not merge those parts.');
+    } finally {
+      setBusy(null);
+    }
   }, [selection, soupOfPart, partWorldPos, project, patchProject]);
 
   /**
@@ -2570,7 +2572,7 @@ export function Workbench({
   );
 
   const runAutoFix = useCallback(
-    (
+    async (
       partId: string,
       options: {
         fillHoles: boolean;
@@ -2581,71 +2583,86 @@ export function Workbench({
     ) => {
       const soup = soupOfPart(partId);
       if (!soup) return;
+      const name = project.parts.find((part) => part.id === partId)?.name ?? 'This part';
 
       setBusy('Repairing mesh…');
-      // Yield a frame so the busy state paints before the synchronous work.
-      setTimeout(() => {
-        try {
-          const result = autoFix(soup, {
-            fillHoles: options.fillHoles,
-            maxHoleEdges: options.maxHoleEdges,
-            dropToTable: options.dropToTable,
-          });
-          let next = result.soup;
-          let usedSolid = false;
+      // Yield a frame so the busy state paints before the synchronous edge repair.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      try {
+        const result = autoFix(soup, {
+          fillHoles: options.fillHoles,
+          maxHoleEdges: options.maxHoleEdges,
+          dropToTable: options.dropToTable,
+        });
+        let next = result.soup;
+        let closed: OnePieceReport | null = null;
+        let stillOpen = '';
 
-          if (options.fallbackSolid && !result.report.after.watertight) {
-            const solid = makeSolid(next, { resolution: 220, sealMm: 0.8 });
-            if (solid.report.trianglesAfter > 0) {
-              next = solid.soup;
-              usedSolid = true;
-              setSolidReport(solid.report);
-            }
-          }
-
-          const report = usedSolid
-            ? {
-                ...result.report,
-                after: inspect(next),
-                unfilledHoles: 0,
-                changed: true,
-              }
-            : result.report;
-          setFixReport(report);
-
-          if (!result.report.changed && !usedSolid) {
-            toast.success(
-              result.report.after.watertight
-                ? 'Already clean — nothing to change.'
-                : 'Could not close it with edge repair. Tick “rebuild as solid” or use Make solid.'
+        if (options.fallbackSolid && !result.report.after.watertight) {
+          // Closed by the exact kernel: openings capped, doubled faces dropped,
+          // shells joined. Never rebuilt from voxels, which melts every surface.
+          try {
+            const solid = await runOnePiece(
+              {
+                bodies: [{ name, soup: next.slice() }],
+                pipes: [],
+                options: { gapMm: 0, crumbMm3: 0, seamMm: 0, allowRebuild: false },
+              },
+              setBusy
             );
-            return;
+            next = solid.soup;
+            closed = solid.report;
+          } catch (error) {
+            stillOpen = error instanceof Error ? error.message : String(error);
           }
-
-          addVersion(
-            partId,
-            next,
-            usedSolid ? 'repaired + solid' : 'repaired',
-            usedSolid ? 'Auto fix, then rebuilt as solid' : 'Auto fix'
-          );
-
-          if (usedSolid) {
-            toast.success('Patched what we could, then rebuilt as a solid.');
-          } else if (report.after.watertight) {
-            toast.success('Repaired — mesh is watertight.');
-          } else {
-            toast.success(
-              `Repaired, but ${report.unfilledHoles} opening(s) were too large to patch.`
-            );
-          }
-        } catch {
-          toast.error('Could not repair that mesh.');
-        } finally {
-          setBusy(null);
         }
-      }, 30);
+
+        const report = closed
+          ? {
+              ...result.report,
+              after: inspect(next),
+              unfilledHoles: 0,
+              changed: true,
+            }
+          : result.report;
+        setFixReport(report);
+
+        if (!result.report.changed && !closed) {
+          toast.success(
+            result.report.after.watertight
+              ? 'Already clean — nothing to change.'
+              : stillOpen
+                ? `${stillOpen} Make solid can rebuild it from voxels, but that softens detail.`
+                : 'Could not close it with edge repair. Tick “close as a solid”, or Make solid rebuilds it from voxels (softens detail).'
+          );
+          return;
+        }
+
+        addVersion(
+          partId,
+          next,
+          closed ? 'repaired + closed' : 'repaired',
+          closed ? `Auto fix, then closed exactly · ${closed.bodies[0]?.detail ?? ''}` : 'Auto fix'
+        );
+
+        if (closed) {
+          toast.success('Repaired — watertight, with the original surface kept.');
+        } else if (report.after.watertight) {
+          toast.success('Repaired — mesh is watertight.');
+        } else {
+          toast.success(
+            stillOpen
+              ? `Repaired what edge repair could, but it is still open: ${stillOpen}`
+              : `Repaired, but ${report.unfilledHoles} opening(s) were too large to patch.`
+          );
+        }
+      } catch {
+        toast.error('Could not repair that mesh.');
+      } finally {
+        setBusy(null);
+      }
     },
-    [soupOfPart, addVersion]
+    [soupOfPart, addVersion, project.parts]
   );
 
   const runAnalyze = useCallback(
@@ -2683,67 +2700,75 @@ export function Workbench({
   );
 
   /**
-   * Close holes, snap near-miss corners, and rebuild as a solid if it stays
+   * Close holes, snap near-miss corners, and close it exactly if it stays
    * open — so Slice and Subtract cut a volume instead of a paper-thin shell.
    */
   const runFillSolid = useCallback(
-    (partId: string) => {
+    async (partId: string) => {
       const soup = soupOfPart(partId);
       if (!soup) return;
+      const name = project.parts.find((part) => part.id === partId)?.name ?? 'This part';
 
       setBusy('Filling to a solid…');
       setShowInspector(true);
       setTab('repair');
-      setTimeout(() => {
-        try {
-          const aligned = fixMisalignment(soup, { toleranceMm: 0.2, fillHoles: true });
-          const repaired = autoFix(aligned.soup, { fillHoles: true, maxHoleEdges: 200 });
-          let next = repaired.soup;
-          let usedSolid = false;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      try {
+        const aligned = fixMisalignment(soup, { toleranceMm: 0.2, fillHoles: true });
+        const repaired = autoFix(aligned.soup, { fillHoles: true, maxHoleEdges: 200 });
+        let next = repaired.soup;
+        let closed = false;
+        let stillOpen = '';
 
-          if (!repaired.report.after.watertight) {
-            const solid = makeSolid(next, { resolution: 220, sealMm: 0.8 });
-            if (solid.report.trianglesAfter > 0) {
-              next = solid.soup;
-              usedSolid = true;
-              setSolidReport(solid.report);
-            }
-          }
-
-          const after = diagnose(next);
-          setDiagnosis(after);
-          setFixReport(repaired.report);
-
-          if (!aligned.report.changed && !repaired.report.changed && !usedSolid) {
-            toast.success(
-              after.watertight
-                ? 'Already a solid — nothing to fill.'
-                : 'Could not close it. Try Make solid.'
+        if (!repaired.report.after.watertight) {
+          // Closed exactly, never rebuilt from voxels — see runAutoFix.
+          try {
+            const solid = await runOnePiece(
+              {
+                bodies: [{ name, soup: next.slice() }],
+                pipes: [],
+                options: { gapMm: 0, crumbMm3: 0, seamMm: 0, allowRebuild: false },
+              },
+              setBusy
             );
-            return;
+            next = solid.soup;
+            closed = true;
+          } catch (error) {
+            stillOpen = error instanceof Error ? error.message : String(error);
           }
-
-          addVersion(
-            partId,
-            next,
-            usedSolid ? 'filled + solid' : 'filled',
-            usedSolid ? 'Fill, then rebuilt as solid' : 'Fill holes + snap'
-          );
-          toast.success(
-            after.watertight && !after.thinShellRisk
-              ? 'Filled — watertight. Slice and Subtract will keep volume.'
-              : usedSolid
-                ? 'Rebuilt as a solid.'
-                : 'Filled what we could — some openings remain.'
-          );
-        } catch {
-          toast.error('Could not fill that mesh.');
-        } finally {
-          setBusy(null);
         }
-      }, 30);
+
+        const after = diagnose(next);
+        setDiagnosis(after);
+        setFixReport(repaired.report);
+
+        if (!aligned.report.changed && !repaired.report.changed && !closed) {
+          toast.success(
+            after.watertight
+              ? 'Already a solid — nothing to fill.'
+              : `${stillOpen || 'Could not close it.'} Make solid can rebuild it from voxels, but that softens detail.`
+          );
+          return;
+        }
+
+        addVersion(
+          partId,
+          next,
+          closed ? 'filled + closed' : 'filled',
+          closed ? 'Fill, then closed exactly' : 'Fill holes + snap'
+        );
+        toast.success(
+          after.watertight && !after.thinShellRisk
+            ? 'Filled — watertight. Slice and Subtract will keep volume.'
+            : 'Filled what we could — some openings remain.'
+        );
+      } catch {
+        toast.error('Could not fill that mesh.');
+      } finally {
+        setBusy(null);
+      }
     },
-    [soupOfPart, addVersion]
+    [soupOfPart, addVersion, project.parts]
   );
 
   /** Slot callouts for the gunsmith overlay, anchored at each mount point. */
@@ -4170,25 +4195,13 @@ export function Workbench({
 
   /** Boolean-subtract another part from the selected one, as a new version. */
   const subtractInto = useCallback(
-    (targetId: string, toolId: string) => {
+    async (targetId: string, toolId: string) => {
       const target = project.parts.find((part) => part.id === targetId);
       const tool = project.parts.find((part) => part.id === toolId);
       if (!target || !tool) return;
       const soupA = soupOfPart(targetId);
       const soupB = soupOfPart(toolId);
       if (!soupA || !soupB) return;
-
-      const healthA = diagnose(soupA);
-      if (healthA.thinShellRisk) {
-        setDiagnosis(healthA);
-        setSelectedId(targetId);
-        setShowInspector(true);
-        setTab('repair');
-        toast.error(
-          `${target.name} is open. Analyze → Fill first, or Subtract will leave a paper-thin shell.`
-        );
-        return;
-      }
 
       const boxA = snapNeighbors.find((entry) => entry.id === targetId)?.box;
       const boxB = snapNeighbors.find((entry) => entry.id === toolId)?.box;
@@ -4197,46 +4210,60 @@ export function Workbench({
         return;
       }
 
+      const fullA: Transform = {
+        position: partWorldPos(target),
+        rotation: target.transform.rotation,
+        scale: target.transform.scale,
+      };
+      const fullB: Transform = {
+        position: partWorldPos(tool),
+        rotation: tool.transform.rotation,
+        scale: tool.transform.scale,
+      };
+      // A pipe cuts the hole it passes through — its whole outside, as One piece
+      // bores it — not a groove the shape of its wall.
+      const pipe = tool.hardware?.kind === 'pipe' ? tool.hardware : null;
+      const clearance = subtractSpec.clearanceMm;
+
       setShowSubtract(false);
       setBusy(`Subtracting ${tool.name}…`);
-      // Let the busy state paint before the synchronous voxel work.
-      setTimeout(() => {
-        try {
-          const fullA: Transform = {
-            position: partWorldPos(target),
-            rotation: target.transform.rotation,
-            scale: target.transform.scale,
-          };
-          const fullB: Transform = {
-            position: partWorldPos(tool),
-            rotation: tool.transform.rotation,
-            scale: tool.transform.scale,
-          };
-
-          const result = subtractMesh(bakeTransform(soupA, fullA), bakeTransform(soupB, fullB), {
-            resolution: subtractSpec.resolution,
-            sealMm: 0.4,
-            clearanceMm: subtractSpec.clearanceMm,
-          });
-          if (result.report.missed || result.soup.length === 0) {
-            toast.error('Nothing left after the cut — do the two parts actually overlap?');
-            return;
-          }
-          // The cut happened in world space; bring it back into the target's own
-          // frame so the part keeps its slot placement and transform.
-          const local = applyMatrix(result.soup, transformMatrix(fullA).invert());
-          addVersion(targetId, local, 'subtract', `− ${tool.name}`);
-          setSelectedId(targetId);
-          if (subtractSpec.removeTool) removePart(toolId);
-          toast.success(
-            `Cut ${tool.name} out of ${target.name} · ${formatCount(result.report.trianglesAfter)} triangles`
-          );
-        } catch {
-          toast.error('Subtract failed — try a lower resolution or simpler parts.');
-        } finally {
-          setBusy(null);
-        }
-      }, 20);
+      try {
+        const result = await runOnePiece(
+          {
+            bodies: [{ name: target.name, soup: bakeTransform(soupA, fullA) }],
+            pipes: pipe
+              ? [
+                  {
+                    name: tool.name,
+                    diameter: pipe.diameter * Math.max(Math.abs(fullB.scale.y), Math.abs(fullB.scale.z)),
+                    length: pipe.length * Math.abs(fullB.scale.x),
+                    matrix: Array.from(transformMatrix({ ...fullB, scale: { x: 1, y: 1, z: 1 } }).elements),
+                  },
+                ]
+              : [],
+            cutters: pipe ? [] : [{ name: tool.name, soup: bakeTransform(soupB, fullB) }],
+            options: { gapMm: clearance, clearanceMm: clearance, crumbMm3: 1, seamMm: 0, allowRebuild: false },
+          },
+          setBusy
+        );
+        // The cut happened in world space; bring it back into the target's own
+        // frame so the part keeps its slot placement and transform.
+        const local = applyMatrix(result.soup, transformMatrix(fullA).invert());
+        addVersion(targetId, local, 'subtract', `− ${tool.name}`);
+        setSelectedId(targetId);
+        if (subtractSpec.removeTool) removePart(toolId);
+        const repaired = [...result.report.bodies, ...result.report.cutters]
+          .filter((note) => note.outcome !== 'as-is')
+          .map((note) => `${note.name}: ${note.detail}`);
+        toast.success(
+          `Cut ${tool.name} out of ${target.name} · ${formatCount(result.report.triangles)} triangles` +
+            (repaired.length > 0 ? ` · ${repaired.join('; ')}` : '')
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Subtract failed.');
+      } finally {
+        setBusy(null);
+      }
     },
     [project, soupOfPart, addVersion, partWorldPos, snapNeighbors, subtractSpec, removePart]
   );
@@ -6235,29 +6262,12 @@ export function Workbench({
           >
             <h2 className="text-sm font-bold text-slate-900">Subtract from “{selectedPart.name}”</h2>
             <p className="mb-3 mt-1 text-[0.75rem] text-slate-500">
-              Pick the cutter. Overlap the two first (double-tap → move), or switch to assembled
-              layout. Need a 28 mm hole through several body pieces instead? Use Pipe ⌀28 — it welds
-              then bores, so the parts do not have to overlap. Clearance 0 mm is an exact voxel cut;
-              0.2–0.4 mm helps mating parts slide.
+              Pick the cutter. Overlap the two first (double-tap → move). The cut is exact: the part
+              keeps its own surface, trimmed only where the cutter passes. A pipe cuts its whole
+              outside, so it slides through. Clearance grows the cutter — 0.2–0.4 mm helps mating
+              parts slide; 0 cuts to size.
             </p>
             <div className="mb-3 grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className={`${LABEL} mb-1 block`}>Resolution</span>
-                <select
-                  className={FIELD}
-                  value={subtractSpec.resolution}
-                  onChange={(event) =>
-                    setSubtractSpec((current) => ({
-                      ...current,
-                      resolution: Number(event.target.value),
-                    }))
-                  }
-                >
-                  <option value={120}>Draft (fast)</option>
-                  <option value={220}>Standard</option>
-                  <option value={320}>Fine</option>
-                </select>
-              </label>
               <label className="block">
                 <span className={`${LABEL} mb-1 block`}>Clearance mm</span>
                 <input
