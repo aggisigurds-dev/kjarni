@@ -136,6 +136,12 @@ const BORE_SAGITTA = 0.005;
 /** Shells enclosing less than this, mm³, hold no material worth keeping. */
 const SLIVER_MM3 = 1e-3;
 
+/** Bits of a seam bridge smaller than this, mm³, are dust from grazing surfaces. */
+const BRIDGE_DUST_MM3 = 0.1;
+
+/** A join that grows the triangle count more than this many times over is thrown away. */
+const BLOWUP = 2;
+
 function boreSegments(radius: number): number {
   const ideal = Math.PI * Math.sqrt(radius / (2 * BORE_SAGITTA));
   return Math.min(256, Math.max(48, Math.ceil(ideal / 2) * 2));
@@ -460,7 +466,8 @@ function offsetSurface(wasm: ManifoldToplevel, solid: Manifold, distance: number
  * back instead folds the surface in inside corners — and where a seam meets a
  * flush outside, a sliver stands no more than half the seam proud of it.
  *
- * Returns null when there is nothing to bridge.
+ * Returns null when there is nothing to bridge; otherwise the joined solid and
+ * how many pieces there were to join.
  */
 function bridgeSeams(
   wasm: ManifoldToplevel,
@@ -468,7 +475,7 @@ function bridgeSeams(
   seam: number,
   minPieceMm3: number,
   onProgress?: (label: string) => void
-): { solid: Manifold; bridges: number } | null {
+): { solid: Manifold; pieces: number } | null {
   const pieces: Manifold[] = [];
   for (const component of solid.decompose()) {
     if (component.volume() >= minPieceMm3) pieces.push(component);
@@ -482,17 +489,27 @@ function bridgeSeams(
   onProgress?.(`Closing seams up to ${seam} mm between ${pieces.length} pieces…`);
   const grown: { full: Manifold; half: Manifold; box: Box }[] = [];
   const bridges: Manifold[] = [];
-  const addOverlap = (a: Manifold, b: Manifold): boolean => {
+  // The overlap is mostly the gap, but also dust wherever two grown surfaces
+  // graze each other — hundreds of bits per seam on the Valken receiver, which
+  // made the join crawl — so dust is dropped here. A slab floating in a gap a
+  // little wider than the seam cannot be picked out this early: asking whether
+  // it touches a piece stalled on that receiver too. Instead every part gets an
+  // ID of its own, and the sweep drops what holds no material from the bodies.
+  const addOverlap = (a: Manifold, b: Manifold) => {
     const overlap = wasm.Manifold.intersection([a, b]);
-    if (overlap.numTri() > 0) {
-      bridges.push(overlap);
-      return true;
+    if (overlap.numTri() === 0) {
+      overlap.delete();
+      return;
+    }
+    for (const part of overlap.decompose()) {
+      if (part.volume() >= BRIDGE_DUST_MM3) bridges.push(part.asOriginal());
+      part.delete();
     }
     overlap.delete();
-    return false;
   };
   try {
-    for (const piece of pieces) {
+    for (const [index, piece] of pieces.entries()) {
+      onProgress?.(`Closing seams up to ${seam} mm: growing piece ${index + 1} of ${pieces.length}…`);
       const full = offsetSurface(wasm, piece, seam);
       const half = offsetSurface(wasm, piece, seam / 2);
       if (full && half) {
@@ -503,23 +520,41 @@ function bridgeSeams(
       }
     }
 
-    let seams = 0;
     for (let i = 0; i < grown.length; i++) {
       for (let j = i + 1; j < grown.length; j++) {
         const a = grown[i].box;
         const b = grown[j].box;
         const apart = [0, 1, 2].some((axis) => a.max[axis] < b.min[axis] || b.max[axis] < a.min[axis]);
         if (apart) continue;
-        const one = addOverlap(grown[i].full, grown[j].half);
-        const other = addOverlap(grown[i].half, grown[j].full);
-        if (one || other) seams++;
+        onProgress?.(`Closing seams up to ${seam} mm: fitting pieces ${i + 1} and ${j + 1} together…`);
+        addOverlap(grown[i].full, grown[j].half);
+        addOverlap(grown[i].half, grown[j].full);
       }
     }
     if (bridges.length === 0) return null;
 
-    const joined = wasm.Manifold.union([solid, ...bridges]);
-    joined.numTri();
-    return { solid: joined, bridges: seams };
+    // One at a time. A single union of the solid with every bridge took minutes
+    // on the Valken receiver, and with its halves a little closer it never
+    // finished; one by one each part takes a second or two.
+    //
+    // Except where a bridge lies almost flat against a finely detailed piece:
+    // the kernel then cuts both surfaces into slivers. On the receiver one part
+    // took a solid of about a million triangles to 5.7 million, and the kernel
+    // ran out of memory on the next step. Such a gap is left open and the job
+    // goes on, rather than losing the whole piece.
+    let joined = solid;
+    for (const [index, bridge] of bridges.entries()) {
+      onProgress?.(`Closing seams up to ${seam} mm: filling gap ${index + 1} of ${bridges.length}…`);
+      const next = joined.add(bridge);
+      if (next.numTri() > (joined.numTri() + bridge.numTri()) * BLOWUP) {
+        next.delete();
+        continue;
+      }
+      if (joined !== solid) joined.delete();
+      joined = next;
+    }
+    if (joined === solid) return null;
+    return { solid: joined, pieces: pieces.length };
   } finally {
     for (const piece of pieces) release(piece);
     for (const entry of grown) {
@@ -528,6 +563,23 @@ function bridgeSeams(
     }
     for (const bridge of bridges) release(bridge);
   }
+}
+
+/**
+ * The originals a mesh really has triangles from. A part split off by
+ * decompose still lists every run of the solid it came from, empty or not.
+ */
+function originalsIn(mesh: { runIndex: Uint32Array; runOriginalID: Uint32Array }): number[] {
+  const ids: number[] = [];
+  for (let run = 0; run < mesh.runOriginalID.length; run++) {
+    if (mesh.runIndex[run + 1] > mesh.runIndex[run]) ids.push(mesh.runOriginalID[run]);
+  }
+  return ids;
+}
+
+/** Whether any of a solid's triangles came from these originals. */
+function carries(solid: Manifold, ids: Set<number>): boolean {
+  return originalsIn(solid.getMesh()).some((id) => ids.has(id));
 }
 
 function boreFor(wasm: ManifoldToplevel, pipe: OnePiecePipe, gapMm: number): Manifold {
@@ -618,6 +670,16 @@ export function makeOnePiece(
       );
     }
 
+    // What the bodies are made of, by original ID. A piece at the end holding
+    // none of it is a seam bridge that touched neither side.
+    const bodyIds = new Set<number>();
+    for (const shell of shells) for (const id of originalsIn(shell.getMesh())) bodyIds.add(id);
+    // Seams closed is how many of the separate pieces were joined into others.
+    let piecesToJoin = 0;
+    const noteBridges = (count: number) => {
+      piecesToJoin = Math.max(piecesToJoin, count);
+    };
+
     let piece = shells[0];
     if (shells.length > 1) {
       onProgress?.(`Joining ${shells.length} shells into one…`);
@@ -627,7 +689,6 @@ export function makeOnePiece(
     }
 
     const seam = Math.max(0, job.options.seamMm || 0);
-    let seamsBridged = 0;
     // With anything to cut, seams are bridged once, after the cut (see cutWith).
     // Bridging here as well doubled the time and the triangles on a receiver.
     const cutsFollow = job.pipes.length > 0 || (job.cutters?.length ?? 0) > 0;
@@ -637,7 +698,7 @@ export function makeOnePiece(
         keep(bridged.solid);
         drop(piece);
         piece = bridged.solid;
-        seamsBridged = bridged.bridges;
+        noteBridges(bridged.pieces);
       }
     }
 
@@ -654,12 +715,13 @@ export function makeOnePiece(
       const bridged = bridgeSeams(wasm, piece, seam, Math.max(job.options.crumbMm3, 1), onProgress);
       if (!bridged) return;
       keep(bridged.solid);
+      onProgress?.(`Closing seams up to ${seam} mm: cutting the bore clean again…`);
       const recut = keep(bridged.solid.subtract(tool));
       recut.numTri();
       drop(bridged.solid);
       drop(piece);
       piece = recut;
-      seamsBridged += bridged.bridges;
+      noteBridges(bridged.pieces);
     };
 
     if (job.pipes.length > 0) {
@@ -722,7 +784,8 @@ export function makeOnePiece(
         // A pocket the join or the bore sealed off inside the material.
         pocketsFilled++;
         component.delete();
-      } else if (volume < job.options.crumbMm3) {
+      } else if (volume < job.options.crumbMm3 || (piecesToJoin > 0 && !carries(component, bodyIds))) {
+        // A bridge that touched neither side of its seam is a loose bit as well.
         crumbsRemoved++;
         crumbVolume += volume;
         component.delete();
@@ -746,6 +809,7 @@ export function makeOnePiece(
     onProgress?.('Writing the mesh…');
     const mesh = final.getMesh();
     const soup = kernelToSoup(mesh.vertProperties, mesh.triVerts);
+    const seamsBridged = Math.max(0, piecesToJoin - pieces);
     return {
       soup,
       report: {

@@ -4,27 +4,53 @@
  * Every job gets a fresh worker, terminated as soon as it answers. Loading the
  * kernel again costs a fraction of a second against a job that takes many; in
  * exchange a job that crashed the kernel, or a failed repair attempt that left
- * memory behind, can never slow down or break the next one.
+ * memory behind, can never slow down or break the next one. A job stopped half
+ * way goes the same way: its worker is thrown away with whatever it was doing.
  */
 
 import type { OnePieceJob, OnePieceReply, OnePieceRequest, OnePieceResult } from './one-piece';
 
 let nextId = 1;
 
+/** What a stopped job rejects with, so stopping can be told apart from failing. */
+export class OnePieceStopped extends Error {
+  constructor() {
+    super('Stopped before it finished. Nothing was changed.');
+    this.name = 'OnePieceStopped';
+  }
+}
+
+/**
+ * The kernel reports running out of room as "memory access out of bounds" and
+ * the like, which tells nobody what to do. Say what happened instead.
+ */
+export function explainKernelError(message: string): string {
+  return /memory access out of bounds|out of memory|Aborted\(OOM\)|Cannot enlarge memory/i.test(message)
+    ? 'The solid kernel ran out of memory. Closing seams on a large model is the usual cause — try a smaller seam setting.'
+    : message;
+}
+
 /**
  * Join, bore and clean up in a worker of its own.
  *
  * The body and cutter soups are handed over, not copied — pass freshly baked copies, never
  * the bench's own meshes, because a transferred buffer is gone from this side.
+ * Aborting `signal` ends the worker at once, even in the middle of a kernel call.
  */
 export function runOnePiece(
   job: OnePieceJob,
-  onProgress?: (label: string) => void
+  onProgress?: (label: string) => void,
+  signal?: AbortSignal
 ): Promise<OnePieceResult> {
   const id = nextId++;
   const request: OnePieceRequest = { ...job, id };
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new OnePieceStopped());
+      return;
+    }
+
     let worker: Worker;
     try {
       worker = new Worker(new URL('./one-piece.worker.ts', import.meta.url), { type: 'module' });
@@ -33,6 +59,16 @@ export function runOnePiece(
       return;
     }
 
+    const finish = () => {
+      signal?.removeEventListener('abort', stop);
+      worker.terminate();
+    };
+    const stop = () => {
+      finish();
+      reject(new OnePieceStopped());
+    };
+    signal?.addEventListener('abort', stop, { once: true });
+
     worker.onmessage = (event: MessageEvent<OnePieceReply>) => {
       const message = event.data;
       if (message.id !== id) return;
@@ -40,14 +76,14 @@ export function runOnePiece(
         onProgress?.(message.label);
         return;
       }
-      worker.terminate();
+      finish();
       if (message.type === 'done') resolve(message.result);
-      else reject(new Error(message.message));
+      else reject(new Error(explainKernelError(message.message)));
     };
     worker.onerror = (event) => {
       event.preventDefault();
-      worker.terminate();
-      reject(new Error(event.message || 'The solid kernel stopped unexpectedly.'));
+      finish();
+      reject(new Error(explainKernelError(event.message || 'The solid kernel stopped unexpectedly.')));
     };
 
     try {
@@ -56,7 +92,7 @@ export function runOnePiece(
       );
       worker.postMessage(request, [...buffers]);
     } catch (error) {
-      worker.terminate();
+      finish();
       reject(error instanceof Error ? error : new Error(String(error)));
     }
   });

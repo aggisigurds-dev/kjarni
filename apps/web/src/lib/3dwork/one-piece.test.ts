@@ -335,6 +335,23 @@ describe('makeOnePiece', () => {
     expect(report.volume).toBeLessThan(2030);
   });
 
+  it('leaves nothing floating in a gap a little wider than the seam', () => {
+    // A 0.3 mm gap is more than the seam setting reaches at a box's corners, so
+    // the cubes stay two pieces, with nothing left floating between them.
+    const { report } = makeOnePiece(wasm, {
+      bodies: [
+        { name: 'left', soup: cubeSoup(10) },
+        { name: 'right', soup: moved(cubeSoup(10), 10.3) },
+      ],
+      pipes: [],
+      options: { ...options, seamMm: 0.3 },
+    });
+    expect(report.pieces).toBe(2);
+    expect(report.seamsBridged).toBe(0);
+    expect(report.volume).toBeGreaterThan(1999);
+    expect(report.volume).toBeLessThan(2030);
+  });
+
   it('joins halves again when the bore takes away the only thing holding them together', () => {
     const run = (seamMm: number) =>
       makeOnePiece(wasm, {
