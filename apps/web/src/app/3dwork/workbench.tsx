@@ -150,7 +150,7 @@ import {
   saveToCloud,
 } from '@/lib/3dwork/supabase-sync';
 import { activeVersionIds } from '@/lib/3dwork/github-sync';
-import { runOnePiece } from '@/lib/3dwork/one-piece-client';
+import { OnePieceStopped, runOnePiece } from '@/lib/3dwork/one-piece-client';
 import type { OnePieceBody, OnePiecePipe, OnePieceReport } from '@/lib/3dwork/one-piece';
 import {
   buildLabel,
@@ -4042,6 +4042,9 @@ export function Workbench({
     setShowOnePiece(true);
   }, []);
 
+  // Stop in the dialog aborts this, and the worker is thrown away mid-job.
+  const onePieceStop = useRef<AbortController | null>(null);
+
   const runOnePieceJob = useCallback(
     async (settings: OnePieceSettings) => {
       const bodyParts = project.parts.filter((part) => settings.bodyIds.includes(part.id));
@@ -4119,6 +4122,8 @@ export function Workbench({
       setOnePieceReport(null);
       setOnePieceError(null);
       setOnePieceProgress('Starting…');
+      const stopper = new AbortController();
+      onePieceStop.current = stopper;
       try {
         const result = await runOnePiece(
           {
@@ -4130,7 +4135,8 @@ export function Workbench({
               seamMm: settings.seamMm,
             },
           },
-          setOnePieceProgress
+          setOnePieceProgress,
+          stopper.signal
         );
 
         // Kept centred on its own origin and placed where it was built, so it
@@ -4204,8 +4210,12 @@ export function Workbench({
         setOnePieceReport(result.report);
         setFrameToken((token) => token + 1);
       } catch (error) {
-        setOnePieceError(error instanceof Error ? error.message : 'One piece failed.');
+        // Stopped on purpose: the dialog goes back to its settings and nothing changed.
+        if (!(error instanceof OnePieceStopped)) {
+          setOnePieceError(error instanceof Error ? error.message : 'One piece failed.');
+        }
       } finally {
+        if (onePieceStop.current === stopper) onePieceStop.current = null;
         setOnePieceProgress(null);
       }
     },
@@ -6592,6 +6602,7 @@ export function Workbench({
         onRun={(settings) => void runOnePieceJob(settings)}
         onDownload={downloadOnePiece}
         onAddPipe={(diameter) => addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2)}
+        onStop={() => onePieceStop.current?.abort()}
         onClose={() => {
           if (onePieceProgress !== null) return;
           setShowOnePiece(false);

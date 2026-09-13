@@ -171,6 +171,7 @@ export function OnePieceDialog({
   onRun,
   onDownload,
   onAddPipe,
+  onStop,
   onClose,
 }: {
   open: boolean;
@@ -187,6 +188,8 @@ export function OnePieceDialog({
   onRun: (settings: OnePieceSettings) => void;
   onDownload: () => void;
   onAddPipe: (diameter: number) => void;
+  /** Ends a running job at once; nothing on the bench changes. */
+  onStop: () => void;
   onClose: () => void;
 }) {
   const [bodyIds, setBodyIds] = useState<string[]>([]);
@@ -279,7 +282,8 @@ export function OnePieceDialog({
                 />
               </div>
               <p className="text-[0.7rem] text-slate-500">
-                {elapsedLabel(elapsed)} · a whole receiver takes a few minutes. This can stay open.
+                {elapsedLabel(elapsed)} · a whole receiver takes a few minutes. This can stay open,
+                and Stop ends it without changing anything.
               </p>
             </div>
           ) : report ? (
@@ -476,8 +480,8 @@ export function OnePieceDialog({
             </>
           ) : (
             <>
-              <button type="button" className={ACTION_GHOST} onClick={onClose} disabled={running}>
-                Cancel
+              <button type="button" className={ACTION_GHOST} onClick={running ? onStop : onClose}>
+                {running ? 'Stop' : 'Cancel'}
               </button>
               <button
                 type="button"
