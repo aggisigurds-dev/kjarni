@@ -142,9 +142,6 @@ const BRIDGE_DUST_MM3 = 0.1;
 /** A join that grows the triangle count more than this many times over is thrown away. */
 const BLOWUP = 2;
 
-/** Times the seam width a piece is grown deep, so a bridge's inner face lies well inside its neighbour. */
-const DEEP = 2;
-
 function boreSegments(radius: number): number {
   const ideal = Math.PI * Math.sqrt(radius / (2 * BORE_SAGITTA));
   return Math.min(256, Math.max(48, Math.ceil(ideal / 2) * 2));
@@ -458,13 +455,12 @@ function offsetSurface(wasm: ManifoldToplevel, solid: Manifold, distance: number
  *
  * Halves cut apart and exported separately rarely touch — the Valken
  * receiver's sit up to a quarter millimetre apart — and the kernel keeps even a
- * 0.0001 mm gap as two pieces. Each piece is grown twice: by half the seam
- * width, and deep, by twice it. Where one piece grown deep overlaps its
- * neighbour grown by half, and the other way round, the two overlaps together
- * fill a gap up to the seam width and reach well into both sides. The inner
- * faces sit deep on purpose: grown by only the seam width, a face could lie a
- * few hundredths of a millimetre under a finely detailed surface, and joining
- * it cut both into millions of slivers.
+ * 0.0001 mm gap as two pieces. Each piece is grown twice, by the whole seam
+ * width and by half of it. Where one piece grown by the whole width overlaps
+ * its neighbour grown by half, and the other way round, the two overlaps
+ * together are a sliver the shape of the gap that reaches into both sides; only
+ * those slivers are added. Growing both pieces by half alone left a sliver
+ * floating in any gap wider than half the setting, touching neither side.
  *
  * The pieces' own surfaces never move — growing everything and shrinking it
  * back instead folds the surface in inside corners — and where a seam meets a
@@ -491,7 +487,7 @@ function bridgeSeams(
   }
 
   onProgress?.(`Closing seams up to ${seam} mm between ${pieces.length} pieces…`);
-  const grown: { deep: Manifold; half: Manifold; box: Box }[] = [];
+  const grown: { full: Manifold; half: Manifold; box: Box }[] = [];
   const bridges: Manifold[] = [];
   // The overlap is mostly the gap, but also dust wherever two grown surfaces
   // graze each other — hundreds of bits per seam on the Valken receiver, which
@@ -514,12 +510,12 @@ function bridgeSeams(
   try {
     for (const [index, piece] of pieces.entries()) {
       onProgress?.(`Closing seams up to ${seam} mm: growing piece ${index + 1} of ${pieces.length}…`);
-      const deep = offsetSurface(wasm, piece, seam * DEEP);
+      const full = offsetSurface(wasm, piece, seam);
       const half = offsetSurface(wasm, piece, seam / 2);
-      if (deep && half) {
-        grown.push({ deep, half, box: deep.boundingBox() });
+      if (full && half) {
+        grown.push({ full, half, box: full.boundingBox() });
       } else {
-        if (deep) release(deep);
+        if (full) release(full);
         if (half) release(half);
       }
     }
@@ -531,8 +527,8 @@ function bridgeSeams(
         const apart = [0, 1, 2].some((axis) => a.max[axis] < b.min[axis] || b.max[axis] < a.min[axis]);
         if (apart) continue;
         onProgress?.(`Closing seams up to ${seam} mm: fitting pieces ${i + 1} and ${j + 1} together…`);
-        addOverlap(grown[i].deep, grown[j].half);
-        addOverlap(grown[i].half, grown[j].deep);
+        addOverlap(grown[i].full, grown[j].half);
+        addOverlap(grown[i].half, grown[j].full);
       }
     }
     if (bridges.length === 0) return null;
@@ -562,7 +558,7 @@ function bridgeSeams(
   } finally {
     for (const piece of pieces) release(piece);
     for (const entry of grown) {
-      release(entry.deep);
+      release(entry.full);
       release(entry.half);
     }
     for (const bridge of bridges) release(bridge);
