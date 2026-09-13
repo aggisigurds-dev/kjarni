@@ -21,6 +21,16 @@ export class OnePieceStopped extends Error {
 }
 
 /**
+ * The kernel reports running out of room as "memory access out of bounds" and
+ * the like, which tells nobody what to do. Say what happened instead.
+ */
+export function explainKernelError(message: string): string {
+  return /memory access out of bounds|out of memory|Aborted\(OOM\)|Cannot enlarge memory/i.test(message)
+    ? 'The solid kernel ran out of memory. Closing seams on a large model is the usual cause — try a smaller seam setting.'
+    : message;
+}
+
+/**
  * Join, bore and clean up in a worker of its own.
  *
  * The body and cutter soups are handed over, not copied — pass freshly baked copies, never
@@ -68,12 +78,12 @@ export function runOnePiece(
       }
       finish();
       if (message.type === 'done') resolve(message.result);
-      else reject(new Error(message.message));
+      else reject(new Error(explainKernelError(message.message)));
     };
     worker.onerror = (event) => {
       event.preventDefault();
       finish();
-      reject(new Error(event.message || 'The solid kernel stopped unexpectedly.'));
+      reject(new Error(explainKernelError(event.message || 'The solid kernel stopped unexpectedly.')));
     };
 
     try {
