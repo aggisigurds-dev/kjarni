@@ -2260,8 +2260,9 @@ export function Workbench({
         void deleteGeometry(version.id);
       }
 
-      setMarked(new Set());
+      // Every member comes back picked, ready to move on together or regroup.
       setSelectedId(group.members[0]?.id ?? null);
+      setMarked(new Set(group.members.slice(1).map((member) => member.id)));
       setFrameToken((token) => token + 1);
       toast.success(`Ungrouped ${group.members.length} parts.`);
     },

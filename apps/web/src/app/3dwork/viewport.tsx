@@ -123,13 +123,15 @@ const GHOST_COLOR = '#38bdf8';
 const MARKED_BOX_COLOR = 0x0ea5e9;
 const PLAIN_BACKGROUND = 0xd5d8dc;
 /** The 3D Builder view's palette. */
-const BUILDER_PART = '#c5c9cf';
-const BUILDER_PICKED = '#a9ccf2';
+const BUILDER_PART = '#c3c7cd';
+const BUILDER_PICKED = '#8fbcef';
 const BUILDER_OUTLINE = '#1a6fe0';
 const BUILDER_OUTLINE_HIDDEN = '#86b1ea';
 /** Light intensities per view: sky, key, fill, and the headlight on the camera. */
 const PLAIN_LIGHTS = { hemi: 1.4, key: 1.8, fill: 0.55, head: 0 };
-const BUILDER_LIGHTS = { hemi: 0.9, key: 1.0, fill: 0.3, head: 1.5 };
+// A strong key from one side and a weak headlight, so the faces of a part
+// come out in different greys instead of one flat, lit-from-the-front sheet.
+const BUILDER_LIGHTS = { hemi: 1.0, key: 2.2, fill: 0.6, head: 0.6 };
 
 function makeCheckerFloor(sizeMm = 1600): THREE.Mesh {
   const canvas = document.createElement('canvas');
@@ -167,7 +169,7 @@ function makeBuilderFloor(sizeMm = 1600): THREE.Group {
     new THREE.PlaneGeometry(sizeMm, sizeMm),
     // Pushed back in depth so the grid lines never flicker through it.
     new THREE.MeshBasicMaterial({
-      color: 0xeef2f7,
+      color: 0xe4e9ef,
       polygonOffset: true,
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,
@@ -176,11 +178,11 @@ function makeBuilderFloor(sizeMm = 1600): THREE.Group {
   plate.rotation.x = -Math.PI / 2;
   plate.position.y = -0.4;
   floor.add(plate);
-  const fine = new THREE.GridHelper(sizeMm, sizeMm / 10, 0xd9e2ee, 0xd9e2ee);
+  const fine = new THREE.GridHelper(sizeMm, sizeMm / 10, 0xcbd5e2, 0xcbd5e2);
   fine.position.y = -0.4;
   floor.add(fine);
   // Drawn after the fine lines at the same depth, so it wins where they cross.
-  const coarse = new THREE.GridHelper(sizeMm, sizeMm / 50, 0xa9bdd8, 0xa9bdd8);
+  const coarse = new THREE.GridHelper(sizeMm, sizeMm / 50, 0x9db2cf, 0x9db2cf);
   coarse.position.y = -0.4;
   coarse.renderOrder = 1;
   floor.add(coarse);
@@ -244,11 +246,12 @@ interface SceneRefs {
     head: THREE.DirectionalLight;
   };
   backgrounds: { plain: THREE.Color; builder: THREE.Texture };
+  /** The plain view's room reflections; null on a slow machine. */
+  environment: THREE.Texture | null;
   /** Draws the builder view with its outline; null on a slow machine. */
   composer: EffectComposer | null;
   outline: OutlinePass | null;
   builder: boolean;
-  slow: boolean;
   meshes: Map<string, THREE.Mesh>;
   targets: Map<string, THREE.Vector3>;
   raf: number;
@@ -497,10 +500,10 @@ export function Viewport({
       markedBoxes,
       lights: { hemi, key, fill, head },
       backgrounds: { plain: plainBackground, builder: builderBackground },
+      environment: envMap,
       composer,
       outline,
       builder: false,
-      slow,
       meshes: new Map(),
       targets: new Map(),
       raf: 0,
@@ -1048,7 +1051,6 @@ export function Viewport({
         material.color.set(picked.has(part.id) ? BUILDER_PICKED : BUILDER_PART);
         material.metalness = 0;
         material.roughness = 0.65;
-        material.envMapIntensity = 0.7;
         material.transparent = part.dimmed;
         material.opacity = part.dimmed ? 0.22 : 1;
         material.depthWrite = !part.dimmed;
@@ -1113,12 +1115,16 @@ export function Viewport({
     if (!state) return;
     state.builder = builder;
     state.scene.background = builder ? state.backgrounds.builder : state.backgrounds.plain;
-    // Neutral keeps a grey part grey; the filmic curve of the plain view suits metal.
+    // The room reflections are far brighter than the lights and wash a grey
+    // part out to white, so the builder view is lit by its lights alone.
+    state.scene.environment = builder ? null : state.environment;
+    // A gentle tone curve in the builder view: its lights stay mostly under it,
+    // and the additive outline keeps its blue instead of clipping to white. The
+    // filmic curve of the plain view suits metal.
     state.renderer.toneMapping = builder ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
     state.renderer.toneMappingExposure = builder ? 1 : 1.05;
     const lights = builder ? BUILDER_LIGHTS : PLAIN_LIGHTS;
-    // Without the room reflections of a fast machine the sky has to do more.
-    state.lights.hemi.intensity = builder && state.slow ? lights.hemi * 2 : lights.hemi;
+    state.lights.hemi.intensity = lights.hemi;
     state.lights.key.intensity = lights.key;
     state.lights.fill.intensity = lights.fill;
     state.lights.head.intensity = lights.head;
