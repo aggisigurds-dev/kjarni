@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  Box,
   Boxes,
   Cylinder,
   Download,
@@ -177,6 +178,14 @@ import {
   aabbOverlap,
   orientedAabb,
 } from '@/lib/3dwork/snap';
+import {
+  clickSelection,
+  invertSelection,
+  makePrimary,
+  pickedIds,
+  selectAll,
+  type NextSelection,
+} from '@/lib/3dwork/selection';
 import { applyMatrix, bakeTransform, scaleSoup, transformMatrix } from './bake';
 import { Gallery } from './gallery';
 import { Inspector, type InspectorTab } from './inspector';
@@ -195,12 +204,16 @@ import { DriveBrowser } from './drive-browser';
 import { KitBoard } from './kit-board';
 import { CloudPicker } from './cloud-picker';
 import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
+import { BuilderPanel } from './builder-panel';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
 
 /** Above this many triangles, + pipe skips looking for the bore and aims at the middle. */
 const BORE_SEARCH_MAX_TRIANGLES = 3_000_000;
+
+/** Remembers the 3D Builder view between visits. */
+const BUILDER_VIEW_KEY = 'kjarni3d_builder_view';
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -316,6 +329,8 @@ export function Workbench({
   const [rotateStep, setRotateStep] = useState(DEFAULT_ROTATE_STEP);
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const [multiSelect, setMultiSelect] = useState(false);
+  /** 3D Builder view: grey parts, blue outlines, and a panel for picking several parts. */
+  const [builderView, setBuilderView] = useState(false);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -1861,16 +1876,17 @@ export function Workbench({
   );
 
   /**
-   * Commit a viewport grab-to-move. In free mode the part carries an absolute
-   * position of its own; everywhere else the delta lands on its offset from the
-   * mount.
+   * Commit a move of one or more parts by the same world-space delta. In free
+   * mode each part carries an absolute position of its own; everywhere else the
+   * delta lands on its offset from the mount.
    */
-  const nudgePart = useCallback(
-    (id: string, delta: { x: number; y: number; z: number }) => {
+  const nudgeParts = useCallback(
+    (ids: readonly string[], delta: { x: number; y: number; z: number }) => {
+      const moving = new Set(ids);
       patchProject((current) => ({
         ...current,
         parts: current.parts.map((part) => {
-          if (part.id !== id) return part;
+          if (!moving.has(part.id)) return part;
           if (mode === 'free') {
             // A part never placed by hand starts from where it is drawn, not the origin.
             const fp = part.freePos ?? partWorldPos(part);
@@ -1945,10 +1961,13 @@ export function Workbench({
    * part just becomes hand-movable. In assembled/free it only arms move mode.
    */
   const enterMoveMode = useCallback((id: string) => {
-    setSelectedId(id);
+    // Whatever else is picked stays picked, and moves along with it.
+    const next = makePrimary({ selectedId, marked }, id);
+    setSelectedId(next.selectedId);
+    setMarked(next.marked);
     setMoveModeId(id);
     if (mode === 'scattered') goFree();
-  }, [mode, goFree]);
+  }, [mode, goFree, selectedId, marked]);
 
   const fitPart = useCallback(
     (slotId: string, partId: string | null) => {
@@ -2005,14 +2024,84 @@ export function Workbench({
     return project.parts.filter((part) => ids.has(part.id));
   }, [project.parts, marked, selectedId]);
 
-  const toggleMarked = useCallback((partId: string) => {
-    setMarked((current) => {
-      const next = new Set(current);
-      if (next.has(partId)) next.delete(partId);
-      else next.add(partId);
-      return next;
-    });
+  const applySelection = useCallback((next: NextSelection) => {
+    setSelectedId(next.selectedId);
+    setMarked(next.marked);
   }, []);
+
+  /** A click on a part in the gallery: `additive` adds it, or takes it away again. */
+  const pickPart = useCallback(
+    (partId: string | null, additive: boolean) => {
+      applySelection(clickSelection({ selectedId, marked }, partId, additive));
+    },
+    [applySelection, selectedId, marked]
+  );
+
+  /** Parts drawn on the table right now — hidden parts and those outside Focus are not. */
+  const drawnIds = useMemo(() => viewportParts.map((part) => part.id), [viewportParts]);
+
+  /** Picked parts on the table, primary first. A move takes all of them along. */
+  const pickedOnTable = useMemo(() => {
+    const drawn = new Set(drawnIds);
+    return pickedIds({ selectedId, marked }).filter((id) => drawn.has(id));
+  }, [drawnIds, selectedId, marked]);
+
+  /** The parts a move of this one takes along: every picked part, if it is picked. */
+  const movingWith = useCallback(
+    (partId: string) => (pickedOnTable.includes(partId) ? pickedOnTable : [partId]),
+    [pickedOnTable]
+  );
+
+  /**
+   * A tap on the table. Sticky selection makes every tap additive. Move mode
+   * stays on while its part is still picked, and a plain tap on a part also
+   * fits it to its mount — the swap gesture.
+   */
+  const pickOnTable = useCallback(
+    (partId: string | null, additive: boolean) => {
+      const add = additive || multiSelect;
+      const next = clickSelection({ selectedId, marked }, partId, add);
+      applySelection(next);
+      setMoveModeId((current) =>
+        current && (current === next.selectedId || next.marked.has(current)) ? current : null
+      );
+      if (!add && partId) selectPart(partId);
+    },
+    [applySelection, selectedId, marked, multiSelect, selectPart]
+  );
+
+  const selectAllParts = useCallback(() => {
+    applySelection(selectAll(drawnIds, { selectedId, marked }));
+  }, [applySelection, drawnIds, selectedId, marked]);
+
+  const deselectAll = useCallback(() => {
+    applySelection({ selectedId: null, marked: new Set() });
+    setMoveModeId(null);
+  }, [applySelection]);
+
+  const invertPicked = useCallback(() => {
+    applySelection(invertSelection(drawnIds, { selectedId, marked }));
+    setMoveModeId(null);
+  }, [applySelection, drawnIds, selectedId, marked]);
+
+  // The builder view is a way of working, so it is still on at the next visit.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(BUILDER_VIEW_KEY) === '1') setBuilderView(true);
+    } catch {
+      /* storage blocked: start in the plain view */
+    }
+  }, []);
+
+  const toggleBuilderView = useCallback(() => {
+    const next = !builderView;
+    setBuilderView(next);
+    try {
+      localStorage.setItem(BUILDER_VIEW_KEY, next ? '1' : '0');
+    } catch {
+      /* storage blocked: the view just is not remembered */
+    }
+  }, [builderView]);
 
   /**
    * Bundle the selected parts into one.
@@ -2326,7 +2415,7 @@ export function Workbench({
     });
 
     if (mode === 'assembled') {
-      nudgePart(movingPart.id, result.delta);
+      nudgeParts([movingPart.id], result.delta);
     } else {
       // Scatter layout ignores transform.position, so seed Free arrange from
       // wherever the parts sit now and apply the slide there.
@@ -2358,7 +2447,7 @@ export function Workbench({
     } else {
       toast.success(summary);
     }
-  }, [selection, selectedId, soupOfPart, partWorldPos, nudgePart, mode, sizes, patchProject]);
+  }, [selection, selectedId, soupOfPart, partWorldPos, nudgeParts, mode, sizes, patchProject]);
 
   /**
    * Drop the selected part onto the table: rotate a face flat onto Y=0, then
@@ -4599,6 +4688,11 @@ export function Workbench({
         }
         return;
       }
+      if (meta && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        selectAllParts();
+        return;
+      }
       if (meta) return;
 
       if (moveModeId) {
@@ -4619,7 +4713,7 @@ export function Workbench({
         const apply = (axis: 'x' | 'y' | 'z', dir: 1 | -1) => {
           event.preventDefault();
           if (manip === 'move') {
-            nudgePart(moveModeId, {
+            nudgeParts(movingWith(moveModeId), {
               x: axis === 'x' ? dir * step : 0,
               y: axis === 'y' ? dir * step : 0,
               z: axis === 'z' ? dir * step : 0,
@@ -4673,6 +4767,7 @@ export function Workbench({
           }
           setMoveModeId(null);
           setSelectedId(null);
+          setMarked(new Set());
           setMeasuring(false);
           break;
         case 'f':
@@ -4692,6 +4787,9 @@ export function Workbench({
           break;
         case 'w':
           setWireframe((value) => !value);
+          break;
+        case 'b':
+          toggleBuilderView();
           break;
         case 'a':
           if (assemblyOn(projectRef.current)) {
@@ -4723,7 +4821,10 @@ export function Workbench({
     manip,
     moveStep,
     rotateStep,
-    nudgePart,
+    nudgeParts,
+    movingWith,
+    selectAllParts,
+    toggleBuilderView,
     spinPart,
     togglePartVisible,
     showAllParts,
@@ -5238,6 +5339,9 @@ export function Workbench({
               Fit to view
             </MenuItem>
             <MenuSeparator />
+            <MenuCheckItem checked={builderView} onClick={toggleBuilderView} shortcut="B">
+              3D Builder view
+            </MenuCheckItem>
             <MenuCheckItem checked={showGrid} onClick={() => setShowGrid((v) => !v)} shortcut="G">
               Table grid
             </MenuCheckItem>
@@ -5491,6 +5595,21 @@ export function Workbench({
           {selectedPart?.visible === false ? 'Show' : 'Hide'}
         </button>
 
+        <button
+          type="button"
+          onClick={toggleBuilderView}
+          aria-pressed={builderView}
+          title="3D Builder view — grey parts with blue outlines; pick several parts, then group them or drag them together (B)"
+          className={`min-h-11 rounded border px-3 text-[0.65rem] font-extrabold uppercase tracking-wide ${
+            builderView
+              ? 'border-sky-500 bg-sky-50 text-sky-700'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Box className="mx-auto mb-0.5 h-3.5 w-3.5" />
+          Builder
+        </button>
+
         <MenuBar>
           <Menu label="More" width={270}>
             <MenuItem
@@ -5556,7 +5675,7 @@ export function Workbench({
             </MenuItem>
             <MenuSeparator />
             <MenuCheckItem checked={multiSelect} onClick={() => setMultiSelect((value) => !value)}>
-              Tap to add parts to the selection
+              Sticky selection — every tap adds a part
             </MenuCheckItem>
             <MenuCheckItem checked={assembly} onClick={toggleAssembly}>
               Blaster assembly slots
@@ -5680,6 +5799,15 @@ export function Workbench({
           >
             {multiSelect ? 'Multi on' : 'Multi'}
           </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
+            onClick={toggleBuilderView}
+            aria-pressed={builderView}
+          >
+            <Box className="h-3.5 w-3.5" />
+            {builderView ? 'Builder on' : 'Builder'}
+          </button>
         </div>
       )}
 
@@ -5749,8 +5877,7 @@ export function Workbench({
             selectedId={selectedId}
             marked={marked}
             multiSelect={multiSelect}
-            onSelect={setSelectedId}
-            onMark={toggleMarked}
+            onPick={pickPart}
             onFit={fitPart}
             onToggleVisible={togglePartVisible}
             onIsolate={isolatePart}
@@ -5779,21 +5906,9 @@ export function Workbench({
           <Viewport
             parts={viewportParts}
             selectedId={selectedId}
-            onSelect={(id) => {
-              setMoveModeId((current) => (current && current === id ? current : null));
-              if (id && multiSelect && selectedId && id !== selectedId) {
-                setMarked((current) => {
-                  const next = new Set(current);
-                  next.add(selectedId);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                });
-                setSelectedId(id);
-                return;
-              }
-              selectPart(id);
-            }}
+            pickedIds={pickedOnTable}
+            onSelect={pickOnTable}
+            builder={builderView}
             wireframe={wireframe}
             showGrid={showGrid}
             xray={xray}
@@ -5821,13 +5936,17 @@ export function Workbench({
             snapAnchors={snapAnchors}
             onSnapHint={setSnapHint}
             onEnterMoveMode={enterMoveMode}
-            onDragMove={nudgePart}
+            onDragMove={nudgeParts}
             onDragRotate={spinPart}
           />
 
           {project.parts.length > 0 && moveModeId && (
             <ManipBar
-              name={selectedPart?.name ?? ''}
+              name={
+                manip === 'move' && movingWith(moveModeId).length > 1
+                  ? `${movingWith(moveModeId).length} parts`
+                  : (project.parts.find((part) => part.id === moveModeId)?.name ?? '')
+              }
               mode={manip}
               onMode={setManip}
               rotateAxis={rotateAxis}
@@ -5845,7 +5964,7 @@ export function Workbench({
                   y: axis === 'y' ? direction * step : 0,
                   z: axis === 'z' ? direction * step : 0,
                 };
-                if (manip === 'move') nudgePart(moveModeId, delta);
+                if (manip === 'move') nudgeParts(movingWith(moveModeId), delta);
                 else spinPart(moveModeId, delta);
               }}
               onDone={() => setMoveModeId(null)}
@@ -5899,9 +6018,30 @@ export function Workbench({
             !painting &&
             !focusId && (
               <div className="pointer-events-none absolute top-3 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
-                Double-tap a part to move or rotate it · drags snap to neighbours
+                {builderView
+                  ? 'Drag a picked part to move every picked part · Ctrl-click adds or removes one'
+                  : 'Double-tap a part to move or rotate it · drags snap to neighbours'}
               </div>
             )
+          )}
+
+          {builderView && project.parts.length > 0 && !painting && (
+            <BuilderPanel
+              picked={pickedOnTable.length}
+              total={drawnIds.length}
+              sticky={multiSelect}
+              onSticky={() => setMultiSelect((value) => !value)}
+              onSelectAll={selectAllParts}
+              onDeselectAll={deselectAll}
+              onInvert={invertPicked}
+              onGroup={groupSelection}
+              canGroup={selection.length >= 2 && !busy}
+              onUngroup={() => selectedId && ungroupPart(selectedId)}
+              canUngroup={Boolean(selectedPart?.group) && !busy}
+              onMove={() => selectedId && enterMoveMode(selectedId)}
+              canMove={Boolean(selectedId) && !moveModeId}
+              onClose={toggleBuilderView}
+            />
           )}
 
           {project.parts.length === 0 && (
@@ -6002,8 +6142,7 @@ export function Workbench({
                   selectedId={selectedId}
                   marked={marked}
                   multiSelect={multiSelect}
-                  onSelect={setSelectedId}
-                  onMark={toggleMarked}
+                  onPick={pickPart}
                   onFit={fitPart}
                   onToggleVisible={togglePartVisible}
                   onIsolate={isolatePart}

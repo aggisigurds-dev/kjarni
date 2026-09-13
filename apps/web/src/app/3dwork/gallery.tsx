@@ -19,8 +19,8 @@ interface GalleryProps {
   marked: Set<string>;
   /** When true, a plain tap adds to the selection instead of replacing it. */
   multiSelect?: boolean;
-  onSelect: (partId: string) => void;
-  onMark: (partId: string) => void;
+  /** Pick a part: `additive` adds it to the selection, or takes it away again. */
+  onPick: (partId: string, additive: boolean) => void;
   onFit: (slotId: string, partId: string | null) => void;
   onToggleVisible: (partId: string) => void;
   onIsolate: (partId: string) => void;
@@ -42,8 +42,7 @@ function PartCard({
   selected,
   marked,
   multiSelect,
-  onSelect,
-  onMark,
+  onPick,
   onFit,
   onToggleVisible,
   onDelete,
@@ -53,8 +52,7 @@ function PartCard({
   selected: boolean;
   marked: boolean;
   multiSelect?: boolean;
-  onSelect: () => void;
-  onMark: () => void;
+  onPick: (additive: boolean) => void;
   onFit: () => void;
   onToggleVisible: () => void;
   onDelete: () => void;
@@ -78,14 +76,9 @@ function PartCard({
         type="button"
         // A modified click adds to the selection instead of replacing it,
         // which is what every other parts list works like.
-        onClick={(event) => {
-          if (event.metaKey || event.ctrlKey || event.shiftKey || multiSelect) {
-            onMark();
-            onSelect();
-          } else {
-            onSelect();
-          }
-        }}
+        onClick={(event) =>
+          onPick(event.metaKey || event.ctrlKey || event.shiftKey || Boolean(multiSelect))
+        }
         onDoubleClick={onFit}
         className="block w-full text-left"
         title={`${part.name} — click to select, ⌘/Ctrl-click to add to the selection, double-click to fit`}
@@ -153,8 +146,7 @@ function SlotLane({
   selectedId,
   marked,
   multiSelect,
-  onSelect,
-  onMark,
+  onPick,
   onFit,
   onToggleVisible,
   onDelete,
@@ -164,8 +156,7 @@ function SlotLane({
   selectedId: string | null;
   marked: Set<string>;
   multiSelect?: boolean;
-  onSelect: (id: string) => void;
-  onMark: (id: string) => void;
+  onPick: (id: string, additive: boolean) => void;
   onFit: (slotId: string, partId: string | null) => void;
   onToggleVisible: (id: string) => void;
   onDelete: (id: string) => void;
@@ -200,8 +191,7 @@ function SlotLane({
               selected={selectedId === part.id}
               marked={marked.has(part.id)}
               multiSelect={multiSelect}
-              onSelect={() => onSelect(part.id)}
-              onMark={() => onMark(part.id)}
+              onPick={(additive) => onPick(part.id, additive)}
               onFit={() => onFit(slot.id, part.id)}
               onToggleVisible={() => onToggleVisible(part.id)}
               onDelete={() => onDelete(part.id)}
@@ -218,8 +208,7 @@ export function Gallery({
   selectedId,
   marked,
   multiSelect,
-  onSelect,
-  onMark,
+  onPick,
   onFit,
   onToggleVisible,
   onIsolate,
@@ -322,12 +311,12 @@ export function Gallery({
                         type="button"
                         className="min-h-11 min-w-0 flex-1 truncate rounded px-1 text-left text-[0.75rem] font-semibold text-slate-800 hover:bg-slate-100"
                         title={part.name}
-                        onClick={(event) => {
-                          if (event.metaKey || event.ctrlKey || event.shiftKey || multiSelect) {
-                            onMark(part.id);
-                          }
-                          onSelect(part.id);
-                        }}
+                        onClick={(event) =>
+                          onPick(
+                            part.id,
+                            event.metaKey || event.ctrlKey || event.shiftKey || Boolean(multiSelect)
+                          )
+                        }
                       >
                         {part.name}
                         {focusId === part.id ? (
@@ -349,7 +338,7 @@ export function Gallery({
                         disabled={fixBusy}
                         onClick={(event) => {
                           event.stopPropagation();
-                          onSelect(part.id);
+                          onPick(part.id, false);
                           onFix(part.id);
                         }}
                       >
@@ -370,8 +359,7 @@ export function Gallery({
             selectedId={selectedId}
             marked={marked}
             multiSelect={multiSelect}
-            onSelect={onSelect}
-            onMark={onMark}
+            onPick={onPick}
             onFit={onFit}
             onToggleVisible={onToggleVisible}
             onDelete={onDelete}
@@ -393,9 +381,8 @@ export function Gallery({
                     selected={selectedId === part.id}
                     marked={marked.has(part.id)}
                     multiSelect={multiSelect}
-                    onSelect={() => onSelect(part.id)}
-                    onMark={() => onMark(part.id)}
-                    onFit={() => onSelect(part.id)}
+                    onPick={(additive) => onPick(part.id, additive)}
+                    onFit={() => onPick(part.id, false)}
                     onToggleVisible={() => onToggleVisible(part.id)}
                     onDelete={() => onDelete(part.id)}
                   />

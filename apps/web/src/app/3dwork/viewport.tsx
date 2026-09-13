@@ -11,12 +11,20 @@
  * The gunsmith callouts are HTML, not WebGL. Their world anchors are projected
  * to screen space inside the render loop and written straight to the DOM, so
  * dragging the camera never triggers a React render.
+ *
+ * The 3D Builder view draws the same scene the way Microsoft 3D Builder does:
+ * plain grey parts under even light, a blue outline around every picked part,
+ * and a drag on any picked part moves all of them.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
 import { isSlowMachine } from '@/lib/3dwork/slow-machine';
@@ -51,7 +59,15 @@ export interface ViewportCallout {
 interface ViewportProps {
   parts: ViewportPart[];
   selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  /** Every picked part: the selected one and any marked alongside it. */
+  pickedIds: string[];
+  /** A tap on a part or on nothing; `additive` when Ctrl, ⌘ or Shift was held. */
+  onSelect: (id: string | null, additive: boolean) => void;
+  /**
+   * 3D Builder view: plain grey parts under even light, a blue outline around
+   * every picked part, and a drag on any picked part moves all of them.
+   */
+  builder: boolean;
   wireframe: boolean;
   showGrid: boolean;
   /** Isolate: the selected part stays solid, everything else goes to glass. */
@@ -73,7 +89,7 @@ interface ViewportProps {
   frameToken: number;
   /** When true, parts can be put into move mode and dragged. */
   dragEnabled: boolean;
-  /** The part currently in move mode — only it is grabbable in the view. */
+  /** The part currently in move mode — only it is grabbable in the plain view. */
   moveModeId: string | null;
   /** Whether a grab translates the part or spins it. */
   manipMode: 'move' | 'rotate';
@@ -94,8 +110,8 @@ interface ViewportProps {
   onSnapHint?: (hint: string | null) => void;
   /** Double-tap on a part: put it into move mode. */
   onEnterMoveMode: (id: string) => void;
-  /** Commit a world-space move of a part (delta added to its offset). */
-  onDragMove: (id: string, delta: { x: number; y: number; z: number }) => void;
+  /** Commit a world-space move of parts (the same delta added to each offset). */
+  onDragMove: (ids: string[], delta: { x: number; y: number; z: number }) => void;
   /** Commit a rotation of a part (delta degrees added to its rotation). */
   onDragRotate: (id: string, delta: { x: number; y: number; z: number }) => void;
 }
@@ -103,6 +119,17 @@ interface ViewportProps {
 const DEG = Math.PI / 180;
 const EASE = 0.18;
 const GHOST_COLOR = '#38bdf8';
+/** Box around each part marked alongside the selected one, in the plain view. */
+const MARKED_BOX_COLOR = 0x0ea5e9;
+const PLAIN_BACKGROUND = 0xd5d8dc;
+/** The 3D Builder view's palette. */
+const BUILDER_PART = '#c5c9cf';
+const BUILDER_PICKED = '#a9ccf2';
+const BUILDER_OUTLINE = '#1a6fe0';
+const BUILDER_OUTLINE_HIDDEN = '#86b1ea';
+/** Light intensities per view: sky, key, fill, and the headlight on the camera. */
+const PLAIN_LIGHTS = { hemi: 1.4, key: 1.8, fill: 0.55, head: 0 };
+const BUILDER_LIGHTS = { hemi: 0.9, key: 1.0, fill: 0.3, head: 1.5 };
 
 function makeCheckerFloor(sizeMm = 1600): THREE.Mesh {
   const canvas = document.createElement('canvas');
@@ -133,6 +160,62 @@ function makeCheckerFloor(sizeMm = 1600): THREE.Mesh {
   return mesh;
 }
 
+/** A pale build plate ruled every 10 mm, the way 3D Builder draws its platform. */
+function makeBuilderFloor(sizeMm = 1600): THREE.Group {
+  const floor = new THREE.Group();
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(sizeMm, sizeMm),
+    // Pushed back in depth so the grid lines never flicker through it.
+    new THREE.MeshBasicMaterial({
+      color: 0xeef2f7,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    })
+  );
+  plate.rotation.x = -Math.PI / 2;
+  plate.position.y = -0.4;
+  floor.add(plate);
+  const fine = new THREE.GridHelper(sizeMm, sizeMm / 10, 0xd9e2ee, 0xd9e2ee);
+  fine.position.y = -0.4;
+  floor.add(fine);
+  // Drawn after the fine lines at the same depth, so it wins where they cross.
+  const coarse = new THREE.GridHelper(sizeMm, sizeMm / 50, 0xa9bdd8, 0xa9bdd8);
+  coarse.position.y = -0.4;
+  coarse.renderOrder = 1;
+  floor.add(coarse);
+  return floor;
+}
+
+/** Light at the top fading to cool grey at the bottom, behind the builder view. */
+function makeBuilderBackground(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, '#fbfcfd');
+    gradient.addColorStop(1, '#d6dce4');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 2, 256);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Free the geometry and materials of everything under an object. */
+function disposeTree(root: THREE.Object3D): void {
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+      child.geometry.dispose();
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      for (const material of materials) material.dispose();
+    }
+  });
+}
+
 /** Callout lane geometry, in pixels. */
 const LANE_TOP = 44;
 const LANE_BOTTOM_INSET = 76;
@@ -147,11 +230,43 @@ interface SceneRefs {
   meshRoot: THREE.Group;
   overlay: THREE.Group;
   paintMarks: THREE.Group;
+  /** The plain view's checker floor. */
   grid: THREE.Object3D;
+  /** The builder view's build plate. */
+  plate: THREE.Group;
   selection: THREE.BoxHelper;
+  /** A box around each marked part, in the plain view. */
+  markedBoxes: THREE.Group;
+  lights: {
+    hemi: THREE.HemisphereLight;
+    key: THREE.DirectionalLight;
+    fill: THREE.DirectionalLight;
+    head: THREE.DirectionalLight;
+  };
+  backgrounds: { plain: THREE.Color; builder: THREE.Texture };
+  /** Draws the builder view with its outline; null on a slow machine. */
+  composer: EffectComposer | null;
+  outline: OutlinePass | null;
+  builder: boolean;
+  slow: boolean;
   meshes: Map<string, THREE.Mesh>;
   targets: Map<string, THREE.Vector3>;
   raf: number;
+}
+
+/** A grab in progress: the part held, and any picked parts riding along with it. */
+interface Grab {
+  id: string;
+  startClient: { x: number; y: number };
+  startPoint: THREE.Vector3;
+  startPos: THREE.Vector3;
+  startRot: THREE.Euler;
+  mode: 'move' | 'rotate';
+  /** Axis lock: move mode's setting, or none for a drag in the builder view. */
+  axis: 'xyz' | 'x' | 'y' | 'z';
+  /** The other picked parts moving with it, by where each one started. */
+  riders: Map<string, THREE.Vector3>;
+  moved: boolean;
 }
 
 function buildGeometry(soup: Float32Array): THREE.BufferGeometry {
@@ -170,7 +285,9 @@ function buildGeometry(soup: Float32Array): THREE.BufferGeometry {
 export function Viewport({
   parts,
   selectedId,
+  pickedIds,
   onSelect,
+  builder,
   wireframe,
   showGrid,
   xray,
@@ -211,9 +328,15 @@ export function Viewport({
   const calloutData = useRef<ViewportCallout[]>(callouts);
   calloutData.current = callouts;
 
+  // A new array every render; the effects key on what is in it instead.
+  const pickedKey = pickedIds.join('\n');
+  const picked = useMemo(() => new Set(pickedKey ? pickedKey.split('\n') : []), [pickedKey]);
+
   // Handlers change every render; a ref keeps the pointer listener stable.
   const handlers = useRef({
     onSelect,
+    pickedIds,
+    builder,
     onMeasurePoint,
     measuring,
     painting,
@@ -237,6 +360,8 @@ export function Viewport({
   });
   handlers.current = {
     onSelect,
+    pickedIds,
+    builder,
     onMeasurePoint,
     measuring,
     painting,
@@ -278,7 +403,9 @@ export function Viewport({
     renderer.domElement.style.inset = '0';
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xd5d8dc);
+    const plainBackground = new THREE.Color(PLAIN_BACKGROUND);
+    const builderBackground = makeBuilderBackground();
+    scene.background = plainBackground;
     const camera = new THREE.PerspectiveCamera(
       35,
       (host.clientWidth || 1) / (host.clientHeight || 1),
@@ -300,16 +427,25 @@ export function Viewport({
       pmrem.dispose();
     }
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xb8bec9, 1.4));
-    const key = new THREE.DirectionalLight(0xffffff, 1.8);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xb8bec9, PLAIN_LIGHTS.hemi);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffffff, PLAIN_LIGHTS.key);
     key.position.set(1, 2, 1.4);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.55);
+    const fill = new THREE.DirectionalLight(0xffffff, PLAIN_LIGHTS.fill);
     fill.position.set(-1.4, 0.6, -1);
     scene.add(fill);
+    // Shines from the camera in the builder view, so whatever you look at is
+    // lit. It stays in the scene, dark, in the plain view: switching views then
+    // never recompiles every material for a different number of lights.
+    const head = new THREE.DirectionalLight(0xffffff, PLAIN_LIGHTS.head);
+    scene.add(head, head.target);
 
     const grid = makeCheckerFloor();
     scene.add(grid);
+    const plate = makeBuilderFloor();
+    plate.visible = false;
+    scene.add(plate);
 
     const meshRoot = new THREE.Group();
     scene.add(meshRoot);
@@ -321,6 +457,31 @@ export function Viewport({
     const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xd97706);
     selection.visible = false;
     scene.add(selection);
+    const markedBoxes = new THREE.Group();
+    scene.add(markedBoxes);
+
+    // The builder view's outline is a post-processing pass. It draws into a
+    // multisampled target so edges stay as smooth as on the canvas itself.
+    let composer: EffectComposer | null = null;
+    let outline: OutlinePass | null = null;
+    if (!slow) {
+      const width = host.clientWidth || 1;
+      const height = host.clientHeight || 1;
+      composer = new EffectComposer(
+        renderer,
+        new THREE.WebGLRenderTarget(width, height, { type: THREE.HalfFloatType, samples: 4 })
+      );
+      composer.setSize(width, height);
+      composer.addPass(new RenderPass(scene, camera));
+      outline = new OutlinePass(new THREE.Vector2(width, height), scene, camera);
+      outline.edgeStrength = 6;
+      outline.edgeThickness = 1;
+      outline.edgeGlow = 0;
+      outline.visibleEdgeColor.set(BUILDER_OUTLINE);
+      outline.hiddenEdgeColor.set(BUILDER_OUTLINE_HIDDEN);
+      composer.addPass(outline);
+      composer.addPass(new OutputPass());
+    }
 
     const state: SceneRefs = {
       renderer,
@@ -331,7 +492,15 @@ export function Viewport({
       overlay,
       paintMarks,
       grid,
+      plate,
       selection,
+      markedBoxes,
+      lights: { hemi, key, fill, head },
+      backgrounds: { plain: plainBackground, builder: builderBackground },
+      composer,
+      outline,
+      builder: false,
+      slow,
       meshes: new Map(),
       targets: new Map(),
       raf: 0,
@@ -427,8 +596,14 @@ export function Viewport({
         }
       }
       if (state.selection.visible) state.selection.update();
+      for (const box of state.markedBoxes.children) (box as THREE.BoxHelper).update();
       state.controls.update();
-      state.renderer.render(state.scene, state.camera);
+      if (state.builder) {
+        head.position.copy(camera.position);
+        head.target.position.copy(controls.target);
+      }
+      if (state.builder && state.composer) state.composer.render();
+      else state.renderer.render(state.scene, state.camera);
       layoutCallouts();
     };
     tick();
@@ -452,6 +627,7 @@ export function Viewport({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
+      composer?.setSize(width, height);
     });
     observer.observe(host);
 
@@ -464,18 +640,8 @@ export function Viewport({
     const ROT_PER_PX = 0.35; // degrees of rotation per pixel dragged
     let downAt: { x: number; y: number } | null = null;
     let lastTap: { id: string; t: number } = { id: '', t: 0 };
-    // Set while a move-mode grab is in progress; null the rest of the time.
-    let drag:
-      | {
-          id: string;
-          startClient: { x: number; y: number };
-          startPoint: THREE.Vector3;
-          startPos: THREE.Vector3;
-          startRot: THREE.Euler;
-          mode: 'move' | 'rotate';
-          moved: boolean;
-        }
-      | null = null;
+    // Set while a grab is in progress; null the rest of the time.
+    let drag: Grab | null = null;
     let paintStroke = false;
     const localHit = new THREE.Vector3();
 
@@ -500,6 +666,33 @@ export function Viewport({
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
 
+    /** Put every part riding along with a grab at the same offset as the part held. */
+    const carryRiders = (grab: Grab, held: THREE.Mesh) => {
+      for (const [riderId, start] of grab.riders) {
+        state.meshes
+          .get(riderId)
+          ?.position.set(
+            start.x + held.position.x - grab.startPos.x,
+            start.y + held.position.y - grab.startPos.y,
+            start.z + held.position.z - grab.startPos.z
+          );
+      }
+    };
+
+    /** Keep a part's ease target where the drag put it, so it does not spring back. */
+    const holdTarget = (id: string, position: THREE.Vector3) => {
+      const target = state.targets.get(id);
+      if (target) target.copy(position);
+      else state.targets.set(id, position.clone());
+    };
+
+    /** Whether the ray passes through the box of any of these parts — cheap next to a raycast. */
+    const rayNears = (ids: readonly (string | null)[]) =>
+      ids.some((id) => {
+        const mesh = id ? state.meshes.get(id) : undefined;
+        return mesh ? raycaster.ray.intersectsBox(worldBox.setFromObject(mesh)) : false;
+      });
+
     const onPointerDown = (event: PointerEvent) => {
       downAt = { x: event.clientX, y: event.clientY };
       drag = null;
@@ -516,16 +709,30 @@ export function Viewport({
         paintAtEvent(event);
         return;
       }
-      // A grab moves or rotates only the part that is in move mode; everything
-      // else — including a merely-selected part — still orbits the camera.
-      if (!h.dragEnabled || h.measuring || !event.isPrimary || !h.moveModeId) return;
+      // A grab moves or rotates the part in move mode, and in the builder view a
+      // grab on any picked part moves every picked part. Everything else — a
+      // merely selected part in the plain view, the right and middle buttons —
+      // still works the camera.
+      if (!h.dragEnabled || h.measuring || !event.isPrimary || event.button !== 0) return;
+      const grabbable = h.builder ? [h.moveModeId, ...h.pickedIds] : [h.moveModeId];
       setPointer(event);
       raycaster.setFromCamera(pointer, camera);
+      if (!rayNears(grabbable)) return;
       const hits = raycaster.intersectObjects([...state.meshes.values()], false);
       if (hits.length === 0) return;
       const id = (hits[0].object as THREE.Mesh).userData.partId as string | undefined;
       const mesh = id ? state.meshes.get(id) : undefined;
-      if (!id || id !== h.moveModeId || !mesh) return;
+      if (!id || !mesh || !grabbable.includes(id)) return;
+
+      const armed = id === h.moveModeId;
+      const mode = armed ? h.manipMode : 'move';
+      const riders = new Map<string, THREE.Vector3>();
+      if (mode === 'move' && h.pickedIds.includes(id)) {
+        for (const other of h.pickedIds) {
+          const rider = other === id ? undefined : state.meshes.get(other);
+          if (rider) riders.set(other, rider.position.clone());
+        }
+      }
 
       // Move within the plane that faces the camera, through the grab point.
       camera.getWorldDirection(camDir);
@@ -536,7 +743,9 @@ export function Viewport({
         startPoint: hits[0].point.clone(),
         startPos: mesh.position.clone(),
         startRot: mesh.rotation.clone(),
-        mode: h.manipMode,
+        mode,
+        axis: armed ? h.moveAxis : 'xyz',
+        riders,
         moved: false,
       };
       // Stop the orbit for this gesture. OrbitControls already saw the down, but
@@ -556,47 +765,50 @@ export function Viewport({
         return;
       }
       if (!drag) return;
-      const mesh = state.meshes.get(drag.id);
+      const grab = drag;
+      const mesh = state.meshes.get(grab.id);
       if (!mesh) return;
       const h = handlers.current;
-      if (drag.mode === 'rotate') {
-        const yawPx = (event.clientX - drag.startClient.x) * ROT_PER_PX;
-        const pitchPx = (event.clientY - drag.startClient.y) * ROT_PER_PX;
+      if (grab.mode === 'rotate') {
+        const yawPx = (event.clientX - grab.startClient.x) * ROT_PER_PX;
+        const pitchPx = (event.clientY - grab.startClient.y) * ROT_PER_PX;
         const step = Math.max(0.1, h.rotateStep);
         const axis = h.rotateAxis;
-        const next = drag.startRot.clone();
+        const next = grab.startRot.clone();
         if (axis === 'x' || axis === 'y' || axis === 'z') {
           // Dominant screen axis drives a single world axis — the CAD way to
           // get a rotation to land where you meant it.
           const raw = Math.abs(yawPx) >= Math.abs(pitchPx) ? yawPx : -pitchPx;
-          const abs = drag.startRot[axis] / DEG + raw;
+          const abs = grab.startRot[axis] / DEG + raw;
           next[axis] = snapAngle(abs, step) * DEG;
         } else if (event.shiftKey) {
-          next.z = snapAngle(drag.startRot.z / DEG + yawPx, step) * DEG;
+          next.z = snapAngle(grab.startRot.z / DEG + yawPx, step) * DEG;
         } else {
-          next.x = snapAngle(drag.startRot.x / DEG + pitchPx, step) * DEG;
-          next.y = snapAngle(drag.startRot.y / DEG + yawPx, step) * DEG;
+          next.x = snapAngle(grab.startRot.x / DEG + pitchPx, step) * DEG;
+          next.y = snapAngle(grab.startRot.y / DEG + yawPx, step) * DEG;
         }
         mesh.rotation.copy(next);
       } else {
         setPointer(event);
         raycaster.setFromCamera(pointer, camera);
         if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
-        const x = drag.startPos.x + (dragPoint.x - drag.startPoint.x);
-        const y = drag.startPos.y + (dragPoint.y - drag.startPoint.y);
-        const z = drag.startPos.z + (dragPoint.z - drag.startPoint.z);
-        const lock = h.moveAxis;
+        const lock = grab.axis;
         mesh.position.set(
-          lock === 'y' || lock === 'z' ? drag.startPos.x : x,
-          lock === 'x' || lock === 'z' ? drag.startPos.y : y,
-          lock === 'x' || lock === 'y' ? drag.startPos.z : z
+          lock === 'y' || lock === 'z' ? grab.startPos.x : grab.startPos.x + (dragPoint.x - grab.startPoint.x),
+          lock === 'x' || lock === 'z' ? grab.startPos.y : grab.startPos.y + (dragPoint.y - grab.startPoint.y),
+          lock === 'x' || lock === 'y' ? grab.startPos.z : grab.startPos.z + (dragPoint.z - grab.startPoint.z)
         );
-        mesh.updateMatrixWorld();
+        carryRiders(grab, mesh);
 
+        // Everything that moves snaps as one block against everything that does not.
         worldBox.setFromObject(mesh);
+        for (const riderId of grab.riders.keys()) {
+          const rider = state.meshes.get(riderId);
+          if (rider) worldBox.expandByObject(rider);
+        }
         if (!worldBox.isEmpty()) {
           const neighbors = h.snapNeighbors
-            .filter((entry) => entry.id !== drag!.id)
+            .filter((entry) => entry.id !== grab.id && !grab.riders.has(entry.id))
             .map((entry) => entry.box);
           const snap = snapTranslation(
             {
@@ -614,15 +826,17 @@ export function Viewport({
           mesh.position.x += snap.delta.x;
           mesh.position.y += snap.delta.y;
           mesh.position.z += snap.delta.z;
+          carryRiders(grab, mesh);
           h.onSnapHint?.(snapHint(snap.hits));
         }
 
-        // Keep the ease target in step so the part does not spring back.
-        const target = state.targets.get(drag.id);
-        if (target) target.copy(mesh.position);
-        else state.targets.set(drag.id, mesh.position.clone());
+        holdTarget(grab.id, mesh.position);
+        for (const riderId of grab.riders.keys()) {
+          const rider = state.meshes.get(riderId);
+          if (rider) holdTarget(riderId, rider.position);
+        }
       }
-      if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 4) drag.moved = true;
+      if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 4) grab.moved = true;
     };
 
     const onPointerUp = (event: PointerEvent) => {
@@ -638,7 +852,13 @@ export function Viewport({
         downAt = null;
         return;
       }
+
+      const h = handlers.current;
+      // A grab that turns out to be a tap already knows its part.
+      let tappedId: string | undefined;
       if (drag) {
+        const grab = drag;
+        drag = null;
         state.controls.enabled = true;
         renderer.domElement.style.cursor = '';
         try {
@@ -646,33 +866,37 @@ export function Viewport({
         } catch {
           /* nothing captured */
         }
-        const mesh = state.meshes.get(drag.id);
-        const h = handlers.current;
-        if (drag.moved && mesh) {
-          if (drag.mode === 'rotate') {
-            h.onDragRotate(drag.id, {
-              x: (mesh.rotation.x - drag.startRot.x) / DEG,
-              y: (mesh.rotation.y - drag.startRot.y) / DEG,
-              z: (mesh.rotation.z - drag.startRot.z) / DEG,
+        h.onSnapHint?.(null);
+        const mesh = state.meshes.get(grab.id);
+        if (grab.moved && mesh) {
+          if (grab.mode === 'rotate') {
+            h.onDragRotate(grab.id, {
+              x: (mesh.rotation.x - grab.startRot.x) / DEG,
+              y: (mesh.rotation.y - grab.startRot.y) / DEG,
+              z: (mesh.rotation.z - grab.startRot.z) / DEG,
             });
           } else {
-            h.onDragMove(drag.id, {
-              x: mesh.position.x - drag.startPos.x,
-              y: mesh.position.y - drag.startPos.y,
-              z: mesh.position.z - drag.startPos.z,
+            h.onDragMove([grab.id, ...grab.riders.keys()], {
+              x: mesh.position.x - grab.startPos.x,
+              y: mesh.position.y - grab.startPos.y,
+              z: mesh.position.z - grab.startPos.z,
             });
           }
-        } else if (mesh) {
-          // A grab that never crossed the threshold is just a tap: undo any
-          // sub-threshold drift and leave the part where it was.
-          mesh.position.copy(drag.startPos);
-          mesh.rotation.copy(drag.startRot);
-          state.targets.get(drag.id)?.copy(drag.startPos);
+          downAt = null;
+          return;
         }
-        h.onSnapHint?.(null);
-        drag = null;
-        downAt = null;
-        return;
+        // A grab that never crossed the threshold is just a tap: undo any
+        // sub-threshold drift, then treat it like any other tap.
+        if (mesh) {
+          mesh.position.copy(grab.startPos);
+          mesh.rotation.copy(grab.startRot);
+          state.targets.get(grab.id)?.copy(grab.startPos);
+        }
+        for (const [riderId, start] of grab.riders) {
+          state.meshes.get(riderId)?.position.copy(start);
+          state.targets.get(riderId)?.copy(start);
+        }
+        tappedId = grab.id;
       }
 
       // Ignore the pointer-up that ends an orbit drag.
@@ -682,31 +906,33 @@ export function Viewport({
       }
       downAt = null;
 
-      setPointer(event);
-      raycaster.setFromCamera(pointer, camera);
-
-      const hits = raycaster.intersectObjects([...state.meshes.values()], false);
-      if (hits.length === 0) {
-        // Tapping empty space clears the selection (and exits move mode).
-        if (!handlers.current.measuring) handlers.current.onSelect(null);
-        return;
+      const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+      let id = tappedId;
+      if (!id) {
+        setPointer(event);
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects([...state.meshes.values()], false);
+        if (hits.length === 0) {
+          // Tapping empty space clears the selection (and exits move mode).
+          if (!h.measuring) h.onSelect(null, additive);
+          return;
+        }
+        const hit = hits[0];
+        if (h.measuring) {
+          h.onMeasurePoint([hit.point.x, hit.point.y, hit.point.z]);
+          return;
+        }
+        id = (hit.object as THREE.Mesh).userData.partId as string | undefined;
+        if (!id) return;
       }
-
-      const hit = hits[0];
-      if (handlers.current.measuring) {
-        handlers.current.onMeasurePoint([hit.point.x, hit.point.y, hit.point.z]);
-        return;
-      }
-      const id = (hit.object as THREE.Mesh).userData.partId as string | undefined;
-      if (!id) return;
       // Double-tap puts a part into move mode; a single tap just selects it.
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      if (handlers.current.dragEnabled && lastTap.id === id && now - lastTap.t < 320) {
+      if (!additive && h.dragEnabled && lastTap.id === id && now - lastTap.t < 320) {
         lastTap = { id: '', t: 0 };
-        handlers.current.onEnterMoveMode(id);
+        h.onEnterMoveMode(id);
       } else {
         lastTap = { id, t: now };
-        handlers.current.onSelect(id);
+        h.onSelect(id, additive);
       }
     };
 
@@ -733,6 +959,14 @@ export function Viewport({
       const floorMat = floor.material as THREE.MeshStandardMaterial;
       floorMat.map?.dispose();
       floorMat.dispose();
+      disposeTree(plate);
+      disposeTree(markedBoxes);
+      disposeTree(selection);
+      builderBackground.dispose();
+      if (composer) {
+        for (const pass of composer.passes) pass.dispose();
+        composer.dispose();
+      }
       renderer.dispose();
       host.removeChild(renderer.domElement);
       refs.current = null;
@@ -808,6 +1042,16 @@ export function Viewport({
         material.transparent = true;
         material.opacity = 0.2;
         material.depthWrite = false;
+      } else if (builder) {
+        // One matte grey, so the shape reads rather than the finish; picked
+        // parts take a blue tint under their outline.
+        material.color.set(picked.has(part.id) ? BUILDER_PICKED : BUILDER_PART);
+        material.metalness = 0;
+        material.roughness = 0.65;
+        material.envMapIntensity = 0.7;
+        material.transparent = part.dimmed;
+        material.opacity = part.dimmed ? 0.22 : 1;
+        material.depthWrite = !part.dimmed;
       } else {
         material.color.set(part.color);
         material.metalness = part.metalness;
@@ -827,23 +1071,60 @@ export function Viewport({
       mesh.scale.set(part.scale.x, part.scale.y, part.scale.z);
       state.targets.set(part.id, new THREE.Vector3(part.target.x, part.target.y, part.target.z));
     }
-  }, [parts, wireframe, xray, selectedId]);
+  }, [parts, wireframe, xray, selectedId, builder, picked]);
 
+  // Boxes around the selected and marked parts in the plain view.
   useEffect(() => {
     const state = refs.current;
     if (!state) return;
-    const mesh = selectedId ? state.meshes.get(selectedId) : undefined;
+    const stale = state.markedBoxes.children.slice();
+    state.markedBoxes.clear();
+    for (const box of stale) disposeTree(box);
+
+    // The builder view outlines picked parts instead of boxing them.
+    const mesh = selectedId && !builder ? state.meshes.get(selectedId) : undefined;
     state.selection.visible = Boolean(mesh);
     if (mesh) {
       state.selection.setFromObject(mesh);
       state.selection.update();
     }
-  }, [selectedId, parts]);
+    if (builder) return;
+    for (const id of picked) {
+      const marked = id === selectedId ? undefined : state.meshes.get(id);
+      if (marked) state.markedBoxes.add(new THREE.BoxHelper(marked, MARKED_BOX_COLOR));
+    }
+  }, [selectedId, picked, builder, parts]);
 
+  // The builder view's outline follows the picked parts.
   useEffect(() => {
     const state = refs.current;
-    if (state) state.grid.visible = showGrid;
-  }, [showGrid]);
+    if (!state?.outline) return;
+    state.outline.selectedObjects = builder
+      ? [...picked].flatMap((id) => {
+          const mesh = state.meshes.get(id);
+          return mesh ? [mesh] : [];
+        })
+      : [];
+  }, [builder, picked, parts]);
+
+  // Switch the look between the plain view and the builder view.
+  useEffect(() => {
+    const state = refs.current;
+    if (!state) return;
+    state.builder = builder;
+    state.scene.background = builder ? state.backgrounds.builder : state.backgrounds.plain;
+    // Neutral keeps a grey part grey; the filmic curve of the plain view suits metal.
+    state.renderer.toneMapping = builder ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
+    state.renderer.toneMappingExposure = builder ? 1 : 1.05;
+    const lights = builder ? BUILDER_LIGHTS : PLAIN_LIGHTS;
+    // Without the room reflections of a fast machine the sky has to do more.
+    state.lights.hemi.intensity = builder && state.slow ? lights.hemi * 2 : lights.hemi;
+    state.lights.key.intensity = lights.key;
+    state.lights.fill.intensity = lights.fill;
+    state.lights.head.intensity = lights.head;
+    state.grid.visible = showGrid && !builder;
+    state.plate.visible = showGrid && builder;
+  }, [builder, showGrid]);
 
   // Redraw the ruler: a dot per click, a line between consecutive pairs.
   useEffect(() => {
