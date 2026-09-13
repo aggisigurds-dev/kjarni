@@ -35,5 +35,5 @@ export function shouldLockDesktop(screenW: number, screenH: number, innerW: numb
 
 export function isStationDesktopPath(pathname: string): boolean {
   if (/\/kjarni\/turbopaint(\/|$)/.test(pathname)) return false;
-  return /\/(kjarni|stjorn|kerfi|skjalarinn|draft)(\/|$)/.test(pathname);
+  return /\/(kjarni|stjorn|bord|kerfi|skjalarinn|draft)(\/|$)/.test(pathname);
 }

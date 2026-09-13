@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="is">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stjórnborð — Ragnarök</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@11/dist/gridstack.min.css">
+<style>
+/* ===== RAGNARÖK theme (inlined from prototypes/ragnarok.css) ===== */
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+:root{
+  --rg-gold-100:#fff4d1;--rg-gold-200:#ffe7a8;--rg-gold-300:#ffd98a;--rg-gold-400:#ffcf6a;
+  --rg-gold-500:#e6b04a;--rg-gold-600:#c9982f;--rg-gold-700:#b5651d;--rg-gold-800:#7a3a0c;--rg-gold-900:#3e1a06;
+  --rg-ember-100:#fff0c0;--rg-ember-300:#ffb347;--rg-ember-500:#ff9a3a;--rg-ember-600:#ff8c2a;--rg-ember-700:#d2691e;--rg-ember-900:#5a2a08;
+  --rg-red:#ff5a2a;
+  --rg-black:#020202;--rg-steel-900:#030303;--rg-steel-800:#070707;--rg-steel-700:#0c0c0c;--rg-steel-600:#141414;--rg-steel-500:#1c1c1c;
+  --rg-text:#f3e4bf;--rg-text-gold:#ffcf6a;--rg-text-dim:#bf9a5d;--rg-text-muted:#9c7a45;--rg-text-faint:#7d6238;
+  --rg-font:'Chakra Petch',monospace;--rg-mono:'JetBrains Mono',monospace;
+  --rg-glow:0 0 22px rgba(255,120,40,.3);--rg-glow-strong:0 0 22px rgba(255,120,40,.5);--rg-glow-text:0 0 10px rgba(255,140,40,.7);--rg-shadow:0 8px 24px rgba(0,0,0,.7);
+  --rg-steel:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px),linear-gradient(180deg,#141414 0%,#030303 100%);
+  --rg-steel-deep:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px),linear-gradient(180deg,#1c1c1c,#070707);
+  --rg-steel-lit:linear-gradient(180deg,#3a2a10,#141414);
+  --rg-ground:radial-gradient(ellipse 30% 12% at 8% 62%,rgba(140,60,12,.35),transparent 70%),radial-gradient(ellipse 26% 10% at 92% 18%,rgba(160,70,15,.3),transparent 70%),radial-gradient(ellipse 40% 8% at 50% 88%,rgba(120,50,10,.3),transparent 70%),repeating-linear-gradient(45deg,rgba(255,255,255,.02) 0 2px,transparent 2px 14px),radial-gradient(ellipse 120% 40% at 50% 28%,#1a1408 0%,#080808 40%,#020202 100%);
+  --rg-frame:repeating-linear-gradient(90deg,transparent 0 41px,rgba(5,5,5,.85) 41px 46px,transparent 46px 97px,rgba(5,5,5,.85) 97px 100px,transparent 100px 163px),repeating-linear-gradient(0deg,transparent 0 53px,rgba(5,5,5,.85) 53px 57px,transparent 57px 131px),linear-gradient(135deg,#fff0c0 0%,#ffb347 12%,#7a3a0c 26%,#ffcf6a 40%,#c9982f 52%,#ff8c2a 64%,#3e1a06 76%,#ffd98a 88%,#d2691e 100%);
+  --rg-frame-thin:repeating-linear-gradient(90deg,transparent 0 23px,rgba(5,5,5,.9) 23px 26px,transparent 26px 61px),linear-gradient(135deg,#ffcf6a,#ff8c2a 30%,#5a2a08 50%,#ffd98a 70%,#d2691e);
+  --rg-gold-fill:linear-gradient(180deg,#ffd98a,#e6b04a 50%,#b5651d);
+  --rg-gold-text:linear-gradient(180deg,#fff4d1,#ffcf6a 35%,#b5651d 55%,#ffe7a8 75%,#ff8c2a);
+  --rg-cut:14px;--rg-cut-sm:8px;
+}
+.rg-body,body.rg{margin:0;min-height:100vh;background:var(--rg-ground);background-color:var(--rg-black);color:var(--rg-text);font-family:var(--rg-font)}
+.rg a{color:var(--rg-gold-500);text-decoration:none}.rg a:hover{color:var(--rg-gold-200)}
+.rg-scanlines{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,200,90,.04) 0 1px,transparent 1px 4px);z-index:999}
+.rg-kicker{font:700 10px var(--rg-mono);letter-spacing:.3em;color:var(--rg-gold-500)}
+.rg-panel{position:relative;padding:2px;background:var(--rg-frame);box-shadow:var(--rg-glow),var(--rg-shadow);clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.rg-panel::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;background:radial-gradient(circle at 11px 11px,#fff0c0 0 1.5px,#ff8c2a 2.5px,#3e1a06 3.5px,transparent 4.5px),radial-gradient(circle at calc(100% - 11px) 11px,#fff0c0 0 1.5px,#ff8c2a 2.5px,#3e1a06 3.5px,transparent 4.5px),radial-gradient(circle at 11px calc(100% - 11px),#fff0c0 0 1.5px,#ff8c2a 2.5px,#3e1a06 3.5px,transparent 4.5px),radial-gradient(circle at calc(100% - 11px) calc(100% - 11px),#fff0c0 0 1.5px,#ff8c2a 2.5px,#3e1a06 3.5px,transparent 4.5px)}
+.rg-panel>.rg-face{padding:18px 20px;background:var(--rg-steel);clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px);height:100%;box-sizing:border-box}
+.rg-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:1.5px;border:0;background:var(--rg-frame-thin);color:var(--rg-text);cursor:pointer;font:600 12px var(--rg-font);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);transition:filter .15s;text-decoration:none}
+.rg-btn>span{white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:8px;height:100%;width:100%;padding:0 18px;box-sizing:border-box;background:var(--rg-steel-deep);color:var(--rg-text);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.rg-btn:hover{filter:brightness(1.2)}.rg-btn:active{filter:brightness(.9)}
+.rg-btn.gold{background:var(--rg-gold-fill);padding:0;color:#0a0a0a;box-shadow:0 0 12px rgba(255,140,40,.5)}.rg-btn.gold>span{background:transparent;color:#0a0a0a;font-weight:700}
+.rg-btn.sm{height:34px;font-size:11px}.rg-btn.sm>span{padding:0 12px}
+.rg-seg{display:inline-flex;gap:2px;padding:2px;background:#050505;border:1px solid rgba(201,160,74,.35)}
+.rg-seg>button{height:28px;padding:0 12px;border:0;cursor:pointer;background:transparent;color:var(--rg-text-dim);font:600 11px var(--rg-font);letter-spacing:.1em}
+.rg-seg>button.on{background:var(--rg-gold-fill);color:#0a0a0a}
+.rg-input-wrap{padding:1px;background:var(--rg-frame-thin)}
+.rg-input{width:100%;box-sizing:border-box;height:42px;padding:0 14px;border:0;outline:0;background:#050505;color:var(--rg-text);font:500 13px var(--rg-mono);letter-spacing:.04em}
+.rg-input:focus{box-shadow:inset 0 0 0 1px var(--rg-ember-500)}
+.rg ::-webkit-scrollbar{width:12px;height:12px}
+.rg ::-webkit-scrollbar-track{background:#050505}
+.rg ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#c9982f,#6e4a12);border:2px solid #050505}
+.rg ::selection{background:rgba(255,140,40,.35);color:#fff0c0}
+</style>
+<style>
+/* ===== dashboard glue over Ragnarök ===== */
+.st-topbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(201,160,74,.35);background:linear-gradient(180deg,#0c0c0c,#040404);position:sticky;top:0;z-index:50}
+.st-topbar .sp{flex:1}
+.st-badge{font:700 9px var(--rg-mono);letter-spacing:.2em;color:#0a0a0a;background:var(--rg-gold-fill);padding:3px 9px;clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.st-zoombar{display:flex;align-items:center;gap:4px}
+.st-zoombar #z-lbl{font:600 11px var(--rg-mono);color:var(--rg-text-dim);min-width:40px;text-align:center}
+.st-canvas{overflow:auto;height:calc(100vh - 112px)}
+.st-zoom{transform-origin:0 0;min-height:100%}
+.st-zoom.st-mobile{padding:14px 0}
+.st-zoom.st-mobile .grid-stack{max-width:600px;margin:0 auto;box-shadow:0 0 0 2px rgba(201,160,74,.22),0 0 30px rgba(255,120,40,.15)}
+.grid-stack{min-height:calc(100vh - 132px);padding:10px;background-image:linear-gradient(to right,rgba(201,160,74,.09) 1px,transparent 1px),linear-gradient(to bottom,rgba(201,160,74,.06) 1px,transparent 1px);background-position:10px 10px;background-size:calc((100% - 20px)/12) 68px}
+.st-mobile .grid-stack{background-size:calc((100% - 20px)/12) 68px}
+.grid-stack.st-dragging{background-image:linear-gradient(to right,rgba(255,154,58,.30) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,154,58,.22) 1px,transparent 1px)}
+.grid-stack-item-content{overflow:visible!important;background:transparent!important;padding:0!important;border:0!important}
+.st-tile{height:100%}
+.st-tile>.rg-face{padding:0!important;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.st-head{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(201,160,74,.28);background:#050505;flex:none}
+.st-drag{cursor:move;color:var(--rg-text-muted);font-size:14px;line-height:1;user-select:none}
+.st-drag:hover{color:var(--rg-gold-400)}
+.st-title{flex:1;min-width:0;font:600 11.5px var(--rg-font);letter-spacing:.08em;text-transform:uppercase;color:var(--rg-text-gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 8px rgba(255,140,40,.35)}
+.st-ic{width:26px;height:26px;display:grid;place-items:center;border:1px solid rgba(201,160,74,.28);background:#0a0a0a;color:var(--rg-text-dim);cursor:pointer;font-size:13px}
+.st-ic:hover{color:var(--rg-ember-100);border-color:var(--rg-ember-500);text-shadow:0 0 8px rgba(255,140,40,.7)}
+.st-head .st-ic{width:24px;height:24px;border:0;background:transparent}
+.st-body{flex:1;min-height:0;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+.st-sub{font:400 10px var(--rg-mono);letter-spacing:.05em;color:var(--rg-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-tile .val{font:700 18px/1.05 var(--rg-mono);color:var(--rg-text);text-shadow:0 0 10px rgba(255,140,40,.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-embed .rg-face>iframe{flex:1;min-height:0;width:100%;border:0;background:#0a0a0a}
+.st-ring-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:6px}
+.st-tile .note{flex:1;outline:none;color:var(--rg-text);font:400 13px/1.55 var(--rg-font);overflow:auto}
+.st-tile .note:empty:before{content:"Skrifaðu…";color:var(--rg-text-faint)}
+.grid-stack-item>.ui-resizable-se{width:16px;height:16px;right:3px;bottom:3px;background:linear-gradient(135deg,transparent 42%,var(--rg-ember-500) 42% 58%,transparent 58%);opacity:.6}
+.grid-stack-item>.ui-resizable-se:hover{opacity:1}
+.st-locked .st-drag{opacity:.2;pointer-events:none}
+.st-locked .grid-stack-item>.ui-resizable-se{display:none}
+.st-ovl{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:flex-start;justify-content:center;padding:56px 16px;z-index:100;overflow:auto}
+.st-ovl.open{display:flex}
+.st-modal{width:min(760px,96vw)}
+.st-modal>.rg-face{padding:18px 20px}
+.st-gal-group{display:block;margin:14px 0 6px}
+.st-gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.st-gal-item{text-align:left;cursor:pointer;border:1px solid rgba(201,160,74,.3);background:#0a0a0a;color:var(--rg-text);padding:10px 12px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.st-gal-item:hover{border-color:var(--rg-ember-500);box-shadow:0 0 10px rgba(255,120,40,.3)}
+.st-gal-item b{display:block;font:600 12.5px var(--rg-font);color:var(--rg-text-gold)}
+.st-gal-item small{font:400 9.5px var(--rg-mono);letter-spacing:.14em;color:var(--rg-text-muted);text-transform:uppercase}
+.st-fld{display:block;margin:10px 0}
+.st-fld label{display:block;font:500 10px var(--rg-mono);letter-spacing:.1em;color:var(--rg-text-dim);margin-bottom:5px;text-transform:uppercase}
+.st-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0a0a0a;border:1px solid var(--rg-ember-500);color:var(--rg-text);padding:10px 16px;font:500 12px var(--rg-font);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 0 16px rgba(255,120,40,.4);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.st-toast.show{opacity:1}
+.st-errb{display:none;padding:10px 16px;color:var(--rg-red);font:500 12px var(--rg-mono)}
+</style>
+</head>
+<body class="rg-body rg">
+<div class="rg-scanlines"></div>
+<div class="st-topbar">
+  <span class="rg-kicker">◧ STJÓRNBORÐ</span>
+  <span class="st-badge">FRUMGERÐ</span>
+  <span class="sp"></span>
+  <div class="rg-seg" id="mode-seg"><button data-mode="desktop">Skjár</button><button data-mode="mobile">Sími</button></div>
+  <div class="st-zoombar">
+    <button class="st-ic" id="z-out" title="Minnka aðdrátt">−</button>
+    <span id="z-lbl">100%</span>
+    <button class="st-ic" id="z-in" title="Auka aðdrátt">+</button>
+    <button class="st-ic" id="z-fit" title="Núlla aðdrátt">⤢</button>
+  </div>
+  <button class="rg-btn sm" id="btn-lock" title="Læsa / opna útlit"><span>🔓 Opið</span></button>
+  <button class="rg-btn gold" id="btn-add"><span>+ REITUR</span></button>
+  <button class="rg-btn sm" id="btn-reset"><span>Núllstilla</span></button>
+</div>
+<div class="st-errb" id="errb"></div>
+<div class="st-canvas" id="canvas"><div class="st-zoom" id="zoom"><div class="grid-stack"></div></div></div>
+
+<div class="st-ovl" id="ovl-gal"><div class="st-modal rg-panel"><div class="rg-face">
+  <div class="rg-kicker">◆ BÆTA VIÐ REIT</div>
+  <p style="font:400 12px var(--rg-font);color:var(--rg-text-muted);margin:6px 0 2px">Veldu tilbúinn reit — bætist á núverandi útlit (Skjár eða Sími). Breyttu (✎), færðu, stækkaðu.</p>
+  <div id="gal-body"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="rg-btn sm" data-close><span>Loka</span></button></div>
+</div></div></div>
+
+<div class="st-ovl" id="ovl-edit"><div class="st-modal rg-panel"><div class="rg-face">
+  <div class="rg-kicker">◆ BREYTA REIT</div>
+  <p id="edit-type" style="font:400 12px var(--rg-mono);color:var(--rg-text-muted);margin:6px 0 8px"></p>
+  <div id="edit-fields"></div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+    <button class="rg-btn sm" data-close><span>Hætta við</span></button>
+    <button class="rg-btn sm gold" id="edit-save"><span>Vista</span></button>
+  </div>
+</div></div></div>
+
+<div class="st-toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/gridstack@11/dist/gridstack-all.js"></script>
+<script>
+/* ===== ragnarok-ring web component (inlined) ===== */
+(() => {
+  const CSS = `
+  :host{display:inline-block;position:relative;contain:layout}
+  .w{position:relative;width:100%;height:100%;font-family:'Chakra Petch','JetBrains Mono',monospace}
+  .l{position:absolute;border-radius:50%}
+  .haze{inset:3%;background:radial-gradient(circle,rgba(255,150,40,.5) 0%,rgba(210,80,20,.22) 32%,transparent 64%);animation:pulse 3s ease-in-out infinite}
+  .r1{inset:10%;background:conic-gradient(from 0deg,#ffb347 0 38deg,transparent 38deg 52deg,#c9982f 52deg 70deg,transparent 70deg 74deg,#ff8c2a 74deg 140deg,transparent 140deg 168deg,#e6b04a 168deg 176deg,transparent 176deg 190deg,#ffcf6a 190deg 262deg,transparent 262deg 300deg,#d2691e 300deg 318deg,transparent 318deg 324deg,#ffb347 324deg 360deg);-webkit-mask:radial-gradient(circle,transparent calc(50% - 7px),#000 calc(50% - 6px),#000 calc(50% - 1px),transparent 50%);mask:radial-gradient(circle,transparent calc(50% - 7px),#000 calc(50% - 6px),#000 calc(50% - 1px),transparent 50%);filter:drop-shadow(0 0 8px rgba(255,140,40,.9));animation:spin 140s linear infinite}
+  .r2{inset:13%;background:conic-gradient(from 90deg,transparent 0 20deg,#ff9a3a 20deg 30deg,transparent 30deg 95deg,#ffd98a 95deg 160deg,transparent 160deg 200deg,#b5651d 200deg 215deg,transparent 215deg 250deg,#ffb347 250deg 330deg,transparent 330deg);-webkit-mask:radial-gradient(circle,transparent calc(50% - 3px),#000 calc(50% - 2px),#000 50%);mask:radial-gradient(circle,transparent calc(50% - 3px),#000 calc(50% - 2px),#000 50%);filter:drop-shadow(0 0 6px rgba(255,170,60,.9));animation:spinr 110s linear infinite}
+  .r3{inset:8%;background:repeating-conic-gradient(from 0deg,#ff8c2a 0deg 1deg,transparent 1deg 5.5deg,#ffcf6a 5.5deg 6deg,transparent 6deg 17deg);-webkit-mask:radial-gradient(circle,transparent calc(50% - 5px),#000 calc(50% - 4px),#000 50%);mask:radial-gradient(circle,transparent calc(50% - 5px),#000 calc(50% - 4px),#000 50%);opacity:.8;animation:spin 300s linear infinite,flicker 8s steps(1) infinite}
+  .face{inset:17%;background:radial-gradient(circle at 50% 50%,#050505 55%,rgba(60,20,5,.9) 80%,rgba(120,40,8,.5) 100%);box-shadow:inset 0 0 40px rgba(255,120,30,.35)}
+  .comet{inset:13%;border:4px solid transparent;border-top-color:#fff0c0;border-right-color:rgba(255,120,40,.6);animation:spin 18s linear infinite;filter:drop-shadow(0 0 10px rgba(255,140,40,1))}
+  canvas{position:absolute;inset:6%;width:100%;height:100%;border-radius:50%}
+  .txt{position:absolute;inset:32%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:12%;box-sizing:border-box;gap:4px;text-align:center;pointer-events:none;color:#ffcf6a;text-shadow:0 0 3px #000,0 0 6px #000,0 0 10px rgba(255,140,40,.9);font-weight:600;letter-spacing:.3em}
+  .txt small{font-size:.6em;letter-spacing:.2em;color:#ffcf6a;font-weight:600;text-shadow:0 0 3px #000,0 0 6px #000}
+  .b{position:absolute;transform:translate(-50%,-50%);font-size:9px;letter-spacing:.14em;color:#ff9a3a;text-shadow:0 0 6px rgba(255,120,30,.8)}
+  @keyframes spin{to{transform:rotate(360deg)}}@keyframes spinr{to{transform:rotate(-360deg)}}
+  @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+  @keyframes flicker{0%,92%,100%{opacity:1}93%{opacity:.4}95%{opacity:1}97%{opacity:.6}}`;
+  class RagnarokRing extends HTMLElement {
+    static get observedAttributes(){return ['size','label','sub','bearings','density'];}
+    constructor(){super();this.attachShadow({mode:'open'});}
+    connectedCallback(){this.render();}
+    disconnectedCallback(){cancelAnimationFrame(this.raf);}
+    attributeChangedCallback(){if(this.isConnected)this.render();}
+    render(){
+      cancelAnimationFrame(this.raf);
+      const size=+this.getAttribute('size')||280;
+      const label=this.getAttribute('label')||'',sub=this.getAttribute('sub')||'';
+      const fs=Math.round(size*0.045);
+      this.style.width=this.style.height=size+'px';
+      let bearings='';
+      if(this.hasAttribute('bearings'))for(let i=0;i<12;i++){const d=i*30,r=(d-90)*Math.PI/180,R=44;bearings+=`<span class="b" style="left:${50+Math.cos(r)*R}%;top:${50+Math.sin(r)*R}%">${String(d).padStart(3,'0')}</span>`;}
+      this.shadowRoot.innerHTML=`<style>${CSS}</style><div class="w">
+        <div class="l haze"></div><div class="l r1"></div><div class="l r2"></div><div class="l r3"></div><div class="l face"></div><div class="l comet"></div>
+        <canvas width="${size*2}" height="${size*2}"></canvas>${bearings}
+        <div class="txt" style="font-size:${fs}px">${label}${sub?`<small>${sub}</small>`:''}</div></div>`;
+      this.startCanvas(this.shadowRoot.querySelector('canvas'),+this.getAttribute('density')||1);
+    }
+    startCanvas(cv,k){
+      const ctx=cv.getContext('2d'),W=cv.width,C=W/2,R=W*0.35;
+      const pts=Array.from({length:Math.round(600*k)},()=>({a:Math.random()*6.28,r:Math.sqrt(Math.random())*R,s:0.6+Math.random()*1.6,w:(Math.random()-0.5)*0.004,ph:Math.random()*6.28}));
+      const arcs=Array.from({length:Math.round(40*Math.max(k,0.6))},()=>({r:R*(0.55+Math.random()*0.55),a:Math.random()*6.28,len:0.1+Math.random()*1.2,w:1+Math.random()*3,sp:(Math.random()-0.5)*0.0025,ph:Math.random()*6.28,hot:Math.random()>0.6}));
+      const sc=W/680;let t=0;
+      const draw=()=>{
+        t+=0.016;ctx.clearRect(0,0,W,W);
+        for(const a of arcs){
+          a.a+=a.sp;const fl=0.5+0.5*Math.sin(t*(0.8+a.w*0.3)+a.ph);if(fl<0.12)continue;
+          ctx.beginPath();ctx.arc(C,C,a.r+Math.sin(t+a.ph)*2,a.a,a.a+a.len);ctx.lineWidth=a.w*sc;
+          ctx.strokeStyle=a.hot?`rgba(255,${200+40*fl|0},140,${(0.35+0.6*fl).toFixed(2)})`:`rgba(${230+25*fl|0},${110+60*fl|0},30,${(0.25+0.5*fl).toFixed(2)})`;
+          ctx.shadowBlur=14*sc;ctx.shadowColor='rgba(255,140,40,0.9)';ctx.stroke();
+        }
+        ctx.shadowBlur=0;
+        for(const p of pts){
+          p.a+=p.w;const x=C+Math.cos(p.a)*p.r,y=C+Math.sin(p.a)*p.r,q=1-p.r/R,tw=0.5+0.5*Math.sin(t*2+p.ph);
+          ctx.fillStyle=`rgba(255,${Math.round(175+60*q)},${Math.round(70+90*q)},${(0.25+0.7*q*tw).toFixed(2)})`;
+          ctx.beginPath();ctx.arc(x,y,p.s*sc,0,6.28);ctx.fill();
+        }
+        const g=ctx.createRadialGradient(C,C,0,C,C,(40+6*Math.sin(t*2))*sc);
+        g.addColorStop(0,'rgba(255,250,225,1)');g.addColorStop(0.3,'rgba(255,190,80,0.8)');g.addColorStop(0.7,'rgba(230,90,20,0.35)');g.addColorStop(1,'rgba(200,60,10,0)');
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(C,C,90*sc,0,6.28);ctx.fill();
+        ctx.lineWidth=2.5*sc;ctx.shadowBlur=18*sc;ctx.shadowColor='rgba(255,200,90,1)';
+        for(let i=0;i<5;i++){const rr=(14+i*9+Math.sin(t*2+i)*4)*sc,st=t*(1.2+i*0.3)+i;ctx.beginPath();ctx.arc(C,C,rr,st,st+1.6+Math.sin(t+i));ctx.strokeStyle=`rgba(255,${210-i*20},${120-i*18},${0.9-i*0.12})`;ctx.stroke();}
+        ctx.shadowBlur=0;
+        this.raf=requestAnimationFrame(draw);
+      };
+      draw();
+    }
+  }
+  if(!customElements.get('ragnarok-ring'))customElements.define('ragnarok-ring',RagnarokRing);
+})();
+</script>
+<script>
+/* ===== Stjórnborð app ===== */
+(function(){
+  "use strict";
+  var SB_URL='https://osfdzskyvisifcwyjkuk.supabase.co';
+  var SB_KEY='sb_publishable_YVpznM5EK01qOdevQwOcIg_rMjTkT7f';
+  var LS_KEY='stjornbord_rg_v2';
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function $(s,r){return (r||document).querySelector(s);}
+  function uid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);}
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+  if(typeof GridStack==='undefined'){var eb=$('#errb');eb.style.display='block';eb.textContent='Náði ekki að hlaða Gridstack (nettenging?).';return;}
+
+  var DEF={link:{w:3,h:2},button:{w:2,h:2},embed:{w:6,h:6},data:{w:2,h:3},note:{w:3,h:3},ring:{w:3,h:6},clock:{w:3,h:2}};
+  var COLS={desktop:12,mobile:12};
+
+  var GALLERY=[
+    {group:'Búa til nýtt (frá grunni)',_new:true,items:[
+      {type:'link',title:'Nýr tengill',label:'Opna',url:''},
+      {type:'button',title:'Nýr hnappur',label:'Keyra',webhook:''},
+      {type:'data',title:'Ný gagna-teljari',label:'',source:'count',table:''},
+      {type:'embed',title:'Ný innfelld síða',url:''},
+      {type:'clock',title:'Klukka'},
+      {type:'note',title:'Nýr minnismiði',text:''},
+      {type:'ring',title:'Nýr Kjarni-hringur',label:'KJARNI',sub:''}
+    ]},
+    {group:'Lifandi gögn',items:[
+      {type:'data',title:'Fyrirtæki',label:'í kerfinu',source:'count',table:'fyrirtaeki',icon:'▤'},
+      {type:'data',title:'Viðskiptavinir',label:'customers_base',source:'count',table:'customers_base',icon:'◉'},
+      {type:'data',title:'Teya færslur',label:'fjöldi alls',source:'count',table:'teya_faerslur',icon:'▦'},
+      {type:'data',title:'Teya kortatekjur',label:'þennan mánuð',source:'teya_month',icon:'⧗'},
+      {type:'data',title:'Opin verk',label:'Verkefnalisti',source:'tasks',icon:'◈'}
+    ]},
+    {group:'Tenglar',items:[
+      {type:'link',title:'Slökkvitæki',label:'Opna appið',url:'https://slokkvitaeki.netlify.app'},
+      {type:'link',title:'Brunahólf hub',label:'Stjórnstöð',url:'https://brunaholf.netlify.app'},
+      {type:'link',title:'Drög-stöð',label:'Reikningar',url:'https://brunaholf.netlify.app/#drogstod'},
+      {type:'link',title:'n8n',label:'Sjálfvirkni',url:'https://brunaholf.app.n8n.cloud'},
+      {type:'link',title:'Supabase',label:'Gagnagrunnur',url:'https://supabase.com/dashboard/project/osfdzskyvisifcwyjkuk'},
+      {type:'link',title:'Gmail',label:'Póstur',url:'https://mail.google.com'}
+    ]},
+    {group:'Innfelldar síður',items:[
+      {type:'embed',title:'Slökkvitæki (innfellt)',url:'https://slokkvitaeki.netlify.app'},
+      {type:'embed',title:'Brunahólf hub (innfellt)',url:'https://brunaholf.netlify.app'}
+    ]},
+    {group:'Sjálfvirkni-hnappar (stubbar)',items:[
+      {type:'button',title:'Teya innflutningur',label:'Keyra'},
+      {type:'button',title:'Sækja pósta á borð',label:'Keyra'},
+      {type:'button',title:'Payday ↻',label:'Keyra'}
+    ]},
+    {group:'Jarvis',items:[
+      {type:'ring',title:'Kjarni',label:'KJARNI',sub:'SYS · ONLINE',size:240}
+    ]},
+    {group:'Annað',items:[
+      {type:'note',title:'Minnismiði',text:''}
+    ]}
+  ];
+
+  var FIELDS={
+    link:[['title','Titill'],['label','Hnappa-texti'],['url','Slóð (URL)']],
+    button:[['title','Titill'],['label','Hnappa-texti'],['webhook','n8n webhook (valfrjálst)']],
+    embed:[['title','Titill'],['url','Slóð (URL)']],
+    data:[['title','Titill'],['label','Merki'],['source','Gagnalind','select',[['count','Fjöldi í töflu'],['teya_month','Teya kortatekjur (mán.)'],['tasks','Opin verk (Verkefnalisti)']]],['table','Tafla (t.d. fyrirtaeki · uttaeki · reikningar) — fyrir „Fjölda"']],
+    note:[['title','Titill']],
+    ring:[['title','Titill'],['label','Miðju-texti'],['sub','Undirtexti']],
+    clock:[['title','Titill']]
+  };
+
+  function defaultsDesktop(){return [
+    {type:'data',title:'Fyrirtæki',label:'í kerfinu',source:'count',table:'fyrirtaeki',icon:'▤',x:0,y:0,w:3,h:3},
+    {type:'data',title:'Viðskiptavinir',label:'customers_base',source:'count',table:'customers_base',icon:'◉',x:3,y:0,w:3,h:3},
+    {type:'data',title:'Teya kortatekjur',label:'þennan mánuð',source:'teya_month',icon:'⧗',x:6,y:0,w:3,h:3},
+    {type:'data',title:'Opin verk',label:'Verkefnalisti',source:'tasks',icon:'◈',x:9,y:0,w:3,h:3},
+    {type:'link',title:'Slökkvitæki',label:'Opna appið',url:'https://slokkvitaeki.netlify.app',x:0,y:3,w:3,h:2},
+    {type:'link',title:'Brunahólf hub',label:'Stjórnstöð',url:'https://brunaholf.netlify.app',x:3,y:3,w:3,h:2},
+    {type:'button',title:'Teya innflutningur',label:'Keyra',x:6,y:3,w:3,h:2},
+    {type:'ring',title:'Kjarni',label:'KJARNI',sub:'SYS · ONLINE',size:240,x:9,y:3,w:3,h:6},
+    {type:'note',title:'Minnismiði',text:'Ragnarök-þema. Dragðu með ⠿ í rúðurnar, stækkaðu í horninu, +/− aðdráttur. Skjár/Sími = tvö útlit.',x:0,y:5,w:9,h:3}
+  ];}
+  function defaultsMobile(){return [
+    {type:'data',title:'Fyrirtæki',label:'í kerfinu',source:'count',table:'fyrirtaeki',icon:'▤',x:0,y:0,w:6,h:3},
+    {type:'data',title:'Viðskiptavinir',label:'customers',source:'count',table:'customers_base',icon:'◉',x:6,y:0,w:6,h:3},
+    {type:'data',title:'Teya',label:'þennan mánuð',source:'teya_month',icon:'⧗',x:0,y:3,w:6,h:3},
+    {type:'data',title:'Opin verk',label:'Verkefnalisti',source:'tasks',icon:'◈',x:6,y:3,w:6,h:3},
+    {type:'link',title:'Slökkvitæki',label:'Opna appið',url:'https://slokkvitaeki.netlify.app',x:0,y:6,w:12,h:2},
+    {type:'button',title:'Teya innflutningur',label:'Keyra',x:0,y:8,w:12,h:2},
+    {type:'ring',title:'Kjarni',label:'KJARNI',sub:'SYS · ONLINE',size:220,x:0,y:10,w:12,h:5},
+    {type:'note',title:'Minnismiði',text:'Sími-útlit — sér útlit frá Skjá.',x:0,y:15,w:12,h:3}
+  ];}
+
+  var saved={};
+  try{saved=JSON.parse(localStorage.getItem(LS_KEY)||'{}')||{};}catch(e){}
+  var mode=saved.mode==='mobile'?'mobile':'desktop';
+  var layouts=saved.layouts||{};
+  if(!Array.isArray(layouts.desktop)||!layouts.desktop.length)layouts.desktop=defaultsDesktop();
+  if(!Array.isArray(layouts.mobile)||!layouts.mobile.length)layouts.mobile=defaultsMobile();
+  [layouts.desktop,layouts.mobile].forEach(function(list){list.forEach(function(t){if(!t.id)t.id=uid();});});
+  var zoom=saved.zoom||{desktop:1,mobile:1};
+  var locked=!!saved.locked;
+
+  var zoomEl=$('#zoom'),canvasEl=$('#canvas'),gEl=$('.grid-stack');
+  var grid;
+  function bindGrid(){grid.on('dragstart resizestart',function(){gEl.classList.add('st-dragging');});grid.on('dragstop resizestop',function(){gEl.classList.remove('st-dragging');persist();});grid.on('change',function(){persist();});}
+  function initGrid(){gEl.innerHTML='';grid=GridStack.init({column:COLS[mode],cellHeight:60,margin:8,float:true,handle:'.st-drag',resizable:{handles:'se,e,s'},animate:true});bindGrid();}
+
+  function tiles(){return layouts[mode];}
+  function getTile(id){var l=tiles();for(var i=0;i<l.length;i++)if(String(l[i].id)===String(id))return l[i];return null;}
+
+  function headHTML(t){
+    return '<div class="st-head"><span class="st-drag" title="Draga">⠿</span><span class="st-title">'+esc(t.title)+'</span>'+
+      (t.type==='data'?'<button class="st-ic" data-act="refresh" title="Uppfæra">↻</button>':'')+
+      '<button class="st-ic" data-act="edit" title="Breyta">✎</button>'+
+      '<button class="st-ic" data-act="remove" title="Fjarlægja">✕</button></div>';
+  }
+  function bodyHTML(t){
+    if(t.type==='link')return '<div class="st-body" style="justify-content:center;align-items:center;gap:10px"><a class="rg-btn gold" href="'+esc(t.url)+'" target="_blank" rel="noopener"><span>'+esc(t.label||'Opna')+' ↗</span></a><div class="st-sub" style="text-align:center;max-width:100%">'+esc(t.url)+'</div></div>';
+    if(t.type==='button')return '<div class="st-body" style="justify-content:center;align-items:center;gap:10px"><button class="rg-btn" data-act="run"><span>'+esc(t.label||'Keyra')+'</span></button><div class="st-sub" style="text-align:center">'+(t.webhook?esc(t.webhook):'stubbur — engin webhook')+'</div></div>';
+    if(t.type==='embed')return '<div class="st-sub" style="padding:5px 8px;background:#050505;border-bottom:1px solid rgba(201,160,74,.25)">'+esc(t.url)+' <a href="'+esc(t.url)+'" target="_blank" rel="noopener" style="color:var(--rg-gold-400);float:right">↗</a></div><iframe src="'+esc(t.url)+'" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>';
+    if(t.type==='data')return '<div class="st-body"><div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--rg-text-gold);background:#050505;border:1px solid rgba(255,154,58,.45);box-shadow:inset 0 0 10px rgba(255,120,30,.3);flex-shrink:0">'+esc(t.icon||'◉')+'</span><span style="min-width:0;font:500 9.5px var(--rg-mono);letter-spacing:.1em;color:var(--rg-text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.label||'')+'</span></div><div class="val" id="val-'+t.id+'" style="margin-top:auto">…</div><div class="st-sub" id="sub-'+t.id+'"></div></div>';
+    if(t.type==='note')return '<div class="st-body"><div class="note" contenteditable="true" data-id="'+t.id+'">'+(t.text||'')+'</div></div>';
+    if(t.type==='ring')return '<div class="st-ring-wrap"><ragnarok-ring size="'+(+t.size||240)+'" label="'+esc(t.label||'KJARNI')+'" sub="'+esc(t.sub||'')+'" bearings></ragnarok-ring></div>';
+    if(t.type==='clock')return '<div class="st-body" style="justify-content:center;align-items:center;gap:4px"><div class="st-clock" data-clock style="font:700 26px var(--rg-mono);color:var(--rg-gold-300);text-shadow:0 0 10px rgba(255,140,40,.5)">–</div><div class="st-sub" data-clockdate></div></div>';
+    return '<div class="st-body"></div>';
+  }
+  function innerHTML(t){return '<div class="rg-panel st-tile st-'+t.type+'"><div class="rg-face">'+headHTML(t)+bodyHTML(t)+'</div></div>';}
+
+  function renderTile(t,auto){
+    var el=document.createElement('div');el.className='grid-stack-item';el.setAttribute('gs-id',t.id);
+    el.setAttribute('gs-w',t.w||DEF[t.type].w);el.setAttribute('gs-h',t.h||DEF[t.type].h);
+    if(!auto&&t.x!=null){el.setAttribute('gs-x',t.x);el.setAttribute('gs-y',t.y);}
+    el.innerHTML='<div class="grid-stack-item-content">'+innerHTML(t)+'</div>';
+    gEl.appendChild(el);grid.makeWidget(el);
+    if(t.type==='data')loadData(t);
+  }
+  function renderAll(){grid.batchUpdate();tiles().forEach(function(t){renderTile(t,false);});grid.commit();}
+
+  function persist(){try{var nodes=grid.save(false)||[];var by={};nodes.forEach(function(n){by[String(n.id)]=n;});tiles().forEach(function(t){var n=by[String(t.id)];if(n){t.x=n.x;t.y=n.y;t.w=n.w;t.h=n.h;}});localStorage.setItem(LS_KEY,JSON.stringify({mode:mode,layouts:layouts,zoom:zoom,locked:locked}));}catch(e){}}
+  function addTile(tpl){var t={};for(var k in tpl)t[k]=tpl[k];t.id=uid();var d=DEF[t.type]||{w:3,h:3};if(t.w==null){t.w=d.w;t.h=d.h;}tiles().push(t);renderTile(t,true);persist();toast('Reit bætt við: '+(t.title||t.type));return t.id;}
+  function removeTile(id){var el=$('.grid-stack-item[gs-id="'+id+'"]');if(el)grid.removeWidget(el);layouts[mode]=tiles().filter(function(x){return String(x.id)!==String(id);});persist();}
+
+  /* ---- zoom ---- */
+  function applyZoom(){zoomEl.style.zoom=zoom[mode];$('#z-lbl').textContent=Math.round(zoom[mode]*100)+'%';}
+  function setZoom(z){zoom[mode]=clamp(Math.round(z*100)/100,0.4,1.6);applyZoom();persist();}
+  $('#z-in').onclick=function(){setZoom(zoom[mode]+0.1);};
+  $('#z-out').onclick=function(){setZoom(zoom[mode]-0.1);};
+  $('#z-fit').onclick=function(){setZoom(1);};
+  canvasEl.addEventListener('wheel',function(e){if(e.ctrlKey){e.preventDefault();setZoom(zoom[mode]+(e.deltaY<0?0.1:-0.1));}},{passive:false});
+
+  /* ---- lock / unlock ---- */
+  function applyLock(){if(grid)grid.setStatic(locked);gEl.classList.toggle('st-locked',locked);var b=$('#btn-lock');if(b)b.innerHTML='<span>'+(locked?'🔒 Læst':'🔓 Opið')+'</span>';}
+  function toggleLock(){locked=!locked;applyLock();persist();toast(locked?'Læst — reitir hreyfast ekki':'Opið — má færa og stækka');}
+  $('#btn-lock').onclick=toggleLock;
+
+  /* ---- mode (Skjár / Sími) ---- */
+  function setModeBtns(){document.querySelectorAll('#mode-seg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-mode')===mode);});}
+  function setMode(m){if(m===mode)return;persist();mode=m;if(grid)grid.destroy(false);initGrid();zoomEl.classList.toggle('st-mobile',mode==='mobile');setModeBtns();renderAll();applyZoom();applyLock();persist();}
+  document.querySelectorAll('#mode-seg button').forEach(function(b){b.onclick=function(){setMode(b.getAttribute('data-mode'));};});
+
+  /* ---- live data ---- */
+  function sbFetch(path,extra){var h={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};if(extra)for(var k in extra)h[k]=extra[k];return fetch(SB_URL+'/rest/v1/'+path,{headers:h});}
+  function sbCount(table){return sbFetch(table+'?select=id',{Prefer:'count=exact',Range:'0-0'}).then(function(r){var cr=r.headers.get('content-range');if(cr&&cr.indexOf('/')>-1){var tot=cr.split('/')[1];if(tot&&tot!=='*')return Number(tot);}return r.json().then(function(j){return Array.isArray(j)?j.length:0;});});}
+  function teyaMonth(){var d=new Date();var f=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';return sbFetch('teya_faerslur?select=upphaed,tegund,teya_stada&faersludagur=gte.'+f).then(function(r){return r.json();}).then(function(rows){var s=0;(rows||[]).forEach(function(x){if(x.teya_stada==='SAMÞYKKT')s+=(x.tegund==='REFUND'?-1:1)*Number(x.upphaed||0);});return s;});}
+  function hubTasks(){return fetch('https://brunaholf.netlify.app/api/verkefnalisti').then(function(r){return r.json();}).then(function(j){var arr=Array.isArray(j)?j:(j.items||j.tasks||j.data||j.rows||[]);return arr.filter(function(x){var s=String(x.status||x.stada||'').toLowerCase();return s==='beidni'||s==='i_vinnu';}).length;});}
+  function loadData(t){var val=$('#val-'+t.id),sub=$('#sub-'+t.id);if(val)val.textContent='…';var p;if(t.source==='count')p=sbCount(t.table).then(function(n){return n.toLocaleString('is-IS');});else if(t.source==='teya_month')p=teyaMonth().then(function(n){return n.toLocaleString('is-IS')+' kr';});else if(t.source==='tasks')p=hubTasks().then(function(n){return n.toLocaleString('is-IS');});else p=Promise.resolve('—');p.then(function(v){if(val)val.textContent=v;if(sub)sub.textContent='uppfært '+new Date().toLocaleTimeString('is-IS',{hour:'2-digit',minute:'2-digit',hour12:false});}).catch(function(){if(val)val.textContent='—';if(sub)sub.textContent='náði ekki gögnum';});}
+  function runTile(t){if(!t)return;if(!t.webhook){toast('Stubbur: „'+(t.title||'')+'" — tengist n8n webhook síðar');return;}toast('Keyri „'+(t.title||'')+'"…');fetch(t.webhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'stjornbord',tile:t.title})}).then(function(){toast('Sent ✓');}).catch(function(){toast('Villa við keyrslu');});}
+
+  /* ---- events ---- */
+  gEl.addEventListener('click',function(e){var act=e.target.closest('[data-act]');if(!act)return;var item=e.target.closest('.grid-stack-item');var id=item&&item.getAttribute('gs-id');var a=act.getAttribute('data-act');if(a==='remove'){e.preventDefault();removeTile(id);}else if(a==='edit'){e.preventDefault();openEdit(id);}else if(a==='refresh'){e.preventDefault();var t=getTile(id);if(t)loadData(t);}else if(a==='run'){e.preventDefault();runTile(getTile(id));}});
+  gEl.addEventListener('input',function(e){var n=e.target.closest('.note');if(!n)return;var t=getTile(n.getAttribute('data-id'));if(t){t.text=n.innerHTML;persist();}});
+  /* grid events are bound in bindGrid() (re-bound on each mode re-init) */
+
+  /* ---- gallery + edit ---- */
+  function openGallery(){var b=$('#gal-body');b.innerHTML='';GALLERY.forEach(function(g){var isNew=!!g._new;var h=document.createElement('div');h.className='rg-kicker st-gal-group';h.textContent=g.group;b.appendChild(h);var gr=document.createElement('div');gr.className='st-gal-grid';g.items.forEach(function(it){var btn=document.createElement('button');btn.className='st-gal-item';btn.innerHTML='<b>'+esc(it.title)+'</b><small>'+esc(it.type)+(isNew?' · nýr':'')+'</small>';btn.onclick=function(){var id=addTile(it);closeOvl('#ovl-gal');if(isNew&&id)openEdit(id);};gr.appendChild(btn);});b.appendChild(gr);});openOvl('#ovl-gal');}
+  var editId=null;
+  function openEdit(id){var t=getTile(id);if(!t)return;editId=id;$('#edit-type').textContent='Tegund: '+t.type;var f=$('#edit-fields');f.innerHTML='';(FIELDS[t.type]||[]).forEach(function(pair){var w=document.createElement('div');w.className='st-fld';var cur=t[pair[0]]==null?'':t[pair[0]];if(pair[2]==='select'){var opts=(pair[3]||[]).map(function(o){return '<option value="'+esc(o[0])+'"'+(String(cur)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>';}).join('');w.innerHTML='<label>'+esc(pair[1])+'</label><div class="rg-input-wrap"><select class="rg-input" data-k="'+pair[0]+'">'+opts+'</select></div>';}else{w.innerHTML='<label>'+esc(pair[1])+'</label><div class="rg-input-wrap"><input class="rg-input" data-k="'+pair[0]+'" value="'+esc(cur)+'"></div>';}f.appendChild(w);});openOvl('#ovl-edit');}
+  $('#edit-save').onclick=function(){var t=getTile(editId);if(!t){closeOvl('#ovl-edit');return;}$('#edit-fields').querySelectorAll('[data-k]').forEach(function(inp){t[inp.getAttribute('data-k')]=inp.value;});var content=$('.grid-stack-item[gs-id="'+editId+'"] .grid-stack-item-content');if(content){content.innerHTML=innerHTML(t);if(t.type==='data')loadData(t);}persist();closeOvl('#ovl-edit');toast('Vistað');};
+
+  function openOvl(sel){$(sel).classList.add('open');}
+  function closeOvl(sel){$(sel).classList.remove('open');}
+  document.querySelectorAll('[data-close]').forEach(function(b){b.onclick=function(){b.closest('.st-ovl').classList.remove('open');};});
+  document.querySelectorAll('.st-ovl').forEach(function(o){o.addEventListener('click',function(e){if(e.target===o)o.classList.remove('open');});});
+
+  $('#btn-add').onclick=openGallery;
+  $('#btn-reset').onclick=function(){if(!confirm('Núllstilla BÆÐI útlit (Skjár + Sími) og aðdrátt?'))return;try{localStorage.removeItem(LS_KEY);}catch(e){}location.reload();};
+
+  var toEl=$('#toast'),toT=null;function toast(m){toEl.textContent=m;toEl.classList.add('show');clearTimeout(toT);toT=setTimeout(function(){toEl.classList.remove('show');},2600);}
+
+  function updateClocks(){var now=new Date();var tm=now.toLocaleTimeString('is-IS',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});var dt=now.toLocaleDateString('is-IS',{weekday:'long',day:'numeric',month:'long'});document.querySelectorAll('[data-clock]').forEach(function(e){e.textContent=tm;});document.querySelectorAll('[data-clockdate]').forEach(function(e){e.textContent=dt;});}
+  setInterval(updateClocks,1000);updateClocks();
+
+  /* ---- boot ---- */
+  setModeBtns();
+  zoomEl.classList.toggle('st-mobile',mode==='mobile');
+  initGrid();
+  renderAll();
+  applyZoom();
+  applyLock();
+})();
+</script>
+</body>
+</html>
