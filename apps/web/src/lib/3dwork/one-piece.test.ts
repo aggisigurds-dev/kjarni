@@ -335,6 +335,23 @@ describe('makeOnePiece', () => {
     expect(report.volume).toBeLessThan(2030);
   });
 
+  it('leaves nothing floating in a gap a little wider than the seam', () => {
+    // Grown by the seam and half of it, the cubes still overlap across a 0.3 gap,
+    // but only in slabs that touch neither cube. Kept, those came out as two
+    // extra pieces.
+    const { report } = makeOnePiece(wasm, {
+      bodies: [
+        { name: 'left', soup: cubeSoup(10) },
+        { name: 'right', soup: moved(cubeSoup(10), 10.3) },
+      ],
+      pipes: [],
+      options: { ...options, seamMm: 0.3 },
+    });
+    expect(report.pieces).toBe(2);
+    expect(report.seamsBridged).toBe(0);
+    expect(report.volume).toBeCloseTo(2000, 0);
+  });
+
   it('joins halves again when the bore takes away the only thing holding them together', () => {
     const run = (seamMm: number) =>
       makeOnePiece(wasm, {
