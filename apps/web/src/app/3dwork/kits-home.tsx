@@ -1,20 +1,22 @@
 'use client';
 
 /**
- * First paint of 3dwork: pictures and file picks only.
+ * First paint of 3dwork: recent work first, then parts from Drive as pictures.
  *
- * The 3D bench (Three.js / WebGL) is a separate chunk. A slow machine can sit
- * here, pick one part, and only then pay for the table. Someone who was working
- * on the bench last time goes straight back to it instead.
+ * The 3D bench (Three.js / WebGL) is a separate chunk, so this page stays light:
+ * it shows the builds worked on lately with pictures of their parts, and only a
+ * click on one — or on 3D bench — pays for the table.
  */
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
-import { Boxes, Cloud } from 'lucide-react';
+import { useState } from 'react';
+import { Boxes, ChevronDown, Cloud } from 'lucide-react';
 import { classifyPart } from '@/lib/3dwork/project';
+import { rememberOpenProject } from '@/lib/3dwork/storage';
 import { CloudPicker } from './cloud-picker';
 import { KitBoard } from './kit-board';
-import { ACTION_GHOST, PANEL } from './ui';
+import { RecentBuilds } from './recent-builds';
+import { ACTION_GHOST, LABEL, PANEL } from './ui';
 
 const DriveBrowser = dynamic(
   () => import('./drive-browser').then((mod) => ({ default: mod.DriveBrowser })),
@@ -37,25 +39,13 @@ export type PendingImport = {
 
 type Engine = null | 'bench' | 'sketch';
 
-/** Where the last visit ended up; the bench writes it whenever its workspace changes. */
-const START_KEY = 'kjarni3d_start';
-
 export function KitsHome() {
   const [engine, setEngine] = useState<Engine>(null);
   const [pending, setPending] = useState<PendingImport | null>(null);
   const [pendingCloudId, setPendingCloudId] = useState<string | null>(null);
   const [showDrive, setShowDrive] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
-
-  // Read after mounting, so the page the server sent and the first render agree.
-  useEffect(() => {
-    try {
-      const last = localStorage.getItem(START_KEY);
-      if (last === 'bench' || last === 'sketch') setEngine(last);
-    } catch {
-      /* private mode or no storage — start on the pictures */
-    }
-  }, []);
+  const [showKits, setShowKits] = useState(false);
 
   if (engine) {
     return (
@@ -74,7 +64,7 @@ export function KitsHome() {
         <div className="flex min-w-0 items-center gap-2">
           <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
           <span className="text-sm font-bold text-slate-900">3dwork</span>
-          <span className="text-[0.65rem] text-slate-500">Pick parts as pictures, then work with them</span>
+          <span className="text-[0.65rem] text-slate-500">Pick up recent work, or start from parts</span>
         </div>
         <button
           type="button"
@@ -82,19 +72,13 @@ export function KitsHome() {
           onClick={() => setShowCloud(true)}
         >
           <Cloud className="h-3.5 w-3.5" />
-          Open saved build
+          All saved builds
         </button>
         <div className="flex overflow-hidden rounded border border-slate-300">
           <button
             type="button"
-            className="bg-sky-600 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-white"
-          >
-            2D kits
-          </button>
-          <button
-            type="button"
             onClick={() => setEngine('bench')}
-            className="px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-500 hover:text-slate-900"
+            className="bg-emerald-600 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-white hover:bg-emerald-500"
           >
             3D bench
           </button>
@@ -108,15 +92,46 @@ export function KitsHome() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1">
-        <KitBoard
-          driveOpen={showDrive}
-          onConnectDrive={() => setShowDrive(true)}
-          onOpenIn3dwork={(files, tags) => {
-            setPending({ files, tags });
-            setEngine('bench');
-          }}
-        />
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+        <div className={`${PANEL} p-3`}>
+          <RecentBuilds
+            onOpen={(entry) => {
+              // A build this computer has opens from its own copy, and the bench
+              // still checks Supabase for a newer one; one made elsewhere comes
+              // straight from Supabase.
+              if (entry.local) {
+                rememberOpenProject(entry.id);
+              } else {
+                setPendingCloudId(entry.id);
+              }
+              setEngine('bench');
+            }}
+          />
+        </div>
+
+        <div className={PANEL}>
+          <button
+            type="button"
+            onClick={() => setShowKits((value) => !value)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left"
+            aria-expanded={showKits}
+          >
+            <span className={`${LABEL} flex-1`}>Parts from Drive, as pictures</span>
+            <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${showKits ? 'rotate-180' : ''}`} />
+          </button>
+          {showKits && (
+            <div className="h-[70dvh] border-t border-slate-200">
+              <KitBoard
+                driveOpen={showDrive}
+                onConnectDrive={() => setShowDrive(true)}
+                onOpenIn3dwork={(files, tags) => {
+                  setPending({ files, tags });
+                  setEngine('bench');
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <CloudPicker

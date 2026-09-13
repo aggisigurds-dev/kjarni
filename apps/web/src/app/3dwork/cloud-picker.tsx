@@ -91,12 +91,12 @@ export function CloudPicker({
                     disabled={saving}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-slate-900">
+                      <span className="block text-sm font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere]">
                         {buildLabel(row.name, row.partNames)}
                       </span>
-                      <span className="block truncate text-[0.65rem] text-slate-500">
+                      <span className="line-clamp-3 text-[0.65rem] leading-snug text-slate-500 [overflow-wrap:anywhere]">
                         {row.parts} part{row.parts === 1 ? '' : 's'}
-                        {row.partNames?.length ? ` · ${partsLine(row.partNames)}` : ''}
+                        {row.partNames?.length ? `: ${partsLine(row.partNames, 8)}` : ''}
                       </span>
                     </span>
                     <span className="shrink-0 text-[0.65rem] text-slate-400">
