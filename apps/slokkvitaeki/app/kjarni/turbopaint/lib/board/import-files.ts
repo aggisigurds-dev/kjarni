@@ -1,3 +1,4 @@
+import "./polyfills";
 import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from "pdfjs-dist";
 import * as UTIF from "utif";
 import { canvasToBlob, fitSize, putAsset } from "./assets";

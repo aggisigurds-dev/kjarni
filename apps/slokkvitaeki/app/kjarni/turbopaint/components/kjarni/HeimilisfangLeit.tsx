@@ -10,21 +10,24 @@ import { Search, X, ExternalLink, MapPin } from "lucide-react";
  * finna réttu teikninguna, afrita permalinkinn, „Af slóð", líma. Sjö skref í
  * þremur flipum. Núna: skrifa „Skútuvogur 4", smella á mynd.
  *
- * Utan Reykjavíkur er ENGINN teikningalisti til HÉR — FotoWeb-safnið nær
- * aðeins yfir Reykjavík. Þá sýnum við hnitatengil á kortasjá sveitarfélagsins
- * (Kópavogur, Garðabær, Hafnarfjörður) í stað tómra lista. Á korti
- * Hafnarfjarðar eru samþykktir uppdrættir undir „Teikningar af byggingum";
- * PDF-slóðina má svo líma í „Af slóð" (teikningar.hafnarfjordur.is).
+ * Reykjavík kemur úr FotoWeb-safninu; Hafnarfjörður, Garðabær og Kópavogur úr
+ * „Teikningar af byggingum" á kortasjám map.is (sjá app/api/turbopaint/mapis.ts)
+ * — sami listi, sömu spjöld, smellur setur PDF-ið á borðið. Utan þessara fjögurra
+ * er aðeins hnitatengill á kortasjá sveitarfélagsins ef hún er þekkt.
  */
 
 type Eign = {
   landnr: number;
+  /** Heitinúmer Staðfangaskrár — lykill teikninga á map.is ásamt landnúmerinu. */
+  heitinr: number | null;
   label: string;
   postnr: number | null;
   x: number | null;
   y: number | null;
   heimild: "reykjavik" | "map.is" | "óþekkt";
   heimildNafn: string | null;
+  /** Sveitarfélagsnúmer á map.is (1000 Kópavogur, 1300 Garðabær, 1400 Hafnarfjörður). */
+  svf: number | null;
   ytriSlod: string | null;
 };
 
@@ -38,6 +41,9 @@ type Teikning = {
   gata: string | null;
   lysing: string | null;
   bnnr: string | null;
+  /** map.is-söfnin: undirflokkur (Grunnmynd, Vatns- og hitalagnir …) og hönnuður. */
+  gerd?: string | null;
+  hofundur?: string | null;
   urelt: boolean;
   haed: number[];
   stig: string[];
@@ -65,6 +71,18 @@ function skipta(t: Teikning): { adal: string; auka: string | null } {
   return { adal: fyrsti.trim(), auka: rest.join(",").trim() || null };
 }
 
+/** Flokkurinn sem ber grunnmyndirnar — Aðaluppdráttur / Bygginganefndarteikning. */
+function sjalfgefinTegund(res: Teikning[]): string {
+  const talning = new Map<string, number>();
+  for (const t of res) {
+    if (t.urelt || !t.tegund) continue;
+    if (!/a[ðd]aluppdr|bygginganefnd/i.test(t.tegund)) continue;
+    talning.set(t.tegund, (talning.get(t.tegund) ?? 0) + 1);
+  }
+  const best = [...talning.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0] : "allt";
+}
+
 export function HeimilisfangLeit({
   onVelja,
   compact = false,
@@ -78,6 +96,8 @@ export function HeimilisfangLeit({
   const [valin, setValin] = useState<Eign | null>(null);
   const [teikningar, setTeikningar] = useState<Teikning[]>([]);
   const [sia, setSia] = useState<string>("allt");
+  const [tegundSia, setTegundSia] = useState<string>("allt");
+  const [textaSia, setTextaSia] = useState("");
   const [synaUrelt, setSynaUrelt] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +111,36 @@ export function HeimilisfangLeit({
     setValin(e);
     setTeikningar([]);
     setSia("allt");
+    setTegundSia("allt");
+    setTextaSia("");
     setSynaUrelt(false);
+    if (e.heimild === "map.is" && e.heitinr && e.svf) {
+      setBusy(true);
+      setMsg(`Sæki teikningar úr kortasjá ${e.heimildNafn}…`);
+      try {
+        const r = await fetch(
+          `/api/turbopaint/teikningar?landnr=${e.landnr}&heitinr=${e.heitinr}&svf=${e.svf}`
+        );
+        const d = (await r.json()) as { results?: Teikning[]; error?: string };
+        if (d.error) { setMsg(d.error); return; }
+        const res = d.results || [];
+        setTeikningar(res);
+        // Aðaluppdrættirnir (grunnmyndir) eru það sem brunavarnateikning þarf —
+        // þeir veljast sjálfkrafa þegar safnið blandar saman lögnum, burðarvirki
+        // og aðaluppdráttum (Garðatorg 7 er 1052 blöð).
+        setTegundSia(sjalfgefinTegund(res));
+        setMsg(
+          res.length
+            ? null
+            : `Engar teikningar skráðar á þetta heimilisfang í kortasjá ${e.heimildNafn} — opnaðu kortið hér að neðan.`
+        );
+      } catch {
+        setMsg("Náði ekki í kortasjána");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (e.heimild !== "reykjavik") {
       setMsg(
         e.heimildNafn
@@ -151,6 +200,25 @@ export function HeimilisfangLeit({
       if (my === seq.current) setBusy(false);
     }
   }, [velja]);
+
+  // Djúptengill: ?leit=Strandgata 6 opnar leitina með heimilisfanginu — kúnnaspjaldið
+  // í Slökkvitæki-appinu sendir hingað svo teikning staðarins sé einn smellur í burtu.
+  useEffect(() => {
+    let raw = "";
+    try {
+      const u = new URL(window.location.href);
+      raw = (u.searchParams.get("leit") || "").normalize("NFC").trim();
+      if (raw) {
+        u.searchParams.delete("leit");
+        window.history.replaceState({}, "", u.pathname + (u.search || "") + u.hash);
+      }
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    setQ(raw);
+    setOpid(true);
+  }, []);
 
   // Loka við smell utan reitsins OG portal-spjaldsins, eða Escape.
   useEffect(() => {
@@ -213,10 +281,38 @@ export function HeimilisfangLeit({
   const virk = synaUrelt ? teikningar : teikningar.filter((t) => !t.urelt);
   const ureltFjoldi = teikningar.filter((t) => t.urelt).length;
   const haedirTiltaekar = Array.from(
-    new Set(virk.flatMap((t) => t.haed))
+    new Set(
+      virk
+        .filter((t) => tegundSia === "allt" || (t.tegund || "Annað") === tegundSia)
+        .flatMap((t) => t.haed)
+    )
   ).sort((a, b) => a - b);
-  const stigTiltaek = Array.from(new Set(virk.flatMap((t) => t.stig)));
-  const synd = virk.filter((t) => {
+  const stigTiltaek = Array.from(
+    new Set(
+      virk
+        .filter((t) => tegundSia === "allt" || (t.tegund || "Annað") === tegundSia)
+        .flatMap((t) => t.stig)
+    )
+  );
+  // Tegundar-sían (map.is-söfnin blanda lögnum, burðarvirki og aðaluppdráttum).
+  const tegundir = Array.from(
+    virk.reduce((m, t) => {
+      const k = t.tegund || "Annað";
+      m.set(k, (m.get(k) ?? 0) + 1);
+      return m;
+    }, new Map<string, number>())
+  ).sort((a, b) => b[1] - a[1]);
+  const eftirTegund =
+    tegundSia === "allt" ? virk : virk.filter((t) => (t.tegund || "Annað") === tegundSia);
+  const leitarord = textaSia.trim().toLowerCase();
+  const synd = eftirTegund.filter((t) => {
+    if (leitarord) {
+      const hey = [t.lysing, t.gerd, t.hofundur, t.bnnr, t.filename, t.tegund]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!hey.includes(leitarord)) return false;
+    }
     if (sia === "allt") return true;
     if (sia.startsWith("s:")) return t.stig.includes(sia.slice(2));
     if (sia === "annad") return !t.grunnmynd;
@@ -304,8 +400,8 @@ export function HeimilisfangLeit({
 
           {msg && <div className="px-2 py-1.5 text-[12px] text-stone-500">{busy ? msg : msg}</div>}
 
-          {/* Utan Reykjavíkur: hnitatengill á kortasjá sveitarfélagsins. */}
-          {valin?.ytriSlod && (
+          {/* Utan teikningasafnanna: hnitatengill á kortasjá sveitarfélagsins. */}
+          {valin?.ytriSlod && teikningar.length === 0 && !busy && (
             <a
               href={valin.ytriSlod}
               target="_blank"
@@ -316,6 +412,37 @@ export function HeimilisfangLeit({
               Opna {valin.heimildNafn} á korti
               <ExternalLink className="ml-auto size-3.5 shrink-0 opacity-60" />
             </a>
+          )}
+
+          {virk.length > 0 && tegundir.length > 1 && (
+            <div className="flex flex-wrap gap-1 px-0.5 pb-1.5 pt-0.5" data-tegundir="">
+              {[
+                { k: "allt", t: `Allt (${virk.length})` },
+                ...tegundir.slice(0, 7).map(([k, n]) => ({ k, t: `${k} (${n})` })),
+              ].map((c) => (
+                <button
+                  key={c.k}
+                  type="button"
+                  onClick={() => { setTegundSia(c.k); setSia("allt"); }}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    tegundSia === c.k
+                      ? "bg-blue-700 text-white"
+                      : "bg-blue-50 text-blue-800 hover:bg-blue-100"
+                  }`}
+                >
+                  {c.t}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {virk.length > 12 && (
+            <input
+              value={textaSia}
+              onChange={(ev) => setTextaSia(ev.target.value)}
+              placeholder="Sía — t.d. grunnmynd, 2. hæð, lagnir, nafn hönnuðar"
+              className="mb-1.5 w-full rounded-md border border-stone-200 bg-stone-50 px-2 py-1.5 text-[12px] text-stone-800 placeholder:text-stone-400 focus:border-blue-400 focus:outline-none"
+            />
           )}
 
           {virk.length > 0 && (haedirTiltaekar.length > 0 || stigTiltaek.length > 0) && (
@@ -356,8 +483,13 @@ export function HeimilisfangLeit({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={t.thumb} alt={t.filename} className="h-24 w-full bg-white object-contain" />
                   ) : (
-                    <div className="flex h-24 items-center justify-center bg-stone-100 text-[11px] text-stone-400">
-                      engin forskoðun
+                    <div className="flex h-24 flex-col items-center justify-center gap-1 bg-stone-100 px-2 text-center">
+                      <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        {/\.tiff?$/i.test(t.filename) ? "TIF" : "PDF"}
+                      </span>
+                      <span className="line-clamp-2 text-[10px] leading-tight text-stone-500">
+                        {t.gerd && t.gerd !== "Óskráð" ? t.gerd : t.tegund || "teikning"}
+                      </span>
                     </div>
                   )}
                   <div className="px-1.5 py-1">
@@ -379,7 +511,7 @@ export function HeimilisfangLeit({
                       </div>
                     )}
                     <div className="truncate text-[10px] text-stone-400">
-                      {[t.dags, t.bnnr].filter(Boolean).join(" · ")}
+                      {[t.dags, t.bnnr, t.hofundur].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                 </button>
@@ -397,6 +529,25 @@ export function HeimilisfangLeit({
                 ? "Fela úreltar teikningar"
                 : `Sýna úreltar teikningar (${ureltFjoldi})`}
             </button>
+          )}
+
+          {virk.length > 0 && synd.length === 0 && (
+            <div className="px-2 py-1.5 text-[12px] text-stone-500">
+              Ekkert í þessari síu — prófaðu „Allt" eða annað leitarorð.
+            </div>
+          )}
+
+          {valin?.ytriSlod && teikningar.length > 0 && (
+            <a
+              href={valin.ytriSlod}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-stone-500 hover:bg-stone-100"
+            >
+              <MapPin className="size-3.5 shrink-0" />
+              Sama lóð í kortasjá {valin.heimildNafn}
+              <ExternalLink className="ml-auto size-3.5 shrink-0 opacity-60" />
+            </a>
           )}
       </div>
     </div>,

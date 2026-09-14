@@ -1,47 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
+import { haedir } from "../haedir";
+import { mapisFyrirPostnr, mapisFyrirSvf, mapisTeikningar } from "../mapis";
 
 // Heimilisfang → landnúmer → teikningar.
 //
-// Tvö þrep, tvö ólík kerfi — bæði loka á vafrann með CORS, svo þau fara hér um:
+// Þrjú kerfi — öll loka á vafrann með CORS, svo þau fara hér um:
 //
 //   ?heimilisfang=Skútuvogur 4
-//     → Landeignaskrá HMS (geo.fasteignaskra.is). Skilar landnúmeri, PÓSTNÚMERI
-//       og ISN93-hnitum. Póstnúmerið ræður hvaða skjalasafn á við; hnitin gera
-//       okkur kleift að djúptengja í map.is fyrir sveitarfélög utan Reykjavíkur.
+//     → Landeignaskrá HMS (geo.fasteignaskra.is). Skilar landnúmeri, HEITINÚMERI,
+//       PÓSTNÚMERI og ISN93-hnitum. Póstnúmerið ræður hvaða skjalasafn á við.
 //
 //   ?landnr=105166
 //     → FotoWeb-safn Reykjavíkur. Skilar `.info`-permalinkum sem
 //       /api/turbopaint/fetch-plan kann ÞEGAR að sækja — teikningin fer því
 //       beint á borðið án þess að notandinn afriti slóð.
 //
+//   ?landnr=122391&heitinr=1030450&svf=1400
+//     → Kortasjá sveitarfélagsins á map.is (Hafnarfjörður 1400, Garðabær 1300,
+//       Kópavogur 1000) — sjá ../mapis.ts. Skilar beinum PDF-slóðum sem
+//       fetch-plan sækir líka.
+//
 // ⚠️ BRODDSTAFIR: Landeignaskrá finnur ekkert fyrir "Skutuvogur". Staðfest
 //    28.08.2026 — "Skútuvogur 4" skilar tveimur eignum, "Skutuvogur 4" engri.
 //
-// ⚠️ AÐEINS REYKJAVÍK Á TEIKNINGAR HÉR. Skjalasafn Reykjavíkur nær aðeins yfir
-//    Reykjavík. Kópavogur, Garðabær og Hafnarfjörður eru á map.is með eigin
-//    kortum; fyrir þau skilum við djúptengli á hnitin í stað teikningalista, svo
-//    notandinn lendi á réttum stað í stað þess að fá tóman lista og halda að
-//    kerfið sé bilað. Á korti Hafnarfjarðar eru samþykktir uppdrættir undir
-//    „Teikningar af byggingum“ (PDF á teikningar.hafnarfjordur.is).
+// Utan þessara fjögurra sveitarfélaga er enginn teikningalisti til hér; þá er
+// aðeins skilað hnitatengli á kortasjá ef hún er þekkt.
 
 export const maxDuration = 30;
 
 /* Útgáfumerki fylgir hverju svari. Tvisvar 28.08 taldi ég deploy lent af því
  * bið-skilyrðið mitt var merki sem GAMLI kóðinn gat líka gefið (landnúmerið
  * fannst grafið í ruslinu; tómt svar við rugli). Þetta er ótvírætt. */
-const API_UTGAFA = "2026-08-28-nfc";
+const API_UTGAFA = "2026-09-14-mapis";
 
 const LANDEIGN = "https://geo.fasteignaskra.is/landeignaskra/search";
 const FOTOWEB = "https://skjalasafn.reykjavik.is";
 const RVK_ARCHIVE = "/fotoweb/archives/5000-A%C3%B0aluppdr%C3%A6ttir/";
 
-// Sveitarfélög sem Agnar hefur staðfest slóðamynstrið á (map.is/<slug>/@X,Y,z,0
-// með ISN93-hnitum). Aðeins staðfest gildi hér — ekki ágiskuð.
-const MAP_IS: { slug: string; nafn: string; postnr: number[] }[] = [
-  { slug: "kopavogur", nafn: "Kópavogur", postnr: [200, 201, 202, 203] },
-  { slug: "gardabaer", nafn: "Garðabær", postnr: [210, 211, 212, 225] },
-  { slug: "hafnarfjordur", nafn: "Hafnarfjörður", postnr: [220, 221] },
-];
 const RVK_POSTNR = new Set([
   101, 102, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 116,
   121, 123, 124, 125, 127, 128, 129, 130, 132, 155, 161, 162,
@@ -71,7 +66,10 @@ export async function GET(req: NextRequest) {
    * Þetta gerði leitina ónothæfa í síma þótt hún virkaði á tölvu. */
   const heimilisfang = (sp.get("heimilisfang") || "").normalize("NFC").trim();
   const landnr = (sp.get("landnr") || "").replace(/[^0-9]/g, "");
+  const heitinr = (sp.get("heitinr") || "").replace(/[^0-9]/g, "");
+  const svf = Number((sp.get("svf") || "").replace(/[^0-9]/g, "")) || 0;
 
+  if (landnr && svf) return mapis(Number(landnr), Number(heitinr), svf);
   if (landnr) return teikningar(landnr);
   if (heimilisfang.length >= 2) return heimilisfong(heimilisfang);
   return bad(400, "Sláðu inn a.m.k. tvo stafi.");
@@ -112,6 +110,9 @@ async function heimilisfong(q: string) {
       const postnr = Number((label.match(/\((\d{3})\)/) || [])[1]) || null;
       return {
         landnr: Number(x.Landnr),
+        // Heitinúmer Staðfangaskrár — kortasjár map.is lykla teikningar á það
+        // ásamt landnúmerinu (staðfest 14.09: Strandgata 6 = L 122391 / H 1030450).
+        heitinr: x.Heinum ? Number(x.Heinum) : null,
         label,
         postnr,
         x: x.X ?? null,
@@ -126,59 +127,53 @@ async function heimilisfong(q: string) {
 /** Hvaða skjalasafn á við þetta póstnúmer — og hvert má senda notandann. */
 function heimild(postnr: number | null, x: number | null, y: number | null) {
   if (postnr && RVK_POSTNR.has(postnr)) {
-    return { heimild: "reykjavik" as const, heimildNafn: "Skjalasafn Reykjavíkur", ytriSlod: null };
+    return { heimild: "reykjavik" as const, heimildNafn: "Skjalasafn Reykjavíkur", svf: null, ytriSlod: null };
   }
-  const m = postnr ? MAP_IS.find((s) => s.postnr.includes(postnr)) : null;
-  if (m && x != null && y != null) {
+  const m = mapisFyrirPostnr(postnr);
+  if (m) {
     return {
       heimild: "map.is" as const,
       heimildNafn: m.nafn,
+      svf: m.svf,
       // Hnitin úr Landeignaskrá eru ISN93 (EPSG:3057) — sama og map.is notar
       // í @X,Y,zoom,snúningur. Því má djúptengja beint á eignina.
-      ytriSlod: `https://map.is/${m.slug}/@${Math.round(x)},${Math.round(y)},z2,0`,
+      ytriSlod:
+        x != null && y != null
+          ? `https://map.is/${m.slug}/@${Math.round(x)},${Math.round(y)},z2,0`
+          : `https://map.is/${m.slug}/`,
     };
   }
   return {
     heimild: "óþekkt" as const,
     heimildNafn: null,
+    svf: null,
     // Landeignaskráin virkar alltaf — betri lending en tómur listi.
     ytriSlod: null,
   };
 }
 
-// Hæða-þáttun úr lýsingarreitnum (214). Agnar 28.08: "ég þarf helst að finna
-// hæðarnar — hæð 1, hæð 2, kjallari". Raunveruleg gildi úr safninu:
-//   "Grunnmynd 1. hæð" · "Grunnmynd 2. hæð" · "Grunnmynd 1. hæð, snið"
-//   "Grunnmynd 2. hæð, útlit austur, suður, norður"
-//   "Útlit norður, suður, vestur" · "Útlit N, V, S" · "Skráningartafla"
-//   "Afstöðumynd, byggingarlýsing, snið" · "Teikningasett"
-// Ein teikning getur borið FLEIRI en eina hæð, svo þetta skilar lista.
-function haedir(lysing: string | null) {
-  const t = (lysing || "").toLowerCase();
-  const haed: number[] = [];
-  for (const m of t.matchAll(/(\d+)\.\s*h[æa][eð]?ð/g)) {
-    const n = Number(m[1]);
-    if (n && !haed.includes(n)) haed.push(n);
+/** Þrep 2b — map.is-sveitarfélag: landnúmer + heitinúmer → teikningalisti. */
+async function mapis(landnr: number, heitinr: number, svf: number) {
+  const sv = mapisFyrirSvf(svf);
+  if (!sv) return bad(400, "Óþekkt sveitarfélagsnúmer");
+  if (!heitinr) return bad(400, "Heitinúmer vantar — veldu heimilisfangið úr leitinni.");
+  try {
+    const { results, hrar } = await mapisTeikningar(landnr, heitinr, svf);
+    return NextResponse.json({
+      utgafa: API_UTGAFA,
+      heimild: "map.is",
+      heimildNafn: sv.nafn,
+      landnr,
+      heitinr,
+      svf,
+      fjoldi: results.length,
+      gildandi: results.filter((x) => !x.urelt).length,
+      hrar,
+      results,
+    });
+  } catch (err) {
+    return bad(502, err instanceof Error ? err.message : "Náði ekki í kortasjána");
   }
-  const kjallari = /kjallar/.test(t);
-  const ris = /ris|ris\.|rish[æa]ð/.test(t);
-  // NEFNDAR hæðir sem bera enga tölu. Staðfest á Skútuvogi 2: "grunnmynd
-  // milligólf, snið" datt út úr hæða-síunni af því orðið er ekki tala, og
-  // teikningin varð ófinnanleg þótt hún sé grunnmynd af hæð.
-  const stig: string[] = [];
-  if (kjallari) stig.push("Kjallari");
-  if (/milligólf|milligolf/.test(t)) stig.push("Milligólf");
-  if (/jarðh[æa]ð|jardh/.test(t)) stig.push("Jarðhæð");
-  if (ris) stig.push("Ris");
-  return {
-    haed: haed.sort((a, b) => a - b),
-    stig,
-    kjallari,
-    ris,
-    // Grunnmynd = teikning AF hæð. Útlit/snið/skráningartafla/afstöðumynd eru
-    // annars konar blöð og eiga ekki heima í hæða-síunni.
-    grunnmynd: /grunnmynd/.test(t) || haed.length > 0 || stig.length > 0,
-  };
 }
 
 /** Þrep 2 — landnúmer → teikningar úr FotoWeb-safni Reykjavíkur. */

@@ -1,5 +1,6 @@
 "use client";
 
+import "../../lib/board/polyfills";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -524,8 +525,12 @@ export function WhiteboardApp() {
       } catch {
         return;
       }
-      const archive =
-        host === "skjalasafn.reykjavik.is" || host === "teikningar.hafnarfjordur.is";
+      const archive = [
+        "skjalasafn.reykjavik.is",
+        "teikningar.hafnarfjordur.is",
+        "teikningar.gardabaer.is",
+        "gagnasja.kopavogur.is",
+      ].includes(host);
       // Skjalasafns-permalink er ALLTAF innflutningur — líka þótt fókusinn
       // sitji óvart í nafnareitnum (slóðin límdist þar inn og skemmdi nafnið).
       if (isTyping(e.target) && !archive) return;
@@ -695,7 +700,7 @@ export function WhiteboardApp() {
         onVeljaTeikningu={(infoUrl) => void runUrlImport(infoUrl)}
         onImportUrl={() => {
           const raw = window.prompt(
-            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða PDF af teikningar.hafnarfjordur.is:"
+            "Límdu inn permalink af skjalasafn.reykjavik.is (…tif.info) eða PDF-slóð úr kortasjá Hafnarfjarðar, Garðabæjar eða Kópavogs:"
           );
           if (raw) void runUrlImport(raw);
         }}
