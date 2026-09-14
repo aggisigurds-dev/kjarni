@@ -1,3 +1,5 @@
+/* kjarni-polyfill: Map.prototype.getOrInsertComputed / getOrInsert (ES2026 upsert) — pdf.js 5.7 notar þær; Chromium ≤141 og eldri Safari/Firefox eiga þær ekki. Sjá lib/board/polyfills.ts. */
+for(const P of [Map.prototype, WeakMap.prototype]){if(typeof P.getOrInsert!=="function")Object.defineProperty(P,"getOrInsert",{configurable:true,writable:true,value:function(k,v){if(this.has(k))return this.get(k);this.set(k,v);return v;}});if(typeof P.getOrInsertComputed!=="function")Object.defineProperty(P,"getOrInsertComputed",{configurable:true,writable:true,value:function(k,f){if(this.has(k))return this.get(k);const v=f(k);this.set(k,v);return v;}});}
 /**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page

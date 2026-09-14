@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fotowebDownloadOrder, type FotowebAsset } from "../fotoweb-pick";
+import { MAPIS_TEIKNINGA_HOSTS } from "../mapis";
 
 // Proxy fyrir TurboPaint: sækir gólfplan af leyfðum ytri slóðum (CORS bannar
 // vafranum að gera það sjálfur). Skilur FotoWeb-permalink skjalasafns
 // Reykjavíkur (…/<skrá>.tif.info): les asset-JSON og velur cache-JPEG
 // (t.d. 6006 px) á undan ORIGINAL TIF svo síminn frjósi ekki við afþjöppun.
-// Einnig bein PDF/mynd af teikningar.hafnarfjordur.is (byggingarfulltrúi).
+// Einnig bein PDF af teikningasöfnum Hafnarfjarðar, Garðabæjar og Kópavogs
+// (kortasjár map.is — sjá ../mapis.ts).
 
 export const maxDuration = 60;
 
 const ALLOWED_HOSTS = new Set([
   "skjalasafn.reykjavik.is",
-  // Samþykktir uppdrættir byggingarfulltrúa Hafnarfjarðar. Bein PDF-slóð
-  // (t.d. teikningar.hafnarfjordur.is/data/….pdf) má líma í „Af slóð".
-  "teikningar.hafnarfjordur.is",
+  // Samþykktir uppdrættir byggingarfulltrúa Hafnarfjarðar, Garðabæjar og
+  // Kópavogs — beinar PDF-slóðir úr kortasjánum (má líka líma í „Af slóð").
+  ...MAPIS_TEIKNINGA_HOSTS,
 ]);
 const MAX_BYTES = 80 * 1024 * 1024;
 const OK_TYPES = /^(image\/|application\/pdf)/i;
@@ -96,7 +98,7 @@ export async function GET(req: NextRequest) {
   if (!ALLOWED_HOSTS.has(target.hostname)) {
     return bad(
       403,
-      `Hýsillinn ${target.hostname} er ekki á leyfilistanum (skjalasafn.reykjavik.is eða teikningar.hafnarfjordur.is)`
+      `Hýsillinn ${target.hostname} er ekki á leyfilistanum (${[...ALLOWED_HOSTS].join(", ")})`
     );
   }
 
