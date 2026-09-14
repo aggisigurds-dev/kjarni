@@ -316,7 +316,9 @@
   [layouts.desktop,layouts.mobile].forEach(function(list){list.forEach(function(t){if(!t.id)t.id=uid();});});
   var zoom=saved.zoom||{desktop:1,mobile:1};
   var locked=!!saved.locked;
-  var _lastTs=(saved&&saved.ts)||0;   // síðasta local-vistun (til að bera saman við þjón)
+  // Ef local á útlit EN engan ts (gamla sniðið) → meðhöndla sem nýlegt svo það sé
+  // ÝTT upp á þjón (ekki yfirskrifað af tómum/default) — verndar núverandi uppröðun.
+  var _lastTs=(saved&&saved.ts)||((saved&&saved.layouts&&saved.layouts.desktop&&saved.layouts.desktop.length)?Date.now():0);
 
   var zoomEl=$('#zoom'),canvasEl=$('#canvas'),gEl=$('.grid-stack');
   var grid;
@@ -371,7 +373,7 @@
       .then(function(rows){
         var srv=rows&&rows[0]&&rows[0].data;
         if(!srv||!srv.layouts){serverSave();return;}                  // ekkert á þjóni → ýta local upp (seed)
-        if((srv.ts||0)<=_lastTs){if(_lastTs)serverSave();return;}      // local jafn-nýtt/nýrra → halda og ýta upp
+        if((srv.ts||0)<=_lastTs){if(_lastTs){try{localStorage.setItem(LS_KEY,JSON.stringify({mode:mode,layouts:layouts,zoom:zoom,locked:locked,ts:_lastTs}));}catch(e){}serverSave();}return;}  // local jafn-nýtt/nýrra → stimpla ts + ýta upp
         layouts=srv.layouts;zoom=srv.zoom||zoom;locked=!!srv.locked;if(srv.mode)mode=srv.mode;
         if(!Array.isArray(layouts.desktop)||!layouts.desktop.length)layouts.desktop=defaultsDesktop();
         if(!Array.isArray(layouts.mobile)||!layouts.mobile.length)layouts.mobile=defaultsMobile();
