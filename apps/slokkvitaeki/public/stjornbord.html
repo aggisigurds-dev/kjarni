@@ -222,6 +222,7 @@
   var SB_URL='https://osfdzskyvisifcwyjkuk.supabase.co';
   var SB_KEY='sb_publishable_YVpznM5EK01qOdevQwOcIg_rMjTkT7f';
   var LS_KEY='stjornbord_rg_v2';
+  var LAYOUT_KEY='default';   // deilt útlit á þjóni (stjornbord_layout) — sama á öllum vélum/slóðum
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function $(s,r){return (r||document).querySelector(s);}
   function uid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);}
@@ -315,6 +316,7 @@
   [layouts.desktop,layouts.mobile].forEach(function(list){list.forEach(function(t){if(!t.id)t.id=uid();});});
   var zoom=saved.zoom||{desktop:1,mobile:1};
   var locked=!!saved.locked;
+  var _lastTs=(saved&&saved.ts)||0;   // síðasta local-vistun (til að bera saman við þjón)
 
   var zoomEl=$('#zoom'),canvasEl=$('#canvas'),gEl=$('.grid-stack');
   var grid;
@@ -352,7 +354,34 @@
   }
   function renderAll(){grid.batchUpdate();tiles().forEach(function(t){renderTile(t,false);});grid.commit();}
 
-  function persist(){try{var nodes=grid.save(false)||[];var by={};nodes.forEach(function(n){by[String(n.id)]=n;});tiles().forEach(function(t){var n=by[String(t.id)];if(n){t.x=n.x;t.y=n.y;t.w=n.w;t.h=n.h;}});localStorage.setItem(LS_KEY,JSON.stringify({mode:mode,layouts:layouts,zoom:zoom,locked:locked}));}catch(e){}}
+  function persist(){try{var nodes=grid.save(false)||[];var by={};nodes.forEach(function(n){by[String(n.id)]=n;});tiles().forEach(function(t){var n=by[String(t.id)];if(n){t.x=n.x;t.y=n.y;t.w=n.w;t.h=n.h;}});_lastTs=Date.now();localStorage.setItem(LS_KEY,JSON.stringify({mode:mode,layouts:layouts,zoom:zoom,locked:locked,ts:_lastTs}));serverSave();}catch(e){}}
+
+  /* ---- server-vistun: EITT útlit á öllum vélum + vefslóðum (last-write-wins) ---- */
+  var _srvT=null;
+  function serverSave(){clearTimeout(_srvT);_srvT=setTimeout(function(){try{
+    if(!_lastTs)_lastTs=Date.now();
+    var blob={mode:mode,layouts:layouts,zoom:zoom,locked:locked,ts:_lastTs};
+    fetch(SB_URL+'/rest/v1/stjornbord_layout',{method:'POST',
+      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify([{key:LAYOUT_KEY,data:blob,updated_at:new Date().toISOString()}])}).catch(function(){});
+  }catch(e){}},700);}
+  function serverLoad(){
+    fetch(SB_URL+'/rest/v1/stjornbord_layout?key=eq.'+encodeURIComponent(LAYOUT_KEY)+'&select=data',{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}})
+      .then(function(r){return r.json();})
+      .then(function(rows){
+        var srv=rows&&rows[0]&&rows[0].data;
+        if(!srv||!srv.layouts){serverSave();return;}                  // ekkert á þjóni → ýta local upp (seed)
+        if((srv.ts||0)<=_lastTs){if(_lastTs)serverSave();return;}      // local jafn-nýtt/nýrra → halda og ýta upp
+        layouts=srv.layouts;zoom=srv.zoom||zoom;locked=!!srv.locked;if(srv.mode)mode=srv.mode;
+        if(!Array.isArray(layouts.desktop)||!layouts.desktop.length)layouts.desktop=defaultsDesktop();
+        if(!Array.isArray(layouts.mobile)||!layouts.mobile.length)layouts.mobile=defaultsMobile();
+        [layouts.desktop,layouts.mobile].forEach(function(list){list.forEach(function(t){if(!t.id)t.id=uid();});});
+        _lastTs=srv.ts||Date.now();
+        try{localStorage.setItem(LS_KEY,JSON.stringify({mode:mode,layouts:layouts,zoom:zoom,locked:locked,ts:_lastTs}));}catch(e){}
+        if(grid)grid.destroy(false);setModeBtns();zoomEl.classList.toggle('st-mobile',mode==='mobile');initGrid();renderAll();applyZoom();applyLock();
+        toast('Útlit sótt af þjóni ✓');
+      }).catch(function(){});
+  }
   function addTile(tpl){var t={};for(var k in tpl)t[k]=tpl[k];t.id=uid();var d=DEF[t.type]||{w:3,h:3};if(t.w==null){t.w=d.w;t.h=d.h;}tiles().push(t);renderTile(t,true);persist();toast('Reit bætt við: '+(t.title||t.type));return t.id;}
   function removeTile(id){var el=$('.grid-stack-item[gs-id="'+id+'"]');if(el)grid.removeWidget(el);layouts[mode]=tiles().filter(function(x){return String(x.id)!==String(id);});persist();}
 
@@ -413,6 +442,7 @@
   renderAll();
   applyZoom();
   applyLock();
+  serverLoad();   // sækja deilt útlit af þjóni (yfirtekur ef nýrra en local)
 })();
 </script>
 </body>
