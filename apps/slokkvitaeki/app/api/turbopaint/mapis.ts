@@ -207,19 +207,34 @@ export async function mapisTeikningar(
     });
   };
 
-  let res = await spyrja(await faSetu());
-  if (res.status === 403) res = await spyrja(await faSetu(true));
-  if (!res.ok) throw new Error(`Kortasjáin svaraði ${res.status}`);
-  const text = await res.text();
-  let rows: MapisRow[] = [];
-  if (text.trim().startsWith("[")) {
-    try {
-      rows = JSON.parse(text) as MapisRow[];
-    } catch {
-      throw new Error("Kortasjáin skilaði ólesanlegu svari");
+  const lesa = async (res: Response): Promise<MapisRow[]> => {
+    if (!res.ok) throw new Error(`Kortasjáin svaraði ${res.status}`);
+    const text = await res.text();
+    if (text.trim().startsWith("[")) {
+      try {
+        return JSON.parse(text) as MapisRow[];
+      } catch {
+        throw new Error("Kortasjáin skilaði ólesanlegu svari");
+      }
     }
-  } else if (!/Engar niðurstöður/i.test(text)) {
-    throw new Error(`Kortasjáin svaraði óvænt: ${text.slice(0, 80)}`);
+    if (!/Engar niðurstöður/i.test(text)) {
+      throw new Error(`Kortasjáin svaraði óvænt: ${text.slice(0, 80)}`);
+    }
+    return [];
+  };
+
+  let s = await faSetu();
+  let res = await spyrja(s);
+  if (res.status === 403) {
+    s = await faSetu(true);
+    res = await spyrja(s);
+  }
+  let rows = await lesa(res);
+  // Tómt svar á eldri setu er tortryggilegt (Garðatorg 7 skilaði 0 í stað ~1050 einu
+  // sinni 14.09.2026 og 10-mín skyndiminni niðurstreymis geymdi tómið) — ný seta og
+  // ein endurtekning áður en tóminu er trúað.
+  if (rows.length === 0 && Date.now() - s.sott > 30_000) {
+    rows = await lesa(await spyrja(await faSetu(true)));
   }
   const results = rows
     .map(mapisRowToTeikning)
