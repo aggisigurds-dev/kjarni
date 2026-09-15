@@ -20,6 +20,8 @@ function renderPanel(overrides: Partial<Parameters<typeof BuilderPanel>[0]> = {}
     canUngroup: false,
     onMove: vi.fn(),
     canMove: true,
+    onSplit: vi.fn(),
+    canSplit: true,
     onClose: vi.fn(),
     ...overrides,
   };
@@ -37,7 +39,9 @@ test('runs each selection command and says how many parts are picked', () => {
   fireEvent.click(screen.getByRole('switch', { name: /sticky selection/i }));
   fireEvent.click(screen.getByRole('button', { name: /^group/i }));
   fireEvent.click(screen.getByRole('button', { name: /^move 2 parts/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^split in half/i }));
 
+  expect(props.onSplit).toHaveBeenCalledOnce();
   expect(props.onSelectAll).toHaveBeenCalledOnce();
   expect(props.onDeselectAll).toHaveBeenCalledOnce();
   expect(props.onInvert).toHaveBeenCalledOnce();
@@ -47,12 +51,20 @@ test('runs each selection command and says how many parts are picked', () => {
 });
 
 test('holds back what cannot be done yet', () => {
-  const props = renderPanel({ picked: 0, canGroup: false, canUngroup: false, canMove: false });
+  const props = renderPanel({
+    picked: 0,
+    canGroup: false,
+    canUngroup: false,
+    canMove: false,
+    canSplit: false,
+  });
 
   const ungroup = screen.getByRole('button', { name: /^ungroup/i }) as HTMLButtonElement;
   const deselect = screen.getByRole('button', { name: /^deselect all/i }) as HTMLButtonElement;
+  const split = screen.getByRole('button', { name: /^split in half/i }) as HTMLButtonElement;
   expect(ungroup.disabled).toBe(true);
   expect(deselect.disabled).toBe(true);
+  expect(split.disabled).toBe(true);
   expect((screen.getByRole('button', { name: /^group/i }) as HTMLButtonElement).disabled).toBe(true);
 
   fireEvent.click(ungroup);
