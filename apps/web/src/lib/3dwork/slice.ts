@@ -200,6 +200,11 @@ export function halvingPlane(bounds: {
 export function slicePlane(soup: Float32Array, options: SliceOptions): {
   keep: SlicePiece;
   cut: SlicePiece;
+  /**
+   * The cross-section's closed rims, in the plane's other two axes (u, v) —
+   * the two axes left when the cut axis is dropped, in x, y, z order.
+   */
+  loops: [number, number][][];
   report: SliceReport;
 } {
   const axis = AXIS_INDEX[options.axis];
@@ -265,14 +270,18 @@ export function slicePlane(soup: Float32Array, options: SliceOptions): {
   let capTriangles = 0;
   let capLoops = 0;
   let openLoops = 0;
+  let loops: [number, number][][] = [];
 
-  if (cap && rim.length > 0) {
+  if (rim.length > 0) {
     const bounds = computeBounds(soup);
     const tolerance = Math.max(bounds.diagonal * 1e-6, 1e-6);
-    const { loops, open } = buildLoops(rim, tolerance);
-    openLoops = open;
+    const chained = buildLoops(rim, tolerance);
+    loops = chained.loops;
+    openLoops = chained.open;
     capLoops = loops.length;
+  }
 
+  if (cap) {
     for (const loop of loops) {
       for (const triangle of triangulateLoop(loop)) {
         const point = (p: [number, number]): Vertex => {
@@ -297,6 +306,7 @@ export function slicePlane(soup: Float32Array, options: SliceOptions): {
   return {
     keep: { soup: new Float32Array(above), triangles: above.length / 9 },
     cut: { soup: new Float32Array(below), triangles: below.length / 9 },
+    loops,
     report: {
       trianglesBefore: Math.floor(soup.length / 9),
       trianglesSplit: split,

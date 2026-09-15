@@ -49,6 +49,20 @@ describe('slicePlane', () => {
     expect(report.trianglesBefore).toBe(12);
   });
 
+  it('hands back the cross-section rim, in the plane’s own two axes', () => {
+    const { loops } = slicePlane(cubeSoup(20), { axis: 'x', position: 10 });
+
+    // One rim, one point per crossed triangle, running right round the 20 mm square.
+    expect(loops).toHaveLength(1);
+    expect(loops[0]).toHaveLength(8);
+    const us = loops[0].map((p) => p[0]);
+    const vs = loops[0].map((p) => p[1]);
+    expect(Math.min(...us)).toBeCloseTo(0, 5);
+    expect(Math.max(...us)).toBeCloseTo(20, 5);
+    expect(Math.min(...vs)).toBeCloseTo(0, 5);
+    expect(Math.max(...vs)).toBeCloseTo(20, 5);
+  });
+
   it('can leave the cross-section open when asked', () => {
     const { keep, report } = slicePlane(cubeSoup(20), {
       axis: 'y',
