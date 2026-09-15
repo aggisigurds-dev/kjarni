@@ -7,7 +7,17 @@
  */
 
 import type { ElementType } from 'react';
-import { Group, Move, Pin, Repeat2, SquareCheckBig, SquareDashed, Ungroup, X } from 'lucide-react';
+import {
+  Group,
+  Move,
+  Pin,
+  Repeat2,
+  Split,
+  SquareCheckBig,
+  SquareDashed,
+  Ungroup,
+  X,
+} from 'lucide-react';
 
 interface BuilderPanelProps {
   /** Picked parts on the table. */
@@ -26,6 +36,9 @@ interface BuilderPanelProps {
   canUngroup: boolean;
   onMove: () => void;
   canMove: boolean;
+  /** Cut the selected part in two, pins and all. */
+  onSplit: () => void;
+  canSplit: boolean;
   onClose: () => void;
 }
 
@@ -75,6 +88,8 @@ export function BuilderPanel({
   canUngroup,
   onMove,
   canMove,
+  onSplit,
+  canSplit,
   onClose,
 }: BuilderPanelProps) {
   return (
@@ -153,6 +168,13 @@ export function BuilderPanel({
           label={picked > 1 ? `Move ${picked} parts` : 'Move'}
           onClick={onMove}
           disabled={!canMove}
+        />
+        <Action
+          icon={Split}
+          label="Split in half…"
+          shortcut="S"
+          onClick={onSplit}
+          disabled={!canSplit}
         />
       </div>
 

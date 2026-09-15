@@ -4944,6 +4944,9 @@ export function Workbench({
         case 'b':
           toggleBuilderView();
           break;
+        case 's':
+          if (selectedId && !busy) openSlice(true);
+          break;
         case 'a':
           if (assemblyOn(projectRef.current)) {
             setMode((current) => (current === 'assembled' ? 'scattered' : 'assembled'));
@@ -4978,6 +4981,8 @@ export function Workbench({
     movingWith,
     selectAllParts,
     toggleBuilderView,
+    openSlice,
+    busy,
     spinPart,
     togglePartVisible,
     showAllParts,
@@ -6218,6 +6223,8 @@ export function Workbench({
               canUngroup={Boolean(selectedPart?.group) && !busy}
               onMove={() => selectedId && enterMoveMode(selectedId)}
               canMove={Boolean(selectedId) && !moveModeId}
+              onSplit={() => openSlice(true)}
+              canSplit={Boolean(selectedId) && !busy}
               onClose={toggleBuilderView}
             />
           )}
