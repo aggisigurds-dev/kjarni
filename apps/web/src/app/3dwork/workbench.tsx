@@ -38,6 +38,7 @@ import {
   Spline,
   Split,
   Star,
+  Zap,
   Sparkles,
   Trash2,
   Upload,
@@ -216,6 +217,7 @@ import { CloudPicker } from './cloud-picker';
 import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 import { BuilderPanel } from './builder-panel';
 import { FavoritesGallery } from './favorites-gallery';
+import { HammerDialog } from './hammer-dialog';
 import { addFavorite, loadFavoriteGeometry, type Favorite } from '@/lib/3dwork/favorites';
 
 type Mode = 'assembled' | 'scattered' | 'free';
@@ -376,6 +378,7 @@ export function Workbench({
   const [showGithub, setShowGithub] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [showHammer, setShowHammer] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [githubOwner, setGithubOwner] = useState('');
@@ -3699,6 +3702,26 @@ export function Workbench({
     return soup ? computeBounds(soup) : null;
   }, [selectedPart, soupOfPart]);
 
+  /** The selected part weighed, for the hammer calculator — only while it is open. */
+  const hammerCandidate = useMemo(() => {
+    if (!showHammer || !selectedPart) return null;
+    const soup = soupOfPart(selectedPart.id);
+    if (!soup) return null;
+    const { scale: s } = selectedPart.transform;
+    const scale = Math.abs(s.x * s.y * s.z) || 1;
+    const key = `${selectedPart.activeVersionId}:${soup.length}`;
+    let stats = statsCache.current.get(key);
+    if (!stats) {
+      const measured = describePart(soup);
+      stats = { volume: measured.volume, triangles: measured.triangles };
+      statsCache.current.set(key, stats);
+    }
+    return {
+      name: selectedPart.name,
+      massG: massGrams(stats.volume * scale, materialById(selectedPart.materialId).density),
+    };
+  }, [showHammer, selectedPart, soupOfPart]);
+
   const sliceAxisIndex = { x: 0, y: 1, z: 2 }[sliceSpec.axis];
 
   /**
@@ -5381,6 +5404,13 @@ export function Workbench({
               Save to favorites
             </MenuItem>
             <MenuItem
+              onClick={() => setShowHammer(true)}
+              icon={Zap}
+              hint="Spring, hammer speed, valve dwell — the selected part can be the hammer"
+            >
+              Hammer force…
+            </MenuItem>
+            <MenuItem
               onClick={() => {
                 if (!selectedId) {
                   toast.error('Select a part first.');
@@ -5999,6 +6029,9 @@ export function Workbench({
             </MenuItem>
             <MenuItem onClick={() => setShowFavorites(true)} icon={Star} hint="Parts saved from other builds">
               Favorites…
+            </MenuItem>
+            <MenuItem onClick={() => setShowHammer(true)} icon={Zap} hint="Spring, hammer speed, valve dwell">
+              Hammer force…
             </MenuItem>
             <MenuItem onClick={() => setShowDrive(true)} icon={HardDrive} hint="Preview STL and 3MF from Google Drive">
               Google Drive
@@ -7180,6 +7213,12 @@ export function Workbench({
           if (onePieceProgress !== null) return;
           setShowOnePiece(false);
         }}
+      />
+
+      <HammerDialog
+        open={showHammer}
+        onClose={() => setShowHammer(false)}
+        selected={hammerCandidate}
       />
 
       <FavoritesGallery
