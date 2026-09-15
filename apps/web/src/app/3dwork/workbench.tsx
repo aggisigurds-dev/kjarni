@@ -37,6 +37,7 @@ import {
   Layers,
   Spline,
   Split,
+  Star,
   Sparkles,
   Trash2,
   Upload,
@@ -214,6 +215,8 @@ import { KitBoard } from './kit-board';
 import { CloudPicker } from './cloud-picker';
 import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 import { BuilderPanel } from './builder-panel';
+import { FavoritesGallery } from './favorites-gallery';
+import { addFavorite, loadFavoriteGeometry, type Favorite } from '@/lib/3dwork/favorites';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
@@ -372,6 +375,7 @@ export function Workbench({
   const [outlineBusy, setOutlineBusy] = useState(false);
   const [showGithub, setShowGithub] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [githubOwner, setGithubOwner] = useState('');
@@ -3724,6 +3728,116 @@ export function Workbench({
     [selectedBounds, sliceSpec.axis]
   );
 
+  /** Put the selected part on the favourites shelf, as it is turned and scaled here. */
+  const saveFavorite = useCallback(async () => {
+    const part = selectedPart;
+    const soup = part ? soupOfPart(part.id) : undefined;
+    if (!part || !soup) {
+      toast.error('Select a part first.');
+      return;
+    }
+    setBusy(`Saving ${part.name} to favorites…`);
+    try {
+      const { rotation, scale } = part.transform;
+      const turned =
+        rotation.x !== 0 || rotation.y !== 0 || rotation.z !== 0 ||
+        scale.x !== 1 || scale.y !== 1 || scale.z !== 1;
+      const mesh = turned
+        ? bakeTransform(soup, { position: { x: 0, y: 0, z: 0 }, rotation, scale })
+        : soup;
+      const look = lookFor(part);
+      await addFavorite(
+        {
+          name: part.name,
+          color: part.color,
+          materialId: part.materialId,
+          finishId: part.finishId,
+          thumbnail: part.thumbnail ?? renderThumbnail(mesh, look.color, look),
+        },
+        mesh
+      );
+      toast.success(`Saved ${part.name} to favorites — on the shelf on every computer.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save that favorite.');
+    } finally {
+      setBusy(null);
+    }
+  }, [selectedPart, soupOfPart]);
+
+  /** Put a favourite on the bench, past the far end of whatever is there. */
+  const addFavoriteToBench = useCallback(
+    async (favorite: Favorite) => {
+      setBusy(`Fetching ${favorite.name} from favorites…`);
+      try {
+        const soup = await loadFavoriteGeometry(favorite.versionId);
+        if (!soup) {
+          toast.error('That favorite’s mesh is missing from the shelf.');
+          return;
+        }
+        const id = newPartId();
+        const versionId = newVersionId();
+        setGeometries((current) => new Map(current).set(versionId, soup));
+        void saveGeometry(versionId, soup);
+        const triangles = Math.floor(soup.length / 9);
+        // Beside the table's right-hand edge, so it does not land inside another part.
+        const rightEdge = snapNeighbors.reduce(
+          (edge, entry) => Math.max(edge, entry.box.max[0]),
+          -Infinity
+        );
+        const freePos = Number.isFinite(rightEdge)
+          ? { x: rightEdge + 20 - computeBounds(soup).min[0], y: 0, z: 0 }
+          : undefined;
+        patchProject((current) => ({
+          ...current,
+          parts: [
+            ...current.parts,
+            {
+              id,
+              name: favorite.name,
+              fileName: '',
+              slotId: '',
+              color: favorite.color,
+              finishId: favorite.finishId,
+              visible: true,
+              transform: {
+                position: { x: 0, y: 0, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                scale: { x: 1, y: 1, z: 1 },
+              },
+              ...(freePos ? { freePos } : {}),
+              triangles,
+              materialId: favorite.materialId,
+              notes: 'From favorites',
+              versions: [
+                {
+                  id: versionId,
+                  label: 'v1 favorite',
+                  note: `From favorites: ${favorite.name}`,
+                  triangles,
+                  createdAt: Date.now(),
+                },
+              ],
+              activeVersionId: versionId,
+              thumbnail: favorite.thumbnail ?? renderThumbnail(soup, favorite.color),
+              addedAt: Date.now(),
+            },
+          ],
+        }));
+        setSelectedId(id);
+        setMarked(new Set());
+        setShowFavorites(false);
+        setWorkspace('bench');
+        setFrameToken((token) => token + 1);
+        toast.success(`Added ${favorite.name} from favorites.`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not fetch that favorite.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [patchProject, snapNeighbors]
+  );
+
   const exportCombined = useCallback(() => {
     const baked = bakedAssembly();
     if (baked.length === 0) {
@@ -5041,6 +5155,15 @@ export function Workbench({
             <Cloud className="h-3 w-3" />
             <span className="hidden sm:inline">Cloud</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setShowFavorites(true)}
+            title="Favorites — parts saved from any build, on every computer"
+            className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-amber-800 hover:bg-amber-100"
+          >
+            <Star className="h-3 w-3" />
+            <span className="hidden sm:inline">Favorites</span>
+          </button>
         </div>
 
         <MenuBar>
@@ -5163,6 +5286,15 @@ export function Workbench({
           </Menu>
 
           <Menu label="Add">
+            <MenuItem
+              onClick={() => setShowFavorites(true)}
+              icon={Star}
+              tone="primary"
+              hint="Parts you saved from other builds"
+            >
+              From favorites…
+            </MenuItem>
+            <MenuSeparator />
             <MenuLabel>Primitives</MenuLabel>
             <MenuItem onClick={() => addPrimitive(boxSoup(), 'Box 30 mm')} icon={Boxes} hint="Cut pockets and flats">
               Box
@@ -5239,6 +5371,14 @@ export function Workbench({
               shortcut="⌘D"
             >
               Duplicate as variant
+            </MenuItem>
+            <MenuItem
+              onClick={() => void saveFavorite()}
+              disabled={!selectedId || Boolean(busy)}
+              icon={Star}
+              hint="Kept on Supabase outside this build — for any build, on any computer"
+            >
+              Save to favorites
             </MenuItem>
             <MenuItem
               onClick={() => {
@@ -5849,6 +5989,17 @@ export function Workbench({
             <MenuCheckItem checked={assembly} onClick={toggleAssembly}>
               Blaster assembly slots
             </MenuCheckItem>
+            <MenuItem
+              onClick={() => void saveFavorite()}
+              disabled={!selectedId || Boolean(busy)}
+              icon={Star}
+              hint="Kept on Supabase, for any build on any computer"
+            >
+              Save to favorites
+            </MenuItem>
+            <MenuItem onClick={() => setShowFavorites(true)} icon={Star} hint="Parts saved from other builds">
+              Favorites…
+            </MenuItem>
             <MenuItem onClick={() => setShowDrive(true)} icon={HardDrive} hint="Preview STL and 3MF from Google Drive">
               Google Drive
             </MenuItem>
@@ -6225,6 +6376,8 @@ export function Workbench({
               canMove={Boolean(selectedId) && !moveModeId}
               onSplit={() => openSlice(true)}
               canSplit={Boolean(selectedId) && !busy}
+              onFavorite={() => void saveFavorite()}
+              canFavorite={Boolean(selectedId) && !busy}
               onClose={toggleBuilderView}
             />
           )}
@@ -6381,6 +6534,7 @@ export function Workbench({
             onCenter={centerPart}
             onDuplicate={duplicatePart}
             onToggleVisible={togglePartVisible}
+            onSaveFavorite={() => void saveFavorite()}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
             onFixMisalignment={runFixMisalignment}
@@ -7026,6 +7180,15 @@ export function Workbench({
           if (onePieceProgress !== null) return;
           setShowOnePiece(false);
         }}
+      />
+
+      <FavoritesGallery
+        open={showFavorites}
+        onClose={() => setShowFavorites(false)}
+        onAdd={addFavoriteToBench}
+        onSaveSelected={saveFavorite}
+        selectedName={selectedPart?.name ?? null}
+        busy={Boolean(busy)}
       />
 
       <CloudPicker

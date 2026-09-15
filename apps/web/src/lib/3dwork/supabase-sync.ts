@@ -22,6 +22,11 @@ import {
 
 export const WORK3D_TABLE = 'work3d_projects';
 export const WORK3D_BUCKET = 'work3d';
+/**
+ * The favourites shelf is a row of the projects table that is not a build:
+ * every list of builds skips it. See favorites.ts.
+ */
+export const FAVORITES_ID = 'prj_favorites';
 
 const COMPANY_URL = 'https://osfdzskyvisifcwyjkuk.supabase.co';
 const COMPANY_KEY = 'sb_publishable_YVpznM5EK01qOdevQwOcIg_rMjTkT7f';
@@ -111,6 +116,7 @@ export async function listCloudProjects(): Promise<CloudProjectIndexEntry[]> {
     .from(WORK3D_TABLE)
     .select('id, name, part_count, updated_at, deleted, parts:project->parts')
     .eq('deleted', false)
+    .neq('id', FAVORITES_ID)
     .order('updated_at', { ascending: false })
     .limit(40);
   if (error) throw new Error(error.message);
