@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
 import { computeBounds, inspect } from './mesh';
-import { slicePlane } from './slice';
+import { halvingPlane, slicePlane } from './slice';
 
 describe('slicePlane', () => {
   it('cuts a cube in half and closes both halves', () => {
@@ -84,5 +84,31 @@ describe('slicePlane', () => {
     const { report } = slicePlane(new Float32Array(0), { axis: 'x', position: 0 });
     expect(report.trianglesBefore).toBe(0);
     expect(report.capTriangles).toBe(0);
+  });
+});
+
+describe('halvingPlane', () => {
+  it('cuts through the middle of the longest side', () => {
+    expect(halvingPlane({ size: [10, 30, 20], center: [1, 2, 3] })).toEqual({
+      axis: 'y',
+      position: 2,
+    });
+  });
+
+  it('takes the first of equally long sides', () => {
+    expect(halvingPlane({ size: [20, 20, 20], center: [5, 6, 7] })).toEqual({
+      axis: 'x',
+      position: 5,
+    });
+  });
+
+  it('leaves two equal solids behind', () => {
+    const soup = cubeSoup(20);
+    const { keep, cut } = slicePlane(soup, halvingPlane(computeBounds(soup)));
+
+    expect(inspect(keep.soup).watertight).toBe(true);
+    expect(inspect(cut.soup).watertight).toBe(true);
+    expect(inspect(keep.soup).signedVolume).toBeCloseTo(4000, 3);
+    expect(inspect(cut.soup).signedVolume).toBeCloseTo(4000, 3);
   });
 });

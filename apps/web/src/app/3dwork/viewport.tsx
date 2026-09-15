@@ -68,6 +68,12 @@ interface ViewportProps {
    * every picked part, and a drag on any picked part moves all of them.
    */
   builder: boolean;
+  /**
+   * The cut the Slice dialog is about to make, in the selected part's own
+   * coordinates. Drawn as a plane across the part; null when no cut is being
+   * set up.
+   */
+  slicePreview: { axis: 'x' | 'y' | 'z'; position: number } | null;
   wireframe: boolean;
   showGrid: boolean;
   /** Isolate: the selected part stays solid, everything else goes to glass. */
@@ -127,6 +133,9 @@ const BUILDER_PART = '#c3c7cd';
 const BUILDER_PICKED = '#8fbcef';
 const BUILDER_OUTLINE = '#1a6fe0';
 const BUILDER_OUTLINE_HIDDEN = '#86b1ea';
+/** The cut the Slice dialog is setting up. */
+const SLICE_PLANE_COLOR = 0x0ea5e9;
+const SLICE_EDGE_COLOR = 0x0284c7;
 /** Light intensities per view: sky, key, fill, and the headlight on the camera. */
 const PLAIN_LIGHTS = { hemi: 1.4, key: 1.8, fill: 0.55, head: 0 };
 // A strong key from one side and a weak headlight, so the faces of a part
@@ -239,6 +248,8 @@ interface SceneRefs {
   selection: THREE.BoxHelper;
   /** A box around each marked part, in the plain view. */
   markedBoxes: THREE.Group;
+  /** The cut the Slice dialog is setting up, drawn across the part. */
+  slicePlane: THREE.Group;
   lights: {
     hemi: THREE.HemisphereLight;
     key: THREE.DirectionalLight;
@@ -291,6 +302,7 @@ export function Viewport({
   pickedIds,
   onSelect,
   builder,
+  slicePreview,
   wireframe,
   showGrid,
   xray,
@@ -334,6 +346,9 @@ export function Viewport({
   // A new array every render; the effects key on what is in it instead.
   const pickedKey = pickedIds.join('\n');
   const picked = useMemo(() => new Set(pickedKey ? pickedKey.split('\n') : []), [pickedKey]);
+  // Likewise for the cut plane: its two numbers, not the object holding them.
+  const sliceAxis = slicePreview?.axis ?? null;
+  const slicePosition = slicePreview?.position ?? null;
 
   // Handlers change every render; a ref keeps the pointer listener stable.
   const handlers = useRef({
@@ -462,6 +477,9 @@ export function Viewport({
     scene.add(selection);
     const markedBoxes = new THREE.Group();
     scene.add(markedBoxes);
+    const slicePlane = new THREE.Group();
+    slicePlane.visible = false;
+    scene.add(slicePlane);
 
     // The builder view's outline is a post-processing pass. It draws into a
     // multisampled target so edges stay as smooth as on the canvas itself.
@@ -498,6 +516,7 @@ export function Viewport({
       plate,
       selection,
       markedBoxes,
+      slicePlane,
       lights: { hemi, key, fill, head },
       backgrounds: { plain: plainBackground, builder: builderBackground },
       environment: envMap,
@@ -600,6 +619,15 @@ export function Viewport({
       }
       if (state.selection.visible) state.selection.update();
       for (const box of state.markedBoxes.children) (box as THREE.BoxHelper).update();
+      // The cut plane rides the part it belongs to while that part eases home.
+      if (state.slicePlane.visible) {
+        const part = state.meshes.get(state.slicePlane.userData.partId as string);
+        if (part) {
+          state.slicePlane.position.copy(part.position);
+          state.slicePlane.quaternion.copy(part.quaternion);
+          state.slicePlane.scale.copy(part.scale);
+        }
+      }
       state.controls.update();
       if (state.builder) {
         head.position.copy(camera.position);
@@ -964,6 +992,7 @@ export function Viewport({
       floorMat.dispose();
       disposeTree(plate);
       disposeTree(markedBoxes);
+      disposeTree(slicePlane);
       disposeTree(selection);
       builderBackground.dispose();
       if (composer) {
@@ -1108,6 +1137,59 @@ export function Viewport({
         })
       : [];
   }, [builder, picked, parts]);
+
+  // The cut the Slice dialog is setting up, drawn across the part it will cut.
+  useEffect(() => {
+    const state = refs.current;
+    if (!state) return;
+    const stale = state.slicePlane.children.slice();
+    state.slicePlane.clear();
+    for (const child of stale) disposeTree(child);
+    state.slicePlane.visible = false;
+
+    const mesh = sliceAxis && selectedId ? state.meshes.get(selectedId) : undefined;
+    const bounds = mesh?.geometry.boundingBox;
+    if (!sliceAxis || slicePosition === null || !mesh || !bounds) return;
+
+    const size = bounds.getSize(new THREE.Vector3());
+    const centre = bounds.getCenter(new THREE.Vector3());
+    // A little larger than the part, so the plane reads as cutting through it.
+    const width = (sliceAxis === 'x' ? size.z : size.x) * 1.2 + 6;
+    const height = (sliceAxis === 'y' ? size.z : size.y) * 1.2 + 6;
+
+    const quad = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      // Drawn over the part rather than buried inside it: the point of this
+      // plane is to show where the cut lands, and most of it sits in material.
+      new THREE.MeshBasicMaterial({
+        color: SLICE_PLANE_COLOR,
+        transparent: true,
+        opacity: 0.25,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    quad.add(
+      new THREE.LineSegments(
+        new THREE.EdgesGeometry(quad.geometry),
+        new THREE.LineBasicMaterial({ color: SLICE_EDGE_COLOR, depthTest: false })
+      )
+    );
+    // A plane faces +Z; turn it to face the axis being cut.
+    if (sliceAxis === 'x') quad.rotation.y = Math.PI / 2;
+    if (sliceAxis === 'y') quad.rotation.x = -Math.PI / 2;
+    quad.position.copy(centre);
+    quad.position[sliceAxis] = slicePosition;
+    quad.renderOrder = 6;
+
+    state.slicePlane.add(quad);
+    state.slicePlane.userData.partId = selectedId;
+    state.slicePlane.position.copy(mesh.position);
+    state.slicePlane.quaternion.copy(mesh.quaternion);
+    state.slicePlane.scale.copy(mesh.scale);
+    state.slicePlane.visible = true;
+  }, [sliceAxis, slicePosition, selectedId, parts]);
 
   // Switch the look between the plain view and the builder view.
   useEffect(() => {

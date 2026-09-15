@@ -179,6 +179,24 @@ function buildLoops(edges: [number, number][][], tolerance: number): {
  * Caps are built per side with opposite winding, so each piece closes its own
  * cross-section and stays a solid in its own right.
  */
+/**
+ * Where to cut a part in two: through the middle of its longest side.
+ *
+ * That is the cut that makes each half fit a bed the whole part does not, and
+ * it is the one people mean by "split it in half"; any other plane is a slice.
+ */
+export function halvingPlane(bounds: {
+  size: readonly number[];
+  center: readonly number[];
+}): { axis: SliceAxis; position: number } {
+  const axes: SliceAxis[] = ['x', 'y', 'z'];
+  let longest = 0;
+  for (let i = 1; i < axes.length; i++) {
+    if ((bounds.size[i] ?? 0) > (bounds.size[longest] ?? 0)) longest = i;
+  }
+  return { axis: axes[longest], position: bounds.center[longest] ?? 0 };
+}
+
 export function slicePlane(soup: Float32Array, options: SliceOptions): {
   keep: SlicePiece;
   cut: SlicePiece;

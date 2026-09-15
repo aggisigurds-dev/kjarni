@@ -36,6 +36,7 @@ import {
   Ungroup,
   Layers,
   Spline,
+  Split,
   Sparkles,
   Trash2,
   Upload,
@@ -163,7 +164,7 @@ import {
   nameFromFirstParts,
   type ProjectListEntry,
 } from '@/lib/3dwork/project-sync';
-import { slicePlane } from '@/lib/3dwork/slice';
+import { halvingPlane, slicePlane } from '@/lib/3dwork/slice';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
 import { outerHull } from '@/lib/3dwork/outerhull';
@@ -310,6 +311,8 @@ export function Workbench({
   const [shellSpec, setShellSpec] = useState<ShellOptions>(DEFAULT_SHELL);
   const [bendSpec, setBendSpec] = useState<BendSpec>(DEFAULT_BEND);
   const [sliceSpec, setSliceSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', position: 0, keepBoth: true });
+  /** The selected part's box, measured once when the cut dialog opens. */
+  const [sliceBounds, setSliceBounds] = useState<ReturnType<typeof computeBounds> | null>(null);
   const [boreSpec, setBoreSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', diameter: 28, cu: 0, cv: 0 });
   const [showOnePiece, setShowOnePiece] = useState(false);
   /** What the one-piece worker is doing; null while it is not running. */
@@ -3257,7 +3260,8 @@ export function Workbench({
           }
 
           toast.success(
-            `Cut · ${formatCount(result.report.trianglesSplit)} triangles split · ` +
+            (spec.keepBoth ? 'Split in two · ' : 'Cut · ') +
+              `${formatCount(result.report.trianglesSplit)} triangles split · ` +
               `${result.report.capLoops} face(s) closed` +
               (result.report.openLoops > 0 ? `, ${result.report.openLoops} left open` : '')
           );
@@ -3571,6 +3575,32 @@ export function Workbench({
     const soup = soupOfPart(selectedPart.id);
     return soup ? computeBounds(soup) : null;
   }, [selectedPart, soupOfPart]);
+
+  const sliceAxisIndex = { x: 0, y: 1, z: 2 }[sliceSpec.axis];
+
+  /**
+   * Open the cut dialog, measuring the part once so the slider knows its ends.
+   * `halve` pre-sets the plane that cuts the longest side straight in two.
+   */
+  const openSlice = useCallback(
+    (halve: boolean) => {
+      const box = selectedBounds();
+      setSliceBounds(box);
+      if (box) {
+        const plan = halve
+          ? halvingPlane(box)
+          : { axis: sliceSpec.axis, position: box.center[{ x: 0, y: 1, z: 2 }[sliceSpec.axis]] };
+        setSliceSpec((current) => ({
+          ...current,
+          axis: plan.axis,
+          position: plan.position,
+          keepBoth: halve ? true : current.keepBoth,
+        }));
+      }
+      setShowSlice(true);
+    },
+    [selectedBounds, sliceSpec.axis]
+  );
 
   const exportCombined = useCallback(() => {
     const baked = bakedAssembly();
@@ -5215,14 +5245,15 @@ export function Workbench({
             <MenuSeparator />
             <MenuLabel>Cut the selected part</MenuLabel>
             <MenuItem
-              onClick={() => {
-                const box = selectedBounds();
-                if (box) {
-                  const index = { x: 0, y: 1, z: 2 }[sliceSpec.axis];
-                  setSliceSpec((current) => ({ ...current, position: box.center[index] }));
-                }
-                setShowSlice(true);
-              }}
+              onClick={() => openSlice(true)}
+              disabled={!selectedId || Boolean(busy)}
+              icon={Split}
+              hint="Cuts the longest side through the middle and keeps both halves"
+            >
+              Split in half…
+            </MenuItem>
+            <MenuItem
+              onClick={() => openSlice(false)}
               disabled={!selectedId || Boolean(busy)}
               icon={Scissors}
               hint="Keeps the original triangles — nothing is resampled"
@@ -5559,6 +5590,16 @@ export function Workbench({
           </button>
           <button
             type="button"
+            onClick={() => openSlice(true)}
+            disabled={!selectedId || Boolean(busy)}
+            title="Cut the selected part into two halves — the plane shows on the table before it cuts"
+            className="min-h-11 border-l border-slate-300 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+          >
+            <Split className="mx-auto mb-0.5 h-3.5 w-3.5" />
+            Split
+          </button>
+          <button
+            type="button"
             onClick={fixSelection}
             disabled={selection.length === 0 || Boolean(busy)}
             title={
@@ -5787,6 +5828,15 @@ export function Workbench({
           <button
             type="button"
             className={TOOL_BTN}
+            onClick={() => openSlice(true)}
+            disabled={!selectedId || Boolean(busy)}
+          >
+            <Split className="h-3.5 w-3.5" />
+            Split
+          </button>
+          <button
+            type="button"
+            className={TOOL_BTN}
             onClick={fixSelection}
             disabled={selection.length === 0 || Boolean(busy)}
           >
@@ -5910,6 +5960,11 @@ export function Workbench({
             pickedIds={pickedOnTable}
             onSelect={pickOnTable}
             builder={builderView}
+            slicePreview={
+              showSlice && selectedId
+                ? { axis: sliceSpec.axis, position: sliceSpec.position }
+                : null
+            }
             wireframe={wireframe}
             showGrid={showGrid}
             xray={xray}
@@ -6230,13 +6285,16 @@ export function Workbench({
       )}
 
       {showSlice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className={`${PANEL} w-full max-w-md p-4`}>
-            <h2 className="mb-1 text-sm font-bold text-slate-900">Slice through the part</h2>
+        // No dark backdrop, and docked low: the plane it is about to cut shows
+        // on the table behind it, and the view still turns while this is open.
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-3">
+          <div className={`${PANEL} pointer-events-auto w-full max-w-md p-4 shadow-xl`}>
+            <h2 className="mb-1 text-sm font-bold text-slate-900">Cut the part in two</h2>
             <p className="mb-3 text-[0.7rem] text-slate-500">
-              Every triangle the plane misses is kept exactly as it is — only the ones it crosses
-              are split, and the cut face is closed flat. The part must be a solid (Analyze → Fill)
-              or the slice comes out as a paper-thin shell.
+              The blue plane on the table is where it cuts — turn the view while this is open to
+              check it. Every triangle the plane misses is kept exactly as it is, only the ones it
+              crosses are split, and the cut face is closed flat. The part must be a solid
+              (Analyze → Fill) or the halves come out as paper-thin shells.
             </p>
 
             <div className="mb-3 grid grid-cols-2 gap-2">
@@ -6247,7 +6305,7 @@ export function Workbench({
                   value={sliceSpec.axis}
                   onChange={(event) => {
                     const axis = event.target.value as 'x' | 'y' | 'z';
-                    const box = selectedBounds();
+                    const box = sliceBounds ?? selectedBounds();
                     const index = { x: 0, y: 1, z: 2 }[axis];
                     setSliceSpec((current) => ({
                       ...current,
@@ -6273,6 +6331,44 @@ export function Workbench({
                 />
               </label>
             </div>
+
+            {sliceBounds && sliceBounds.size[sliceAxisIndex] > 0 && (
+              <div className="mb-3">
+                <input
+                  type="range"
+                  className="w-full accent-emerald-600"
+                  min={sliceBounds.min[sliceAxisIndex]}
+                  max={sliceBounds.max[sliceAxisIndex]}
+                  step={Math.max(sliceBounds.size[sliceAxisIndex] / 400, 0.01)}
+                  value={sliceSpec.position}
+                  onChange={(event) =>
+                    setSliceSpec((current) => ({ ...current, position: Number(event.target.value) }))
+                  }
+                  aria-label="Where the cut sits along the axis"
+                />
+                {/* What each half measures along the axis, so the cut can be aimed at a bed size. */}
+                <div className="mt-1 flex items-center justify-between font-mono text-[0.65rem] text-slate-500">
+                  <span>
+                    {Math.max(sliceSpec.position - sliceBounds.min[sliceAxisIndex], 0).toFixed(1)} mm
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-2 py-1 font-sans text-[0.62rem] font-bold uppercase tracking-wide text-slate-600 hover:bg-slate-100"
+                    onClick={() =>
+                      setSliceSpec((current) => ({
+                        ...current,
+                        position: sliceBounds.center[sliceAxisIndex],
+                      }))
+                    }
+                  >
+                    Middle
+                  </button>
+                  <span>
+                    {Math.max(sliceBounds.max[sliceAxisIndex] - sliceSpec.position, 0).toFixed(1)} mm
+                  </span>
+                </div>
+              </div>
+            )}
 
             <label className="mb-3 flex items-center gap-2 text-[0.7rem] text-slate-700">
               <input
