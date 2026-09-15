@@ -165,6 +165,14 @@ import {
   type ProjectListEntry,
 } from '@/lib/3dwork/project-sync';
 import { halvingPlane, slicePlane } from '@/lib/3dwork/slice';
+import {
+  DEFAULT_DOWELS,
+  dowelHoles,
+  pinLength,
+  pinSoup,
+  placeDowels,
+  type DowelSpec,
+} from '@/lib/3dwork/dowels';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
 import { outerHull } from '@/lib/3dwork/outerhull';
@@ -310,7 +318,14 @@ export function Workbench({
   const [showShell, setShowShell] = useState(false);
   const [shellSpec, setShellSpec] = useState<ShellOptions>(DEFAULT_SHELL);
   const [bendSpec, setBendSpec] = useState<BendSpec>(DEFAULT_BEND);
-  const [sliceSpec, setSliceSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', position: 0, keepBoth: true });
+  const [sliceSpec, setSliceSpec] = useState({
+    axis: 'x' as 'x' | 'y' | 'z',
+    position: 0,
+    keepBoth: true,
+    /** Bore matching holes into both halves and put pins on the table. */
+    dowels: false,
+    dowel: DEFAULT_DOWELS,
+  });
   /** The selected part's box, measured once when the cut dialog opens. */
   const [sliceBounds, setSliceBounds] = useState<ReturnType<typeof computeBounds> | null>(null);
   const [boreSpec, setBoreSpec] = useState({ axis: 'x' as 'x' | 'y' | 'z', diameter: 28, cu: 0, cv: 0 });
@@ -3198,7 +3213,13 @@ export function Workbench({
    * are split.
    */
   const runSlice = useCallback(
-    (spec: { axis: 'x' | 'y' | 'z'; position: number; keepBoth: boolean }) => {
+    async (spec: {
+      axis: 'x' | 'y' | 'z';
+      position: number;
+      keepBoth: boolean;
+      dowels: boolean;
+      dowel: DowelSpec;
+    }) => {
       const part = selectedPart;
       const soup = part ? soupOfPart(part.id) : undefined;
       if (!part || !soup) return;
@@ -3214,65 +3235,163 @@ export function Workbench({
         return;
       }
 
+      // Pins only make sense with both halves on the table.
+      const keepBoth = spec.keepBoth || spec.dowels;
       setBusy('Cutting…');
-      setTimeout(() => {
-        try {
-          const result = slicePlane(soup, { axis: spec.axis, position: spec.position, cap: true });
-          if (result.keep.triangles === 0 || result.cut.triangles === 0) {
-            toast.error('The plane misses the part — nothing was cut.');
+      // Let the busy overlay paint before the cut takes the thread.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      try {
+        const result = slicePlane(soup, { axis: spec.axis, position: spec.position, cap: true });
+        if (result.keep.triangles === 0 || result.cut.triangles === 0) {
+          toast.error('The plane misses the part — nothing was cut.');
+          return;
+        }
+
+        let lower = result.cut.soup;
+        let upper = result.keep.soup;
+        let pins: [number, number][] = [];
+        if (spec.dowels) {
+          pins = placeDowels(result.loops, spec.dowel);
+          if (pins.length === 0) {
+            toast.error(
+              `No room in the cut face for ⌀${spec.dowel.diameter} mm pins — try a smaller diameter, or cut where the part is thicker.`
+            );
             return;
           }
+          const holes = dowelHoles(pins, spec.axis, spec.position, spec.dowel);
+          // The clearance is already in the holes' diameter.
+          const options = { gapMm: 0, clearanceMm: 0, crumbMm3: 1, seamMm: 0, allowRebuild: false };
+          // The kernel takes its soups over, so it gets copies: the plain halves
+          // stay here in case it fails.
+          setBusy(`Boring ${pins.length} dowel hole(s) into the first half…`);
+          lower = (
+            await runOnePiece(
+              { bodies: [{ name: part.name, soup: lower.slice() }], pipes: holes.lower, options },
+              setBusy
+            )
+          ).soup;
+          setBusy(`Boring ${pins.length} dowel hole(s) into the other half…`);
+          upper = (
+            await runOnePiece(
+              {
+                bodies: [{ name: `${part.name} (other half)`, soup: upper.slice() }],
+                pipes: holes.upper,
+                options,
+              },
+              setBusy
+            )
+          ).soup;
+        }
 
-          // The half on the near side replaces the part; the other half becomes
-          // its own part so both can be printed or exported separately.
-          addVersion(part.id, result.cut.soup, 'cut', `Sliced on ${spec.axis.toUpperCase()}`);
+        // The half on the near side replaces the part; the other half becomes
+        // its own part so both can be printed or exported separately.
+        addVersion(part.id, lower, 'cut', `Sliced on ${spec.axis.toUpperCase()}`);
 
-          if (spec.keepBoth) {
-            const id = newPartId();
+        const added: Part[] = [];
+        if (keepBoth) {
+          const versionId = newVersionId();
+          setGeometries((current) => new Map(current).set(versionId, upper));
+          void saveGeometry(versionId, upper);
+          const triangles = Math.floor(upper.length / 9);
+          added.push({
+            ...part,
+            id: newPartId(),
+            name: `${part.name} (other half)`,
+            slotId: '',
+            triangles,
+            versions: [
+              {
+                id: versionId,
+                label: 'v1 cut',
+                note: `Other half of ${part.name}`,
+                triangles,
+                createdAt: Date.now(),
+              },
+            ],
+            activeVersionId: versionId,
+            thumbnail: renderThumbnail(upper, part.color),
+            addedAt: Date.now(),
+          });
+        }
+
+        if (pins.length > 0) {
+          // The pins go in a row just past the part's far edge, level with the
+          // cut: on the table to print, and out of the way of the halves.
+          const bounds = computeBounds(soup);
+          const axisIndex = { x: 0, y: 1, z: 2 }[spec.axis];
+          // The row runs along the table, not up into the air: along Z after an
+          // X cut, along X after any other.
+          const row = axisIndex === 0 ? 2 : 0;
+          const other = [0, 1, 2].find((i) => i !== axisIndex && i !== row) as number;
+          const frame = transformMatrix({ ...part.transform, position: partWorldPos(part) });
+          const pin = pinSoup(spec.dowel, spec.axis);
+          const length = pinLength(spec.dowel);
+          const color = nextColor(project);
+          const triangles = Math.floor(pin.length / 9);
+          pins.forEach((_, i) => {
+            const local = new Float32Array(3);
+            local[axisIndex] = spec.position;
+            local[row] = bounds.max[row] + 6 + spec.dowel.diameter * (0.5 + 2.5 * i);
+            local[other] = bounds.center[other];
+            const world = applyMatrix(local, frame);
+            const copy = pin.slice();
             const versionId = newVersionId();
-            setGeometries((current) => new Map(current).set(versionId, result.keep.soup));
-            void saveGeometry(versionId, result.keep.soup);
-            patchProject((current) => ({
-              ...current,
-              parts: [
-                ...current.parts,
+            setGeometries((current) => new Map(current).set(versionId, copy));
+            void saveGeometry(versionId, copy);
+            added.push({
+              id: newPartId(),
+              name: `Dowel ⌀${spec.dowel.diameter} × ${length} mm (${i + 1}/${pins.length})`,
+              fileName: '',
+              slotId: '',
+              color,
+              visible: true,
+              transform: {
+                position: { x: 0, y: 0, z: 0 },
+                rotation: { ...part.transform.rotation },
+                scale: { x: 1, y: 1, z: 1 },
+              },
+              freePos: { x: world[0], y: world[1], z: world[2] },
+              triangles,
+              materialId: part.materialId,
+              notes: `Fits the dowel holes of ${part.name}`,
+              versions: [
                 {
-                  ...part,
-                  id,
-                  name: `${part.name} (other half)`,
-                  slotId: '',
-                  triangles: result.keep.triangles,
-                  versions: [
-                    {
-                      id: versionId,
-                      label: 'v1 cut',
-                      note: `Other half of ${part.name}`,
-                      triangles: result.keep.triangles,
-                      createdAt: Date.now(),
-                    },
-                  ],
-                  activeVersionId: versionId,
-                  thumbnail: renderThumbnail(result.keep.soup, part.color),
-                  addedAt: Date.now(),
+                  id: versionId,
+                  label: 'v1 dowel',
+                  note: `⌀${spec.dowel.diameter} × ${length} mm`,
+                  triangles,
+                  createdAt: Date.now(),
                 },
               ],
-            }));
-          }
-
-          toast.success(
-            (spec.keepBoth ? 'Split in two · ' : 'Cut · ') +
-              `${formatCount(result.report.trianglesSplit)} triangles split · ` +
-              `${result.report.capLoops} face(s) closed` +
-              (result.report.openLoops > 0 ? `, ${result.report.openLoops} left open` : '')
-          );
-        } catch {
-          toast.error('Could not cut that part.');
-        } finally {
-          setBusy(null);
+              activeVersionId: versionId,
+              thumbnail: renderThumbnail(copy, color),
+              addedAt: Date.now(),
+            });
+          });
         }
-      }, 30);
+
+        if (added.length > 0) {
+          patchProject((current) => ({ ...current, parts: [...current.parts, ...added] }));
+        }
+
+        toast.success(
+          (keepBoth ? 'Split in two · ' : 'Cut · ') +
+            `${formatCount(result.report.trianglesSplit)} triangles split · ` +
+            `${result.report.capLoops} face(s) closed` +
+            (result.report.openLoops > 0 ? `, ${result.report.openLoops} left open` : '') +
+            (pins.length > 0
+              ? ` · ${pins.length} dowel pin(s) on the table${
+                  pins.length < spec.dowel.count ? ` — room for only ${pins.length}` : ''
+                }`
+              : '')
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not cut that part.');
+      } finally {
+        setBusy(null);
+      }
     },
-    [selectedPart, soupOfPart, addVersion, patchProject]
+    [selectedPart, soupOfPart, addVersion, patchProject, partWorldPos, project]
   );
 
   /**
@@ -3590,11 +3709,14 @@ export function Workbench({
         const plan = halve
           ? halvingPlane(box)
           : { axis: sliceSpec.axis, position: box.center[{ x: 0, y: 1, z: 2 }[sliceSpec.axis]] };
+        // Halves are usually cut to be printed and glued, so they get pins
+        // unless the box is unticked.
         setSliceSpec((current) => ({
           ...current,
           axis: plan.axis,
           position: plan.position,
           keepBoth: halve ? true : current.keepBoth,
+          dowels: halve ? true : current.dowels,
         }));
       }
       setShowSlice(true);
@@ -6288,7 +6410,9 @@ export function Workbench({
         // No dark backdrop, and docked low: the plane it is about to cut shows
         // on the table behind it, and the view still turns while this is open.
         <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-3">
-          <div className={`${PANEL} pointer-events-auto w-full max-w-md p-4 shadow-xl`}>
+          <div
+            className={`${PANEL} pointer-events-auto max-h-[85dvh] w-full max-w-md overflow-y-auto p-4 shadow-xl`}
+          >
             <h2 className="mb-1 text-sm font-bold text-slate-900">Cut the part in two</h2>
             <p className="mb-3 text-[0.7rem] text-slate-500">
               The blue plane on the table is where it cuts — turn the view while this is open to
@@ -6373,7 +6497,8 @@ export function Workbench({
             <label className="mb-3 flex items-center gap-2 text-[0.7rem] text-slate-700">
               <input
                 type="checkbox"
-                checked={sliceSpec.keepBoth}
+                checked={sliceSpec.keepBoth || sliceSpec.dowels}
+                disabled={sliceSpec.dowels}
                 onChange={(event) =>
                   setSliceSpec((current) => ({ ...current, keepBoth: event.target.checked }))
                 }
@@ -6381,6 +6506,57 @@ export function Workbench({
               />
               Keep both halves as separate parts
             </label>
+
+            <div className="mb-3 rounded border border-slate-200 bg-slate-50 p-2">
+              <label className="flex items-center gap-2 text-[0.7rem] font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={sliceSpec.dowels}
+                  onChange={(event) =>
+                    setSliceSpec((current) => ({ ...current, dowels: event.target.checked }))
+                  }
+                  className="accent-emerald-600"
+                />
+                Dowel pins, so the halves line up when glued
+              </label>
+              {sliceSpec.dowels && (
+                <>
+                  <p className="mt-1 text-[0.65rem] leading-snug text-slate-500">
+                    Matching holes are bored into both cut faces and loose pins put on the table to
+                    print alongside, so both halves still print cut face down. Pins go where the
+                    face has room for them — fewer if it is thin.
+                  </p>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {(
+                      [
+                        ['count', 'Pins', 1, 1],
+                        ['diameter', '⌀ mm', 0.5, 1],
+                        ['depth', 'Depth mm', 0.5, 1],
+                        ['clearance', 'Gap mm', 0.05, 0],
+                      ] as const
+                    ).map(([key, label, step, min]) => (
+                      <label key={key} className="block">
+                        <span className={`${LABEL} mb-1 block`}>{label}</span>
+                        <input
+                          type="number"
+                          className={FIELD}
+                          step={step}
+                          min={min}
+                          value={sliceSpec.dowel[key]}
+                          onChange={(event) => {
+                            const patch = { [key]: Number(event.target.value) } as Partial<DowelSpec>;
+                            setSliceSpec((current) => ({
+                              ...current,
+                              dowel: { ...current.dowel, ...patch },
+                            }));
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="flex justify-end gap-2">
               <button type="button" className={ACTION_GHOST} onClick={() => setShowSlice(false)}>
@@ -6391,7 +6567,7 @@ export function Workbench({
                 className={ACTION_PRIMARY}
                 onClick={() => {
                   setShowSlice(false);
-                  runSlice(sliceSpec);
+                  void runSlice(sliceSpec);
                 }}
               >
                 Cut
