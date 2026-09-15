@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, RotateCw, Ruler } from 'lucide-react';
+import { Eye, EyeOff, RotateCw, Ruler, Star } from 'lucide-react';
 import {
   MATERIALS,
   analyzeTube,
@@ -55,6 +55,8 @@ interface InspectorProps {
   onCenter: (partId: string) => void;
   onDuplicate: (partId: string) => void;
   onToggleVisible: (partId: string) => void;
+  /** Keep the part on the favourites shelf, for other builds. */
+  onSaveFavorite: (partId: string) => void;
   onAutoFix: (
     partId: string,
     options: {
@@ -1353,6 +1355,15 @@ export function Inspector(props: InspectorProps) {
           >
             {part.visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             {part.visible ? 'Hide from table' : 'Show on table'}
+          </button>
+          <button
+            type="button"
+            className={`${ACTION_GHOST} flex min-h-11 flex-1 items-center justify-center gap-2`}
+            onClick={() => props.onSaveFavorite(part.id)}
+            title="Keep this part on the favorites shelf, for any other build on any computer"
+          >
+            <Star className="h-4 w-4" />
+            Save to favorites
           </button>
         </div>
       )}

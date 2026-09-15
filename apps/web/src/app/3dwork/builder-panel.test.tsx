@@ -22,6 +22,8 @@ function renderPanel(overrides: Partial<Parameters<typeof BuilderPanel>[0]> = {}
     canMove: true,
     onSplit: vi.fn(),
     canSplit: true,
+    onFavorite: vi.fn(),
+    canFavorite: true,
     onClose: vi.fn(),
     ...overrides,
   };
@@ -40,8 +42,10 @@ test('runs each selection command and says how many parts are picked', () => {
   fireEvent.click(screen.getByRole('button', { name: /^group/i }));
   fireEvent.click(screen.getByRole('button', { name: /^move 2 parts/i }));
   fireEvent.click(screen.getByRole('button', { name: /^split in half/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^save to favorites/i }));
 
   expect(props.onSplit).toHaveBeenCalledOnce();
+  expect(props.onFavorite).toHaveBeenCalledOnce();
   expect(props.onSelectAll).toHaveBeenCalledOnce();
   expect(props.onDeselectAll).toHaveBeenCalledOnce();
   expect(props.onInvert).toHaveBeenCalledOnce();

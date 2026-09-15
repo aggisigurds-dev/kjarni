@@ -13,6 +13,7 @@ import {
   Pin,
   Repeat2,
   Split,
+  Star,
   SquareCheckBig,
   SquareDashed,
   Ungroup,
@@ -39,6 +40,9 @@ interface BuilderPanelProps {
   /** Cut the selected part in two, pins and all. */
   onSplit: () => void;
   canSplit: boolean;
+  /** Keep the selected part on the favourites shelf, for other builds. */
+  onFavorite: () => void;
+  canFavorite: boolean;
   onClose: () => void;
 }
 
@@ -90,6 +94,8 @@ export function BuilderPanel({
   canMove,
   onSplit,
   canSplit,
+  onFavorite,
+  canFavorite,
   onClose,
 }: BuilderPanelProps) {
   return (
@@ -175,6 +181,12 @@ export function BuilderPanel({
           shortcut="S"
           onClick={onSplit}
           disabled={!canSplit}
+        />
+        <Action
+          icon={Star}
+          label="Save to favorites"
+          onClick={onFavorite}
+          disabled={!canFavorite}
         />
       </div>
 
