@@ -1159,18 +1159,21 @@ export function Viewport({
 
     const quad = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
+      // Drawn over the part rather than buried inside it: the point of this
+      // plane is to show where the cut lands, and most of it sits in material.
       new THREE.MeshBasicMaterial({
         color: SLICE_PLANE_COLOR,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.25,
         side: THREE.DoubleSide,
         depthWrite: false,
+        depthTest: false,
       })
     );
     quad.add(
       new THREE.LineSegments(
         new THREE.EdgesGeometry(quad.geometry),
-        new THREE.LineBasicMaterial({ color: SLICE_EDGE_COLOR })
+        new THREE.LineBasicMaterial({ color: SLICE_EDGE_COLOR, depthTest: false })
       )
     );
     // A plane faces +Z; turn it to face the axis being cut.
