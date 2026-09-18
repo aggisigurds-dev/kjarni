@@ -2270,12 +2270,26 @@ export function Workbench({
 
       const restored = new Map(group.fitted.map((entry) => [entry.slotId, entry.partId]));
 
+      // Keep the members where the group is sitting now: shift each by how far
+      // the group has been moved from the origin it was baked at, instead of
+      // snapping them back to their pre-group spots (which dropped them to the
+      // floor when the group had been moved).
+      const bundlePart = project.parts.find((part) => part.id === partId);
+      const delta = bundlePart?.freePos ?? { x: 0, y: 0, z: 0 };
+      const placedMembers = group.members.map((member) => {
+        const base = member.freePos ?? member.transform.position;
+        return {
+          ...member,
+          freePos: { x: base.x + delta.x, y: base.y + delta.y, z: base.z + delta.z },
+        };
+      });
+
       patchProject((current) => ({
         ...current,
         slots: current.slots.map((slot) =>
           restored.has(slot.id) ? { ...slot, activePartId: restored.get(slot.id) as string } : slot
         ),
-        parts: [...current.parts.filter((part) => part.id !== partId), ...group.members],
+        parts: [...current.parts.filter((part) => part.id !== partId), ...placedMembers],
       }));
 
       // The bundle's own geometry is the only thing that goes; the members'
@@ -3808,8 +3822,8 @@ export function Workbench({
           -Infinity
         );
         const freePos = Number.isFinite(rightEdge)
-          ? { x: rightEdge + 20 - computeBounds(soup).min[0], y: 0, z: 0 }
-          : undefined;
+          ? { x: rightEdge + 20 - computeBounds(soup).min[0], y: 200, z: 0 }
+          : { x: 0, y: 200, z: 0 };
         patchProject((current) => ({
           ...current,
           parts: [
@@ -4685,6 +4699,8 @@ export function Workbench({
               rotation: { x: 0, y: 0, z: 0 },
               scale: { x: 1, y: 1, z: 1 },
             },
+            // New shapes appear ~20 cm up so they are not buried in the floor.
+            freePos: { x: 0, y: 200, z: 0 },
             triangles: Math.floor(soup.length / 9),
             materialId: project.materialId,
             notes: '',
