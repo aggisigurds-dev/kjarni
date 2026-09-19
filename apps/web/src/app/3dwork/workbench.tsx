@@ -5154,7 +5154,7 @@ export function Workbench({
   );
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col gap-2 bg-slate-200 p-2 text-slate-800">
+    <div className="wb-theme flex h-dvh max-h-dvh flex-col gap-2 bg-[var(--wb-ground)] p-2 text-[var(--wb-ink)]">
       <input
         ref={fileInputRef}
         type="file"
