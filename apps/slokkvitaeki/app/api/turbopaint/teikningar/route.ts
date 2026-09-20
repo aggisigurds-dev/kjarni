@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { haedir } from "../haedir";
 import { mapisFyrirPostnr, mapisFyrirSvf, mapisTeikningar } from "../mapis";
+import { lesaHusnumer, siaHusnumer } from "../husnumer";
 
 // Heimilisfang → landnúmer → teikningar.
 //
@@ -31,7 +32,7 @@ export const maxDuration = 30;
 /* Útgáfumerki fylgir hverju svari. Tvisvar 28.08 taldi ég deploy lent af því
  * bið-skilyrðið mitt var merki sem GAMLI kóðinn gat líka gefið (landnúmerið
  * fannst grafið í ruslinu; tómt svar við rugli). Þetta er ótvírætt. */
-const API_UTGAFA = "2026-09-14-mapis";
+const API_UTGAFA = "2026-09-20-husnumer";
 
 const LANDEIGN = "https://geo.fasteignaskra.is/landeignaskra/search";
 const FOTOWEB = "https://skjalasafn.reykjavik.is";
@@ -121,7 +122,15 @@ async function heimilisfong(q: string) {
       };
     });
 
-  return NextResponse.json({ utgafa: API_UTGAFA, results });
+  // Húsnúmer í leitinni → AÐEINS það númer (sjá ../husnumer.ts). `gataFjoldi` segir kallaranum hve margar eignir
+  // voru á götunni áður en síað var, svo hann geti sagt „ekkert skráð á þetta númer" í stað „ekkert fannst".
+  const siad = siaHusnumer(results, q);
+  return NextResponse.json({
+    utgafa: API_UTGAFA,
+    results: siad,
+    numer: lesaHusnumer(q)?.nr ?? null,
+    gataFjoldi: results.length,
+  });
 }
 
 /** Hvaða skjalasafn á við þetta póstnúmer — og hvert má senda notandann. */
