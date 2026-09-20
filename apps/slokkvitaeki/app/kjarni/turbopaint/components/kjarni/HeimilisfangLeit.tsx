@@ -177,7 +177,7 @@ export function HeimilisfangLeit({
     setMsg("Leita…");
     try {
       const r = await fetch(`/api/turbopaint/teikningar?heimilisfang=${encodeURIComponent(t)}`);
-      const d = (await r.json()) as { results?: Eign[]; error?: string };
+      const d = (await r.json()) as { results?: Eign[]; error?: string; numer?: number | null; gataFjoldi?: number };
       if (my !== seq.current) return;
       if (d.error) { setMsg(d.error); setEignir([]); return; }
       const res = d.results || [];
@@ -192,7 +192,9 @@ export function HeimilisfangLeit({
       setMsg(
         res.length
           ? null
-          : "Ekkert fannst — athugaðu broddstafina (Skútuvogur, ekki Skutuvogur)."
+          : d.numer != null && (d.gataFjoldi ?? 0) > 0
+            ? `Ekkert skráð á númer ${d.numer} — slepptu númerinu til að sjá alla götuna (${d.gataFjoldi} eignir).`
+            : "Ekkert fannst — athugaðu broddstafina (Skútuvogur, ekki Skutuvogur)."
       );
     } catch {
       if (my === seq.current) setMsg("Leit mistókst");
