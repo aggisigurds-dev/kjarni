@@ -42,10 +42,28 @@ function quickLongEdge(q: FotowebQuickRendition): number {
   return Math.max(q.width ?? 0, q.height ?? 0, q.size ?? 0);
 }
 
-export function fotowebDownloadOrder(asset: FotowebAsset, pathname: string): FotowebCandidate[] {
+export function fotowebDownloadOrder(
+  asset: FotowebAsset,
+  pathname: string,
+  opts: { preferImage?: boolean } = {}
+): FotowebCandidate[] {
   const baseName = fotowebBaseName(asset, pathname);
-  const jpegName = baseName.replace(/\.tiff?$/i, "") + ".jpg";
+  const jpegName = baseName.replace(/\.(tiff?|pdf)$/i, "") + ".jpg";
   const out: FotowebCandidate[] = [];
+  const original = asset.renditions?.find((r) => r.original && r.href);
+
+  // PDF er VIGUR og lítill (A1-uppdráttur úr CAD ≈ 0,4 MB). Cache-JPEG safnsins er
+  // föst 6006 px mynd af sömu síðu (≈180 DPI á A1) — hún varð að graut um leið og
+  // þysjað var inn á herbergi (Agnar 20.09.2026, Fiskislóð 41: „increase the import
+  // quality in turbopaint search"). PDF-innflutningurinn teiknar vigurinn sjálfur í
+  // allt að 300/600 DPI og les textann með, svo upprunalega skjalið fer FREMST.
+  // TIF-röðin hér að neðan er óbreytt: þar frysti fullt TIF símann.
+  // preferImage: kallari sem setur skrána í <img>/<canvas> (teikn-mynd í Slökkvitæki-appinu, „Sækja teikningu")
+  // getur ekki tekið við PDF — þar heldur JPEG forgangi. Vigurinn sækir sá kallari sér.
+  const isPdf = /\.pdf$/i.test(baseName) && !opts.preferImage;
+  if (isPdf && original?.href) {
+    out.push({ href: original.href, name: baseName, kind: "original" });
+  }
 
   const jpegs = [...(asset.quickRenditions ?? [])]
     .filter((q) => q.href && quickLongEdge(q) >= FOTOWEB_BOARD_JPEG_MIN)
@@ -54,8 +72,7 @@ export function fotowebDownloadOrder(asset: FotowebAsset, pathname: string): Fot
     out.push({ href: q.href as string, name: jpegName, kind: "jpeg" });
   }
 
-  const original = asset.renditions?.find((r) => r.original && r.href);
-  if (original?.href) {
+  if (!isPdf && original?.href) {
     out.push({ href: original.href, name: baseName, kind: "original" });
   }
 

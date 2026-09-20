@@ -203,11 +203,11 @@ export function TopBar({
           if (e.key === "Enter") e.currentTarget.blur();
         }}
         enterKeyHint="done"
-        className="min-w-[8rem] flex-1 basis-[8rem] truncate rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:min-w-[12rem] sm:basis-[12rem] sm:text-sm"
+        className="min-w-[4.5rem] flex-1 basis-[4.5rem] truncate rounded-md bg-transparent px-1 text-base font-medium text-stone-100 outline-none placeholder:text-stone-500 focus:bg-white/8 sm:min-w-[12rem] sm:basis-[12rem] sm:text-sm"
         placeholder="Nafn á borði"
       />
       {onVeljaTeikningu && (
-        <div className="min-w-0 shrink">
+        <div className="min-w-[5.5rem] flex-1 basis-[5.5rem] sm:flex-none sm:basis-auto">
           <HeimilisfangLeit onVelja={onVeljaTeikningu} />
         </div>
       )}

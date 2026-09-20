@@ -29,6 +29,8 @@ function passThrough(upstream: Response, filename: string) {
   let type = upstream.headers.get("content-type") || "application/octet-stream";
   // Background-task TIF kemur sem octet-stream — merkja rétt eftir endingu.
   if (/octet-stream/i.test(type) && /\.tiff?$/i.test(filename)) type = "image/tiff";
+  // Sama með upprunalegt PDF — án réttrar tegundar færi það í TIF-lesarann í vafranum.
+  if (/octet-stream/i.test(type) && /\.pdf$/i.test(filename)) type = "application/pdf";
   headers.set("content-type", type);
   const len = upstream.headers.get("content-length");
   if (len) headers.set("content-length", len);
@@ -115,7 +117,8 @@ export async function GET(req: NextRequest) {
 
       // JPEG (≈6000 px) á undan ORIGINAL TIF (≈10000 px / 70 MP).
       // Fullt TIF afþjappað í vafranum frysti innflutninginn á síma.
-      for (const cand of fotowebDownloadOrder(asset, target.pathname)) {
+      const preferImage = req.nextUrl.searchParams.get("prefer") === "image";
+      for (const cand of fotowebDownloadOrder(asset, target.pathname, { preferImage })) {
         const href = cand.href.startsWith("http") ? cand.href : base + cand.href;
         if (cand.kind === "original") {
           try {
