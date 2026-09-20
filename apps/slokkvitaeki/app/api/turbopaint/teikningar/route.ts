@@ -32,7 +32,7 @@ export const maxDuration = 30;
 /* Útgáfumerki fylgir hverju svari. Tvisvar 28.08 taldi ég deploy lent af því
  * bið-skilyrðið mitt var merki sem GAMLI kóðinn gat líka gefið (landnúmerið
  * fannst grafið í ruslinu; tómt svar við rugli). Þetta er ótvírætt. */
-const API_UTGAFA = "2026-09-20-husnumer";
+const API_UTGAFA = "2026-09-20-husnumer-bil";
 
 const LANDEIGN = "https://geo.fasteignaskra.is/landeignaskra/search";
 const FOTOWEB = "https://skjalasafn.reykjavik.is";
@@ -91,6 +91,25 @@ async function heimilisfong(q: string) {
     return bad(502, "Náði ekki í Landeignaskrá");
   }
   if (!Array.isArray(raw)) raw = [];
+
+  // „Fiskislóð 4" er ekki til sem stök eign — en „Fiskislóð 2 2-8" nær yfir númerið. Landeignaskrá skilar þá ENGU
+  // fyrir leitina með númeri, svo gatan ein er sótt og húsnúmerasían hér að neðan finnur bilið sem á við.
+  if (!raw.length && lesaHusnumer(q)) {
+    const gataEin = q.replace(/\s*\d.*$/, "").trim();
+    if (gataEin.length >= 2) {
+      try {
+        const r2 = await fetch(`${LANDEIGN}?term=${encodeURIComponent(gataEin)}`, {
+          headers: { "User-Agent": "Kjarni-TurboPaint/1.0", Accept: "application/json, */*" },
+        });
+        if (r2.ok) {
+          const aftur = JSON.parse(await r2.text()) as LeitRow[];
+          if (Array.isArray(aftur)) raw = aftur;
+        }
+      } catch {
+        /* fyrri niðurstaða (tóm) stendur */
+      }
+    }
+  }
 
   /* Landeignaskrá er LAUS í leit — hún skilar einhverju sem líkist inntakinu
    * fremur en engu (staðfest: "zzzqqq ekkert hér" skilaði Héraðsdal). Fyrir
