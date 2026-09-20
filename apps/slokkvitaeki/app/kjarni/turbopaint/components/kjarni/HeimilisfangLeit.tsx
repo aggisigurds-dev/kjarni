@@ -322,7 +322,11 @@ export function HeimilisfangLeit({
   const showPanel = opid && (compact || eignir.length > 0 || msg || teikningar.length > 0);
 
   const searchField = (
-    <div className="flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-1">
+    // Á síma (412 px) komst hausinn ekki fyrir: reiturinn hafði min-w 9rem OG 46vw og
+    // lak því út úr `min-w-0 shrink` umbúðunum yfir „PDF"-hnappinn (Agnar 20.09.2026:
+    // „Fix overlap in mobile view"). Nú má hann skreppa og klippist innan umbúðanna;
+    // sprettiglugginn er hvort eð er með sinn eigin leitarreit í fullri breidd.
+    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden rounded-md bg-white/10 px-2 py-1">
       <Search className="size-3.5 shrink-0 text-stone-300" />
       <input
         value={q}
@@ -330,7 +334,7 @@ export function HeimilisfangLeit({
         onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
         onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
         placeholder="Heimilisfang — t.d. Skútuvogur 4"
-        className="w-[min(46vw,220px)] min-w-[9rem] bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none sm:w-[220px]"
+        className="w-full min-w-0 truncate bg-transparent text-[12.5px] text-white placeholder:text-stone-400 focus:outline-none sm:w-[220px] sm:min-w-[9rem]"
       />
       {q && (
         <button

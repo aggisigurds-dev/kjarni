@@ -52,3 +52,22 @@ test("falls back to original TIF when FotoWeb has no large JPEG", () => {
 test("strips .info from the FotoWeb filename", () => {
   assert.equal(fotowebBaseName({ filename: "a.tif.info" }, "/x"), "a.tif");
 });
+
+test("a PDF drawing downloads the vector original before the 6006 px JPEG", () => {
+  const asset: FotowebAsset = {
+    filename: "2023-11-2843348.pdf",
+    renditions: [{ original: true, width: 3368, height: 4768, href: "/x.pdf.info/__renditions/ORIGINAL" }],
+    quickRenditions: [
+      { size: 6006, width: 4242, height: 6006, href: "/cache/6006.jpg" },
+      { size: 2400, width: 1695, height: 2400, href: "/cache/2400.jpg" },
+      { size: 800, width: 565, height: 800, href: "/cache/800.jpg" },
+    ],
+  };
+  const order = fotowebDownloadOrder(asset, "/archives/2023-11-2843348.pdf.info");
+  assert.equal(order[0]?.kind, "original");
+  assert.equal(order[0]?.name, "2023-11-2843348.pdf");
+  assert.equal(order[1]?.kind, "jpeg");
+  assert.equal(order[1]?.name, "2023-11-2843348.jpg");
+  assert.ok(order[1]?.href.includes("6006.jpg"));
+  assert.equal(order.filter((c) => c.kind === "original").length, 1);
+});
