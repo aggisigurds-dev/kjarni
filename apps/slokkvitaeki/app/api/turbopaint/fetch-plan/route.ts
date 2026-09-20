@@ -117,7 +117,8 @@ export async function GET(req: NextRequest) {
 
       // JPEG (≈6000 px) á undan ORIGINAL TIF (≈10000 px / 70 MP).
       // Fullt TIF afþjappað í vafranum frysti innflutninginn á síma.
-      for (const cand of fotowebDownloadOrder(asset, target.pathname)) {
+      const preferImage = req.nextUrl.searchParams.get("prefer") === "image";
+      for (const cand of fotowebDownloadOrder(asset, target.pathname, { preferImage })) {
         const href = cand.href.startsWith("http") ? cand.href : base + cand.href;
         if (cand.kind === "original") {
           try {

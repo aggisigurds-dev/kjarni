@@ -71,3 +71,15 @@ test("a PDF drawing downloads the vector original before the 6006 px JPEG", () =
   assert.ok(order[1]?.href.includes("6006.jpg"));
   assert.equal(order.filter((c) => c.kind === "original").length, 1);
 });
+
+test("prefer=image keeps the JPEG first even for a PDF drawing", () => {
+  const asset: FotowebAsset = {
+    filename: "2023-11-2843348.pdf",
+    renditions: [{ original: true, href: "/x.pdf.info/__renditions/ORIGINAL" }],
+    quickRenditions: [{ size: 6006, width: 4242, height: 6006, href: "/cache/6006.jpg" }],
+  };
+  const order = fotowebDownloadOrder(asset, "/archives/2023-11-2843348.pdf.info", { preferImage: true });
+  assert.equal(order[0]?.kind, "jpeg");
+  assert.ok(order[0]?.href.includes("6006.jpg"));
+  assert.equal(order[1]?.kind, "original");
+});
