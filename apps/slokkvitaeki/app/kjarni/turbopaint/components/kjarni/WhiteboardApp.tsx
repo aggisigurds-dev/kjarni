@@ -33,7 +33,8 @@ import * as symbolsApi from "../../lib/board/symbols";
 import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
 import type { OcrWord } from "../../lib/board/firewall-rating";
-import { clearBoard, loadBoard, migrateBoardObjects, schedulePersist } from "../../lib/board/persistence";
+import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
+import { finnaTengduMynd, giskaFrumStaerd, innflutningsSlod, merkiIBord, saekjaUttekt, symbolFyrirTegund, vistaIUttekt } from "../../lib/board/uttekt";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
 import {
@@ -455,6 +456,82 @@ export function WhiteboardApp() {
     [runImport]
   );
 
+  // ── Úttektarteikning úr Slökkvitæki-appinu: ?uttekt=<fyrirtæki>&haed=<hæð> ──────────────────────────────
+  // Opnar hæðina sem borð („<staður> — <hæð>"): sé borðið til er því haldið (með öllu sem teiknað var á það),
+  // annars er teikningin flutt inn og tækin sett niður á sínum stöðum. „Vista í úttekt" skrifar þau til baka.
+  const [uttektVistar, setUttektVistar] = useState(false);
+  const tengdMynd = useBoardStore((st) => finnaTengduMynd(st.objects));
+  const uttektFromQuery = useRef(false);
+  useEffect(() => {
+    if (uttektFromQuery.current) return;
+    const q = new URLSearchParams(window.location.search);
+    const cid = Number(q.get("uttekt") || 0);
+    const haedId = q.get("haed") || "";
+    if (!cid || !haedId) return;
+    uttektFromQuery.current = true;
+    const hrein = new URL(window.location.href);
+    ["uttekt", "haed", "b", "h"].forEach((k) => hrein.searchParams.delete(k));
+    window.history.replaceState({}, "", hrein.pathname + hrein.search);
+    const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
+    void (async () => {
+      try {
+        const u = await saekjaUttekt(cid);
+        const haed = u.haedir.find((x) => x.id === haedId) || (u.haedir.length === 1 ? u.haedir[0] : null);
+        if (!haed) throw new Error("Hæðin fannst ekki í úttektinni.");
+        const nafn = `${u.nafn} — ${haed.nafn || "hæð"}`.slice(0, 80);
+        const til = (await listBoards()).find((b) => b.name === nafn);
+        if (til) {
+          await switchBoard(til.id);
+          toast.success(`${nafn}: borðið var til — opnað eins og þú skildir við það`);
+          return;
+        }
+        const slod = innflutningsSlod(haed.image_url);
+        if (!slod) throw new Error("Teikning hæðarinnar er upphlaðin mynd, ekki úr skjalasafni — flyttu hana inn handvirkt.");
+        await createBoard(nafn);
+        await runUrlImport(slod);
+        const myndir = useBoardStore.getState().objects.filter((o) => o.type === "image");
+        const mynd = myndir[myndir.length - 1];
+        if (!mynd || mynd.type !== "image") throw new Error("Teikningin kom ekki inn á borðið.");
+        const frum =
+          haed.frum && haed.frum.b > 0 ? haed.frum : urlFrum.b > 0 && urlFrum.h > 0 ? urlFrum : giskaFrumStaerd(mynd);
+        useBoardStore.getState().patchObject(
+          mynd.id,
+          { uttekt: { companyId: cid, haedId: haed.id, frumB: frum.b, frumH: frum.h } } as Partial<BoardObject>,
+          false
+        );
+        // Táknin miðast við blaðið: 56 px stimpill hverfur á 7.200 px uppdrætti.
+        const staerd = Math.max(getStampSize(), Math.round(Math.max(mynd.width, mynd.height) / 110));
+        const takn = (haed.markers || []).map((m) => {
+          const t = u.taeki.find((x) => x.id === m.unitId);
+          const stadur = merkiIBord(m, mynd, frum, staerd);
+          const obj = makeSymbol(symbolFyrirTegund(t?.type), stadur.x, stadur.y, t?.serial ? String(t.serial).slice(-6) : "", staerd);
+          return { ...obj, parentId: mynd.id, uttektUnitId: m.unitId } as BoardObject;
+        });
+        if (takn.length) useBoardStore.getState().addObjects(takn, false);
+        await persistBoard();
+        toast.success(`${nafn}: ${takn.length} tæki sett á teikninguna. Færðu þau til og ýttu á „Vista í úttekt".`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
+      }
+    })();
+  }, [runUrlImport]);
+
+  const vistaUttekt = useCallback(async () => {
+    setUttektVistar(true);
+    try {
+      const r = await vistaIUttekt(useBoardStore.getState().objects);
+      const auka = [
+        r.otengd ? `${r.otengd} ný tákn eru ekki skráð tæki og vistast ekki` : "",
+        r.utan ? `${r.utan} tæki standa utan teikningar og voru ekki færð` : "",
+      ].filter(Boolean);
+      toast.success(`${r.nafn}: ${r.fjoldi} staðsetningar vistaðar (${r.breytt} færðar, ${r.ny} nýjar)` + (auka.length ? " · " + auka.join(" · ") : ""));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Vistun í úttekt mistókst");
+    } finally {
+      setUttektVistar(false);
+    }
+  }, []);
+
   const planFromQuery = useRef(false);
   useEffect(() => {
     if (planFromQuery.current) return;
@@ -727,6 +804,22 @@ export function WhiteboardApp() {
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
+      {tengdMynd?.uttekt && (
+        <div className="pointer-events-none absolute inset-x-0 top-[6.75rem] z-30 flex justify-center px-2">
+          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
+            <span className="min-w-0 truncate">🧯 Úttektarteikning · staðsetningar tækja</span>
+            <button
+              type="button"
+              disabled={uttektVistar}
+              onClick={() => void vistaUttekt()}
+              className="shrink-0 rounded-full bg-[#FE653F] px-3.5 py-1.5 font-semibold text-white hover:bg-[#ff7a58] disabled:opacity-60"
+              title="Skrifar staðsetningar tækjanna aftur í úttektarteikninguna í Slökkvitæki-appinu"
+            >
+              {uttektVistar ? "Vistar…" : "💾 Vista í úttekt"}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <div
           ref={shellRef}
