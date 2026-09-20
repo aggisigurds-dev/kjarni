@@ -20,6 +20,8 @@ export type FotowebQuickRendition = {
 
 export type FotowebAsset = {
   filename?: string;
+  /** Bytes. CAD-vigur á A1 er ~0,4 MB; skannaður uppdráttur í PDF-umbúðum ~10 MB. */
+  filesize?: number;
   renditions?: FotowebRendition[];
   quickRenditions?: FotowebQuickRendition[];
 };
@@ -32,6 +34,9 @@ export type FotowebCandidate = {
 
 /** Longest edge of the preferred cache JPEG. Below this we still try TIF. */
 export const FOTOWEB_BOARD_JPEG_MIN = 2400;
+
+/** Stærra PDF en þetta er nær örugglega skönnuð mynd, ekki vigur. */
+export const FOTOWEB_VECTOR_PDF_MAX = 3 * 1024 * 1024;
 
 export function fotowebBaseName(asset: FotowebAsset, pathname: string): string {
   const raw = asset.filename || pathname.split("/").pop() || "teikning";
@@ -60,7 +65,11 @@ export function fotowebDownloadOrder(
   // TIF-röðin hér að neðan er óbreytt: þar frysti fullt TIF símann.
   // preferImage: kallari sem setur skrána í <img>/<canvas> (teikn-mynd í Slökkvitæki-appinu, „Sækja teikningu")
   // getur ekki tekið við PDF — þar heldur JPEG forgangi. Vigurinn sækir sá kallari sér.
-  const isPdf = /\.pdf$/i.test(baseName) && !opts.preferImage;
+  // SKANNAÐ PDF er ein risamynd (Skútuvogur 4, 1. hæð: 10 MB). Teiknað í 7.200 px varð það 63 MB PNG á borðinu —
+  // hægt í vafra, þungt í skýinu og enginn vigur unninn. Þá er cache-JPEG safnsins (1,7 MB) betri kostur.
+  // Stærðin greinir á milli: vigur-uppdrættir eru brot úr megabæti. Óþekkt stærð → gert ráð fyrir vigri.
+  const likelyScan = (asset.filesize ?? 0) > FOTOWEB_VECTOR_PDF_MAX;
+  const isPdf = /\.pdf$/i.test(baseName) && !opts.preferImage && !likelyScan;
   if (isPdf && original?.href) {
     out.push({ href: original.href, name: baseName, kind: "original" });
   }
