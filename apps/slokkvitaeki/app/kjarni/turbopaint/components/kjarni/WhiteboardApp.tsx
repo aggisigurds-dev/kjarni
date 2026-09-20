@@ -475,6 +475,11 @@ export function WhiteboardApp() {
     const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
     void (async () => {
       try {
+        // BÍÐA eftir að síðasta borð sé hlaðið. Án þessa keppti createBoard() við loadBoard() í ræsingu: nýja borðið
+        // varð til, svo skipti ræsingin yfir á síðasta borð og teikningin lenti ÞAR (fannst á framleiðslu 20.09.2026 —
+        // Skútuvogur fór inn á borð Bílabúðar Benna). Staðbundið vann createBoard kapphlaupið og villan sást ekki.
+        for (let i = 0; i < 200 && !useBoardStore.getState().hydrated; i++) await new Promise((r) => setTimeout(r, 100));
+        if (!useBoardStore.getState().hydrated) throw new Error("Borðið hlóðst ekki — reyndu aftur.");
         const u = await saekjaUttekt(cid);
         const haed = u.haedir.find((x) => x.id === haedId) || (u.haedir.length === 1 ? u.haedir[0] : null);
         if (!haed) throw new Error("Hæðin fannst ekki í úttektinni.");
