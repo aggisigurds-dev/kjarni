@@ -83,3 +83,18 @@ test("prefer=image keeps the JPEG first even for a PDF drawing", () => {
   assert.ok(order[0]?.href.includes("6006.jpg"));
   assert.equal(order[1]?.kind, "original");
 });
+
+test("a scanned PDF (large file) keeps the JPEG first — rasterising it made a 63 MB PNG", () => {
+  const asset: FotowebAsset = {
+    filename: "2022-10-1139929.pdf",
+    filesize: 10466028,
+    renditions: [{ original: true, href: "/x.pdf.info/__renditions/ORIGINAL" }],
+    quickRenditions: [{ size: 6006, width: 6006, height: 4295, href: "/cache/6006.jpg" }],
+  };
+  const order = fotowebDownloadOrder(asset, "/archives/2022-10-1139929.pdf.info");
+  assert.equal(order[0]?.kind, "jpeg");
+  assert.equal(order[order.length - 1]?.kind, "original");
+  // Lítill vigur heldur PDF-forgangi.
+  const vigur = fotowebDownloadOrder({ ...asset, filesize: 417934 }, "/archives/x.pdf.info");
+  assert.equal(vigur[0]?.kind, "original");
+});
