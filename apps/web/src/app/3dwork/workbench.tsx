@@ -4761,20 +4761,14 @@ export function Workbench({
         actions: [{ label: 'Download STL', run: () => downloadPartStl(finished.id) }],
       };
     }
-    if (onePiecePipes.length === 0) {
-      return {
-        text: 'Next: put a pipe down the bore.',
-        actions: [28, 20].map((diameter) => ({
-          label: `+ ⌀${diameter}`,
-          run: () => addPipeThrough(diameter, diameter >= 25 ? 1.5 : 2),
-        })),
-      };
-    }
+    // The "put a pipe down the bore" (⌀28 / ⌀20) suggestion was intrusive on
+    // marker builds that don't use the pipe-bore workflow — don't nag for it.
+    if (onePiecePipes.length === 0) return null;
     return {
       text: 'Next: join the bodies and cut the pipe holes.',
       actions: [{ label: 'One piece', run: openOnePiece }],
     };
-  }, [assembly, onePieceBodies, onePiecePipes, project.parts, downloadPartStl, addPipeThrough, openOnePiece]);
+  }, [assembly, onePieceBodies, onePiecePipes, project.parts, downloadPartStl, openOnePiece]);
 
   const onePieceMass = useMemo(() => {
     if (!onePieceReport) return null;
