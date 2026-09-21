@@ -61,6 +61,7 @@ import {
   MousePointer2,
   SquareDashed,
   Grid2x2,
+  AlignCenterVertical,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -384,6 +385,9 @@ export function Workbench({
   const [multiSelect, setMultiSelect] = useState(false);
   /** 3D Builder view: grey parts, blue outlines, and a panel for picking several parts. */
   const [builderView, setBuilderView] = useState(true);
+  // Centre mode: every drawn part laid on one vertical wall (shared Z), camera
+  // pinned front-on and depth locked, so they line up in 2-D before 3-D.
+  const [centerMode, setCenterMode] = useState(false);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -1938,6 +1942,8 @@ export function Workbench({
   const nudgeParts = useCallback(
     (ids: readonly string[], delta: { x: number; y: number; z: number }) => {
       const moving = new Set(ids);
+      // Centre mode pins depth: a move only slides along the wall (X / Y).
+      const dz = centerMode ? 0 : delta.z;
       patchProject((current) => ({
         ...current,
         parts: current.parts.map((part) => {
@@ -1945,7 +1951,7 @@ export function Workbench({
           if (mode === 'free') {
             // A part never placed by hand starts from where it is drawn, not the origin.
             const fp = part.freePos ?? partWorldPos(part);
-            return { ...part, freePos: { x: fp.x + delta.x, y: fp.y + delta.y, z: fp.z + delta.z } };
+            return { ...part, freePos: { x: fp.x + delta.x, y: fp.y + delta.y, z: fp.z + dz } };
           }
           return {
             ...part,
@@ -1954,14 +1960,14 @@ export function Workbench({
               position: {
                 x: part.transform.position.x + delta.x,
                 y: part.transform.position.y + delta.y,
-                z: part.transform.position.z + delta.z,
+                z: part.transform.position.z + dz,
               },
             },
           };
         }),
       }));
     },
-    [patchProject, mode, partWorldPos]
+    [patchProject, mode, partWorldPos, centerMode]
   );
 
   /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
@@ -2158,6 +2164,42 @@ export function Workbench({
       /* storage blocked: the view just is not remembered */
     }
   }, [builderView]);
+
+  // Lay every drawn part onto one vertical wall — a shared Z, the middle of
+  // where they already are — so pipes can be lined up coaxially from the front
+  // and only slid up/down/left/right. Hidden parts stay put; one undo step.
+  const flattenToWall = useCallback(() => {
+    const drawn = new Set(drawnIds);
+    patchProject((current) => {
+      const placements =
+        mode === 'assembled' ? assembledPlacement(current) : scatterPlacement(current, sizes);
+      const posById = new Map(placements.map((placement) => [placement.partId, placement.position]));
+      const seeded = current.parts.map((part) => ({
+        ...part,
+        freePos: part.freePos ?? posById.get(part.id) ?? { ...part.transform.position },
+      }));
+      const wall = seeded.filter((part) => drawn.has(part.id));
+      const midZ = wall.length
+        ? wall.reduce((sum, part) => sum + part.freePos.z, 0) / wall.length
+        : 0;
+      return {
+        ...current,
+        parts: seeded.map((part) =>
+          drawn.has(part.id) ? { ...part, freePos: { ...part.freePos, z: midZ } } : part
+        ),
+      };
+    });
+    if (mode !== 'free') setMode('free');
+  }, [drawnIds, mode, sizes, patchProject]);
+
+  const toggleCenterMode = useCallback(() => {
+    if (centerMode) {
+      setCenterMode(false);
+    } else {
+      flattenToWall();
+      setCenterMode(true);
+    }
+  }, [centerMode, flattenToWall]);
 
   /**
    * Bundle the selected parts into one.
@@ -5404,6 +5446,18 @@ export function Workbench({
           ],
         },
         {
+          cap: 'Assemble',
+          tools: [
+            {
+              icon: AlignCenterVertical,
+              label: 'Center',
+              on: centerMode,
+              onClick: toggleCenterMode,
+              title: 'Centre mode — lay parts on one wall to line them up front-on, then turn it off to move in 3D',
+            },
+          ],
+        },
+        {
           cap: 'Panels',
           tools: [
             { icon: PanelRight, label: 'Parts', on: showGallery, onClick: () => setShowGallery((v) => !v) },
@@ -6656,6 +6710,7 @@ export function Workbench({
             manipMode={manip}
             rotateAxis={rotateAxis}
             moveAxis={moveAxis}
+            lockFront={centerMode}
             moveStep={moveStep}
             rotateStep={rotateStep}
             magnetMm={DEFAULT_MAGNET_MM}
