@@ -383,7 +383,7 @@ export function Workbench({
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const [multiSelect, setMultiSelect] = useState(false);
   /** 3D Builder view: grey parts, blue outlines, and a panel for picking several parts. */
-  const [builderView, setBuilderView] = useState(false);
+  const [builderView, setBuilderView] = useState(true);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -2139,12 +2139,13 @@ export function Workbench({
     setMoveModeId(null);
   }, [applySelection, drawnIds, selectedId, marked]);
 
-  // The builder view is a way of working, so it is still on at the next visit.
+  // The builder view is the default way of working; only a visitor who turned
+  // it off explicitly (stored '0') starts in the plain view.
   useEffect(() => {
     try {
-      if (localStorage.getItem(BUILDER_VIEW_KEY) === '1') setBuilderView(true);
+      if (localStorage.getItem(BUILDER_VIEW_KEY) === '0') setBuilderView(false);
     } catch {
-      /* storage blocked: start in the plain view */
+      /* storage blocked: keep the default builder view */
     }
   }, []);
 
