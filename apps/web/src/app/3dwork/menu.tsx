@@ -60,7 +60,7 @@ export function MenuBar({ children }: { children: React.ReactNode }) {
 
   return (
     <MenuBarContext.Provider value={{ openId, setOpenId }}>
-      <div className="relative z-50 flex shrink-0 items-center gap-0.5">{children}</div>
+      <div className="relative z-50 flex flex-wrap items-center gap-0.5">{children}</div>
     </MenuBarContext.Provider>
   );
 }
