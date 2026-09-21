@@ -262,3 +262,23 @@
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
+
+/* ── 3dwork bench · Brunahólf "Boss" theme (black steel · cream paper · gold) ──
+   Light work-area defaults; the top chrome sets .bench-chrome to go dark gold. */
+.wb-theme {
+  --wb-ground: #e7e2d6;
+  --wb-panel: #faf8f4;
+  --wb-panel-border: #d9d3c6;
+  --wb-ink: #161513;
+  --wb-ink-mute: #6f685c;
+  --wb-label: #8a6a1c;
+  --wb-accent: #c9a54a;
+  --wb-accent-ink: #2e2004;
+  --wb-tool-bg: #faf8f4;
+  --wb-tool-border: #d9d3c6;
+  --wb-tool-ink: #4a463f;
+  --wb-tool-hover: #f1ede4;
+  --wb-field-bg: #ffffff;
+  --wb-focus: #c9a54a;
+}
+
