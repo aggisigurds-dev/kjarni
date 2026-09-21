@@ -107,6 +107,9 @@ interface ViewportProps {
   rotateAxis: 'free' | 'x' | 'y' | 'z';
   /** When moving, lock to one world axis or slide freely. */
   moveAxis: 'xyz' | 'x' | 'y' | 'z';
+  /** Centre mode: pin the camera to a straight-on front view and stop the
+   *  orbit turning, so parts flattened onto the wall only slide in X / Y. */
+  lockFront: boolean;
   /** Millimetre grid a drag snaps onto. */
   moveStep: number;
   /** Degree grid a rotate-drag snaps onto. */
@@ -330,6 +333,7 @@ export function Viewport({
   manipMode,
   rotateAxis,
   moveAxis,
+  lockFront,
   moveStep,
   rotateStep,
   magnetMm,
@@ -376,6 +380,7 @@ export function Viewport({
     manipMode,
     rotateAxis,
     moveAxis,
+    lockFront,
     moveStep,
     rotateStep,
     magnetMm,
@@ -404,6 +409,7 @@ export function Viewport({
     manipMode,
     rotateAxis,
     moveAxis,
+    lockFront,
     moveStep,
     rotateStep,
     magnetMm,
@@ -843,6 +849,8 @@ export function Viewport({
           lock === 'x' || lock === 'z' ? grab.startPos.y : grab.startPos.y + (dragPoint.y - grab.startPoint.y),
           lock === 'x' || lock === 'y' ? grab.startPos.z : grab.startPos.z + (dragPoint.z - grab.startPoint.z)
         );
+        // Centre mode keeps every part on the wall, whatever the camera angle.
+        if (h.lockFront) mesh.position.z = grab.startPos.z;
         carryRiders(grab, mesh);
 
         // Everything that moves snaps as one block against everything that does not.
@@ -1044,6 +1052,28 @@ export function Viewport({
 
     state.controls.target.copy(center);
     state.camera.position.copy(center).add(new THREE.Vector3(0.12, 0.18, 1).setLength(distance));
+    state.camera.near = Math.max(distance / 500, 0.1);
+    state.camera.far = distance * 20;
+    state.camera.updateProjectionMatrix();
+    state.controls.update();
+  }, []);
+
+  // Centre mode: look straight down -Z at the wall (the X-Y plane), so a drag
+  // only slides parts left/right and up/down. Sized from the wall's X-Y extent,
+  // since Z is ~flat once the parts are centred.
+  const frontView = useCallback(() => {
+    const state = refs.current;
+    if (!state || state.meshes.size === 0) return;
+    const box = new THREE.Box3();
+    for (const mesh of state.meshes.values()) box.expandByObject(mesh);
+    if (box.isEmpty()) return;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.x, size.y, 1) * 0.5;
+    const distance = (radius / Math.sin((state.camera.fov * DEG) / 2)) * 1.5;
+    state.controls.target.copy(center);
+    state.camera.up.set(0, 1, 0);
+    state.camera.position.set(center.x, center.y, center.z + distance);
     state.camera.near = Math.max(distance / 500, 0.1);
     state.camera.far = distance * 20;
     state.camera.updateProjectionMatrix();
@@ -1320,6 +1350,18 @@ export function Viewport({
     const handle = requestAnimationFrame(() => frameAll());
     return () => cancelAnimationFrame(handle);
   }, [frameToken, frameAll]);
+
+  // Centre mode pins the camera front-on and stops the orbit turning; leaving
+  // it lets you rotate freely again. Parts stay where they were flattened.
+  useEffect(() => {
+    const state = refs.current;
+    if (!state) return;
+    state.controls.enableRotate = !lockFront;
+    if (lockFront) {
+      const handle = requestAnimationFrame(() => frontView());
+      return () => cancelAnimationFrame(handle);
+    }
+  }, [lockFront, frontView]);
 
   const cursor = useMemo(
     () => (painting || measuring ? 'crosshair' : 'grab'),
