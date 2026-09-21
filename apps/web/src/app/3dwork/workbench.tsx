@@ -47,6 +47,20 @@ import {
   Cloud,
   Github,
   HardDrive,
+  Plus,
+  Circle,
+  Cone,
+  Move,
+  RotateCw,
+  Focus,
+  Wrench,
+  Ruler,
+  PaintBucket,
+  Pipette,
+  Pin,
+  MousePointer2,
+  SquareDashed,
+  Grid2x2,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -210,6 +224,7 @@ import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { PaintBar } from './paint-bar';
 import { AddVolumeBar } from './add-volume-bar';
+import { Ribbon, type RibbonTabDef } from './ribbon';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, TOOL_BTN, TOOL_BTN_PRIMARY } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -313,6 +328,7 @@ export function Workbench({
     versionId: string;
   } | null>(null);
   const avToken = useRef(0);
+  const [ribbonTab, setRibbonTab] = useState('object');
   const [zUp, setZUp] = useState(true);
   const [unit, setUnit] = useState<Unit>('mm');
   const [cutItems, setCutItems] = useState<CutItem[]>([]);
@@ -5257,6 +5273,198 @@ export function Workbench({
     [importFiles]
   );
 
+  // ---- 3D-Builder ribbon: tabs of tool groups, each wired to its handler ----
+  const busyB = Boolean(busy);
+  const hasSel = Boolean(selectedId);
+  const canGroup = selection.length >= 2 && !busy;
+  const canUngroup = Boolean(selectedPart?.group) && !busy;
+  const ribbonTabs: RibbonTabDef[] = [
+    {
+      id: 'insert',
+      label: 'Insert',
+      groups: [
+        {
+          cap: 'Pipes',
+          tools: [
+            { icon: Cylinder, label: 'Pipe ⌀28', tone: 'primary', big: true, disabled: busyB, onClick: () => addPipeThrough(28, 1.5) },
+            { icon: Cylinder, label: 'Pipe ⌀20', tone: 'primary', big: true, disabled: busyB, onClick: () => addPipeThrough(20, 2) },
+          ],
+        },
+        {
+          cap: 'Primitives',
+          tools: [
+            { icon: Box, label: 'Cube', onClick: () => addPrimitive(boxSoup(), 'Box') },
+            { icon: Cylinder, label: 'Cylinder', onClick: () => addPrimitive(cylinderSoup(), 'Cylinder') },
+            { icon: Cone, label: 'Cone', onClick: () => addPrimitive(coneSoup(), 'Cone') },
+            { icon: Circle, label: 'Sphere', onClick: () => addPrimitive(sphereSoup(), 'Sphere') },
+          ],
+        },
+        {
+          cap: 'Library',
+          tools: [
+            { icon: Star, label: 'Favorites', onClick: () => setShowFavorites(true) },
+            { icon: Upload, label: 'Import', onClick: () => fileInputRef.current?.click() },
+            { icon: HardDrive, label: 'Drive', onClick: () => setShowDrive(true) },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'object',
+      label: 'Object',
+      groups: [
+        {
+          cap: 'Select',
+          tools: [
+            { icon: MousePointer2, label: 'Select all', onClick: selectAllParts },
+            { icon: SquareDashed, label: 'Deselect', onClick: deselectAll },
+            { icon: Layers, label: 'Invert', onClick: invertPicked },
+            { icon: Pin, label: 'Sticky', on: multiSelect, onClick: () => setMultiSelect((v) => !v) },
+          ],
+        },
+        {
+          cap: 'Arrange',
+          tools: [
+            { icon: Group, label: 'Group', tone: 'primary', big: true, disabled: !canGroup, onClick: groupSelection },
+            { icon: Ungroup, label: 'Ungroup', big: true, disabled: !canUngroup, onClick: () => selectedId && ungroupPart(selectedId) },
+          ],
+        },
+        {
+          cap: 'Transform',
+          tools: [
+            { icon: Move, label: 'Move', disabled: !hasSel, onClick: () => selectedId && enterMoveMode(selectedId) },
+            { icon: Split, label: 'Split', disabled: !hasSel || busyB, onClick: () => openSlice(true) },
+          ],
+        },
+        {
+          cap: 'Part',
+          tools: [
+            { icon: EyeOff, label: 'Hide', disabled: !hasSel, onClick: () => selectedId && patchPart(selectedId, { visible: false }) },
+            { icon: Focus, label: 'Isolate', disabled: !hasSel, onClick: () => selectedId && setFocusId((c) => (c === selectedId ? null : selectedId)) },
+            { icon: Star, label: 'Favorite', disabled: !hasSel || busyB, onClick: () => void saveFavorite() },
+            { icon: Trash2, label: 'Delete', tone: 'danger', disabled: !hasSel, onClick: () => selectedId && removePart(selectedId) },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'edit',
+      label: 'Edit',
+      groups: [
+        {
+          cap: 'History',
+          tools: [
+            { icon: Undo2, label: 'Undo', disabled: !canUndo, onClick: undo },
+            { icon: Redo2, label: 'Redo', disabled: !canRedo, onClick: redo },
+          ],
+        },
+        {
+          cap: 'Boolean',
+          tools: [
+            { icon: Combine, label: 'Merge', disabled: selection.length < 2 || busyB, onClick: () => void mergeSelection() },
+            { icon: Scissors, label: 'Subtract', disabled: !hasSel || busyB, onClick: () => setShowSubtract(true) },
+            { icon: Split, label: 'Split', disabled: !hasSel || busyB, onClick: () => openSlice(true) },
+          ],
+        },
+        {
+          cap: 'Combine',
+          tools: [
+            { icon: Boxes, label: 'One piece', tone: 'primary', big: true, disabled: busyB || onePieceBodies.length === 0, onClick: openOnePiece },
+          ],
+        },
+        {
+          cap: 'Shape',
+          tools: [
+            { icon: CircleDot, label: 'Bore', disabled: !hasSel, onClick: () => setShowBore(true) },
+            { icon: Layers, label: 'Wall', disabled: !hasSel, onClick: () => setShowShell(true) },
+            { icon: Spline, label: 'Bend', disabled: !hasSel, onClick: () => setShowBend(true) },
+            { icon: Combine, label: 'Duplicate', disabled: !hasSel, onClick: () => selectedId && duplicatePart(selectedId) },
+          ],
+        },
+        {
+          cap: 'Physics',
+          tools: [
+            { icon: Zap, label: 'Hammer', tone: 'primary', disabled: !hasSel, onClick: () => setShowHammer(true) },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'view',
+      label: 'View',
+      groups: [
+        {
+          cap: 'Display',
+          tools: [
+            { icon: Box, label: '3D Builder', on: builderView, onClick: toggleBuilderView },
+            { icon: Grid2x2, label: 'Grid', on: showGrid, onClick: () => setShowGrid((v) => !v) },
+            { icon: Spline, label: 'Wireframe', on: wireframe, onClick: () => setWireframe((v) => !v) },
+            { icon: Layers, label: 'X-ray', on: xray, onClick: () => setXray((v) => !v) },
+          ],
+        },
+        {
+          cap: 'Panels',
+          tools: [
+            { icon: PanelRight, label: 'Parts', on: showGallery, onClick: () => setShowGallery((v) => !v) },
+            { icon: PanelLeft, label: 'Inspector', on: showInspector, onClick: () => setShowInspector((v) => !v) },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'paint',
+      label: 'Paint',
+      groups: [
+        {
+          cap: 'Tools',
+          tools: [
+            {
+              icon: Paintbrush,
+              label: 'Paint brush',
+              on: painting,
+              disabled: !hasSel,
+              onClick: () => {
+                if (!selectedId) return;
+                if (avRef.current) cancelAddVolume();
+                setAddingVolume(false);
+                setMeasuring(false);
+                setPainting((v) => !v);
+              },
+            },
+            {
+              icon: Plus,
+              label: 'Add volume',
+              on: addingVolume,
+              disabled: !hasSel,
+              onClick: () => {
+                if (addingVolume) {
+                  if (avRef.current) commitAddVolume();
+                  setAddingVolume(false);
+                  return;
+                }
+                if (!selectedId) return;
+                setPainting(false);
+                setMeasuring(false);
+                setAddingVolume(true);
+              },
+            },
+            {
+              icon: Ruler,
+              label: 'Measure',
+              on: measuring,
+              onClick: () => {
+                if (avRef.current) cancelAddVolume();
+                setAddingVolume(false);
+                setPainting(false);
+                setMeasuring((v) => !v);
+              },
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="wb-theme flex h-dvh max-h-dvh flex-col gap-2 bg-[var(--wb-ground)] p-2 text-[var(--wb-ink)]">
       <input
@@ -5428,6 +5636,7 @@ export function Workbench({
             </MenuItem>
           </Menu>
 
+          {false && (<>
           <Menu label="Add">
             <MenuItem
               onClick={() => setShowFavorites(true)}
@@ -5897,6 +6106,7 @@ export function Workbench({
               Rotate Z-up on import
             </MenuCheckItem>
           </Menu>
+          </>)}
 
           <Menu label="Export">
             <MenuItem
@@ -5937,26 +6147,28 @@ export function Workbench({
               Sketch SVG
             </MenuItem>
           </Menu>
+          <Menu
+            label={workspace === 'kits' ? '2D Kits' : workspace === 'bench' ? '3D Bench' : '2D Sketch'}
+            width={170}
+          >
+            <MenuCheckItem checked={workspace === 'bench'} onClick={() => setWorkspace('bench')}>
+              3D Bench
+            </MenuCheckItem>
+            <MenuCheckItem checked={workspace === 'kits'} onClick={() => setWorkspace('kits')}>
+              2D Kits
+            </MenuCheckItem>
+            <MenuCheckItem checked={workspace === 'sketch'} onClick={() => setWorkspace('sketch')}>
+              2D Sketch
+            </MenuCheckItem>
+          </Menu>
         </MenuBar>
-        <div className="flex overflow-hidden rounded border border-[var(--wb-tool-border)]">
-          {(['kits', 'bench', 'sketch'] as Workspace[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setWorkspace(option)}
-              className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
-                workspace === option
-                  ? 'bg-[var(--wb-accent)] text-[var(--wb-accent-ink)]'
-                  : 'text-[var(--wb-tool-ink)] hover:text-[var(--wb-ink)]'
-              }`}
-            >
-              {option === 'kits' ? '2D kits' : option === 'bench' ? '3D bench' : '2D sketch'}
-            </button>
-          ))}
-        </div>
         </div>
 
         {workspace === 'bench' && (
+          <Ribbon tabs={ribbonTabs} active={ribbonTab} onActive={setRibbonTab} />
+        )}
+
+        {false && (
         <div className="hidden min-w-0 flex-wrap items-center gap-1 md:flex">
 
         <div className="flex overflow-hidden rounded border border-slate-300">
@@ -6223,7 +6435,7 @@ export function Workbench({
         )}
       </div>
 
-      {isMobile && workspace === 'bench' && (
+      {false && isMobile && workspace === 'bench' && (
         <div className="bench-chrome flex shrink-0 gap-1 overflow-x-auto bg-[var(--wb-panel)] px-2 py-2">
           <button
             type="button"

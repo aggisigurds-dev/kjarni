@@ -286,19 +286,19 @@
    --wb-* tokens dark, so anything styled through ui.ts turns gold-on-steel
    without touching each call site. The work area stays light (.wb-theme). */
 .bench-chrome {
-  --wb-panel: #17150f;
-  --wb-panel-border: #4a463f;
-  --wb-ground: #100e0a;
-  --wb-ink: #f5e6b0;
-  --wb-ink-mute: #b89a54;
-  --wb-label: #f5d76e;
+  --wb-panel: #161513;
+  --wb-panel-border: #3a3732;
+  --wb-ground: #0a0a09;
+  --wb-ink: #f4f1ea;        /* cream text — NOT gold */
+  --wb-ink-mute: #8f8776;
+  --wb-label: #f5d76e;      /* gold reserved for labels / accents */
   --wb-accent: #f5d76e;
   --wb-accent-ink: #201700;
-  --wb-tool-bg: #221e16;
-  --wb-tool-border: #4a463f;
-  --wb-tool-ink: #e8dca8;
-  --wb-tool-hover: #2e2a1e;
-  --wb-field-bg: #17150f;
+  --wb-tool-bg: #1c1b18;
+  --wb-tool-border: #3a3732;
+  --wb-tool-ink: #c8c1b1;   /* cream-grey, not gold */
+  --wb-tool-hover: #23211e;
+  --wb-field-bg: #1c1b18;
   --wb-focus: #f5d76e;
   color: var(--wb-ink);
 }
