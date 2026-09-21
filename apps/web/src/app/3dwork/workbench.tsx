@@ -177,6 +177,7 @@ import {
 } from '@/lib/3dwork/dowels';
 import { boreCylinder } from '@/lib/3dwork/bore';
 import { boxSoup, sphereSoup, cylinderSoup, coneSoup } from '@/lib/3dwork/primitives';
+import { buildCornerWedge, concaveEdgesNear, type ConcaveEdge } from '@/lib/3dwork/addvolume';
 import { outerHull } from '@/lib/3dwork/outerhull';
 import { createZip, safeFileName } from '@/lib/3dwork/zip';
 import { emptySketch, toSvg, type Sketch } from '@/lib/3dwork/sketch';
@@ -208,6 +209,7 @@ import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { PaintBar } from './paint-bar';
+import { AddVolumeBar } from './add-volume-bar';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, LABEL, PANEL, TOOL_BTN, TOOL_BTN_PRIMARY } from './ui';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -299,6 +301,18 @@ export function Workbench({
   const [painting, setPainting] = useState(false);
   const [paintRadiusMm, setPaintRadiusMm] = useState(2);
   const [painted, setPainted] = useState<Set<number>>(() => new Set());
+  // Add-volume (corner fillet) tool.
+  const [addingVolume, setAddingVolume] = useState(false);
+  const [avSizeMm, setAvSizeMm] = useState(1.5);
+  const [avPending, setAvPending] = useState(false);
+  const [avPlaced, setAvPlaced] = useState(0);
+  const avRef = useRef<{
+    partId: string;
+    base: Float32Array;
+    edges: ConcaveEdge[];
+    versionId: string;
+  } | null>(null);
+  const avToken = useRef(0);
   const [zUp, setZUp] = useState(true);
   const [unit, setUnit] = useState<Unit>('mm');
   const [cutItems, setCutItems] = useState<CutItem[]>([]);
@@ -2710,6 +2724,102 @@ export function Workbench({
     },
     [project.parts, patchPart]
   );
+
+  /**
+   * Add-volume: union a 45° chamfer wedge into the corner the user tapped, sized
+   * live by the slider. The pre-edit mesh is kept as its own version (undoable);
+   * live sizing overwrites the working version so there is no version spam.
+   */
+  const applyAvSize = useCallback(
+    async (size: number) => {
+      const av = avRef.current;
+      if (!av) return;
+      const wedge = buildCornerWedge(av.edges, size);
+      if (wedge.length === 0) return;
+      const token = ++avToken.current;
+      setBusy('Bæti efni í hornið…');
+      try {
+        const result = await runOnePiece(
+          {
+            bodies: [
+              { name: 'part', soup: av.base.slice() },
+              { name: 'fillet', soup: wedge.slice() },
+            ],
+            pipes: [],
+            options: { gapMm: 0, crumbMm3: 1, seamMm: 0, allowRebuild: false },
+          },
+          setBusy
+        );
+        if (token !== avToken.current) return;
+        setGeometries((current) => new Map(current).set(av.versionId, result.soup));
+        void saveGeometry(av.versionId, result.soup);
+        patchPart(av.partId, { triangles: Math.floor(result.soup.length / 9) });
+      } catch (error) {
+        if (!(error instanceof OnePieceStopped)) toast.error('Gat ekki bætt efni í hornið.');
+      } finally {
+        if (token === avToken.current) setBusy(null);
+      }
+    },
+    [patchPart]
+  );
+
+  const onAddVolumeAt = useCallback(
+    (partId: string, localPoint: [number, number, number]) => {
+      if (avRef.current) return; // finish the current corner first
+      const soup = soupOfPart(partId);
+      if (!soup) return;
+      const edges = concaveEdgesNear(soup, localPoint, 2.6);
+      if (edges.length === 0) {
+        toast.error('Engin kverk þarna — smelltu á innra 90° horn.');
+        return;
+      }
+      const versionId = addVersion(partId, soup, 'add', 'Bæta efni í kverk');
+      avRef.current = { partId, base: soup, edges, versionId };
+      setAvPending(true);
+    },
+    [soupOfPart, addVersion]
+  );
+
+  const commitAddVolume = useCallback(() => {
+    const av = avRef.current;
+    if (!av) return;
+    const soup = geometries.get(av.versionId);
+    const part = project.parts.find((candidate) => candidate.id === av.partId);
+    if (soup && part) {
+      patchPart(av.partId, {
+        thumbnail: renderThumbnail(soup, lookFor(part).color, lookFor(part)),
+      });
+    }
+    avRef.current = null;
+    setAvPending(false);
+    setAvPlaced((count) => count + 1);
+  }, [geometries, project.parts, patchPart]);
+
+  const cancelAddVolume = useCallback(() => {
+    const av = avRef.current;
+    if (!av) return;
+    avToken.current += 1; // drop any in-flight result
+    setGeometries((current) => new Map(current).set(av.versionId, av.base));
+    void saveGeometry(av.versionId, av.base);
+    patchPart(av.partId, { triangles: Math.floor(av.base.length / 9) });
+    avRef.current = null;
+    setAvPending(false);
+    setBusy(null);
+  }, [patchPart]);
+
+  const exitAddVolume = useCallback(() => {
+    if (avRef.current) commitAddVolume();
+    setAddingVolume(false);
+  }, [commitAddVolume]);
+
+  // Live re-union while the size slider moves (debounced).
+  useEffect(() => {
+    if (!avPending) return;
+    const timer = setTimeout(() => {
+      void applyAvSize(avSizeMm);
+    }, 140);
+    return () => clearTimeout(timer);
+  }, [avPending, avSizeMm, applyAvSize]);
 
   /** Switch which saved version of a part is the live one. */
   const selectVersion = useCallback(
@@ -5718,6 +5828,8 @@ export function Workbench({
                   toast.error('Select a part first.');
                   return;
                 }
+                if (avRef.current) cancelAddVolume();
+                setAddingVolume(false);
                 setPainting((value) => !value);
                 setMeasuring(false);
                 setMoveModeId(null);
@@ -5726,8 +5838,30 @@ export function Workbench({
               Paint brush
             </MenuCheckItem>
             <MenuCheckItem
+              checked={addingVolume}
+              onClick={() => {
+                if (addingVolume) {
+                  if (avRef.current) commitAddVolume();
+                  setAddingVolume(false);
+                  return;
+                }
+                if (!selectedId) {
+                  toast.error('Veldu part fyrst.');
+                  return;
+                }
+                setPainting(false);
+                setMeasuring(false);
+                setMoveModeId(null);
+                setAddingVolume(true);
+              }}
+            >
+              Bæta efni (kverk-fillet)
+            </MenuCheckItem>
+            <MenuCheckItem
               checked={measuring}
               onClick={() => {
+                if (avRef.current) cancelAddVolume();
+                setAddingVolume(false);
                 setMeasuring((v) => !v);
                 setPainting(false);
               }}
@@ -6303,6 +6437,9 @@ export function Workbench({
             paintPartId={painting ? selectedId : null}
             paintLocal={paintLocal}
             onPaintAt={onPaintAt}
+            addingVolume={addingVolume}
+            addVolumePartId={addingVolume ? selectedId : null}
+            onAddVolumeAt={onAddVolumeAt}
             callouts={showCallouts && !isMobile ? callouts : []}
             onCalloutSelect={selectSlot}
             onCalloutCycle={cycleSlot}
@@ -6368,6 +6505,20 @@ export function Workbench({
                 setPainting(false);
                 setPainted(new Set());
               }}
+              busy={Boolean(busy)}
+            />
+          )}
+
+          {project.parts.length > 0 && addingVolume && selectedPart && (
+            <AddVolumeBar
+              name={selectedPart.name}
+              sizeMm={avSizeMm}
+              onSize={setAvSizeMm}
+              hasPending={avPending}
+              placed={avPlaced}
+              onCommit={commitAddVolume}
+              onCancel={cancelAddVolume}
+              onDone={exitAddVolume}
               busy={Boolean(busy)}
             />
           )}

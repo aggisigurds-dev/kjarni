@@ -88,6 +88,10 @@ interface ViewportProps {
   /** Local-space XYZ triples of already-painted vertices. */
   paintLocal: Float32Array;
   onPaintAt: (partId: string, localPoint: [number, number, number], erase: boolean) => void;
+  /** Add-volume mode: tap an inner corner on the selected part to fillet it. */
+  addingVolume: boolean;
+  addVolumePartId: string | null;
+  onAddVolumeAt: (partId: string, localPoint: [number, number, number]) => void;
   callouts: ViewportCallout[];
   onCalloutSelect: (slotId: string) => void;
   onCalloutCycle: (slotId: string, direction: 1 | -1) => void;
@@ -314,6 +318,9 @@ export function Viewport({
   paintPartId,
   paintLocal,
   onPaintAt,
+  addingVolume,
+  addVolumePartId,
+  onAddVolumeAt,
   callouts,
   onCalloutSelect,
   onCalloutCycle,
@@ -361,6 +368,9 @@ export function Viewport({
     paintRadiusMm,
     paintPartId,
     onPaintAt,
+    addingVolume,
+    addVolumePartId,
+    onAddVolumeAt,
     dragEnabled,
     moveModeId,
     manipMode,
@@ -386,6 +396,9 @@ export function Viewport({
     paintRadiusMm,
     paintPartId,
     onPaintAt,
+    addingVolume,
+    addVolumePartId,
+    onAddVolumeAt,
     dragEnabled,
     moveModeId,
     manipMode,
@@ -744,7 +757,8 @@ export function Viewport({
       // grab on any picked part moves every picked part. Everything else — a
       // merely selected part in the plain view, the right and middle buttons —
       // still works the camera.
-      if (!h.dragEnabled || h.measuring || !event.isPrimary || event.button !== 0) return;
+      if (!h.dragEnabled || h.measuring || h.addingVolume || !event.isPrimary || event.button !== 0)
+        return;
       const grabbable = h.builder ? [h.moveModeId, ...h.pickedIds] : [h.moveModeId];
       setPointer(event);
       raycaster.setFromCamera(pointer, camera);
@@ -945,10 +959,20 @@ export function Viewport({
         const hits = raycaster.intersectObjects([...state.meshes.values()], false);
         if (hits.length === 0) {
           // Tapping empty space clears the selection (and exits move mode).
-          if (!h.measuring) h.onSelect(null, additive);
+          if (!h.measuring && !h.addingVolume) h.onSelect(null, additive);
           return;
         }
         const hit = hits[0];
+        if (h.addingVolume) {
+          const target = hit.object as THREE.Mesh;
+          const pid = target.userData.partId as string | undefined;
+          if (pid && (!h.addVolumePartId || pid === h.addVolumePartId)) {
+            const lp = hit.point.clone();
+            target.worldToLocal(lp);
+            h.onAddVolumeAt(pid, [lp.x, lp.y, lp.z]);
+          }
+          return;
+        }
         if (h.measuring) {
           h.onMeasurePoint([hit.point.x, hit.point.y, hit.point.z]);
           return;
