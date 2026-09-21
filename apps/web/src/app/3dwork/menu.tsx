@@ -117,7 +117,9 @@ export function Menu({
           if (openId !== null && !open) setOpenId(id);
         }}
         className={`flex items-center gap-1 rounded px-2.5 py-1.5 text-[0.7rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
-          open ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          open
+            ? 'bg-[var(--wb-accent)] text-[var(--wb-accent-ink)]'
+            : 'text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)] hover:text-[var(--wb-ink)]'
         }`}
       >
         {label}

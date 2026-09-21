@@ -282,3 +282,24 @@
   --wb-focus: #c9a54a;
 }
 
+/* Dark gold chrome for the top bars (menus · tabs · toolbar). Redefines the
+   --wb-* tokens dark, so anything styled through ui.ts turns gold-on-steel
+   without touching each call site. The work area stays light (.wb-theme). */
+.bench-chrome {
+  --wb-panel: #17150f;
+  --wb-panel-border: #4a463f;
+  --wb-ground: #100e0a;
+  --wb-ink: #f5e6b0;
+  --wb-ink-mute: #b89a54;
+  --wb-label: #f5d76e;
+  --wb-accent: #f5d76e;
+  --wb-accent-ink: #201700;
+  --wb-tool-bg: #221e16;
+  --wb-tool-border: #4a463f;
+  --wb-tool-ink: #e8dca8;
+  --wb-tool-hover: #2e2a1e;
+  --wb-field-bg: #17150f;
+  --wb-focus: #f5d76e;
+  color: var(--wb-ink);
+}
+

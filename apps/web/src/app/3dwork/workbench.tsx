@@ -5271,10 +5271,10 @@ export function Workbench({
         }}
       />
 
-      <div className={`${PANEL} relative z-40 flex flex-col gap-1 px-2 py-1.5`}>
+      <div className={`${PANEL} bench-chrome relative z-40 flex flex-col gap-1 px-2 py-1.5`}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
+          <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-accent)]" />
           <input
             value={project.name}
             onChange={(event) =>
@@ -5282,7 +5282,7 @@ export function Workbench({
                 history: false,
               })
             }
-            className="min-w-0 max-w-[12rem] flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-slate-900 outline-none hover:border-slate-300 focus:border-emerald-500 sm:max-w-[16rem]"
+            className="min-w-0 max-w-[12rem] flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-[var(--wb-ink)] outline-none hover:border-[var(--wb-panel-border)] focus:border-[var(--wb-focus)] sm:max-w-[16rem]"
             aria-label="Project name"
           />
           <button
@@ -5938,7 +5938,7 @@ export function Workbench({
             </MenuItem>
           </Menu>
         </MenuBar>
-        <div className="flex overflow-hidden rounded border border-slate-300">
+        <div className="flex overflow-hidden rounded border border-[var(--wb-tool-border)]">
           {(['kits', 'bench', 'sketch'] as Workspace[]).map((option) => (
             <button
               key={option}
@@ -5946,8 +5946,8 @@ export function Workbench({
               onClick={() => setWorkspace(option)}
               className={`px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] transition-colors ${
                 workspace === option
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-500 hover:text-slate-900'
+                  ? 'bg-[var(--wb-accent)] text-[var(--wb-accent-ink)]'
+                  : 'text-[var(--wb-tool-ink)] hover:text-[var(--wb-ink)]'
               }`}
             >
               {option === 'kits' ? '2D kits' : option === 'bench' ? '3D bench' : '2D sketch'}
@@ -6224,7 +6224,7 @@ export function Workbench({
       </div>
 
       {isMobile && workspace === 'bench' && (
-        <div className="flex shrink-0 gap-1 overflow-x-auto bg-white px-2 py-2">
+        <div className="bench-chrome flex shrink-0 gap-1 overflow-x-auto bg-[var(--wb-panel)] px-2 py-2">
           <button
             type="button"
             className={TOOL_BTN}
