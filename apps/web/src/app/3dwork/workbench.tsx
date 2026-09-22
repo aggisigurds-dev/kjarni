@@ -2235,6 +2235,28 @@ export function Workbench({
     if (mode !== 'free') setMode('free');
   }, [pickedOnTable, selectedId, snapNeighbors, partWorldPos, mode, patchProject]);
 
+  // Resize a part so one axis measures `mm`, keeping its proportions (uniform
+  // scale) — the on-canvas version of the inspector's resize-to-measurement.
+  const resizePartTo = useCallback(
+    (partId: string, axis: 'x' | 'y' | 'z', mm: number) => {
+      if (mm <= 0) return;
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      const s = sizes.get(partId);
+      if (!part || !s) return;
+      const current = axis === 'x' ? s.width : axis === 'y' ? s.height : s.depth;
+      if (current <= 0) return;
+      const ratio = mm / current;
+      patchTransform(partId, {
+        scale: {
+          x: part.transform.scale.x * ratio,
+          y: part.transform.scale.y * ratio,
+          z: part.transform.scale.z * ratio,
+        },
+      });
+    },
+    [project.parts, sizes, patchTransform]
+  );
+
   /**
    * Bundle the selected parts into one.
    *
@@ -6763,7 +6785,12 @@ export function Workbench({
             onDragRotate={spinPart}
           />
 
-          {project.parts.length > 0 && moveModeId && (
+          {project.parts.length > 0 && moveModeId && (() => {
+            const mp = project.parts.find((part) => part.id === moveModeId);
+            const ms = sizes.get(moveModeId);
+            const pipeSpec = mp?.hardware?.kind === 'pipe' ? mp.hardware : null;
+            const single = movingWith(moveModeId).length <= 1;
+            return (
             <ManipBar
               name={
                 manip === 'move' && movingWith(moveModeId).length > 1
@@ -6791,9 +6818,16 @@ export function Workbench({
                 else spinPart(moveModeId, delta);
               }}
               onDone={() => setMoveModeId(null)}
+              size={single && ms ? { x: ms.width, y: ms.height, z: ms.depth } : null}
+              onResize={(axis, mm) => resizePartTo(moveModeId, axis, mm)}
+              pipe={single && pipeSpec ? { outer: pipeSpec.diameter, wall: pipeSpec.wall ?? 1 } : null}
+              onPipe={(patch) => {
+                if (mp?.hardware) updateHardware(moveModeId, { ...mp.hardware, ...patch });
+              }}
               snapHint={snapHint}
             />
-          )}
+            );
+          })()}
 
           {project.parts.length > 0 && painting && selectedPart && (
             <PaintBar
