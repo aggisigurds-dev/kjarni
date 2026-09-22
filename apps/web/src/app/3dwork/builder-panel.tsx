@@ -8,6 +8,8 @@
 
 import type { ElementType } from 'react';
 import {
+  Eye,
+  Focus,
   Group,
   Move,
   Pin,
@@ -16,6 +18,7 @@ import {
   Star,
   SquareCheckBig,
   SquareDashed,
+  Target,
   Ungroup,
   X,
 } from 'lucide-react';
@@ -38,6 +41,13 @@ interface BuilderPanelProps {
   canSplit: boolean;
   onFavorite: () => void;
   canFavorite: boolean;
+  onCoaxial: () => void;
+  canCoaxial: boolean;
+  onIsolate: () => void;
+  canIsolate: boolean;
+  isolated: boolean;
+  onShowAll: () => void;
+  canShowAll: boolean;
   onClose: () => void;
 }
 
@@ -94,14 +104,21 @@ export function BuilderPanel({
   canSplit,
   onFavorite,
   canFavorite,
+  onCoaxial,
+  canCoaxial,
+  onIsolate,
+  canIsolate,
+  isolated,
+  onShowAll,
+  canShowAll,
   onClose,
 }: BuilderPanelProps) {
-  const rule = <div className="my-0.5 h-px w-5 bg-slate-200" />;
+  const rule = <div className="my-0.5 h-px w-5 shrink-0 bg-slate-200" />;
   return (
-    <div className="pointer-events-auto absolute right-2 top-2 z-10 flex w-10 flex-col items-center gap-0.5 rounded-xl border border-slate-300 bg-white/95 py-1.5 shadow-lg backdrop-blur-sm">
+    <div className="pointer-events-auto absolute right-2 top-2 z-10 flex max-h-[calc(100%-1rem)] w-10 flex-col items-center gap-0.5 overflow-y-auto rounded-xl border border-slate-300 bg-white/95 py-1.5 shadow-lg backdrop-blur-sm">
       <span
         title={`${picked} of ${total} picked`}
-        className="pb-0.5 font-mono text-[0.55rem] font-bold text-sky-700"
+        className="shrink-0 pb-0.5 font-mono text-[0.55rem] font-bold text-sky-700"
       >
         {picked}/{total}
       </span>
@@ -109,12 +126,16 @@ export function BuilderPanel({
       <Tool icon={SquareCheckBig} label="Select all" onClick={onSelectAll} disabled={total === 0} />
       <Tool icon={SquareDashed} label="Deselect all" onClick={onDeselectAll} disabled={picked === 0} />
       <Tool icon={Repeat2} label="Invert selection" onClick={onInvert} disabled={total === 0} />
-      <Tool icon={Pin} label="Sticky selection — every tap adds a part" on={sticky} onClick={onSticky} />
+      <Tool icon={Pin} label="Multi-select — every tap adds a part" on={sticky} onClick={onSticky} />
       {rule}
       <Tool icon={Group} label="Group" onClick={onGroup} disabled={!canGroup} tone="primary" />
       <Tool icon={Ungroup} label="Ungroup" onClick={onUngroup} disabled={!canUngroup} />
+      <Tool icon={Target} label="Line up coaxial — concentric on one axis" onClick={onCoaxial} disabled={!canCoaxial} />
       <Tool icon={Move} label="Move" onClick={onMove} disabled={!canMove} />
       <Tool icon={Split} label="Split in half" onClick={onSplit} disabled={!canSplit} />
+      {rule}
+      <Tool icon={Focus} label="Isolate — show only the selected part" on={isolated} onClick={onIsolate} disabled={!canIsolate} />
+      <Tool icon={Eye} label="Show all parts" onClick={onShowAll} disabled={!canShowAll} />
       <Tool icon={Star} label="Save to favorites" onClick={onFavorite} disabled={!canFavorite} />
       {rule}
       <Tool icon={X} label="Close 3D Builder" onClick={onClose} />

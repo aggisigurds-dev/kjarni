@@ -62,6 +62,7 @@ import {
   SquareDashed,
   Grid2x2,
   AlignCenterVertical,
+  Target,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -2200,6 +2201,39 @@ export function Workbench({
       setCenterMode(true);
     }
   }, [centerMode, flattenToWall]);
+
+  // Line the picked parts up coaxially: slide each onto the primary part's
+  // centre-line along its longest axis (a pipe's length), so parts modelled the
+  // same way become concentric in one move. Only the two cross axes change — the
+  // shared axis stays free to slide the parts into each other. One undo step.
+  const alignCoaxial = useCallback(() => {
+    const ids = pickedOnTable;
+    if (ids.length < 2) return;
+    const boxById = new Map(snapNeighbors.map((entry) => [entry.id, entry.box]));
+    const primaryId = selectedId && ids.includes(selectedId) ? selectedId : ids[0];
+    const primaryBox = boxById.get(primaryId);
+    if (!primaryBox) return;
+    const centreOf = (box: { min: readonly number[]; max: readonly number[] }, i: number) =>
+      (box.min[i] + box.max[i]) / 2;
+    const span = [0, 1, 2].map((i) => primaryBox.max[i] - primaryBox.min[i]);
+    const axis = span[0] >= span[1] && span[0] >= span[2] ? 0 : span[1] >= span[2] ? 1 : 2;
+    const target = [0, 1, 2].map((i) => centreOf(primaryBox, i));
+    const moving = new Set(ids.filter((id) => id !== primaryId));
+    patchProject((current) => ({
+      ...current,
+      parts: current.parts.map((part) => {
+        if (!moving.has(part.id)) return part;
+        const box = boxById.get(part.id);
+        if (!box) return part;
+        const dx = axis === 0 ? 0 : target[0] - centreOf(box, 0);
+        const dy = axis === 1 ? 0 : target[1] - centreOf(box, 1);
+        const dz = axis === 2 ? 0 : target[2] - centreOf(box, 2);
+        const fp = part.freePos ?? partWorldPos(part);
+        return { ...part, freePos: { x: fp.x + dx, y: fp.y + dy, z: fp.z + dz } };
+      }),
+    }));
+    if (mode !== 'free') setMode('free');
+  }, [pickedOnTable, selectedId, snapNeighbors, partWorldPos, mode, patchProject]);
 
   /**
    * Bundle the selected parts into one.
@@ -5370,6 +5404,13 @@ export function Workbench({
           tools: [
             { icon: Group, label: 'Group', tone: 'primary', big: true, disabled: !canGroup, onClick: groupSelection },
             { icon: Ungroup, label: 'Ungroup', big: true, disabled: !canUngroup, onClick: () => selectedId && ungroupPart(selectedId) },
+            {
+              icon: Target,
+              label: 'Coaxial',
+              disabled: pickedOnTable.length < 2,
+              onClick: alignCoaxial,
+              title: 'Line the picked parts up on one shared centre axis (concentric)',
+            },
           ],
         },
         {
@@ -6840,6 +6881,18 @@ export function Workbench({
               canSplit={Boolean(selectedId) && !busy}
               onFavorite={() => void saveFavorite()}
               canFavorite={Boolean(selectedId) && !busy}
+              onCoaxial={alignCoaxial}
+              canCoaxial={pickedOnTable.length >= 2}
+              onIsolate={() =>
+                selectedId && setFocusId((current) => (current === selectedId ? null : selectedId))
+              }
+              canIsolate={Boolean(selectedId)}
+              isolated={Boolean(focusId)}
+              onShowAll={() => {
+                setFocusId(null);
+                showAllParts();
+              }}
+              canShowAll={Boolean(focusId) || project.parts.some((part) => !part.visible)}
               onClose={toggleBuilderView}
             />
           )}
