@@ -1,4 +1,5 @@
 export const SKINS = [
+  { id: "ragnarok", label: "Ragnarök", hint: "Bráðið gull · svart stál" },
   { id: "command", label: "Command", hint: "Ísblátt HUD-stjórnborð" },
   { id: "atlas", label: "Atlas", hint: "Bláprent · kortaborð" },
   { id: "pulse", label: "Pulse", hint: "Vaktborð · ops" },
@@ -9,7 +10,10 @@ export const SKINS = [
 
 export type SkinId = (typeof SKINS)[number]["id"];
 export const SKIN_IDS: SkinId[] = SKINS.map((skin) => skin.id);
-export const SKIN_KEY = "kjarni_skin";
+/* v2 (24.09.2026): Ragnarök varð sjálfgefið útlit. Nýr lykill svo allir lendi
+ * einu sinni á því — eldra val (kjarni_skin) er hunsað; hin útlitin eru enn í röðinni. */
+export const SKIN_KEY = "kjarni_skin_v2";
+export const DEFAULT_SKIN: SkinId = "ragnarok";
 
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
@@ -26,9 +30,9 @@ export const TOOLS = [
 export type ToolId = (typeof TOOLS)[number]["id"];
 
 export function readSkin(): SkinId {
-  if (typeof window === "undefined") return "command";
+  if (typeof window === "undefined") return DEFAULT_SKIN;
   const stored = window.localStorage.getItem(SKIN_KEY);
   const fromHtml = document.documentElement.dataset.kjarniSkin;
   if (SKIN_IDS.includes(stored as SkinId)) return stored as SkinId;
-  return SKIN_IDS.includes(fromHtml as SkinId) ? (fromHtml as SkinId) : "command";
+  return SKIN_IDS.includes(fromHtml as SkinId) ? (fromHtml as SkinId) : DEFAULT_SKIN;
 }
