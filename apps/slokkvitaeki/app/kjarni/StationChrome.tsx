@@ -2,10 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { DesktopView } from "./DesktopView";
-import { SKINS, TOOLS, SKIN_KEY, readSkin, type SkinId, type ToolId } from "./skins";
+import { SKINS, TOOLS, SKIN_KEY, DEFAULT_SKIN, readSkin, type SkinId, type ToolId } from "./skins";
+import { rgFont, rgMono } from "./ragnarok/fonts";
+import "./ragnarok/ragnarok.css";
+import "./ragnarok/kjarni-ragnarok.css";
 
 const SkinCtx = createContext<{ skin: SkinId; setSkin: (id: SkinId) => void }>({
-  skin: "command",
+  skin: DEFAULT_SKIN,
   setSkin: () => {},
 });
 
@@ -20,7 +23,7 @@ export function StationChrome({
   tool: ToolId;
   children: ReactNode;
 }) {
-  const [skin, setSkin] = useState<SkinId>("command");
+  const [skin, setSkin] = useState<SkinId>(DEFAULT_SKIN);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -40,9 +43,10 @@ export function StationChrome({
   return (
     <SkinCtx.Provider value={{ skin, setSkin }}>
       <DesktopView enabled={tool !== "turbopaint" && tool !== "bord"}>
-        <div className="stn" data-skin={skin} data-tool={tool}>
+        <div className={`stn ${rgFont.variable} ${rgMono.variable}`} data-skin={skin} data-tool={tool}>
           <header className="stn-bar">
             <a className="stn-home" href="/kjarni">
+              <span className="stn-mark" aria-hidden="true"><i /><i /></span>
               <span aria-hidden="true">◉</span> Kjarni
             </a>
             <nav className="stn-tools" aria-label="Kjarni-tól">
@@ -59,6 +63,7 @@ export function StationChrome({
                 </a>
               ))}
             </nav>
+            {skin === "ragnarok" && <Klukka />}
             <div className="stn-skins" role="tablist" aria-label="Þema og útlit">
               {SKINS.map((option) => (
                 <button
@@ -82,5 +87,23 @@ export function StationChrome({
         </div>
       </DesktopView>
     </SkinCtx.Provider>
+  );
+}
+
+/* Klukkan í Ragnarök-stikunni — eigin state svo aðeins hún teiknast á sekúndu fresti. */
+function Klukka() {
+  const [nu, setNu] = useState("");
+  useEffect(() => {
+    const tik = () =>
+      setNu(new Date().toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }));
+    tik();
+    const id = window.setInterval(tik, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <div className="stn-clock" aria-label="Klukka">
+      <i aria-hidden="true" />
+      <span suppressHydrationWarning>{nu || "--:--:--"}</span>
+    </div>
   );
 }

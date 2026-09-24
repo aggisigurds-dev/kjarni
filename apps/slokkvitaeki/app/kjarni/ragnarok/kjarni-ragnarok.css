@@ -1,0 +1,298 @@
+/* Stjórnstöðin (/kjarni) í Ragnarök-útliti — uppröðun síðunnar sjálfrar.
+ * Táknin og íhlutirnir (.rg-panel, .rg-btn, .rg-tag …) koma úr ragnarok.css;
+ * hér er aðeins það sem er sérstakt fyrir þessa síðu (.rgk-*).
+ * Reglur kerfisins: skorin horn, engin græn/blá, glóð er appelsínugul,
+ * hægir snúningar, texti á gulli #0a0a0a. */
+
+/* letrin: next/font setur --font-rg* á .stn, svo --rg-font verður að leysast ÞAR.
+   Á :root væri var(--font-rg) óskilgreint og öll font:-styttingin ógild. */
+.stn { --rg-font:var(--font-rg),'Chakra Petch',monospace; --rg-mono:var(--font-rg-mono),'JetBrains Mono',monospace; }
+
+/* grunnurinn — nær svartur, ryðblettir, stálskástrik, föst skannlína */
+html[data-kjarni-skin="ragnarok"],
+html[data-kjarni-skin="ragnarok"] body { background:#020202; }
+.stn[data-skin="ragnarok"][data-tool="kjarni"] { background:#020202; }
+.rgk {
+  position:relative; flex:1; min-height:0;
+  background:var(--rg-ground); background-color:var(--rg-black); background-attachment:fixed;
+  color:var(--rg-text); font-family:var(--rg-font); color-scheme:dark;
+  padding-bottom:calc(60px + env(safe-area-inset-bottom, 0px));
+}
+.rgk::after {
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:repeating-linear-gradient(0deg,rgba(255,200,90,.04) 0 1px,transparent 1px 4px);
+}
+.rgk *, .rgk *::before, .rgk *::after { box-sizing:border-box; }
+.rgk-in {
+  position:relative; z-index:1;
+  max-width:1280px; margin:0 auto; padding:28px 24px 0;
+  display:flex; flex-direction:column; gap:26px;
+}
+.rgk-sec { display:flex; flex-direction:column; gap:22px; scroll-margin-top:90px; }
+.rgk p { margin:0; }
+.rgk a.rg-btn { color:var(--rg-text); }
+.rgk :focus-visible { outline:2px solid var(--rg-ember-500); outline-offset:3px; }
+
+/* hnapparaðir (útlit, kaflar, síur) */
+.rgk-row { display:flex; flex-wrap:wrap; gap:8px; }
+.rgk-row .rg-btn { letter-spacing:.2em; }
+.rgk-row .rg-btn > span { padding:0 20px; }
+
+/* hetjan + kjarnahringurinn */
+.rgk-hero { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:28px; align-items:center; }
+.rgk-hero-txt { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.rgk-proto { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+.rgk-proto-tags { display:flex; gap:6px; }
+.rgk-proto-tags span { padding:2px 8px; border:1px solid var(--rg-gold-500); color:var(--rg-ember-100); }
+.rgk-hero h1 { font-size:clamp(34px,5vw,58px); }
+.rgk-bar { max-width:520px; }
+.rgk-lead { font:500 15px/1.5 var(--rg-font); color:#d3ac66; max-width:560px; }
+.rgk-hud { font:400 12px/1.6 var(--rg-mono); letter-spacing:.08em; color:var(--rg-text-muted); }
+.rgk-core { width:340px; height:340px; justify-self:center; }
+
+/* fyrirsagnir kafla */
+.rgk-h2row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.rgk-sub { font:400 13px/1.5 var(--rg-font); color:var(--rg-text-muted); margin-top:6px !important; }
+.rgk-link { font:700 11px var(--rg-font); letter-spacing:.14em; color:var(--rg-ember-500) !important; }
+.rgk-link:hover { filter:brightness(1.2); }
+.rgk-kick { font:700 10px var(--rg-mono); letter-spacing:.28em; color:var(--rg-gold-500); }
+.rgk-empty { padding:24px 0; text-align:center; color:var(--rg-text-muted); }
+
+/* stóru kerfisspjöldin */
+.rgk-systems { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr)); gap:16px; }
+a.rgk-sys { display:block; color:inherit; transition:filter .15s; }
+a.rgk-sys:hover { filter:brightness(1.15); }
+.rgk-sys > .rg-face { display:flex; flex-direction:column; gap:10px; min-height:150px; padding:18px 18px 16px; }
+.rgk-sys-top { display:flex; justify-content:space-between; align-items:center; font:700 9px var(--rg-mono); letter-spacing:.24em; color:var(--rg-gold-500); }
+.rgk-state { display:inline-flex; align-items:center; gap:6px; }
+.rgk-sys-name { font:700 22px/1.1 var(--rg-font); letter-spacing:.06em; color:var(--rg-text-gold); text-shadow:0 0 10px rgba(255,140,40,.5); }
+.rgk-sys-desc { font:400 12px/1.55 var(--rg-font); color:var(--rg-text-dim); flex:1; }
+.rgk-sys-foot { display:flex; justify-content:space-between; align-items:center; font:500 10px var(--rg-mono); letter-spacing:.14em; color:var(--rg-text-muted); }
+.rgk-go { color:var(--rg-ember-500); }
+
+/* teikningaleitin — HeimilisfangLeit er Tailwind-íhlutur; óflokkaðar reglur
+   hér vinna utilities-lagið, svo reiturinn verður stál-reitur kerfisins */
+.rgk-leit > .rg-face { padding:18px 20px 20px; }
+.rgk-leit-reitur { margin-top:14px; }
+.rgk-leit-reitur [data-hleit] > div {
+  height:42px; padding:0 14px; gap:10px; border-radius:0; background:#050505;
+}
+.rgk-leit-reitur [data-hleit] input {
+  width:100%; min-width:0; height:100%;
+  font:500 13px var(--rg-mono); letter-spacing:.04em; color:var(--rg-text);
+}
+.rgk-leit-reitur [data-hleit] input::placeholder { color:var(--rg-text-faint); }
+.rgk-leit-reitur [data-hleit] svg { color:var(--rg-gold-500); }
+.rgk-leit-reitur:focus-within { box-shadow:0 0 12px rgba(255,140,40,.5); }
+/* niðurstöðuspjaldið er portal á <body> — sama stál og gull */
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] {
+  border-radius:0; border:1px solid rgba(255,154,58,.5); background:#0a0a0a; color:var(--rg-text);
+  box-shadow:0 0 22px rgba(255,120,40,.3),0 20px 50px rgba(0,0,0,.9);
+}
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] :is(.bg-white,.bg-stone-50,.bg-stone-100) { background:#141414; }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] :is(.border-stone-200,.border-stone-300) { border-color:rgba(201,160,74,.3); }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] :is(.text-stone-900,.text-stone-800) { color:var(--rg-text); }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] :is(.text-stone-600,.text-stone-500) { color:var(--rg-text-dim); }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] :is(.text-stone-400) { color:var(--rg-text-muted); }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] .text-blue-600 { color:var(--rg-ember-500); }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] .bg-stone-800 { background:var(--rg-gold-fill); color:#0a0a0a; }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] :is(button,a):hover { background:#1a0c06; }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] .rounded-lg,
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] .rounded-md,
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] .rounded-full { border-radius:0; }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] input { color:var(--rg-text); }
+html[data-kjarni-skin="ragnarok"] body > [data-hleit] img { background:#141414; filter:sepia(.35) brightness(.9); }
+
+/* tölurnar */
+.rgk-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr)); gap:12px; }
+.rgk-stat > .rg-face { padding:16px 18px 18px; }
+.rgk-stat-l { font:500 11px var(--rg-font); letter-spacing:.2em; text-transform:uppercase; color:var(--rg-text-dim); }
+.rgk-stat-v { display:flex; align-items:baseline; gap:4px; margin-top:10px; }
+.rgk-stat-v b {
+  font:700 40px/1 var(--rg-font);
+  background:linear-gradient(180deg,#fff6d8,#f3d582 45%,#b3832f 60%,#ffe9b0);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 8px rgba(255,140,40,.5));
+}
+.rgk-stat-v small { font:500 16px var(--rg-font); color:var(--rg-text-muted); }
+
+/* tenglar + virkni */
+.rgk-overview { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:24px; align-items:start; }
+.rgk-col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.rgk-group { display:flex; flex-direction:column; gap:8px; }
+.rgk-launch { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+a.rgk-lnk {
+  display:block; padding:1px; background:var(--rg-frame-thin);
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:filter .15s;
+}
+a.rgk-lnk:hover { filter:brightness(1.2); }
+a.rgk-lnk > span {
+  display:flex; align-items:center; gap:10px; height:48px; padding:0 14px;
+  background:var(--rg-steel); font:600 13px var(--rg-font); color:var(--rg-text);
+  clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+  white-space:nowrap; overflow:hidden;
+}
+a.rgk-lnk .rg-diamond { flex:none; }
+.rgk-act { display:flex; flex-direction:column; gap:14px; }
+.rgk-actrow {
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:6px 12px; align-items:baseline;
+  padding-bottom:14px; border-bottom:1px solid rgba(201,160,74,.2);
+}
+.rgk-actrow:last-child { border-bottom:0; padding-bottom:0; }
+.rgk-act-nafn { font:600 15px var(--rg-font); color:var(--rg-text-gold); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rgk-act-when { font:400 11px var(--rg-mono); color:var(--rg-text-muted); }
+.rgk-act-sub { grid-column:2 / 4; font:400 13px var(--rg-font); color:var(--rg-text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* vefir & kerfi */
+.rgk-sites { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:14px; }
+.rgk-site > .rg-face { display:flex; flex-direction:column; gap:12px; padding:18px; }
+.rgk-site-name { font:700 20px/1.15 var(--rg-font); letter-spacing:.04em; color:var(--rg-text-gold); text-shadow:0 0 10px rgba(255,140,40,.5); }
+.rgk-site-desc { font:400 12px/1.5 var(--rg-font); color:var(--rg-text-dim); }
+.rgk-site-stats { display:flex; flex-direction:column; gap:6px; flex:1; font:400 13px var(--rg-font); color:var(--rg-text-muted); }
+.rgk-site-stats b { font-weight:700; font-size:16px; color:var(--rg-text); }
+.rgk-site-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.rgk-add {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  min-height:260px; padding:24px; text-align:center; cursor:pointer;
+  background:transparent; border:1px dashed rgba(230,176,74,.45); color:inherit; font:inherit;
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+  transition:filter .15s, background .15s;
+}
+.rgk-add:hover { background:rgba(255,140,40,.05); filter:brightness(1.2); }
+.rgk-add-plus { font:400 40px/1 var(--rg-font); color:var(--rg-gold-500); text-shadow:0 0 10px rgba(255,140,40,.6); }
+.rgk-add b { font:700 16px var(--rg-font); color:var(--rg-text-gold); }
+.rgk-add small { font:400 12px/1.5 var(--rg-font); color:var(--rg-text-muted); max-width:220px; }
+
+/* einingar */
+.rgk-gal { display:flex; flex-direction:column; gap:12px; }
+.rgk-gal-h { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.rgk-gal-h > div { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.rgk-gal-h b { font:700 15px var(--rg-font); letter-spacing:.06em; color:var(--rg-text-gold); }
+.rgk-gal-h span { font:400 12px var(--rg-font); color:var(--rg-text-muted); }
+.rgk-count { font:600 11px var(--rg-mono) !important; padding:3px 10px; border:1px solid rgba(230,176,74,.5); color:var(--rg-gold-500) !important; }
+.rgk-gal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr)); gap:10px; }
+.rgk-mod {
+  display:block; padding:1px; background:var(--rg-frame-dim); color:inherit;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:filter .15s;
+}
+a.rgk-mod:hover { background:var(--rg-frame-thin); filter:brightness(1.15); }
+.rgk-mod.wip { background:linear-gradient(135deg,#3a2a10,#1a1a1a); }
+.rgk-mod-face {
+  display:flex; flex-direction:column; gap:6px; min-height:92px; height:100%; padding:12px 14px;
+  background:linear-gradient(180deg,#141414,#030303);
+  clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+}
+.rgk-mod.wip .rgk-mod-face { background:linear-gradient(180deg,#1a1408,#0a0806); }
+.rgk-mod-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.rgk-mod-top b { font:700 13px var(--rg-font); color:var(--rg-text); }
+.rgk-mod-kind { font:700 8.5px var(--rg-mono); letter-spacing:.14em; padding:2px 6px; color:var(--rg-text-dim); border:1px solid rgba(191,154,93,.5); white-space:nowrap; }
+.rgk-mod-desc { font:400 11.5px/1.45 var(--rg-font); color:var(--rg-text-muted); flex:1; }
+.rgk-mod-state { font:700 10px var(--rg-mono); letter-spacing:.12em; }
+
+/* aðstoðarborð */
+.rgk-help { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:14px; }
+.rgk-conn > .rg-face { display:flex; flex-direction:column; gap:10px; padding:16px 18px 18px; }
+.rgk-conn-h { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.rgk-conn-h b { font:700 16px var(--rg-font); color:var(--rg-text-gold); }
+.rgk-conn p { font:400 12px/1.55 var(--rg-font); color:var(--rg-text-dim); flex:1; }
+
+/* nýr vefur — gluggi */
+.rgk-modal-wrap { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(2,2,2,.78); }
+.rgk-modal { width:min(460px,96vw); }
+.rgk-modal > .rg-face { display:flex; flex-direction:column; gap:16px; padding:22px; }
+.rgk-form { display:flex; flex-direction:column; gap:14px; }
+.rgk-form label { display:flex; flex-direction:column; gap:6px; font:700 10px var(--rg-mono); letter-spacing:.24em; color:var(--rg-text-dim); }
+.rgk-form .rg-input-wrap { display:block; }
+.rgk-form .rg-input { font-size:16px; }
+.rgk-form select.rg-input { appearance:none; cursor:pointer; }
+.rgk-form select.rg-input option { background:#0a0a0a; color:var(--rg-text); }
+
+/* hin tólin (Kerfi, Draft, Stjórnborð …) eru ljós og byggð á --m-*; í Ragnarök fá
+   þau gullna pappírinn (sama og Don) svo þau haldist læsileg — aðeins stikan er svört */
+.stn[data-skin="ragnarok"], .ms[data-skin="ragnarok"] {
+  --m-navy:#1a1208; --m-bg:#f4ead4; --m-ink:#1a1208; --m-soft:#6b5a3c; --m-line:#d7c398;
+  --m-org:#b8862b; --m-org-hover:#9a6f22; --m-green:#b8862b; --m-card:#fff8e8; --m-muted:#f0e2c4;
+  --m-head:rgba(244,234,212,0.95); --m-hud:#b8862b; --m-width:1280px; --m-radius:2px;
+}
+
+/* toppstikan (StationChrome) í Ragnarök — á öllum tólum, líka utan /kjarni */
+.stn[data-skin="ragnarok"] .stn-bar {
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px),linear-gradient(180deg,#141414,#030303);
+  border-bottom:0; box-shadow:0 6px 24px rgba(0,0,0,.8); backdrop-filter:none; -webkit-backdrop-filter:none;
+  font-family:var(--rg-font);
+}
+.stn[data-skin="ragnarok"] .stn-bar::after {
+  content:""; position:absolute; left:0; right:0; bottom:-3px; height:3px; pointer-events:none;
+  background:linear-gradient(90deg,#3e1a06,#ff8c2a 20%,#ffd98a 35%,#7a3a0c 50%,#ffb347 70%,#d2691e 90%,#3e1a06);
+  box-shadow:0 0 18px rgba(255,120,40,.4);
+}
+.stn[data-skin="ragnarok"] .stn-home { color:var(--rg-text-gold); letter-spacing:.3em; font:700 15px var(--rg-font); text-shadow:0 0 10px rgba(255,140,40,.8); gap:10px; }
+.stn-mark { display:none; }
+.stn[data-skin="ragnarok"] .stn-mark { display:inline-block; position:relative; width:22px; height:22px; flex:none; }
+.stn[data-skin="ragnarok"] .stn-home > span[aria-hidden]:not(.stn-mark) { display:none; }
+.stn-mark i { position:absolute; border-radius:50%; }
+.stn-mark i:first-child {
+  inset:0;
+  background:conic-gradient(from 0deg,#ffb347 0 40deg,transparent 40deg 55deg,#ff8c2a 55deg 130deg,transparent 130deg 160deg,#ffcf6a 160deg 250deg,transparent 250deg 300deg,#d2691e 300deg 330deg,transparent 330deg);
+  -webkit-mask:radial-gradient(circle,transparent 6px,#000 7px,#000 10px,transparent 11px);
+  mask:radial-gradient(circle,transparent 6px,#000 7px,#000 10px,transparent 11px);
+  animation:rg-spin 40s linear infinite;
+}
+.stn-mark i:last-child { inset:8px; background:#fff0c0; box-shadow:0 0 8px #ff9a3a; }
+.stn[data-skin="ragnarok"] .stn-tools { gap:2px; }
+.stn[data-skin="ragnarok"] .stn-tools a {
+  border-radius:0; padding:8px 10px; font:500 12px var(--rg-font); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--rg-text-dim); border-bottom:2px solid transparent; background:none;
+}
+.stn[data-skin="ragnarok"] .stn-tools a:hover { color:var(--rg-gold-200); }
+.stn[data-skin="ragnarok"] .stn-tools a.on {
+  background:none; color:var(--rg-text-gold); border-bottom-color:var(--rg-ember-600); text-shadow:0 0 8px rgba(255,140,40,.7);
+}
+.stn[data-skin="ragnarok"] .stn-skins button {
+  border-radius:0; border:1px solid rgba(201,160,74,.35); background:#070707; color:var(--rg-text-dim);
+  font-family:var(--rg-font); clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+}
+.stn[data-skin="ragnarok"] .stn-skins button.on { background:var(--rg-steel-lit); color:var(--rg-ember-100); border-color:var(--rg-ember-600); }
+.stn[data-skin="ragnarok"] .stn-skins .ms-skin-pip { background:var(--rg-ember-500); box-shadow:0 0 6px rgba(255,140,40,.8); }
+/* á /kjarni er útlitsvalið á síðunni sjálfri (einingar-röðin), klukkan tekur sætið */
+.stn[data-skin="ragnarok"][data-tool="kjarni"] .stn-skins { display:none; }
+.stn-clock { display:none; }
+.stn[data-skin="ragnarok"] .stn-clock {
+  display:flex; align-items:center; gap:10px; margin-left:auto; flex:none;
+  font:500 11px var(--rg-mono); letter-spacing:.2em; color:var(--rg-text-dim);
+}
+/* á hinum tólunum þarf stikan plássið fyrir tólin + útlitsvalið */
+.stn[data-skin="ragnarok"]:not([data-tool="kjarni"]) .stn-clock { display:none; }
+.stn-clock i {
+  width:8px; height:8px; border-radius:50%;
+  background:radial-gradient(circle,#fff0c0,#ff8c2a); box-shadow:0 0 8px #ff9a3a;
+  animation:rg-pulse 3s ease-in-out infinite;
+}
+
+/* hleðsla og aðgangur í Ragnarök (StationShell-gluggarnir) */
+.ms[data-skin="ragnarok"] { background:var(--rg-ground); background-color:#020202; color:var(--rg-text); font-family:var(--rg-font); }
+.ms[data-skin="ragnarok"]::before { background-image:none; }
+.ms[data-skin="ragnarok"] .ms-head { background:transparent; border:0; box-shadow:none; }
+.ms[data-skin="ragnarok"] .ms-top-l h1 { color:var(--rg-text-gold); letter-spacing:.06em; }
+.ms[data-skin="ragnarok"] .ms-top-l p, .ms[data-skin="ragnarok"] .ms-gate p { color:var(--rg-text-dim); }
+.ms[data-skin="ragnarok"] .ms-badge, .ms[data-skin="ragnarok"] .ms-gate-badge { background:#070707; color:var(--rg-text-gold); border:1px solid var(--rg-ember-600); border-radius:0; }
+.ms[data-skin="ragnarok"] .ms-gate h1 { color:var(--rg-text-gold); }
+.ms[data-skin="ragnarok"] .ms-skin-hint { color:var(--rg-ember-500); }
+
+/* hreyfing: kerfið snýst hægt — sá sem biður um minni hreyfingu fær kyrra mynd */
+@media (prefers-reduced-motion:reduce) {
+  .rgk .rg-flicker, .stn-mark i:first-child, .stn-clock i { animation:none; }
+}
+
+@media (max-width:900px) {
+  html:not([data-desk-lock]) .rgk-hero { grid-template-columns:1fr; }
+  html:not([data-desk-lock]) .rgk-core { width:280px; height:280px; }
+  html:not([data-desk-lock]) .rgk-core ragnarok-ring { transform:scale(.8235); transform-origin:top left; }
+}
+@media (max-width:620px) {
+  html:not([data-desk-lock]) .rgk-in { padding:20px 16px 0; gap:20px; }
+  html:not([data-desk-lock]) .rgk-row .rg-btn > span { padding:0 12px; letter-spacing:.12em; }
+  html:not([data-desk-lock]) .stn-clock { display:none; }
+}
