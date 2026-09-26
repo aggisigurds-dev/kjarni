@@ -2238,7 +2238,7 @@ export function Workbench({
   // Resize a part so one axis measures `mm`, keeping its proportions (uniform
   // scale) — the on-canvas version of the inspector's resize-to-measurement.
   const resizePartTo = useCallback(
-    (partId: string, axis: 'x' | 'y' | 'z', mm: number) => {
+    (partId: string, axis: 'x' | 'y' | 'z', mm: number, keep = true) => {
       if (mm <= 0) return;
       const part = project.parts.find((candidate) => candidate.id === partId);
       const s = sizes.get(partId);
@@ -2246,12 +2246,12 @@ export function Workbench({
       const current = axis === 'x' ? s.width : axis === 'y' ? s.height : s.depth;
       if (current <= 0) return;
       const ratio = mm / current;
+      const sc = part.transform.scale;
+      // keep = uniform (all axes scale together); otherwise just the typed axis.
       patchTransform(partId, {
-        scale: {
-          x: part.transform.scale.x * ratio,
-          y: part.transform.scale.y * ratio,
-          z: part.transform.scale.z * ratio,
-        },
+        scale: keep
+          ? { x: sc.x * ratio, y: sc.y * ratio, z: sc.z * ratio }
+          : { ...sc, [axis]: sc[axis] * ratio },
       });
     },
     [project.parts, sizes, patchTransform]
@@ -5393,7 +5393,7 @@ export function Workbench({
           cap: 'Primitives',
           tools: [
             { icon: Box, label: 'Cube', onClick: () => addPrimitive(boxSoup(), 'Box') },
-            { icon: Cylinder, label: 'Cylinder', onClick: () => addPrimitive(cylinderSoup(), 'Cylinder') },
+            { icon: Cylinder, label: 'Cylinder', onClick: () => addHardware({ kind: 'rod', length: 40, diameter: 24 }) },
             { icon: Cone, label: 'Cone', onClick: () => addPrimitive(coneSoup(), 'Cone') },
             { icon: Circle, label: 'Sphere', onClick: () => addPrimitive(sphereSoup(), 'Sphere') },
           ],
@@ -6776,7 +6776,7 @@ export function Workbench({
             lockFront={centerMode}
             moveStep={moveStep}
             rotateStep={rotateStep}
-            magnetMm={DEFAULT_MAGNET_MM}
+            magnetMm={Math.min(DEFAULT_MAGNET_MM, moveStep * 2)}
             snapNeighbors={snapNeighbors}
             snapAnchors={snapAnchors}
             onSnapHint={setSnapHint}
@@ -6788,7 +6788,10 @@ export function Workbench({
           {project.parts.length > 0 && moveModeId && (() => {
             const mp = project.parts.find((part) => part.id === moveModeId);
             const ms = sizes.get(moveModeId);
-            const pipeSpec = mp?.hardware?.kind === 'pipe' ? mp.hardware : null;
+            const tubeSpec =
+              mp?.hardware && (mp.hardware.kind === 'pipe' || mp.hardware.kind === 'rod')
+                ? mp.hardware
+                : null;
             const single = movingWith(moveModeId).length <= 1;
             return (
             <ManipBar
@@ -6801,8 +6804,6 @@ export function Workbench({
               onMode={setManip}
               rotateAxis={rotateAxis}
               onRotateAxis={setRotateAxis}
-              moveAxis={moveAxis}
-              onMoveAxis={setMoveAxis}
               moveStep={moveStep}
               rotateStep={rotateStep}
               onMoveStep={setMoveStep}
@@ -6819,10 +6820,23 @@ export function Workbench({
               }}
               onDone={() => setMoveModeId(null)}
               size={single && ms ? { x: ms.width, y: ms.height, z: ms.depth } : null}
-              onResize={(axis, mm) => resizePartTo(moveModeId, axis, mm)}
-              pipe={single && pipeSpec ? { outer: pipeSpec.diameter, wall: pipeSpec.wall ?? 1 } : null}
-              onPipe={(patch) => {
-                if (mp?.hardware) updateHardware(moveModeId, { ...mp.hardware, ...patch });
+              onResize={(axis, mm, keep) => resizePartTo(moveModeId, axis, mm, keep)}
+              tube={
+                single && tubeSpec
+                  ? { isPipe: tubeSpec.kind === 'pipe', outer: tubeSpec.diameter, wall: tubeSpec.wall ?? 2 }
+                  : null
+              }
+              onTube={(patch) => {
+                const hw = mp?.hardware;
+                if (!hw) return;
+                if (patch.toPipe !== undefined) {
+                  updateHardware(
+                    moveModeId,
+                    patch.toPipe ? { ...hw, kind: 'pipe', wall: hw.wall ?? 2 } : { ...hw, kind: 'rod' }
+                  );
+                } else {
+                  updateHardware(moveModeId, { ...hw, ...patch });
+                }
               }}
               snapHint={snapHint}
             />
