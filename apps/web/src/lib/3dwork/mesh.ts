@@ -33,6 +33,12 @@ export interface Topology {
   inconsistentEdges: number;
   holes: number;
   watertight: boolean;
+  /**
+   * Closed as the soup stands, read without the tolerance weld — see
+   * `sealedExactly`. Watertight parts are sealed; so are parts an exact kernel
+   * joined, which the weld reads as open along their seams.
+   */
+  sealed: boolean;
   /** Signed volume in model units cubed. Negative means inside-out. */
   signedVolume: number;
   area: number;
@@ -341,6 +347,8 @@ export function analyze(mesh: IndexedMesh): Topology {
     inconsistentEdges: inconsistent,
     holes: boundary === 0 ? 0 : boundaryLoops(mesh.indices, edges).length,
     watertight: boundary === 0 && nonManifold === 0 && inconsistent === 0,
+    // What the weld cannot see is left to `inspect`, which has the soup.
+    sealed: boundary === 0 && nonManifold === 0 && inconsistent === 0,
     signedVolume: signedVolume(mesh),
     area: surfaceArea(mesh),
     bounds: computeBounds(mesh.positions),
@@ -1427,13 +1435,146 @@ export function fixMisalignment(soup: Float32Array, options: MisalignOptions): {
   };
 }
 
+export interface Seal {
+  /** Every edge used as often one way round as the other, and the whole facing out. */
+  sealed: boolean;
+  /** Edges used more often one way than the other: the rims of holes, and flipped faces. */
+  unbalancedEdges: number;
+  /** Edges where two stretches of surface touch — four faces or more on one edge. Closed, but pinched. */
+  touchingEdges: number;
+  /** Separate pieces of surface — more than one is bodies that were never joined, overlapping or not. */
+  shells: number;
+  /** Enclosed volume in model units cubed; negative inside out. Meaningful only when sealed. */
+  volume: number;
+}
+
+/**
+ * Whether a soup is closed exactly as it stands.
+ *
+ * Corners are one vertex only where they sit at the very same point, to the
+ * last bit — no tolerance. The weld the rest of this file works on pairs up
+ * vertices a hair apart in the order it meets them, and a part joined by an
+ * exact kernel is full of those along its seams: welded, it reads as open where
+ * it is closed, and Fill would rebuild a part that needed nothing. Read exactly,
+ * a closed surface uses every edge as often in one direction as in the other,
+ * however many faces meet there. Zero-area corners (an edge from a vertex to
+ * itself) close nothing and open nothing.
+ */
+export function sealedExactly(soup: Float32Array): Seal {
+  const corners = Math.floor(soup.length / 9) * 3;
+  if (corners === 0) return { sealed: false, unbalancedEdges: 0, touchingEdges: 0, shells: 0, volume: 0 };
+
+  // Vertices by the bit patterns of their coordinates — equal floats, equal bits, but for the two zeros.
+  const bits = new Uint32Array(soup.buffer, soup.byteOffset, corners * 3);
+  const NEGATIVE_ZERO = 0x80000000;
+  const at = (i: number) => (bits[i] === NEGATIVE_ZERO ? 0 : bits[i]);
+  let size = 16;
+  while (size < corners * 2) size *= 2;
+  const mask = size - 1;
+  const table = new Int32Array(size).fill(-1);
+  const firstCorner = new Uint32Array(corners);
+  const vertexOf = new Uint32Array(corners);
+  let vertices = 0;
+  for (let c = 0; c < corners; c++) {
+    const x = at(c * 3);
+    const y = at(c * 3 + 1);
+    const z = at(c * 3 + 2);
+    let slot = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask;
+    for (;;) {
+      const vertex = table[slot];
+      if (vertex < 0) {
+        table[slot] = vertices;
+        firstCorner[vertices] = c;
+        vertexOf[c] = vertices++;
+        break;
+      }
+      const o = firstCorner[vertex] * 3;
+      if (at(o) === x && at(o + 1) === y && at(o + 2) === z) {
+        vertexOf[c] = vertex;
+        break;
+      }
+      slot = (slot + 1) & mask;
+    }
+  }
+
+  // Pieces of surface: vertices joined by the edges between them.
+  const root = new Int32Array(vertices);
+  for (let v = 0; v < vertices; v++) root[v] = v;
+  const find = (v: number): number => {
+    while (root[v] !== v) {
+      root[v] = root[root[v]];
+      v = root[v];
+    }
+    return v;
+  };
+
+  // Every edge as a number: the pair of its ends, low one first, and which way it runs.
+  // Sorted, the uses of an edge sit together and can be counted each way.
+  const keys = new Float64Array(corners);
+  let count = 0;
+  for (let t = 0; t < corners; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = vertexOf[t + k];
+      const b = vertexOf[t + ((k + 1) % 3)];
+      if (a === b) continue;
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) root[ra] = rb;
+      const low = a < b ? a : b;
+      const high = a < b ? b : a;
+      keys[count++] = (low * vertices + high) * 2 + (a < b ? 1 : 0);
+    }
+  }
+  const sorted = keys.subarray(0, count).sort();
+  let unbalancedEdges = 0;
+  let touchingEdges = 0;
+  for (let i = 0; i < count; ) {
+    const edge = Math.floor(sorted[i] / 2);
+    let forward = 0;
+    let backward = 0;
+    while (i < count && Math.floor(sorted[i] / 2) === edge) {
+      if (sorted[i] % 2 === 1) forward++;
+      else backward++;
+      i++;
+    }
+    if (forward !== backward) unbalancedEdges++;
+    else if (forward + backward > 2) touchingEdges++;
+  }
+
+  let volume = 0;
+  for (let t = 0; t < corners * 3; t += 9) {
+    const ax = soup[t];
+    const ay = soup[t + 1];
+    const az = soup[t + 2];
+    const bx = soup[t + 3];
+    const by = soup[t + 4];
+    const bz = soup[t + 5];
+    const cx = soup[t + 6];
+    const cy = soup[t + 7];
+    const cz = soup[t + 8];
+    volume += ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
+  }
+  let shells = 0;
+  for (let v = 0; v < vertices; v++) if (find(v) === v) shells++;
+  return {
+    sealed: count > 0 && unbalancedEdges === 0 && volume > 0,
+    unbalancedEdges,
+    touchingEdges,
+    shells,
+    volume: volume / 6,
+  };
+}
+
 /** Topology summary without repairing anything. */
 export function inspect(soup: Float32Array, weldTolerance?: number): Topology {
-  return analyze(weld(soup, weldTolerance).mesh);
+  const topology = analyze(weld(soup, weldTolerance).mesh);
+  return topology.watertight ? topology : { ...topology, sealed: sealedExactly(soup).sealed };
 }
 
 export interface Diagnosis {
   watertight: boolean;
+  /** Closed exactly, even where the weld reads it as open — see `sealedExactly`. */
+  sealed: boolean;
   /** Boundary loops — missing faces / holes. */
   missingFaces: number;
   openEdges: number;
@@ -1466,8 +1607,10 @@ export function diagnose(soup: Float32Array, alignMm = 0.2): Diagnosis {
   const size = topology.bounds.size;
   const boxVolume = Math.max(size[0] * size[1] * size[2], 1e-12);
   const volumeMm3 = Math.abs(topology.signedVolume);
+  const sealed = topology.watertight || sealedExactly(soup).sealed;
   return {
     watertight: topology.watertight,
+    sealed,
     missingFaces: topology.holes,
     openEdges: topology.boundaryEdges,
     misalignedClusters: snappedClusters,
@@ -1475,7 +1618,7 @@ export function diagnose(soup: Float32Array, alignMm = 0.2): Diagnosis {
     disturbedEdges: topology.nonManifoldEdges,
     junkFaces: junk.degenerate + junk.duplicates,
     insideOut: topology.signedVolume < 0,
-    thinShellRisk: !topology.watertight || volumeMm3 / boxVolume < 0.08,
+    thinShellRisk: !sealed || volumeMm3 / boxVolume < 0.08,
     volumeMm3,
   };
 }

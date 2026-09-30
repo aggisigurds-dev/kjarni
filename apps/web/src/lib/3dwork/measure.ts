@@ -7,7 +7,7 @@
  * and all masses grams unless a name says otherwise.
  */
 
-import { computeBounds, type Bounds, type IndexedMesh, weld, analyze } from './mesh';
+import { computeBounds, type Bounds, type IndexedMesh, weld, analyze, sealedExactly } from './mesh';
 
 export interface Material {
   id: string;
@@ -65,7 +65,8 @@ export function describePart(soup: Float32Array): PartMeasurement {
     volume,
     area: topology.area,
     triangles: topology.triangles,
-    watertight: topology.watertight,
+    // Closed exactly counts: a part joined in One piece is, though the weld reads its seams as open.
+    watertight: topology.watertight || sealedExactly(soup).sealed,
     fillRatio: boxVolume > 0 ? volume / boxVolume : 0,
   };
 }

@@ -73,6 +73,7 @@ import {
   fixMisalignment,
   inspect,
   recenter,
+  sealedExactly,
   simplify,
   toSoup,
   verticesInRadius,
@@ -3089,7 +3090,10 @@ export function Workbench({
         try {
           const report = diagnose(soup);
           setDiagnosis(report);
-          if (report.watertight && !report.thinShellRisk && report.misalignedClusters === 0) {
+          if (report.sealed && !report.watertight && !report.thinShellRisk) {
+            // Joined exactly: the near-miss corners and fighting faces the weld sees are its seams.
+            toast.success('Closed — ready to slice or subtract.');
+          } else if (report.watertight && !report.thinShellRisk && report.misalignedClusters === 0) {
             toast.success('Solid — ready to slice or subtract.');
           } else {
             const bits = [
@@ -3127,6 +3131,16 @@ export function Workbench({
       setTab('repair');
       await new Promise((resolve) => setTimeout(resolve, 30));
       try {
+        // Already closed exactly, in one piece — a part joined in One piece, say.
+        // Snapping its corners 0.2 mm and closing it again would only wear its
+        // seams down. Bodies never joined still go through: closing joins them.
+        // (The exact check is quick; the full diagnosis of a big part is not.)
+        const seal = sealedExactly(soup);
+        const box = computeBounds(soup).size;
+        if (seal.sealed && seal.shells === 1 && seal.volume >= 0.08 * box[0] * box[1] * box[2]) {
+          toast.success('Already closed — nothing to fill. Slice and Subtract will keep volume.');
+          return;
+        }
         const aligned = fixMisalignment(soup, { toleranceMm: 0.2, fillHoles: true });
         const repaired = autoFix(aligned.soup, { fillHoles: true, maxHoleEdges: 200 });
         let next = repaired.soup;
