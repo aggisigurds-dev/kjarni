@@ -27,6 +27,14 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 
 import { smoothNormals } from '@/lib/3dwork/normals';
+import {
+  beginSeamBrushStroke,
+  seamBrushDab,
+  seamBrushPick,
+  type SeamBrushMesh,
+  type SeamBrushMode,
+  type SeamBrushStroke,
+} from '@/lib/3dwork/seam-brush';
 import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
 
@@ -54,6 +62,18 @@ export interface ViewportCallout {
   /** Which variant of how many is fitted, for the x/y counter. */
   index: number;
   variants: number;
+}
+
+/** The seam brush at work on a part. */
+export interface ViewportSeamBrush {
+  partId: string;
+  /** The part's working mesh: drawn in place of its soup, and shaped by every dab. */
+  mesh: SeamBrushMesh;
+  radiusMm: number;
+  stepMm: number;
+  mode: SeamBrushMode;
+  /** Drags turn the view instead of brushing — on a touch screen one finger has to do both. */
+  turning: boolean;
 }
 
 interface ViewportProps {
@@ -88,6 +108,10 @@ interface ViewportProps {
   /** Local-space XYZ triples of already-painted vertices. */
   paintLocal: Float32Array;
   onPaintAt: (partId: string, localPoint: [number, number, number], erase: boolean) => void;
+  /** Seam brush: drags over its part level the seam under them. Null when it is put away. */
+  seamBrush: ViewportSeamBrush | null;
+  /** A stroke of the seam brush that moved something has ended. */
+  onSeamStroke: (stroke: SeamBrushStroke) => void;
   /** Add-volume mode: tap an inner corner on the selected part to fillet it. */
   addingVolume: boolean;
   addVolumePartId: string | null;
@@ -143,6 +167,19 @@ const BUILDER_OUTLINE_HIDDEN = '#86b1ea';
 /** The cut the Slice dialog is setting up. */
 const SLICE_PLANE_COLOR = 0x0ea5e9;
 const SLICE_EDGE_COLOR = 0x0284c7;
+/** The seam brush's ring: what it shaves with, and what it fills with. */
+const SEAM_SHAVE_COLOR = 0xd97706;
+const SEAM_FILL_COLOR = 0x059669;
+/** A stroke puts a dab down every this share of the brush radius… */
+const SEAM_DAB_SPACING = 0.3;
+/** …and no more than this many between two pointer events, however fast the pointer went. */
+const SEAM_DABS_PER_MOVE = 8;
+/** How long a frame may spend putting dabs down before it draws, ms. */
+const SEAM_FRAME_BUDGET_MS = 12;
+/** A stroke keeps no more dabs than this waiting: what is left when the pointer lets go is done in one go. */
+const SEAM_DABS_WAITING = 24;
+/** Changed triangles this close together in the buffer go to the GPU as one run. */
+const SEAM_UPLOAD_GAP = 256;
 /** Light intensities per view: sky, key, fill, and the headlight on the camera. */
 const PLAIN_LIGHTS = { hemi: 1.4, key: 1.8, fill: 0.55, head: 0 };
 // A strong key from one side and a weak headlight, so the faces of a part
@@ -248,6 +285,8 @@ interface SceneRefs {
   meshRoot: THREE.Group;
   overlay: THREE.Group;
   paintMarks: THREE.Group;
+  /** The seam brush's ring, lying on the surface under the pointer. */
+  brushRing: THREE.Mesh;
   /** The plain view's checker floor. */
   grid: THREE.Object3D;
   /** The builder view's build plate. */
@@ -303,6 +342,29 @@ function buildGeometry(soup: Float32Array): THREE.BufferGeometry {
   return geometry;
 }
 
+/**
+ * Geometry drawn straight from a seam brush mesh. Its buffers have room to
+ * grow, so only the triangles in use are drawn, and every dab writes into them
+ * in place — nothing is rebuilt while a stroke is under way.
+ */
+function buildBrushGeometry(brush: SeamBrushMesh): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  const position = new THREE.BufferAttribute(brush.soup, 3);
+  position.setUsage(THREE.DynamicDrawUsage);
+  const normal = new THREE.BufferAttribute(brush.normals, 3);
+  normal.setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('position', position);
+  geometry.setAttribute('normal', normal);
+  geometry.setDrawRange(0, brush.triangleCount * 3);
+  // Measured over the triangles in use: the spare room is all zeros.
+  geometry.boundingBox = new THREE.Box3().setFromArray(brush.soup.subarray(0, brush.triangleCount * 9));
+  geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
+  geometry.userData.buffers = brush.buffers;
+  // The whole of it goes to the GPU with the first frame.
+  brush.dirty.clear();
+  return geometry;
+}
+
 export function Viewport({
   parts,
   selectedId,
@@ -321,6 +383,8 @@ export function Viewport({
   paintPartId,
   paintLocal,
   onPaintAt,
+  seamBrush,
+  onSeamStroke,
   addingVolume,
   addVolumePartId,
   onAddVolumeAt,
@@ -360,6 +424,10 @@ export function Viewport({
   // Likewise for the cut plane: its two numbers, not the object holding them.
   const sliceAxis = slicePreview?.axis ?? null;
   const slicePosition = slicePreview?.position ?? null;
+  // And for the seam brush: which mesh it is working on, not how it is set.
+  const brushMesh = seamBrush?.mesh ?? null;
+  const brushPartId = seamBrush?.partId ?? null;
+  const brushTurning = seamBrush?.turning ?? false;
 
   // Handlers change every render; a ref keeps the pointer listener stable.
   const handlers = useRef({
@@ -372,6 +440,8 @@ export function Viewport({
     paintRadiusMm,
     paintPartId,
     onPaintAt,
+    seamBrush,
+    onSeamStroke,
     addingVolume,
     addVolumePartId,
     onAddVolumeAt,
@@ -401,6 +471,8 @@ export function Viewport({
     paintRadiusMm,
     paintPartId,
     onPaintAt,
+    seamBrush,
+    onSeamStroke,
     addingVolume,
     addVolumePartId,
     onAddVolumeAt,
@@ -490,6 +562,21 @@ export function Viewport({
     scene.add(overlay);
     const paintMarks = new THREE.Group();
     scene.add(paintMarks);
+    // Drawn over the part rather than sunk into it: the ring is the brush, and
+    // half of it under a ridge would hide how wide the brush is.
+    const brushRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.93, 1, 64),
+      new THREE.MeshBasicMaterial({
+        color: SEAM_SHAVE_COLOR,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.9,
+      })
+    );
+    brushRing.renderOrder = 13;
+    brushRing.visible = false;
+    scene.add(brushRing);
 
     const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xd97706);
     selection.visible = false;
@@ -531,6 +618,7 @@ export function Viewport({
       meshRoot,
       overlay,
       paintMarks,
+      brushRing,
       grid,
       plate,
       selection,
@@ -624,10 +712,75 @@ export function Viewport({
       }
     };
 
+    // A stroke of the seam brush in progress: what it has done so far, the dabs
+    // it has yet to put down, where the last one it took on went, and whether
+    // any of them has moved anything.
+    let seamStroke: {
+      stroke: SeamBrushStroke;
+      pending: { point: [number, number, number]; normal: [number, number, number] }[];
+      last: THREE.Vector3;
+      moved: boolean;
+    } | null = null;
+
+    /**
+     * Put down the dabs a stroke has waiting, for as long as `budgetMs` allows
+     * and always at least one. On a big part a dab takes longer than a frame:
+     * the pointer runs ahead and the dabs catch up, so the view keeps turning
+     * over under a fast stroke instead of freezing until it is done.
+     */
+    const runSeamStroke = (budgetMs: number) => {
+      const brush = handlers.current.seamBrush;
+      if (!seamStroke || !brush) return;
+      const options = { radiusMm: brush.radiusMm, stepMm: brush.stepMm, mode: brush.mode };
+      const started = performance.now();
+      for (let next = seamStroke.pending.shift(); next; next = seamStroke.pending.shift()) {
+        const dab = seamBrushDab(brush.mesh, next.point, next.normal, options, seamStroke.stroke);
+        if (dab.vertices.length > 0) seamStroke.moved = true;
+        if (performance.now() - started >= budgetMs) break;
+      }
+    };
+
+    /**
+     * Send what the seam brush has changed since the last frame to the GPU:
+     * only the runs of triangles it wrote to, not the whole part. A stroke, an
+     * undo and a split all land here the same way.
+     */
+    const syncSeamBrush = () => {
+      const brush = handlers.current.seamBrush;
+      if (!brush) return;
+      const mesh = state.meshes.get(brush.partId);
+      // Not drawn from the brush mesh yet: the part list is reconciled first.
+      if (!mesh || mesh.userData.soup !== brush.mesh) return;
+      if (mesh.geometry.userData.buffers !== brush.mesh.buffers) {
+        // The brush outgrew its buffers and moved into bigger ones.
+        mesh.geometry.dispose();
+        mesh.geometry = buildBrushGeometry(brush.mesh);
+        return;
+      }
+      if (brush.mesh.dirty.size === 0) return;
+      const changed = Array.from(brush.mesh.dirty).sort((a, b) => a - b);
+      brush.mesh.dirty.clear();
+      const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const normal = mesh.geometry.getAttribute('normal') as THREE.BufferAttribute;
+      let from = changed[0];
+      for (let i = 1; i <= changed.length; i++) {
+        if (i < changed.length && changed[i] - changed[i - 1] <= SEAM_UPLOAD_GAP) continue;
+        const count = (changed[i - 1] - from + 1) * 9;
+        position.addUpdateRange(from * 9, count);
+        normal.addUpdateRange(from * 9, count);
+        from = changed[i];
+      }
+      position.needsUpdate = true;
+      normal.needsUpdate = true;
+      mesh.geometry.setDrawRange(0, brush.mesh.triangleCount * 3);
+    };
+
     let running = true;
     const tick = () => {
       if (!running) return;
       state.raf = requestAnimationFrame(tick);
+      runSeamStroke(SEAM_FRAME_BUDGET_MS);
+      syncSeamBrush();
       // Ease every mesh toward its arrangement position; this is what makes
       // scatter and assemble read as one motion instead of a jump cut.
       for (const [id, mesh] of state.meshes) {
@@ -716,6 +869,79 @@ export function Viewport({
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
 
+    const toLocal = new THREE.Matrix4();
+    const localRay = new THREE.Ray();
+    const ringNormal = new THREE.Vector3();
+    const dabPoint = new THREE.Vector3();
+    const FACING = new THREE.Vector3(0, 0, 1);
+
+    /**
+     * What the pointer is over on the part being brushed, in the part's own
+     * coordinates. The brush mesh carries its own ray tree, so this costs next
+     * to nothing even on a million triangles — and it sees the mesh as the
+     * stroke has left it.
+     */
+    const seamPickAt = (event: PointerEvent) => {
+      const brush = handlers.current.seamBrush;
+      const mesh = brush ? state.meshes.get(brush.partId) : undefined;
+      if (!brush || !mesh) return null;
+      setPointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      localRay.copy(raycaster.ray).applyMatrix4(toLocal.copy(mesh.matrixWorld).invert());
+      return seamBrushPick(
+        brush.mesh,
+        [localRay.origin.x, localRay.origin.y, localRay.origin.z],
+        [localRay.direction.x, localRay.direction.y, localRay.direction.z]
+      );
+    };
+
+    /** Lay the ring on the surface under the pointer, or put it away. */
+    const showBrushRing = (pick: ReturnType<typeof seamPickAt>) => {
+      const brush = handlers.current.seamBrush;
+      const mesh = brush ? state.meshes.get(brush.partId) : undefined;
+      if (!brush || !mesh || !pick || brush.turning) {
+        brushRing.visible = false;
+        return;
+      }
+      ringNormal.set(pick.normal[0], pick.normal[1], pick.normal[2]).transformDirection(mesh.matrixWorld);
+      brushRing.position.set(pick.point[0], pick.point[1], pick.point[2]);
+      mesh.localToWorld(brushRing.position);
+      brushRing.quaternion.setFromUnitVectors(FACING, ringNormal);
+      brushRing.scale.setScalar(brush.radiusMm * mesh.scale.x);
+      (brushRing.material as THREE.MeshBasicMaterial).color.set(
+        brush.mode === 'shave' ? SEAM_SHAVE_COLOR : SEAM_FILL_COLOR
+      );
+      brushRing.visible = true;
+    };
+
+    /** Carry the stroke on to where the pointer is now: a dab every so often along the way. */
+    const seamStrokeTo = (pick: NonNullable<ReturnType<typeof seamPickAt>>, first: boolean) => {
+      const brush = handlers.current.seamBrush;
+      if (!brush || !seamStroke) return;
+      const active = seamStroke;
+      const spacing = brush.radiusMm * SEAM_DAB_SPACING;
+      dabPoint.set(pick.point[0], pick.point[1], pick.point[2]);
+      const distance = active.last.distanceTo(dabPoint);
+      if (!first && distance < spacing) return;
+      const dabs = first ? 1 : Math.min(SEAM_DABS_PER_MOVE, Math.floor(distance / spacing));
+      for (let k = 1; k <= dabs; k++) {
+        const t = k / dabs;
+        active.pending.push({
+          point: [
+            active.last.x + (dabPoint.x - active.last.x) * t,
+            active.last.y + (dabPoint.y - active.last.y) * t,
+            active.last.z + (dabPoint.z - active.last.z) * t,
+          ],
+          normal: pick.normal,
+        });
+      }
+      // A pointer that far ahead of the brush has left it behind; the oldest dabs give way.
+      if (active.pending.length > SEAM_DABS_WAITING) {
+        active.pending.splice(0, active.pending.length - SEAM_DABS_WAITING);
+      }
+      active.last.copy(dabPoint);
+    };
+
     /** Put every part riding along with a grab at the same offset as the part held. */
     const carryRiders = (grab: Grab, held: THREE.Mesh) => {
       for (const [riderId, start] of grab.riders) {
@@ -757,6 +983,27 @@ export function Viewport({
           /* capture is best-effort */
         }
         paintAtEvent(event);
+        return;
+      }
+      if (h.seamBrush) {
+        // On the part, the drag is a stroke. Off it — or with the brush set to
+        // turn the view — the camera takes it, as it would any other drag.
+        const pick = h.seamBrush.turning || !event.isPrimary || event.button !== 0 ? null : seamPickAt(event);
+        if (!pick) return;
+        seamStroke = {
+          stroke: beginSeamBrushStroke(h.seamBrush.mesh),
+          pending: [],
+          last: new THREE.Vector3(pick.point[0], pick.point[1], pick.point[2]),
+          moved: false,
+        };
+        state.controls.enabled = false;
+        try {
+          renderer.domElement.setPointerCapture(event.pointerId);
+        } catch {
+          /* capture is best-effort */
+        }
+        seamStrokeTo(pick, true);
+        showBrushRing(pick);
         return;
       }
       // A grab moves or rotates the part in move mode, and in the builder view a
@@ -813,6 +1060,17 @@ export function Viewport({
     const onPointerMove = (event: PointerEvent) => {
       if (paintStroke) {
         paintAtEvent(event);
+        return;
+      }
+      if (seamStroke) {
+        const pick = seamPickAt(event);
+        if (pick) seamStrokeTo(pick, false);
+        showBrushRing(pick);
+        return;
+      }
+      if (handlers.current.seamBrush) {
+        // The ring follows the pointer while it hovers; a drag that turns the view hides it.
+        showBrushRing(event.buttons === 0 ? seamPickAt(event) : null);
         return;
       }
       if (!drag) return;
@@ -902,6 +1160,28 @@ export function Viewport({
         } catch {
           /* nothing captured */
         }
+        downAt = null;
+        return;
+      }
+
+      if (seamStroke) {
+        // The stroke ends where the pointer let go: what it still has waiting goes down now.
+        runSeamStroke(Infinity);
+        const ended = seamStroke;
+        seamStroke = null;
+        state.controls.enabled = true;
+        try {
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        } catch {
+          /* nothing captured */
+        }
+        downAt = null;
+        if (ended.moved) handlers.current.onSeamStroke(ended.stroke);
+        return;
+      }
+      // While the brush is out a tap selects nothing: picking another part
+      // would put the brush away with the work still on it.
+      if (handlers.current.seamBrush) {
         downAt = null;
         return;
       }
@@ -999,9 +1279,14 @@ export function Viewport({
       }
     };
 
+    const onPointerLeave = () => {
+      if (!seamStroke) brushRing.visible = false;
+    };
+
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     renderer.domElement.addEventListener('pointermove', onPointerMove);
     renderer.domElement.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener('pointerleave', onPointerLeave);
 
     return () => {
       cancelAnimationFrame(state.raf);
@@ -1009,6 +1294,8 @@ export function Viewport({
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
+      disposeTree(brushRing);
       for (const mesh of state.meshes.values()) {
         mesh.geometry.dispose();
         (mesh.material as THREE.Material).dispose();
@@ -1100,10 +1387,15 @@ export function Viewport({
 
     for (const part of parts) {
       let mesh = state.meshes.get(part.id);
+      // The part under the seam brush is drawn from the brush's working mesh,
+      // which the strokes shape in place; its soup takes over again — the new
+      // version, or the old one untouched — once the brush is put away.
+      const brushed = brushMesh && part.id === brushPartId ? brushMesh : null;
+      const source = brushed ?? part.soup;
 
       if (!mesh) {
         mesh = new THREE.Mesh(
-          buildGeometry(part.soup),
+          brushed ? buildBrushGeometry(brushed) : buildGeometry(part.soup),
           new THREE.MeshStandardMaterial({ metalness: part.metalness, roughness: part.roughness })
         );
         mesh.userData.partId = part.id;
@@ -1111,11 +1403,11 @@ export function Viewport({
         mesh.position.set(part.target.x, part.target.y, part.target.z);
         state.meshRoot.add(mesh);
         state.meshes.set(part.id, mesh);
-      } else if (mesh.userData.soup !== part.soup) {
+      } else if (mesh.userData.soup !== source) {
         mesh.geometry.dispose();
-        mesh.geometry = buildGeometry(part.soup);
+        mesh.geometry = brushed ? buildBrushGeometry(brushed) : buildGeometry(part.soup);
       }
-      mesh.userData.soup = part.soup;
+      mesh.userData.soup = source;
 
       const material = mesh.material as THREE.MeshStandardMaterial;
       const ghosted = isolating && part.id !== selectedId;
@@ -1156,7 +1448,13 @@ export function Viewport({
       mesh.scale.set(part.scale.x, part.scale.y, part.scale.z);
       state.targets.set(part.id, new THREE.Vector3(part.target.x, part.target.y, part.target.z));
     }
-  }, [parts, wireframe, xray, selectedId, builder, picked]);
+  }, [parts, wireframe, xray, selectedId, builder, picked, brushMesh, brushPartId]);
+
+  // The ring belongs to the brush: put it away with it, and while drags turn the view.
+  useEffect(() => {
+    const state = refs.current;
+    if (state && (!brushMesh || brushTurning)) state.brushRing.visible = false;
+  }, [brushMesh, brushTurning]);
 
   // Boxes around the selected and marked parts in the plain view.
   useEffect(() => {
@@ -1364,8 +1662,8 @@ export function Viewport({
   }, [lockFront, frontView]);
 
   const cursor = useMemo(
-    () => (painting || measuring ? 'crosshair' : 'grab'),
-    [painting, measuring]
+    () => (painting || measuring || (brushMesh && !brushTurning) ? 'crosshair' : 'grab'),
+    [painting, measuring, brushMesh, brushTurning]
   );
 
   return (
