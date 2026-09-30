@@ -2024,7 +2024,7 @@ h3 {
   --m-muted:#eef2f7;
   --m-head:rgba(238,243,248,0.92);
   --m-radius:14px;
-  --m-width:1220px;
+  --m-width:1560px;
   --m-hud:#0ea5b7;
   max-width:none; width:100%; margin:0;
   padding:0 0 calc(48px + env(safe-area-inset-bottom, 0px));
@@ -2461,7 +2461,7 @@ a.ms-gitem:hover { border-color:var(--m-navy); }
 .ms[data-skin="command"], .stn[data-skin="command"] {
   --m-navy:#102038; --m-bg:#e8eef6; --m-ink:#102038; --m-soft:#5a6b80; --m-line:#cfdcea;
   --m-org:#0ea5b7; --m-org-hover:#0b8fa0; --m-green:#1f9d6a; --m-card:#f7fbff; --m-muted:#e4eef6;
-  --m-head:rgba(232,238,246,0.94); --m-hud:#0ea5b7; --m-width:1220px; --m-radius:12px;
+  --m-head:rgba(232,238,246,0.94); --m-hud:#0ea5b7; --m-width:1560px; --m-radius:12px;
 }
 .ms[data-skin="atlas"], .stn[data-skin="atlas"] {
   --m-navy:#1d4e7a; --m-bg:#e4eef7; --m-ink:#16324f; --m-soft:#4d6d8a; --m-line:#b7cde0;
@@ -2486,7 +2486,7 @@ a.ms-gitem:hover { border-color:var(--m-navy); }
 .ms[data-skin="don"], .stn[data-skin="don"] {
   --m-navy:#1a1208; --m-bg:#f4ead4; --m-ink:#1a1208; --m-soft:#6b5a3c; --m-line:#d7c398;
   --m-org:#b8862b; --m-org-hover:#9a6f22; --m-green:#6d8a3c; --m-card:#fff8e8; --m-muted:#f0e2c4;
-  --m-head:rgba(244,234,212,0.95); --m-hud:#b8862b; --m-width:1040px; --m-radius:2px;
+  --m-head:rgba(244,234,212,0.95); --m-hud:#b8862b; --m-width:1560px; --m-radius:2px;
 }
 
 .ms::before {
