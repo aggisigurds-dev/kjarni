@@ -474,10 +474,17 @@ function bridgeSeams(
   solid: Manifold,
   seam: number,
   minPieceMm3: number,
-  onProgress?: (label: string) => void
+  onProgress?: (label: string) => void,
+  /**
+   * The parts to bridge between, when they are not simply the solid's separate
+   * pieces — the bodies it was joined from. Copies are taken; the caller keeps
+   * its own.
+   */
+  parts?: Manifold[]
 ): { solid: Manifold; pieces: number } | null {
   const pieces: Manifold[] = [];
-  for (const component of solid.decompose()) {
+  const candidates = parts ? parts.map((part) => part.translate([0, 0, 0])) : solid.decompose();
+  for (const component of candidates) {
     if (component.volume() >= minPieceMm3) pieces.push(component);
     else component.delete();
   }
@@ -597,7 +604,8 @@ function boreFor(wasm: ManifoldToplevel, pipe: OnePiecePipe, gapMm: number): Man
 
 /**
  * Bring each part up to a solid and split it into the shells that hold
- * material. `keep` registers every shell with the caller's cleanup.
+ * material. `keep` registers every shell with the caller's cleanup; `owners`
+ * says which part each shell came from.
  */
 function solidShells(
   wasm: ManifoldToplevel,
@@ -605,9 +613,10 @@ function solidShells(
   allowRebuild: boolean,
   keep: (manifold: Manifold) => Manifold,
   progress: (part: OnePieceBody, index: number) => void
-): { notes: BodyNote[]; shells: Manifold[]; pockets: number } {
+): { notes: BodyNote[]; shells: Manifold[]; owners: number[]; pockets: number } {
   const notes: BodyNote[] = [];
   const shells: Manifold[] = [];
+  const owners: number[] = [];
   let pockets = 0;
 
   parts.forEach((part, index) => {
@@ -619,7 +628,10 @@ function solidShells(
     }
     const split = shellsOf(wasm, prepared.solid);
     prepared.solid.delete();
-    for (const shell of split.shells) shells.push(keep(shell));
+    for (const shell of split.shells) {
+      shells.push(keep(shell));
+      owners.push(index);
+    }
     pockets += split.pockets;
 
     const extras: string[] = [];
@@ -634,7 +646,7 @@ function solidShells(
     );
   });
 
-  return { notes, shells, pockets };
+  return { notes, shells, owners, pockets };
 }
 
 export function makeOnePiece(
@@ -657,7 +669,7 @@ export function makeOnePiece(
 
   try {
     const allowRebuild = job.options.allowRebuild !== false;
-    const { notes, shells, pockets } = solidShells(wasm, job.bodies, allowRebuild, keep, (body, index) =>
+    const { notes, shells, owners, pockets } = solidShells(wasm, job.bodies, allowRebuild, keep, (body, index) =>
       onProgress?.(`Checking ${body.name} (${index + 1} of ${job.bodies.length})…`)
     );
     let pocketsFilled = pockets;
@@ -680,20 +692,53 @@ export function makeOnePiece(
       piecesToJoin = Math.max(piecesToJoin, count);
     };
 
-    let piece = shells[0];
-    if (shells.length > 1) {
-      onProgress?.(`Joining ${shells.length} shells into one…`);
-      piece = keep(wasm.Manifold.union(shells));
+    // Each body's shells are joined first and the bodies after, so the bodies
+    // are still at hand for closing the seams between them.
+    const bodySolids: Manifold[] = [];
+    for (let index = 0; index < job.bodies.length; index++) {
+      const own = shells.filter((_, shell) => owners[shell] === index);
+      if (own.length === 0) continue;
+      if (own.length === 1) {
+        bodySolids.push(own[0]);
+        continue;
+      }
+      onProgress?.(`Joining the ${own.length} shells of ${job.bodies[index].name}…`);
+      const joined = keep(wasm.Manifold.union(own));
+      joined.numTri();
+      for (const shell of own) drop(shell);
+      bodySolids.push(joined);
+    }
+    let piece = bodySolids[0];
+    if (bodySolids.length > 1) {
+      onProgress?.(`Joining ${bodySolids.length} bodies into one…`);
+      piece = keep(wasm.Manifold.union(bodySolids));
       piece.numTri();
-      for (const shell of shells) drop(shell);
     }
 
     const seam = Math.max(0, job.options.seamMm || 0);
-    // With anything to cut, seams are bridged once, after the cut (see cutWith).
-    // Bridging here as well doubled the time and the triangles on a receiver.
+    const minPiece = Math.max(job.options.crumbMm3, 1);
+    // Seams are closed between the bodies themselves, not only between pieces
+    // that ended up apart. Halves that touch anywhere — a boss, a corner, a
+    // spot where they overlap — join into one piece, and the rest of the seam
+    // between them was then left open: on the Valken receiver a crack 0.1 mm
+    // wide and 1.5 mm deep across the side and a groove along the top rail.
+    if (seam > 0 && bodySolids.length > 1) {
+      const bridged = bridgeSeams(wasm, piece, seam, minPiece, onProgress, bodySolids);
+      if (bridged) {
+        keep(bridged.solid);
+        drop(piece);
+        piece = bridged.solid;
+        noteBridges(bridged.pieces);
+      }
+    }
+    for (const body of bodySolids) if (body !== piece) drop(body);
+
+    // A single body can still arrive as separate pieces. With anything to cut,
+    // those are bridged once, after the cut (see cutWith) — bridging here as
+    // well doubled the time and the triangles on a receiver.
     const cutsFollow = job.pipes.length > 0 || (job.cutters?.length ?? 0) > 0;
-    if (seam > 0 && !cutsFollow) {
-      const bridged = bridgeSeams(wasm, piece, seam, Math.max(job.options.crumbMm3, 1), onProgress);
+    if (seam > 0 && !cutsFollow && bodySolids.length === 1) {
+      const bridged = bridgeSeams(wasm, piece, seam, minPiece, onProgress);
       if (bridged) {
         keep(bridged.solid);
         drop(piece);

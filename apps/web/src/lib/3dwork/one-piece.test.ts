@@ -352,6 +352,30 @@ describe('makeOnePiece', () => {
     expect(report.volume).toBeLessThan(2030);
   });
 
+  it('closes the seam between halves that already touch somewhere else', () => {
+    // The halves are joined at one end, so they are one piece before any seam
+    // is closed — and the other 35 mm of the seam used to stay an open crack.
+    const run = (seamMm: number) =>
+      makeOnePiece(wasm, {
+        bodies: [
+          { name: 'left', soup: box([-20, -10, -10], [20, 10, -0.075]) },
+          { name: 'right', soup: box([-20, -10, 0.075], [20, 10, 10]) },
+          { name: 'link', soup: box([15, -10, -1], [20, 10, 1]) },
+        ],
+        pipes: [],
+        options: { ...options, seamMm },
+      }).report;
+    const halves = 40 * 20 * 19.85;
+    const link = 5 * 20 * 0.15;
+    const crack = 35 * 20 * 0.15;
+    expect(run(0).volume).toBeCloseTo(halves + link, 0);
+    const welded = run(0.3);
+    expect(welded.pieces).toBe(1);
+    expect(welded.volume).toBeGreaterThan(halves + link + crack * 0.95);
+    // Filled, not buried: the fill stands no more than half the seam proud.
+    expect(welded.volume).toBeLessThan(halves + link + crack + 120 * 0.15);
+  });
+
   it('joins halves again when the bore takes away the only thing holding them together', () => {
     const run = (seamMm: number) =>
       makeOnePiece(wasm, {
