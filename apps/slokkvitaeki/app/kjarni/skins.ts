@@ -12,10 +12,8 @@ export type SkinId = (typeof SKINS)[number]["id"];
 export const SKIN_IDS: SkinId[] = SKINS.map((skin) => skin.id);
 /* v2 (24.09.2026): Ragnarök varð sjálfgefið útlit. Nýr lykill svo allir lendi
  * einu sinni á því — eldra val (kjarni_skin) er hunsað; hin útlitin eru enn í röðinni. */
-/* v3 (30.09.2026, Agnar: „fjólublái liturinn skelfilegur … frekar the big boss theme, ljóst, gull og svart"):
- * Don (ljóst · gull · svart) varð sjálfgefið; nýr lykill svo allir lendi einu sinni á því — hin útlitin má velja aftur. */
-export const SKIN_KEY = "kjarni_skin_v3";
-export const DEFAULT_SKIN: SkinId = "don";
+export const SKIN_KEY = "kjarni_skin_v2";
+export const DEFAULT_SKIN: SkinId = "ragnarok";
 
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
