@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { smoothNormals } from './normals';
 import {
   beginSeamBrushStroke,
+  cloneStampDab,
   createSeamBrushMesh,
   seamBrushDab,
   seamBrushPick,
@@ -413,5 +414,74 @@ describe('seam brush', () => {
     const soup = seamBrushSoup(mesh);
     const full = smoothNormals(soup);
     for (let i = 0; i < full.length; i++) expect(mesh.normals[i]).toBeCloseTo(full[i], 3);
+  });
+
+  describe('clone stamp', () => {
+    /** Drag the stamp along the Y axis at `x`, the source `offset` away along X. */
+    const cloneAlongY = (mesh: SeamBrushMesh, x: number, offset: number, passes: number, reach = 4) => {
+      let moved = 0;
+      for (let pass = 0; pass < passes; pass++) {
+        const stroke = beginSeamBrushStroke(mesh);
+        for (let y = -reach; y <= reach; y += 0.5) {
+          const z = 0;
+          moved += cloneStampDab(mesh, [x, y, z], UP, [x + offset, y, z], { radiusMm: 2, strength: 1 }, stroke).vertices
+            .length;
+        }
+      }
+      return moved;
+    };
+
+    it('lays a ridge flat with clean surface from beside it', () => {
+      const mesh = createSeamBrushMesh(sheet((x) => (Math.abs(x) < 0.3 ? 0.2 : 0)));
+      expect(cloneAlongY(mesh, 0, 4, 3)).toBeGreaterThan(0);
+      const after = extremes(mesh, 3, 3);
+      expect(after.max).toBeLessThan(0.02);
+      expect(after.min).toBeGreaterThan(-0.02);
+    });
+
+    it('copies the shape of the source, not its height', () => {
+      // Ripples 0.1 mm tall on a patch standing 0.5 mm proud, and flat ground to clone them onto.
+      const ripple = (y: number) => 0.1 * Math.sin(2 * Math.PI * y);
+      const mesh = createSeamBrushMesh(sheet((x, y) => (x > 1.5 ? 0.5 + ripple(y) : 0), 8, 0.125));
+      cloneAlongY(mesh, -1.5, 5.5, 3, 3);
+      let worst = 0;
+      let checked = 0;
+      for (let v = 0; v < mesh.vertexCount; v++) {
+        const x = mesh.positions[v * 3];
+        const y = mesh.positions[v * 3 + 1];
+        if (Math.abs(x + 1.5) > 0.7 || Math.abs(y) > 2.5) continue;
+        worst = Math.max(worst, Math.abs(mesh.positions[v * 3 + 2] - ripple(y)));
+        checked++;
+      }
+      expect(checked).toBeGreaterThan(100);
+      expect(worst).toBeLessThan(0.03);
+    });
+
+    it('leaves the surface alone where it already has the shape of its source', () => {
+      // Flat ground, and a flat plateau 0.5 mm higher to clone from.
+      const given = sheet((x) => (x > 2.5 ? 0.5 : 0));
+      const mesh = createSeamBrushMesh(given.slice());
+      expect(cloneAlongY(mesh, -2, 7, 1)).toBe(0);
+      expect(Array.from(seamBrushSoup(mesh))).toEqual(Array.from(given));
+    });
+
+    it('does nothing with a source off the part, and says so', () => {
+      const mesh = createSeamBrushMesh(sheet((x) => (Math.abs(x) < 0.3 ? 0.2 : 0)));
+      const dab = cloneStampDab(mesh, [0, 0, 0.2], UP, [30, 0, 0.2], { radiusMm: 2, strength: 1 });
+      expect(dab.source).toBeNull();
+      expect(dab.vertices).toEqual([]);
+      expect(movedCount(mesh)).toBe(0);
+    });
+
+    it('is taken back like any other stroke', () => {
+      const mesh = createSeamBrushMesh(sheet((x) => (Math.abs(x) < 0.3 ? 0.2 : 0), 4));
+      const stroke = beginSeamBrushStroke(mesh);
+      for (let y = -2; y <= 2; y += 0.5) {
+        cloneStampDab(mesh, [0, y, 0.2], UP, [2.5, y, 0], { radiusMm: 1, strength: 1 }, stroke);
+      }
+      expect(movedCount(mesh)).toBeGreaterThan(0);
+      undoSeamBrushStroke(mesh, stroke);
+      expect(movedCount(mesh)).toBe(0);
+    });
   });
 });

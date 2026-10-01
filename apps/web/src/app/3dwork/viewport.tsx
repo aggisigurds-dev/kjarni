@@ -29,14 +29,16 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { smoothNormals } from '@/lib/3dwork/normals';
 import {
   beginSeamBrushStroke,
+  cloneStampDab,
   seamBrushDab,
   seamBrushPick,
   type SeamBrushMesh,
-  type SeamBrushMode,
   type SeamBrushStroke,
+  type Vec3,
 } from '@/lib/3dwork/seam-brush';
 import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
+import type { SeamTool } from './seam-brush-bar';
 
 export interface ViewportPart {
   id: string;
@@ -70,8 +72,13 @@ export interface ViewportSeamBrush {
   /** The part's working mesh: drawn in place of its soup, and shaped by every dab. */
   mesh: SeamBrushMesh;
   radiusMm: number;
+  /** Shaving and filling: how far one pass takes the ceiling down or the floor up, mm. */
   stepMm: number;
-  mode: SeamBrushMode;
+  /** Cloning: how much of the way to the source's shape one dab goes, 0–1. */
+  strength: number;
+  mode: SeamTool;
+  /** Cloning: the next tap on the part picks the source instead of starting a stroke. */
+  pickingSource: boolean;
   /** Drags turn the view instead of brushing — on a touch screen one finger has to do both. */
   turning: boolean;
 }
@@ -112,6 +119,8 @@ interface ViewportProps {
   seamBrush: ViewportSeamBrush | null;
   /** A stroke of the seam brush that moved something has ended. */
   onSeamStroke: (stroke: SeamBrushStroke) => void;
+  /** Cloning: a source was picked, or a stroke was tried with none picked yet. */
+  onCloneSource: (event: 'picked' | 'missing') => void;
   /** Add-volume mode: tap an inner corner on the selected part to fillet it. */
   addingVolume: boolean;
   addVolumePartId: string | null;
@@ -170,6 +179,9 @@ const SLICE_EDGE_COLOR = 0x0284c7;
 /** The seam brush's ring: what it shaves with, and what it fills with. */
 const SEAM_SHAVE_COLOR = 0xd97706;
 const SEAM_FILL_COLOR = 0x059669;
+/** The clone stamp's ring, and the ring at the source it copies from. */
+const SEAM_CLONE_COLOR = 0x2563eb;
+const SEAM_SOURCE_COLOR = 0x60a5fa;
 /** A stroke puts a dab down every this share of the brush radius… */
 const SEAM_DAB_SPACING = 0.3;
 /** …and no more than this many between two pointer events, however fast the pointer went. */
@@ -287,6 +299,8 @@ interface SceneRefs {
   paintMarks: THREE.Group;
   /** The seam brush's ring, lying on the surface under the pointer. */
   brushRing: THREE.Mesh;
+  /** The clone stamp's source: a ring where the brush copies from. */
+  sourceRing: THREE.Mesh;
   /** The plain view's checker floor. */
   grid: THREE.Object3D;
   /** The builder view's build plate. */
@@ -385,6 +399,7 @@ export function Viewport({
   onPaintAt,
   seamBrush,
   onSeamStroke,
+  onCloneSource,
   addingVolume,
   addVolumePartId,
   onAddVolumeAt,
@@ -428,6 +443,11 @@ export function Viewport({
   const brushMesh = seamBrush?.mesh ?? null;
   const brushPartId = seamBrush?.partId ?? null;
   const brushTurning = seamBrush?.turning ?? false;
+  const brushTool = seamBrush?.mode ?? null;
+
+  // The clone stamp's source on the part being brushed, and — once the first
+  // stroke has started — how far from the brush it stays.
+  const cloneRef = useRef<{ source: Vec3 | null; offset: Vec3 | null }>({ source: null, offset: null });
 
   // Handlers change every render; a ref keeps the pointer listener stable.
   const handlers = useRef({
@@ -442,6 +462,7 @@ export function Viewport({
     onPaintAt,
     seamBrush,
     onSeamStroke,
+    onCloneSource,
     addingVolume,
     addVolumePartId,
     onAddVolumeAt,
@@ -473,6 +494,7 @@ export function Viewport({
     onPaintAt,
     seamBrush,
     onSeamStroke,
+    onCloneSource,
     addingVolume,
     addVolumePartId,
     onAddVolumeAt,
@@ -577,6 +599,19 @@ export function Viewport({
     brushRing.renderOrder = 13;
     brushRing.visible = false;
     scene.add(brushRing);
+    const sourceRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 1, 64),
+      new THREE.MeshBasicMaterial({
+        color: SEAM_SOURCE_COLOR,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.8,
+      })
+    );
+    sourceRing.renderOrder = 13;
+    sourceRing.visible = false;
+    scene.add(sourceRing);
 
     const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xd97706);
     selection.visible = false;
@@ -619,6 +654,7 @@ export function Viewport({
       overlay,
       paintMarks,
       brushRing,
+      sourceRing,
       grid,
       plate,
       selection,
@@ -717,9 +753,13 @@ export function Viewport({
     // any of them has moved anything.
     let seamStroke: {
       stroke: SeamBrushStroke;
-      pending: { point: [number, number, number]; normal: [number, number, number] }[];
+      pending: { point: Vec3; normal: Vec3 }[];
       last: THREE.Vector3;
       moved: boolean;
+      /** Cloning: where the last dab copied from, and which way the brush faced there. */
+      source: { point: Vec3; normal: Vec3 } | null;
+      /** Which way the last dab found the surface facing: the next one starts from it. */
+      facing: Vec3 | null;
     } | null = null;
 
     /**
@@ -731,11 +771,33 @@ export function Viewport({
     const runSeamStroke = (budgetMs: number) => {
       const brush = handlers.current.seamBrush;
       if (!seamStroke || !brush) return;
-      const options = { radiusMm: brush.radiusMm, stepMm: brush.stepMm, mode: brush.mode };
       const started = performance.now();
+      const { offset } = cloneRef.current;
       for (let next = seamStroke.pending.shift(); next; next = seamStroke.pending.shift()) {
-        const dab = seamBrushDab(brush.mesh, next.point, next.normal, options, seamStroke.stroke);
-        if (dab.vertices.length > 0) seamStroke.moved = true;
+        // The face under the pointer can be the flank of the very ridge being
+        // worked on; the way the last dab found the surface facing is a surer guide.
+        const hint = seamStroke.facing ?? next.normal;
+        let moved: number[];
+        if (brush.mode === 'clone') {
+          if (!offset) break;
+          const dab = cloneStampDab(
+            brush.mesh,
+            next.point,
+            hint,
+            [next.point[0] + offset[0], next.point[1] + offset[1], next.point[2] + offset[2]],
+            { radiusMm: brush.radiusMm, strength: brush.strength },
+            seamStroke.stroke
+          );
+          moved = dab.vertices;
+          seamStroke.facing = dab.normal;
+          if (dab.source) seamStroke.source = { point: dab.source, normal: dab.normal };
+        } else {
+          const options = { radiusMm: brush.radiusMm, stepMm: brush.stepMm, mode: brush.mode };
+          const dab = seamBrushDab(brush.mesh, next.point, hint, options, seamStroke.stroke);
+          moved = dab.vertices;
+          seamStroke.facing = dab.normal;
+        }
+        if (moved.length > 0) seamStroke.moved = true;
         if (performance.now() - started >= budgetMs) break;
       }
     };
@@ -909,9 +971,48 @@ export function Viewport({
       brushRing.quaternion.setFromUnitVectors(FACING, ringNormal);
       brushRing.scale.setScalar(brush.radiusMm * mesh.scale.x);
       (brushRing.material as THREE.MeshBasicMaterial).color.set(
-        brush.mode === 'shave' ? SEAM_SHAVE_COLOR : SEAM_FILL_COLOR
+        brush.mode === 'shave' ? SEAM_SHAVE_COLOR : brush.mode === 'fill' ? SEAM_FILL_COLOR : SEAM_CLONE_COLOR
       );
       brushRing.visible = true;
+    };
+
+    /** Lay the source ring where the clone stamp copies from, or put it away. */
+    const showSourceRing = (at: { point: Vec3; normal: Vec3 } | null) => {
+      const brush = handlers.current.seamBrush;
+      const mesh = brush ? state.meshes.get(brush.partId) : undefined;
+      if (!brush || !mesh || !at || brush.mode !== 'clone' || brush.turning) {
+        sourceRing.visible = false;
+        return;
+      }
+      ringNormal.set(at.normal[0], at.normal[1], at.normal[2]).transformDirection(mesh.matrixWorld);
+      sourceRing.position.set(at.point[0], at.point[1], at.point[2]);
+      mesh.localToWorld(sourceRing.position);
+      sourceRing.quaternion.setFromUnitVectors(FACING, ringNormal);
+      sourceRing.scale.setScalar(brush.radiusMm * mesh.scale.x);
+      sourceRing.visible = true;
+    };
+
+    /**
+     * Where the clone stamp would copy from with the brush at `pick`: the
+     * source itself until a stroke has fixed how far off it stays, and from
+     * then on that far from the brush, dropped onto the surface below.
+     */
+    const sourceFor = (pick: NonNullable<ReturnType<typeof seamPickAt>>): { point: Vec3; normal: Vec3 } | null => {
+      const brush = handlers.current.seamBrush;
+      const { source, offset } = cloneRef.current;
+      if (!brush || !source) return null;
+      if (!offset) return { point: source, normal: pick.normal };
+      const [nx, ny, nz] = pick.normal;
+      const lift = 10;
+      return seamBrushPick(
+        brush.mesh,
+        [
+          pick.point[0] + offset[0] + lift * nx,
+          pick.point[1] + offset[1] + lift * ny,
+          pick.point[2] + offset[2] + lift * nz,
+        ],
+        [-nx, -ny, -nz]
+      );
     };
 
     /** Carry the stroke on to where the pointer is now: a dab every so often along the way. */
@@ -990,11 +1091,36 @@ export function Viewport({
         // turn the view — the camera takes it, as it would any other drag.
         const pick = h.seamBrush.turning || !event.isPrimary || event.button !== 0 ? null : seamPickAt(event);
         if (!pick) return;
+        if (h.seamBrush.mode === 'clone') {
+          // Alt-click, or a tap with the source button down, picks where to copy from.
+          if (event.altKey || h.seamBrush.pickingSource) {
+            cloneRef.current = { source: pick.point, offset: null };
+            showSourceRing({ point: pick.point, normal: pick.normal });
+            h.onCloneSource('picked');
+            downAt = null;
+            return;
+          }
+          const { source, offset } = cloneRef.current;
+          if (!source) {
+            h.onCloneSource('missing');
+            downAt = null;
+            return;
+          }
+          // The first stroke after a source is picked fixes how far off it the brush stays.
+          if (!offset) {
+            cloneRef.current = {
+              source,
+              offset: [source[0] - pick.point[0], source[1] - pick.point[1], source[2] - pick.point[2]],
+            };
+          }
+        }
         seamStroke = {
           stroke: beginSeamBrushStroke(h.seamBrush.mesh),
           pending: [],
           last: new THREE.Vector3(pick.point[0], pick.point[1], pick.point[2]),
           moved: false,
+          source: null,
+          facing: null,
         };
         state.controls.enabled = false;
         try {
@@ -1066,11 +1192,14 @@ export function Viewport({
         const pick = seamPickAt(event);
         if (pick) seamStrokeTo(pick, false);
         showBrushRing(pick);
+        showSourceRing(seamStroke.source);
         return;
       }
       if (handlers.current.seamBrush) {
-        // The ring follows the pointer while it hovers; a drag that turns the view hides it.
-        showBrushRing(event.buttons === 0 ? seamPickAt(event) : null);
+        // The rings follow the pointer while it hovers; a drag that turns the view hides them.
+        const pick = event.buttons === 0 ? seamPickAt(event) : null;
+        showBrushRing(pick);
+        showSourceRing(pick ? sourceFor(pick) : null);
         return;
       }
       if (!drag) return;
@@ -1280,7 +1409,10 @@ export function Viewport({
     };
 
     const onPointerLeave = () => {
-      if (!seamStroke) brushRing.visible = false;
+      if (!seamStroke) {
+        brushRing.visible = false;
+        sourceRing.visible = false;
+      }
     };
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -1296,6 +1428,7 @@ export function Viewport({
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
       disposeTree(brushRing);
+      disposeTree(sourceRing);
       for (const mesh of state.meshes.values()) {
         mesh.geometry.dispose();
         (mesh.material as THREE.Material).dispose();
@@ -1450,11 +1583,18 @@ export function Viewport({
     }
   }, [parts, wireframe, xray, selectedId, builder, picked, brushMesh, brushPartId]);
 
-  // The ring belongs to the brush: put it away with it, and while drags turn the view.
+  // The rings belong to the brush: put them away with it, and while drags turn the view.
   useEffect(() => {
     const state = refs.current;
-    if (state && (!brushMesh || brushTurning)) state.brushRing.visible = false;
-  }, [brushMesh, brushTurning]);
+    if (!state) return;
+    if (!brushMesh || brushTurning) state.brushRing.visible = false;
+    if (!brushMesh || brushTurning || brushTool !== 'clone') state.sourceRing.visible = false;
+  }, [brushMesh, brushTurning, brushTool]);
+
+  // A new session of the brush starts with no clone source.
+  useEffect(() => {
+    cloneRef.current = { source: null, offset: null };
+  }, [brushMesh]);
 
   // Boxes around the selected and marked parts in the plain view.
   useEffect(() => {

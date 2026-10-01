@@ -73,6 +73,8 @@ const DISC_PER_RADIUS = 0.4;
 const CORNER_PER_DISC = 0.5;
 /** Heights this close to where they belong are already level, mm — far finer than a print shows. */
 const LEVEL_MM = 0.01;
+/** The height fit never trusts a spread finer than this, mm: what stands 0.02 mm proud is a seam, not noise. */
+const MIN_SPREAD_MM = 0.004;
 /** Slopes within this of each other belong to one face: about two degrees. */
 const SAME_SLOPE = 0.03;
 /** The fit never trusts slopes to agree more closely than this. */
@@ -90,6 +92,12 @@ const MIN_EDGE_MM = 0.2;
 const MAX_SPLITS = 2500;
 /** The brush's direction is taken from the triangles at no more than this many of the vertices under it. */
 const NORMAL_VERTICES = 1500;
+/** How many points across the clone stamp reads the surface, here and at the source. */
+const CLONE_ACROSS = 33;
+/** The clone stamp looks for its source this far either side of where it was named, mm. */
+const CLONE_SEARCH_MM = 3;
+/** A source leaning further than this against the brush is another face, not a patch of this one. */
+const CLONE_MAX_SLOPE = 0.35;
 /** Triangles per BVH leaf. */
 const LEAF = 6;
 
@@ -1011,8 +1019,11 @@ function brushNormal(mesh: SeamBrushMesh, vertices: number[], hint: Vec3): Vec3 
     if (!next) break;
     facing = next;
   }
-  // However the triangles around it lean, the brush works on the face it was put down on.
-  return facing[0] * hint[0] + facing[1] * hint[1] + facing[2] * hint[2] > 0.7 ? facing : hint;
+  // The flank of a ridge can face well away from the surface it stands on, but
+  // the face under the pointer is never turned right away from the brush: if
+  // the triangles around it are, they are another face — a wall beside a thin
+  // edge — and the brush works on the one it was put down on.
+  return facing[0] * hint[0] + facing[1] * hint[1] + facing[2] * hint[2] > 0.4 ? facing : hint;
 }
 
 /** Two unit vectors square to `n` and to each other. */
@@ -1189,6 +1200,62 @@ function fitSheet(map: Float32Array, across: number, half: number): Sheet | null
   };
 }
 
+/**
+ * The average lie of a height map: a gently curved sheet through its heights,
+ * with what stands well off the rest — a seam — given no say. Unlike
+ * `fitSheet` it keeps to the middle of a texture rather than to one facet of
+ * it: fitted to ripples it lies flat through them.
+ */
+function fitLie(map: Float32Array, across: number, half: number): Sheet | null {
+  const pitch = (2 * half) / (across - 1);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const hs: number[] = [];
+  for (let i = 0; i < across; i++) {
+    for (let j = 0; j < across; j++) {
+      const h = map[i * across + j];
+      if (!Number.isFinite(h)) continue;
+      xs.push(-half + i * pitch);
+      ys.push(-half + j * pitch);
+      hs.push(h);
+    }
+  }
+  const n = hs.length;
+  if (n < 6) return null;
+  const terms = n >= 24 ? 6 : 3;
+  const basis = (x: number, y: number): number[] => (terms === 6 ? [1, x, y, x * x, x * y, y * y] : [1, x, y]);
+  let coefficients: number[] = Array.from({ length: terms }, (_, k) => (k === 0 ? median(hs) : 0));
+  const height = (x: number, y: number) => {
+    const b = basis(x, y);
+    let sum = 0;
+    for (let k = 0; k < terms; k++) sum += coefficients[k] * b[k];
+    return sum;
+  };
+  for (let pass = 0; pass < 6; pass++) {
+    const residuals = hs.map((h, k) => h - height(xs[k], ys[k]));
+    const cut = 4.685 * Math.max(MIN_SPREAD_MM, 1.4826 * median(residuals.map(Math.abs)));
+    const matrix = Array.from({ length: terms }, () => Array.from({ length: terms }, () => 0));
+    const rhs: number[] = Array.from({ length: terms }, () => 0);
+    for (let k = 0; k < n; k++) {
+      const r = residuals[k] / cut;
+      if (Math.abs(r) >= 1) continue;
+      const weight = (1 - r * r) ** 2;
+      const b = basis(xs[k], ys[k]);
+      for (let row = 0; row < terms; row++) {
+        rhs[row] += weight * b[row] * hs[k];
+        for (let col = 0; col < terms; col++) matrix[row][col] += weight * b[row] * b[col];
+      }
+    }
+    // A touch of damping on the curved terms so a thin strip of points cannot bend the sheet.
+    for (let k = 3; k < terms; k++) matrix[k][k] += 1e-6 * half ** 4;
+    if (!solve(matrix, rhs)) break;
+    coefficients = rhs;
+  }
+  // Heights from the middle of the brush, like the sheet `fitSheet` gives.
+  const middle = height(0, 0);
+  return { height: (x, y) => height(x, y) - middle, slope: [coefficients[1], coefficients[2]] };
+}
+
 /** The cells of a square grid that a disc `cells` in radius covers, as offsets from its middle. */
 function discOffsets(cells: number): number[] {
   const offsets: number[] = [];
@@ -1350,6 +1417,239 @@ export interface SeamBrushDab {
   normal: Vec3;
 }
 
+/** How deep a dab reaches either side of the surface, and how far above it its rays set out from. */
+function reachOf(radius: number): { depth: number; band: number } {
+  // How tall a ridge the brush shaves and how deep a groove it fills. A wider
+  // brush reaches further — 3 mm takes the slit an exact join left on the
+  // Valken receiver — and what lies beyond belongs to something else.
+  const depth = Math.min(Math.max(radius, 1), 3);
+  return { depth, band: depth + 1 };
+}
+
+/** The brush square to the surface: which way it faces, and two directions across it. */
+interface Frame {
+  n: Vec3;
+  u: Vec3;
+  v: Vec3;
+}
+
+function facesAlong(mesh: SeamBrushMesh, triangle: number, n: Vec3): boolean {
+  const face = faceNormal(mesh.soup, triangle);
+  return face[0] * n[0] + face[1] * n[1] + face[2] * n[2] > 0;
+}
+
+/**
+ * Drop a square grid of rays onto the surface along the frame — `across`
+ * points each way, `half` either side of `point` — and write into `map` the
+ * height of what each lands on above the plane through `point`. A ray met from
+ * behind set out from inside the part: the surface there stands higher than
+ * the brush looks (Infinity). A ray that meets nothing looks into an open drop
+ * (-Infinity) — unless it set out under a surface too far below to have come
+ * out of. `landed` collects the triangles the rays land on.
+ */
+function readHeights(
+  mesh: SeamBrushMesh,
+  point: Vec3,
+  frame: Frame,
+  band: number,
+  across: number,
+  half: number,
+  map: Float32Array,
+  landed: Set<number> | null
+): void {
+  const { n, u, v } = frame;
+  const pitch = (2 * half) / (across - 1);
+  for (let i = 0; i < across; i++) {
+    for (let j = 0; j < across; j++) {
+      const x = -half + i * pitch;
+      const y = -half + j * pitch;
+      const ox = point[0] + x * u[0] + y * v[0] + band * n[0];
+      const oy = point[1] + x * u[1] + y * v[1] + band * n[1];
+      const oz = point[2] + x * u[2] + y * v[2] + band * n[2];
+      const hit = castRay(mesh, ox, oy, oz, -n[0], -n[1], -n[2], 2 * band);
+      if (hit) {
+        map[i * across + j] = facesAlong(mesh, hit.triangle, n) ? band - hit.t : Infinity;
+        landed?.add(hit.triangle);
+      } else {
+        const over = castRay(mesh, ox, oy, oz, n[0], n[1], n[2], Infinity);
+        map[i * across + j] = over && facesAlong(mesh, over.triangle, n) ? Infinity : -Infinity;
+      }
+    }
+  }
+}
+
+function frameOf(n: Vec3): Frame {
+  const [u, v] = tangents(n);
+  return { n, u, v };
+}
+
+/**
+ * Which way the surface under a dab faces. The face under the pointer may be
+ * the flank of the very ridge being shaved, so the triangles around the point
+ * lean the brush first, and a quick look at the surface squares it after —
+ * to the lie `fit` finds in it. `frame` is null when there is nothing to look
+ * at, or when the squaring would swing the brush round: something other than
+ * the surface under the pointer has been seen.
+ */
+function squareTo(
+  mesh: SeamBrushMesh,
+  point: Vec3,
+  hint: Vec3,
+  radius: number,
+  band: number,
+  nearby: number[],
+  fit: (map: Float32Array, across: number, half: number) => Sheet | null
+): { frame: Frame | null; facing: Vec3 } {
+  // With no vertex near — the middle of a long triangle — the hint is all there is to go on.
+  const facing = brushNormal(mesh, nearby, hint);
+  let n = facing;
+  const glance = new Float32Array(SAMPLES_ACROSS * SAMPLES_ACROSS);
+  for (let pass = 0; pass < 2; pass++) {
+    const frame = frameOf(n);
+    readHeights(mesh, point, frame, band, SAMPLES_ACROSS, radius, glance, null);
+    const rough = fit(glance, SAMPLES_ACROSS, radius);
+    if (!rough) return { frame: null, facing };
+    const [su, sv] = rough.slope;
+    const tilt = Math.hypot(su, sv);
+    // Square enough already — or so far off that this is not the face the brush was put on.
+    if (tilt < 0.02 || tilt > 1) break;
+    const squared = normalize([
+      n[0] - su * frame.u[0] - sv * frame.v[0],
+      n[1] - su * frame.u[1] - sv * frame.v[1],
+      n[2] - su * frame.u[2] - sv * frame.v[2],
+    ]);
+    if (!squared) break;
+    n = squared;
+  }
+  if (n[0] * facing[0] + n[1] * facing[1] + n[2] * facing[2] < 0.8) return { frame: null, facing };
+  return { frame: frameOf(n), facing };
+}
+
+/** A point of the brush plane, as the frame sees a place on the mesh. */
+function inFrame(frame: Frame, point: Vec3, px: number, py: number, pz: number): { x: number; y: number; above: number } {
+  const dx = px - point[0];
+  const dy = py - point[1];
+  const dz = pz - point[2];
+  const { n, u, v } = frame;
+  return {
+    x: dx * u[0] + dy * u[1] + dz * u[2],
+    y: dx * v[0] + dy * v[1] + dz * v[2],
+    above: dx * n[0] + dy * n[1] + dz * n[2],
+  };
+}
+
+/** How much of a move a point this far from the middle of the brush gets: all of it over the inner half, easing off to the rim. */
+function weightAt(distance: number, radius: number): number {
+  const t = Math.min(1, Math.max(0, (distance / radius - 0.5) / 0.5));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/**
+ * Only what shows from above the surface moves: not the back of a thin wall,
+ * nor the floor of a hollow under it. A point shows when the first thing seen
+ * from above, at or right beside it, is no higher than the point itself.
+ */
+function showsIn(map: Float32Array, across: number, half: number, x: number, y: number, above: number): boolean {
+  const pitch = (2 * half) / (across - 1);
+  const gi = Math.round((x + half) / pitch);
+  const gj = Math.round((y + half) / pitch);
+  if (gi < 0 || gj < 0 || gi >= across || gj >= across) return false;
+  for (let i = Math.max(0, gi - 1); i <= Math.min(across - 1, gi + 1); i++) {
+    for (let j = Math.max(0, gj - 1); j <= Math.min(across - 1, gj + 1); j++) {
+      if (map[i * across + j] <= above + 0.05) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The part of a dab that shapes the mesh, once the dab knows how far each
+ * point should go.
+ *
+ * The surface under the brush is first made fit to be shaped: every triangle
+ * that shows under it is split until it is fine enough. Without that a long
+ * triangle with no vertex under the brush stays standing where it was, a fin
+ * over what has been shaped around it, and one with a vertex there is dragged
+ * by it however far it reaches. Then every vertex under the brush is moved
+ * along the normal by what `shiftOf` says — noted in the stroke first, so that
+ * it can be put back.
+ */
+function shapeUnder(
+  mesh: SeamBrushMesh,
+  point: Vec3,
+  frame: Frame,
+  radius: number,
+  depth: number,
+  landed: Set<number>,
+  shows: (x: number, y: number, above: number) => boolean,
+  shiftOf: (x: number, y: number, above: number, distance: number) => number,
+  reshade: Set<number>,
+  stroke: SeamBrushStroke | undefined
+): number[] {
+  const { n } = frame;
+  const low: Vec3 = [point[0] - depth * n[0], point[1] - depth * n[1], point[2] - depth * n[2]];
+  const high: Vec3 = [point[0] + depth * n[0], point[1] + depth * n[1], point[2] + depth * n[2]];
+  const shrunk = new Set<number>();
+  const maxEdge = Math.max(MIN_EDGE_MM, EDGE_PER_RADIUS * radius);
+  // A triangle the rays slipped past still shows if a corner of it, or its middle, does.
+  const showing = (triangle: number): boolean => {
+    const { soup } = mesh;
+    const at = triangle * 9;
+    for (let k = 0; k < 9; k += 3) {
+      const corner = inFrame(frame, point, soup[at + k], soup[at + k + 1], soup[at + k + 2]);
+      if (shows(corner.x, corner.y, corner.above)) return true;
+    }
+    const middle = inFrame(
+      frame,
+      point,
+      (soup[at] + soup[at + 3] + soup[at + 6]) / 3,
+      (soup[at + 1] + soup[at + 4] + soup[at + 7]) / 3,
+      (soup[at + 2] + soup[at + 5] + soup[at + 8]) / 3
+    );
+    return shows(middle.x, middle.y, middle.above);
+  };
+  const splits = refineUnder(mesh, low, high, radius, maxEdge, landed, showing, reshade, shrunk);
+  if (splits > 0) {
+    // A split triangle only shrinks, so the tree over the given ones still
+    // holds — but its boxes are drawn in round what is left of them, or every
+    // ray past a long sliver would go on testing it. The added ones get a tree
+    // of their own.
+    refitBvh(mesh.bvh, mesh.soup, shrunk);
+    mesh.addedBvh = buildBvh(mesh.soup, mesh.givenTriangles, mesh.triangleCount - mesh.givenTriangles);
+  }
+
+  const scratch: number[] = [];
+  const moved: number[] = [];
+  for (const vertex of verticesNear(mesh, point, Math.hypot(radius, depth))) {
+    const at = inFrame(frame, point, mesh.positions[vertex * 3], mesh.positions[vertex * 3 + 1], mesh.positions[vertex * 3 + 2]);
+    const distance = Math.hypot(at.x, at.y);
+    if (distance >= radius) continue;
+    const shift = shiftOf(at.x, at.y, at.above, distance);
+    // Not worth the move: the rim of the brush barely touches what it passes over.
+    if (!(Math.abs(shift) >= 1e-4)) continue;
+    if (stroke && vertex < stroke.vertexCount && !stroke.before.has(vertex)) {
+      stroke.before.set(vertex, [
+        mesh.positions[vertex * 3],
+        mesh.positions[vertex * 3 + 1],
+        mesh.positions[vertex * 3 + 2],
+      ]);
+    }
+    const nx = mesh.positions[vertex * 3] + shift * n[0];
+    const ny = mesh.positions[vertex * 3 + 1] + shift * n[1];
+    const nz = mesh.positions[vertex * 3 + 2] + shift * n[2];
+    place(mesh, vertex, nx, ny, nz, scratch);
+    const drift = Math.hypot(
+      nx - mesh.origin[vertex * 3],
+      ny - mesh.origin[vertex * 3 + 1],
+      nz - mesh.origin[vertex * 3 + 2]
+    );
+    if (drift > mesh.drift) mesh.drift = drift;
+    moved.push(vertex);
+  }
+  refitAround(mesh, moved);
+  return moved;
+}
+
 /**
  * One dab of the brush at a point on the surface. `hint` is the direction the
  * surface faces there: the normal of the face under the pointer. Given the
@@ -1363,15 +1663,7 @@ export function seamBrushDab(
   stroke?: SeamBrushStroke
 ): SeamBrushDab {
   const radius = Math.max(options.radiusMm, 0.05);
-  const hintUnit = normalize(hint) ?? [0, 0, 1];
-  // How tall a ridge the brush shaves and how deep a groove it fills. A wider
-  // brush reaches further — 3 mm takes the slit an exact join left on the
-  // Valken receiver — and what lies beyond belongs to something else.
-  const depth = Math.min(Math.max(radius, 1), 3);
-  // Samples are dropped onto the surface from this far above it.
-  const band = depth + 1;
-  const scratch: number[] = [];
-
+  const { depth, band } = reachOf(radius);
   const reshade = new Set<number>();
   const finish = (moved: number[], normal: Vec3): SeamBrushDab => {
     for (const vertex of moved) reshade.add(vertex);
@@ -1379,71 +1671,12 @@ export function seamBrushDab(
     return { vertices: moved, normal };
   };
 
-  let nearby = verticesNear(mesh, point, Math.hypot(radius, depth));
-  // With no vertex near — the middle of a long triangle — the hint is all there is to go on.
-  const facing = brushNormal(mesh, nearby, hintUnit);
-  let n = facing;
-
-  // First, which way the surface faces. The face under the pointer may be the
-  // flank of the very ridge being shaved, so a quick fit to a few points
-  // squares the brush to the surface before it is read properly.
-  let u: Vec3 = [1, 0, 0];
-  let v: Vec3 = [0, 1, 0];
-  /**
-   * Drop a square grid of rays onto the surface, `half` each way from the
-   * middle of the brush, into a map of the height at every point of it — and
-   * fit a sheet to the lie of what they land on. `landed` collects the
-   * triangles they land on.
-   */
-  const read = (across: number, half: number, map: Float32Array, landed: Set<number> | null): Sheet | null => {
-    [u, v] = tangents(n);
-    const pitch = (2 * half) / (across - 1);
-    for (let i = 0; i < across; i++) {
-      for (let j = 0; j < across; j++) {
-        const x = -half + i * pitch;
-        const y = -half + j * pitch;
-        const ox = point[0] + x * u[0] + y * v[0] + band * n[0];
-        const oy = point[1] + x * u[1] + y * v[1] + band * n[1];
-        const oz = point[2] + x * u[2] + y * v[2] + band * n[2];
-        const hit = castRay(mesh, ox, oy, oz, -n[0], -n[1], -n[2], 2 * band);
-        if (hit) {
-          // Met from behind, the ray set out from inside the part: beside the
-          // brush the surface stands higher than the brush looks.
-          map[i * across + j] = facesUp(hit.triangle) ? band - hit.t : Infinity;
-          landed?.add(hit.triangle);
-        } else {
-          // Nothing below. Either it is open as far down as the brush looks, or
-          // the ray set out under a surface too far below to have come out of.
-          const over = castRay(mesh, ox, oy, oz, n[0], n[1], n[2], Infinity);
-          map[i * across + j] = over && facesUp(over.triangle) ? Infinity : -Infinity;
-        }
-      }
-    }
-    return fitSheet(map, across, half);
-  };
-  const facesUp = (triangle: number): boolean => {
-    const face = faceNormal(mesh.soup, triangle);
-    return face[0] * n[0] + face[1] * n[1] + face[2] * n[2] > 0;
-  };
-  const glance = new Float32Array(SAMPLES_ACROSS * SAMPLES_ACROSS);
-  for (let pass = 0; pass < 2; pass++) {
-    const rough = read(SAMPLES_ACROSS, radius, glance, null);
-    if (!rough) return finish([], facing);
-    const [su, sv] = rough.slope;
-    const tilt = Math.hypot(su, sv);
-    // Square enough already — or so far off that this is not the face the brush was put on.
-    if (tilt < 0.02 || tilt > 1) break;
-    const squared = normalize([
-      n[0] - su * u[0] - sv * v[0],
-      n[1] - su * u[1] - sv * v[1],
-      n[2] - su * u[2] - sv * v[2],
-    ]);
-    if (!squared) break;
-    n = squared;
-  }
-  // The correction is a small one. If it has swung the brush round, something
-  // other than the surface under the pointer has been fitted: leave it alone.
-  if (n[0] * facing[0] + n[1] * facing[1] + n[2] * facing[2] < 0.8) return finish([], facing);
+  const nearby = verticesNear(mesh, point, Math.hypot(radius, depth));
+  // Squared to the face most of the surface around it lies on, so that an edge
+  // or a step under the brush is seen from one side of it, not from between.
+  const { frame, facing } = squareTo(mesh, point, normalize(hint) ?? [0, 0, 1], radius, band, nearby, fitSheet);
+  if (!frame) return finish([], facing);
+  const { n } = frame;
 
   // Then the surface itself, read finely, out past the rim of the brush by the
   // radius of the disc: the map of what shows from above.
@@ -1451,8 +1684,9 @@ export function seamBrushDab(
   const half = radius + disc;
   const mapPitch = (2 * half) / (MAP_ACROSS - 1);
   const map = new Float32Array(MAP_ACROSS * MAP_ACROSS);
-  const seen = new Set<number>();
-  const sheet = read(MAP_ACROSS, half, map, seen);
+  const landed = new Set<number>();
+  readHeights(mesh, point, frame, band, MAP_ACROSS, half, map, landed);
+  const sheet = fitSheet(map, MAP_ACROSS, half);
   if (!sheet) return finish([], n);
 
   // The heights are taken off the sheet — so a round body is not one long
@@ -1488,75 +1722,41 @@ export function seamBrushDab(
     }
   }
   const level = Math.max(LEVEL_MM, rough.length > 0 ? 3 * median(rough) : 0);
+  const shows = (x: number, y: number, above: number) => showsIn(map, MAP_ACROSS, half, x, y, above);
 
-  /** The map cell a point of the brush plane falls in, or -1 off the map. */
-  const cellAt = (x: number, y: number): number => {
+  /** How far a point stands off where the part belongs — if it is seam on the brush's side, and shows. */
+  const offBy = (x: number, y: number, above: number): number | null => {
     const gi = Math.round((x + half) / mapPitch);
     const gj = Math.round((y + half) / mapPitch);
-    return gi < 0 || gj < 0 || gi >= MAP_ACROSS || gj >= MAP_ACROSS ? -1 : gi * MAP_ACROSS + gj;
+    if (gi < 0 || gj < 0 || gi >= MAP_ACROSS || gj >= MAP_ACROSS) return null;
+    const height = above - sheet.height(x, y) - belongs[gi * MAP_ACROSS + gj];
+    // Further off than the brush reaches — or beside a drop with no bottom — is not seam.
+    if (!(Math.abs(height) <= depth)) return null;
+    if (shave ? height <= level : height >= -level) return null;
+    return shows(x, y, above) ? height : null;
   };
 
-  /**
-   * Only what shows from above the surface moves: not the back of a thin wall,
-   * nor the floor of a hollow under it. A point shows when the first thing
-   * seen from above, at or right beside it, is no higher than the point itself.
-   */
-  const shows = (x: number, y: number, above: number): boolean => {
-    const gi = Math.round((x + half) / mapPitch);
-    const gj = Math.round((y + half) / mapPitch);
-    if (gi < 0 || gj < 0 || gi >= MAP_ACROSS || gj >= MAP_ACROSS) return false;
-    for (let i = Math.max(0, gi - 1); i <= Math.min(MAP_ACROSS - 1, gi + 1); i++) {
-      for (let j = Math.max(0, gj - 1); j <= Math.min(MAP_ACROSS - 1, gj + 1); j++) {
-        if (map[i * MAP_ACROSS + j] <= above + 0.05) return true;
-      }
-    }
-    return false;
+  // The ceiling starts at the highest point under the brush and comes down a
+  // step per dab (the floor likewise comes up), so the worst goes first. What
+  // counts as highest is weighed by how near the middle it is: the seam runs on
+  // out of the brush at its full height, and if the rim had as much say as the
+  // middle the ceiling would never come down past it. Where the seam is there
+  // may be no vertex yet — a ridge can be two triangles from one end of the
+  // part to the other — so the points of the map count as well as the vertices.
+  // Anything further out than HEADROOM_MM is brought to it in one go: a 3 mm
+  // slit should not take thirty dabs before its mouth begins to close.
+  let worst = 0;
+  const weigh = (height: number, distance: number) => {
+    const weighed = height * weightAt(distance, radius);
+    if (shave ? weighed > worst : weighed < worst) worst = weighed;
   };
-
-  /** How much of a move a point this far from the middle of the brush gets: all of it over the inner half, easing off to the rim. */
-  const weightAt = (distance: number) => {
-    const t = Math.min(1, Math.max(0, (distance / radius - 0.5) / 0.5));
-    return 1 - t * t * (3 - 2 * t);
-  };
-
-  interface Feature {
-    /** Height above where the part itself stands; negative below it. */
-    height: number;
-    /** 1 in the middle of the brush, easing to 0 at its rim. */
-    weight: number;
+  for (const vertex of nearby) {
+    const at = inFrame(frame, point, mesh.positions[vertex * 3], mesh.positions[vertex * 3 + 1], mesh.positions[vertex * 3 + 2]);
+    const distance = Math.hypot(at.x, at.y);
+    if (distance >= radius) continue;
+    const height = offBy(at.x, at.y, at.above);
+    if (height !== null) weigh(height, distance);
   }
-  interface Candidate extends Feature {
-    vertex: number;
-  }
-  /** What the brush would move: the vertices of a ridge when shaving, of a groove when filling. */
-  const candidatesAmong = (vertices: number[]): Candidate[] => {
-    const found: Candidate[] = [];
-    for (const vertex of vertices) {
-      const px = mesh.positions[vertex * 3] - point[0];
-      const py = mesh.positions[vertex * 3 + 1] - point[1];
-      const pz = mesh.positions[vertex * 3 + 2] - point[2];
-      const x = px * u[0] + py * u[1] + pz * u[2];
-      const y = px * v[0] + py * v[1] + pz * v[2];
-      const distance = Math.hypot(x, y);
-      if (distance >= radius) continue;
-      const above = px * n[0] + py * n[1] + pz * n[2];
-      const cell = cellAt(x, y);
-      if (cell < 0) continue;
-      const height = above - sheet.height(x, y) - belongs[cell];
-      // Further off than the brush reaches — or beside a drop with no bottom — is not seam.
-      if (!(Math.abs(height) <= depth)) continue;
-      if (shave ? height <= level : height >= -level) continue;
-      if (!shows(x, y, above)) continue;
-      found.push({ vertex, height, weight: weightAt(distance) });
-    }
-    return found;
-  };
-
-  // Where the seam is, there may be no vertex yet — a ridge can be two
-  // triangles from one end of the part to the other. So the points of the map
-  // that landed on it count as well as the vertices.
-  const before = candidatesAmong(nearby);
-  const sampled: Feature[] = [];
   for (let i = 0; i < MAP_ACROSS; i++) {
     for (let j = 0; j < MAP_ACROSS; j++) {
       const x = -half + i * mapPitch;
@@ -1566,96 +1766,205 @@ export function seamBrushDab(
       const height = relief[i * MAP_ACROSS + j] - belongs[i * MAP_ACROSS + j];
       if (!(Math.abs(height) <= depth)) continue;
       if (shave ? height <= level : height >= -level) continue;
-      sampled.push({ height, weight: weightAt(distance) });
+      weigh(height, distance);
     }
-  }
-
-  // The ceiling starts at the highest point under the brush and comes down a
-  // step per dab (the floor likewise comes up), so the worst goes first. What
-  // counts as highest is weighed by how near the middle it is: the seam runs on
-  // out of the brush at its full height, and if the rim had as much say as the
-  // middle the ceiling would never come down past it.
-  // Anything further out than HEADROOM_MM is brought to it in one go: a 3 mm
-  // slit should not take thirty dabs before its mouth begins to close.
-  let worst = 0;
-  for (const feature of [...before, ...sampled]) {
-    const weighed = feature.height * feature.weight;
-    if (shave ? weighed > worst : weighed < worst) worst = weighed;
   }
   if (worst === 0) return finish([], n);
   const extreme = shave ? Math.min(worst, HEADROOM_MM) : Math.max(worst, -HEADROOM_MM);
   const limit = shave ? Math.max(0, extreme - options.stepMm) : Math.min(0, extreme + options.stepMm);
 
-  // There is seam here to work on, so the surface under the brush is made fit
-  // to be shaped: every triangle that shows under it is split until it is fine
-  // enough. Without that a long triangle with no vertex under the brush stays
-  // standing where it was, a fin over what has been levelled around it, and
-  // one with a vertex there is dragged by it however far it reaches.
-  const low: Vec3 = [point[0] - depth * n[0], point[1] - depth * n[1], point[2] - depth * n[2]];
-  const high: Vec3 = [point[0] + depth * n[0], point[1] + depth * n[1], point[2] + depth * n[2]];
-  const shrunk = new Set<number>();
-  const maxEdge = Math.max(MIN_EDGE_MM, EDGE_PER_RADIUS * radius);
-  // A triangle the rays slipped past still shows if a corner of it, or its middle, does.
-  const showing = (triangle: number): boolean => {
-    const { soup } = mesh;
-    const at = triangle * 9;
-    let cx = 0;
-    let cy = 0;
-    let cz = 0;
-    for (let k = 0; k < 9; k += 3) {
-      const px = soup[at + k] - point[0];
-      const py = soup[at + k + 1] - point[1];
-      const pz = soup[at + k + 2] - point[2];
-      cx += px / 3;
-      cy += py / 3;
-      cz += pz / 3;
-      if (shows(px * u[0] + py * u[1] + pz * u[2], px * v[0] + py * v[1] + pz * v[2], px * n[0] + py * n[1] + pz * n[2])) {
-        return true;
-      }
-    }
-    return shows(cx * u[0] + cy * u[1] + cz * u[2], cx * v[0] + cy * v[1] + cz * v[2], cx * n[0] + cy * n[1] + cz * n[2]);
-  };
-  const splits = refineUnder(mesh, low, high, radius, maxEdge, seen, showing, reshade, shrunk);
-  if (splits > 0) {
-    // A split triangle only shrinks, so the tree over the given ones still
-    // holds — but its boxes are drawn in round what is left of them, or every
-    // ray past a long sliver would go on testing it. The added ones get a tree
-    // of their own.
-    refitBvh(mesh.bvh, mesh.soup, shrunk);
-    mesh.addedBvh = buildBvh(mesh.soup, mesh.givenTriangles, mesh.triangleCount - mesh.givenTriangles);
-    nearby = verticesNear(mesh, point, Math.hypot(radius, depth));
-  }
-  const candidates = splits > 0 ? candidatesAmong(nearby) : before;
-
-  const moved: number[] = [];
-  for (const candidate of candidates) {
-    const beyond = candidate.height - limit;
-    if (shave ? beyond <= 0 : beyond >= 0) continue;
-    const shift = -beyond * candidate.weight;
-    // Not worth the move: the rim of the brush barely touches what it passes over.
-    if (Math.abs(shift) < 1e-4) continue;
-    const vertex = candidate.vertex;
-    if (stroke && vertex < stroke.vertexCount && !stroke.before.has(vertex)) {
-      stroke.before.set(vertex, [
-        mesh.positions[vertex * 3],
-        mesh.positions[vertex * 3 + 1],
-        mesh.positions[vertex * 3 + 2],
-      ]);
-    }
-    const nx = mesh.positions[vertex * 3] + shift * n[0];
-    const ny = mesh.positions[vertex * 3 + 1] + shift * n[1];
-    const nz = mesh.positions[vertex * 3 + 2] + shift * n[2];
-    place(mesh, vertex, nx, ny, nz, scratch);
-    const drift = Math.hypot(
-      nx - mesh.origin[vertex * 3],
-      ny - mesh.origin[vertex * 3 + 1],
-      nz - mesh.origin[vertex * 3 + 2]
-    );
-    if (drift > mesh.drift) mesh.drift = drift;
-    moved.push(vertex);
-  }
-  refitAround(mesh, moved);
+  const moved = shapeUnder(
+    mesh,
+    point,
+    frame,
+    radius,
+    depth,
+    landed,
+    shows,
+    (x, y, above, distance) => {
+      const height = offBy(x, y, above);
+      if (height === null) return 0;
+      const beyond = height - limit;
+      if (shave ? beyond <= 0 : beyond >= 0) return 0;
+      return -beyond * weightAt(distance, radius);
+    },
+    reshade,
+    stroke
+  );
   return finish(moved, n);
+}
+
+export interface CloneStampOptions {
+  radiusMm: number;
+  /** How much of the way to the source's shape one dab goes, 0–1. */
+  strength: number;
+}
+
+export interface CloneStampDab extends SeamBrushDab {
+  /** Where on the surface the dab took its shape from; null when there was nothing there to take. */
+  source: Vec3 | null;
+}
+
+/** The value of a map at a point of its square, read between its four nearest points; NaN off the map or beside a drop. */
+function sampleAt(map: Float32Array, across: number, half: number, x: number, y: number): number {
+  const pitch = (2 * half) / (across - 1);
+  const fi = (x + half) / pitch;
+  const fj = (y + half) / pitch;
+  const i = Math.floor(fi);
+  const j = Math.floor(fj);
+  if (i < 0 || j < 0 || i >= across - 1 || j >= across - 1) {
+    const ni = Math.round(fi);
+    const nj = Math.round(fj);
+    return ni < 0 || nj < 0 || ni >= across || nj >= across ? Number.NaN : map[ni * across + nj];
+  }
+  const ti = fi - i;
+  const tj = fj - j;
+  const value =
+    map[i * across + j] * (1 - ti) * (1 - tj) +
+    map[(i + 1) * across + j] * ti * (1 - tj) +
+    map[i * across + j + 1] * (1 - ti) * tj +
+    map[(i + 1) * across + j + 1] * ti * tj;
+  return Number.isFinite(value) ? value : Number.NaN;
+}
+
+/**
+ * The height of the surface about its own lie: the map less its sheet, and
+ * less the level most of it stands at — so that a patch of clean surface reads
+ * as nothing at all, wherever it is and however it tilts. Gives that level too.
+ */
+function reliefOf(
+  map: Float32Array,
+  sheet: Sheet,
+  across: number,
+  half: number
+): { relief: Float32Array; level: number } {
+  const pitch = (2 * half) / (across - 1);
+  const relief = new Float32Array(map.length);
+  const levels: number[] = [];
+  for (let i = 0; i < across; i++) {
+    for (let j = 0; j < across; j++) {
+      const x = -half + i * pitch;
+      const y = -half + j * pitch;
+      const value = map[i * across + j] - sheet.height(x, y);
+      relief[i * across + j] = value;
+      if (Number.isFinite(value) && x * x + y * y <= half * half) levels.push(value);
+    }
+  }
+  const level = levels.length > 0 ? median(levels) : 0;
+  for (let k = 0; k < relief.length; k++) relief[k] -= level;
+  return { relief, level };
+}
+
+/**
+ * One dab of the clone stamp: the surface under the brush takes on the shape
+ * of the surface at `source` — a point on the part, usually some way off along
+ * it, that the stroke carries along at the same distance.
+ *
+ * What is copied is the shape about the lie of the surface, not its height:
+ * clean surface cloned onto a seam lays the seam flat into the surface around
+ * it, and a knurl cloned onto a patch that lost it puts it back — on a curve or
+ * a slope as on the flat. The source is read square to the brush, so it should
+ * face much the same way; one that does not is left alone.
+ */
+export function cloneStampDab(
+  mesh: SeamBrushMesh,
+  point: Vec3,
+  hint: Vec3,
+  source: Vec3,
+  options: CloneStampOptions,
+  stroke?: SeamBrushStroke
+): CloneStampDab {
+  const radius = Math.max(options.radiusMm, 0.05);
+  const strength = Math.min(Math.max(options.strength, 0), 1);
+  const { depth, band } = reachOf(radius);
+  const reshade = new Set<number>();
+  const finish = (moved: number[], normal: Vec3, from: Vec3 | null): CloneStampDab => {
+    for (const vertex of moved) reshade.add(vertex);
+    if (reshade.size > 0) refreshSeamBrushNormals(mesh, reshade);
+    return { vertices: moved, normal, source: from };
+  };
+
+  const nearby = verticesNear(mesh, point, Math.hypot(radius, depth));
+  // Squared to the average lie of the surface, texture and all: squared to one
+  // facet of a knurl — or of the ripples it is laying down — it would copy them askew.
+  const { frame, facing } = squareTo(mesh, point, normalize(hint) ?? [0, 0, 1], radius, band, nearby, fitLie);
+  if (!frame) return finish([], facing, null);
+  const { n } = frame;
+
+  // The source is wherever the surface is under the point it names, seen the
+  // way the brush looks: it may lie a little above or below where it was named.
+  const reach = band + CLONE_SEARCH_MM;
+  const found = castRay(
+    mesh,
+    source[0] + reach * n[0],
+    source[1] + reach * n[1],
+    source[2] + reach * n[2],
+    -n[0],
+    -n[1],
+    -n[2],
+    2 * reach
+  );
+  // Found much further off than it was named, it is some other surface.
+  if (!found || !facesAlong(mesh, found.triangle, n) || Math.abs(reach - found.t) > CLONE_SEARCH_MM) {
+    return finish([], n, null);
+  }
+  const from: Vec3 = [
+    source[0] + (reach - found.t) * n[0],
+    source[1] + (reach - found.t) * n[1],
+    source[2] + (reach - found.t) * n[2],
+  ];
+
+  const across = CLONE_ACROSS;
+  const half = radius;
+  const there = new Float32Array(across * across);
+  readHeights(mesh, from, frame, band, across, half, there, null);
+  const sourceSheet = fitLie(there, across, half);
+  // Much steeper than the brush and it is another face, not a patch of this one.
+  if (!sourceSheet || Math.hypot(...sourceSheet.slope) > CLONE_MAX_SLOPE) return finish([], n, from);
+  const here = new Float32Array(across * across);
+  const landed = new Set<number>();
+  readHeights(mesh, point, frame, band, across, half, here, landed);
+  const sheet = fitLie(here, across, half);
+  if (!sheet) return finish([], n, from);
+
+  const copied = reliefOf(there, sourceSheet, across, half).relief;
+  const { relief: own, level } = reliefOf(here, sheet, across, half);
+  // Where the surface here should stand: its own lie, and the source's shape about it.
+  const wanted = (x: number, y: number) => sheet.height(x, y) + level + sampleAt(copied, across, half, x, y);
+  const shows = (x: number, y: number, above: number) => showsIn(here, across, half, x, y, above);
+
+  // Only if the surface under the brush is off its source somewhere is there anything to do.
+  const pitch = (2 * half) / (across - 1);
+  let off = false;
+  for (let i = 0; i < across && !off; i++) {
+    for (let j = 0; j < across && !off; j++) {
+      const x = -half + i * pitch;
+      const y = -half + j * pitch;
+      if (x * x + y * y >= radius * radius) continue;
+      const gap = copied[i * across + j] - own[i * across + j];
+      if (Math.abs(gap) > LEVEL_MM && Math.abs(gap) <= depth) off = true;
+    }
+  }
+  if (!off) return finish([], n, from);
+
+  const moved = shapeUnder(
+    mesh,
+    point,
+    frame,
+    radius,
+    depth,
+    landed,
+    shows,
+    (x, y, above, distance) => {
+      const gap = wanted(x, y) - above;
+      if (!(Math.abs(gap) > LEVEL_MM && Math.abs(gap) <= depth)) return 0;
+      if (!shows(x, y, above)) return 0;
+      return gap * strength * weightAt(distance, radius);
+    },
+    reshade,
+    stroke
+  );
+  return finish(moved, n, from);
 }
 
 /**

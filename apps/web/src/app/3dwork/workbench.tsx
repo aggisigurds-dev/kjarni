@@ -154,7 +154,6 @@ import {
   seamBrushSoup,
   undoSeamBrushStroke,
   type SeamBrushMesh,
-  type SeamBrushMode,
   type SeamBrushStroke,
 } from '@/lib/3dwork/seam-brush';
 import { findBoreAxis } from '@/lib/3dwork/bore-axis';
@@ -231,7 +230,7 @@ import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
 import { Viewport, type ViewportCallout, type ViewportPart, type ViewportSeamBrush } from './viewport';
-import { SeamBrushBar } from './seam-brush-bar';
+import { SeamBrushBar, type SeamStrength, type SeamTool } from './seam-brush-bar';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { PaintBar } from './paint-bar';
@@ -294,6 +293,11 @@ function sameBounds(pieces: Float32Array[], whole: Float32Array): boolean {
   );
 }
 
+/** How far one pass of the seam brush takes a ridge down or a groove up, by strength, mm. */
+const SEAM_STEP_MM = [0.02, 0.05, 0.15] as const;
+/** How much of the way to its source one dab of the clone stamp goes, by strength. */
+const CLONE_STRENGTH = [0.25, 0.5, 1] as const;
+
 /** One point on the undo timeline: the project, and the meshes it referred to. */
 interface HistoryStep {
   project: Project;
@@ -335,10 +339,13 @@ export function Workbench({
     base: Float32Array;
     mesh: SeamBrushMesh;
   } | null>(null);
-  const [seamMode, setSeamMode] = useState<SeamBrushMode>('shave');
+  const [seamMode, setSeamMode] = useState<SeamTool>('shave');
   const [seamRadiusMm, setSeamRadiusMm] = useState(2);
-  const [seamStepMm, setSeamStepMm] = useState(0.05);
+  const [seamStrength, setSeamStrength] = useState<SeamStrength>(1);
   const [seamTurning, setSeamTurning] = useState(false);
+  // Clone stamp: whether a source has been picked, and whether the next tap picks one.
+  const [cloneSourceSet, setCloneSourceSet] = useState(false);
+  const [pickingCloneSource, setPickingCloneSource] = useState(false);
   const [seamStrokes, setSeamStrokes] = useState<SeamBrushStroke[]>([]);
   // Add-volume (corner fillet) tool.
   const [addingVolume, setAddingVolume] = useState(false);
@@ -2973,6 +2980,8 @@ export function Workbench({
         setSeamBrush({ partId, base: soup, mesh: createSeamBrushMesh(soup) });
         setSeamStrokes([]);
         setSeamTurning(false);
+        setCloneSourceSet(false);
+        setPickingCloneSource(false);
       } catch {
         toast.error('Gat ekki opnað saumburstann á þessum hlut.');
       } finally {
@@ -3002,6 +3011,16 @@ export function Workbench({
 
   const onSeamStroke = useCallback((stroke: SeamBrushStroke) => {
     setSeamStrokes((current) => [...current, stroke]);
+  }, []);
+
+  const onCloneSource = useCallback((event: 'picked' | 'missing') => {
+    if (event === 'picked') {
+      setCloneSourceSet(true);
+      setPickingCloneSource(false);
+      return;
+    }
+    toast('Veldu fyrst hreint svæði til að klóna frá: Alt-smelltu á það, eða ýttu á Uppruni og smelltu.');
+    setPickingCloneSource(true);
   }, []);
 
   /** Take the last stroke of the seam brush back. */
@@ -3043,12 +3062,14 @@ export function Workbench({
             partId: seamBrush.partId,
             mesh: seamBrush.mesh,
             radiusMm: seamRadiusMm,
-            stepMm: seamStepMm,
+            stepMm: SEAM_STEP_MM[seamStrength],
+            strength: CLONE_STRENGTH[seamStrength],
             mode: seamMode,
+            pickingSource: pickingCloneSource,
             turning: seamTurning,
           }
         : null,
-    [seamBrush, seamRadiusMm, seamStepMm, seamMode, seamTurning]
+    [seamBrush, seamRadiusMm, seamStrength, seamMode, pickingCloneSource, seamTurning]
   );
 
   // Live re-union while the size slider moves (debounced).
@@ -6927,6 +6948,7 @@ export function Workbench({
             onPaintAt={onPaintAt}
             seamBrush={viewportSeamBrush}
             onSeamStroke={onSeamStroke}
+            onCloneSource={onCloneSource}
             addingVolume={addingVolume}
             addVolumePartId={addingVolume ? selectedId : null}
             onAddVolumeAt={onAddVolumeAt}
@@ -7029,12 +7051,15 @@ export function Workbench({
           {seamBrush && selectedPart && selectedPart.id === seamBrush.partId && (
             <SeamBrushBar
               name={selectedPart.name}
-              mode={seamMode}
-              onMode={setSeamMode}
+              tool={seamMode}
+              onTool={setSeamMode}
               radiusMm={seamRadiusMm}
               onRadius={setSeamRadiusMm}
-              stepMm={seamStepMm}
-              onStep={setSeamStepMm}
+              strength={seamStrength}
+              onStrength={setSeamStrength}
+              hasSource={cloneSourceSet}
+              pickingSource={pickingCloneSource}
+              onPickSource={setPickingCloneSource}
               turning={seamTurning}
               onTurning={setSeamTurning}
               strokes={seamStrokes.length}
