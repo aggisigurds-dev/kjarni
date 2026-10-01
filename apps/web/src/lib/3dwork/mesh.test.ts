@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
-import { alignPaintedVertices, autoFix, computeBounds, diagnose, fillPaintedHoles, fixMisalignment, inspect, simplify, toSoup, weld } from './mesh';
+import { alignPaintedVertices, autoFix, computeBounds, diagnose, fillPaintedHoles, fixMisalignment, inspect, sealedExactly, simplify, toSoup, weld } from './mesh';
 
 /** A sphere-ish blob with far more triangles than its shape needs. */
 function denseSphere(radius = 20, rings = 40, segments = 60): Float32Array {
@@ -192,6 +192,73 @@ describe('inspect', () => {
 
     expect(topology.inconsistentEdges).toBeGreaterThan(0);
     expect(topology.watertight).toBe(false);
+  });
+});
+
+/** A cube moved by (dx, dy, dz). */
+function movedCube(size: number, dx: number, dy: number, dz: number): Float32Array {
+  const soup = cubeSoup(size);
+  for (let i = 0; i < soup.length; i += 3) {
+    soup[i] += dx;
+    soup[i + 1] += dy;
+    soup[i + 2] += dz;
+  }
+  return soup;
+}
+
+function joined(...soups: Float32Array[]): Float32Array {
+  const out = new Float32Array(soups.reduce((sum, soup) => sum + soup.length, 0));
+  let at = 0;
+  for (const soup of soups) {
+    out.set(soup, at);
+    at += soup.length;
+  }
+  return out;
+}
+
+describe('sealedExactly', () => {
+  it('seals a closed cube', () => {
+    expect(sealedExactly(cubeSoup())).toEqual({
+      sealed: true,
+      unbalancedEdges: 0,
+      touchingEdges: 0,
+      shells: 1,
+      volume: 1000,
+    });
+  });
+
+  it('does not seal a cube with a face missing, nor one turned inside out', () => {
+    expect(sealedExactly(removeTriangle(cubeSoup(), 3))).toMatchObject({ sealed: false, unbalancedEdges: 3 });
+    let inside = cubeSoup();
+    for (let t = 0; t < 12; t++) inside = flipTriangle(inside, t);
+    expect(sealedExactly(inside).sealed).toBe(false);
+  });
+
+  it('seals two blocks that touch along an edge, and counts the edge', () => {
+    const seal = sealedExactly(joined(cubeSoup(), movedCube(10, 10, 10, 0)));
+    expect(seal.sealed).toBe(true);
+    expect(seal.touchingEdges).toBeGreaterThan(0);
+    // Joined by the edge they share: one piece of surface.
+    expect(seal.shells).toBe(1);
+  });
+
+  it('reads two blocks a hair apart as closed, where the weld reads fighting faces', () => {
+    // What an exact join leaves along a seam: faces a hundredth of a micron apart.
+    const soup = joined(movedCube(10, 0, 0, 0), movedCube(10, 10.00001, 0, 0));
+    // Two pieces of surface, read exactly — the weld would make them one.
+    expect(sealedExactly(soup).shells).toBe(2);
+    const topology = inspect(soup);
+    expect(topology.watertight).toBe(false);
+    expect(topology.sealed).toBe(true);
+    const diagnosis = diagnose(soup);
+    expect(diagnosis.watertight).toBe(false);
+    expect(diagnosis.sealed).toBe(true);
+    expect(diagnosis.thinShellRisk).toBe(false);
+  });
+
+  it('marks a watertight mesh sealed without a second look', () => {
+    expect(inspect(cubeSoup()).sealed).toBe(true);
+    expect(inspect(removeTriangle(cubeSoup(), 0)).sealed).toBe(false);
   });
 });
 

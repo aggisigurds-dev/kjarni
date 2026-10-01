@@ -849,39 +849,51 @@ function RepairTab({
             <Row label="Status">
               <span
                 className={
-                  diagnosis.watertight && !diagnosis.thinShellRisk
+                  diagnosis.sealed && !diagnosis.thinShellRisk
                     ? 'text-emerald-600'
                     : 'text-amber-600'
                 }
               >
-                {diagnosis.watertight && !diagnosis.thinShellRisk
-                  ? 'solid — ready to slice'
+                {diagnosis.sealed && !diagnosis.thinShellRisk
+                  ? diagnosis.watertight
+                    ? 'solid — ready to slice'
+                    : 'closed — ready to slice'
                   : 'needs Fill before slice / subtract'}
               </span>
             </Row>
-            <Row label="Misalignment">
-              {diagnosis.misalignedClusters === 0
-                ? 'none'
-                : `${formatCount(diagnosis.misalignedClusters)} near-miss corner group(s)`}
-            </Row>
-            <Row label="Missing faces">
-              {diagnosis.missingFaces === 0
-                ? 'none'
-                : `${formatCount(diagnosis.missingFaces)} hole(s) · ${formatCount(diagnosis.openEdges)} open edges`}
-            </Row>
-            <Row label="Face trouble">
-              {diagnosis.flippedFaces + diagnosis.disturbedEdges + diagnosis.junkFaces === 0
-                ? 'none'
-                : [
-                    diagnosis.flippedFaces > 0 && `${formatCount(diagnosis.flippedFaces)} flipped`,
-                    diagnosis.disturbedEdges > 0 &&
-                      `${formatCount(diagnosis.disturbedEdges)} fighting`,
-                    diagnosis.junkFaces > 0 && `${formatCount(diagnosis.junkFaces)} junk`,
-                    diagnosis.insideOut && 'inside-out',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-            </Row>
+            {diagnosis.sealed && !diagnosis.watertight ? (
+              <p className="pt-1 text-[0.65rem] text-slate-500">
+                Closed exactly as it is. Read with corners a hair apart welded together, the seams
+                of a part joined in one piece look like holes and fighting faces — there are none.
+                Nothing to fill.
+              </p>
+            ) : (
+              <>
+                <Row label="Misalignment">
+                  {diagnosis.misalignedClusters === 0
+                    ? 'none'
+                    : `${formatCount(diagnosis.misalignedClusters)} near-miss corner group(s)`}
+                </Row>
+                <Row label="Missing faces">
+                  {diagnosis.missingFaces === 0
+                    ? 'none'
+                    : `${formatCount(diagnosis.missingFaces)} hole(s) · ${formatCount(diagnosis.openEdges)} open edges`}
+                </Row>
+                <Row label="Face trouble">
+                  {diagnosis.flippedFaces + diagnosis.disturbedEdges + diagnosis.junkFaces === 0
+                    ? 'none'
+                    : [
+                        diagnosis.flippedFaces > 0 && `${formatCount(diagnosis.flippedFaces)} flipped`,
+                        diagnosis.disturbedEdges > 0 &&
+                          `${formatCount(diagnosis.disturbedEdges)} fighting`,
+                        diagnosis.junkFaces > 0 && `${formatCount(diagnosis.junkFaces)} junk`,
+                        diagnosis.insideOut && 'inside-out',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                </Row>
+              </>
+            )}
             {diagnosis.thinShellRisk && (
               <p className="pt-1 text-[0.65rem] text-amber-700">
                 Open or hollow here — Slice and Subtract would come out as a paper-thin shell. Press
@@ -892,12 +904,16 @@ function RepairTab({
         ) : (
           <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
             <Row label="Status">
-              <span className={topology.watertight ? 'text-emerald-600' : 'text-amber-600'}>
-                {topology.watertight ? 'print ready' : 'needs repair'}
+              <span className={topology.sealed ? 'text-emerald-600' : 'text-amber-600'}>
+                {topology.watertight ? 'print ready' : topology.sealed ? 'closed — print ready' : 'needs repair'}
               </span>
             </Row>
-            <Row label="Open edges">{formatCount(topology.boundaryEdges)}</Row>
-            <Row label="Holes">{formatCount(topology.holes)}</Row>
+            {!topology.sealed && (
+              <>
+                <Row label="Open edges">{formatCount(topology.boundaryEdges)}</Row>
+                <Row label="Holes">{formatCount(topology.holes)}</Row>
+              </>
+            )}
             <p className="pt-1 text-[0.65rem] text-slate-400">Press Analyze for a full diagnosis.</p>
           </div>
         )}
@@ -1004,7 +1020,7 @@ function RepairTab({
       <div className={`${PANEL} space-y-2 px-3 py-2`}>
         <div className="flex items-center justify-between">
           <span className={LABEL}>Make solid</span>
-          {!topology.watertight && (
+          {!topology.sealed && (
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-amber-700">
               suggested
             </span>
