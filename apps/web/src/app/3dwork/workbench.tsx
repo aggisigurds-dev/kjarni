@@ -43,6 +43,7 @@ import {
   Trash2,
   Upload,
   Paintbrush,
+  Brush,
   ScanSearch,
   Cloud,
   Github,
@@ -148,6 +149,14 @@ import {
   type HardwareSpec,
 } from '@/lib/3dwork/hardware';
 import { concatSoups, makeSolid, type CylinderCut, type SolidifyReport } from '@/lib/3dwork/solidify';
+import {
+  createSeamBrushMesh,
+  seamBrushSoup,
+  undoSeamBrushStroke,
+  type SeamBrushMesh,
+  type SeamBrushMode,
+  type SeamBrushStroke,
+} from '@/lib/3dwork/seam-brush';
 import { findBoreAxis } from '@/lib/3dwork/bore-axis';
 import { fitTogether } from '@/lib/3dwork/fit';
 import { settleOnFloor } from '@/lib/3dwork/settle';
@@ -221,7 +230,8 @@ import { ProjectListItem } from './project-list-item';
 import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
-import { Viewport, type ViewportCallout, type ViewportPart } from './viewport';
+import { Viewport, type ViewportCallout, type ViewportPart, type ViewportSeamBrush } from './viewport';
+import { SeamBrushBar } from './seam-brush-bar';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { PaintBar } from './paint-bar';
@@ -318,6 +328,18 @@ export function Workbench({
   const [painting, setPainting] = useState(false);
   const [paintRadiusMm, setPaintRadiusMm] = useState(2);
   const [painted, setPainted] = useState<Set<number>>(() => new Set());
+  // Seam brush: levels a seam by hand on a working copy of the part's mesh.
+  // `base` is the soup it was opened on; the copy becomes a new version on save.
+  const [seamBrush, setSeamBrush] = useState<{
+    partId: string;
+    base: Float32Array;
+    mesh: SeamBrushMesh;
+  } | null>(null);
+  const [seamMode, setSeamMode] = useState<SeamBrushMode>('shave');
+  const [seamRadiusMm, setSeamRadiusMm] = useState(2);
+  const [seamStepMm, setSeamStepMm] = useState(0.05);
+  const [seamTurning, setSeamTurning] = useState(false);
+  const [seamStrokes, setSeamStrokes] = useState<SeamBrushStroke[]>([]);
   // Add-volume (corner fillet) tool.
   const [addingVolume, setAddingVolume] = useState(false);
   const [avSizeMm, setAvSizeMm] = useState(1.5);
@@ -2927,6 +2949,108 @@ export function Workbench({
     setAddingVolume(false);
   }, [commitAddVolume]);
 
+  /** Take the seam brush out on the selected part. */
+  const startSeamBrush = useCallback(() => {
+    if (!selectedId) {
+      toast.error('Veldu hlut fyrst.');
+      return;
+    }
+    const soup = soupOfPart(selectedId);
+    if (!soup || soup.length === 0) {
+      toast.error('Þessi hlutur hefur engan möskva til að bursta.');
+      return;
+    }
+    if (avRef.current) cancelAddVolume();
+    setAddingVolume(false);
+    setPainting(false);
+    setMeasuring(false);
+    setMoveModeId(null);
+    const partId = selectedId;
+    setBusy('Undirbý saumbursta…');
+    // Yield a frame so the busy state paints before the mesh is indexed.
+    setTimeout(() => {
+      try {
+        setSeamBrush({ partId, base: soup, mesh: createSeamBrushMesh(soup) });
+        setSeamStrokes([]);
+        setSeamTurning(false);
+      } catch {
+        toast.error('Gat ekki opnað saumburstann á þessum hlut.');
+      } finally {
+        setBusy(null);
+      }
+    }, 30);
+  }, [selectedId, soupOfPart, cancelAddVolume]);
+
+  /** Put the seam brush away — keeping what it did as a new version, or not. */
+  const finishSeamBrush = useCallback(
+    (keep: boolean) => {
+      if (!seamBrush) return;
+      if (keep && seamStrokes.length > 0) {
+        addVersion(
+          seamBrush.partId,
+          seamBrushSoup(seamBrush.mesh),
+          'brushed',
+          `Saumbursti · ${seamStrokes.length} ${seamStrokes.length === 1 ? 'stroka' : 'strokur'}`
+        );
+        toast.success('Saumurinn vistaður sem ný útgáfa.');
+      }
+      setSeamBrush(null);
+      setSeamStrokes([]);
+    },
+    [seamBrush, seamStrokes, addVersion]
+  );
+
+  const onSeamStroke = useCallback((stroke: SeamBrushStroke) => {
+    setSeamStrokes((current) => [...current, stroke]);
+  }, []);
+
+  /** Take the last stroke of the seam brush back. */
+  const undoSeamStroke = useCallback(() => {
+    const stroke = seamStrokes[seamStrokes.length - 1];
+    if (!seamBrush || !stroke) return;
+    // The viewport draws straight from the brush mesh and picks the change up on its next frame.
+    undoSeamBrushStroke(seamBrush.mesh, stroke);
+    setSeamStrokes(seamStrokes.slice(0, -1));
+  }, [seamBrush, seamStrokes]);
+
+  // The brush works on one part as it stood when the brush came out. Another
+  // tool or another part taking over keeps the strokes as a version; the part
+  // going away or changing under the brush leaves nothing to keep them on.
+  useEffect(() => {
+    if (!seamBrush) return;
+    if (soupOfPart(seamBrush.partId) !== seamBrush.base) {
+      if (seamStrokes.length > 0) toast.error('Saumbursta lokað — hluturinn breyttist undir honum.');
+      finishSeamBrush(false);
+    } else if (selectedId !== seamBrush.partId || painting || measuring || addingVolume || moveModeId) {
+      finishSeamBrush(true);
+    }
+  }, [
+    seamBrush,
+    seamStrokes,
+    selectedId,
+    painting,
+    measuring,
+    addingVolume,
+    moveModeId,
+    soupOfPart,
+    finishSeamBrush,
+  ]);
+
+  const viewportSeamBrush = useMemo<ViewportSeamBrush | null>(
+    () =>
+      seamBrush
+        ? {
+            partId: seamBrush.partId,
+            mesh: seamBrush.mesh,
+            radiusMm: seamRadiusMm,
+            stepMm: seamStepMm,
+            mode: seamMode,
+            turning: seamTurning,
+          }
+        : null,
+    [seamBrush, seamRadiusMm, seamStepMm, seamMode, seamTurning]
+  );
+
   // Live re-union while the size slider moves (debounced).
   useEffect(() => {
     if (!avPending) return;
@@ -5180,6 +5304,21 @@ export function Workbench({
 
       const meta = event.metaKey || event.ctrlKey;
 
+      if (seamBrush) {
+        // The brush has the keyboard while it is out: undo takes back a stroke,
+        // and no shortcut may delete or change the part under it.
+        if (meta && event.key.toLowerCase() === 'z') {
+          event.preventDefault();
+          if (!event.shiftKey) undoSeamStroke();
+        } else if (event.key === 'Escape') {
+          if (seamStrokes.length === 0) finishSeamBrush(false);
+          else toast('Vista eða Hætta við til að loka saumburstanum.');
+        } else if (event.key === 'f' && !meta) {
+          setFrameToken((token) => token + 1);
+        }
+        return;
+      }
+
       if (meta && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo();
@@ -5361,6 +5500,10 @@ export function Workbench({
     painting,
     focusId,
     toggleFocus,
+    seamBrush,
+    seamStrokes,
+    undoSeamStroke,
+    finishSeamBrush,
   ]);
 
   const onDrop = useCallback(
@@ -5548,6 +5691,13 @@ export function Workbench({
                 setMeasuring(false);
                 setPainting((v) => !v);
               },
+            },
+            {
+              icon: Brush,
+              label: 'Saumbursti',
+              on: Boolean(seamBrush),
+              disabled: !hasSel || busyB,
+              onClick: () => (seamBrush ? finishSeamBrush(true) : startSeamBrush()),
             },
             {
               icon: Plus,
@@ -6159,6 +6309,12 @@ export function Workbench({
               Paint brush
             </MenuCheckItem>
             <MenuCheckItem
+              checked={Boolean(seamBrush)}
+              onClick={() => (seamBrush ? finishSeamBrush(true) : startSeamBrush())}
+            >
+              Saumbursti (slípa / fylla saum)
+            </MenuCheckItem>
+            <MenuCheckItem
               checked={addingVolume}
               onClick={() => {
                 if (addingVolume) {
@@ -6486,6 +6642,14 @@ export function Workbench({
             >
               {painting ? 'Stop painting' : 'Paint a broken edge'}
             </MenuItem>
+            <MenuItem
+              onClick={() => (seamBrush ? finishSeamBrush(true) : startSeamBrush())}
+              disabled={!selectedId || Boolean(busy)}
+              icon={Brush}
+              hint="Dragðu yfir saum: − slípar toppana, + fyllir lægðirnar"
+            >
+              {seamBrush ? 'Loka saumbursta' : 'Saumbursti — jafna saum'}
+            </MenuItem>
             <MenuSeparator />
             <MenuCheckItem checked={multiSelect} onClick={() => setMultiSelect((value) => !value)}>
               Sticky selection — every tap adds a part
@@ -6761,6 +6925,8 @@ export function Workbench({
             paintPartId={painting ? selectedId : null}
             paintLocal={paintLocal}
             onPaintAt={onPaintAt}
+            seamBrush={viewportSeamBrush}
+            onSeamStroke={onSeamStroke}
             addingVolume={addingVolume}
             addVolumePartId={addingVolume ? selectedId : null}
             onAddVolumeAt={onAddVolumeAt}
@@ -6860,6 +7026,24 @@ export function Workbench({
             />
           )}
 
+          {seamBrush && selectedPart && selectedPart.id === seamBrush.partId && (
+            <SeamBrushBar
+              name={selectedPart.name}
+              mode={seamMode}
+              onMode={setSeamMode}
+              radiusMm={seamRadiusMm}
+              onRadius={setSeamRadiusMm}
+              stepMm={seamStepMm}
+              onStep={setSeamStepMm}
+              turning={seamTurning}
+              onTurning={setSeamTurning}
+              strokes={seamStrokes.length}
+              onUndo={undoSeamStroke}
+              onSave={() => finishSeamBrush(true)}
+              onCancel={() => finishSeamBrush(false)}
+            />
+          )}
+
           {project.parts.length > 0 && addingVolume && selectedPart && (
             <AddVolumeBar
               name={selectedPart.name}
@@ -6874,7 +7058,7 @@ export function Workbench({
             />
           )}
 
-          {project.parts.length > 0 && focusId && !painting && !moveModeId && (
+          {project.parts.length > 0 && focusId && !painting && !seamBrush && !moveModeId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-emerald-400 bg-white/95 px-3 py-2 text-center text-[0.7rem] font-medium text-emerald-800 shadow-sm">
               Focus · {project.parts.find((part) => part.id === focusId)?.name ?? 'part'} · View →
               uncheck Focus to show the rest
@@ -6901,6 +7085,7 @@ export function Workbench({
             selectedId &&
             !moveModeId &&
             !painting &&
+            !seamBrush &&
             !focusId && (
               <div className="pointer-events-none absolute top-3 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
                 {builderView
