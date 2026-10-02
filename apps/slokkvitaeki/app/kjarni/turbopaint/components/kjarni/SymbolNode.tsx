@@ -300,10 +300,12 @@ export function SymbolNode({
         height={size}
         fill={colors.bg}
         cornerRadius={size * 0.12}
-        shadowColor="rgba(28,25,23,0.28)"
-        shadowBlur={8}
+        shadowColor="rgba(0,0,0,0.78)"
+        shadowBlur={Math.max(8, size * 0.22)}
         shadowOffsetY={2}
         shadowEnabled
+        stroke="#0c0a09"
+        strokeWidth={Math.max(2.2, size / 11)}
       />
       {customImg ? (
         // „fit to frame": contain = öll myndin inni í reitnum (sjálfgefið),

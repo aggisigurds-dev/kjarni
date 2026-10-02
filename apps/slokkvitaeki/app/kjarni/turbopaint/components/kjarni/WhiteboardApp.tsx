@@ -41,6 +41,7 @@ import {
   innflutningsSlod,
   merkiIBord,
   saekjaUttekt,
+  stimpilStaerdABladi,
   symbolFyrirMerki,
   uttektBordNafn,
   veljaUttektHaed,
@@ -528,7 +529,7 @@ export function WhiteboardApp() {
           false
         );
         // Táknin miðast við blaðið: 56 px stimpill hverfur á 7.200 px uppdrætti.
-        const staerd = Math.max(getStampSize(), Math.round(Math.max(mynd.width, mynd.height) / 110));
+        const staerd = stimpilStaerdABladi(mynd, getStampSize());
         const takn = (haed.markers || []).map((m) => {
           const t = typeof m.unitId === "number" ? u.taeki.find((x) => x.id === m.unitId) : undefined;
           const stadur = merkiIBord(m, mynd, frum, staerd);

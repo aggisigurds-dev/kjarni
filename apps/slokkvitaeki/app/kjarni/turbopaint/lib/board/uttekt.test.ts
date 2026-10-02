@@ -6,6 +6,7 @@ import {
   innflutningsSlod,
   merkiIBord,
   merkiLykill,
+  stimpilStaerdABladi,
   symbolFyrirMerki,
   symbolFyrirStimpil,
   symbolFyrirTegund,
@@ -109,4 +110,12 @@ test("the archive permalink is recovered from the app's image proxy URL", () => 
   assert.equal(innflutningsSlod("https://example.com/plan.png"), "https://example.com/plan.png");
   assert.equal(innflutningsSlod("data:image/jpeg;base64,AAAA"), "");
   assert.equal(innflutningsSlod(null), "");
+});
+
+test("round-trip stamps stay readable when a 6006 px sheet is fit to a phone", () => {
+  const s = stimpilStaerdABladi({ width: 4244, height: 6006 }, 56);
+  assert.ok(s >= 400, "world size must scale with the sheet, got " + s);
+  const css = s * (390 / 6006);
+  assert.ok(css >= 26, "phone fit must be ≥26 CSS px, got " + css.toFixed(1));
+  assert.equal(stimpilStaerdABladi({ width: 400, height: 300 }, 56), 56);
 });

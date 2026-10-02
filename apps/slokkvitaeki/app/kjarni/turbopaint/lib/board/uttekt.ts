@@ -170,6 +170,15 @@ export function uppfaeraHaedir(haedir: UttektHaed[], haedId: string, stodur: Map
   return { haedir: ut, breytt, ny };
 }
 
+/** World-px stamp so a 390 px phone fit of a 6006 px grunnmynd still reads (~28 CSS px). */
+export function stimpilStaerdABladi(
+  mynd: { width: number; height: number },
+  bound = 56
+): number {
+  const long = Math.max(mynd.width || 0, mynd.height || 0, 1);
+  return Math.max(bound, Math.round(long / 14));
+}
+
 /** '/.netlify/functions/teikn-mynd?url=<permalink>' → permalinkurinn (þá sækir fetch-plan vigur-PDF). Annars slóðin sjálf. */
 export function innflutningsSlod(imageUrl: string | null | undefined): string {
   if (!imageUrl) return "";

@@ -2,6 +2,7 @@ import "./polyfills";
 import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from "pdfjs-dist";
 import * as UTIF from "utif";
 import { canvasToBlob, fitSize, putAsset } from "./assets";
+import { boostSheetCanvas } from "./sheet-contrast";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
 import { fileSizeWarning, planPdfRaster, PDF_SAFE_AREA } from "./import-limits";
@@ -174,6 +175,7 @@ async function rasterizePdfPage(
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      boostSheetCanvas(canvas);
       return { canvas, warnings: [...new Set(warnings)] };
     } catch (err) {
       lastErr = err;
@@ -276,6 +278,7 @@ async function importTiff(
       const sctx = canvas.getContext("2d");
       if (!sctx) throw new Error("Gat ekki opnað canvas");
       sctx.putImageData(imageData, 0, 0);
+      boostSheetCanvas(canvas);
       const blob = await canvasToBlob(canvas);
         const assetId = newId();
       await putAsset(assetId, blob);
@@ -313,6 +316,7 @@ async function importRaster(
       img.naturalHeight,
       IMPORT_MAX_PX[quality]
     );
+    boostSheetCanvas(canvas);
     const blob = await canvasToBlob(canvas);
         const assetId = newId();
     await putAsset(assetId, blob);

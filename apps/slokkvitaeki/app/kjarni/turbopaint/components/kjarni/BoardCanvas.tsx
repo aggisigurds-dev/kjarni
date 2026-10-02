@@ -1082,7 +1082,7 @@ export function BoardCanvas({
   return (
     <div
       ref={wrapRef}
-      className="relative h-full w-full overflow-hidden"
+      className="tp-sheet relative h-full w-full overflow-hidden"
       style={{ cursor, touchAction: "none" }}
       onDragOver={(e) => {
         e.preventDefault();
