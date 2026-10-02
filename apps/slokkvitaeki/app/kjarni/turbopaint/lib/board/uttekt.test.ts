@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  erStimpil,
   giskaFrumStaerd,
   innflutningsSlod,
   merkiIBord,
+  merkiLykill,
+  symbolFyrirMerki,
+  symbolFyrirStimpil,
   symbolFyrirTegund,
   taknIMerki,
   uppfaeraHaedir,
+  uttektBordNafn,
+  veljaUttektHaed,
   type UttektHaed,
 } from "./uttekt";
 
@@ -61,6 +67,40 @@ test("positions update one floor, keep untouched devices and pull a moved device
   assert.deepEqual(u.haedir[0].skurdur, { x: 1, y: 2, w: 3, h: 4 }); // annað á hæðinni er ósnert
   assert.equal(u.breytt, 1);
   assert.equal(u.ny, 1);
+});
+
+test("sign stamps round-trip with string unit ids and keep kind/sign", () => {
+  assert.equal(symbolFyrirStimpil("ut"), "exit");
+  assert.equal(symbolFyrirStimpil("skilti_slt"), "sign-extinguisher");
+  assert.equal(symbolFyrirMerki({ unitId: "s:ut:abc", x: 1, y: 2, kind: "sign", sign: "ut" }), "exit");
+  assert.equal(erStimpil({ unitId: "s:ut:abc", kind: "sign" }), true);
+  assert.equal(erStimpil({ unitId: 25442 }), false);
+  assert.equal(merkiLykill("s:ut:abc"), "s:ut:abc");
+  const haedir: UttektHaed[] = [
+    { id: "a", markers: [{ unitId: 25442, x: 10, y: 10 }, { unitId: "s:ut:abc", x: 20, y: 20, kind: "sign", sign: "ut" }] },
+  ];
+  const stodur = new Map([
+    ["25442", { x: 11, y: 10, unitId: 25442 }],
+    ["s:ut:abc", { x: 21, y: 22, unitId: "s:ut:abc", kind: "sign", sign: "ut" }],
+  ]);
+  const u = uppfaeraHaedir(haedir, "a", stodur);
+  assert.deepEqual(u.haedir[0].markers, [
+    { unitId: 25442, x: 11, y: 10 },
+    { unitId: "s:ut:abc", x: 21, y: 22, kind: "sign", sign: "ut" },
+  ]);
+  assert.equal(u.breytt, 2);
+});
+
+test("veljaUttektHaed prefers id, then matching plan permalink, then first floor", () => {
+  const info = "https://skjalasafn.reykjavik.is/fotoweb/x.pdf.info";
+  const haedir: UttektHaed[] = [
+    { id: "h1", nafn: "1. hæð", image_url: "/.netlify/functions/teikn-mynd?url=" + encodeURIComponent(info) },
+    { id: "h2", nafn: "2. hæð", image_url: "https://example.com/annad.png" },
+  ];
+  assert.equal(veljaUttektHaed(haedir, "h2")?.id, "h2");
+  assert.equal(veljaUttektHaed(haedir, "", info)?.id, "h1");
+  assert.equal(veljaUttektHaed(haedir)?.id, "h1");
+  assert.equal(uttektBordNafn("Bílabúð Benna - Fiskislóð", haedir[0]), "Bílabúð Benna - Fiskislóð — 1. hæð");
 });
 
 test("the archive permalink is recovered from the app's image proxy URL", () => {
