@@ -1,6 +1,6 @@
 /** Display/import contrast for faint Icelandic grunnmyndir (gray CAD on white). */
 
-export const SHEET_CONTRAST_FILTER = "contrast(1.5) brightness(0.95)";
+export const SHEET_CONTRAST_FILTER = "brightness(0.82) contrast(1.55)";
 
 /** Copy `src` through a contrast filter onto itself. No-op if canvas has no 2d context. */
 export function boostSheetCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
