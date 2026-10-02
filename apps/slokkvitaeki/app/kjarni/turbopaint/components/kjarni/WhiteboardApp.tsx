@@ -34,7 +34,18 @@ import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-fi
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
 import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
-import { finnaTengduMynd, giskaFrumStaerd, innflutningsSlod, merkiIBord, saekjaUttekt, symbolFyrirTegund, vistaIUttekt } from "../../lib/board/uttekt";
+import {
+  erStimpil,
+  finnaTengduMynd,
+  giskaFrumStaerd,
+  innflutningsSlod,
+  merkiIBord,
+  saekjaUttekt,
+  symbolFyrirMerki,
+  uttektBordNafn,
+  veljaUttektHaed,
+  vistaIUttekt,
+} from "../../lib/board/uttekt";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
 import {
@@ -423,10 +434,12 @@ export function WhiteboardApp() {
   // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
   // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
-    async (raw: string) => {
+    async (raw: string, opts?: { throwOnError?: boolean; asPlan?: boolean }) => {
       const trimmed = raw.trim();
       if (!/^https?:\/\//i.test(trimmed)) {
-        toast.error("Þetta lítur ekki út eins og slóð");
+        const msg = "Þetta lítur ekki út eins og slóð";
+        if (opts?.throwOnError) throw new Error(msg);
+        toast.error(msg);
         return;
       }
       try {
@@ -447,30 +460,36 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        await runImport([file], undefined, { asPlan: true });
+        await runImport([file], undefined, { asPlan: opts?.asPlan !== false });
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
+        if (opts?.throwOnError) throw err;
         toast.error(err instanceof Error ? err.message : "Gat ekki sótt af slóðinni");
       }
     },
     [runImport]
   );
 
-  // ── Úttektarteikning úr Slökkvitæki-appinu: ?uttekt=<fyrirtæki>&haed=<hæð> ──────────────────────────────
-  // Opnar hæðina sem borð („<staður> — <hæð>"): sé borðið til er því haldið (með öllu sem teiknað var á það),
-  // annars er teikningin flutt inn og tækin sett niður á sínum stöðum. „Vista í úttekt" skrifar þau til baka.
+  // ── Úttektarteikning úr Slökkvitæki-appinu: ?uttekt=<fyrirtæki>&haed=<hæð>[&plan=] ─────────────────────
+  // FloorPlan er sannleikurinn: blaðið og merkin eru alltaf sótt úr teikning_bord, ekki úr gömlu TurboPaint-borði.
+  // Eitt borð per stað+hæð er endurnýtt (svo listinn fyllist ekki) en innihaldið er endurbyggt. Vista í úttekt
+  // skrifar merkin til baka í sömu röð.
   const [uttektVistar, setUttektVistar] = useState(false);
   const tengdMynd = useBoardStore((st) => finnaTengduMynd(st.objects));
   const uttektFromQuery = useRef(false);
+  const planFromQuery = useRef(false);
   useEffect(() => {
     if (uttektFromQuery.current) return;
     const q = new URLSearchParams(window.location.search);
     const cid = Number(q.get("uttekt") || 0);
     const haedId = q.get("haed") || "";
-    if (!cid || !haedId) return;
+    const planUrl = q.get("plan") || "";
+    if (!cid) return;
+    if (!haedId && !planUrl) return;
     uttektFromQuery.current = true;
+    planFromQuery.current = true;
     const hrein = new URL(window.location.href);
-    ["uttekt", "haed", "b", "h"].forEach((k) => hrein.searchParams.delete(k));
+    ["uttekt", "haed", "b", "h", "plan"].forEach((k) => hrein.searchParams.delete(k));
     window.history.replaceState({}, "", hrein.pathname + hrein.search);
     const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
     void (async () => {
@@ -481,19 +500,23 @@ export function WhiteboardApp() {
         for (let i = 0; i < 200 && !useBoardStore.getState().hydrated; i++) await new Promise((r) => setTimeout(r, 100));
         if (!useBoardStore.getState().hydrated) throw new Error("Borðið hlóðst ekki — reyndu aftur.");
         const u = await saekjaUttekt(cid);
-        const haed = u.haedir.find((x) => x.id === haedId) || (u.haedir.length === 1 ? u.haedir[0] : null);
+        const haed = veljaUttektHaed(u.haedir, haedId, planUrl);
         if (!haed) throw new Error("Hæðin fannst ekki í úttektinni.");
-        const nafn = `${u.nafn} — ${haed.nafn || "hæð"}`.slice(0, 80);
-        const til = (await listBoards()).find((b) => b.name === nafn);
-        if (til) {
-          await switchBoard(til.id);
-          toast.success(`${nafn}: borðið var til — opnað eins og þú skildir við það`);
-          return;
-        }
-        const slod = innflutningsSlod(haed.image_url);
+        const nafn = uttektBordNafn(u.nafn, haed);
+        const slod = planUrl || innflutningsSlod(haed.image_url);
         if (!slod) throw new Error("Teikning hæðarinnar er upphlaðin mynd, ekki úr skjalasafni — flyttu hana inn handvirkt.");
-        await createBoard(nafn);
-        await runUrlImport(slod);
+        const til = (await listBoards()).find((b) => b.name === nafn);
+        if (til) await switchBoard(til.id);
+        else await createBoard(nafn);
+        useBoardStore.getState().replaceBoard({
+          name: nafn,
+          objects: [],
+          camera: { x: 80, y: 80, scale: 1 },
+          pixelsPerMeter: null,
+          grid: true,
+          snap: true,
+        });
+        await runUrlImport(slod, { throwOnError: true, asPlan: true });
         const myndir = useBoardStore.getState().objects.filter((o) => o.type === "image");
         const mynd = myndir[myndir.length - 1];
         if (!mynd || mynd.type !== "image") throw new Error("Teikningin kom ekki inn á borðið.");
@@ -507,14 +530,25 @@ export function WhiteboardApp() {
         // Táknin miðast við blaðið: 56 px stimpill hverfur á 7.200 px uppdrætti.
         const staerd = Math.max(getStampSize(), Math.round(Math.max(mynd.width, mynd.height) / 110));
         const takn = (haed.markers || []).map((m) => {
-          const t = u.taeki.find((x) => x.id === m.unitId);
+          const t = typeof m.unitId === "number" ? u.taeki.find((x) => x.id === m.unitId) : undefined;
           const stadur = merkiIBord(m, mynd, frum, staerd);
-          const obj = makeSymbol(symbolFyrirTegund(t?.type), stadur.x, stadur.y, t?.serial ? String(t.serial).slice(-6) : "", staerd);
-          return { ...obj, parentId: mynd.id, uttektUnitId: m.unitId } as BoardObject;
+          const merki = erStimpil(m) ? (m.sign || "ÚT") : t?.serial ? String(t.serial).slice(-6) : "";
+          const obj = makeSymbol(symbolFyrirMerki(m, t?.type), stadur.x, stadur.y, merki, staerd);
+          return {
+            ...obj,
+            parentId: mynd.id,
+            uttektUnitId: m.unitId,
+            uttektKind: m.kind,
+            uttektSign: m.sign,
+          } as BoardObject;
         });
         if (takn.length) useBoardStore.getState().addObjects(takn, false);
+        const view = shellRef.current;
+        if (view) {
+          useBoardStore.getState().setCamera(cameraFit(boardBounds(useBoardStore.getState().objects), view.clientWidth, view.clientHeight));
+        }
         await persistBoard();
-        toast.success(`${nafn}: ${takn.length} tæki sett á teikninguna. Færðu þau til og ýttu á „Vista í úttekt".`);
+        toast.success(`${nafn}: ${takn.length} merki á teikningunni. Færðu þau til og ýttu á „Vista í úttekt".`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
       }
@@ -537,10 +571,11 @@ export function WhiteboardApp() {
     }
   }, []);
 
-  const planFromQuery = useRef(false);
   useEffect(() => {
     if (planFromQuery.current) return;
-    const raw = new URLSearchParams(window.location.search).get("plan");
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("uttekt")) return;
+    const raw = q.get("plan");
     if (!raw) return;
     planFromQuery.current = true;
     const url = new URL(window.location.href);
