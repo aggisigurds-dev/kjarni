@@ -13,8 +13,9 @@
  *
  * Tákn sem notandinn bætir við í TurboPaint án tengingar vistast ekki til baka. */
 
+import { newId } from "./ids";
 import { getSupabase } from "./supabase";
-import type { BoardObject, ImageObject, SymbolObject } from "./types";
+import type { BoardObject, ImageObject, LineObject, SymbolObject } from "./types";
 
 export type UttektTenging = { companyId: number; haedId: string; frumB: number; frumH: number };
 export type UttektMerki = { unitId: number | string; x: number; y: number; kind?: string; sign?: string; [k: string]: unknown };
@@ -103,6 +104,58 @@ export function merkiIBord(
     x: mynd.x + (m.x / frum.b) * mynd.width - staerd / 2,
     y: mynd.y + (m.y / frum.h) * mynd.height - staerd / 2,
   };
+}
+
+/** Greindur veggur hæðar í punktum FRUMMYNDAR: p = [x0, y0, x1, y1, …] (miðlína), t = þykkt. TurboPaint er vélin sem
+ * greinir veggina og skrifar þá í `haedir[].veggjaLinur`; Slökkvitæki-glugginn (383) les þá og sýnir í 3D
+ * (Agnar 03.10.2026: „turboprint á að vera svona vinnuengine", „samnýta tæknina"). */
+export type UttektVeggur = { p: number[]; t: number };
+
+/** Greindir veggir tengdu myndarinnar → punktar frummyndar (heiltölur, svo röðin haldist lítil). */
+export function veggirIFrum(
+  objects: BoardObject[],
+  mynd: { id: string; x: number; y: number; width: number; height: number },
+  frum: { b: number; h: number }
+): UttektVeggur[] {
+  const kx = frum.b / mynd.width, ky = frum.h / mynd.height;
+  const ut: UttektVeggur[] = [];
+  for (const o of objects) {
+    if ((o.type !== "polyline" && o.type !== "line") || !o.veggur || o.parentId !== mynd.id || o.hidden) continue;
+    const p: number[] = [];
+    for (let i = 0; i + 1 < o.points.length; i += 2) {
+      p.push(Math.round((o.x + o.points[i] - mynd.x) * kx), Math.round((o.y + o.points[i + 1] - mynd.y) * ky));
+    }
+    if (p.length >= 4) ut.push({ p, t: Math.max(1, Math.round(o.strokeWidth * kx)) });
+  }
+  return ut;
+}
+
+/** Veggjalínur hæðar → línur á borðinu, festar við myndina (sama útlit og „Veggir" gefur). */
+export function veggirIBord(
+  veggir: UttektVeggur[],
+  mynd: { id: string; x: number; y: number; width: number; height: number },
+  frum: { b: number; h: number }
+): LineObject[] {
+  const kx = mynd.width / frum.b, ky = mynd.height / frum.h;
+  return veggir
+    .filter((v) => Array.isArray(v.p) && v.p.length >= 4)
+    .map((v) => ({
+      id: newId(),
+      type: "polyline",
+      x: 0,
+      y: 0,
+      points: v.p.map((n, i) => (i % 2 === 0 ? mynd.x + n * kx : mynd.y + n * ky)),
+      stroke: "#1c1917",
+      strokeWidth: Math.max(1, (v.t || 1) * kx),
+      dash: "solid",
+      rotation: 0,
+      opacity: 0.9,
+      locked: false,
+      hidden: false,
+      name: "Veggur",
+      parentId: mynd.id,
+      veggur: true,
+    }));
 }
 
 /** Tákn á borðinu → punktar frummyndar (miðja táknsins). */
@@ -273,6 +326,9 @@ export async function vistaIUttekt(objects: BoardObject[]) {
   const nu = await saekjaUttekt(t.companyId);
   if (!nu.haedir.some((h) => h.id === t.haedId)) throw new Error("Hæðin er ekki lengur til í úttektinni — henni var eytt í appinu.");
   const u = uppfaeraHaedir(nu.haedir, t.haedId, stodur);
+  // Greindir veggir fylgja með (ef einhverjir eru á borðinu — annars haldast þeir sem fyrir voru).
+  const veggir = veggirIFrum(objects, mynd, frum);
+  if (veggir.length) u.haedir = u.haedir.map((h) => (h.id === t.haedId ? { ...h, veggjaLinur: veggir } : h));
   const fyrsta = u.haedir[0];
   const { error, data } = await sb
     .from("teikning_bord")
@@ -286,5 +342,5 @@ export async function vistaIUttekt(objects: BoardObject[]) {
     .select("company_id");
   if (error) throw new Error(error.message);
   if (!data || !data.length) throw new Error("Ekkert var skrifað — röðin fannst ekki eða aðgangi var hafnað.");
-  return { fjoldi: stodur.size, breytt: u.breytt, ny: u.ny, otengd, utan, nafn: nu.nafn };
+  return { fjoldi: stodur.size, breytt: u.breytt, ny: u.ny, otengd, utan, nafn: nu.nafn, veggir: veggir.length };
 }
