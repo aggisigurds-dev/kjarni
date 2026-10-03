@@ -60,18 +60,21 @@ export function flokkaDila(rgba: Uint8ClampedArray, naemi: number): Uint8Array {
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     const sat = max === 0 ? 0 : (max - min) / max;
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    if (sat < 0.45) {
-      if (lum < cut) out[p] = BLEK;
-      continue;
+    // Litur er lesinn fyrst ef díllinn er nógu bjartur og ögn litaður: daufar bleikar skýjalínur (mettun 0,3–0,45)
+    // urðu annars „grátt blek" og svartar í síunni (mælt á Skútuvogi 4, 03.10). Svart blek (max < 70) fer beint í blek.
+    if (max >= 70 && sat >= 0.2) {
+      const d = max - min;
+      let h: number;                         // litblær í gráðum
+      if (max === r) h = (60 * ((g - b) / d) + 360) % 360;
+      else if (max === g) h = 60 * ((b - r) / d) + 120;
+      else h = 60 * ((r - g) / d) + 240;
+      // Skanninn gerir rauðu ÚT-örvarnar fjólubleikar (320–345°): örvarnar eru heilfylltar, dökkar og mettaðar,
+      // skýjalínurnar ljósar og daufari.
+      if (h >= 345 || h < 22) { if (sat >= 0.35) { out[p] = RAUTT; continue; } }
+      else if (h >= 300 && h < 345 && sat >= 0.55 && lum < 120) { out[p] = RAUTT; continue; }
+      else if (h >= 275 && h < 345) { out[p] = BLEIKT; continue; }
     }
-    if (max < 70) continue;                  // of dökkt til að lesa lit — mettun er þá suð
-    const d = max - min;
-    let h: number;                           // litblær í gráðum
-    if (max === r) h = (60 * ((g - b) / d) + 360) % 360;
-    else if (max === g) h = 60 * ((b - r) / d) + 120;
-    else h = 60 * ((r - g) / d) + 240;
-    if (h >= 345 || h < 22) out[p] = RAUTT;
-    else if (h >= 275 && h < 345) out[p] = BLEIKT;
+    if (sat < 0.45 && lum < cut) out[p] = BLEK;
   }
   return out;
 }
@@ -108,24 +111,35 @@ export function opna(maski: Uint8Array, w: number, h: number, k: number): Uint8A
   return b;
 }
 
-/** Litakort síunnar: hver díll sem sést fær sinn upprunalega lit (veggir svartir), annað hvítt. */
+/** Grátónn eftir „levels": pappírinn (≥ ~230) verður hvítur, blekið (≤ ~40) svart — millitónarnir halda sér, svo brúnir
+ * og texti haldast jafn skörp og í skönnuninni. (Agnar 03.10: svart/hvít þröskuldun varð „allt of óskýr".) */
+function graTonn(r: number, g: number, b: number): number {
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return Math.max(0, Math.min(255, Math.round(((lum - 40) / 190) * 255)));
+}
+
+/** Litakort síunnar: blek í upprunalegum grátónum, valdir litir í sínum lit, pappír og það sem slökkt er á hvítt. */
 export function siaRgba(rgba: Uint8ClampedArray, w: number, h: number, val: SiaVal): Uint8ClampedArray {
   const flokkar = flokkaDila(rgba, val.naemi);
   const blek = new Uint8Array(flokkar.length);
   for (let p = 0; p < flokkar.length; p++) blek[p] = flokkar[p] === BLEK ? 1 : 0;
-  const veggir = val.veggir || val.thunnt ? opna(blek, w, h, val.veggthykkt) : null;
+  const thurfaVeggi = val.veggir !== val.thunnt;       // bæði á = allt blek; hvorugt = ekkert blek
+  const veggir = thurfaVeggi ? opna(blek, w, h, val.veggthykkt) : null;
+  // Mjúkar brúnir: millitónadílar við blek teljast með bleki ef þunnt blek sést (annars draugur við fjarlægðar línur)
+  const halda = val.thunnt;
   const ut = new Uint8ClampedArray(rgba.length);
   for (let p = 0, i = 0; p < flokkar.length; p++, i += 4) {
     const f = flokkar[p];
-    let synd = false, svart = false;
+    const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+    let v = 255, lit = false;
     if (f === BLEK) {
-      const erVeggur = veggir ? veggir[p] === 1 : false;
-      if (erVeggur && val.veggir) { synd = true; svart = true; }
-      else if (!erVeggur && val.thunnt) { synd = true; svart = true; }   // svart blek á hvítu, eins og Hreinsa
-    } else if (f === RAUTT) synd = val.rautt;
-    else if (f === BLEIKT) synd = val.bleikt;
-    if (synd && !svart) { ut[i] = rgba[i]; ut[i + 1] = rgba[i + 1]; ut[i + 2] = rgba[i + 2]; }
-    else if (!synd) { ut[i] = 255; ut[i + 1] = 255; ut[i + 2] = 255; }
+      const erVeggur = veggir ? veggir[p] === 1 : val.veggir;
+      if ((erVeggur && val.veggir) || (!erVeggur && val.thunnt)) v = graTonn(r, g, b);
+    } else if (f === RAUTT) lit = val.rautt;
+    else if (f === BLEIKT) lit = val.bleikt;
+    else if (halda) v = graTonn(r, g, b);              // pappír + brúnamillitónar: verða hvít/ljósgrá af sjálfu sér
+    if (lit) { ut[i] = r; ut[i + 1] = g; ut[i + 2] = b; }
+    else { ut[i] = v; ut[i + 1] = v; ut[i + 2] = v; }
     ut[i + 3] = 255;
   }
   return ut;

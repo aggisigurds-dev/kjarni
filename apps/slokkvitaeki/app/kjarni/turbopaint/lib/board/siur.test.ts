@@ -31,6 +31,15 @@ test("flokkaDila: blek, rautt og bleikt aðgreint; hvítt er bakgrunnur", () => 
   assert.equal(f[20 * W + 20], 0);
 });
 
+test("flokkaDila: skönnuð ÚT-ör (dökk fjólurauð, 332°) er rauð — ljósbleik skýjalína er bleik", () => {
+  const d = new Uint8ClampedArray([150, 20, 80, 255, 230, 110, 200, 255, 200, 140, 180, 255, 60, 62, 58, 255]);
+  const f = flokkaDila(d, 0.62);
+  assert.equal(f[0], 2);
+  assert.equal(f[1], 3);
+  assert.equal(f[2], 3, "dauf skýjalína (mettun 0,3) er bleik, ekki svart blek");
+  assert.equal(f[3], 1, "dökkgrátt skannað blek er blek");
+});
+
 test("opna: þykkur veggur stendur, 1 px lína hverfur", () => {
   const f = flokkaDila(teikning(), 0.62);
   const blek = Uint8Array.from(f, (v) => (v === 1 ? 1 : 0));
@@ -42,7 +51,7 @@ test("opna: þykkur veggur stendur, 1 px lína hverfur", () => {
 
 test("siaRgba: bara veggir — þunna línan og litirnir verða hvítir", () => {
   const ut = siaRgba(teikning(), W, H, { ...SJALFGEFIN_SIA, veggir: true, thunnt: false, rautt: false, bleikt: false, veggthykkt: 5 });
-  assert.deepEqual(dill(ut, 8, 20), [0, 0, 0]);
+  assert.deepEqual(dill(ut, 8, 20), [0, 0, 0], "veggurinn (20,20,20) verður svartur eftir levels");
   assert.deepEqual(dill(ut, 30, 20), [255, 255, 255]);
   assert.deepEqual(dill(ut, 45, 10), [255, 255, 255]);
   assert.deepEqual(dill(ut, 45, 30), [255, 255, 255]);
@@ -58,6 +67,13 @@ test("siaRgba: bara þunnt blek — veggurinn hverfur, línan stendur", () => {
   const ut = siaRgba(teikning(), W, H, { ...SJALFGEFIN_SIA, veggir: false, thunnt: true, veggthykkt: 5 });
   assert.deepEqual(dill(ut, 8, 20), [255, 255, 255]);
   assert.deepEqual(dill(ut, 30, 20), [0, 0, 0]);
+});
+
+test("siaRgba heldur millitónum: grá brún (130) helst grá, pappír (235) verður hvítur", () => {
+  const d = new Uint8ClampedArray([130, 130, 130, 255, 235, 235, 232, 255]);
+  const ut = siaRgba(d, 2, 1, { ...SJALFGEFIN_SIA, veggir: true, thunnt: true, veggthykkt: 3 });
+  assert.ok(ut[0] > 60 && ut[0] < 200, "millitónn á brún: " + ut[0]);
+  assert.equal(ut[4], 255);
 });
 
 test("teljaFlokka og sjálfgefin veggþykkt", () => {
