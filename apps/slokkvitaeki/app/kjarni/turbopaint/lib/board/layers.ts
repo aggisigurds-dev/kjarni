@@ -16,6 +16,8 @@ export interface BoardLayer {
 
 export const LAYER_TEIKNING = "teikning";
 export const LAYER_ALMENNT = "almennt";
+/** Greindir veggir (vektor) — feldu „Teikning" til að sjá aðeins veggina. */
+export const LAYER_VEGGIR = "veggir";
 
 export const DEFAULT_LAYERS: BoardLayer[] = [
   {
@@ -26,6 +28,15 @@ export const DEFAULT_LAYERS: BoardLayer[] = [
     visible: true,
     locked: false,
     kind: "background",
+  },
+  {
+    id: LAYER_VEGGIR,
+    key: "walls",
+    name: "Veggir",
+    color: "#1c1917",
+    visible: true,
+    locked: false,
+    kind: "drawing",
   },
   {
     id: LAYER_ALMENNT,

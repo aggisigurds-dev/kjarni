@@ -5,6 +5,7 @@ import {
   Cloud,
   Crosshair,
   Download,
+  BrickWall,
   Eraser,
   Flame,
   Link2,
@@ -63,6 +64,7 @@ export function TopBar({
   onOpenSample,
   onMarkFirewalls,
   onStrip,
+  onWalls,
   onImportUrl,
   onVeljaTeikningu,
   onOpenLayers,
@@ -74,6 +76,8 @@ export function TopBar({
   onOpenSample?: () => void;
   onMarkFirewalls?: () => void;
   onStrip?: () => void;
+  /** Greina veggi teikningarinnar á lagið „Veggir". */
+  onWalls?: () => void;
   onImportUrl?: () => void;
   /** Teikning valin úr heimilisfangaleitinni — `.info` permalink. */
   onVeljaTeikningu?: (infoUrl: string) => void;
@@ -342,6 +346,16 @@ export function TopBar({
       </Button>
       <Button
         size="sm"
+        variant="ghost"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
+        onClick={() => onWalls?.()}
+        title="Greina veggi — holir og fylltir veggir verða sér lag („Veggir“)"
+      >
+        <BrickWall className="size-4" />
+        <span className="hidden lg:inline">Veggir</span>
+      </Button>
+      <Button
+        size="sm"
         className="hidden bg-[#FE653F] text-white hover:bg-[#E8553F] sm:inline-flex"
         title="Flytja út PNG / PDF / JSON"
         onClick={onExport}
@@ -405,6 +419,9 @@ export function TopBar({
           </DropdownMenuItem>
           <DropdownMenuItem className="lg:hidden" onClick={() => onStrip?.()}>
             🧹 Hreinsa teikningu
+          </DropdownMenuItem>
+          <DropdownMenuItem className="lg:hidden" onClick={() => onWalls?.()}>
+            🧱 Greina veggi
           </DropdownMenuItem>
           <DropdownMenuItem className="sm:hidden" onClick={onExport}>
             ⬇ Flytja út

@@ -88,6 +88,8 @@ export interface RectObject extends BaseObject {
   roomGataCount?: number;
   /** Gátreitur: hakreitur með ✓-merki í horni sem grænkar þegar hakað er. */
   isCheckbox?: boolean;
+  /** Veggbútur greindur úr teikningunni (lag „Veggir"). Endurgreining skiptir þeim út; handteiknaðir haldast. */
+  veggur?: boolean;
   checked?: boolean;
 }
 

@@ -1,6 +1,7 @@
 import { canvasToBlob, getAssetBlob, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
+import { finnaVeggi, sjalfgefnarVeggjaStillingar, type VeggjaNidurstada } from "./veggir";
 import { siaRgba, sjalfgefinVeggthykkt, teljaFlokka, type SiaFlokkur, type SiaUrGlugga } from "./siur";
 import type { ImageObject } from "./types";
 
@@ -102,6 +103,39 @@ export async function siaTeikningu(
   ctx.putImageData(image, 0, 0);
   onProgress?.(100);
   return { canvas, width: w, height: h, fjoldi, veggthykkt };
+}
+
+/** Veggjagreining á skjámynd teikningar. `studull` > 1 leyfir þykkari veggi. Skilar kössunum í dílum myndarinnar
+ * og stærð hennar, svo kallandinn geti varpað þeim á borðið. */
+export async function greinaVeggiTeikningar(
+  plan: ImageObject,
+  studull = 1,
+  onProgress?: (percent: number) => void
+): Promise<VeggjaNidurstada & { breidd: number; haed: number }> {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob) throw new Error("Teikningin er ekki í minni — opnaðu borðið aftur");
+  const bmp = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("Gat ekki opnað canvas");
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  onProgress?.(20);
+  await andaUI();
+  const w = canvas.width, h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  canvas.width = 0;
+  canvas.height = 0;
+  onProgress?.(35);
+  await andaUI();
+  const st = sjalfgefnarVeggjaStillingar(w);
+  st.hamarksThykkt = Math.round(st.hamarksThykkt * studull);
+  st.fylltThykkt = Math.max(3, Math.round(st.fylltThykkt * studull));
+  const nid = finnaVeggi(data, w, h, st);
+  onProgress?.(100);
+  return { ...nid, breidd: w, haed: h };
 }
 
 /** White-out OCR word boxes (raster px of the same canvas), small padding. */

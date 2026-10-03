@@ -99,6 +99,26 @@ function rennaLina(src: Uint8Array, dst: Uint8Array, w: number, h: number, k: nu
   }
 }
 
+/** Rof með ferningi k×k: díll heldur sér aðeins ef allur ferningurinn í kringum hann er 1. */
+export function rofa(maski: Uint8Array, w: number, h: number, k: number): Uint8Array {
+  const kk = Math.max(1, Math.round(k)) | 1;
+  if (kk <= 1) return maski.slice();
+  const a = new Uint8Array(maski.length), b = new Uint8Array(maski.length);
+  rennaLina(maski, a, w, h, kk, false, true);
+  rennaLina(a, b, w, h, kk, true, true);
+  return b;
+}
+
+/** Útþensla með ferningi k×k. */
+export function thenja(maski: Uint8Array, w: number, h: number, k: number): Uint8Array {
+  const kk = Math.max(1, Math.round(k)) | 1;
+  if (kk <= 1) return maski.slice();
+  const a = new Uint8Array(maski.length), b = new Uint8Array(maski.length);
+  rennaLina(maski, a, w, h, kk, false, false);
+  rennaLina(a, b, w, h, kk, true, false);
+  return b;
+}
+
 /** Opnun með ferningi k×k: heldur aðeins blekklessum sem eru a.m.k. k dílar á þykkt. */
 export function opna(maski: Uint8Array, w: number, h: number, k: number): Uint8Array {
   const kk = Math.max(1, Math.round(k)) | 1;   // oddatala svo glugginn sé miðjaður
