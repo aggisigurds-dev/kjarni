@@ -1,6 +1,7 @@
 import { canvasToBlob, getAssetBlob, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
+import { siaRgba, sjalfgefinVeggthykkt, teljaFlokka, type SiaFlokkur, type SiaUrGlugga } from "./siur";
 import type { ImageObject } from "./types";
 
 // „Strip": hreinsar skannaða teikningu niður í svart blek á hvítum grunni.
@@ -15,6 +16,9 @@ export interface StripResult {
 }
 
 const CHUNK_ROWS = 400;
+
+/** Hleypir viðmótinu að (framvindustika) — setTimeout, ekki rAF: rAF stöðvast í földum flipa og síunin hengi. */
+const andaUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function nextFrame() {
   return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -64,6 +68,40 @@ export async function stripToInk(
 
   ctx.putImageData(image, 0, 0);
   return { canvas, width: canvas.width, height: canvas.height };
+}
+
+/** Síur (veggir · þunnt blek · rautt · bleikt) á skjámynd teikningar. Skilar strigann og hversu margir dílar
+ * lentu í hverjum flokki, svo hægt sé að segja „ekkert rautt fannst" í stað þess að skila hvítri síðu þegjandi. */
+export async function siaTeikningu(
+  plan: ImageObject,
+  val: SiaUrGlugga,
+  onProgress?: (percent: number) => void
+): Promise<StripResult & { fjoldi: Record<SiaFlokkur, number>; veggthykkt: number }> {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob) throw new Error("Teikningin er ekki í minni — opnaðu borðið aftur");
+  const bmp = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Gat ekki opnað canvas");
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  onProgress?.(15);
+  await andaUI();
+  const w = canvas.width, h = canvas.height;
+  const image = ctx.getImageData(0, 0, w, h);
+  const veggthykkt = Math.max(3, Math.round(sjalfgefinVeggthykkt(w) * val.veggStudull));
+  const full = { ...val, veggthykkt };
+  onProgress?.(30);
+  await andaUI();
+  const fjoldi = teljaFlokka(image.data, w, h, full);
+  onProgress?.(60);
+  await andaUI();
+  image.data.set(siaRgba(image.data, w, h, full));
+  ctx.putImageData(image, 0, 0);
+  onProgress?.(100);
+  return { canvas, width: w, height: h, fjoldi, veggthykkt };
 }
 
 /** White-out OCR word boxes (raster px of the same canvas), small padding. */

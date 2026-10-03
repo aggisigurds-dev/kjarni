@@ -135,6 +135,7 @@ async function importPdf(
     const obj = makeImageObject(assetId, target.width, target.height, name, cursorX, origin.y, {
       pixelsPerPdfPoint: target.scale,
     });
+    obj.frumSida = i - 1;
     objects.push(obj);
     if (words.length) textByObjectId[obj.id] = words;
     cursorX += target.width + 96;
@@ -289,7 +290,9 @@ async function importTiff(
       await putAsset(assetId, blob);
       const name =
         pages.length > 1 ? `${file.name} · síða ${i + 1}` : file.name.replace(/\.[^.]+$/, "");
-      objects.push(makeImageObject(assetId, sampled.width, sampled.height, name, cursorX, origin.y));
+      const tobj = makeImageObject(assetId, sampled.width, sampled.height, name, cursorX, origin.y);
+      tobj.frumSida = ifds.indexOf(ifd);
+      objects.push(tobj);
       cursorX += sampled.width + 96;
       canvas.width = 0;
       canvas.height = 0;
@@ -379,6 +382,21 @@ export async function importFiles(
     if (kind === "pdf") result = await importPdf(file, quality, report, { x, y: origin.y });
     else if (kind === "tiff") result = await importTiff(file, quality, report, { x, y: origin.y });
     else result = await importRaster(file, quality, report, { x, y: origin.y });
+
+    // Frumskráin (TIF/PDF) er geymd óbreytt svo greining (veggir, litir, texti) geti unnið í fullri upplausn
+    // síðar — skjámyndin er klemmd við 40 MP. Mistakist geymslan stendur innflutningurinn samt.
+    if ((kind === "pdf" || kind === "tiff") && result.objects.length) {
+      try {
+        const frumId = newId();
+        await putAsset(frumId, file);
+        for (const o of result.objects) {
+          o.frumAssetId = frumId;
+          o.frumNafn = file.name;
+        }
+      } catch {
+        warnings.push("Frumskráin var ekki geymd — teikningin er á borðinu en greining notar skjámyndina.");
+      }
+    }
 
     all.push(...result.objects);
     warnings.push(...result.warnings);
