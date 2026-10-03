@@ -18,7 +18,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 import { HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 
-const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
+export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
   kvarda: { texti: "Kvarða", titill: "Kvarða teikninguna á þekktri lengd (K)", takn: <Ruler className="size-3.5" /> },
   hreinsa: { texti: "Hreinsa", titill: "Hreinsa teikningu — sýna bara veggi og þær merkingar sem þú velur", takn: <Eraser className="size-3.5" /> },
   veggir: { texti: "Veggir", titill: "Greina veggi — úr vigur-PDF þegar það er til, annars úr myndinni", takn: <BrickWall className="size-3.5" /> },
@@ -38,7 +38,7 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const h = getHamur(hamur);
 
   return (
-    <div className="border-b border-white/8 px-3 py-2.5" title={h.lysing}>
+    <div className="border-b border-white/8 py-2.5 pr-6 pl-3" title={h.lysing}>
       <div className="flex flex-wrap gap-1" role="tablist" aria-label="Hamur">
         {HAMIR.map((x) => (
           <button

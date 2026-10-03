@@ -71,7 +71,7 @@ import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
 import Hus3D from "./Hus3D";
-import { useHamur, type HamAdgerd } from "../../lib/board/hamir";
+import { getHamur, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -109,6 +109,23 @@ export function WhiteboardApp() {
   const objects = useBoardStore((s) => s.objects);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   const hamur = useHamur((s) => s.hamur);
+  // Hliðarspjaldið má leggja saman (útlitsval vafrans).
+  const [spjaldFalid, setSpjaldFalidState] = useState(false);
+  useEffect(() => {
+    try {
+      setSpjaldFalidState(localStorage.getItem("tp_spjald_falid") === "1");
+    } catch {
+      /* ekkert */
+    }
+  }, []);
+  const setSpjaldFalid = useCallback((v: boolean) => {
+    setSpjaldFalidState(v);
+    try {
+      localStorage.setItem("tp_spjald_falid", v ? "1" : "0");
+    } catch {
+      /* ekkert */
+    }
+  }, []);
   const camera = useBoardStore((s) => s.camera);
   const selectedIds = useBoardStore((s) => s.selectedIds);
 
@@ -994,6 +1011,7 @@ export function WhiteboardApp() {
         onStrip={hreinsaTeikningu}
         onWalls={greinaVeggi}
         on3d={() => setThrividd(true)}
+        onHamAdgerd={hamAdgerd}
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
@@ -1137,17 +1155,30 @@ export function WhiteboardApp() {
           ) : null}
         </div>
         <div className="hidden lg:block">
-          <RightPanel onFocusObject={focusObject} onHamAdgerd={hamAdgerd} />
+          {spjaldFalid ? (
+            // Saman lagt spjald: mjó rönd — teikningin fær skjáinn (Agnar 03.10.2026: „spara pláss á skjánum").
+            <button
+              type="button"
+              title="Opna hliðarspjaldið (hamur, hlutir, eiginleikar)"
+              onClick={() => setSpjaldFalid(false)}
+              className="flex h-full w-7 flex-col items-center gap-2 border-l border-white/8 bg-[#12141c] pt-3 text-stone-400 hover:text-white"
+            >
+              <span className="text-sm leading-none">‹</span>
+              <span className="text-[10px] font-semibold tracking-widest [writing-mode:vertical-rl]">{getHamur(hamur).stutt}</span>
+            </button>
+          ) : (
+            <RightPanel onFocusObject={focusObject} onHamAdgerd={hamAdgerd} onFela={() => setSpjaldFalid(true)} />
+          )}
         </div>
       </div>
       {panelOpen ? (
         <div className="lg:hidden">
           <div
-            className="fixed inset-0 z-40 bg-black/50"
+            className="fixed inset-0 z-40"
             aria-label="Loka eiginleikum"
             onClick={() => setPanelOpen(false)}
           />
-          <div className="fixed inset-y-0 right-0 z-40 flex w-[300px] max-w-[85vw] flex-col shadow-2xl shadow-black/60 [&>aside]:h-full [&>aside]:w-full">
+          <div className="fixed inset-y-0 right-0 z-40 flex w-[236px] max-w-[72vw] flex-col shadow-2xl shadow-black/60 [&>aside]:h-full [&>aside]:w-full">
             <button
               type="button"
               className="absolute left-0 top-3 z-10 -translate-x-full rounded-l-md bg-[#12141c] px-2 py-2 text-xs text-stone-300"
