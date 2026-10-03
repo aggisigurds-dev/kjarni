@@ -75,7 +75,8 @@ function layerGroupOf(obj: BoardObject): LayerGroupId {
 export function RightPanel({
   onFocusObject,
   onHamAdgerd,
-}: { onFocusObject?: (id: string) => void; onHamAdgerd?: (a: HamAdgerd) => void } = {}) {
+  onFela,
+}: { onFocusObject?: (id: string) => void; onHamAdgerd?: (a: HamAdgerd) => void; onFela?: () => void } = {}) {
   const objects = useBoardStore((s) => s.objects);
   const layers = useBoardStore((s) => s.layers);
   const selectedIds = useBoardStore((s) => s.selectedIds);
@@ -109,7 +110,17 @@ export function RightPanel({
   })();
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-l border-white/8 bg-[#12141c] text-stone-200">
+    <aside className="relative flex h-full w-[264px] shrink-0 flex-col border-l border-white/8 bg-[#12141c] text-stone-200">
+      {onFela ? (
+        <button
+          type="button"
+          title="Leggja hliðarspjaldið saman — meira pláss fyrir teikninguna"
+          onClick={onFela}
+          className="absolute top-2 right-1.5 z-10 rounded px-1 text-sm leading-none text-stone-500 hover:bg-white/10 hover:text-white"
+        >
+          ›
+        </button>
+      ) : null}
       {onHamAdgerd ? <HamStika onAdgerd={onHamAdgerd} /> : null}
       {selected.length ? (
       <div className="border-b border-white/8 px-4 py-3">

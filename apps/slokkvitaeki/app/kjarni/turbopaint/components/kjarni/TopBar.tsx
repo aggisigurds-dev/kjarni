@@ -35,6 +35,8 @@ import {
 import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
 import { HeimilisfangLeit } from "./HeimilisfangLeit";
+import { ADGERDIR } from "./HamStika";
+import { HAMIR, getHamur, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,9 +61,7 @@ export function TopBar({
   onHelp,
   onOpenSample,
   onMarkFirewalls,
-  onStrip,
-  onWalls,
-  on3d,
+  onHamAdgerd,
   onImportUrl,
   onVeljaTeikningu,
   onOpenLayers,
@@ -75,6 +75,7 @@ export function TopBar({
   onStrip?: () => void;
   /** Greina veggi teikningarinnar á lagið „Veggir". */
   onWalls?: () => void;
+  onHamAdgerd?: (a: HamAdgerd) => void;
   on3d?: () => void;
   onImportUrl?: () => void;
   /** Teikning valin úr heimilisfangaleitinni — `.info` permalink. */
@@ -88,6 +89,7 @@ export function TopBar({
   const name = useBoardStore((s) => s.name);
   const setName = useBoardStore((s) => s.setName);
   const camera = useBoardStore((s) => s.camera);
+  const hamur = useHamur((s) => s.hamur);
   const grid = useBoardStore((s) => s.grid);
   const snap = useBoardStore((s) => s.snap);
   const quality = useBoardStore((s) => s.importQuality);
@@ -327,6 +329,22 @@ export function TopBar({
           <RotateCcw className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-48">
+          {/* Á síma / þröngum skjá: hamurinn og aðgerðir hans hér — hliðarspjaldið þarf ekki að opna til þess. */}
+          {HAMIR.map((x) => (
+            <DropdownMenuItem key={x.id} className="lg:hidden" onClick={() => useHamur.getState().setHamur(x.id)}>
+              <span className={x.id === hamur ? "font-semibold text-[#FE653F]" : ""}>
+                {x.id === hamur ? "● " : "○ "}
+                {x.heiti}
+              </span>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator className="lg:hidden" />
+          {getHamur(hamur).adgerdir.map((a) => (
+            <DropdownMenuItem key={a} className="lg:hidden" onClick={() => onHamAdgerd?.(a)}>
+              {ADGERDIR[a].texti}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator className="lg:hidden" />
           {/* Sjaldnotuðu stiku-hnapparnir (Undo/Redo, zoom, grind, segull) eru
               hidden md:flex í stikunni — á síma búa þeir hér í staðinn. */}
           <DropdownMenuItem className="2xl:hidden" onClick={() => useBoardStore.getState().undo()}>
@@ -371,15 +389,6 @@ export function TopBar({
           {/* Takkarnir sem eru faldir á síma / þröngu skjáborði. */}
           <DropdownMenuItem className="lg:hidden" onClick={() => onImportUrl?.()}>
             🔗 Sækja af slóð
-          </DropdownMenuItem>
-          <DropdownMenuItem className="lg:hidden" onClick={() => onStrip?.()}>
-            🧹 Hreinsa teikningu
-          </DropdownMenuItem>
-          <DropdownMenuItem className="lg:hidden" onClick={() => onWalls?.()}>
-            🧱 Greina veggi
-          </DropdownMenuItem>
-          <DropdownMenuItem className="lg:hidden" onClick={() => on3d?.()}>
-            🏢 Hús í 3D
           </DropdownMenuItem>
           <DropdownMenuItem className="sm:hidden" onClick={onExport}>
             ⬇ Flytja út
