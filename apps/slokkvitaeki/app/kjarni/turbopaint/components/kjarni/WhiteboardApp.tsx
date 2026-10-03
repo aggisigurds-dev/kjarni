@@ -18,6 +18,7 @@ import {
 import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
 import {
   canvasToAsset,
+  greinaVeggiTeikningar,
   isFirewallLabelWord,
   isNameWord,
   siaTeikningu,
@@ -53,12 +54,13 @@ import {
   isDrawnLocked,
   isDrawnVisible,
   LAYER_ALMENNT,
+  LAYER_VEGGIR,
   selectableIds,
   withLayerId,
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
-import type { BoardDocument, BoardObject } from "../../lib/board/types";
+import type { BoardDocument, BoardObject, RectObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
@@ -323,6 +325,9 @@ export function WhiteboardApp() {
     if (selected) return selected;
     if (state.selectedIds.length) {
       const chosen = state.objects.filter((o) => state.selectedIds.includes(o.id));
+      // Valinn hlutur sem er festur við teikningu (t.d. greindur veggur) vísar á hana beint — líka þótt lagið „Teikning" sé falið
+      const foreldri = images.find((img) => chosen.some((o) => o.parentId === img.id));
+      if (foreldri) return foreldri;
       const host = images.find((img) => objectsOnDocument(img, chosen).length > 0);
       if (host) return host;
     }
@@ -403,6 +408,63 @@ export function WhiteboardApp() {
     },
     []
   );
+
+  // Veggjalag: greindir veggir verða rétthyrningar á laginu „Veggir", festir við teikninguna (parentId) svo þeir
+  // fylgi henni. Endurgreining skiptir aðeins út GREINDUM veggjum þessarar teikningar — handteiknað helst.
+  const runVeggir = useCallback(async (planId: string) => {
+    const plan = useBoardStore.getState().objects.find((o) => o.id === planId);
+    if (!plan || plan.type !== "image") return;
+    if (plan.rotation) {
+      toast.error("Teikningunni hefur verið snúið — veggjagreining styður aðeins óbreytta stefnu enn");
+      return;
+    }
+    try {
+      useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: 5, message: "Greini veggi…" });
+      const nid = await greinaVeggiTeikningar(plan, 1, (p) =>
+        useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: p, message: "Greini veggi…" })
+      );
+      const sx = plan.width / nid.breidd, sy = plan.height / nid.haed;
+      const veggir: RectObject[] = nid.kassar.map((k) => ({
+        id: newId(),
+        type: "rect",
+        x: plan.x + k.x * sx,
+        y: plan.y + k.y * sy,
+        width: k.w * sx,
+        height: k.h * sy,
+        fill: "#1c1917",
+        stroke: "#1c1917",
+        strokeWidth: 0,
+        cornerRadius: 0,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        hidden: false,
+        name: "Veggur",
+        parentId: plan.id,
+        veggur: true,
+      }));
+      const gamlir = useBoardStore
+        .getState()
+        .objects.filter((o) => o.type === "rect" && (o as RectObject).veggur && o.parentId === plan.id)
+        .map((o) => o.id);
+      if (gamlir.length) useBoardStore.getState().deleteIds(gamlir);
+      if (veggir.length) useBoardStore.getState().addObjects(withLayerId(veggir, LAYER_VEGGIR), false);
+      useBoardStore.getState().setImportProgress(null);
+      if (!veggir.length) {
+        toast.error("Engir veggir fundust — prófaðu að hreinsa teikninguna fyrst eða hækka næmi");
+        return;
+      }
+      toast.success(
+        `${veggir.length} veggbútar á laginu „Veggir“` +
+          (nid.holir ? ` · ${nid.holir} holir veggir` : "") +
+          (nid.fylltir ? " · fylltir veggir" : "") +
+          " — feldu „Teikning“ í Lögum til að sjá bara veggina"
+      );
+    } catch (err) {
+      useBoardStore.getState().setImportProgress(null);
+      toast.error(err instanceof Error ? err.message : "Veggjagreining mistókst");
+    }
+  }, []);
 
   const runCrop = useCallback(
     async (rect: { x: number; y: number; width: number; height: number }) => {
@@ -850,6 +912,14 @@ export function WhiteboardApp() {
             return;
           }
           setStripPlanId(plan.id);
+        }}
+        onWalls={() => {
+          const plan = resolvePlan();
+          if (!plan) {
+            toast.error("Engin teikning fannst — veldu teikninguna fyrst");
+            return;
+          }
+          void runVeggir(plan.id);
         }}
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
