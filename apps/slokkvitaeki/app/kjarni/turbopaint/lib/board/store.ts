@@ -179,7 +179,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   pixelsPerMeter: null,
   grid: true,
   snap: true,
-  importQuality: "standard",
+  // 03.10.2026 (Agnar): leit á að sækja bestu gæði sjálfgefið. Stórar síður eru samt klemmdar í 40 MP.
+  importQuality: "print",
   importProgress: null,
   spacePan: false,
   roomDraftGroupId: null,
