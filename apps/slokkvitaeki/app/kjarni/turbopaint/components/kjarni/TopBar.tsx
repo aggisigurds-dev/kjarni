@@ -2,13 +2,8 @@
 
 import { toast } from "sonner";
 import {
-  Box,
   Cloud,
-  Crosshair,
   Download,
-  BrickWall,
-  Eraser,
-  Flame,
   Link2,
   Grid3x3,
   HelpCircle,
@@ -313,60 +308,7 @@ export function TopBar({
         <Link2 className="size-4" />
         <span className="hidden xl:inline">Af slóð</span>
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white sm:inline-flex"
-        onClick={() => onMarkFirewalls?.()}
-        title="Merkja E-30 / E-60 eldveggi og 165.BR1 búnað"
-      >
-        <Flame className="size-4 text-[#FE653F]" />
-        <span className="hidden lg:inline">E-30 / E-60</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
-        onClick={() => {
-          const n = useBoardStore.getState().refreshCrossings();
-          if (n) toast.message(`Gegnumtök: ${n} krossar vegg`);
-          else toast.message("Engin lagnir krossa vegg");
-        }}
-        title="Merkja þar sem lagnir krossa veggi — sterkari merki á EI-30 / EI-60"
-      >
-        <Crosshair className="size-4" />
-        <span className="hidden xl:inline">Gegnumtök</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
-        onClick={() => onStrip?.()}
-        title="Hreinsa teikningu — hvítur grunnur, bara veggir og blek"
-      >
-        <Eraser className="size-4" />
-        <span className="hidden lg:inline">Hreinsa</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
-        onClick={() => onWalls?.()}
-        title="Greina veggi — holir og fylltir veggir verða sér lag („Veggir“)"
-      >
-        <BrickWall className="size-4" />
-        <span className="hidden lg:inline">Veggir</span>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
-        onClick={() => on3d?.()}
-        title="Hús í 3D — veggir og tæki á öllum hæðum"
-      >
-        <Box className="size-4" />
-        <span className="hidden lg:inline">3D</span>
-      </Button>
+      {/* E-30/E-60, Gegnumtök, Hreinsa, Veggir og 3D búa í hamstikunni (HamStika) — hver í sínum ham. */}
       <Button
         size="sm"
         className="hidden bg-[#FE653F] text-white hover:bg-[#E8553F] sm:inline-flex"

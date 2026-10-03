@@ -12,6 +12,7 @@ import {
 import { useBoardStore } from "../../lib/board/store";
 import { cn } from "../../lib/utils";
 import { SymbolManager } from "./SymbolManager";
+import { taknIHam, useHamur } from "../../lib/board/hamir";
 
 export function SymbolTray() {
   const style = useBoardStore((s) => s.style);
@@ -29,9 +30,13 @@ export function SymbolTray() {
   const settings = getSymbolSettings();
   // Innbyggða úrvalið fyrst, svo táknin sem Agnar bjó til sjálfur — þau eiga
   // alltaf heima í slánni, annars fyndust þau hvergi eftir að þau voru búin til.
-  const visible = [...TRAY_SYMBOLS, ...settings.custom.map((c) => c.id)].filter(
+  // Hamurinn ræður hvaða tákn standa í slánni (lib/board/hamir.ts); í Teikningarham er sláin falin.
+  const hamur = useHamur((s) => s.hamur);
+  const iHam = taknIHam(hamur, settings.custom.map((c) => c.id));
+  const visible = (iHam ?? [...TRAY_SYMBOLS, ...settings.custom.map((c) => c.id)]).filter(
     (id) => !settings.overrides[id]?.hidden
   );
+  if (!iHam) return null;
 
   return (
     <div className="pointer-events-auto flex max-w-[min(96vw,820px)] items-center gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-2 py-1.5 shadow-2xl">
