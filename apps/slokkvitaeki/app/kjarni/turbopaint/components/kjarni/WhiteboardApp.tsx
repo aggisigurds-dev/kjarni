@@ -20,7 +20,7 @@ import {
   canvasToAsset,
   isFirewallLabelWord,
   isNameWord,
-  stripToInk,
+  siaTeikningu,
   whiteOutWords,
 } from "../../lib/board/strip";
 import { cropPlanAsset } from "../../lib/board/crop";
@@ -330,7 +330,7 @@ export function WhiteboardApp() {
   }, []);
 
   const runStrip = useCallback(
-    async (planId: string, opts: { threshold: number; keepNames: boolean; keepFw: boolean }) => {
+    async (planId: string, opts: StripOpts) => {
       const plan = useBoardStore.getState().objects.find((o) => o.id === planId);
       if (!plan || plan.type !== "image") return;
       try {
@@ -339,13 +339,22 @@ export function WhiteboardApp() {
           percent: 4,
           message: "Hreinsa bakgrunn — geri hvítt á bak við…",
         });
-        const { canvas } = await stripToInk(plan, opts.threshold, (p) =>
-          useBoardStore.getState().setImportProgress({
-            fileName: plan.name,
-            percent: Math.round(p * 0.55),
-            message: "Hreinsa bakgrunn — geri hvítt á bak við…",
-          })
+        const { canvas, fjoldi } = await siaTeikningu(
+          plan,
+          { ...opts.sia, naemi: opts.threshold },
+          (p) =>
+            useBoardStore.getState().setImportProgress({
+              fileName: plan.name,
+              percent: Math.round(p * 0.55),
+              message: "Síur — greini veggi, blek og liti…",
+            })
         );
+        // Valinn flokkur sem fannst hvergi: segja það, ekki skila hljóðlaust hvítri síðu
+        const tomt = (["veggir", "thunnt", "rautt", "bleikt"] as const).filter((k) => opts.sia[k] && fjoldi[k] === 0);
+        if (tomt.length) {
+          const heiti = { veggir: "veggir", thunnt: "þunnt blek", rautt: "rauðar merkingar", bleikt: "bleikar línur" };
+          toast.message("Fannst ekki á teikningunni: " + tomt.map((k) => heiti[k]).join(", "));
+        }
         let assetId = await canvasToAsset(canvas);
         // Eitt ⌘Z skilar upprunalegu myndinni (asset-skipti í einni sögufærslu).
         useBoardStore.getState().patchObject(plan.id, { assetId }, true);
@@ -385,9 +394,7 @@ export function WhiteboardApp() {
         canvas.height = 0;
         useBoardStore.getState().setImportProgress(null);
         toast.success(
-          opts.keepFw
-            ? "Teikningin hreinsuð — hvítur grunnur, eldveggir merktir"
-            : "Teikningin hreinsuð — hvítur grunnur"
+          (opts.keepFw ? "Teikningin síuð — eldveggir merktir" : "Teikningin síuð") + " · ⌘Z skilar upprunalegu myndinni"
         );
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
@@ -1081,6 +1088,14 @@ export function WhiteboardApp() {
   );
 }
 
+type StripOpts = {
+  threshold: number;
+  keepNames: boolean;
+  keepFw: boolean;
+  sia: { veggir: boolean; thunnt: boolean; rautt: boolean; bleikt: boolean; veggStudull: number };
+};
+const SJALFGEFIN_GLUGGI: StripOpts["sia"] = { veggir: true, thunnt: true, rautt: false, bleikt: false, veggStudull: 1 };
+
 function StripDialog({
   planId,
   planName,
@@ -1090,22 +1105,62 @@ function StripDialog({
   planId: string | null;
   planName: string;
   onClose: () => void;
-  onRun: (opts: { threshold: number; keepNames: boolean; keepFw: boolean }) => void;
+  onRun: (opts: StripOpts) => void;
 }) {
   const [threshold, setThreshold] = useState(0.62);
   const [keepNames, setKeepNames] = useState(true);
   const [keepFw, setKeepFw] = useState(true);
+  const [sia, setSia] = useState<StripOpts["sia"]>({ ...SJALFGEFIN_GLUGGI });
+  const rofi = (k: "veggir" | "thunnt" | "rautt" | "bleikt", texti: string, skyring: string) => (
+    <label className="flex items-start gap-2">
+      <input
+        type="checkbox"
+        className="mt-0.5"
+        checked={sia[k]}
+        onChange={(e) => setSia((s) => ({ ...s, [k]: e.target.checked }))}
+      />
+      <span>
+        {texti} <span className="text-muted-foreground">— {skyring}</span>
+      </span>
+    </label>
+  );
+  const ekkert = !sia.veggir && !sia.thunnt && !sia.rautt && !sia.bleikt;
   return (
     <Dialog open={planId !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Hreinsa teikningu</DialogTitle>
+          <DialogTitle>Hreinsa og sía teikningu</DialogTitle>
           <DialogDescription>
-            „{planName}" verður einfölduð: gulur/grár bakgrunnur og litaðar merkingar hverfa —
-            eftir standa veggir og svart blek á hvítum grunni. ⌘Z skilar upprunalegu myndinni.
+            „{planName}" fær hvítan grunn og aðeins það sem þú velur stendur eftir. ⌘Z skilar
+            upprunalegu myndinni.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 text-sm">
+          <div className="grid gap-2 rounded-lg border p-3">
+            <span className="font-medium">Sýna</span>
+            {rofi("veggir", "Veggir", "þykkar línur")}
+            {rofi("thunnt", "Þunnt blek og texti", "málsetningar, hurðir, innréttingar, heiti")}
+            {rofi("rautt", "Rauðar merkingar", "ÚT-örvar, flóttaleiðir")}
+            {rofi("bleikt", "Bleikar línur", "skýjalínur breytinga, merkingar teiknara")}
+            {sia.veggir || sia.thunnt ? (
+              <label className="grid gap-1.5 pt-1">
+                <span className="text-muted-foreground">
+                  Veggþykkt — hærra telur aðeins þykkari línur veggi ({sia.veggStudull.toFixed(1)}×)
+                </span>
+                <input
+                  type="range"
+                  min={5}
+                  max={30}
+                  value={Math.round(sia.veggStudull * 10)}
+                  onChange={(e) => setSia((s) => ({ ...s, veggStudull: Number(e.target.value) / 10 }))}
+                />
+              </label>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Skönnun er mynd, ekki teikning með lögum: veggur þekkist á þykkt, merking á lit. Veggir
+              teiknaðir sem tvær þunnar línur teljast þunnt blek.
+            </p>
+          </div>
           <label className="grid gap-1.5">
             <span className="text-muted-foreground">
               Næmi — hærra heldur fleiri daufum línum ({Math.round(threshold * 100)}%)
@@ -1139,7 +1194,9 @@ function StripDialog({
           <Button variant="outline" onClick={onClose}>
             Hætta við
           </Button>
-          <Button onClick={() => onRun({ threshold, keepNames, keepFw })}>Hreinsa</Button>
+          <Button disabled={ekkert} onClick={() => onRun({ threshold, keepNames, keepFw, sia })}>
+            Sía
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

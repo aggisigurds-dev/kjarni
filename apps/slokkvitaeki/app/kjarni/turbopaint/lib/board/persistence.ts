@@ -95,6 +95,10 @@ function docFromState(): BoardDocument {
   const assetIds = state.objects
     .filter((o) => o.type === "image")
     .map((o) => (o as Extract<BoardObject, { type: "image" }>).assetId);
+  const frumAssetIds = state.objects
+    .filter((o) => o.type === "image")
+    .map((o) => (o as Extract<BoardObject, { type: "image" }>).frumAssetId)
+    .filter((x): x is string => !!x);
   return {
     version: 2,
     name: state.name,
@@ -106,6 +110,7 @@ function docFromState(): BoardDocument {
     layers: state.layers,
     activeLayerId: state.activeLayerId,
     assetIds: [...new Set(assetIds)],
+    frumAssetIds: [...new Set(frumAssetIds)],
     boardId: currentBoardId ?? undefined,
     updatedAt: lastUpdatedAt || new Date().toISOString(),
     syncRev: 2,
@@ -140,6 +145,25 @@ async function ensureAssetsLocal(doc: BoardDocument) {
   }
 }
 
+/** Frumskrá teikningar (TIF/PDF í fullri upplausn) — sótt ÞEGAR greining þarf hana, aldrei við opnun borðs.
+ * Röð: minni → IndexedDB → skýið. Skilar null ef hún næst hvergi (t.d. án nets). */
+export async function saekjaFrum(id: string): Promise<Blob | null> {
+  const iMinni = getAssetBlob(id);
+  if (iMinni) return iMinni;
+  await hydrateAssets([id]);
+  const stad = getAssetBlob(id);
+  if (stad) return stad;
+  try {
+    const res = await fetch(assetPublicUrl(id));
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    await putAsset(id, blob);
+    return blob;
+  } catch {
+    return null;
+  }
+}
+
 async function loadUploadedSet() {
   if (!uploadedAssets) {
     uploadedAssets = new Set((await get<string[]>(UPLOADED_KEY)) ?? []);
@@ -151,7 +175,7 @@ async function pushAssets(doc: BoardDocument) {
   const sb = getSupabase();
   if (!sb) return;
   const uploaded = await loadUploadedSet();
-  for (const id of doc.assetIds ?? []) {
+  for (const id of [...(doc.assetIds ?? []), ...(doc.frumAssetIds ?? [])]) {
     if (uploaded.has(id)) continue;
     const blob = getAssetBlob(id);
     if (!blob) continue;

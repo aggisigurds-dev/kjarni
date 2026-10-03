@@ -60,6 +60,12 @@ export interface ImageObject extends BaseObject {
   height: number;
   /** Pixels per PDF point when the page was rasterized (viewport.scale). */
   pixelsPerPdfPoint?: number;
+  /** Upprunalega skráin (TIF / PDF) í fullri upplausn — fyrir greiningu (veggir, litir, texti). Skjámyndin
+   * (assetId) er klemmd við 40 MP svo síminn ráði við hana; frumskráin er það ekki. Sótt aðeins þegar þarf. */
+  frumAssetId?: string;
+  frumNafn?: string;
+  /** Síða í frumskránni (PDF-síða eða TIF-IFD), 0-talið. */
+  frumSida?: number;
 }
 
 export interface RectObject extends BaseObject {
@@ -148,6 +154,8 @@ export interface BoardDocument {
   grid: boolean;
   snap: boolean;
   assetIds: string[];
+  /** Frumskrár teikninga (TIF/PDF). Vistaðar í skýið en EKKI sóttar við opnun borðs — aðeins í greiningu. */
+  frumAssetIds?: string[];
   /** Named plumbing / drawing layers. Missing on older boards. */
   layers?: import("./layers").BoardLayer[];
   /** Id of the layer new strokes land on. */
