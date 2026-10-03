@@ -19,6 +19,7 @@ import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromSc
 import {
   canvasToAsset,
   greinaVeggiTeikningar,
+  greinaVeggiUrPdf,
   isFirewallLabelWord,
   isNameWord,
   siaTeikningu,
@@ -426,9 +427,18 @@ export function WhiteboardApp() {
     }
     try {
       useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: 5, message: "Greini veggi…" });
-      const nid = await greinaVeggiTeikningar(plan, 1, (p) =>
-        useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: p, message: "Greini veggi…" })
-      );
+      const framvinda = (message: string) => (p: number) =>
+        useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: p, message });
+      // Vigur-PDF fyrst: veggjalínurnar sjálfar, paraðar — nákvæmara en myndgreining og laust við skástrikun/texta.
+      let urPdf: Awaited<ReturnType<typeof greinaVeggiUrPdf>> = null;
+      try {
+        urPdf = await greinaVeggiUrPdf(plan, framvinda("Les veggi úr PDF-vigrum…"));
+      } catch (err) {
+        console.warn("[veggir] PDF-lestur mistókst — myndgreining í staðinn", err);
+      }
+      const nid = urPdf
+        ? { ...urPdf, holir: 0, fylltir: false, kassar: [] }
+        : await greinaVeggiTeikningar(plan, 1, framvinda("Greini veggi…"));
       const sx = plan.width / nid.breidd, sy = plan.height / nid.haed;
       const veggir: LineObject[] = nid.midlinur.map((l) => ({
         id: newId(),
@@ -462,6 +472,7 @@ export function WhiteboardApp() {
       }
       toast.success(
         `${veggir.length} veggir á laginu „Veggir“` +
+          (urPdf ? ` · lesnir úr PDF-vigrum (línuþykkt ${urPdf.flokkur} pt)` : "") +
           (nid.holir ? ` · ${nid.holir} holir veggir` : "") +
           (nid.fylltir ? " · fylltir veggir" : "") +
           " — feldu „Teikning“ í Lögum til að sjá bara veggina"
