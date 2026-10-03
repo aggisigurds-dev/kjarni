@@ -60,7 +60,7 @@ import {
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
-import type { BoardDocument, BoardObject, RectObject } from "../../lib/board/types";
+import type { BoardDocument, BoardObject, LineObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
@@ -409,8 +409,9 @@ export function WhiteboardApp() {
     []
   );
 
-  // Veggjalag: greindir veggir verða rétthyrningar á laginu „Veggir", festir við teikninguna (parentId) svo þeir
-  // fylgi henni. Endurgreining skiptir aðeins út GREINDUM veggjum þessarar teikningar — handteiknað helst.
+  // Veggjalag: greindir veggir verða MIÐLÍNUR með þykkt (brotalínur, strokeWidth = veggþykkt) á laginu „Veggir", festar
+  // við teikninguna (parentId) svo þær fylgi henni. Hundruð lína í stað þúsunda kassa — tugir KB. Endurgreining skiptir
+  // aðeins út GREINDUM veggjum þessarar teikningar (líka eldri kassaútgáfunni) — handteiknað helst.
   const runVeggir = useCallback(async (planId: string) => {
     const plan = useBoardStore.getState().objects.find((o) => o.id === planId);
     if (!plan || plan.type !== "image") return;
@@ -424,19 +425,17 @@ export function WhiteboardApp() {
         useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: p, message: "Greini veggi…" })
       );
       const sx = plan.width / nid.breidd, sy = plan.height / nid.haed;
-      const veggir: RectObject[] = nid.kassar.map((k) => ({
+      const veggir: LineObject[] = nid.midlinur.map((l) => ({
         id: newId(),
-        type: "rect",
-        x: plan.x + k.x * sx,
-        y: plan.y + k.y * sy,
-        width: k.w * sx,
-        height: k.h * sy,
-        fill: "#1c1917",
+        type: "polyline",
+        x: 0,
+        y: 0,
+        points: l.punktar.map((v, i) => (i % 2 === 0 ? plan.x + v * sx : plan.y + v * sy)),
         stroke: "#1c1917",
-        strokeWidth: 0,
-        cornerRadius: 0,
+        strokeWidth: Math.max(1, l.thykkt * sx),
+        dash: "solid",
         rotation: 0,
-        opacity: 1,
+        opacity: 0.9,
         locked: false,
         hidden: false,
         name: "Veggur",
@@ -445,7 +444,9 @@ export function WhiteboardApp() {
       }));
       const gamlir = useBoardStore
         .getState()
-        .objects.filter((o) => o.type === "rect" && (o as RectObject).veggur && o.parentId === plan.id)
+        .objects.filter(
+          (o) => o.parentId === plan.id && ((o.type === "rect" && o.veggur) || (o.type === "polyline" && o.veggur))
+        )
         .map((o) => o.id);
       if (gamlir.length) useBoardStore.getState().deleteIds(gamlir);
       if (veggir.length) useBoardStore.getState().addObjects(withLayerId(veggir, LAYER_VEGGIR), false);
@@ -455,7 +456,7 @@ export function WhiteboardApp() {
         return;
       }
       toast.success(
-        `${veggir.length} veggbútar á laginu „Veggir“` +
+        `${veggir.length} veggir á laginu „Veggir“` +
           (nid.holir ? ` · ${nid.holir} holir veggir` : "") +
           (nid.fylltir ? " · fylltir veggir" : "") +
           " — feldu „Teikning“ í Lögum til að sjá bara veggina"

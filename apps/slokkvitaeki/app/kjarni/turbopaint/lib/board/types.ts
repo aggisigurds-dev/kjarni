@@ -110,6 +110,8 @@ export interface LineObject extends BaseObject {
   dash: DashStyle;
   /** Innslegin RAUN-lengd í metrum (Kvarði) — yfirskrifar reiknaða lengd á merkimiða. */
   meters?: number;
+  /** Greindur veggur (miðlína úr veggjagreiningu; strokeWidth = þykkt veggjarins). */
+  veggur?: boolean;
 }
 
 export interface TextObject extends BaseObject {
