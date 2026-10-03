@@ -71,6 +71,8 @@ import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
 import Hus3D from "./Hus3D";
+import { HamStika } from "./HamStika";
+import { useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -483,6 +485,68 @@ export function WhiteboardApp() {
     }
   }, []);
 
+  // Sameiginlegar aðgerðir efstu stikunnar og hamstikunnar (HamStika) — ein útgáfa af hverri.
+  const merkjaEldveggi = useCallback(() => {
+    // Sé teikning valin er AÐEINS hún greind — annars allar á borðinu.
+    const st = useBoardStore.getState();
+    const chosen = st.objects.filter((o) => o.type === "image" && st.selectedIds.includes(o.id));
+    void markFirewalls(chosen.length ? chosen : st.objects);
+  }, [markFirewalls]);
+  const hreinsaTeikningu = useCallback(() => {
+    const plan = resolvePlan();
+    if (!plan) {
+      toast.error("Engin teikning fannst — veldu teikninguna fyrst");
+      return;
+    }
+    setStripPlanId(plan.id);
+  }, [resolvePlan]);
+  const greinaVeggi = useCallback(() => {
+    const plan = resolvePlan();
+    if (!plan) {
+      toast.error("Engin teikning fannst — veldu teikninguna fyrst");
+      return;
+    }
+    void runVeggir(plan.id);
+  }, [resolvePlan, runVeggir]);
+  const hamAdgerd = useCallback(
+    (a: HamAdgerd) => {
+      const st = useBoardStore.getState();
+      switch (a) {
+        case "kvarda":
+          st.setTool("calibrate");
+          toast.message("Kvarði: dragðu línu eftir þekktri lengd á teikningunni og sláðu inn metrana");
+          return;
+        case "hreinsa":
+          return hreinsaTeikningu();
+        case "veggir":
+          return greinaVeggi();
+        case "thrividd":
+          return setThrividd(true);
+        case "slt-brsl":
+        case "ei":
+          return merkjaEldveggi();
+        case "eldveggur":
+          st.startFirewall();
+          toast.message("Eldveggur: smelltu horn af horni — Enter lýkur vegg og næsti getur byrjað, Esc hættir og heldur veggnum");
+          return;
+        case "gegnumtok": {
+          const n = st.refreshCrossings();
+          toast.message(n ? `Gegnumtök: ${n} krossar vegg` : "Engin lögn krossar vegg");
+          return;
+        }
+        case "rymi":
+          st.startRoomDraft();
+          toast.message("Rými: dragðu ferninga sem mynda rýmið — Enter lýkur, svo nafn og staða í hægra spjaldinu");
+          return;
+        case "gatreitur":
+          st.setTool("checkbox");
+          toast.message("Gátreitur: smelltu þar sem hann á að vera — hakaðu þegar verkið er klárt");
+          return;
+      }
+    },
+    [greinaVeggi, hreinsaTeikningu, merkjaEldveggi]
+  );
+
   const runCrop = useCallback(
     async (rect: { x: number; y: number; width: number; height: number }) => {
       const state = useBoardStore.getState();
@@ -577,6 +641,8 @@ export function WhiteboardApp() {
     if (!haedId && !planUrl) return;
     uttektFromQuery.current = true;
     planFromQuery.current = true;
+    // Úttektarteikning úr Slökkvitæki-appinu = tækin raðast: byrja í Slökkvitækjaham.
+    useHamur.getState().setHamur("slokkvitaeki");
     const hrein = new URL(window.location.href);
     ["uttekt", "haed", "b", "h", "plan"].forEach((k) => hrein.searchParams.delete(k));
     window.history.replaceState({}, "", hrein.pathname + hrein.search);
@@ -924,28 +990,9 @@ export function WhiteboardApp() {
         }}
         onHelp={() => setHelpOpen(true)}
         onOpenSample={() => void openSamplePlan()}
-        onMarkFirewalls={() => {
-          // Sé teikning valin er AÐEINS hún greind — annars allar á borðinu.
-          const st = useBoardStore.getState();
-          const chosen = st.objects.filter((o) => o.type === "image" && st.selectedIds.includes(o.id));
-          void markFirewalls(chosen.length ? chosen : st.objects);
-        }}
-        onStrip={() => {
-          const plan = resolvePlan();
-          if (!plan) {
-            toast.error("Engin teikning fannst — veldu teikninguna fyrst");
-            return;
-          }
-          setStripPlanId(plan.id);
-        }}
-        onWalls={() => {
-          const plan = resolvePlan();
-          if (!plan) {
-            toast.error("Engin teikning fannst — veldu teikninguna fyrst");
-            return;
-          }
-          void runVeggir(plan.id);
-        }}
+        onMarkFirewalls={merkjaEldveggi}
+        onStrip={hreinsaTeikningu}
+        onWalls={greinaVeggi}
         on3d={() => setThrividd(true)}
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
@@ -1013,6 +1060,9 @@ export function WhiteboardApp() {
                 Súlan sjálf skrunar ef hún kemst enn ekki fyrir (sjá styles.css). */}
             <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
+            </div>
+            <div className="absolute top-3 left-[3.75rem] sm:left-16">
+              <HamStika onAdgerd={hamAdgerd} />
             </div>
             <div className="pointer-events-auto absolute top-3 right-3">
               <CountTable />
