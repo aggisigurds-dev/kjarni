@@ -45,7 +45,9 @@ import {
   stimpilStaerdABladi,
   symbolFyrirMerki,
   uttektBordNafn,
+  veggirIBord,
   veljaUttektHaed,
+  type UttektVeggur,
   vistaIUttekt,
 } from "../../lib/board/uttekt";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
@@ -67,6 +69,7 @@ import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
+import Hus3D from "./Hus3D";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -102,6 +105,7 @@ export function WhiteboardApp() {
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);
   const objects = useBoardStore((s) => s.objects);
+  const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   const camera = useBoardStore((s) => s.camera);
   const selectedIds = useBoardStore((s) => s.selectedIds);
 
@@ -315,6 +319,7 @@ export function WhiteboardApp() {
   }, []);
 
   const [stripPlanId, setStripPlanId] = useState<string | null>(null);
+  const [thrividd, setThrividd] = useState(false);
 
   const resolvePlan = useCallback(() => {
     const state = useBoardStore.getState();
@@ -616,6 +621,10 @@ export function WhiteboardApp() {
           } as BoardObject;
         });
         if (takn.length) useBoardStore.getState().addObjects(takn, false);
+        // Veggir sem TurboPaint greindi áður á þessari hæð koma aftur á borðið (lagið „Veggir").
+        const veggjaLinur = Array.isArray(haed.veggjaLinur) ? (haed.veggjaLinur as UttektVeggur[]) : [];
+        const veggir = veggirIBord(veggjaLinur, mynd, frum);
+        if (veggir.length) useBoardStore.getState().addObjects(withLayerId(veggir, LAYER_VEGGIR), false);
         const view = shellRef.current;
         if (view) {
           useBoardStore.getState().setCamera(cameraFit(boardBounds(useBoardStore.getState().objects), view.clientWidth, view.clientHeight));
@@ -636,7 +645,11 @@ export function WhiteboardApp() {
         r.otengd ? `${r.otengd} ný tákn eru ekki skráð tæki og vistast ekki` : "",
         r.utan ? `${r.utan} tæki standa utan teikningar og voru ekki færð` : "",
       ].filter(Boolean);
-      toast.success(`${r.nafn}: ${r.fjoldi} staðsetningar vistaðar (${r.breytt} færðar, ${r.ny} nýjar)` + (auka.length ? " · " + auka.join(" · ") : ""));
+      toast.success(
+        `${r.nafn}: ${r.fjoldi} staðsetningar vistaðar (${r.breytt} færðar, ${r.ny} nýjar)` +
+          (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
+          (auka.length ? " · " + auka.join(" · ") : "")
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Vistun í úttekt mistókst");
     } finally {
@@ -922,9 +935,13 @@ export function WhiteboardApp() {
           }
           void runVeggir(plan.id);
         }}
+        on3d={() => setThrividd(true)}
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
+      {thrividd ? (
+        <Hus3D objects={objects} pixelsPerMeter={pixelsPerMeter} onClose={() => setThrividd(false)} />
+      ) : null}
       {tengdMynd?.uttekt && (
         <div className="pointer-events-none absolute inset-x-0 top-[6.75rem] z-30 flex justify-center px-2">
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">

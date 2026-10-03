@@ -2,6 +2,7 @@
 
 import { toast } from "sonner";
 import {
+  Box,
   Cloud,
   Crosshair,
   Download,
@@ -65,6 +66,7 @@ export function TopBar({
   onMarkFirewalls,
   onStrip,
   onWalls,
+  on3d,
   onImportUrl,
   onVeljaTeikningu,
   onOpenLayers,
@@ -78,6 +80,7 @@ export function TopBar({
   onStrip?: () => void;
   /** Greina veggi teikningarinnar á lagið „Veggir". */
   onWalls?: () => void;
+  on3d?: () => void;
   onImportUrl?: () => void;
   /** Teikning valin úr heimilisfangaleitinni — `.info` permalink. */
   onVeljaTeikningu?: (infoUrl: string) => void;
@@ -356,6 +359,16 @@ export function TopBar({
       </Button>
       <Button
         size="sm"
+        variant="ghost"
+        className="hidden text-stone-200 hover:bg-white/10 hover:text-white lg:inline-flex"
+        onClick={() => on3d?.()}
+        title="Hús í 3D — veggir og tæki á öllum hæðum"
+      >
+        <Box className="size-4" />
+        <span className="hidden lg:inline">3D</span>
+      </Button>
+      <Button
+        size="sm"
         className="hidden bg-[#FE653F] text-white hover:bg-[#E8553F] sm:inline-flex"
         title="Flytja út PNG / PDF / JSON"
         onClick={onExport}
@@ -422,6 +435,9 @@ export function TopBar({
           </DropdownMenuItem>
           <DropdownMenuItem className="lg:hidden" onClick={() => onWalls?.()}>
             🧱 Greina veggi
+          </DropdownMenuItem>
+          <DropdownMenuItem className="lg:hidden" onClick={() => on3d?.()}>
+            🏢 Hús í 3D
           </DropdownMenuItem>
           <DropdownMenuItem className="sm:hidden" onClick={onExport}>
             ⬇ Flytja út

@@ -12,10 +12,13 @@ import {
   symbolFyrirTegund,
   taknIMerki,
   uppfaeraHaedir,
+  veggirIBord,
+  veggirIFrum,
   uttektBordNafn,
   veljaUttektHaed,
   type UttektHaed,
 } from "./uttekt";
+import type { BoardObject } from "./types";
 
 test("device types map to TurboPaint symbols", () => {
   assert.equal(symbolFyrirTegund("Léttvatn"), "extinguisher-lettvatn");
@@ -118,4 +121,17 @@ test("round-trip stamps stay readable when a 6006 px sheet is fit to a phone", (
   const css = s * (390 / 6006);
   assert.ok(css >= 26, "phone fit must be ≥26 CSS px, got " + css.toFixed(1));
   assert.equal(stimpilStaerdABladi({ width: 400, height: 300 }, 56), 56);
+});
+
+test("veggir fara fram og til baka milli borðs og frummyndar (TurboPaint → teikning_bord → TurboPaint)", () => {
+  const mynd = { id: "m", x: 100, y: 50, width: 2000, height: 1400 };
+  const frum = { b: 9933, h: 6953 };
+  const bord = veggirIBord([{ p: [0, 0, 9933, 0, 9933, 6953], t: 50 }], mynd, frum);
+  assert.equal(bord.length, 1);
+  assert.deepEqual(bord[0].points.map((n) => Math.round(n)), [100, 50, 2100, 50, 2100, 1450]);
+  assert.ok(Math.abs(bord[0].strokeWidth - 50 * (2000 / 9933)) < 1e-9);
+  const aftur = veggirIFrum(bord as BoardObject[], mynd, frum);
+  assert.deepEqual(aftur, [{ p: [0, 0, 9933, 0, 9933, 6953], t: 50 }]);
+  // aðeins greindir veggir ÞESSARAR myndar fara með
+  assert.equal(veggirIFrum([{ ...bord[0], parentId: "annad" }] as BoardObject[], mynd, frum).length, 0);
 });
