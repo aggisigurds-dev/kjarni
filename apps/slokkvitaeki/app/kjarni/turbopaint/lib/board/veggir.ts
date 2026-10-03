@@ -44,6 +44,11 @@ export function sjalfgefnarVeggjaStillingar(breidd: number): VeggjaStillingar {
   return { naemi: 0.62, hamarksThykkt: Math.round(40 * k), lagmarksLengd: Math.round(60 * k), fylltThykkt: Math.max(3, Math.round(7 * k)) };
 }
 
+/** Stillingar eftir kvarða blaðsins: dílar á millimetra pappírs (A1 í 7.500 px ≈ 8,9 díll/mm). */
+export function veggjaStillingarFyrirKvarda(dilarAMm: number): VeggjaStillingar {
+  return sjalfgefnarVeggjaStillingar(7500 * (dilarAMm / 8.9));
+}
+
 /** Merkir 4-tengd svæði þar sem maski === 1 (union-find, tvær umferðir). Skilar merkjum (0 = utan) og fjölda. */
 export function merkjaSvaedi(maski: Uint8Array, w: number, h: number): { merki: Int32Array; fjoldi: number } {
   const merki = new Int32Array(w * h);
@@ -184,6 +189,11 @@ export function finnaVeggi(rgba: Uint8ClampedArray, w: number, h: number, st: Ve
   const flokkar = flokkaDila(rgba, st.naemi);
   const blek = new Uint8Array(flokkar.length);
   for (let p = 0; p < flokkar.length; p++) blek[p] = flokkar[p] === 1 ? 1 : 0;
+  return finnaVeggiUrBleki(blek, w, h, st);
+}
+
+/** Sama greining á tilbúnum blekmaska (1 = blek) — t.d. aðeins veggjaflokkur vigur-PDF teiknaður á auðan grunn. */
+export function finnaVeggiUrBleki(blek: Uint8Array, w: number, h: number, st: VeggjaStillingar): VeggjaNidurstada {
   const thykkt = Math.max(2, st.hamarksThykkt);
   const lengd = Math.max(4, st.lagmarksLengd);
 
