@@ -34,6 +34,8 @@ export interface VeggjaNidurstada {
   kassar: VeggKassi[];
   holir: number;          // fjöldi holra veggsvæða sem fundust
   fylltir: boolean;       // fannst fylltur veggur
+  /** Veggjamaskinn sjálfur (1 = veggur), w×h — grunnur miðlínanna. */
+  maski: Uint8Array;
 }
 
 /** Sjálfgefnar stillingar miðað við breidd myndarinnar (A1 í ~7.500 px ≈ 8,9 díll/mm á blaði). */
@@ -207,5 +209,5 @@ export function finnaVeggi(rgba: Uint8ClampedArray, w: number, h: number, st: Ve
   // rétthyrningar í fullri upplausn; smábútar burt
   const lagmark = Math.max(2, Math.round(lengd * 0.25));
   const kassar = rettHyrningar(veggMaski, w, h).filter((k) => Math.max(k.w, k.h) >= lagmark);
-  return { kassar, holir, fylltir };
+  return { kassar, holir, fylltir, maski: veggMaski };
 }

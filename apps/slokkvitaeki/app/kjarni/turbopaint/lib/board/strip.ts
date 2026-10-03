@@ -1,6 +1,7 @@
 import { canvasToBlob, getAssetBlob, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
+import { midlinurUrMaska, type Midlina } from "./midlinur";
 import { finnaVeggi, sjalfgefnarVeggjaStillingar, type VeggjaNidurstada } from "./veggir";
 import { siaRgba, sjalfgefinVeggthykkt, teljaFlokka, type SiaFlokkur, type SiaUrGlugga } from "./siur";
 import type { ImageObject } from "./types";
@@ -111,7 +112,7 @@ export async function greinaVeggiTeikningar(
   plan: ImageObject,
   studull = 1,
   onProgress?: (percent: number) => void
-): Promise<VeggjaNidurstada & { breidd: number; haed: number }> {
+): Promise<Omit<VeggjaNidurstada, "maski"> & { midlinur: Midlina[]; breidd: number; haed: number }> {
   const blob = getAssetBlob(plan.assetId);
   if (!blob) throw new Error("Teikningin er ekki í minni — opnaðu borðið aftur");
   const bmp = await createImageBitmap(blob);
@@ -133,9 +134,15 @@ export async function greinaVeggiTeikningar(
   const st = sjalfgefnarVeggjaStillingar(w);
   st.hamarksThykkt = Math.round(st.hamarksThykkt * studull);
   st.fylltThykkt = Math.max(3, Math.round(st.fylltThykkt * studull));
-  const nid = finnaVeggi(data, w, h, st);
+  const { maski, ...nid } = finnaVeggi(data, w, h, st);
+  onProgress?.(80);
+  await andaUI();
+  // Maskinn → miðlínur með þykkt (vektor). Blettir mun þykkari en veggur (stigaþrep, stimplar) detta út.
+  const midlinur = midlinurUrMaska(maski, w, h, { lagmarksLengd: st.lagmarksLengd }).filter(
+    (l) => l.thykkt <= st.hamarksThykkt * 1.6
+  );
   onProgress?.(100);
-  return { ...nid, breidd: w, haed: h };
+  return { ...nid, midlinur, breidd: w, haed: h };
 }
 
 /** White-out OCR word boxes (raster px of the same canvas), small padding. */
