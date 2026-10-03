@@ -1,7 +1,7 @@
 "use client";
 
-// Hamstikan: velur ham og sýnir aðgerðir hans (lib/board/hamir.ts). Situr efst til vinstri á borðinu, hægra megin við
-// verkfærasúluna. Á síma er hamurinn valinn úr fellilista og aðgerðirnar skruna lárétt.
+// Hamstikan: velur ham og sýnir aðgerðir hans (lib/board/hamir.ts). Efst í hægra hliðarspjaldinu (Agnar 03.10.2026:
+// „frekar sett þetta í hægri sidepannel — of mikið fyrir þarna" — á borðinu sjálfu skyggði hún á teikninguna).
 
 import {
   Box,
@@ -38,8 +38,8 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const h = getHamur(hamur);
 
   return (
-    <div className="pointer-events-auto flex max-w-[min(calc(100vw-5.5rem),680px)] flex-col gap-1.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 text-stone-100 shadow-2xl">
-      <div className="hidden items-center gap-0.5 sm:flex" role="tablist" aria-label="Hamur">
+    <div className="border-b border-white/8 px-3 py-2.5" title={h.lysing}>
+      <div className="flex flex-wrap gap-1" role="tablist" aria-label="Hamur">
         {HAMIR.map((x) => (
           <button
             key={x.id}
@@ -48,27 +48,15 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
             aria-selected={x.id === hamur}
             title={x.lysing}
             onClick={() => setHamur(x.id)}
-            className={`rounded-lg px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap transition-colors ${
-              x.id === hamur ? "bg-[#FE653F] text-white" : "text-stone-300 hover:bg-white/10 hover:text-white"
+            className={`rounded-md px-2 py-1 text-[11.5px] font-semibold whitespace-nowrap transition-colors ${
+              x.id === hamur ? "bg-[#FE653F] text-white" : "bg-white/5 text-stone-300 hover:bg-white/10 hover:text-white"
             }`}
           >
             {x.stutt}
           </button>
         ))}
       </div>
-      <select
-        aria-label="Hamur"
-        value={hamur}
-        onChange={(e) => setHamur(e.target.value as typeof hamur)}
-        className="rounded-lg border border-white/15 bg-[#11131f] px-2 py-1 text-[12px] font-semibold text-white sm:hidden"
-      >
-        {HAMIR.map((x) => (
-          <option key={x.id} value={x.id}>
-            {x.heiti}
-          </option>
-        ))}
-      </select>
-      <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="mt-1.5 flex flex-wrap gap-1">
         {h.adgerdir.map((a) => {
           const d = ADGERDIR[a];
           return (
@@ -77,7 +65,7 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
               type="button"
               title={d.titill}
               onClick={() => onAdgerd(a)}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11.5px] font-medium text-stone-100 hover:bg-white/15"
+              className="flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] font-medium text-stone-100 hover:bg-white/12"
             >
               {d.takn}
               {d.texti}
@@ -85,7 +73,6 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
           );
         })}
       </div>
-      <p className="hidden px-1 text-[10.5px] leading-snug text-stone-400 md:block">{h.lysing}</p>
     </div>
   );
 }

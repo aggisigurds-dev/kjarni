@@ -71,7 +71,6 @@ import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
 import Hus3D from "./Hus3D";
-import { HamStika } from "./HamStika";
 import { useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import { Button } from "../ui/button";
 import {
@@ -109,6 +108,7 @@ export function WhiteboardApp() {
   const importProgress = useBoardStore((s) => s.importProgress);
   const objects = useBoardStore((s) => s.objects);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
+  const hamur = useHamur((s) => s.hamur);
   const camera = useBoardStore((s) => s.camera);
   const selectedIds = useBoardStore((s) => s.selectedIds);
 
@@ -1061,12 +1061,11 @@ export function WhiteboardApp() {
             <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
             </div>
-            <div className="absolute top-3 left-[3.75rem] sm:left-16">
-              <HamStika onAdgerd={hamAdgerd} />
-            </div>
-            <div className="pointer-events-auto absolute top-3 right-3">
-              <CountTable />
-            </div>
+            {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
+              <div className="pointer-events-auto absolute top-3 right-3">
+                <CountTable />
+              </div>
+            ) : null}
             {selectedIds.length ? (
               <div className="pointer-events-auto absolute right-3 bottom-28 lg:hidden">
                 <button
@@ -1138,7 +1137,7 @@ export function WhiteboardApp() {
           ) : null}
         </div>
         <div className="hidden lg:block">
-          <RightPanel onFocusObject={focusObject} />
+          <RightPanel onFocusObject={focusObject} onHamAdgerd={hamAdgerd} />
         </div>
       </div>
       {panelOpen ? (
@@ -1156,7 +1155,7 @@ export function WhiteboardApp() {
             >
               Loka
             </button>
-            <RightPanel onFocusObject={focusObject} />
+            <RightPanel onFocusObject={focusObject} onHamAdgerd={hamAdgerd} />
           </div>
         </div>
       ) : null}

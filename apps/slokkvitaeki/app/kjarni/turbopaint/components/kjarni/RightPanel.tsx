@@ -14,6 +14,8 @@ import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
+import { HamStika } from "./HamStika";
+import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { RoomList } from "./RoomList";
 import { CustomColorSwatch } from "./ColorPicker";
 import { useCustomColors, withAlpha } from "../../lib/board/custom-colors";
@@ -47,6 +49,15 @@ const LAYER_GROUPS: { id: LayerGroupId; label: string }[] = [
   { id: "annad", label: "Annað" },
 ];
 
+/** Hópar hlutalistans sem hver hamur sýnir — hamur sparar pláss, sýnir aðeins það sem á við (Agnar 03.10.2026). */
+const HAM_HOPAR: Record<HamurId, LayerGroupId[]> = {
+  teikning: ["teikning", "annad"],
+  slokkvitaeki: ["takn", "mvs"],
+  brunathettingar: ["eldveggur", "gegnumtak", "kalt", "heitt", "skolp", "loftræsting", "hitakerfi"],
+  brunakerfi: ["takn"],
+  rymi: ["rými"],
+};
+
 function layerGroupOf(obj: BoardObject): LayerGroupId {
   if (obj.type === "rect" && obj.isRoom) return "rými";
   if (obj.name.startsWith("Gegnumtak")) return "gegnumtak";
@@ -61,10 +72,14 @@ function layerGroupOf(obj: BoardObject): LayerGroupId {
   return "annad";
 }
 
-export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => void } = {}) {
+export function RightPanel({
+  onFocusObject,
+  onHamAdgerd,
+}: { onFocusObject?: (id: string) => void; onHamAdgerd?: (a: HamAdgerd) => void } = {}) {
   const objects = useBoardStore((s) => s.objects);
   const layers = useBoardStore((s) => s.layers);
   const selectedIds = useBoardStore((s) => s.selectedIds);
+  const hamur = useHamur((s) => s.hamur);
   const selected = objects.filter((o) => selectedIds.includes(o.id));
   const primary = selected[0];
   const roomSelected = primary?.type === "rect" && Boolean(primary.isRoom);
@@ -95,6 +110,8 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
 
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col border-l border-white/8 bg-[#12141c] text-stone-200">
+      {onHamAdgerd ? <HamStika onAdgerd={onHamAdgerd} /> : null}
+      {selected.length ? (
       <div className="border-b border-white/8 px-4 py-3">
         <div className="text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">EIGINLEIKAR</div>
         <div className="mt-1 text-sm text-stone-300">
@@ -105,8 +122,9 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
               : `${selected.length} atriði`}
         </div>
       </div>
+      ) : null}
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        <RoomList onFocusObject={onFocusObject} />
+        {hamur === "rymi" ? <RoomList onFocusObject={onFocusObject} /> : null}
         {primary ? (
           <div className="space-y-4">
             {primary.type === "symbol" ? (
@@ -253,20 +271,18 @@ export function RightPanel({ onFocusObject }: { onFocusObject?: (id: string) => 
             Dragðu inn PDF eða TIF af gólfplani. Síðan seturðu inn slökkvitæki, flóttaleiðir, línur og
             minnispunkta — eins og á hvítu borði.
           </p>
-        ) : (
-          <p className="text-xs leading-relaxed text-stone-500">
-            Smelltu á lag til að velja það á borðinu.
-          </p>
-        )}
-        <div className="mt-6">
-          <LayerList />
-        </div>
-        <div className="mt-6">
+        ) : null}
+        {hamur === "brunathettingar" ? (
+          <div className="mt-4">
+            <LayerList />
+          </div>
+        ) : null}
+        <div className="mt-4">
           <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-stone-500">
-            HLUTIR · {objects.length}
+            HLUTIR · {objects.filter((o) => HAM_HOPAR[hamur].includes(layerGroupOf(o))).length}
           </div>
           <div className="space-y-2">
-            {LAYER_GROUPS.map((group) => {
+            {LAYER_GROUPS.filter((g) => HAM_HOPAR[hamur].includes(g.id)).map((group) => {
               const items = [...objects].reverse().filter((obj) => layerGroupOf(obj) === group.id);
               if (!items.length) return null;
               return (
