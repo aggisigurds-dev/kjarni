@@ -27,6 +27,11 @@ type ProgressFn = (percent: number, message: string) => void;
 
 const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
+/** Skannað PDF (stærra en vigur-uppdráttur) og TIF eru ljósmyndir af blaði: sem PNG varð ein síða 63 MB á
+ * borðinu og í skýinu. JPEG í 0,9 heldur línunum skörpum á broti af stærðinni. Vigur-PDF helst PNG. */
+const SCAN_PDF_BYTES = 3 * 1024 * 1024;
+const scanBlob = (canvas: HTMLCanvasElement) => canvasToBlob(canvas, "image/jpeg", 0.9);
+
 function makeImageObject(
   assetId: string,
   width: number,
@@ -122,7 +127,7 @@ async function importPdf(
     warnings.push(...rasterWarnings);
     const worldViewport = page.getViewport({ scale: target.scale });
     const words = await extractPdfWords(page, worldViewport);
-    const blob = await canvasToBlob(canvas);
+    const blob = file.size > SCAN_PDF_BYTES ? await scanBlob(canvas) : await canvasToBlob(canvas);
     const assetId = newId();
     await putAsset(assetId, blob);
     const name =
@@ -279,7 +284,7 @@ async function importTiff(
       if (!sctx) throw new Error("Gat ekki opnað canvas");
       sctx.putImageData(imageData, 0, 0);
       boostSheetCanvas(canvas);
-      const blob = await canvasToBlob(canvas);
+      const blob = await scanBlob(canvas);
         const assetId = newId();
       await putAsset(assetId, blob);
       const name =

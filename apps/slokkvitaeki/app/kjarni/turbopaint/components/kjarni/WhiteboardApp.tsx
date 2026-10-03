@@ -449,7 +449,9 @@ export function WhiteboardApp() {
           percent: 10,
           message: "Sæki teikningu…",
         });
-        const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}`);
+        // „Há gæði" (sjálfgefið): upprunalega skönnunin / TIF á undan 6006 px cache-JPEG safnsins
+        const prefer = useBoardStore.getState().importQuality === "print" ? "&prefer=original" : "";
+        const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}${prefer}`);
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
           throw new Error(body?.error || `Gat ekki sótt af slóðinni (${res.status})`);

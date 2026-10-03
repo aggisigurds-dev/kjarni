@@ -50,12 +50,25 @@ function quickLongEdge(q: FotowebQuickRendition): number {
 export function fotowebDownloadOrder(
   asset: FotowebAsset,
   pathname: string,
-  opts: { preferImage?: boolean } = {}
+  opts: { preferImage?: boolean; preferOriginal?: boolean } = {}
 ): FotowebCandidate[] {
   const baseName = fotowebBaseName(asset, pathname);
   const jpegName = baseName.replace(/\.(tiff?|pdf)$/i, "") + ".jpg";
   const out: FotowebCandidate[] = [];
   const original = asset.renditions?.find((r) => r.original && r.href);
+
+  // preferOriginal (Agnar 03.10.2026: „when I search … it will download the best quality — eins og download
+  // tiff version"): upprunalega skráin FREMST, líka skannað PDF og 9k TIF. Innflutningurinn í vafranum ræður
+  // nú við það — TIF er afþjappað beint í borðstærð (tiff-raster, aldrei fullur strigi) og skannaðar síður
+  // vistast sem JPEG, ekki 63 MB PNG. Cache-JPEG er aðeins til vara ef upprunalega skráin næst ekki.
+  if (opts.preferOriginal && original?.href) {
+    out.push({ href: original.href, name: baseName, kind: "original" });
+    const allar = [...(asset.quickRenditions ?? [])]
+      .filter((q) => q.href)
+      .sort((x, y) => quickLongEdge(y) - quickLongEdge(x));
+    for (const q of allar) out.push({ href: q.href as string, name: jpegName, kind: "jpeg" });
+    return out;
+  }
 
   // PDF er VIGUR og lítill (A1-uppdráttur úr CAD ≈ 0,4 MB). Cache-JPEG safnsins er
   // föst 6006 px mynd af sömu síðu (≈180 DPI á A1) — hún varð að graut um leið og

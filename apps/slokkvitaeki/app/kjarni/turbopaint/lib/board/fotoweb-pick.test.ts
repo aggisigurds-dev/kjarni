@@ -98,3 +98,25 @@ test("a scanned PDF (large file) keeps the JPEG first — rasterising it made a 
   const vigur = fotowebDownloadOrder({ ...asset, filesize: 417934 }, "/archives/x.pdf.info");
   assert.equal(vigur[0]?.kind, "original");
 });
+
+test("preferOriginal (Há gæði í leit) puts the 9k original TIF first, cache JPEG only as fallback", () => {
+  const order = fotowebDownloadOrder(SKUTUVOGUR, "/archives/2021-01-2631662.tif.info", { preferOriginal: true });
+  assert.equal(order[0]?.kind, "original");
+  assert.equal(order[0]?.name, "2021-01-2631662.tif");
+  assert.equal(order[1]?.kind, "jpeg");
+  assert.equal(order[1]?.href, "/fotoweb/cache/v2/6006.jpg");
+  assert.equal(order.filter((c) => c.kind === "original").length, 1);
+});
+
+test("preferOriginal also takes a scanned PDF original before the cache JPEG", () => {
+  const scan: FotowebAsset = {
+    filename: "2022-10-1139928.pdf",
+    filesize: 10_289_152,
+    renditions: [{ original: true, href: "/fotoweb/archives/x/2022-10-1139928.pdf.info/__renditions/ORIGINAL" }],
+    quickRenditions: [{ size: 6006, width: 6006, height: 4297, href: "/fotoweb/cache/v2/scan6006.jpg" }],
+  };
+  const order = fotowebDownloadOrder(scan, "/archives/2022-10-1139928.pdf.info", { preferOriginal: true });
+  assert.deepEqual(order.map((c) => c.kind), ["original", "jpeg"]);
+  // án preferOriginal helst gamla röðin: skannað PDF → JPEG fyrst
+  assert.equal(fotowebDownloadOrder(scan, "/archives/2022-10-1139928.pdf.info")[0]?.kind, "jpeg");
+});

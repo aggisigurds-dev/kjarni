@@ -117,8 +117,10 @@ export async function GET(req: NextRequest) {
 
       // JPEG (≈6000 px) á undan ORIGINAL TIF (≈10000 px / 70 MP).
       // Fullt TIF afþjappað í vafranum frysti innflutninginn á síma.
-      const preferImage = req.nextUrl.searchParams.get("prefer") === "image";
-      for (const cand of fotowebDownloadOrder(asset, target.pathname, { preferImage })) {
+      const prefer = req.nextUrl.searchParams.get("prefer");
+      const preferImage = prefer === "image";
+      const preferOriginal = prefer === "original";   // „Há gæði": upprunalega skönnunin / TIF á undan cache-JPEG
+      for (const cand of fotowebDownloadOrder(asset, target.pathname, { preferImage, preferOriginal })) {
         const href = cand.href.startsWith("http") ? cand.href : base + cand.href;
         if (cand.kind === "original") {
           try {
