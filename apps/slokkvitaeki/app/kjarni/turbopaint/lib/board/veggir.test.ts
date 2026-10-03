@@ -67,3 +67,28 @@ test("finnaVeggi: innrétting (lítill lokaður hringur / vaskur) er ekki veggur
   const r = finnaVeggi(d, W2, H2, { naemi: 0.62, hamarksThykkt: 16, lagmarksLengd: 30, fylltThykkt: 5 });
   assert.equal(r.holir, 0);
 });
+
+test("finnaVeggi: stuttur L-veggur við baðherbergi helst (beinn, liggur við jaðar reitsins)", () => {
+  const W2 = 120, H2 = 120, d = new Uint8ClampedArray(W2 * H2 * 4).fill(255);
+  const svart = (x: number, y: number) => { const i = (y * W2 + x) * 4; d[i] = d[i + 1] = d[i + 2] = 25; };
+  // blekkassi 60×60 með L-laga hvítu holi (8 díla breitt) — hol L-veggur sem er lokaður allan hringinn
+  for (let y = 20; y < 80; y++) for (let x = 20; x < 80; x++) svart(x, y);
+  const hvit = (x: number, y: number) => { const i = (y * W2 + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; };
+  for (let y = 26; y < 34; y++) for (let x = 26; x < 74; x++) hvit(x, y);
+  for (let y = 26; y < 74; y++) for (let x = 26; x < 34; x++) hvit(x, y);
+  const r = finnaVeggi(d, W2, H2, { naemi: 0.62, hamarksThykkt: 16, lagmarksLengd: 30, fylltThykkt: 5 });
+  assert.equal(r.holir, 1);
+});
+
+test("finnaVeggi í beltum: lóðréttur holur veggur yfir 4 belti finnst heill — slitnar ekki á beltaskilum", () => {
+  const W2 = 100, H2 = 400, d = new Uint8ClampedArray(W2 * H2 * 4).fill(255);
+  const svart = (x: number, y: number) => { const i = (y * W2 + x) * 4; d[i] = d[i + 1] = d[i + 2] = 25; };
+  for (let y = 20; y <= 380; y++) { svart(40, y); svart(50, y); }   // tvær langar lóðréttar línur
+  for (let x = 40; x <= 50; x++) { svart(x, 20); svart(x, 380); }  // lokaðir endar
+  const st = { naemi: 0.62, hamarksThykkt: 16, lagmarksLengd: 30, fylltThykkt: 5 };
+  const heil = finnaVeggi(d, W2, H2, { ...st, belti: 1 });
+  const beltad = finnaVeggi(d, W2, H2, { ...st, belti: 4 });
+  const iVegg = (r: typeof heil, x: number, y: number) => r.kassar.some((k) => x >= k.x && x < k.x + k.w && y >= k.y && y < k.y + k.h);
+  for (const y of [30, 99, 100, 101, 200, 299, 300, 370]) assert.ok(iVegg(beltad, 45, y), "veggur við y=" + y);
+  assert.ok(iVegg(heil, 45, 200));
+});
