@@ -27,3 +27,9 @@ test("finnaLinu: samsíða lína rétt hjá (tvöfaldur veggur) fylgir ekki", ()
   assert.ok(r);
   assert.equal(r.strik.length, 1);
 });
+
+test("finnaLinu: löng lína vinnur stutt strik (bíll / tákn) sem liggur aðeins nær smellinum", () => {
+  const r = finnaLinu({ "0.24": [[0, 0, 300, 300], [149, 151.2, 151, 151.4] /* stutt strik í bíl */] }, [150, 151], 3);
+  assert.ok(r);
+  assert.deepEqual(r.strik, [[0, 0, 300, 300]]);
+});

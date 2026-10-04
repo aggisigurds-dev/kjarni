@@ -19,12 +19,17 @@ export function finnaLinu(
   vik: number,
   bil = 14
 ): { strik: Strik[]; flokkur: string } | null {
-  let best: { s: Strik; l: string; d: number } | null = null;
+  // Löng lína vinnur stutt strik sem liggur aðeins nær (bílar, tákn og letur eru úr örstuttum strikum — prófað á
+  // Fiskislóð 04.10.2026: sveimi yfir skálínu sem lá yfir bíl valdi útlínu bílsins). Stig = fjarlægð/vik − lengdarbónus.
+  let best: { s: Strik; l: string; d: number; stig: number } | null = null;
   for (const l of Object.keys(flokkar)) {
     for (const s of flokkar[l]) {
       if (s[0] === s[2] && s[1] === s[3]) continue;
       const d = fjarlaegdAdStriki(p[0], p[1], s);
-      if (d <= vik && (!best || d < best.d)) best = { s, l, d };
+      if (d > vik) continue;
+      const lengd = Math.hypot(s[2] - s[0], s[3] - s[1]);
+      const stig = d / vik - 0.6 * Math.min(1, lengd / (12 * vik));
+      if (!best || stig < best.stig) best = { s, l, d, stig };
     }
   }
   if (!best) return null;
