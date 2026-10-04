@@ -177,7 +177,12 @@ export async function greinaVeggiUrPdf(
     const flokkar = flokkaPdfLinur(pdfjs.OPS as unknown as PdfOps, ol.fnArray, ol.argsArray, vp.transform);
     const val = veljaVeggjaflokk(flokkar, vp.width, vp.height);
     if (!val.valinn) return null;
-    const veggir = paraVeggi(flokkar[val.valinn]);
+    // Svæði sem notandinn hreinsaði („Hreinsa svæði") eru hunsuð — frumskráin sjálf er óbreytt.
+    const burt = plan.hvittad ?? [];
+    const veggir = paraVeggi(flokkar[val.valinn]).filter((v) => {
+      const mx = (v.a[0] + v.b[0]) / 2 / vp.width, my = (v.a[1] + v.b[1]) / 2 / vp.height;
+      return !burt.some((b) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+    });
     if (!veggir.length) return null;
     const midlinur: Midlina[] = veggir.map((v) => ({
       punktar: [v.a[0], v.a[1], v.b[0], v.b[1]],

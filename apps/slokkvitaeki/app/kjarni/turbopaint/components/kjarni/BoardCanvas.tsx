@@ -68,7 +68,8 @@ type Draft =
   | { kind: "sticky"; ax: number; ay: number; bx: number; by: number }
   | { kind: LineKind; points: number[] }
   | { kind: "marquee"; ax: number; ay: number; bx: number; by: number }
-  | { kind: "crop"; ax: number; ay: number; bx: number; by: number };
+  | { kind: "crop"; ax: number; ay: number; bx: number; by: number }
+  | { kind: "hvitta"; ax: number; ay: number; bx: number; by: number };
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -97,6 +98,7 @@ export function BoardCanvas({
   onSymbolDropped,
   onCalibrate,
   onCropRect,
+  onHvittaRect,
   onRequestStrip,
 }: {
   width: number;
@@ -106,6 +108,7 @@ export function BoardCanvas({
   onSymbolDropped: (symbolId: string, world: { x: number; y: number }) => void;
   onCalibrate: (pixels: number, points: number[]) => void;
   onCropRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  onHvittaRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   onRequestStrip?: (planId: string) => void;
 }) {
   const stageRef = useRef<Konva.Stage>(null);
@@ -201,7 +204,7 @@ export function BoardCanvas({
 
   const commitShape = useCallback((d: Draft, firewallWall = false) => {
     const { style: st, addObjects } = useBoardStore.getState();
-    if (d.kind === "marquee" || d.kind === "crop") return;
+    if (d.kind === "marquee" || d.kind === "crop" || d.kind === "hvitta") return;
     if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
       let box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       const asCheckbox = d.kind === "rect" && useBoardStore.getState().tool === "checkbox";
@@ -458,9 +461,10 @@ export function BoardCanvas({
         d.kind === "ellipse" ||
         d.kind === "sticky" ||
         d.kind === "marquee" ||
-        d.kind === "crop"
+        d.kind === "crop" ||
+        d.kind === "hvitta"
       ) {
-        const pt = d.kind === "crop" ? world : snapped;
+        const pt = d.kind === "crop" || d.kind === "hvitta" ? world : snapped;
         setDraftState({ ...d, bx: pt.x, by: pt.y });
         return;
       }
@@ -488,6 +492,13 @@ export function BoardCanvas({
       setDraftState(null);
       useBoardStore.getState().setTool("select");
       if (box.width > 24 && box.height > 24) onCropRect?.(box);
+      return;
+    }
+    if (d.kind === "hvitta") {
+      // Tólið helst virkt svo hreinsa megi mörg svæði í röð; Esc / V hættir.
+      const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
+      setDraftState(null);
+      if (box.width > 4 && box.height > 4) onHvittaRect?.(box);
       return;
     }
     if (d.kind === "marquee") {
@@ -524,7 +535,7 @@ export function BoardCanvas({
     if (nextTool !== "pen" && nextTool !== "room") {
       useBoardStore.getState().setTool("select");
     }
-  }, [commitShape, onCalibrate, onCropRect, setDraftState]);
+  }, [commitShape, onCalibrate, onCropRect, onHvittaRect, setDraftState]);
 
   // Two-finger pinch: zoom around the fingers' midpoint, pan as it moves.
   useEffect(() => {
@@ -643,6 +654,10 @@ export function BoardCanvas({
 
     if (currentTool === "crop") {
       setDraftState({ kind: "crop", ax: world.x, ay: world.y, bx: world.x, by: world.y });
+      return;
+    }
+    if (currentTool === "hvitta") {
+      setDraftState({ kind: "hvitta", ax: world.x, ay: world.y, bx: world.x, by: world.y });
       return;
     }
 
@@ -1172,6 +1187,7 @@ export function BoardCanvas({
           {draft &&
           draft.kind !== "marquee" &&
           draft.kind !== "crop" &&
+          draft.kind !== "hvitta" &&
           draft.kind !== "rect" &&
           draft.kind !== "ellipse" &&
           draft.kind !== "sticky" ? (
@@ -1216,6 +1232,17 @@ export function BoardCanvas({
               strokeWidth={2 / camera.scale}
               dash={[10, 6]}
               fill="rgba(254,101,63,0.08)"
+              listening={false}
+              name="ui-only"
+            />
+          ) : null}
+          {draft && draft.kind === "hvitta" ? (
+            <Rect
+              {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
+              stroke="#FE653F"
+              strokeWidth={2 / camera.scale}
+              dash={[6, 4]}
+              fill="rgba(255,255,255,0.85)"
               listening={false}
               name="ui-only"
             />

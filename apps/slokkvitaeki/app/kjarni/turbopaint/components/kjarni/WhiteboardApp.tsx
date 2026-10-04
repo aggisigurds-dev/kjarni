@@ -25,7 +25,7 @@ import {
   siaTeikningu,
   whiteOutWords,
 } from "../../lib/board/strip";
-import { cropPlanAsset } from "../../lib/board/crop";
+import { cropPlanAsset, hvittaPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
@@ -529,6 +529,10 @@ export function WhiteboardApp() {
     (a: HamAdgerd) => {
       const st = useBoardStore.getState();
       switch (a) {
+        case "hreinsa-svaedi":
+          st.setTool("hvitta");
+          toast.message("Hreinsa svæði: dragðu kassa yfir það sem á að hverfa af teikningunni — Esc hættir");
+          return;
         case "kvarda":
           st.setTool("calibrate");
           toast.message("Kvarði: dragðu línu eftir þekktri lengd á teikningunni og sláðu inn metrana");
@@ -598,6 +602,38 @@ export function WhiteboardApp() {
     },
     []
   );
+
+  // „Hreinsa svæði": hvítar kassann á öllum teikningum sem hann sker (Agnar 04.10.2026).
+  const runHvitta = useCallback(async (rect: { x: number; y: number; width: number; height: number }) => {
+    const plon = useBoardStore
+      .getState()
+      .objects.filter(
+        (o): o is Extract<typeof o, { type: "image" }> =>
+          o.type === "image" &&
+          !o.hidden &&
+          rect.x < o.x + o.width &&
+          rect.x + rect.width > o.x &&
+          rect.y < o.y + o.height &&
+          rect.y + rect.height > o.y
+      );
+    if (!plon.length) {
+      toast.error("Kassinn nær ekki yfir neina teikningu");
+      return;
+    }
+    try {
+      for (const plan of plon) {
+        if (Math.abs(plan.rotation % 360) > 0.5) {
+          toast.error("Snúðu teikningunni í 0° áður en svæði er hreinsað");
+          continue;
+        }
+        const res = await hvittaPlanAsset(plan, rect);
+        useBoardStore.getState().patchObject(plan.id, res, true);
+      }
+      toast.success("Svæðið hreinsað — ⌘Z afturkallar · dragðu fleiri kassa eða Esc til að hætta");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Hreinsun mistókst");
+    }
+  }, []);
 
   // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
   // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
@@ -949,6 +985,7 @@ export function WhiteboardApp() {
           s: "symbol",
           k: "calibrate",
           e: "eraser",
+          b: "hvitta",
           x: "checkbox",
         };
         const tool = map[e.key.toLowerCase()];
@@ -1058,6 +1095,7 @@ export function WhiteboardApp() {
               }}
               onCalibrate={(px, points) => setCalibrateDraft({ px, points })}
               onCropRect={(rect) => void runCrop(rect)}
+              onHvittaRect={(rect) => void runHvitta(rect)}
               onRequestStrip={(planId) => setStripPlanId(planId)}
             />
           ) : (
