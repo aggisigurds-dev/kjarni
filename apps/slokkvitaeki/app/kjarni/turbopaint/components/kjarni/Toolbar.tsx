@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Circle,
   Eraser,
+  Slash,
   Brush,
   SquareDashed,
   Hand,
@@ -75,6 +76,12 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
     label: "Strokleður teikningar — strjúktu yfir það sem á að hverfa (stærð = línuþykkt, ⌘Z afturkallar)",
     shortcut: "G",
     icon: <Brush className="size-4" />,
+  },
+  {
+    id: "eydalinu",
+    label: "Eyða línu — smelltu á línu sem á að hverfa (vigur-PDF teikningar), öll línan fer, ⌘Z afturkallar",
+    shortcut: "D",
+    icon: <Slash className="size-4" />,
   },
 ];
 

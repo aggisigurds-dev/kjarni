@@ -2,7 +2,7 @@ import { canvasToBlob, getAssetBlob, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
 import { midlinurUrMaska, type Midlina } from "./midlinur";
-import { flokkaPdfLinur, paraVeggi, veljaVeggjaflokk, type PdfOps } from "./pdf-veggir";
+import { flokkaPdfLinur, paraVeggi, veljaVeggjaflokk, type PdfOps, type Strik } from "./pdf-veggir";
 import { PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
 import { finnaVeggi, sjalfgefnarVeggjaStillingar, type VeggjaNidurstada } from "./veggir";
 import { siaRgba, sjalfgefinVeggthykkt, teljaFlokka, type SiaFlokkur, type SiaUrGlugga } from "./siur";
@@ -147,6 +147,55 @@ export async function greinaVeggiTeikningar(
   return { ...nid, midlinur, breidd: w, haed: h };
 }
 
+/** Strokuð strik vigur-PDF síðu teikningarinnar, flokkuð eftir línuþykkt, í punktum síðunnar — lesið einu sinni og
+ * geymt í minni (veggjagreining og „Eyða línu" deila lestrinum). null ef teikningin á ekkert vigur-PDF eða hefur
+ * verið skorin (önnur hlutföll en síðan). */
+export interface PdfSida {
+  flokkar: Record<string, Strik[]>;
+  breidd: number;
+  haed: number;
+}
+const pdfSidur = new Map<string, Promise<PdfSida | null>>();
+export function lesaPdfSidu(plan: ImageObject, onProgress?: (percent: number) => void): Promise<PdfSida | null> {
+  if (!plan.frumAssetId) return Promise.resolve(null);
+  const lykill = plan.frumAssetId + "#" + (plan.frumSida ?? 0);
+  let p = pdfSidur.get(lykill);
+  if (!p) {
+    p = (async () => {
+      const { saekjaFrum } = await import("./persistence");
+      const blob = await saekjaFrum(plan.frumAssetId!);
+      if (!blob) return null;
+      const data = await blob.arrayBuffer();
+      const haus = new Uint8Array(data, 0, Math.min(5, data.byteLength));
+      if (String.fromCharCode(...haus) !== "%PDF-") return null;
+      onProgress?.(15);
+      const pdfjs = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+      const doc = await pdfjs.getDocument(pdfJsDocumentOptions(data)).promise;
+      try {
+        const sida = await doc.getPage((plan.frumSida ?? 0) + 1);
+        const vp = sida.getViewport({ scale: 1 });
+        onProgress?.(35);
+        const ol = await sida.getOperatorList();
+        onProgress?.(70);
+        await andaUI();
+        const flokkar = flokkaPdfLinur(pdfjs.OPS as unknown as PdfOps, ol.fnArray, ol.argsArray, vp.transform);
+        return { flokkar, breidd: vp.width, haed: vp.height };
+      } finally {
+        void doc.destroy();
+      }
+    })().catch((err) => {
+      pdfSidur.delete(lykill);
+      throw err;
+    });
+    pdfSidur.set(lykill, p);
+  }
+  return p.then((sida) =>
+    // Skorin teikning (önnur hlutföll en síðan) passar ekki lengur við síðuhnitin.
+    sida && Math.abs(plan.width / plan.height / (sida.breidd / sida.haed) - 1) <= 0.01 ? sida : null
+  );
+}
+
 /** Veggir lesnir beint úr VIGUR-PDF teikningarinnar (frumskráin), þegar hún er til: veggjaflokkurinn (línuþykkt) valinn
  * og samsíða línur paraðar í veggi með þykkt. Skilar miðlínum í punktum síðunnar og stærð síðunnar — eða null ef
  * teikningin á ekkert vigur-PDF (skönnun, TIF, mynd) eða enginn línuflokkur líkist veggjum. */
@@ -154,46 +203,25 @@ export async function greinaVeggiUrPdf(
   plan: ImageObject,
   onProgress?: (percent: number) => void
 ): Promise<{ midlinur: Midlina[]; breidd: number; haed: number; flokkur: string } | null> {
-  if (!plan.frumAssetId) return null;
-  const { saekjaFrum } = await import("./persistence");
-  const blob = await saekjaFrum(plan.frumAssetId);
-  if (!blob) return null;
-  const data = await blob.arrayBuffer();
-  const haus = new Uint8Array(data, 0, Math.min(5, data.byteLength));
-  if (String.fromCharCode(...haus) !== "%PDF-") return null;
-  onProgress?.(15);
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
-  const doc = await pdfjs.getDocument(pdfJsDocumentOptions(data)).promise;
-  try {
-    const sida = await doc.getPage((plan.frumSida ?? 0) + 1);
-    const vp = sida.getViewport({ scale: 1 });
-    // Skorin teikning (önnur hlutföll en síðan) passar ekki lengur við síðuhnitin — þá myndgreining.
-    if (Math.abs(plan.width / plan.height / (vp.width / vp.height) - 1) > 0.01) return null;
-    onProgress?.(35);
-    const ol = await sida.getOperatorList();
-    onProgress?.(70);
-    await andaUI();
-    const flokkar = flokkaPdfLinur(pdfjs.OPS as unknown as PdfOps, ol.fnArray, ol.argsArray, vp.transform);
-    const val = veljaVeggjaflokk(flokkar, vp.width, vp.height);
-    if (!val.valinn) return null;
-    // Svæði sem notandinn hreinsaði („Hreinsa svæði") eru hunsuð — frumskráin sjálf er óbreytt.
-    const burt = plan.hvittad ?? [];
-    const veggir = paraVeggi(flokkar[val.valinn]).filter((v) => {
-      const mx = (v.a[0] + v.b[0]) / 2 / vp.width, my = (v.a[1] + v.b[1]) / 2 / vp.height;
-      return !burt.some((b) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
-    });
-    if (!veggir.length) return null;
-    const midlinur: Midlina[] = veggir.map((v) => ({
-      punktar: [v.a[0], v.a[1], v.b[0], v.b[1]],
-      thykkt: v.thykkt,
-      lengd: Math.hypot(v.b[0] - v.a[0], v.b[1] - v.a[1]),
-    }));
-    onProgress?.(100);
-    return { midlinur, breidd: vp.width, haed: vp.height, flokkur: val.valinn };
-  } finally {
-    void doc.destroy();
-  }
+  const sida = await lesaPdfSidu(plan, onProgress);
+  if (!sida) return null;
+  const { flokkar } = sida;
+  const val = veljaVeggjaflokk(flokkar, sida.breidd, sida.haed);
+  if (!val.valinn) return null;
+  // Svæði sem notandinn hreinsaði („Hreinsa svæði") eru hunsuð — frumskráin sjálf er óbreytt.
+  const burt = plan.hvittad ?? [];
+  const veggir = paraVeggi(flokkar[val.valinn]).filter((v) => {
+    const mx = (v.a[0] + v.b[0]) / 2 / sida.breidd, my = (v.a[1] + v.b[1]) / 2 / sida.haed;
+    return !burt.some((b) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+  });
+  if (!veggir.length) return null;
+  const midlinur: Midlina[] = veggir.map((v) => ({
+    punktar: [v.a[0], v.a[1], v.b[0], v.b[1]],
+    thykkt: v.thykkt,
+    lengd: Math.hypot(v.b[0] - v.a[0], v.b[1] - v.a[1]),
+  }));
+  onProgress?.(100);
+  return { midlinur, breidd: sida.breidd, haed: sida.haed, flokkur: val.valinn };
 }
 
 /** White-out OCR word boxes (raster px of the same canvas), small padding. */
