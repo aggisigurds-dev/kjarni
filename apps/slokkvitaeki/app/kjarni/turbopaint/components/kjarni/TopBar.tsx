@@ -294,7 +294,6 @@ export function TopBar({
       >
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
-        <span className="sm:hidden">PDF</span>
       </Button>
       <span className="hidden max-w-[10.5rem] text-[10px] leading-tight text-stone-500 2xl:inline">
         Í vafranum · engin 20 MB hömlun
@@ -401,10 +400,12 @@ export function TopBar({
           <DropdownMenuSeparator className="2xl:hidden" />
           <DropdownMenuItem onClick={() => void resetBoard()}>Sækja dæmiborð</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onMarkFirewalls?.()}>
+          {/* Á síma eru þessar tvær aðgerðir hamsins efst í valmyndinni — ekki tvítaka. */}
+          <DropdownMenuItem className="max-lg:hidden" onClick={() => onMarkFirewalls?.()}>
             Merkja eldveggi og 165.BR1 (SLT / slöngur / skilti)
           </DropdownMenuItem>
           <DropdownMenuItem
+            className="max-lg:hidden"
             onClick={() => {
               const n = useBoardStore.getState().refreshCrossings();
               toast.message(n ? `Gegnumtök: ${n} krossar vegg` : "Engin lagnir krossa vegg");
