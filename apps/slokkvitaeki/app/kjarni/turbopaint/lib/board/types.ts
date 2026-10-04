@@ -15,6 +15,7 @@ export type Tool =
   | "firewall"
   | "eraser"
   | "crop"
+  | "hvitta"
   | "room"
   | "checkbox";
 
@@ -66,6 +67,8 @@ export interface ImageObject extends BaseObject {
   frumNafn?: string;
   /** Síða í frumskránni (PDF-síða eða TIF-IFD), 0-talið. */
   frumSida?: number;
+  /** Svæði sem notandinn hvíttaði („Hreinsa svæði"), í hlutföllum myndarinnar (0–1). Veggjagreining hunsar þau. */
+  hvittad?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface RectObject extends BaseObject {

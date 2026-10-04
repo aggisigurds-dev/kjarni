@@ -10,6 +10,7 @@ export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunake
 /** Aðgerðir sem hamstikan getur sýnt; WhiteboardApp tengir hverja við sína virkni. */
 export type HamAdgerd =
   | "hreinsa"
+  | "hreinsa-svaedi"
   | "veggir"
   | "kvarda"
   | "thrividd"
@@ -37,7 +38,7 @@ export const HAMIR: Hamur[] = [
     heiti: "Teikning og greining",
     stutt: "Teikning",
     lysing: "Flyttu inn teikninguna, kvarðaðu, hreinsaðu og greindu veggina — grunnurinn fyrir hina hamana.",
-    adgerdir: ["kvarda", "hreinsa", "veggir", "thrividd"],
+    adgerdir: ["kvarda", "hreinsa-svaedi", "hreinsa", "veggir", "thrividd"],
     takn: null,
   },
   {
