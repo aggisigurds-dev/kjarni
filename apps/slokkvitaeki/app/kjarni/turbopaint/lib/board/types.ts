@@ -16,6 +16,7 @@ export type Tool =
   | "eraser"
   | "crop"
   | "hvitta"
+  | "hvitpensill"
   | "room"
   | "checkbox";
 

@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Circle,
   Eraser,
+  Brush,
   SquareDashed,
   Hand,
   Minus,
@@ -68,6 +69,12 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
     label: "Hreinsa svæði — dragðu kassa yfir það sem á að hverfa af teikningunni (hvítast, ⌘Z afturkallar)",
     shortcut: "B",
     icon: <SquareDashed className="size-4" />,
+  },
+  {
+    id: "hvitpensill",
+    label: "Strokleður teikningar — strjúktu yfir það sem á að hverfa (stærð = línuþykkt, ⌘Z afturkallar)",
+    shortcut: "G",
+    icon: <Brush className="size-4" />,
   },
 ];
 

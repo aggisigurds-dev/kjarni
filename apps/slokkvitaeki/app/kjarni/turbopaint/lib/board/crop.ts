@@ -90,3 +90,60 @@ export async function hvittaPlanAsset(
     hvittad: [...(plan.hvittad ?? []), { x: fx, y: fy, w: fx1 - fx, h: fy1 - fy }],
   };
 }
+
+/** Hvítur pensill (Agnar 04.10.2026: „strokað út sjálfur … hálfgert strokleður"): strokan máluð hvít á skjámynd
+ * teikningarinnar. Skilar nýrri mynd + litlum reitum eftir strokunni (hlutföll 0–1) svo veggjagreining úr PDF hunsi
+ * líka það sem var strokað út. null ef strokan snertir ekki teikninguna. */
+export async function hvitPensillPlanAsset(plan: ImageObject, points: number[], breidd: number) {
+  let snertir = false;
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    const x = points[i], y = points[i + 1];
+    if (x > plan.x - breidd && x < plan.x + plan.width + breidd && y > plan.y - breidd && y < plan.y + plan.height + breidd) {
+      snertir = true;
+      break;
+    }
+  }
+  if (!snertir) return null;
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob) throw new Error("Teikningin er ekki í minni — opnaðu borðið aftur");
+  const bmp = await createImageBitmap(blob);
+  const kx = bmp.width / plan.width, ky = bmp.height / plan.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bmp.close();
+    throw new Error("Gat ekki opnað canvas");
+  }
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = breidd * kx;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    const px = (points[i] - plan.x) * kx, py = (points[i + 1] - plan.y) * ky;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  const out = /jpe?g/i.test(blob.type) ? await canvasToBlob(canvas, "image/jpeg", 0.92) : await canvasToBlob(canvas);
+  const assetId = newId();
+  await putAsset(assetId, out);
+  canvas.width = 0;
+  canvas.height = 0;
+  // reitir eftir strokunni, á u.þ.b. hálfrar breiddar fresti
+  const reitir: { x: number; y: number; w: number; h: number }[] = [];
+  const bw = breidd / plan.width, bh = breidd / plan.height;
+  let sx = Number.NaN, sy = Number.NaN;
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    const x = points[i], y = points[i + 1];
+    if (!Number.isNaN(sx) && Math.hypot(x - sx, y - sy) < breidd / 2) continue;
+    sx = x;
+    sy = y;
+    reitir.push({ x: (x - plan.x) / plan.width - bw / 2, y: (y - plan.y) / plan.height - bh / 2, w: bw, h: bh });
+  }
+  return { assetId, hvittad: [...(plan.hvittad ?? []), ...reitir] };
+}

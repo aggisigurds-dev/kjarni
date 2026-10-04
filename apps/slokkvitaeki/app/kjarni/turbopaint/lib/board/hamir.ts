@@ -11,6 +11,7 @@ export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunake
 export type HamAdgerd =
   | "hreinsa"
   | "hreinsa-svaedi"
+  | "strokledur"
   | "veggir"
   | "kvarda"
   | "thrividd"
@@ -38,7 +39,7 @@ export const HAMIR: Hamur[] = [
     heiti: "Teikning og greining",
     stutt: "Teikning",
     lysing: "Flyttu inn teikninguna, kvarðaðu, hreinsaðu og greindu veggina — grunnurinn fyrir hina hamana.",
-    adgerdir: ["kvarda", "hreinsa-svaedi", "hreinsa", "veggir", "thrividd"],
+    adgerdir: ["kvarda", "strokledur", "hreinsa-svaedi", "hreinsa", "veggir", "thrividd"],
     takn: null,
   },
   {

@@ -25,7 +25,7 @@ import {
   siaTeikningu,
   whiteOutWords,
 } from "../../lib/board/strip";
-import { cropPlanAsset, hvittaPlanAsset } from "../../lib/board/crop";
+import { cropPlanAsset, hvitPensillPlanAsset, hvittaPlanAsset } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
@@ -529,6 +529,10 @@ export function WhiteboardApp() {
     (a: HamAdgerd) => {
       const st = useBoardStore.getState();
       switch (a) {
+        case "strokledur":
+          st.setTool("hvitpensill");
+          toast.message("Strokleður: strjúktu yfir það sem á að hverfa — stærðin fylgir línuþykktinni neðst · Esc hættir");
+          return;
         case "hreinsa-svaedi":
           st.setTool("hvitta");
           toast.message("Hreinsa svæði: dragðu kassa yfir það sem á að hverfa af teikningunni — Esc hættir");
@@ -632,6 +636,25 @@ export function WhiteboardApp() {
       toast.success("Svæðið hreinsað — ⌘Z afturkallar · dragðu fleiri kassa eða Esc til að hætta");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Hreinsun mistókst");
+    }
+  }, []);
+
+  // Hvítur pensill: strokan máluð hvít á þær teikningar sem hún snertir.
+  const runHvitPensill = useCallback(async (points: number[], breidd: number) => {
+    const plon = useBoardStore
+      .getState()
+      .objects.filter((o): o is Extract<typeof o, { type: "image" }> => o.type === "image" && !o.hidden && !o.rotation);
+    try {
+      let n = 0;
+      for (const plan of plon) {
+        const res = await hvitPensillPlanAsset(plan, points, breidd);
+        if (!res) continue;
+        useBoardStore.getState().patchObject(plan.id, res, true);
+        n++;
+      }
+      if (!n) toast.error("Strokan snerti enga teikningu");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Strokleður mistókst");
     }
   }, []);
 
@@ -986,6 +1009,7 @@ export function WhiteboardApp() {
           k: "calibrate",
           e: "eraser",
           b: "hvitta",
+          g: "hvitpensill",
           x: "checkbox",
         };
         const tool = map[e.key.toLowerCase()];
@@ -1096,6 +1120,7 @@ export function WhiteboardApp() {
               onCalibrate={(px, points) => setCalibrateDraft({ px, points })}
               onCropRect={(rect) => void runCrop(rect)}
               onHvittaRect={(rect) => void runHvitta(rect)}
+              onHvitPensill={(pts, b) => void runHvitPensill(pts, b)}
               onRequestStrip={(planId) => setStripPlanId(planId)}
             />
           ) : (

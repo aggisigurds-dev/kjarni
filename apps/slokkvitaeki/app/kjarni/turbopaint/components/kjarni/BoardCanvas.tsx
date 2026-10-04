@@ -69,7 +69,8 @@ type Draft =
   | { kind: LineKind; points: number[] }
   | { kind: "marquee"; ax: number; ay: number; bx: number; by: number }
   | { kind: "crop"; ax: number; ay: number; bx: number; by: number }
-  | { kind: "hvitta"; ax: number; ay: number; bx: number; by: number };
+  | { kind: "hvitta"; ax: number; ay: number; bx: number; by: number }
+  | { kind: "hvitpensill"; points: number[]; breidd: number };
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -99,6 +100,7 @@ export function BoardCanvas({
   onCalibrate,
   onCropRect,
   onHvittaRect,
+  onHvitPensill,
   onRequestStrip,
 }: {
   width: number;
@@ -109,6 +111,8 @@ export function BoardCanvas({
   onCalibrate: (pixels: number, points: number[]) => void;
   onCropRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   onHvittaRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  /** Hvítur pensill: slóð (heimshnit) og breidd (heimseiningar). */
+  onHvitPensill?: (points: number[], breidd: number) => void;
   onRequestStrip?: (planId: string) => void;
 }) {
   const stageRef = useRef<Konva.Stage>(null);
@@ -204,7 +208,7 @@ export function BoardCanvas({
 
   const commitShape = useCallback((d: Draft, firewallWall = false) => {
     const { style: st, addObjects } = useBoardStore.getState();
-    if (d.kind === "marquee" || d.kind === "crop" || d.kind === "hvitta") return;
+    if (d.kind === "marquee" || d.kind === "crop" || d.kind === "hvitta" || d.kind === "hvitpensill") return;
     if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
       let box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       const asCheckbox = d.kind === "rect" && useBoardStore.getState().tool === "checkbox";
@@ -468,6 +472,10 @@ export function BoardCanvas({
         setDraftState({ ...d, bx: pt.x, by: pt.y });
         return;
       }
+      if (d.kind === "hvitpensill") {
+        setDraftState({ ...d, points: [...d.points, world.x, world.y] });
+        return;
+      }
       if (d.kind === "pen") {
         setDraftState({ kind: "pen", points: [...d.points, world.x, world.y] });
         return;
@@ -492,6 +500,11 @@ export function BoardCanvas({
       setDraftState(null);
       useBoardStore.getState().setTool("select");
       if (box.width > 24 && box.height > 24) onCropRect?.(box);
+      return;
+    }
+    if (d.kind === "hvitpensill") {
+      setDraftState(null);
+      if (d.points.length >= 2) onHvitPensill?.(d.points, d.breidd);
       return;
     }
     if (d.kind === "hvitta") {
@@ -535,7 +548,7 @@ export function BoardCanvas({
     if (nextTool !== "pen" && nextTool !== "room") {
       useBoardStore.getState().setTool("select");
     }
-  }, [commitShape, onCalibrate, onCropRect, onHvittaRect, setDraftState]);
+  }, [commitShape, onCalibrate, onCropRect, onHvittaRect, onHvitPensill, setDraftState]);
 
   // Two-finger pinch: zoom around the fingers' midpoint, pan as it moves.
   useEffect(() => {
@@ -654,6 +667,12 @@ export function BoardCanvas({
 
     if (currentTool === "crop") {
       setDraftState({ kind: "crop", ax: world.x, ay: world.y, bx: world.x, by: world.y });
+      return;
+    }
+    if (currentTool === "hvitpensill") {
+      // Pensilbreidd fylgir línuþykkt stílstikunnar (2/4/8/12 px → 12/24/48/72 skjápixlar), óháð aðdrætti.
+      const breidd = (Math.max(2, useBoardStore.getState().style.strokeWidth) * 6) / camera.scale;
+      setDraftState({ kind: "hvitpensill", points: [world.x, world.y, world.x + 0.01, world.y], breidd });
       return;
     }
     if (currentTool === "hvitta") {
@@ -1188,6 +1207,7 @@ export function BoardCanvas({
           draft.kind !== "marquee" &&
           draft.kind !== "crop" &&
           draft.kind !== "hvitta" &&
+          draft.kind !== "hvitpensill" &&
           draft.kind !== "rect" &&
           draft.kind !== "ellipse" &&
           draft.kind !== "sticky" ? (
@@ -1232,6 +1252,18 @@ export function BoardCanvas({
               strokeWidth={2 / camera.scale}
               dash={[10, 6]}
               fill="rgba(254,101,63,0.08)"
+              listening={false}
+              name="ui-only"
+            />
+          ) : null}
+          {draft && draft.kind === "hvitpensill" ? (
+            <Line
+              points={draft.points}
+              stroke="#ffffff"
+              strokeWidth={draft.breidd}
+              lineCap="round"
+              lineJoin="round"
+              opacity={0.92}
               listening={false}
               name="ui-only"
             />
