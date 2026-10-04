@@ -5,6 +5,7 @@
 
 import {
   Box,
+  Slash,
   Brush,
   BrickWall,
   CheckSquare,
@@ -22,6 +23,7 @@ import { HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/b
 
 export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
   kvarda: { texti: "Kvarða", titill: "Kvarða teikninguna á þekktri lengd (K)", takn: <Ruler className="size-3.5" /> },
+  "eyda-linu": { texti: "Eyða línu", titill: "Smelltu á línu sem á að hverfa (vigur-PDF) — öll línan og bútar hennar fara, ⌘Z afturkallar", takn: <Slash className="size-3.5" /> },
   strokledur: { texti: "Strokleður", titill: "Strjúktu yfir það sem á að hverfa af teikningunni — stærð = línuþykkt neðst, ⌘Z afturkallar", takn: <Brush className="size-3.5" /> },
   "hreinsa-svaedi": { texti: "Hreinsa svæði", titill: "Dragðu kassa yfir það sem á að hverfa af teikningunni — hvítast, ⌘Z afturkallar", takn: <SquareDashed className="size-3.5" /> },
   hreinsa: { texti: "Hreinsa", titill: "Hreinsa teikningu — sýna bara veggi og þær merkingar sem þú velur", takn: <Eraser className="size-3.5" /> },

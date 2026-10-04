@@ -20,12 +20,14 @@ import {
   canvasToAsset,
   greinaVeggiTeikningar,
   greinaVeggiUrPdf,
+  lesaPdfSidu,
+  type PdfSida,
   isFirewallLabelWord,
   isNameWord,
   siaTeikningu,
   whiteOutWords,
 } from "../../lib/board/strip";
-import { cropPlanAsset, hvitPensillPlanAsset, hvittaPlanAsset } from "../../lib/board/crop";
+import { cropPlanAsset, hvitPensillPlanAsset, hvittaPlanAsset, hvittaStrik } from "../../lib/board/crop";
 import { classifyFile, importFiles } from "../../lib/board/import-files";
 import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
@@ -71,6 +73,7 @@ import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
 import Hus3D from "./Hus3D";
+import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import { Button } from "../ui/button";
 import {
@@ -529,6 +532,10 @@ export function WhiteboardApp() {
     (a: HamAdgerd) => {
       const st = useBoardStore.getState();
       switch (a) {
+        case "eyda-linu":
+          st.setTool("eydalinu");
+          toast.message("Eyða línu: smelltu á línu sem á að hverfa (vigur-PDF) — öll línan fer, ⌘Z afturkallar · Esc hættir");
+          return;
         case "strokledur":
           st.setTool("hvitpensill");
           toast.message("Strokleður: strjúktu yfir það sem á að hverfa — stærðin fylgir línuþykktinni neðst · Esc hættir");
@@ -636,6 +643,70 @@ export function WhiteboardApp() {
       toast.success("Svæðið hreinsað — ⌘Z afturkallar · dragðu fleiri kassa eða Esc til að hætta");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Hreinsun mistókst");
+    }
+  }, []);
+
+  // „Eyða línu": smellt á línu í vigur-PDF teikningu → hún og samliggjandi bútar hennar hvítast (Agnar 04.10.2026).
+  // Sveimi: línan undir músinni lýsist rauð áður en smellt er (síðan lesin einu sinni, svo samstillt leit).
+  const eydaLinuBid = useRef(false);
+  const [ljosLina, setLjosLina] = useState<number[][] | null>(null);
+  const sidurIMinni = useRef(new Map<string, PdfSida | null | "les">());
+  const sveimaEydaLinu = useCallback((pt: { x: number; y: number }, vik: number) => {
+    const plan = [...useBoardStore.getState().objects]
+      .reverse()
+      .find(
+        (o): o is Extract<typeof o, { type: "image" }> =>
+          o.type === "image" && !o.hidden && !o.rotation && pt.x >= o.x && pt.x <= o.x + o.width && pt.y >= o.y && pt.y <= o.y + o.height
+      );
+    if (!plan) return setLjosLina(null);
+    const lykill = plan.id + "|" + plan.width + "x" + plan.height;
+    const til = sidurIMinni.current.get(lykill);
+    if (til === undefined) {
+      sidurIMinni.current.set(lykill, "les");
+      void lesaPdfSidu(plan)
+        .then((s) => sidurIMinni.current.set(lykill, s))
+        .catch(() => sidurIMinni.current.set(lykill, null));
+      return;
+    }
+    if (!til || til === "les") return setLjosLina(null);
+    const kx = til.breidd / plan.width;
+    const f = finnaLinu(til.flokkar, [(pt.x - plan.x) * kx, (pt.y - plan.y) * kx], vik * kx);
+    setLjosLina(f ? f.strik.map((s) => [plan.x + s[0] / kx, plan.y + s[1] / kx, plan.x + s[2] / kx, plan.y + s[3] / kx]) : null);
+  }, []);
+  const runEydaLinu = useCallback(async (pt: { x: number; y: number }, vik: number) => {
+    if (eydaLinuBid.current) return;
+    const plan = [...useBoardStore.getState().objects]
+      .reverse()
+      .find(
+        (o): o is Extract<typeof o, { type: "image" }> =>
+          o.type === "image" && !o.hidden && pt.x >= o.x && pt.x <= o.x + o.width && pt.y >= o.y && pt.y <= o.y + o.height
+      );
+    if (!plan) return;
+    if (plan.rotation) {
+      toast.error("Snúðu teikningunni í 0° fyrst");
+      return;
+    }
+    eydaLinuBid.current = true;
+    try {
+      const sida = await lesaPdfSidu(plan);
+      if (!sida) {
+        toast.error("„Eyða línu\" virkar á teikningum úr vigur-PDF — notaðu strokleðrið (G) eða „Hreinsa svæði\" (B) á skannanir");
+        return;
+      }
+      const kx = sida.breidd / plan.width;
+      const fundin = finnaLinu(sida.flokkar, [(pt.x - plan.x) * kx, (pt.y - plan.y) * kx], vik * kx);
+      if (!fundin) {
+        toast.message("Engin lína akkúrat hér — smelltu beint á línuna");
+        return;
+      }
+      const res = await hvittaStrik(plan, fundin.strik, sida.breidd, sida.haed, Number(fundin.flokkur) || 0.3);
+      useBoardStore.getState().patchObject(plan.id, res, true);
+      setLjosLina(null);
+      toast.success(`Línu eytt (${fundin.strik.length} ${fundin.strik.length === 1 ? "bútur" : "bútar"}) — ⌘Z afturkallar`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gat ekki eytt línu");
+    } finally {
+      eydaLinuBid.current = false;
     }
   }, []);
 
@@ -1010,6 +1081,7 @@ export function WhiteboardApp() {
           e: "eraser",
           b: "hvitta",
           g: "hvitpensill",
+          d: "eydalinu",
           x: "checkbox",
         };
         const tool = map[e.key.toLowerCase()];
@@ -1121,6 +1193,9 @@ export function WhiteboardApp() {
               onCropRect={(rect) => void runCrop(rect)}
               onHvittaRect={(rect) => void runHvitta(rect)}
               onHvitPensill={(pts, b) => void runHvitPensill(pts, b)}
+              onEydaLinu={(pt, vik) => void runEydaLinu(pt, vik)}
+              onEydaLinuSveima={sveimaEydaLinu}
+              ljosLina={ljosLina}
               onRequestStrip={(planId) => setStripPlanId(planId)}
             />
           ) : (

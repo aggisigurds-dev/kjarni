@@ -17,6 +17,7 @@ export type Tool =
   | "crop"
   | "hvitta"
   | "hvitpensill"
+  | "eydalinu"
   | "room"
   | "checkbox";
 

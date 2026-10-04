@@ -101,6 +101,9 @@ export function BoardCanvas({
   onCropRect,
   onHvittaRect,
   onHvitPensill,
+  onEydaLinu,
+  onEydaLinuSveima,
+  ljosLina,
   onRequestStrip,
 }: {
   width: number;
@@ -113,6 +116,12 @@ export function BoardCanvas({
   onHvittaRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   /** Hvítur pensill: slóð (heimshnit) og breidd (heimseiningar). */
   onHvitPensill?: (points: number[], breidd: number) => void;
+  /** „Eyða línu": smellt á punkt (heimshnit) með vikmörkum (heimseiningar). */
+  onEydaLinu?: (pt: { x: number; y: number }, vik: number) => void;
+  /** Músin yfir teikningu í „Eyða línu" — kallandinn finnur línuna og skilar henni í `ljosLina`. */
+  onEydaLinuSveima?: (pt: { x: number; y: number }, vik: number) => void;
+  /** Línan sem „Eyða línu" myndi fjarlægja: strik [ax, ay, bx, by] í heimshnitum, teiknuð rauð. */
+  ljosLina?: number[][] | null;
   onRequestStrip?: (planId: string) => void;
 }) {
   const stageRef = useRef<Konva.Stage>(null);
@@ -604,12 +613,23 @@ export function BoardCanvas({
     };
   }, [setDraftState]);
 
+  const sveimaRef = useRef(onEydaLinuSveima);
+  sveimaRef.current = onEydaLinuSveima;
+  const sveimaRaf = useRef(0);
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       if (pinchRef.current) return;
       if (eraseRef.current) {
         eraseAt(e.clientX, e.clientY);
         return;
+      }
+      if (useBoardStore.getState().tool === "eydalinu" && sveimaRef.current && !panRef.current) {
+        const cx = e.clientX, cy = e.clientY;
+        cancelAnimationFrame(sveimaRaf.current);
+        sveimaRaf.current = requestAnimationFrame(() => {
+          const w = clientToWorld(cx, cy);
+          sveimaRef.current?.(w, 8 / useBoardStore.getState().camera.scale);
+        });
       }
       if (!panRef.current && !draftRef.current) return;
       applyPointerMove(e.clientX, e.clientY);
@@ -667,6 +687,11 @@ export function BoardCanvas({
 
     if (currentTool === "crop") {
       setDraftState({ kind: "crop", ax: world.x, ay: world.y, bx: world.x, by: world.y });
+      return;
+    }
+    if (currentTool === "eydalinu") {
+      // 8 skjápixla vikmörk, óháð aðdrætti
+      onEydaLinu?.(world, 8 / camera.scale);
       return;
     }
     if (currentTool === "hvitpensill") {
@@ -1256,6 +1281,20 @@ export function BoardCanvas({
               name="ui-only"
             />
           ) : null}
+          {ljosLina && tool === "eydalinu"
+            ? ljosLina.map((s, i) => (
+                <Line
+                  key={`ljos-${i}`}
+                  points={s}
+                  stroke="#e11d2e"
+                  strokeWidth={4 / camera.scale}
+                  lineCap="round"
+                  opacity={0.85}
+                  listening={false}
+                  name="ui-only"
+                />
+              ))
+            : null}
           {draft && draft.kind === "hvitpensill" ? (
             <Line
               points={draft.points}

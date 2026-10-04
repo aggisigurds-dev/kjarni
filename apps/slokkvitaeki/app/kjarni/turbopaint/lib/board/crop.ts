@@ -147,3 +147,43 @@ export async function hvitPensillPlanAsset(plan: ImageObject, points: number[], 
   }
   return { assetId, hvittad: [...(plan.hvittad ?? []), ...reitir] };
 }
+
+/** „Eyða línu": málar valin strik (punktar PDF-síðunnar) hvít á skjámynd teikningarinnar, aðeins breiðara en línan
+ * sjálf svo hún hverfi alveg. Skilar nýrri mynd. */
+export async function hvittaStrik(
+  plan: ImageObject,
+  strik: [number, number, number, number][],
+  sidaB: number,
+  sidaH: number,
+  linuthykktPt: number
+) {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob) throw new Error("Teikningin er ekki í minni — opnaðu borðið aftur");
+  const bmp = await createImageBitmap(blob);
+  const kx = bmp.width / sidaB, ky = bmp.height / sidaH;
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bmp.close();
+    throw new Error("Gat ekki opnað canvas");
+  }
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = Math.max(3, linuthykktPt * kx * 2 + 2);
+  ctx.lineCap = "square";
+  ctx.beginPath();
+  for (const [ax, ay, bx, by] of strik) {
+    ctx.moveTo(ax * kx, ay * ky);
+    ctx.lineTo(bx * kx, by * ky);
+  }
+  ctx.stroke();
+  const out = /jpe?g/i.test(blob.type) ? await canvasToBlob(canvas, "image/jpeg", 0.92) : await canvasToBlob(canvas);
+  const assetId = newId();
+  await putAsset(assetId, out);
+  canvas.width = 0;
+  canvas.height = 0;
+  return { assetId };
+}

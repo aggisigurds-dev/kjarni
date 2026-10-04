@@ -12,6 +12,7 @@ export type HamAdgerd =
   | "hreinsa"
   | "hreinsa-svaedi"
   | "strokledur"
+  | "eyda-linu"
   | "veggir"
   | "kvarda"
   | "thrividd"
@@ -39,7 +40,7 @@ export const HAMIR: Hamur[] = [
     heiti: "Teikning og greining",
     stutt: "Teikning",
     lysing: "Flyttu inn teikninguna, kvarðaðu, hreinsaðu og greindu veggina — grunnurinn fyrir hina hamana.",
-    adgerdir: ["kvarda", "strokledur", "hreinsa-svaedi", "hreinsa", "veggir", "thrividd"],
+    adgerdir: ["kvarda", "eyda-linu", "strokledur", "hreinsa-svaedi", "hreinsa", "veggir", "thrividd"],
     takn: null,
   },
   {
