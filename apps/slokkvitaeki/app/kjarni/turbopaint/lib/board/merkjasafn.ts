@@ -462,7 +462,7 @@ export function teiknaLykil(
 
 /* ── Stærð og snúningur merkis (433) ─────────────────────────────────────────────────────────────────────────────── */
 
-export const STAERD_MIN = 24;
+export const STAERD_MIN = 10; // eins og 433 (lækkað 24 → 10 px 06.10.2026)
 export const STAERD_MAX = 160;
 /** Sjálfgefin stimpilstærð Teikning-gluggans á borðtölvu (436 stimpilPx: w/12 klemmt í 32–56) — viðmið þegar hæðin á
  * enga `stimpilStaerd`. */
