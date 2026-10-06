@@ -2,7 +2,7 @@
 
 import type Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
+import { Group, Layer, Line, Rect, Stage, Text as KonvaText, Transformer } from "react-konva";
 import { toast } from "sonner";
 import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
@@ -19,6 +19,8 @@ import { getSymbol } from "../../lib/board/symbols";
 import { getStampSize } from "../../lib/board/symbol-settings";
 import { TAEKI_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { stimpilStaerdBords } from "../../lib/board/uttekt";
+import { raesaFjolcrop, useFjolcrop } from "../../lib/board/fjolcrop";
+import { getHamur, useHamur } from "../../lib/board/hamir";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { DEFAULT_ROOM_NAME, fillAlpha, roomOfSelection } from "../../lib/board/rooms";
@@ -72,6 +74,7 @@ type Draft =
   | { kind: LineKind; points: number[] }
   | { kind: "marquee"; ax: number; ay: number; bx: number; by: number }
   | { kind: "crop"; ax: number; ay: number; bx: number; by: number }
+  | { kind: "fjolcrop"; ax: number; ay: number; bx: number; by: number }
   | { kind: "hvitta"; ax: number; ay: number; bx: number; by: number }
   | { kind: "hvitpensill"; points: number[]; breidd: number };
 
@@ -110,7 +113,13 @@ export function BoardCanvas({
   onRequestStrip,
   onSetjaVal,
   onTaekiDropped,
+  onFjolcrop,
+  onFinnaGrunnmyndir,
 }: {
+  /** „Croppa oft": skera blaðið í hlutana sem kassarnir sýna (Enter / „Croppa"). */
+  onFjolcrop?: () => void;
+  /** „Croppa oft → Finna sjálfkrafa": stinga upp á kössum utan um grunnmyndirnar. */
+  onFinnaGrunnmyndir?: () => void;
   width: number;
   height: number;
   onEditText: (id: string) => void;
@@ -135,6 +144,10 @@ export function BoardCanvas({
 }) {
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
+  const trFjolRef = useRef<Konva.Transformer>(null);
+  const fjolKassar = useFjolcrop((s) => s.kassar);
+  const fjolValinn = useFjolcrop((s) => s.valinn);
+  const hamur = useHamur((s) => s.hamur);
   const objects = useBoardStore((s) => s.objects);
   const layers = useBoardStore((s) => s.layers);
   const selectedIds = useBoardStore((s) => s.selectedIds);
@@ -211,6 +224,16 @@ export function BoardCanvas({
     tr.getLayer()?.batchDraw();
   }, [selectedIds, objects, camera, width, height, ritillVirkur]);
 
+  // „Croppa oft": valinn kassi fær handföng (stækka/minnka), aðeins meðan tólið er virkt.
+  useEffect(() => {
+    const tr = trFjolRef.current;
+    const stage = stageRef.current;
+    if (!tr || !stage) return;
+    const node = tool === "fjolcrop" && fjolValinn != null ? stage.findOne(`#fjolkassi-${fjolValinn}`) : null;
+    tr.nodes(node ? [node] : []);
+    tr.getLayer()?.batchDraw();
+  }, [tool, fjolValinn, fjolKassar, camera, width, height]);
+
   const draftRef = useRef<Draft | null>(null);
 
   const setDraftState = useCallback((next: Draft | null) => {
@@ -230,7 +253,7 @@ export function BoardCanvas({
 
   const commitShape = useCallback((d: Draft, firewallWall = false) => {
     const { style: st, addObjects } = useBoardStore.getState();
-    if (d.kind === "marquee" || d.kind === "crop" || d.kind === "hvitta" || d.kind === "hvitpensill") return;
+    if (d.kind === "marquee" || d.kind === "crop" || d.kind === "fjolcrop" || d.kind === "hvitta" || d.kind === "hvitpensill") return;
     if (d.kind === "rect" || d.kind === "ellipse" || d.kind === "sticky") {
       let box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
       const asCheckbox = d.kind === "rect" && useBoardStore.getState().tool === "checkbox";
@@ -488,9 +511,10 @@ export function BoardCanvas({
         d.kind === "sticky" ||
         d.kind === "marquee" ||
         d.kind === "crop" ||
+        d.kind === "fjolcrop" ||
         d.kind === "hvitta"
       ) {
-        const pt = d.kind === "crop" || d.kind === "hvitta" ? world : snapped;
+        const pt = d.kind === "crop" || d.kind === "fjolcrop" || d.kind === "hvitta" ? world : snapped;
         setDraftState({ ...d, bx: pt.x, by: pt.y });
         return;
       }
@@ -522,6 +546,14 @@ export function BoardCanvas({
       setDraftState(null);
       useBoardStore.getState().setTool("select");
       if (box.width > 24 && box.height > 24) onCropRect?.(box);
+      return;
+    }
+    if (d.kind === "fjolcrop") {
+      // Tólið helst virkt: dragðu næsta kassa (2, 3 …); Enter sker, Esc hættir.
+      const box = rectFromPoints(d.ax, d.ay, d.bx, d.by);
+      setDraftState(null);
+      const lagm = 12 / useBoardStore.getState().camera.scale;
+      if (box.width > lagm && box.height > lagm) useFjolcrop.getState().baeta(box);
       return;
     }
     if (d.kind === "hvitpensill") {
@@ -702,6 +734,13 @@ export function BoardCanvas({
       setDraftState({ kind: "crop", ax: world.x, ay: world.y, bx: world.x, by: world.y });
       return;
     }
+    if (currentTool === "fjolcrop") {
+      // Smellur á kassa eða handfang hans = færa/stækka hann (Konva sér um það); annars nýr kassi.
+      if (!clickedEmpty) return;
+      useFjolcrop.getState().velja(null);
+      setDraftState({ kind: "fjolcrop", ax: world.x, ay: world.y, bx: world.x, by: world.y });
+      return;
+    }
     if (currentTool === "eydalinu") {
       // 8 skjápixla vikmörk, óháð aðdrætti
       onEydaLinu?.(world, 8 / camera.scale);
@@ -745,7 +784,7 @@ export function BoardCanvas({
         setDraftState({ kind: "polyline", points: [world.x, world.y] });
         return;
       }
-      const stampPx = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize());
+      const stampPx = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize(), world);
       // Stimplað þar sem smellt var, ekki á næsta grindarpunkt — sama regla og
       // í drættinum: tákn eru sett á vegg eða hurð, ekki á grind.
       const at = world;
@@ -886,9 +925,25 @@ export function BoardCanvas({
     }
   }, [tool, commitShape, setDraftState]);
 
+  const fjolcropRef = useRef(onFjolcrop);
+  fjolcropRef.current = onFjolcrop;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
+      if (useBoardStore.getState().tool === "fjolcrop") {
+        // Croppa oft: Enter sker, Delete/Backspace eyðir völdum kassa, Esc hættir (neðar — kassarnir hverfa með tólinu).
+        if (e.key === "Enter") {
+          e.preventDefault();
+          fjolcropRef.current?.();
+          return;
+        }
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          const v = useFjolcrop.getState().valinn;
+          if (v != null) useFjolcrop.getState().eyda(v);
+          return;
+        }
+      }
       if (e.key === "Escape") {
         if (useBoardStore.getState().tool === "room") {
           polyRef.current = null;
@@ -1250,7 +1305,7 @@ export function BoardCanvas({
           ))}
           {draft &&
           draft.kind !== "marquee" &&
-          draft.kind !== "crop" &&
+          draft.kind !== "crop" && draft.kind !== "fjolcrop" &&
           draft.kind !== "hvitta" &&
           draft.kind !== "hvitpensill" &&
           draft.kind !== "rect" &&
@@ -1301,6 +1356,76 @@ export function BoardCanvas({
               name="ui-only"
             />
           ) : null}
+          {tool === "fjolcrop"
+            ? fjolKassar.map((k, i) => (
+                <Rect
+                  key={`fjol-${i}`}
+                  id={`fjolkassi-${i}`}
+                  x={k.x}
+                  y={k.y}
+                  width={k.width}
+                  height={k.height}
+                  stroke="#FE653F"
+                  strokeWidth={(i === fjolValinn ? 3 : 2) / camera.scale}
+                  dash={[12 / camera.scale, 7 / camera.scale]}
+                  fill={i === fjolValinn ? "rgba(254,101,63,0.16)" : "rgba(254,101,63,0.07)"}
+                  draggable
+                  name="ui-only fjolkassi"
+                  onPointerDown={(e) => {
+                    e.cancelBubble = true;
+                    useFjolcrop.getState().velja(i);
+                  }}
+                  onDragMove={(e) => {
+                    const n = e.target;
+                    useFjolcrop.getState().setja(i, { x: n.x(), y: n.y(), width: k.width, height: k.height });
+                  }}
+                  onDragEnd={(e) => {
+                    const n = e.target;
+                    useFjolcrop.getState().setja(i, { x: n.x(), y: n.y(), width: k.width, height: k.height });
+                  }}
+                  onTransformEnd={(e) => {
+                    const n = e.target;
+                    const ny = { x: n.x(), y: n.y(), width: Math.max(8, n.width() * n.scaleX()), height: Math.max(8, n.height() * n.scaleY()) };
+                    n.scaleX(1);
+                    n.scaleY(1);
+                    useFjolcrop.getState().setja(i, ny);
+                  }}
+                />
+              ))
+            : null}
+          {tool === "fjolcrop"
+            ? fjolKassar.map((k, i) => {
+                const s = 1 / camera.scale;
+                return (
+                  <Group key={`fjolnr-${i}`} x={k.x + 6 * s} y={k.y + 6 * s} listening={false} name="ui-only">
+                    <Rect width={30 * s} height={30 * s} cornerRadius={15 * s} fill="#FE653F" />
+                    <KonvaText width={30 * s} height={30 * s} align="center" verticalAlign="middle" text={String(i + 1)} fontSize={17 * s} fontStyle="bold" fill="#ffffff" />
+                  </Group>
+                );
+              })
+            : null}
+          {draft && draft.kind === "fjolcrop" ? (
+            <Rect
+              {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
+              stroke="#FE653F"
+              strokeWidth={2 / camera.scale}
+              dash={[12 / camera.scale, 7 / camera.scale]}
+              fill="rgba(254,101,63,0.1)"
+              listening={false}
+              name="ui-only"
+            />
+          ) : null}
+          <Transformer
+            ref={trFjolRef}
+            rotateEnabled={false}
+            keepRatio={false}
+            boundBoxFunc={(oldBox, newBox) => (newBox.width < 16 || newBox.height < 16 ? oldBox : newBox)}
+            anchorSize={12}
+            borderStroke="#FE653F"
+            anchorStroke="#FE653F"
+            anchorFill="#fff"
+            name="ui-only"
+          />
           {ljosLina && tool === "eydalinu"
             ? ljosLina.map((s, i) => (
                 <Line
@@ -1374,6 +1499,58 @@ export function BoardCanvas({
       {tool === "room" ? (
         <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/10 bg-[#1a1d2e]/90 px-3 py-1.5 text-[12px] text-stone-100 shadow-lg">
           Teiknaðu kassa fyrir rýmið · Enter = búa til · Esc = hætta
+        </div>
+      ) : null}
+      {tool === "fjolcrop" ? (
+        <div
+          data-fjolcrop
+          // Neðst, ofan við stílstikuna (og táknaslána þegar hún sést) — efst skyggði spjaldið á efstu grunnmyndina.
+          className={`absolute left-1/2 z-20 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-2 text-[12px] text-stone-100 shadow-xl select-none ${
+            getHamur(hamur).takn ? "bottom-36" : "bottom-[4.25rem]"
+          }`}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <span className="font-semibold text-[#FE653F]">✂ Croppa oft</span>
+          <span className="text-stone-300">
+            {fjolKassar.length ? "Dragðu næsta kassa — eða færðu/stækkaðu kassa" : "Dragðu kassa yfir hverja grunnmynd (1., 2., 3. hæð …)"}
+          </span>
+          {fjolKassar.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              data-fjolkassi={i + 1}
+              title={`Eyða kassa ${i + 1}`}
+              onClick={() => useFjolcrop.getState().eyda(i)}
+              className={`rounded-full px-2 py-0.5 font-semibold ${i === fjolValinn ? "bg-[#FE653F] text-white" : "bg-white/10 text-stone-100 hover:bg-white/20"}`}
+            >
+              {i + 1} ✕
+            </button>
+          ))}
+          {onFinnaGrunnmyndir ? (
+            <button
+              type="button"
+              onClick={() => onFinnaGrunnmyndir()}
+              title="Stinga upp á kössum utan um aðskildar grunnmyndir á blaðinu — lagaðu þá eða eyddu áður en þú croppar"
+              className="rounded-md border border-white/15 bg-white/5 px-2 py-1 hover:bg-white/12"
+            >
+              Finna sjálfkrafa
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={!fjolKassar.length}
+            onClick={() => onFjolcrop?.()}
+            className="rounded-md bg-[#FE653F] px-2.5 py-1 font-semibold text-white hover:bg-[#ff7a58] disabled:opacity-50"
+          >
+            Croppa {fjolKassar.length || ""} (Enter)
+          </button>
+          <button
+            type="button"
+            onClick={() => useBoardStore.getState().setTool("select")}
+            className="rounded-md px-2 py-1 text-stone-300 hover:bg-white/10"
+          >
+            Hætta (Esc)
+          </button>
         </div>
       ) : null}
       {menu
@@ -1604,11 +1781,7 @@ export function BoardCanvas({
                           type="button"
                           className={item}
                           onClick={act(() => {
-                            // 07.10.2026 vörn: croppun á TENGDRI úttektarmynd varpaði skugga og merkjum rangt
-                            if ((target as { uttekt?: unknown }).uttekt) {
-                              toast.message("Úttektarteikningin opnast þegar á húsinu — croppun á tengdri hæð kemur í næstu uppfærslu.");
-                              return;
-                            }
+                            // Tengd úttektarmynd má croppa: skurðurinn fylgir (uttekt.myndSkurdur, sjá skurdurEftirCrop)
                             useBoardStore.getState().setTool("crop");
                             toast.message(
                               "Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af"
@@ -1616,6 +1789,14 @@ export function BoardCanvas({
                           })}
                         >
                           ✂ Croppa teikningu
+                        </button>
+                        <button
+                          type="button"
+                          className={item}
+                          title="Margar grunnmyndir á einu blaði: dragðu kassa yfir hverja og skerðu þær allar í einu"
+                          onClick={act(() => raesaFjolcrop())}
+                        >
+                          ✂ Croppa oft — margar hæðir
                         </button>
                         <button
                           type="button"

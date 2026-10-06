@@ -84,13 +84,15 @@ export function golfHaedar(plan: Pick<ImageObject, "width" | "height" | "uttekt"
   const allt = { x0: -w / 2, y0: -h / 2, x1: w / 2, y1: h / 2 };
   const t = plan.uttekt, sk = t?.skurdur;
   if (!t || !sk || !(sk.w > 8) || !(sk.h > 8) || !(t.frumB > 0) || !(t.frumH > 0)) return allt;
-  const kx = w / t.frumB, ky = h / t.frumH;
+  // Skorin mynd („Croppa oft") sýnir aðeins myndSkurdur af blaðinu — skurður hæðarinnar miðast þá við hann.
+  const ms = t.myndSkurdur && t.myndSkurdur.w > 0 && t.myndSkurdur.h > 0 ? t.myndSkurdur : { x: 0, y: 0, w: t.frumB, h: t.frumH };
+  const kx = w / ms.w, ky = h / ms.h;
   const sp = Math.max(sk.w * kx, sk.h * ky) * 0.04;
   return {
-    x0: Math.max(-w / 2, sk.x * kx - sp - w / 2),
-    y0: Math.max(-h / 2, sk.y * ky - sp - h / 2),
-    x1: Math.min(w / 2, (sk.x + sk.w) * kx + sp - w / 2),
-    y1: Math.min(h / 2, (sk.y + sk.h) * ky + sp - h / 2),
+    x0: Math.max(-w / 2, (sk.x - ms.x) * kx - sp - w / 2),
+    y0: Math.max(-h / 2, (sk.y - ms.y) * ky - sp - h / 2),
+    x1: Math.min(w / 2, (sk.x - ms.x + sk.w) * kx + sp - w / 2),
+    y1: Math.min(h / 2, (sk.y - ms.y + sk.h) * ky + sp - h / 2),
   };
 }
 
@@ -470,7 +472,11 @@ export function pdfDilarAMetra(plan: Pick<ImageObject, "pixelsPerPdfPoint">): nu
 /** A1 í 1:100 (sama forsenda og 1. áfangi): úttektarmynd eftir frummyndinni, annars eftir blaðinu á borðinu. */
 export function giskDilarAMetra(plan: Pick<ImageObject, "width" | "height" | "uttekt" | "heimild">): number | null {
   const t = plan.uttekt;
-  if (t && t.frumB > 0 && t.frumH > 0 && plan.width > 0) return (plan.width / t.frumB) * dilarAMetraGisk({ b: t.frumB, h: t.frumH });
+  if (t && t.frumB > 0 && t.frumH > 0 && plan.width > 0) {
+    // skorin mynd sýnir aðeins myndSkurdur.w dílar frummyndar á breidd sinni
+    const frumBreidd = t.myndSkurdur && t.myndSkurdur.w > 0 ? t.myndSkurdur.w : t.frumB;
+    return (plan.width / frumBreidd) * dilarAMetraGisk({ b: t.frumB, h: t.frumH });
+  }
   const b = plan.heimild?.b || plan.width, h = plan.heimild?.h || plan.height;
   return b > 0 && h > 0 ? dilarAMetraGisk({ b, h }) : null;
 }

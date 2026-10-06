@@ -23,6 +23,9 @@ import {
 import { snapPoint, useBoardStore } from "../../lib/board/store";
 import { checkboxBadge, checkboxPaint, isCheckbox, tickPoints } from "../../lib/board/checkbox";
 import type { BoardObject } from "../../lib/board/types";
+import { merkiMyndar } from "../../lib/board/margar-haedir";
+import { bladIBordi } from "../../lib/board/uttekt";
+import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 import { SkarptPdfLag } from "./SkarptPdfLag";
 import { SymbolNode } from "./SymbolNode";
 
@@ -66,9 +69,12 @@ function SkurdarSkuggi({ obj }: { obj: Extract<BoardObject, { type: "image" }> }
   const t = obj.uttekt;
   const sk = t?.skurdur;
   if (!t || !sk || !(sk.w > 8) || !(sk.h > 8) || !(t.frumB > 0) || !(t.frumH > 0)) return null;
-  const kx = obj.width / t.frumB, ky = obj.height / t.frumH;
-  const x0 = Math.max(0, sk.x * kx), y0 = Math.max(0, sk.y * ky);
-  const x1 = Math.min(obj.width, (sk.x + sk.w) * kx), y1 = Math.min(obj.height, (sk.y + sk.h) * ky);
+  // Skorin mynd („Croppa oft"): blaðið nær út fyrir hana — skurðurinn miðast við allt blaðið (sýndarblaðið).
+  const blad = bladIBordi(obj, { b: t.frumB, h: t.frumH }, t.myndSkurdur);
+  const kx = blad.width / t.frumB, ky = blad.height / t.frumH;
+  const ox = blad.x - obj.x, oy = blad.y - obj.y;
+  const x0 = Math.max(0, ox + sk.x * kx), y0 = Math.max(0, oy + sk.y * ky);
+  const x1 = Math.min(obj.width, ox + (sk.x + sk.w) * kx), y1 = Math.min(obj.height, oy + (sk.y + sk.h) * ky);
   if (x1 <= x0 || y1 <= y0) return null;
   const fill = "rgba(28,25,23,0.16)";
   const reitir = [
@@ -83,6 +89,27 @@ function SkurdarSkuggi({ obj }: { obj: Extract<BoardObject, { type: "image" }> }
         <Rect key={i} {...r} fill={fill} listening={false} name="ui-only" />
       ))}
     </>
+  );
+}
+
+/** Merkið á mynd („Croppa oft"): hæðin sem hlutinn er tengdur („2. hæð") eða „Hluti 2 · ótengdur". Fast í skjástærð,
+ * efst til vinstri á myndinni — aðeins á skjánum (ui-only). */
+function HaedarMerki({ obj }: { obj: Extract<BoardObject, { type: "image" }> }) {
+  const scale = useBoardStore((s) => s.camera.scale);
+  const gogn = useUttektGogn((s) => s.gogn);
+  if (!obj.bladhluti) return null;
+  const cid = obj.uttekt?.companyId ?? obj.bladhluti.companyId;
+  const texti = merkiMyndar(obj, gogn && gogn.companyId === cid ? gogn.haedir : null);
+  if (!texti) return null;
+  const k = 1 / Math.max(scale, 0.01);
+  const fs = 14 * k, pad = 6 * k;
+  const breidd = (texti.length * 7.6 + 2 * 6) * k;
+  const tengd = !!obj.uttekt;
+  return (
+    <Group x={8 * k} y={8 * k} listening={false} name="ui-only">
+      <Rect width={breidd} height={fs + 2 * pad} fill={tengd ? "#FE653F" : "#44403c"} opacity={0.95} cornerRadius={5 * k} />
+      <KonvaText x={pad} y={pad} text={texti} fontSize={fs} fontStyle="bold" fill="#ffffff" />
+    </Group>
   );
 }
 
@@ -187,6 +214,7 @@ export function ObjectNode({
       >
         <FloorplanImage obj={obj} />
         <SkurdarSkuggi obj={obj} />
+        <HaedarMerki obj={obj} />
       </Group>
     );
   }

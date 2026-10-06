@@ -56,6 +56,12 @@ export function objectsOrigin(objects: BoardObject[]): { x: number; y: number } 
  */
 export function anUttektarTengingar<T extends BoardObject>(o: T): T {
   const s = o as BoardObject;
+  // Afrit af tengdri mynd verður ótengt: ein hæð á einni mynd (annars vistuðu tvær myndir sömu hæð).
+  if (s.type === "image" && s.uttekt) {
+    const copy = { ...s };
+    delete copy.uttekt;
+    return copy as BoardObject as T;
+  }
   if (s.type !== "symbol" || s.uttektUnitId == null || s.uttektUnitId === "") return o;
   const stimpill = s.uttektKind === "sign" || String(s.uttektUnitId).startsWith("s:");
   const copy: SymbolObject = { ...s };

@@ -40,26 +40,33 @@ import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, pe
 import {
   finnaTengduMynd,
   giskaFrumStaerd,
+  innanSvaedis,
   innflutningsSlod,
   merkiLykill,
+  myndUndir,
   saekjaUttekt,
   skurdurIBord,
   stimpilDef,
   stimpilStaerdABladi,
   stimpilStaerdBords,
+  stimpilStaerdMyndar,
   stuttNumer,
+  svaediMyndar,
   symbolFyrirTegund,
   taknFyrirMerki,
   uttektBordNafn,
   veggirIBord,
   veljaUttektHaed,
   vistaIUttekt,
+  vorpunMyndar,
 } from "../../lib/board/uttekt";
+import { aetlaHluta, beitaFjolcrop, bladMyndar, finnaGrunnmyndir, rodAnSkorunar, skurdurEftirCrop } from "../../lib/board/margar-haedir";
+import { raesaFjolcrop, useFjolcrop } from "../../lib/board/fjolcrop";
 import { afvopna, useTaekjaVal, useUttektGogn, type TaekjaVal } from "../../lib/board/uttekt-gogn";
 import { adgerdVidSetningu } from "../../lib/board/taekjalisti";
 import { grunnStaerdHaedar } from "../../lib/board/merkjasafn";
 import { veggirHaedar } from "../../lib/board/teikning-veggir";
-import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
+import { dataUrlToBlob, getAssetBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
 import {
   isDrawnLocked,
@@ -71,7 +78,7 @@ import {
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
-import type { BoardDocument, BoardObject, LineObject } from "../../lib/board/types";
+import type { BoardDocument, BoardObject, ImageObject, LineObject, UttektTenging } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
@@ -149,6 +156,7 @@ export function WhiteboardApp() {
     // endurnefninguna á raunverulegu stillingunum en ekki afriti af þeim.
     const w = window as unknown as Record<string, unknown>;
     w.__tpStore = useBoardStore;
+    w.__tpFjolcrop = useFjolcrop;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
     w.__tpKit = { makeSymbol, placeMvs165Equipment, exportTiledPdf, getRegisteredStage };
@@ -347,7 +355,7 @@ export function WhiteboardApp() {
     }
     // Miðjar á stimpilstærðinni, ekki fastri 32 — annars lenti táknið út undan
     // bendlinum um leið og stærðin var stillt.
-    const px = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize());
+    const px = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize(), world);
     const half = px / 2;
     // Engin grind-festing: táknið lendir þar sem því var sleppt (sbr. dráttinn).
     const spot = { x: world.x - half, y: world.y - half };
@@ -536,6 +544,10 @@ export function WhiteboardApp() {
           st.startRoomDraft();
           toast.message("Rými: dragðu ferninga sem mynda rýmið — Enter lýkur, svo nafn og staða í hægra spjaldinu");
           return;
+        case "croppa-oft":
+          raesaFjolcrop();
+          toast.message("Croppa oft: dragðu kassa yfir hverja grunnmynd (1, 2, 3 …) — Enter sker, Esc hættir");
+          return;
         case "gatreitur":
           st.setTool("checkbox");
           toast.message("Gátreitur: smelltu þar sem hann á að vera — hakaðu þegar verkið er klárt");
@@ -571,7 +583,8 @@ export function WhiteboardApp() {
       }
       try {
         const res = await cropPlanAsset(plan, rect);
-        useBoardStore.getState().patchObject(plan.id, res, true);
+        // Tengd úttektarmynd / hluti blaðs: skurðurinn fylgir myndinni svo hnit merkja og veggja haldist rétt.
+        useBoardStore.getState().patchObject(plan.id, { ...res, ...skurdurEftirCrop(plan, res) } as Partial<BoardObject>, true);
         toast.success("Króppað — ⌘Z afturkallar");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Cropp mistókst");
@@ -579,6 +592,156 @@ export function WhiteboardApp() {
     },
     []
   );
+
+  // „Croppa oft" (Agnar 06.10.2026): margar grunnmyndir á einu blaði — einn kassi á hverja, allar skornar í einu á
+  // nativum dílum og raðað hlið við hlið; hver hluti man svæðið sitt á blaðinu (dílar frummyndar) og fær „Tengja við hæð".
+  const fjolcropBid = useRef(false);
+  const runFjolcrop = useCallback(async () => {
+    if (fjolcropBid.current) return;
+    const kassar = useFjolcrop.getState().kassar;
+    if (!kassar.length) {
+      toast.message("Dragðu fyrst kassa yfir grunnmyndirnar");
+      return;
+    }
+    const state = useBoardStore.getState();
+    const myndir = state.objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden);
+    // Myndin sem kassarnir ná mest yfir (efsta ef jafnt).
+    const skorun = (m: ImageObject) =>
+      kassar.reduce((s, k) => {
+        const w = Math.min(k.x + k.width, m.x + m.width) - Math.max(k.x, m.x);
+        const h = Math.min(k.y + k.height, m.y + m.height) - Math.max(k.y, m.y);
+        return s + (w > 0 && h > 0 ? w * h : 0);
+      }, 0);
+    let plan: ImageObject | null = null;
+    for (const m of myndir) if (skorun(m) > 0 && (!plan || skorun(m) >= skorun(plan))) plan = m;
+    if (!plan) {
+      toast.error("Kassarnir ná ekki yfir neina teikningu");
+      return;
+    }
+    if (Math.abs(plan.rotation % 360) > 0.5) {
+      toast.error("Snúðu teikningunni í 0° áður en croppað er");
+      return;
+    }
+    const gogn = useUttektGogn.getState().gogn;
+    const cid = plan.uttekt?.companyId ?? plan.bladhluti?.companyId ?? gogn?.companyId ?? null;
+    const rettGogn = gogn && cid && gogn.companyId === cid ? gogn : null;
+    const imageUrlHaedar = plan.uttekt ? rettGogn?.haedir.find((h) => h.id === plan!.uttekt!.haedId)?.image_url ?? null : null;
+    const blad = bladMyndar(plan, imageUrlHaedar, cid);
+    // Hlið við hlið þar sem blaðið var — eða neðan við allt borðið ef röðin lenti ofan á því sem situr eftir.
+    const hlutar = rodAnSkorunar(state.objects, plan, aetlaHluta(plan, blad, kassar));
+    if (!hlutar.length) {
+      toast.error("Kassarnir eru of litlir eða utan teikningarinnar");
+      return;
+    }
+    if (hlutar.length < kassar.length) toast.message(`${kassar.length - hlutar.length} kassi náði ekki inn á teikninguna og var sleppt`);
+    fjolcropBid.current = true;
+    try {
+      const eignir: string[] = [];
+      for (const h of hlutar) eignir.push((await cropPlanAsset(plan, h.rammi)).assetId);
+      const st = useBoardStore.getState();
+      const r = beitaFjolcrop(st.objects, plan, blad, hlutar, eignir);
+      st.commitHistory();
+      useBoardStore.setState({ objects: r.objects, selectedIds: [] });
+      useBoardStore.getState().setTool("select");
+      const view = shellRef.current;
+      if (view) useBoardStore.getState().setCamera(cameraFit(boardBounds(r.myndir), view.clientWidth, view.clientHeight));
+      const erfd = r.erfingi != null ? r.myndir[r.erfingi] : null;
+      toast.success(
+        `${hlutar.length} hlutar skornir úr blaðinu — ⌘Z afturkallar.` +
+          (erfd ? ` Hluti ${erfd.bladhluti?.nr} heldur tengingunni við hæðina sem var opnuð.` : "") +
+          " Veldu hvern hluta og „Tengja við hæð“." +
+          (r.eftir
+            ? ` ${r.eftir} hlutir stóðu utan kassanna og sitja eftir` +
+              (r.taekiEftir ? ` (${r.taekiEftir} tæki/merki — staða þeirra í úttektinni helst óbreytt)` : "") +
+              "."
+            : ""),
+        { duration: 6000 }
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Croppa oft mistókst");
+    } finally {
+      fjolcropBid.current = false;
+    }
+  }, []);
+
+  // „Finna sjálfkrafa": kassar utan um aðskildar grunnmyndir (blekþyrpingar með veggjalínum) á teikningunni.
+  const finnaGrunnmyndirAMynd = useCallback(async () => {
+    const st = useBoardStore.getState();
+    const myndir = st.objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden && !o.rotation);
+    const plan =
+      myndir.find((m) => st.selectedIds.includes(m.id)) ??
+      myndir.find((m) => m.uttekt) ??
+      [...myndir].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    if (!plan) {
+      toast.error("Engin teikning á borðinu");
+      return;
+    }
+    const blob = getAssetBlob(plan.assetId);
+    if (!blob) {
+      toast.error("Teikningin er ekki í minni — opnaðu borðið aftur");
+      return;
+    }
+    try {
+      const bmp = await createImageBitmap(blob);
+      const k = Math.min(1, 900 / Math.max(bmp.width, bmp.height));
+      const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+      // Smækkað í helmingsskrefum: ein stór smækkun tekur sýni og mjóar veggjalínur slitna (fannst ekkert á Ægisgötu 4).
+      let src: CanvasImageSource = bmp, sw = bmp.width, sh = bmp.height;
+      const tmp: HTMLCanvasElement[] = [];
+      while (sw > w * 2) {
+        const nw = Math.max(w, Math.round(sw / 2)), nh = Math.max(h, Math.round(sh / 2));
+        const t = document.createElement("canvas");
+        t.width = nw;
+        t.height = nh;
+        const tc = t.getContext("2d");
+        if (!tc) break;
+        tc.imageSmoothingQuality = "high";
+        tc.fillStyle = "#fff";
+        tc.fillRect(0, 0, nw, nh);
+        tc.drawImage(src, 0, 0, nw, nh);
+        tmp.push(t);
+        src = t;
+        sw = nw;
+        sh = nh;
+      }
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("Gat ekki opnað canvas");
+      ctx.imageSmoothingQuality = "high";
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(src, 0, 0, w, h);
+      bmp.close();
+      for (const t of tmp) {
+        t.width = 0;
+        t.height = 0;
+      }
+      const d = ctx.getImageData(0, 0, w, h).data;
+      const gra = new Uint8Array(w * h);
+      for (let i = 0, j = 0; i < w * h; i++, j += 4) gra[i] = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
+      c.width = 0;
+      c.height = 0;
+      const fundnir = finnaGrunnmyndir(gra, w, h);
+      if (!fundnir.length) {
+        toast.message("Fann engar aðskildar grunnmyndir — dragðu kassana sjálfur");
+        return;
+      }
+      const sp = 0.01;
+      useFjolcrop.getState().setjaAlla(
+        fundnir.map((f) => ({
+          x: plan.x + Math.max(0, f.x - sp) * plan.width,
+          y: plan.y + Math.max(0, f.y - sp) * plan.height,
+          width: Math.min(1, f.w + 2 * sp) * plan.width,
+          height: Math.min(1, f.h + 2 * sp) * plan.height,
+        }))
+      );
+      toast.message(`${fundnir.length} grunnmyndir fundust — lagaðu kassana, eyddu þeim sem eiga ekki við og ýttu á Croppa`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Leitin mistókst");
+    }
+  }, []);
 
   // „Hreinsa svæði": hvítar kassann á öllum teikningum sem hann sker (Agnar 04.10.2026).
   const runHvitta = useCallback(async (rect: { x: number; y: number; width: number; height: number }) => {
@@ -778,6 +941,9 @@ export function WhiteboardApp() {
   // skrifar merkin til baka í sömu röð.
   const [uttektVistar, setUttektVistar] = useState(false);
   const tengdMynd = useBoardStore((st) => finnaTengduMynd(st.objects));
+  // „Croppa oft": hlutar blaðs á borðinu og hve margir eru tengdir hæð.
+  const hlutarABordi = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti).length);
+  const tengdirHlutar = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti && o.uttekt).length);
   const uttektFromQuery = useRef(false);
   const planFromQuery = useRef(false);
   useEffect(() => {
@@ -887,44 +1053,58 @@ export function WhiteboardApp() {
         st.patchObject(n.objId, { uttektUnitId: n.unitId, uttektKind: "sign", uttektSign: n.sign } as Partial<BoardObject>, false);
       }
       // Merki sem bættust við í appinu eftir opnun (eða eldra borð án `merki`) eru í hæðinni en ekki á borðinu:
-      // sett á borðið svo það sýni úttektina eins og hún er.
-      const mynd = finnaTengduMynd(useBoardStore.getState().objects);
+      // sett á borðið svo það sýni úttektina eins og hún er — hver hæð á sína mynd (margar hæðir: „Croppa oft").
       let sott = 0;
-      if (mynd?.uttekt) {
-        const frum = { b: mynd.uttekt.frumB, h: mynd.uttekt.frumH };
-        const staerd = stimpilStaerdABladi(mynd, getStampSize(), mynd.uttekt.skurdur, frum);
-        const haedNu = r.haedir.find((h) => h.id === mynd.uttekt?.haedId);
-        const ny = r.utanBords.map((m) => taknFyrirMerki(m, r.taeki, mynd, frum, staerd, grunnStaerdHaedar(haedNu)));
+      for (const hl of r.hlutar) {
+        const mynd = useBoardStore.getState().objects.find((o): o is ImageObject => o.type === "image" && o.id === hl.myndId);
+        if (!mynd?.uttekt) continue;
+        const v = vorpunMyndar(mynd);
+        if (!v) continue;
+        const staerd = stimpilStaerdABladi(v.blad, getStampSize(), mynd.uttekt.skurdur, v.frum);
+        const haedNu = r.haedir.find((h) => h.id === hl.haedId);
+        const svaediM = svaediMyndar(v.frum, v.svaedi);
+        // Skorinn hluti sýnir aðeins sitt svæði — merki hæðarinnar utan þess (t.d. á gamalli teikningu) fara ekki á hann.
+        const inni = hl.utanBords.filter((m) => !v.svaedi || innanSvaedis(m, svaediM));
+        const ny = inni.map((m) => taknFyrirMerki(m, r.taeki, mynd, v.frum, staerd, grunnStaerdHaedar(haedNu), v.svaedi));
         if (ny.length) st.addObjects(withLayerId(ny, LAYER_ALMENNT), false);
-        sott = ny.length;
-        // Stærðin sem var vistuð er nú viðmiðið: næsta vistun skrifar `staerd` aðeins ef táknið er stækkað aftur.
-        const tengd = useBoardStore
-          .getState()
-          .objects.filter((o) => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== "" && o.uttektPx !== o.size);
-        if (tengd.length) {
-          useBoardStore.getState().updateObjects(
-            tengd.map((o) => o.id),
-            (o) => (o.type === "symbol" ? { ...o, uttektPx: o.size } : o),
-            false
-          );
-        }
-        st.patchObject(
-          mynd.id,
-          {
-            uttekt: { ...mynd.uttekt, merki: [...r.merkiABordi, ...ny.map((s) => merkiLykill(s.uttektUnitId))] },
-          } as Partial<BoardObject>,
+        sott += ny.length;
+        const tenging: UttektTenging = { ...mynd.uttekt, merki: [...hl.merkiABordi, ...ny.map((s) => merkiLykill(s.uttektUnitId))] };
+        delete tenging.nyHaed; // hæðin er nú til í úttektinni
+        st.patchObject(mynd.id, { uttekt: tenging } as Partial<BoardObject>, false);
+      }
+      // Stærðin sem var vistuð er nú viðmiðið: næsta vistun skrifar `staerd` aðeins ef táknið er stækkað aftur.
+      const tengd = useBoardStore
+        .getState()
+        .objects.filter((o) => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== "" && o.uttektPx !== o.size);
+      if (tengd.length) {
+        useBoardStore.getState().updateObjects(
+          tengd.map((o) => o.id),
+          (o) => (o.type === "symbol" ? { ...o, uttektPx: o.size } : o),
           false
         );
       }
       useUttektGogn.getState().setGogn({ companyId: r.tenging.companyId, nafn: r.nafn, haedir: r.haedir, taeki: r.taeki });
+      // Borð með mörgum hæðum fær nafn allra hæðanna — annars endurbyggði „Opna í TurboPaint" á 1. hæð það (eitt borð
+      // á hverja stað+hæð er endurnýtt) og hlutarnir og tengingarnar hyrfu.
+      if (r.hlutar.length > 1) {
+        const bordNafn = `${r.nafn} — ${r.hlutar.map((h) => h.nafn).join(", ")}`.slice(0, 80);
+        if (useBoardStore.getState().name !== bordNafn) useBoardStore.getState().setName(bordNafn);
+      }
       const auka = [
         r.otengd ? `${r.otengd} tákn án tengingar vistast ekki í úttekt` : "",
         r.utan ? `${r.utan} tæki standa utan teikningar og voru ekki færð` : "",
         r.tvitekin ? `${r.tvitekin} afrit af tæki vistast ekki (tæki er á einum stað)` : "",
         sott ? `${sott} merki úr appinu sett á borðið` : "",
       ].filter(Boolean);
+      const haedaTexti =
+        r.hlutar.length > 1
+          ? ` · ${r.hlutar.length} hæðir (${r.hlutar.map((h) => h.nafn + (h.ny ? " ný" : "")).join(", ")})`
+          : r.nyjarHaedir.length
+            ? ` · ný hæð „${r.hlutar[0].nafn}“`
+            : "";
       toast.success(
         `${r.nafn}: ${r.fjoldi} merki vistuð (${r.breytt} færð, ${r.ny} ný, ${r.tekin} tekin af)` +
+          haedaTexti +
           (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
           (auka.length ? " · " + auka.join(" · ") : "")
       );
@@ -941,19 +1121,27 @@ export function WhiteboardApp() {
     const val = gefid ?? useTaekjaVal.getState().val;
     if (!val) return false;
     const st = useBoardStore.getState();
-    const mynd = finnaTengduMynd(st.objects);
-    if (!mynd?.uttekt) {
+    if (!finnaTengduMynd(st.objects)) {
       afvopna();
-      toast.error("Borðið er ekki tengt úttektarteikningu.");
+      toast.error(
+        st.objects.some((o) => o.type === "image" && o.bladhluti)
+          ? "Tengdu hlutana við hæðir fyrst („Tengja við hæð“)."
+          : "Borðið er ekki tengt úttektarteikningu."
+      );
       return true;
     }
-    if (world.x < mynd.x || world.y < mynd.y || world.x > mynd.x + mynd.width || world.y > mynd.y + mynd.height) {
-      toast.message("Smelltu á teikninguna sjálfa");
+    // Margar hæðir á borðinu („Croppa oft"): tækið fer á hæðina sem smellt var á.
+    const mynd = myndUndir(st.objects, world);
+    if (!mynd?.uttekt) {
+      const hluti = st.objects.find(
+        (o): o is ImageObject =>
+          o.type === "image" && !!o.bladhluti && world.x >= o.x && world.y >= o.y && world.x <= o.x + o.width && world.y <= o.y + o.height
+      );
+      toast.message(hluti ? `Hluti ${hluti.bladhluti!.nr} er ótengdur — veldu hann og „Tengja við hæð“ fyrst` : "Smelltu á teikninguna sjálfa");
       return true;
     }
     const t = mynd.uttekt;
-    const frum = { b: t.frumB, h: t.frumH };
-    const staerd = stimpilStaerdABladi(mynd, getStampSize(), t.skurdur, frum);
+    const staerd = stimpilStaerdMyndar(mynd, getStampSize());
     const ljuka = (id: string) => {
       afvopna();
       useBoardStore.getState().setTool("select");
@@ -977,7 +1165,7 @@ export function WhiteboardApp() {
     if (a.teg === "faera") {
       const s = st.objects.find((o) => o.id === a.objId);
       const size = s && s.type === "symbol" ? s.size : staerd;
-      st.patchObject(a.objId, { x: world.x - size / 2, y: world.y - size / 2, hidden: false } as Partial<BoardObject>);
+      st.patchObject(a.objId, { x: world.x - size / 2, y: world.y - size / 2, hidden: false, parentId: mynd.id } as Partial<BoardObject>);
       ljuka(a.objId);
       return true;
     }
@@ -1179,6 +1367,7 @@ export function WhiteboardApp() {
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
+        if (store.tool === "fjolcrop") return; // Croppa oft: Delete eyðir völdum kassa (BoardCanvas)
         const ids = store.selectedIds.filter((id) => {
           const obj = store.objects.find((o) => o.id === id);
           return obj && !isDrawnLocked(obj, store.layers);
@@ -1284,10 +1473,15 @@ export function WhiteboardApp() {
       {thrividd ? (
         <Hus3D objects={objects} pixelsPerMeter={pixelsPerMeter} onClose={() => setThrividd(false)} />
       ) : null}
-      {tengdMynd?.uttekt && (
+      {(tengdMynd?.uttekt || hlutarABordi > 0) && (
         <div className="pointer-events-none absolute inset-x-0 top-[6.75rem] z-30 flex justify-center px-2">
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
-            <span className="min-w-0 truncate">🧯 Úttektarteikning · staðsetningar tækja</span>
+            <span className="min-w-0 truncate">
+              🧯 Úttektarteikning ·{" "}
+              {hlutarABordi > 0
+                ? `${tengdirHlutar} af ${hlutarABordi} hlutum tengdir hæðum`
+                : "staðsetningar tækja"}
+            </span>
             <button
               type="button"
               disabled={uttektVistar}
@@ -1332,6 +1526,8 @@ export function WhiteboardApp() {
               onRequestStrip={(planId) => setStripPlanId(planId)}
               onSetjaVal={(world) => setjaVal(world)}
               onTaekiDropped={taekiDregid}
+              onFjolcrop={() => void runFjolcrop()}
+              onFinnaGrunnmyndir={() => void finnaGrunnmyndirAMynd()}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-stone-500">
