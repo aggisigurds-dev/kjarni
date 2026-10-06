@@ -8,6 +8,7 @@ import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument,
 import { registerStage } from "../../lib/board/stage-ref";
 import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
+import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { serializeClipboard } from "../../lib/board/clipboard";
 import {
   CHECKBOX_FILL,
@@ -144,6 +145,7 @@ export function BoardCanvas({
   const style = useBoardStore((s) => s.style);
   const roomStyle = useBoardStore((s) => s.roomStyle);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
+  const ritillVirkur = useVeggjaRitill((s) => s.virkur);
   /* Shift = frjáls halli meðan hornalæsingin er á. Hreyfi-handlerinn fær aðeins
    * hnitin, ekki atburðinn, svo staðan er geymd hér og uppfærð af glugganum. */
   const shiftRef = useRef(false);
@@ -199,12 +201,15 @@ export function BoardCanvas({
     const tr = trRef.current;
     const stage = stageRef.current;
     if (!tr || !stage) return;
-    const nodes = selectedIds
-      .map((id) => stage.findOne(`#${id}`))
-      .filter((n): n is Konva.Node => Boolean(n));
+    // Veggjaritillinn teiknar sitt eigið val (útlínur + endapunkta) — umbreytingarramminn myndi aðeins skyggja á
+    const nodes = ritillVirkur
+      ? []
+      : selectedIds
+          .map((id) => stage.findOne(`#${id}`))
+          .filter((n): n is Konva.Node => Boolean(n));
     tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
-  }, [selectedIds, objects, camera, width, height]);
+  }, [selectedIds, objects, camera, width, height, ritillVirkur]);
 
   const draftRef = useRef<Draft | null>(null);
 

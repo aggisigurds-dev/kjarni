@@ -18,8 +18,6 @@ import {
 import { boardBounds, cameraFit, objectsOnDocument, screenFromWorld, worldFromScreen } from "../../lib/board/geometry";
 import {
   canvasToAsset,
-  greinaVeggiTeikningar,
-  greinaVeggiUrPdf,
   lesaPdfSidu,
   type PdfSida,
   isFirewallLabelWord,
@@ -73,7 +71,7 @@ import {
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
-import type { BoardDocument, BoardObject, LineObject } from "../../lib/board/types";
+import type { BoardDocument, BoardObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
@@ -84,6 +82,8 @@ import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { VeggjaStika } from "./VeggjaStika";
+import { VeggjaRitill } from "./VeggjaRitill";
+import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -452,73 +452,8 @@ export function WhiteboardApp() {
     []
   );
 
-  // Veggjalag: greindir veggir verða MIÐLÍNUR með þykkt (brotalínur, strokeWidth = veggþykkt) á laginu „Veggir", festar
-  // við teikninguna (parentId) svo þær fylgi henni. Hundruð lína í stað þúsunda kassa — tugir KB. Endurgreining skiptir
-  // aðeins út GREINDUM veggjum þessarar teikningar (líka eldri kassaútgáfunni) — handteiknað helst.
-  const runVeggir = useCallback(async (planId: string) => {
-    const plan = useBoardStore.getState().objects.find((o) => o.id === planId);
-    if (!plan || plan.type !== "image") return;
-    if (plan.rotation) {
-      toast.error("Teikningunni hefur verið snúið — veggjagreining styður aðeins óbreytta stefnu enn");
-      return;
-    }
-    try {
-      useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: 5, message: "Greini veggi…" });
-      const framvinda = (message: string) => (p: number) =>
-        useBoardStore.getState().setImportProgress({ fileName: plan.name, percent: p, message });
-      // Vigur-PDF fyrst: veggjalínurnar sjálfar, paraðar — nákvæmara en myndgreining og laust við skástrikun/texta.
-      let urPdf: Awaited<ReturnType<typeof greinaVeggiUrPdf>> = null;
-      try {
-        urPdf = await greinaVeggiUrPdf(plan, framvinda("Les veggi úr PDF-vigrum…"));
-      } catch (err) {
-        console.warn("[veggir] PDF-lestur mistókst — myndgreining í staðinn", err);
-      }
-      const nid = urPdf
-        ? { ...urPdf, holir: 0, fylltir: false, kassar: [] }
-        : await greinaVeggiTeikningar(plan, 1, framvinda("Greini veggi…"));
-      const sx = plan.width / nid.breidd, sy = plan.height / nid.haed;
-      const veggir: LineObject[] = nid.midlinur.map((l) => ({
-        id: newId(),
-        type: "polyline",
-        x: 0,
-        y: 0,
-        points: l.punktar.map((v, i) => (i % 2 === 0 ? plan.x + v * sx : plan.y + v * sy)),
-        stroke: "#1c1917",
-        strokeWidth: Math.max(1, l.thykkt * sx),
-        dash: "solid",
-        rotation: 0,
-        opacity: 0.9,
-        locked: false,
-        hidden: false,
-        name: "Veggur",
-        parentId: plan.id,
-        veggur: true,
-      }));
-      const gamlir = useBoardStore
-        .getState()
-        .objects.filter(
-          (o) => o.parentId === plan.id && ((o.type === "rect" && o.veggur) || (o.type === "polyline" && o.veggur))
-        )
-        .map((o) => o.id);
-      if (gamlir.length) useBoardStore.getState().deleteIds(gamlir);
-      if (veggir.length) useBoardStore.getState().addObjects(withLayerId(veggir, LAYER_VEGGIR), false);
-      useBoardStore.getState().setImportProgress(null);
-      if (!veggir.length) {
-        toast.error("Engir veggir fundust — prófaðu að hreinsa teikninguna fyrst eða hækka næmi");
-        return;
-      }
-      toast.success(
-        `${veggir.length} veggir á laginu „Veggir“` +
-          (urPdf ? ` · lesnir úr PDF-vigrum (línuþykkt ${urPdf.flokkur} pt)` : "") +
-          (nid.holir ? ` · ${nid.holir} holir veggir` : "") +
-          (nid.fylltir ? " · fylltir veggir" : "") +
-          " — feldu „Teikning“ í Lögum til að sjá bara veggina"
-      );
-    } catch (err) {
-      useBoardStore.getState().setImportProgress(null);
-      toast.error(err instanceof Error ? err.message : "Veggjagreining mistókst");
-    }
-  }, []);
+  // Veggjagreiningin („Veggir") býr í VeggjaGreining (veggjaritillinn): línuflokkar PDF valdir, forskoðun, og
+  // Bæta við / Skipta út / Hætta við — veggjum sem fyrir eru er aldrei hent hljóðlaust.
 
   // Sameiginlegar aðgerðir efstu stikunnar og hamstikunnar (HamStika) — ein útgáfa af hverri.
   const merkjaEldveggi = useCallback(() => {
@@ -541,8 +476,12 @@ export function WhiteboardApp() {
       toast.error("Engin teikning fannst — veldu teikninguna fyrst");
       return;
     }
-    void runVeggir(plan.id);
-  }, [resolvePlan, runVeggir]);
+    if (plan.rotation) {
+      toast.error("Teikningunni hefur verið snúið — veggjagreining styður aðeins óbreytta stefnu enn");
+      return;
+    }
+    useVeggjaRitill.getState().opnaGreiningu(plan.id);
+  }, [resolvePlan]);
   const hamAdgerd = useCallback(
     (a: HamAdgerd) => {
       const st = useBoardStore.getState();
@@ -567,6 +506,8 @@ export function WhiteboardApp() {
           return hreinsaTeikningu();
         case "veggir":
           return greinaVeggi();
+        case "veggjaritill":
+          return useVeggjaRitill.getState().virkur ? useVeggjaRitill.getState().slokkva() : useVeggjaRitill.getState().kveikja();
         case "thrividd":
           return setThrividd(true);
         case "slt-brsl":
@@ -1391,6 +1332,7 @@ export function WhiteboardApp() {
               </div>
             </div>
           )}
+          {hydrated ? <VeggjaRitill /> : null}
           <div className="pointer-events-none absolute inset-0">
             {/* Verkfærasúlan var lóðrétt MIÐJUÐ (top-1/2 + -translate-y-1/2).
                 Á síma er hún hærri en borðið, svo hún klipptist af að ofan OG
@@ -2003,7 +1945,7 @@ function HelpDialog({
             ["R / O", "Ferningur / hringur"],
             ["+ rými", "Rými: kassar, Enter = búa til, Esc = hætta"],
             ["L / A", "Lína / ör"],
-            ["W", "Veggir (smelltu, Enter til að loka)"],
+            ["W", "Veggir (smelltu, Enter til að loka) — í Teikning-ham opnar W veggjaritilinn (? þar = flýtilyklar hans)"],
             ["P / T / N", "Penni / texti / minnismiði"],
             ["X", "Gátreitur — hakreitur; smelltu á ✓ í horninu og reiturinn grænkar"],
             ["S", "Brunavarnatákn"],
