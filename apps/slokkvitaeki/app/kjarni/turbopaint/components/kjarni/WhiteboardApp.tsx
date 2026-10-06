@@ -58,6 +58,7 @@ import {
 } from "../../lib/board/uttekt";
 import { afvopna, useTaekjaVal, useUttektGogn, type TaekjaVal } from "../../lib/board/uttekt-gogn";
 import { adgerdVidSetningu } from "../../lib/board/taekjalisti";
+import { grunnStaerdHaedar } from "../../lib/board/merkjasafn";
 import { veggirHaedar } from "../../lib/board/teikning-veggir";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
@@ -837,7 +838,7 @@ export function WhiteboardApp() {
         const sk = haed.skurdur && haed.skurdur.w > 8 && haed.skurdur.h > 8 ? haed.skurdur : null;
         // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið.
         const staerd = stimpilStaerdABladi(mynd, getStampSize(), sk, frum);
-        const takn = (haed.markers || []).map((m) => taknFyrirMerki(m, u.taeki, mynd, frum, staerd));
+        const takn = (haed.markers || []).map((m) => taknFyrirMerki(m, u.taeki, mynd, frum, staerd, grunnStaerdHaedar(haed)));
         // `merki` = það sem borðið sýnir af hæðinni: tæki/merki sem hverfa af borðinu fara úr hæðinni við vistun.
         useBoardStore.getState().patchObject(
           mynd.id,
@@ -885,7 +886,7 @@ export function WhiteboardApp() {
   const vistaUttekt = useCallback(async () => {
     setUttektVistar(true);
     try {
-      const r = await vistaIUttekt(useBoardStore.getState().objects);
+      const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize());
       const st = useBoardStore.getState();
       // Nýir stimplar fá unitId sitt á borðinu — næsta vistun færir þá í stað þess að bæta öðrum við.
       for (const n of r.nyirStimplar) {
@@ -898,9 +899,21 @@ export function WhiteboardApp() {
       if (mynd?.uttekt) {
         const frum = { b: mynd.uttekt.frumB, h: mynd.uttekt.frumH };
         const staerd = stimpilStaerdABladi(mynd, getStampSize(), mynd.uttekt.skurdur, frum);
-        const ny = r.utanBords.map((m) => taknFyrirMerki(m, r.taeki, mynd, frum, staerd));
+        const haedNu = r.haedir.find((h) => h.id === mynd.uttekt?.haedId);
+        const ny = r.utanBords.map((m) => taknFyrirMerki(m, r.taeki, mynd, frum, staerd, grunnStaerdHaedar(haedNu)));
         if (ny.length) st.addObjects(withLayerId(ny, LAYER_ALMENNT), false);
         sott = ny.length;
+        // Stærðin sem var vistuð er nú viðmiðið: næsta vistun skrifar `staerd` aðeins ef táknið er stækkað aftur.
+        const tengd = useBoardStore
+          .getState()
+          .objects.filter((o) => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== "" && o.uttektPx !== o.size);
+        if (tengd.length) {
+          useBoardStore.getState().updateObjects(
+            tengd.map((o) => o.id),
+            (o) => (o.type === "symbol" ? { ...o, uttektPx: o.size } : o),
+            false
+          );
+        }
         st.patchObject(
           mynd.id,
           {
@@ -954,8 +967,12 @@ export function WhiteboardApp() {
     };
     if (val.teg === "stimpill") {
       const def = stimpilDef(val.sign);
-      const obj = makeSymbol(def?.symbolId ?? val.symbolId, world.x - staerd / 2, world.y - staerd / 2, def?.stutt ?? "", staerd);
-      st.addObjects([{ ...obj, parentId: mynd.id, layerId: LAYER_ALMENNT, uttektKind: "sign", uttektSign: val.sign }], true);
+      // Eins og í Teikning-glugganum: platan ein, enginn merkimiði á merkjum.
+      const obj = makeSymbol(def?.symbolId ?? val.symbolId, world.x - staerd / 2, world.y - staerd / 2, "", staerd);
+      st.addObjects(
+        [{ ...obj, parentId: mynd.id, layerId: LAYER_ALMENNT, uttektKind: "sign", uttektSign: val.sign, uttektPx: staerd }],
+        true
+      );
       ljuka(obj.id);
       return true;
     }
@@ -976,7 +993,7 @@ export function WhiteboardApp() {
       return true;
     }
     const obj = makeSymbol(symbolFyrirTegund(taeki?.type), world.x - staerd / 2, world.y - staerd / 2, stuttNumer(taeki?.serial), staerd);
-    st.addObjects([{ ...obj, parentId: mynd.id, layerId: LAYER_ALMENNT, uttektUnitId: val.unitId }], true);
+    st.addObjects([{ ...obj, parentId: mynd.id, layerId: LAYER_ALMENNT, uttektUnitId: val.unitId, uttektPx: staerd }], true);
     ljuka(obj.id);
     return true;
   }, []);

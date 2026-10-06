@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { TRAY_SYMBOLS, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
+import { SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { getSymbol, symbolPaint } from "../../lib/board/symbols";
 import {
   getSymbolSettings,
@@ -12,7 +12,8 @@ import {
 import { useBoardStore } from "../../lib/board/store";
 import { cn } from "../../lib/utils";
 import { SymbolManager } from "./SymbolManager";
-import { taknIHam, useHamur } from "../../lib/board/hamir";
+import { taknIHamSkipt, useHamur } from "../../lib/board/hamir";
+import { MerkiTakn } from "./MerkiTakn";
 import { afvopna } from "../../lib/board/uttekt-gogn";
 
 export function SymbolTray() {
@@ -33,11 +34,13 @@ export function SymbolTray() {
   // alltaf heima í slánni, annars fyndust þau hvergi eftir að þau voru búin til.
   // Hamurinn ræður hvaða tákn standa í slánni (lib/board/hamir.ts); í Teikningarham er sláin falin.
   const hamur = useHamur((s) => s.hamur);
-  const iHam = taknIHam(hamur, settings.custom.map((c) => c.id));
-  const visible = (iHam ?? [...TRAY_SYMBOLS, ...settings.custom.map((c) => c.id)]).filter(
-    (id) => !settings.overrides[id]?.hidden
-  );
+  const iHam = taknIHamSkipt(hamur, settings.custom.map((c) => c.id));
+  const synilegt = (id: string) => !settings.overrides[id]?.hidden;
   if (!iHam) return null;
+  // Merkjasafn Teikning-gluggans fyrst; aukatákn TurboPaint standa sér á eftir (þau vistast ekki í úttektina).
+  const teikning = iHam.teikning.filter(synilegt);
+  const auka = iHam.auka.filter(synilegt);
+  const visible = [...teikning, ...auka];
 
   return (
     <div className="pointer-events-auto flex max-w-[min(96vw,820px)] items-center gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-2 py-1.5 shadow-2xl">
@@ -58,17 +61,29 @@ export function SymbolTray() {
           Öll tákn falin — opnaðu ⚙ Táknin
         </span>
       ) : null}
-      {visible.map((id) => {
+      {visible.map((id, i) => {
         const s = getSymbol(id);
+        const skil =
+          i === teikning.length && teikning.length > 0 ? (
+            <span
+              key="skil-auka"
+              title="Aukatákn TurboPaint — Teikning-glugginn á þau ekki og þau vistast ekki í úttektina"
+              className="ml-1 shrink-0 border-l border-white/15 pl-2 text-[9.5px] font-medium tracking-wide text-white/40"
+            >
+              AUKA
+            </span>
+          ) : null;
         const c = symbolPaint(s);
         const ov = settings.overrides[id] ?? {};
         const active = style.symbolId === id;
-        return (
+        return [
+          skil,
           <button
             key={id}
             type="button"
             draggable
-            title={`${s.name} — dragðu inn á plönið`}
+            data-takn={id}
+            title={`${s.name}${s.teikn ? "" : " (aukatákn TurboPaint)"} — dragðu inn á plönið`}
             onDragStart={(e) => {
               e.dataTransfer.setData(SYMBOL_DRAG_TYPE, id);
               e.dataTransfer.effectAllowed = "copy";
@@ -91,6 +106,9 @@ export function SymbolTray() {
               active ? "bg-white/15 ring-1 ring-white/30" : "hover:bg-white/8"
             )}
           >
+            {s.teikn ? (
+              <MerkiTakn lykill={s.teikn} size={24} />
+            ) : (
             <span
               className="flex size-6 items-center justify-center overflow-hidden rounded-sm text-[8px] font-bold shadow-sm"
               style={ov.imageUrl ? undefined : { background: c.bg, color: c.fg }}
@@ -108,9 +126,10 @@ export function SymbolTray() {
                 s.short.slice(0, 2)
               )}
             </span>
+            )}
             <span className="hidden lg:inline">{s.name}</span>
-          </button>
-        );
+          </button>,
+        ];
       })}
       <SymbolManager open={managerOpen} onOpenChange={setManagerOpen} />
     </div>

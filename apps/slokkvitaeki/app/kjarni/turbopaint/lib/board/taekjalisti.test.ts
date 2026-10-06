@@ -114,40 +114,41 @@ const naestaId = () => {
 test("stimplar Teikning-gluggans ↔ tákn TurboPaint: hver stimpill fer fram og til baka", () => {
   for (const s of TEIKNING_STIMPLAR) {
     assert.equal(symbolFyrirStimpil(s.id), s.symbolId, s.id);
+    assert.equal(stimpillFyrirTakn(s.symbolId), s.id, s.id);
     // tákn sem ber stimpilinn (uttektSign) vistast sem sami stimpill
     assert.equal(stimpillFyrirTakn(s.symbolId, s.id), s.id, s.id);
   }
-  // ótengd tákn úr slánni: sjálfgefinn stimpill
+  // eldri tákn TurboPaint sem eru nákvæmlega sama merkið
   assert.equal(stimpillFyrirTakn("exit"), "neyðarútgangur");
   assert.equal(stimpillFyrirTakn("electric"), "rafmagn");
-  assert.equal(stimpillFyrirTakn("hose"), "hose");
   assert.equal(stimpillFyrirTakn("sign-extinguisher"), "skilti_slt");
   assert.equal(stimpillFyrirTakn("sign-hose"), "skilti_slanga");
   assert.equal(stimpillFyrirTakn("detector"), "reykskynjari");
-  assert.equal(stimpillFyrirTakn("alarm"), "bjalla");
-  // tákn sem Teikning-glugginn á engan stimpil fyrir vistast ekki
-  for (const id of ["extinguisher", "extinguisher-lettvatn", "e-light", "blanket", "firstaid", "eigid-takn-1"]) {
+  // aukatákn TurboPaint og tækjategundir vistast ekki sem merki (engin nálgun)
+  for (const id of ["extinguisher", "extinguisher-lettvatn", "hose", "alarm", "e-light", "blanket", "firstaid", "eigid-takn-1", "teikn:lettvatn", "teikn:slanga"]) {
     assert.equal(stimpillFyrirTakn(id), null, id);
   }
-  // óþekktur stimpill sýnist hlutlaus (ekki neyðarútgangur) en heldur nafni sínu
-  assert.equal(symbolFyrirStimpil("eitthvad_nytt"), "pin");
-  assert.equal(stimpillFyrirTakn("pin", "eitthvad_nytt"), "eitthvad_nytt");
+  // óþekktur stimpill teiknast eins og í Teikning („annað") en heldur nafni sínu
+  assert.equal(symbolFyrirStimpil("eitthvad_nytt"), "teikn:annad");
+  assert.equal(stimpillFyrirTakn("teikn:annad", "eitthvad_nytt"), "eitthvad_nytt");
   assert.equal(stimpillMerkis({ unitId: "s:bjalla:abc" }), "bjalla");
   assert.equal(stimpilDef("ut")?.stutt, "ÚT");
 });
 
-test("opnun: tæki fá tákn sinnar tegundar + raðnúmer, stimplar sitt tákn + stuttheiti, tengd með unitId", () => {
+test("opnun: tæki fá tákn safnsins eftir tegund + raðnúmer, stimplar sitt tákn, tengd með unitId", () => {
   const [, ...t] = opna(haedirFixture()) as [ImageObject, ...SymbolObject[]];
   const tæki = t.find((s) => s.uttektUnitId === 25442)!;
-  assert.equal(tæki.symbolId, "extinguisher-lettvatn");
+  assert.equal(tæki.symbolId, "teikn:lettvatn");
   assert.equal(tæki.label, "N5VABN");
   assert.equal(tæki.parentId, "mynd");
   assert.equal(tæki.uttektKind, undefined);
   // miðja táknsins á staðnum: (200,200) frummyndar = (100,100) á borðinu
   assert.equal(tæki.x + tæki.size / 2, 100);
   const slanga = t.find((s) => s.uttektUnitId === "s:hose:muu3fnqsbw0n")!;
-  assert.equal(slanga.symbolId, "hose");
-  assert.equal(slanga.label, "SL");
+  assert.equal(slanga.symbolId, "teikn:hose");
+  assert.equal(slanga.label, "", "merki fá enga stafi, eins og í Teikning-glugganum");
+  // plötulitur merkisins (#c93c1d) = litur stimpilsins í safninu → ekkert sérgeymt
+  assert.equal(slanga.uttektLitur, undefined);
   assert.equal(slanga.uttektKind, "sign");
   assert.equal(slanga.uttektSign, "hose");
 });
@@ -166,9 +167,9 @@ test("Vista í úttekt: tæki sett, fært, tekið af, ÚT-merki bætt við — T
     rotation: 0, opacity: 1, locked: false, hidden: false, name: "Veggur", parentId: "mynd", veggur: true, layerId: "veggir",
   };
   bord.push(
-    takn("extinguisher-lettvatn", 300, 300, { uttektUnitId: 25447, label: "G79YGM" }),
-    takn("extinguisher-lettvatn", 350, 350, { uttektUnitId: 25448 }),
-    takn("exit", 400, 100, { uttektKind: "sign", uttektSign: "ut", label: "ÚT" }),
+    takn("teikn:lettvatn", 300, 300, { uttektUnitId: 25447, label: "G79YGM" }),
+    takn("teikn:lettvatn", 350, 350, { uttektUnitId: 25448 }),
+    takn("teikn:ut", 400, 100, { uttektKind: "sign", uttektSign: "ut" }),
     takn("electric", 450, 150),
     takn("extinguisher", 500, 500),
     takn("exit", 520, 520, { name: "165.BR1 útgangur 1" }),
@@ -288,7 +289,7 @@ test("tækjalistinn: á teikningu / á annarri hæð / ekki staðsett, flokkað 
   assert.equal(s(25442).stuttNr, "N5VABN");
   assert.equal(s(25448).urelt, true);
   const hopar = flokkaTaekjalista(listi);
-  assert.deepEqual(hopar.map((h) => h.heiti), ["Slökkvitæki · Léttvatn", "Slökkvitæki · Duft", "Brunaslanga"]);
+  assert.deepEqual(hopar.map((h) => h.heiti), ["Léttvatn", "Duft", "Slanga"]);
   // föst röð eftir raðnúmeri (röðin hoppar ekki þegar tæki er staðsett)
   assert.deepEqual(hopar[0].taeki.map((x) => x.stuttNr), ["7NMN67", "B4XGYG", "G79YGM", "N5VABN", "R5PY7E"]);
   assert.deepEqual(siaTaekjalista(listi, "", true).map((x) => x.taeki.id).sort(), [25444, 25447, 25451, 25460]);
@@ -309,11 +310,11 @@ test("smellur á teikninguna: tæki á hæðinni færist (aldrei tvítekið), t�
 });
 
 test("afrit (⌘D / líma) af tengdu tæki missir tenginguna; afrit af stimpli verður nýr stimpill", () => {
-  const t = takn("extinguisher-lettvatn", 1, 1, { uttektUnitId: 25442, label: "N5VABN" });
+  const t = takn("teikn:lettvatn", 1, 1, { uttektUnitId: 25442, label: "N5VABN" });
   const a = anUttektarTengingar(t) as SymbolObject;
   assert.equal(a.uttektUnitId, undefined);
   assert.equal(a.label, "");
-  assert.equal(a.symbolId, "extinguisher-lettvatn");
+  assert.equal(a.symbolId, "teikn:lettvatn");
   const s = takn("exit", 1, 1, { uttektUnitId: "s:ut:abc", uttektKind: "sign", uttektSign: "ut", label: "ÚT" });
   const b = anUttektarTengingar(s) as SymbolObject;
   assert.equal(b.uttektUnitId, undefined);

@@ -47,6 +47,9 @@ const mynd = (n) => path.join(OUT, n);
   let skrifad = null; // síðasta gripna sending — síðari lestrar sjá hana, eins og skrifin hefðu farið í gegn
   let appBaetti = false; // „appið" setur bjöllu á 1. hæð eftir opnun (sett rétt fyrir fyrstu vistun)
   const auka = (rod) => {
+    // rot/staerd sýndir (433): rafmagnstaflan snúin 90° og tvöföld (staerd 52 á hæð með stimpilStaerd 26)
+    const raf = rod.haedir.find((h) => h.id === HAED).markers.find((m) => m.unitId === "s:rafmagn:mur14paumv8v");
+    if (raf) Object.assign(raf, { rot: 90, staerd: 52 });
     const h2 = rod.haedir.find((h) => h.id === HAED2);
     h2.markers = [
       ...(h2.markers || []).filter((m) => m.unitId !== 25448),
@@ -116,7 +119,7 @@ const mynd = (n) => path.join(OUT, n);
         tool: s.tool,
         selected: s.selectedIds,
         mynd: { id: m.id, x: m.x, y: m.y, w: m.width, h: m.height, uttekt: m.uttekt },
-        takn: takn.map((t) => ({ id: t.id, symbolId: t.symbolId, x: t.x, y: t.y, size: t.size, label: t.label, u: t.uttektUnitId, k: t.uttektKind, sg: t.uttektSign, hidden: t.hidden })),
+        takn: takn.map((t) => ({ id: t.id, symbolId: t.symbolId, x: t.x, y: t.y, size: t.size, rotation: t.rotation, label: t.label, u: t.uttektUnitId, k: t.uttektKind, sg: t.uttektSign, hidden: t.hidden })),
         veggir: s.objects.filter((o) => o.veggur).length,
       };
     });
@@ -164,7 +167,7 @@ const mynd = (n) => path.join(OUT, n);
   const yfirlit = await radir.getByText(/á teikningu ·/).innerText();
   check("tækjalistinn: 14 tæki, 10 á teikningu · 1 á öðrum hæðum · 3 óstaðsett", /TÆKI STAÐARINS · 14/.test(await radir.innerText()) && /10 á teikningu · 1 á öðrum hæðum · 3 óstaðsett/.test(yfirlit), yfirlit);
   const hopar = await radir.locator("div.font-semibold").allInnerTexts();
-  check("flokkað eftir tegund (Léttvatn, Brunaslanga)", hopar.some((h) => /Slökkvitæki · Léttvatn/.test(h)) && hopar.some((h) => /Brunaslanga/.test(h)), JSON.stringify(hopar));
+  check("flokkað eftir tegund með nöfnum Teikning-gluggans (Léttvatn 9, Slanga 5)", hopar.some((h) => /^Léttvatn 9$/.test(h)) && hopar.some((h) => /^Slanga 5$/.test(h)), JSON.stringify(hopar));
   const r25448 = radir.locator('[data-taeki="25448"]');
   check("tæki á 2. hæð merkt „á 2. hæð“", /á 2\. hæð/.test(await r25448.innerText()), await r25448.innerText());
   check("staðsett tæki merkt „á teikningu“", /á teikningu/.test(await radir.locator('[data-taeki="25442"]').innerText()), "");
@@ -194,7 +197,7 @@ const mynd = (n) => path.join(OUT, n);
   await page.waitForTimeout(400);
   st = await stada();
   const t47 = takniFyrir(st, 25447);
-  check("tækið 25447 komið á teikninguna, tengt (eitt tákn)", t47.length === 1 && t47[0].symbolId === "extinguisher-lettvatn" && t47[0].label === "G79YGM", JSON.stringify(t47));
+  check("tækið 25447 komið á teikninguna, tengt (eitt tákn, Léttvatn úr merkjasafninu)", t47.length === 1 && t47[0].symbolId === "teikn:lettvatn" && t47[0].label === "G79YGM", JSON.stringify(t47));
   check("miðja táknsins þar sem smellt var", t47[0] && Math.hypot(t47[0].x + t47[0].size / 2 - blettir[0].wx, t47[0].y + t47[0].size / 2 - blettir[0].wy) < 2, JSON.stringify([t47[0], blettir[0]]));
   check("eftir setningu: Velja-tól og nýja táknið valið", st.tool === "select" && st.selected.length === 1 && st.selected[0] === t47[0]?.id, JSON.stringify([st.tool, st.selected]));
   check("röðin sýnir nú „á teikningu“", /á teikningu/.test(await radir.locator('[data-taeki="25447"]').innerText()), "");
@@ -255,7 +258,7 @@ const mynd = (n) => path.join(OUT, n);
   await page.waitForTimeout(500);
   st = await stada();
   const t51 = takniFyrir(st, 25451);
-  check("dregin röð (25451) lendir á teikningunni sem brunaslanga", t51.length === 1 && t51[0].symbolId === "hose" && Math.hypot(t51[0].x + t51[0].size / 2 - blettir[3].wx, t51[0].y + t51[0].size / 2 - blettir[3].wy) < 3, JSON.stringify(t51));
+  check("dregin röð (25451) lendir á teikningunni sem Slanga (teikn:slanga)", t51.length === 1 && t51[0].symbolId === "teikn:slanga" && Math.hypot(t51[0].x + t51[0].size / 2 - blettir[3].wx, t51[0].y + t51[0].size / 2 - blettir[3].wy) < 3, JSON.stringify(t51));
 
   // ── 7) ÚT-merki úr „Merki (Teikning)" ──────────────────────────────────────────────────────────────────────────
   await radir.locator('[data-stimpill="ut"]').click();
@@ -264,26 +267,42 @@ const mynd = (n) => path.join(OUT, n);
   await page.waitForTimeout(400);
   st = await stada();
   const utTakn = st.takn.filter((t) => t.sg === "ut");
-  check("ÚT-merki sett (tákn exit, stimpill ut, merkimiði ÚT)", utTakn.length === 1 && utTakn[0].symbolId === "exit" && utTakn[0].label === "ÚT" && utTakn[0].k === "sign", JSON.stringify(utTakn));
-  await page.screenshot({ path: mynd("05_ut_merki.png") });
+  check("ÚT-merki sett (tákn teikn:ut, stimpill ut, enginn merkimiði eins og í Teikning)", utTakn.length === 1 && utTakn[0].symbolId === "teikn:ut" && utTakn[0].label === "" && utTakn[0].k === "sign", JSON.stringify(utTakn));
+  // Segulloki (er í Teikning-glugganum — var ekki í 1. útgáfu 2. áfanga)
+  const blettir2 = await frjalsir(1, blettir.map((b) => [b.wx, b.wy]));
+  await radir.locator('[data-stimpill="segull"]').click();
+  await page.waitForTimeout(200);
+  await page.mouse.click(blettir2[0].sx, blettir2[0].sy);
+  await page.waitForTimeout(400);
+  st = await stada();
+  const sgTakn = st.takn.filter((t) => t.sg === "segull");
+  check("Segulloki settur (teikn:segull)", sgTakn.length === 1 && sgTakn[0].symbolId === "teikn:segull", JSON.stringify(sgTakn));
+  await page.screenshot({ path: mynd("05_ut_og_segull.png") });
 
   // ── 8) Laust slökkvitæki úr slánni (á ekkert tæki) → athugasemdin ──────────────────────────────────────────────
-  await page.locator('button[title^="Slökkvitæki — "]').click();
+  // Táknasláin: merkjasafnið (14) fyrst, svo AUKA
+  const slain = await page.locator("[data-takn]").evaluateAll((els) => els.map((e) => e.dataset.takn));
+  check("táknasláin: merkjasafn Teikning (4 tæki + 10 merki, segull með) á undan aukatáknum", slain.slice(0, 14).every((id) => id.startsWith("teikn:")) && slain.includes("teikn:segull") && slain.slice(14).every((id) => !id.startsWith("teikn:")) && (await page.getByText("AUKA", { exact: true }).isVisible()), JSON.stringify(slain));
+  await page.locator('button[data-takn="teikn:lettvatn"]').click();
   await page.waitForTimeout(200);
   await page.mouse.click(blettir[5].sx, blettir[5].sy);
   await page.waitForTimeout(400);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
   st = await stada();
-  const lausir = st.takn.filter((t) => t.symbolId === "extinguisher" && (t.u == null || t.u === ""));
-  check("laust slökkvitæki úr slánni er ótengt", lausir.length === 1, JSON.stringify(lausir));
+  const lausir = st.takn.filter((t) => t.symbolId === "teikn:lettvatn" && (t.u == null || t.u === ""));
+  check("laust Léttvatn úr slánni (ekkert tæki) er ótengt", lausir.length === 1, JSON.stringify(lausir));
   const taekjaStaerd = takniFyrir(st, 25447)[0]?.size;
   check("tákn úr slánni jafnstórt tækjunum á tengdu borði", lausir[0] && Math.abs(lausir[0].size - taekjaStaerd) < 0.5, JSON.stringify([lausir[0]?.size, taekjaStaerd]));
   const ath = radir.getByText(/tákn án tengingar vistast ekki í úttekt/);
   check("athugasemd: „1 tákn án tengingar vistast ekki í úttekt“", (await ath.isVisible()) && (await ath.innerText()).startsWith("1 tákn"), "");
   // magntaflan telur eftir tegund og sýnir skráð tæki
   const magn = await page.locator("text=MAGNTAFLA").locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]").innerText();
-  check("magntaflan: Léttvatn talin og „skráð tæki“ sýnd", /Slökkvitæki · Léttvatn[\s\S]*skráð tæki/.test(magn), magn.slice(0, 300));
+  check("magntaflan: nöfn Teikning-gluggans (Léttvatn, Slanga, Segulloki …) og „skráð tæki“", /Léttvatn[\s\S]*skráð tæki/.test(magn) && /Segulloki/.test(magn) && /Slöngumerki/.test(magn) && !/Slökkvitæki · /.test(magn), magn.slice(0, 400));
+  // rot/staerd úr úttektinni sjást á borðinu
+  const rafT = takniFyrir(st, "s:rafmagn:mur14paumv8v")[0];
+  const tSt = takniFyrir(st, 25445)[0];
+  check("rafmagnstaflan snúin 90° og tvöföld stærð (rot/staerd 433 sýnd)", rafT && rafT.rotation === 90 && Math.abs(rafT.size / tSt.size - 2) < 0.01, JSON.stringify([rafT, tSt && tSt.size]));
   await page.screenshot({ path: mynd("06_magntafla_og_athugasemd.png") });
 
   // ── 9) Vista í úttekt (gripið) ─────────────────────────────────────────────────────────────────────────────────
@@ -315,6 +334,8 @@ const mynd = (n) => path.join(OUT, n);
   check("25448 og dregna 25451 í hæðinni", merki(25448).length === 1 && merki(25451).length === 1, "");
   check("teknu tækin 25443 og 25444 EKKI í hæðinni", merki(25443).length === 0 && merki(25444).length === 0, "");
   const ut = hd.markers.filter((m) => m.sign === "ut");
+  const sg = hd.markers.filter((m) => m.sign === "segull");
+  check("Segulloki í sendingunni á Teikning-sniði (s:segull:<id>, litur #c93c1d, rot 0)", sg.length === 1 && /^s:segull:[0-9a-z]+$/.test(sg[0].unitId) && sg[0].kind === "sign" && sg[0].color === "#c93c1d" && sg[0].rot === 0, JSON.stringify(sg));
   check(
     "ÚT-merkið á Teikning-sniði: kind sign, sign ut, unitId s:ut:<id>, litur, rot 0",
     ut.length === 1 && ut[0].kind === "sign" && /^s:ut:[0-9a-z]+$/.test(ut[0].unitId) && ut[0].color === "#15803d" && ut[0].rot === 0,
@@ -326,10 +347,10 @@ const mynd = (n) => path.join(OUT, n);
   const fM = (u) => f1.markers.find((m) => String(m.unitId) === String(u));
   check("óhreyfð tæki óbreytt (líka brotatölu-hnit 25445)", oHreyfd.every((u) => JSON.stringify(merki(u)[0]) === JSON.stringify(fM(u))), JSON.stringify(oHreyfd.map((u) => [merki(u)[0], fM(u)])));
   const gomulMerki = f1.markers.filter((m) => m.kind === "sign" && m.unitId !== "s:bjalla:fraappinu");
-  check("eldri stimplar (slanga, bjalla, rafmagn, skilti) óbreyttir", gomulMerki.length === 4 && gomulMerki.every((m) => JSON.stringify(merki(m.unitId)[0]) === JSON.stringify(m)), JSON.stringify(gomulMerki));
+  check("eldri stimplar (slanga, bjalla, rafmagn m. rot 90/staerd 52, skilti) óbreyttir", gomulMerki.length === 4 && gomulMerki.every((m) => JSON.stringify(merki(m.unitId)[0]) === JSON.stringify(m)), JSON.stringify(gomulMerki));
   check("merki sem appið setti EFTIR opnun heldur sér (fersk röð)", merki("s:bjalla:fraappinu").length === 1, "");
-  // 25442 + 7 óhreyfð tæki + 4 eldri stimplar + bjalla úr appinu + 4 ný (25447, 25448, 25451, ÚT)
-  check("laust slökkvitæki (án tækis) EKKI skrifað", hd.markers.length === 1 + 7 + 4 + 1 + 4, `markers=${hd.markers.length}: ${JSON.stringify(hd.markers.map((m) => m.unitId))}`);
+  // 25442 + 7 óhreyfð tæki + 4 eldri stimplar + bjalla úr appinu + 5 ný (25447, 25448, 25451, ÚT, Segulloki)
+  check("laust Léttvatn (án tækis) EKKI skrifað", hd.markers.length === 1 + 7 + 4 + 1 + 5, `markers=${hd.markers.length}: ${JSON.stringify(hd.markers.map((m) => m.unitId))}`);
   check("2. hæð: 25448 farið, ÚT-merkið þar ósnert", hd2.markers.length === 1 && hd2.markers[0].unitId === "s:ut:prof2haed" && JSON.stringify(hd2.markers[0]) === JSON.stringify(f2.markers.find((m) => m.unitId === "s:ut:prof2haed")), JSON.stringify(hd2.markers));
   const { markers: _a, ...hd2Annad } = hd2;
   const { markers: _b, ...f2Annad } = f2;

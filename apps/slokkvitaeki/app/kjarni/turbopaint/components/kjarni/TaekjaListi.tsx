@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useHamur } from "../../lib/board/hamir";
 import { TAEKI_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { useBoardStore } from "../../lib/board/store";
-import { getSymbol, symbolColors, symbolPaint } from "../../lib/board/symbols";
 import {
   flokkaTaekjalista,
   merkiTexti,
@@ -19,28 +18,7 @@ import {
 } from "../../lib/board/taekjalisti";
 import { byggjaStodur, finnaTengduMynd, TEIKNING_STIMPLAR } from "../../lib/board/uttekt";
 import { afvopna, useTaekjaVal, useUttektGogn, vopna, type TaekjaVal } from "../../lib/board/uttekt-gogn";
-
-function TaknMerki({ symbolId, stutt }: { symbolId: string; stutt?: string }) {
-  const s = getSymbol(symbolId);
-  const c = symbolPaint(s);
-  // Stafirnir í flokkslitnum (hvítt / dökkt á gulu) — tegundarliturinn (t.d. grænblátt Léttvatn) er fyrir teikninguna
-  // sjálfa og varð ólæsilegur sem texti á rauðu.
-  const blek = symbolColors(s.kind).fg;
-  return (
-    <span
-      aria-hidden
-      className="flex size-5 shrink-0 items-center justify-center rounded-sm text-[7.5px] font-bold leading-none shadow-sm"
-      style={{
-        background: c.bg,
-        color: blek,
-        boxShadow: s.glyphId ? `inset 0 -3px 0 ${c.fg}` : undefined,
-        outline: c.outline ? `1px solid ${c.outline}` : undefined,
-      }}
-    >
-      {(stutt ?? s.short).slice(0, 3)}
-    </span>
-  );
-}
+import { MerkiTakn } from "./MerkiTakn";
 
 const MERKI_LITUR: Record<TaekiILista["stada"], string> = {
   her: "bg-emerald-500/15 text-emerald-300",
@@ -189,7 +167,7 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
                                     : "hover:bg-white/6"
                               } ${x.urelt ? "opacity-55" : ""}`}
                             >
-                              <TaknMerki symbolId={x.symbolId} />
+                              <MerkiTakn symbolId={x.symbolId} size={20} />
                               <span className="min-w-0 flex-1 truncate">
                                 <span className="font-mono text-[11px] text-stone-100">{x.stuttNr}</span>
                                 <span className="pl-1.5 text-[10px] text-stone-500">{stadaTaekisTexti(x.taeki.status)}</span>
@@ -207,8 +185,8 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
           )}
           <div className="border-t border-white/8 pt-2">
             <div className="pb-1 text-[10.5px] font-semibold tracking-wide text-stone-400">Merki (Teikning)</div>
-            <div className="grid grid-cols-1 gap-px">
-              {TEIKNING_STIMPLAR.filter((s) => s.id !== "segull").map((s) => {
+            <div className="space-y-px">
+              {TEIKNING_STIMPLAR.map((s) => {
                 const valid = val?.teg === "stimpill" && val.sign === s.id;
                 const v: TaekjaVal = { teg: "stimpill", sign: s.id, symbolId: s.symbolId };
                 return (
@@ -224,11 +202,11 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                     onClick={() => veljaVal(v, valid)}
-                    className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-[11px] text-stone-300 ${
+                    className={`flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-[11px] text-stone-300 ${
                       valid ? "bg-amber-400/15 ring-1 ring-amber-400/60" : "hover:bg-white/6"
                     }`}
                   >
-                    <TaknMerki symbolId={s.symbolId} stutt={s.stutt} />
+                    <MerkiTakn symbolId={s.symbolId} size={20} />
                     <span className="min-w-0 truncate">{s.nafn}</span>
                   </button>
                 );

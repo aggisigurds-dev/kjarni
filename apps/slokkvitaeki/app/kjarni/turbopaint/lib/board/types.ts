@@ -169,6 +169,11 @@ export interface SymbolObject extends BaseObject {
   /** Stimpill Teikning-gluggans (neyðarútgangur, ut, hose, rafmagn, skilti_slt …). Á ótengdu tákni = stimpillinn sem
    * það vistast sem (valið í „Merki" í tækjalistanum). */
   uttektSign?: string;
+  /** Stærð táknsins (borðdílar) þegar það kom úr úttektinni eða var sett — breytist hún hefur notandinn stækkað/minnkað
+   * táknið og ný `staerd` vistast í merkið. */
+  uttektPx?: number;
+  /** `color` merkisins í teikning_bord — plötuliturinn eins og Teikning-glugginn teiknar hann. */
+  uttektLitur?: string;
 }
 
 export type BoardObject =

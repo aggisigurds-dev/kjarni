@@ -157,7 +157,9 @@ export function CountTable() {
     const on = objectsOnDocument(plan, objects).filter((o) => !o.hidden);
     const telja = (...ids: string[]) =>
       on.filter((o) => o.type === "symbol" && ids.includes(o.symbolId)).length;
-    const kefli = telja("hose");
+    // Tákn merkjasafns Teikning-gluggans (teikn:…) teljast með sínum jafngildu eldri táknum. „Annað tæki" telst ekki
+    // slökkvitæki (þar lenda líka reykskynjarar og teppi, sbr. 434 fjold).
+    const kefli = telja("hose", "teikn:slanga", "teikn:hose");
     return greinaTharfir({
       m2: netM2 || grossM2,
       flokkur,
@@ -165,13 +167,21 @@ export function CountTable() {
       keflaEdaUdakerfi: kefli > 0 || telja("sprinkler") > 0,
       komid: {
         // Tegundirnar þrjár (Léttvatn/Duft/CO₂) eru líka slökkvitæki — áður taldist aðeins almenna táknið.
-        slokkvitaeki: telja("extinguisher", "extinguisher-lettvatn", "extinguisher-duft", "extinguisher-co2"),
+        slokkvitaeki: telja(
+          "extinguisher",
+          "extinguisher-lettvatn",
+          "extinguisher-duft",
+          "extinguisher-co2",
+          "teikn:lettvatn",
+          "teikn:duft",
+          "teikn:co2"
+        ),
         kefli,
-        skiltiSlokkvitaekis: telja("sign-extinguisher"),
-        skiltiKeflis: telja("sign-hose"),
+        skiltiSlokkvitaekis: telja("sign-extinguisher", "teikn:skilti_slt"),
+        skiltiKeflis: telja("sign-hose", "teikn:skilti_slanga"),
         flottaskilti: telja("route", "e-light"),
-        utgangar: telja("exit"),
-        reykskynjarar: telja("detector"),
+        utgangar: telja("exit", "teikn:neydarutgangur", "teikn:ut"),
+        reykskynjarar: telja("detector", "teikn:reykskynjari"),
       },
     });
   }, [plan, objects, netM2, grossM2, flokkur]);

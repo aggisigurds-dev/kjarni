@@ -32,7 +32,24 @@ export interface Hamur {
   adgerdir: HamAdgerd[];
   /** Tákn í slánni (null = sláin falin). Eigin tákn Agnars bætast alltaf við þar sem sláin sést. */
   takn: string[] | null;
+  /** Aukatákn TurboPaint sem Teikning-glugginn á ekki — standa sér í slánni og vistast ekki í úttektina. */
+  auka?: string[];
 }
+
+/** Merkjasafn Teikning-gluggans í slánni: tækjategundirnar fjórar og merkin tíu (433), í sömu röð og þar. */
+const TEIKNING_TAEKI = ["teikn:lettvatn", "teikn:duft", "teikn:co2", "teikn:slanga"];
+const TEIKNING_MERKI = [
+  "teikn:neydarutgangur",
+  "teikn:ut",
+  "teikn:hose",
+  "teikn:rafmagn",
+  "teikn:skilti_slt",
+  "teikn:skilti_slanga",
+  "teikn:reykskynjari",
+  "teikn:hitaskynjari",
+  "teikn:bjalla",
+  "teikn:segull",
+];
 
 export const HAMIR: Hamur[] = [
   {
@@ -49,19 +66,9 @@ export const HAMIR: Hamur[] = [
     stutt: "Slökkvitæki",
     lysing: "Raðaðu slökkvitækjum, slöngum og skiltum — SLT/BRSL af teikningunni setur hönnuðu staðina sjálfkrafa.",
     adgerdir: ["slt-brsl", "thrividd"],
-    takn: [
-      "extinguisher",
-      "extinguisher-lettvatn",
-      "extinguisher-duft",
-      "extinguisher-co2",
-      "hose",
-      "sign-extinguisher",
-      "sign-hose",
-      "blanket",
-      "electric",
-      "exit",
-      "e-light",
-    ],
+    // Sama safn og Teikning-glugginn (Agnar 06.10.2026: „Samræma merkingar þarna á milli").
+    takn: [...TEIKNING_TAEKI, ...TEIKNING_MERKI],
+    auka: ["blanket", "e-light"],
   },
   {
     id: "brunathettingar",
@@ -77,7 +84,8 @@ export const HAMIR: Hamur[] = [
     stutt: "Brunakerfi",
     lysing: "Skynjarar, brunahnappar, úðakerfi, neyðarlýsing og stjórnstöð — talið í magntöflunni.",
     adgerdir: ["thrividd"],
-    takn: ["detector", "alarm", "sprinkler", "e-light", "electric", "hydrant", "phone"],
+    takn: ["teikn:reykskynjari", "teikn:hitaskynjari", "teikn:bjalla", "teikn:segull", "teikn:rafmagn"],
+    auka: ["alarm", "sprinkler", "e-light", "hydrant", "phone"],
   },
   {
     id: "rymi",
@@ -124,7 +132,16 @@ export function hladaHam() {
 
 /** Tákn slánnar í hamnum: listi hamsins ∩ ófalin, auk eigin tákna. null = sláin falin. */
 export function taknIHam(hamur: HamurId, eigin: string[]): string[] | null {
+  const s = taknIHamSkipt(hamur, eigin);
+  return s ? [...s.teikning, ...s.auka] : null;
+}
+
+/** Sláin skipt: merkjasafn Teikning-gluggans fyrst, aukatákn TurboPaint (og eigin tákn) sér. null = sláin falin. */
+export function taknIHamSkipt(hamur: HamurId, eigin: string[]): { teikning: string[]; auka: string[] } | null {
   const h = getHamur(hamur);
   if (!h.takn) return null;
-  return [...h.takn, ...eigin.filter((id) => !h.takn!.includes(id))];
+  const teikning = h.takn.filter((id) => id.startsWith("teikn:"));
+  const fyrst = h.takn.filter((id) => !id.startsWith("teikn:"));
+  const auka = [...fyrst, ...(h.auka ?? [])];
+  return { teikning, auka: [...auka, ...eigin.filter((id) => !auka.includes(id) && !teikning.includes(id))] };
 }

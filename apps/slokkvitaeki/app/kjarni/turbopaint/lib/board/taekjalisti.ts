@@ -12,6 +12,7 @@ import {
   type UttektHaed,
   type UttektTaeki,
 } from "./uttekt";
+import { MERKJASAFN } from "./merkjasafn";
 import type { BoardObject } from "./types";
 
 export type TaekjaStada = "her" | "onnur" | "ekki";
@@ -31,16 +32,11 @@ export interface TaekiILista {
   urelt: boolean;
 }
 
-/** Flokkar listans í röð — tegund tækis ræður tákninu (symbolFyrirTegund) og táknið flokknum. */
-export const TAEKJAFLOKKAR: { symbolId: string; heiti: string }[] = [
-  { symbolId: "extinguisher-lettvatn", heiti: "Slökkvitæki · Léttvatn" },
-  { symbolId: "extinguisher-duft", heiti: "Slökkvitæki · Duft" },
-  { symbolId: "extinguisher-co2", heiti: "Slökkvitæki · CO₂" },
-  { symbolId: "extinguisher", heiti: "Slökkvitæki · annað" },
-  { symbolId: "hose", heiti: "Brunaslanga" },
-  { symbolId: "detector", heiti: "Reykskynjari" },
-  { symbolId: "blanket", heiti: "Eldvarnarteppi" },
-];
+/** Flokkar listans = tækjategundir merkjasafnsins í röð Teikning-gluggans (Léttvatn, Duft, CO₂, Slanga, Annað tæki) —
+ * tegund tækis ræður lyklinum með sömu reglu og þar (434 fjold). */
+export const TAEKJAFLOKKAR: { symbolId: string; heiti: string }[] = MERKJASAFN.filter((f) => f.flokkur === "taeki").map(
+  (f) => ({ symbolId: f.symbolId, heiti: f.nafn })
+);
 
 function flokkurTakns(symbolId: string): string {
   return TAEKJAFLOKKAR.find((f) => f.symbolId === symbolId)?.heiti ?? "Annað";
