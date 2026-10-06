@@ -71,6 +71,18 @@ export interface ImageObject extends BaseObject {
   frumSida?: number;
   /** Svæði sem notandinn hvíttaði („Hreinsa svæði"), í hlutföllum myndarinnar (0–1). Veggjagreining hunsar þau. */
   hvittad?: { x: number; y: number; w: number; h: number }[];
+  /** Tenging við úttektarteikningu Slökkvitæki-appsins (lib/board/uttekt.ts). */
+  uttekt?: UttektTenging;
+}
+
+/** Mynd á borðinu ↔ hæð í teikning_bord. frumB/frumH = stærð frummyndar; skurdur = svæði hússins á blaðinu
+ * (dílar frummyndar) — borðið opnast rammað á það og dekkir utan við, myndin sjálf er ósnert. */
+export interface UttektTenging {
+  companyId: number;
+  haedId: string;
+  frumB: number;
+  frumH: number;
+  skurdur?: { x: number; y: number; w: number; h: number } | null;
 }
 
 export interface RectObject extends BaseObject {
@@ -117,6 +129,8 @@ export interface LineObject extends BaseObject {
   meters?: number;
   /** Greindur veggur (miðlína úr veggjagreiningu; strokeWidth = þykkt veggjarins). */
   veggur?: boolean;
+  /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi eða hurð. Vantar = veggur. */
+  veggTegund?: "veggur" | "gler" | "hurd";
 }
 
 export interface TextObject extends BaseObject {
