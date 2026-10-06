@@ -23,6 +23,7 @@ import {
 import { snapPoint, useBoardStore } from "../../lib/board/store";
 import { checkboxBadge, checkboxPaint, isCheckbox, tickPoints } from "../../lib/board/checkbox";
 import type { BoardObject } from "../../lib/board/types";
+import { SkarptPdfLag } from "./SkarptPdfLag";
 import { SymbolNode } from "./SymbolNode";
 
 function useAsset(assetId: string) {
@@ -43,15 +44,19 @@ function useAsset(assetId: string) {
 function FloorplanImage({ obj }: { obj: Extract<BoardObject, { type: "image" }> }) {
   const image = useAsset(obj.assetId);
   return (
-    <KonvaImage
-      image={image}
-      width={obj.width}
-      height={obj.height}
-      shadowColor="rgba(28,25,23,0.18)"
-      shadowBlur={18}
-      shadowOffsetY={6}
-      shadowEnabled
-    />
+    <>
+      <KonvaImage
+        image={image}
+        width={obj.width}
+        height={obj.height}
+        shadowColor="rgba(28,25,23,0.18)"
+        shadowBlur={18}
+        shadowOffsetY={6}
+        shadowEnabled
+      />
+      {/* Vigur-PDF: sýnilegi hlutinn teiknaður skarpt þegar þysjað er nær en myndin dugar (aðeins á skjánum). */}
+      <SkarptPdfLag obj={obj} raster={image} />
+    </>
   );
 }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  erSkonnudTif,
   FOTOWEB_BOARD_JPEG_MIN,
   fotowebBaseName,
   fotowebDownloadOrder,
@@ -119,4 +120,33 @@ test("preferOriginal also takes a scanned PDF original before the cache JPEG", (
   assert.deepEqual(order.map((c) => c.kind), ["original", "jpeg"]);
   // án preferOriginal helst gamla röðin: skannað PDF → JPEG fyrst
   assert.equal(fotowebDownloadOrder(scan, "/archives/2022-10-1139928.pdf.info")[0]?.kind, "jpeg");
+});
+
+// Center Hótel Þingholt, kjallari: 7016 × 4961 TIF (Orientation 3, litaspjald) — JPEG skjalasafnsins 6006 × 4251.
+const THINGHOLT: FotowebAsset = {
+  filename: "2014-06-2461_3.tif",
+  renditions: [{ original: true, width: 7016, height: 4961, href: "/fotoweb/archives/x/2014-06-2461_3.tif.info/__renditions/ORIGINAL" }],
+  quickRenditions: [
+    { size: 6006, width: 6006, height: 4251, href: "/fotoweb/cache/v2/thingholt6006.jpg" },
+    { size: 2400, width: 2400, height: 1699, href: "/fotoweb/cache/v2/thingholt2400.jpg" },
+  ],
+};
+
+test("skönnun: prefer=tif skilar TIF-frumritinu EINU — aldrei JPEG í staðinn", () => {
+  const order = fotowebDownloadOrder(THINGHOLT, "/archives/2014-06-2461_3.tif.info", { preferTif: true });
+  assert.deepEqual(order, [{ href: THINGHOLT.renditions![0].href, name: "2014-06-2461_3.tif", kind: "original" }]);
+  // PDF eða asset án frumrits: ekkert (fetch-plan svarar 415)
+  assert.deepEqual(fotowebDownloadOrder({ filename: "x.pdf", renditions: [{ original: true, href: "/o" }] }, "/x.pdf.info", { preferTif: true }), []);
+  assert.deepEqual(fotowebDownloadOrder({ filename: "x.tif", quickRenditions: [{ size: 6006, href: "/j" }] }, "/x.tif.info", { preferTif: true }), []);
+});
+
+test("skönnun: JPEG skjalasafnsins er áfram viðmiðið — sjálfgefið og prefer=image (teikn-mynd) halda JPEG fremst", () => {
+  // Teikning-glugginn vistar merkin í dílum þessa JPEG (teikn-mynd → fetch-plan?prefer=image) — má aldrei víkja fyrir TIF
+  const mynd = fotowebDownloadOrder(THINGHOLT, "/archives/2014-06-2461_3.tif.info", { preferImage: true });
+  assert.equal(mynd[0]?.kind, "jpeg");
+  assert.ok(mynd[0]?.href.includes("thingholt6006.jpg"));
+  assert.equal(fotowebDownloadOrder(THINGHOLT, "/archives/2014-06-2461_3.tif.info")[0]?.kind, "jpeg");
+  assert.equal(erSkonnudTif(THINGHOLT, "/x"), true);
+  assert.equal(erSkonnudTif({ filename: "a.pdf" }, "/a.pdf.info"), false);
+  assert.equal(erSkonnudTif({}, "/archives/b.tiff.info"), true);
 });

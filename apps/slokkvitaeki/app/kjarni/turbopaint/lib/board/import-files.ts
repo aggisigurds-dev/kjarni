@@ -357,6 +357,18 @@ function loadHtmlImage(url: string) {
   });
 }
 
+/** Skörp skönnun (lib/board/skonnun.ts): myndin er þegar tilbúin — TIF-frumritið endursýnt í ramma JPEG skjalasafnsins.
+ * Á borðinu fær hún stærð JPEG-sins (b × h), sömu stærð og JPEG-innflutningur hefði gefið, svo úttektarmerki og veggir
+ * lenda á sama stað; eignin sjálf er í upplausn frumritsins. */
+export async function importSkonnun(
+  s: { blob: Blob; nafn: string; b: number; h: number },
+  origin: { x: number; y: number }
+): Promise<ImportResult> {
+  const assetId = newId();
+  await putAsset(assetId, s.blob);
+  return { objects: [makeImageObject(assetId, s.b, s.h, s.nafn, origin.x, origin.y)], warnings: [], textByObjectId: {} };
+}
+
 export async function importFiles(
   files: File[],
   quality: ImportQuality,
