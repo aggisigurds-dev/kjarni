@@ -45,7 +45,7 @@ import {
 } from "./merkjasafn";
 import { getSymbol } from "./symbols";
 import { erVeggTegund, type FrumVeggur } from "./teikning-veggir";
-import type { BoardObject, ImageObject, LineObject, SymbolObject, UttektTenging } from "./types";
+import type { BladHluti, BoardObject, ImageObject, LineObject, SymbolObject, UttektTenging } from "./types";
 import { erVeggur, VEGG_LITIR, VEGG_NOFN } from "./veggja-leidretting";
 
 export type { UttektTenging };
@@ -198,18 +198,62 @@ function midjuHlidrun(staerd: number, rot: number) {
   return { dx: h * Math.cos(a) - h * Math.sin(a), dy: h * Math.sin(a) + h * Math.cos(a) };
 }
 
-/** Merki (punktar frummyndar) → upphafspunktur tákns á borðinu, miðjað á staðnum (líka snúið, eins og 433 `rot`). */
+/** Svæði á blaðinu í dílum frummyndar (skurður hæðar eða skorinnar myndar). */
+export type Svaedi = { x: number; y: number; w: number; h: number };
+type Rammi = { x: number; y: number; width: number; height: number };
+
+/** Nothæfur skurður skorinnar myndar, annars null (= myndin er allt blaðið). */
+export function gilturSkurdur(s: Svaedi | null | undefined): Svaedi | null {
+  if (!s) return null;
+  if (![s.x, s.y, s.w, s.h].every((n) => Number.isFinite(n))) return null;
+  return s.w > 0 && s.h > 0 ? s : null;
+}
+
+/** Svæðið sem myndin sýnir af blaðinu (dílar frummyndar): skurður skorinnar myndar, annars allt blaðið. */
+export function svaediMyndar(frum: { b: number; h: number }, svaedi?: Svaedi | null): Svaedi {
+  return gilturSkurdur(svaedi) ?? { x: 0, y: 0, w: frum.b, h: frum.h };
+}
+
+/** ALLT BLAÐIÐ í borðhnitum. Mynd sem var skorin úr blaðinu („Croppa oft") sýnir aðeins `svaedi` (dílar frummyndar);
+ * sýndarblaðið nær þá út fyrir myndina í sama kvarða, svo hver vörpun er sú sama og áður:
+ *   frum = svaedi.x + (borðX − mynd.x) / mynd.width · svaedi.w   (eins fyrir y).
+ * Án svæðis er blaðið myndin sjálf — óbreytt hegðun. */
+export function bladIBordi(mynd: Rammi, frum: { b: number; h: number }, svaedi?: Svaedi | null): Rammi {
+  const s = gilturSkurdur(svaedi);
+  if (!s || !(frum.b > 0) || !(frum.h > 0)) return { x: mynd.x, y: mynd.y, width: mynd.width, height: mynd.height };
+  const kx = mynd.width / s.w, ky = mynd.height / s.h;
+  return { x: mynd.x - s.x * kx, y: mynd.y - s.y * ky, width: frum.b * kx, height: frum.h * ky };
+}
+
+/** Er punkturinn (dílar frummyndar) innan svæðisins? */
+export function innanSvaedis(p: { x: number; y: number }, s: Svaedi): boolean {
+  return p.x >= s.x && p.y >= s.y && p.x <= s.x + s.w && p.y <= s.y + s.h;
+}
+
+/** Vörpun tengdrar myndar: stærð frummyndar, skurður myndarinnar (null = allt blaðið) og blaðið á borðinu. */
+export function vorpunMyndar(mynd: ImageObject): { frum: { b: number; h: number }; svaedi: Svaedi | null; blad: Rammi } | null {
+  const t = mynd.uttekt;
+  if (!t || !(t.frumB > 0) || !(t.frumH > 0)) return null;
+  const frum = { b: t.frumB, h: t.frumH };
+  const svaedi = gilturSkurdur(t.myndSkurdur);
+  return { frum, svaedi, blad: bladIBordi(mynd, frum, svaedi) };
+}
+
+/** Merki (punktar frummyndar) → upphafspunktur tákns á borðinu, miðjað á staðnum (líka snúið, eins og 433 `rot`).
+ * `svaedi` = skurður myndarinnar þegar hún var skorin úr blaðinu (vantar = myndin er allt blaðið). */
 export function merkiIBord(
   m: { x: number; y: number },
-  mynd: { x: number; y: number; width: number; height: number },
+  mynd: Rammi,
   frum: { b: number; h: number },
   staerd: number,
-  rot = 0
+  rot = 0,
+  svaedi?: Svaedi | null
 ) {
   const h = midjuHlidrun(staerd, rot);
+  const b = bladIBordi(mynd, frum, svaedi);
   return {
-    x: mynd.x + (m.x / frum.b) * mynd.width - h.dx,
-    y: mynd.y + (m.y / frum.h) * mynd.height - h.dy,
+    x: b.x + (m.x / frum.b) * b.width - h.dx,
+    y: b.y + (m.y / frum.h) * b.height - h.dy,
   };
 }
 
@@ -219,19 +263,23 @@ export function merkiIBord(
 export type UttektVeggur = FrumVeggur;
 
 /** Veggir tengdu myndarinnar → punktar frummyndar (heiltölur, svo röðin haldist lítil). Með fara veggir festir við
- * myndina og veggir teiknaðir ofan á hana án festingar (Veggja-tólið W); veggir annarra mynda ekki. */
+ * myndina og veggir teiknaðir ofan á hana án festingar (Veggja-tólið W); veggir annarra mynda ekki. Skorin mynd
+ * (`svaedi`): hnitin fara um skurðinn og laus veggur fylgir aðeins ef miðja hans er á hlutanum sjálfum. */
 export function veggirIFrum(
   objects: BoardObject[],
   mynd: { id: string; x: number; y: number; width: number; height: number },
-  frum: { b: number; h: number }
+  frum: { b: number; h: number },
+  svaedi?: Svaedi | null
 ): UttektVeggur[] {
-  const kx = frum.b / mynd.width, ky = frum.h / mynd.height;
+  const b = bladIBordi(mynd, frum, svaedi);
+  const sv = svaediMyndar(frum, svaedi);
+  const kx = frum.b / b.width, ky = frum.h / b.height;
   const ut: UttektVeggur[] = [];
   for (const o of objects) {
     if (!erVeggur(o) || o.hidden) continue;
     const p: number[] = [];
     for (let i = 0; i + 1 < o.points.length; i += 2) {
-      p.push(Math.round((o.x + o.points[i] - mynd.x) * kx), Math.round((o.y + o.points[i + 1] - mynd.y) * ky));
+      p.push(Math.round((o.x + o.points[i] - b.x) * kx), Math.round((o.y + o.points[i + 1] - b.y) * ky));
     }
     if (o.parentId !== mynd.id) {
       if (o.parentId) continue;
@@ -239,21 +287,23 @@ export function veggirIFrum(
       const n = p.length / 2;
       let sx = 0, sy = 0;
       for (let i = 0; i < p.length; i += 2) { sx += p[i]; sy += p[i + 1]; }
-      const cx = sx / n, cy = sy / n;
-      if (!(cx >= 0 && cy >= 0 && cx <= frum.b && cy <= frum.h)) continue;
+      if (!innanSvaedis({ x: sx / n, y: sy / n }, sv)) continue;
     }
     if (p.length >= 4) ut.push({ p, t: Math.max(1, Math.round(o.strokeWidth * kx)), tegund: o.veggTegund ?? "veggur" });
   }
   return ut;
 }
 
-/** Veggjalínur hæðar → línur á borðinu, festar við myndina (sama útlit og „Veggir" gefur; gler blátt, hurð brún). */
+/** Veggjalínur hæðar → línur á borðinu, festar við myndina (sama útlit og „Veggir" gefur; gler blátt, hurð brún).
+ * Skorin mynd (`svaedi`): hnitin fara um skurðinn. */
 export function veggirIBord(
   veggir: UttektVeggur[],
   mynd: { id: string; x: number; y: number; width: number; height: number },
-  frum: { b: number; h: number }
+  frum: { b: number; h: number },
+  svaedi?: Svaedi | null
 ): LineObject[] {
-  const kx = mynd.width / frum.b, ky = mynd.height / frum.h;
+  const b = bladIBordi(mynd, frum, svaedi);
+  const kx = b.width / frum.b, ky = b.height / frum.h;
   return veggir
     .filter((v) => Array.isArray(v.p) && v.p.length >= 4)
     .map((v) => {
@@ -263,7 +313,7 @@ export function veggirIBord(
         type: "polyline",
         x: 0,
         y: 0,
-        points: v.p.map((n, i) => (i % 2 === 0 ? mynd.x + n * kx : mynd.y + n * ky)),
+        points: v.p.map((n, i) => (i % 2 === 0 ? b.x + n * kx : b.y + n * ky)),
         stroke: VEGG_LITIR[tegund],
         strokeWidth: Math.max(1, (v.t || 1) * kx),
         dash: "solid",
@@ -284,11 +334,13 @@ export function veggirIBord(
 export function skurdurIBord(
   sk: { x: number; y: number; w: number; h: number } | null | undefined,
   mynd: { x: number; y: number; width: number; height: number },
-  frum: { b: number; h: number }
+  frum: { b: number; h: number },
+  svaedi?: Svaedi | null
 ): { x: number; y: number; width: number; height: number } | null {
   if (!sk || !(sk.w > 8) || !(sk.h > 8) || !(frum.b > 0) || !(frum.h > 0)) return null;
-  const kx = mynd.width / frum.b, ky = mynd.height / frum.h;
-  return { x: mynd.x + sk.x * kx, y: mynd.y + sk.y * ky, width: sk.w * kx, height: sk.h * ky };
+  const b = bladIBordi(mynd, frum, svaedi);
+  const kx = b.width / frum.b, ky = b.height / frum.h;
+  return { x: b.x + sk.x * kx, y: b.y + sk.y * ky, width: sk.w * kx, height: sk.h * ky };
 }
 
 /** Veggirnir skrifast í hæðina sem veggjaLinur og hún fær `leidrett` (Teikning veit þá að veggirnir voru leiðréttir í
@@ -299,17 +351,25 @@ export function skrifaVeggiIHaed<T extends UttektHaed>(haedir: T[], haedId: stri
   return haedir.map((h) => (h.id === haedId ? { ...h, veggjaLinur: veggir, leidrett } : h));
 }
 
-/** Tákn á borðinu → punktar frummyndar (miðja táknsins, líka þegar því er snúið). */
+/** Tákn á borðinu → punktar frummyndar (miðja táknsins, líka þegar því er snúið). Skorin mynd (`svaedi`): um skurðinn. */
 export function taknIMerki(
   takn: { x: number; y: number; size: number; rotation?: number },
-  mynd: { x: number; y: number; width: number; height: number },
-  frum: { b: number; h: number }
+  mynd: Rammi,
+  frum: { b: number; h: number },
+  svaedi?: Svaedi | null
 ) {
   const h = midjuHlidrun(takn.size, takn.rotation || 0);
+  const b = bladIBordi(mynd, frum, svaedi);
   return {
-    x: Math.round(((takn.x + h.dx - mynd.x) / mynd.width) * frum.b),
-    y: Math.round(((takn.y + h.dy - mynd.y) / mynd.height) * frum.h),
+    x: Math.round(((takn.x + h.dx - b.x) / b.width) * frum.b),
+    y: Math.round(((takn.y + h.dy - b.y) / b.height) * frum.h),
   };
+}
+
+/** Miðja tákns á borðinu (líka snúins). */
+function taknMidjaABordi(takn: { x: number; y: number; size: number; rotation?: number }) {
+  const h = midjuHlidrun(takn.size, takn.rotation || 0);
+  return { x: takn.x + h.dx, y: takn.y + h.dy };
 }
 
 /** Viðmið stærðar við vistun: stærð nýs tákns á borðinu og sjálfgefin stærð hæðarinnar í Teikning-glugganum. */
@@ -372,7 +432,9 @@ export function uppfaeraHaedir(
         else uppf.push(m);
         continue;
       }
-      const kyrrt = s.x === Math.round(Number(m.x)) && s.y === Math.round(Number(m.y));
+      // Óhreyft = staða táknsins (heiltölur) er innan námundunar frá vistuðu hnitunum. Ekki `=== Math.round(m.x)`:
+      // hnit á borð við 4000,5 námundast upp en vörpunin fram og til baka (líka um skurð) gefur 4000,4999… → 4000.
+      const kyrrt = Math.abs(s.x - Number(m.x)) <= 0.5 + 1e-6 && Math.abs(s.y - Number(m.y)) <= 0.5 + 1e-6;
       const next: UttektMerki = { ...m, x: kyrrt ? m.x : s.x, y: kyrrt ? m.y : s.y, unitId: m.unitId };
       if (s.kind) next.kind = s.kind;
       if (s.sign) next.sign = s.sign;
@@ -427,25 +489,51 @@ export type StodurBords = {
   tvitekin: number;
 };
 
-/** Merki hæðarinnar eins og borðið sýnir þau: tengd tæki + stimplar (tengdir eða samsvarandi tákn). */
-export function byggjaStodur(
+/** Ein tengd mynd í vistun: myndin, stærð frummyndar, skurður hennar (null = allt blaðið) og stærðarviðmið. */
+export type MyndILotu = {
+  mynd: { id: string; x: number; y: number; width: number; height: number };
+  frum: { b: number; h: number };
+  svaedi?: Svaedi | null;
+  vidmid?: StaerdarVidmid;
+};
+
+/** Hvaða tengdu mynd táknið tilheyrir þegar borðið ber margar hæðir („Croppa oft"): myndin sem miðja táknsins stendur
+ * á (efsta), annars myndin sem það er fest við, annars sú fyrsta (þar telst það „utan teikningar"). */
+function myndTakns(s: SymbolObject, lidir: MyndILotu[]): number {
+  if (lidir.length < 2) return 0;
+  const c = taknMidjaABordi(s);
+  for (let i = lidir.length - 1; i >= 0; i--) {
+    const m = lidir[i].mynd;
+    if (c.x >= m.x && c.y >= m.y && c.x <= m.x + m.width && c.y <= m.y + m.height) return i;
+  }
+  const f = lidir.findIndex((l) => l.mynd.id === s.parentId);
+  return f >= 0 ? f : 0;
+}
+
+/** Merki hverrar tengdrar myndar eins og borðið sýnir þau: tengd tæki + stimplar (tengdir eða samsvarandi tákn). Tákn
+ * tilheyrir einni mynd (myndTakns) og vistast í hennar hæð; `aBordi` er sameiginlegt öllu borðinu (tæki er á einum
+ * stað — afrit vistast ekki, og tákn sem stendur á annarri mynd telst ekki tekið af). */
+export function byggjaStodurMargar(
   objects: BoardObject[],
-  mynd: { x: number; y: number; width: number; height: number },
-  frum: { b: number; h: number },
-  nyttId: (sign: string) => string = nyttStimpilId,
-  vidmid?: StaerdarVidmid
-): StodurBords {
-  const ut: StodurBords = { stodur: new Map(), aBordi: new Set(), nyirStimplar: [], otengd: 0, utan: 0, tvitekin: 0 };
+  lidir: MyndILotu[],
+  nyttId: (sign: string) => string = nyttStimpilId
+): { hlutar: StodurBords[]; aBordi: Set<string> } {
+  const aBordi = new Set<string>();
+  const hlutar: StodurBords[] = lidir.map(() => ({ stodur: new Map(), aBordi, nyirStimplar: [], otengd: 0, utan: 0, tvitekin: 0 }));
+  if (!lidir.length) return { hlutar, aBordi };
   for (const o of objects) {
     if (o.type !== "symbol") continue;
     const s = o as TaknMedTaeki;
-    const p = taknIMerki(s, mynd, frum);
-    const inni = p.x >= 0 && p.y >= 0 && p.x <= frum.b && p.y <= frum.h;
+    const i = myndTakns(s, lidir);
+    const { mynd, frum, svaedi, vidmid } = lidir[i];
+    const ut = hlutar[i];
+    const p = taknIMerki(s, mynd, frum, svaedi);
+    const inni = innanSvaedis(p, svaediMyndar(frum, svaedi));
     if (s.uttektUnitId != null && s.uttektUnitId !== "") {
       const unitId = kodaUnitId(s.uttektUnitId);
       const key = merkiLykill(unitId);
-      if (!ut.aBordi.has(key)) {
-        ut.aBordi.add(key);
+      if (!aBordi.has(key)) {
+        aBordi.add(key);
         if (s.hidden) continue;
         if (!inni) {
           ut.utan++;
@@ -470,10 +558,23 @@ export function byggjaStodur(
     const stada: UttektStada = { x: p.x, y: p.y, unitId, kind: "sign", sign, color: stimpilDef(sign)?.litur, rot: rotGradur(s.rotation) };
     if (vidmid && s.uttektPx && Math.abs(s.size - s.uttektPx) > 0.5) stada.staerd = staerdUrBordi(s.size, vidmid.grunnPx, vidmid.grunnTeikning);
     ut.stodur.set(unitId, stada);
-    ut.aBordi.add(unitId);
+    aBordi.add(unitId);
     ut.nyirStimplar.push({ objId: s.id, unitId, sign });
   }
-  return ut;
+  return { hlutar, aBordi };
+}
+
+/** Merki hæðarinnar eins og borðið sýnir þau: tengd tæki + stimplar (tengdir eða samsvarandi tákn). Ein mynd — öll
+ * tákn borðsins teljast til hennar. `svaedi` = skurður myndarinnar þegar hún var skorin úr blaðinu. */
+export function byggjaStodur(
+  objects: BoardObject[],
+  mynd: { x: number; y: number; width: number; height: number },
+  frum: { b: number; h: number },
+  nyttId: (sign: string) => string = nyttStimpilId,
+  vidmid?: StaerdarVidmid,
+  svaedi?: Svaedi | null
+): StodurBords {
+  return byggjaStodurMargar(objects, [{ mynd: { id: "", ...mynd }, frum, svaedi, vidmid }], nyttId).hlutar[0];
 }
 
 /** Merki hæðar → tákn á borðinu eins og Teikning-glugginn sýnir það: tákn úr merkjasafninu (434 lykillFyrir), plötulitur
@@ -485,7 +586,8 @@ export function taknFyrirMerki(
   mynd: { id: string; x: number; y: number; width: number; height: number },
   frum: { b: number; h: number },
   staerd: number,
-  grunnTeikning = STAERD_SJALF
+  grunnTeikning = STAERD_SJALF,
+  svaedi?: Svaedi | null
 ): SymbolObject {
   const stimpill = erStimpil(m);
   const t = stimpill ? undefined : taeki.find((x) => merkiLykill(x.id) === merkiLykill(m.unitId));
@@ -493,7 +595,7 @@ export function taknFyrirMerki(
   const symbolId = symbolIdLykils(lykill);
   const px = staerdABordi(m, staerd, grunnTeikning);
   const rot = rotGradur(m.rot);
-  const stadur = merkiIBord(m, mynd, frum, px, rot);
+  const stadur = merkiIBord(m, mynd, frum, px, rot, svaedi);
   const s: SymbolObject = {
     id: newId(),
     type: "symbol",
@@ -541,11 +643,33 @@ export function stimpilStaerdABladi(
 }
 
 /** Stimpilstærð nýs tákns á borðinu: á borði tengdu úttekt sama stærð og tæki/merki hæðarinnar (miðað við húsið), svo
- * tákn úr slánni verði ekki margfalt stærri en hin; annars stimpilstærð notandans óbreytt. */
-export function stimpilStaerdBords(objects: BoardObject[], bound: number): number {
-  const m = finnaTengduMynd(objects);
-  if (!m?.uttekt || !(m.uttekt.frumB > 0)) return bound;
-  return stimpilStaerdABladi(m, bound, m.uttekt.skurdur, { b: m.uttekt.frumB, h: m.uttekt.frumH });
+ * tákn úr slánni verði ekki margfalt stærri en hin; annars stimpilstærð notandans óbreytt. Mörg hús á borðinu („Croppa
+ * oft"): stærð hæðarinnar sem `vid` (heimspunktur) stendur á. */
+export function stimpilStaerdBords(objects: BoardObject[], bound: number, vid?: { x: number; y: number }): number {
+  const m = (vid && myndUndir(objects, vid)) || finnaTengduMynd(objects);
+  return m ? stimpilStaerdMyndar(m, bound) : bound;
+}
+
+/** Stimpilstærð tengdrar myndar (miðað við húsið — skurð hæðarinnar), líka skorinnar. */
+export function stimpilStaerdMyndar(m: ImageObject, bound: number): number {
+  const v = vorpunMyndar(m);
+  if (!v) return bound;
+  return stimpilStaerdABladi(v.blad, bound, m.uttekt?.skurdur, v.frum);
+}
+
+/** Tengdar myndir borðsins (hver tengd sinni hæð), í röð borðsins. */
+export function myndirTengdar(objects: BoardObject[]): ImageObject[] {
+  return objects.filter((o): o is ImageObject => o.type === "image" && !!(o as ImageObject).uttekt);
+}
+
+/** Tengda myndin sem heimspunkturinn stendur á (efsta), eða null. */
+export function myndUndir(objects: BoardObject[], p: { x: number; y: number }): ImageObject | null {
+  const m = myndirTengdar(objects);
+  for (let i = m.length - 1; i >= 0; i--) {
+    const o = m[i];
+    if (!o.hidden && p.x >= o.x && p.y >= o.y && p.x <= o.x + o.width && p.y <= o.y + o.height) return o;
+  }
+  return null;
 }
 
 /** '/.netlify/functions/teikn-mynd?url=<permalink>' → permalinkurinn (þá sækir fetch-plan vigur-PDF). Annars slóðin sjálf. */
@@ -611,9 +735,90 @@ export async function saekjaUttekt(companyId: number) {
   };
 }
 
+/** Nýtt hæðar-id á sniði Teikning-gluggans (383 nyttId): `h<tími36><slembi3>`. */
+export function nyttHaedId(): string {
+  return "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
+/** Sama blað? (sami permalink skjalasafnsins, eða nákvæmlega sama slóð) */
+export function samaBlad(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const ia = innflutningsSlod(a);
+  return !!ia && ia === innflutningsSlod(b);
+}
+
+/** image_url blaðs í teikning_bord út frá permalinki skjalasafnsins — sama snið og Teikning-glugginn (374/384). */
+export function myndSlodBlads(slod: string | null | undefined): string | null {
+  if (!slod || !/^https?:\/\//i.test(slod)) return null;
+  // Hrein PDF utan Reykjavíkur (Hafnarfjörður) fara ekki um teikn-mynd í Teikning-glugganum — engin slóð þá.
+  if (/\.pdf$/i.test(slod) && !/skjalasafn\.reykjavik\.is/i.test(slod)) return null;
+  return "/.netlify/functions/teikn-mynd?url=" + encodeURIComponent(slod);
+}
+
+/** Númer hæðar úr nafni („2. hæð" → 2, „Kjallari" → null). */
+export function haedNumer(nafn: string | null | undefined): number | null {
+  const m = /^\s*(\d+)\s*\.\s*h[æa]/i.exec(String(nafn || ""));
+  return m ? Number(m[1]) : null;
+}
+
+/** Tillaga að nafni nýrrar hæðar: næsta „N. hæð" á eftir hæstu tölusettu hæðinni (líka nýjum á borðinu). */
+export function tillagaHaedarNafns(nofn: (string | null | undefined)[]): string {
+  let mest = 0;
+  for (const n of nofn) mest = Math.max(mest, haedNumer(n) ?? 0);
+  return `${mest + 1}. hæð`;
+}
+
+/** Hæð sem fær SKORINN hluta blaðs („Croppa oft"): blaðið (image_url), stærð frummyndar og skurðurinn = hlutinn —
+ * handvalinn skurður eins og í Teikning-glugganum (383: sjalf=false, ekki „þétt"), svo sjálfvirkur skurður skrifi ekki
+ * yfir hann. Fari hæðin á ANNAÐ blað falla skurður og veggir gömlu teikningarinnar út, sama regla og 383 (merkin
+ * haldast). Annað á hæðinni er ósnert. */
+export function stillaBladHaedar(h: UttektHaed, bh: BladHluti, skurdur: Svaedi): UttektHaed {
+  const sk = { x: Math.round(skurdur.x), y: Math.round(skurdur.y), w: Math.round(skurdur.w), h: Math.round(skurdur.h) };
+  const n: UttektHaed = { ...h, frum: { b: bh.frumB, h: bh.frumH }, skurdur: sk, sjalf: false };
+  delete n.thett;
+  if (bh.imageUrl) {
+    if (h.image_url && !samaBlad(h.image_url, bh.imageUrl)) {
+      n.veggir = [];
+      n.pdfVeggir = [];
+      delete n.veggjaLinur;
+      delete n.leidrett;
+      delete n.eldVal;
+      delete n.pdfFlokkar;
+    }
+    n.image_url = bh.imageUrl;
+  }
+  return n;
+}
+
+/** Ný hæð í teikning_bord á sniði Teikning-gluggans (383: { id, nafn, image_url, markers: [], skurdur, veggir: [] }). */
+export function nyHaedFraHluta(id: string, nafn: string, bh: BladHluti, skurdur: Svaedi): UttektHaed {
+  return stillaBladHaedar({ id, nafn, image_url: bh.imageUrl ?? null, markers: [], skurdur: null, veggir: [], pdfVeggir: [] }, bh, skurdur);
+}
+
+/** Hluti vistunar: ein tengd mynd og hæðin hennar. */
+export type VistunarHluti = {
+  myndId: string;
+  haedId: string;
+  nafn: string;
+  /** Hæðin var ný (+ Ný hæð) og bættist við í þessari vistun. */
+  ny: boolean;
+  fjoldi: number;
+  veggir: number;
+  /** Merki hæðarinnar sem borðið sýnir ekki (bættust við í appinu eftir opnun, eða eldra borð án `merki`). */
+  utanBords: UttektMerki[];
+  /** Lyklar hæðarinnar sem borðið sýnir eftir vistun — verða `uttekt.merki` myndarinnar. */
+  merkiABordi: string[];
+  anThekkingar: boolean;
+};
+
 /** Hvað „Vista í úttekt" skrifar, reiknað úr borðinu og FERSKRI röð (án þess að skrifa): merki hæðarinnar = tengd tæki
  * + stimplar á borðinu; tæki sem var á borðinu (`uttekt.merki`) og er horfið fer úr hæðinni; tæki sem fær stöðu hér
- * fer af öðrum hæðum. Veggirnir fylgja (1. áfangi). Aðrar hæðir og annað á hæðinni er ósnert. */
+ * fer af öðrum hæðum. Veggirnir fylgja (1. áfangi). Aðrar hæðir og annað á hæðinni er ósnert.
+ *
+ * Margar hæðir á einu borði („Croppa oft"): hver tengd mynd skrifar SÍNA hæð — tákn og veggir sem standa á henni,
+ * varpað um skurð hennar. Skorin mynd (`bladhluti`) skrifar líka blaðið, frum og skurðinn (= hlutann) í hæðina; ný hæð
+ * (`nyHaed`) bætist aftast. Aðeins hæðir sem eru tengdar á borðinu breytast — engri hæð er eytt. */
 export function utbuaVistun(
   objects: BoardObject[],
   haedir: UttektHaed[],
@@ -621,50 +826,121 @@ export function utbuaVistun(
   nyttId: (sign: string) => string = nyttStimpilId,
   stimpilBound = 56
 ) {
-  const mynd = finnaTengduMynd(objects);
-  if (!mynd || !mynd.uttekt) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
-  const t = mynd.uttekt;
-  if (!haedir.some((h) => h.id === t.haedId)) throw new Error("Hæðin er ekki lengur til í úttektinni — henni var eytt í appinu.");
-  const frum = { b: t.frumB, h: t.frumH };
-  const vidmid: StaerdarVidmid = {
-    grunnPx: stimpilStaerdABladi(mynd, stimpilBound, t.skurdur, frum),
-    grunnTeikning: grunnStaerdHaedar(haedir.find((h) => h.id === t.haedId)),
-  };
-  const b = byggjaStodur(objects, mynd, frum, nyttId, vidmid);
-  const thekkt = Array.isArray(t.merki) ? t.merki : null;
-  const fjarlaegja = thekkt ? thekkt.filter((k) => !b.aBordi.has(k)) : [];
-  const u = uppfaeraHaedir(haedir, t.haedId, b.stodur, { fjarlaegja });
-  // Veggirnir fylgja með, með tegund (veggur/gler/hurð), og hæðin merkist leiðrétt í TurboPaint — ef einhverjir eru á
-  // borðinu; annars haldast þeir sem fyrir voru.
-  const veggir = veggirIFrum(objects, mynd, frum);
-  u.haedir = skrifaVeggiIHaed(u.haedir, t.haedId, veggir, kl);
-  const haed = u.haedir.find((h) => h.id === t.haedId)!;
+  const myndir = myndirTengdar(objects);
+  if (!myndir.length) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
+  const nafnHaedar = (id: string, m?: ImageObject) =>
+    haedir.find((h) => h.id === id)?.nafn || m?.uttekt?.nyHaed?.nafn || "hæð";
+  const cid = myndir[0].uttekt!.companyId;
+  const sed = new Set<string>();
+  for (const m of myndir) {
+    const t = m.uttekt!;
+    if (t.companyId !== cid) throw new Error("Myndirnar á borðinu eru tengdar ólíkum stöðum — vistaðu hvern stað á sínu borði.");
+    if (sed.has(t.haedId)) {
+      throw new Error(`Tvær myndir á borðinu eru tengdar „${nafnHaedar(t.haedId, m)}“ — tengdu aðra þeirra við aðra hæð.`);
+    }
+    sed.add(t.haedId);
+  }
+  // Nýjar hæðir (+ Ný hæð) bætast aftast, í röð hæðanúmera; hæð sem var eytt í appinu stöðvar vistunina.
+  const nyjar: { mynd: ImageObject; haed: UttektHaed }[] = [];
+  for (const m of myndir) {
+    const t = m.uttekt!;
+    if (haedir.some((h) => h.id === t.haedId)) continue;
+    if (!t.nyHaed || !m.bladhluti || !gilturSkurdur(t.myndSkurdur)) {
+      throw new Error("Hæðin er ekki lengur til í úttektinni — henni var eytt í appinu.");
+    }
+    nyjar.push({ mynd: m, haed: nyHaedFraHluta(t.haedId, t.nyHaed.nafn, m.bladhluti, t.myndSkurdur!) });
+  }
+  nyjar.sort((a, b) => (haedNumer(a.haed.nafn) ?? 999) - (haedNumer(b.haed.nafn) ?? 999));
+  let hs: UttektHaed[] = [...haedir, ...nyjar.map((n) => n.haed)];
+  // Skornar myndir: blaðið, frum og skurðurinn (= hlutinn) í hæðina.
+  for (const m of myndir) {
+    const t = m.uttekt!;
+    const sk = gilturSkurdur(t.myndSkurdur);
+    if (!m.bladhluti || !sk) continue;
+    hs = hs.map((h) => (h.id === t.haedId ? stillaBladHaedar(h, m.bladhluti!, sk) : h));
+  }
+  const lidir: MyndILotu[] = myndir.map((m) => {
+    const t = m.uttekt!;
+    const frum = { b: t.frumB, h: t.frumH };
+    const svaedi = gilturSkurdur(t.myndSkurdur);
+    return {
+      mynd: m,
+      frum,
+      svaedi,
+      vidmid: {
+        grunnPx: stimpilStaerdABladi(bladIBordi(m, frum, svaedi), stimpilBound, t.skurdur, frum),
+        grunnTeikning: grunnStaerdHaedar(hs.find((h) => h.id === t.haedId)),
+      },
+    };
+  });
+  const b = byggjaStodurMargar(objects, lidir, nyttId);
+  let breytt = 0, ny = 0, tekin = 0, veggirAlls = 0;
+  const veggjaFjoldi: number[] = [];
+  const thekking: (string[] | null)[] = [];
+  myndir.forEach((m, i) => {
+    const t = m.uttekt!;
+    const thekkt = Array.isArray(t.merki) ? t.merki : null;
+    thekking.push(thekkt);
+    const fjarlaegja = thekkt ? thekkt.filter((k) => !b.aBordi.has(k)) : [];
+    const u = uppfaeraHaedir(hs, t.haedId, b.hlutar[i].stodur, { fjarlaegja });
+    hs = u.haedir;
+    breytt += u.breytt;
+    ny += u.ny;
+    tekin += u.tekin;
+    // Veggirnir fylgja með, með tegund (veggur/gler/hurð), og hæðin merkist leiðrétt í TurboPaint — ef einhverjir eru
+    // á myndinni; annars haldast þeir sem fyrir voru.
+    const veggir = veggirIFrum(objects, m, lidir[i].frum, lidir[i].svaedi);
+    hs = skrifaVeggiIHaed(hs, t.haedId, veggir, kl);
+    veggjaFjoldi.push(veggir.length);
+    veggirAlls += veggir.length;
+  });
+  const nyjarIds = new Set(nyjar.map((n) => n.haed.id));
+  const hlutar: VistunarHluti[] = myndir.map((m, i) => {
+    const t = m.uttekt!;
+    const haed = hs.find((h) => h.id === t.haedId)!;
+    return {
+      myndId: m.id,
+      haedId: t.haedId,
+      nafn: haed.nafn || nafnHaedar(t.haedId, m),
+      ny: nyjarIds.has(t.haedId),
+      fjoldi: b.hlutar[i].stodur.size,
+      veggir: veggjaFjoldi[i],
+      utanBords: (haed.markers || []).filter((mk) => !b.aBordi.has(merkiLykill(mk.unitId))),
+      merkiABordi: (haed.markers || []).map((mk) => merkiLykill(mk.unitId)).filter((k) => b.aBordi.has(k)),
+      anThekkingar: !thekking[i],
+    };
+  });
+  const summa = (f: (s: StodurBords) => number) => b.hlutar.reduce((s, h) => s + f(h), 0);
   return {
-    tenging: t,
-    haedir: u.haedir,
-    fjoldi: b.stodur.size,
-    breytt: u.breytt,
-    ny: u.ny,
-    tekin: u.tekin,
-    otengd: b.otengd,
-    utan: b.utan,
-    tvitekin: b.tvitekin,
-    veggir: veggir.length,
-    nyirStimplar: b.nyirStimplar,
-    /** Merki hæðarinnar sem borðið sýnir ekki (bættust við í appinu eftir opnun, eða eldra borð án `merki`). */
-    utanBords: (haed.markers || []).filter((m) => !b.aBordi.has(merkiLykill(m.unitId))),
-    /** Lyklar hæðarinnar sem borðið sýnir eftir vistun — verða `uttekt.merki`. */
-    merkiABordi: (haed.markers || []).map((m) => merkiLykill(m.unitId)).filter((k) => b.aBordi.has(k)),
-    anThekkingar: !thekkt,
+    tenging: myndir[0].uttekt!,
+    haedir: hs,
+    fjoldi: summa((h) => h.stodur.size),
+    breytt,
+    ny,
+    tekin,
+    otengd: summa((h) => h.otengd),
+    utan: summa((h) => h.utan),
+    tvitekin: summa((h) => h.tvitekin),
+    veggir: veggirAlls,
+    nyirStimplar: b.hlutar.flatMap((h) => h.nyirStimplar),
+    /** Merki (fyrstu) hæðarinnar sem borðið sýnir ekki — sjá `hlutar` fyrir hverja hæð. */
+    utanBords: hlutar[0].utanBords,
+    /** Lyklar (fyrstu) hæðarinnar sem borðið sýnir eftir vistun. */
+    merkiABordi: hlutar[0].merkiABordi,
+    anThekkingar: hlutar[0].anThekkingar,
+    /** Ein færsla á hverja tengda mynd/hæð. */
+    hlutar,
+    /** Hæðir sem bættust við (+ Ný hæð). */
+    nyjarHaedir: nyjar.map((n) => n.haed.id),
   };
 }
 
 /** Skrifar staðsetningar tengdra tákna aftur í teikning_bord. Les röðina FERSKA fyrst svo breytingar úr appinu
- * (nýjar hæðir, skurður, veggir, merki sett eftir opnun) tapist ekki — aðeins `markers`/veggir tengdu hæðarinnar og
- * tækja sem fluttu breytast. */
+ * (nýjar hæðir, skurður, veggir, merki sett eftir opnun) tapist ekki — aðeins `markers`/veggir tengdu hæðanna og
+ * tækja sem fluttu breytast (og blað/skurður skorinna hluta, og nýjar hæðir aftast). */
 export async function vistaIUttekt(objects: BoardObject[], stimpilBound = 56) {
   const mynd = finnaTengduMynd(objects);
-  if (!mynd || !mynd.uttekt) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
+  if (!mynd || !mynd.uttekt) throw new Error("Þetta borð er ekki tengt úttektarteikningu — tengdu hlutana við hæðir fyrst.");
   const t = mynd.uttekt;
   const sb = getSupabase();
   if (!sb) throw new Error("Engin tenging við gagnagrunn");

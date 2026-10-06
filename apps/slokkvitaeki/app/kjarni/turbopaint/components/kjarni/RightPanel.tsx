@@ -10,6 +10,8 @@ import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS, type BoardObject, type Sym
 import { erStimpil, merkiLykill, stimpilDef, stimpillMerkis, type UttektTaeki } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 import { TaekjaListi } from "./TaekjaListi";
+import { TengjaVidHaed } from "./TengjaVidHaed";
+import { raesaFjolcrop } from "../../lib/board/fjolcrop";
 import { useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
 import { Button } from "../ui/button";
@@ -190,21 +192,36 @@ export function RightPanel({
             ) : null}
             {primary.type === "image" ? (
               <>
+                {primary.bladhluti ? <TengjaVidHaed mynd={primary} /> : null}
                 <p className="text-xs leading-relaxed text-stone-400">
                   Dragðu gólfplönið til að færa skjalið. Merkingar, tákn og minnismiðar ofan á síðunni
                   fylgja með. Læstu síðunni ef þú vilt ekki hreyfa hana óvart.
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-white/10 bg-white/5 text-stone-200"
-                  onClick={() => {
-                    useBoardStore.getState().setTool("crop");
-                    toast.message("Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af");
-                  }}
-                >
-                  ✂ Croppa teikningu
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 border-white/10 bg-white/5 px-1.5 text-stone-200"
+                    onClick={() => {
+                      useBoardStore.getState().setTool("crop");
+                      toast.message("Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af");
+                    }}
+                  >
+                    ✂ Croppa teikningu
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    title="Margar grunnmyndir á einu blaði: dragðu kassa yfir hverja (1, 2, 3 …), skerðu þær allar í einu og tengdu hverja við sína hæð"
+                    className="flex-1 border-[#FE653F]/40 bg-[#FE653F]/10 px-1.5 text-stone-100"
+                    onClick={() => {
+                      raesaFjolcrop();
+                      toast.message("Croppa oft: dragðu kassa yfir hverja grunnmynd — Enter sker, Esc hættir");
+                    }}
+                  >
+                    ✂ Croppa oft
+                  </Button>
+                </div>
               </>
             ) : null}
             {primary.type === "rect" && primary.isCheckbox ? (

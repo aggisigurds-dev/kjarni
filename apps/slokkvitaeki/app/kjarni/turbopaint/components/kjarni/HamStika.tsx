@@ -14,6 +14,7 @@ import {
   Flame,
   Ruler,
   ScanSearch,
+  Scissors,
   Square,
   SquareDashed,
   Waypoints,
@@ -22,6 +23,11 @@ import { useEffect, type ReactNode } from "react";
 import { HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 
 export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
+  "croppa-oft": {
+    texti: "Croppa oft",
+    titill: "Margar grunnmyndir á einu blaði (1., 2., 3. hæð): dragðu kassa yfir hverja, skerðu allar í einu og tengdu hverja við sína hæð",
+    takn: <Scissors className="size-3.5" />,
+  },
   kvarda: { texti: "Kvarða", titill: "Kvarða teikninguna á þekktri lengd (K)", takn: <Ruler className="size-3.5" /> },
   "eyda-linu": { texti: "Eyða línu", titill: "Smelltu á línu sem á að hverfa (vigur-PDF) — öll línan og bútar hennar fara, ⌘Z afturkallar", takn: <Slash className="size-3.5" /> },
   strokledur: { texti: "Strokleður", titill: "Strjúktu yfir það sem á að hverfa af teikningunni — stærð = línuþykkt neðst, ⌘Z afturkallar", takn: <Brush className="size-3.5" /> },
