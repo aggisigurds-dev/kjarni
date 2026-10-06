@@ -16,6 +16,8 @@ import {
 } from "../../lib/board/checkbox";
 import { getSymbol } from "../../lib/board/symbols";
 import { getStampSize } from "../../lib/board/symbol-settings";
+import { TAEKI_DRAG_TYPE } from "../../lib/board/markup-kit";
+import { stimpilStaerdBords } from "../../lib/board/uttekt";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { DEFAULT_ROOM_NAME, fillAlpha, roomOfSelection } from "../../lib/board/rooms";
@@ -105,12 +107,18 @@ export function BoardCanvas({
   onEydaLinuSveima,
   ljosLina,
   onRequestStrip,
+  onSetjaVal,
+  onTaekiDropped,
 }: {
   width: number;
   height: number;
   onEditText: (id: string) => void;
   onFilesDropped: (files: File[], world: { x: number; y: number }) => void;
   onSymbolDropped: (symbolId: string, world: { x: number; y: number }) => void;
+  /** Smellur á teikninguna meðan tæki/stimpill úr tækjalistanum er valið — true = smellurinn var notaður. */
+  onSetjaVal?: (world: { x: number; y: number }) => boolean;
+  /** Röð úr tækjalistanum dregin á teikninguna (JSON af TaekjaVal). */
+  onTaekiDropped?: (data: string, world: { x: number; y: number }) => void;
   onCalibrate: (pixels: number, points: number[]) => void;
   onCropRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   onHvittaRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
@@ -723,6 +731,8 @@ export function BoardCanvas({
     }
 
     if (currentTool === "symbol") {
+      // Tæki eða stimpill úr tækjalistanum: tengt tákn (eða tækið fært), ekki laust tákn.
+      if (onSetjaVal?.(world)) return;
       const { style: st, addObjects } = useBoardStore.getState();
       if (st.symbolId === "firewall") {
         useBoardStore.getState().startFirewall();
@@ -730,7 +740,7 @@ export function BoardCanvas({
         setDraftState({ kind: "polyline", points: [world.x, world.y] });
         return;
       }
-      const stampPx = getStampSize();
+      const stampPx = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize());
       // Stimplað þar sem smellt var, ekki á næsta grindarpunkt — sama regla og
       // í drættinum: tákn eru sett á vegg eða hurð, ekki á grind.
       const at = world;
@@ -918,6 +928,11 @@ export function BoardCanvas({
       { x: e.clientX - rect.left, y: e.clientY - rect.top },
       useBoardStore.getState().camera
     );
+    const taeki = e.dataTransfer.getData(TAEKI_DRAG_TYPE);
+    if (taeki && onTaekiDropped) {
+      onTaekiDropped(taeki, world);
+      return;
+    }
     const symbolId = e.dataTransfer.getData("application/x-turbopaint-symbol");
     if (symbolId) {
       onSymbolDropped(symbolId, world);

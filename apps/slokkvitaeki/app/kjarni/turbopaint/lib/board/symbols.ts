@@ -1,3 +1,5 @@
+import { MERKJASAFN } from "./merkjasafn";
+
 export type SymbolCategory = "eldur" | "flotti" | "oryggi" | "bygging";
 
 export type SymbolKind = "fire" | "exit" | "info" | "warning" | "neutral";
@@ -19,6 +21,9 @@ export interface SafetySymbol {
   outline?: string;
   /** Táknið var búið til í Táknastjóranum, ekki innbyggt. */
   userMade?: boolean;
+  /** Tákn úr merkjasafni Teikning-gluggans (lib/board/merkjasafn.ts): lykillinn. Teiknast sem málmplata Teikning-
+   * gluggans og vistast 1:1 í úttektina. */
+  teikn?: string;
 }
 
 export const SYMBOL_CATEGORIES: { id: SymbolCategory; label: string }[] = [
@@ -59,6 +64,18 @@ export const SAFETY_SYMBOLS: SafetySymbol[] = [
   { id: "pin", name: "Staðsetning", short: "PIN", category: "bygging", kind: "neutral" },
 ];
 
+/** Merkjasafn Teikning-gluggans sem tákn TurboPaint (`teikn:<lykill>`) — sömu nöfn, stuttheiti og litir. */
+export const TEIKNING_SYMBOLS: SafetySymbol[] = MERKJASAFN.map((f) => ({
+  id: f.symbolId,
+  name: f.nafn,
+  short: f.stutt,
+  category: f.lykill === "neydarutgangur" || f.lykill === "ut" ? "flotti" : f.lykill === "rafmagn" ? "oryggi" : "eldur",
+  kind: f.lykill === "neydarutgangur" || f.lykill === "ut" ? "exit" : f.lykill === "rafmagn" ? "warning" : "fire",
+  bg: f.litur.bg,
+  fg: f.litur.fg,
+  teikn: f.lykill,
+}));
+
 let userSymbols: SafetySymbol[] = [];
 let renames: Record<string, string> = {};
 
@@ -69,17 +86,22 @@ export function applySymbolCustomisation(custom: SafetySymbol[], names: Record<s
 }
 
 function renamed(s: SafetySymbol): SafetySymbol {
+  // Nöfn merkjasafnsins eru nöfn Teikning-gluggans — þau endurnefnast ekki í TurboPaint (sama forritið, sömu nöfn).
+  if (s.teikn) return s;
   const n = renames[s.id];
   return n && n !== s.name ? { ...s, name: n } : s;
 }
 
 /** Innbyggð tákn OG þau sem notandinn bjó til, með gildandi nöfnum. */
 export function allSymbols(): SafetySymbol[] {
-  return [...SAFETY_SYMBOLS, ...userSymbols].map(renamed);
+  return [...TEIKNING_SYMBOLS, ...SAFETY_SYMBOLS, ...userSymbols].map(renamed);
 }
 
 export function getSymbol(id: string): SafetySymbol {
-  const hit = SAFETY_SYMBOLS.find((s) => s.id === id) ?? userSymbols.find((s) => s.id === id);
+  const hit =
+    SAFETY_SYMBOLS.find((s) => s.id === id) ??
+    TEIKNING_SYMBOLS.find((s) => s.id === id) ??
+    userSymbols.find((s) => s.id === id);
   return renamed(hit ?? SAFETY_SYMBOLS[0]);
 }
 

@@ -6,7 +6,10 @@ import { Eye, EyeOff, Lock, Trash2, Unlock } from "lucide-react";
 import { isFirewallMark } from "../../lib/board/detect-firewalls";
 import { findLayer, objectLayerId } from "../../lib/board/layers";
 import { isMvsMark } from "../../lib/board/mvs165";
-import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS, type BoardObject } from "../../lib/board/types";
+import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS, type BoardObject, type SymbolObject } from "../../lib/board/types";
+import { erStimpil, merkiLykill, stimpilDef, stimpillMerkis, type UttektTaeki } from "../../lib/board/uttekt";
+import { useUttektGogn } from "../../lib/board/uttekt-gogn";
+import { TaekjaListi } from "./TaekjaListi";
 import { useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
 import { Button } from "../ui/button";
@@ -84,6 +87,10 @@ export function RightPanel({
   const selected = objects.filter((o) => selectedIds.includes(o.id));
   const primary = selected[0];
   const roomSelected = primary?.type === "rect" && Boolean(primary.isRoom);
+  const gogn = useUttektGogn((s) => s.gogn);
+  const tengdTakn = selected.filter(
+    (o): o is SymbolObject => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== ""
+  );
 
   // Lög heita „tegund + númer" í sköpunarröð (Slökkvitæki 1, 2 …) í stað þess
   // að allt heiti „Tákn". Númer bætist aðeins við þegar fleiri en eitt deila nafni.
@@ -138,6 +145,26 @@ export function RightPanel({
         {hamur === "rymi" ? <RoomList onFocusObject={onFocusObject} /> : null}
         {primary ? (
           <div className="space-y-4">
+            {tengdTakn.length ? (
+              <div className="space-y-1.5 rounded-md border border-white/10 bg-white/4 p-2">
+                <div className="text-[11px] leading-snug text-stone-300">
+                  {tengdTakn.length === 1 ? lysingTengds(tengdTakn[0], gogn?.taeki) : `${tengdTakn.length} tengd tæki/merki valin`}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-white/10 bg-white/5 text-stone-200"
+                  onClick={() => {
+                    useBoardStore.getState().deleteIds(tengdTakn.map((o) => o.id));
+                    toast.message(
+                      "Tekið af teikningunni — tækið er áfram í tækjalistanum (ekki staðsett). Vistast með „Vista í úttekt“."
+                    );
+                  }}
+                >
+                  Taka af teikningu
+                </Button>
+              </div>
+            ) : null}
             {primary.type === "symbol" ? (
               <Field label="Merki / númer">
                 <Input
@@ -283,6 +310,12 @@ export function RightPanel({
             minnispunkta — eins og á hvítu borði.
           </p>
         ) : null}
+        {/* Tækjalistinn á eftir eiginleikunum: „Taka af teikningu" valins tækis er efst, listinn fyrir neðan. */}
+        {hamur === "slokkvitaeki" || hamur === "teikning" ? (
+          <div className={primary ? "mt-4" : ""}>
+            <TaekjaListi onFocusObject={onFocusObject} />
+          </div>
+        ) : null}
         {hamur === "brunathettingar" ? (
           <div className="mt-4">
             <LayerList />
@@ -346,6 +379,17 @@ export function RightPanel({
       </div>
     </aside>
   );
+}
+
+/** „Léttvatn · TMP-N5VABN" fyrir tengt tæki, „Merki Teikning: Út" fyrir stimpil. */
+function lysingTengds(s: SymbolObject, taeki: UttektTaeki[] | undefined): string {
+  const m = { unitId: s.uttektUnitId, kind: s.uttektKind, sign: s.uttektSign };
+  if (erStimpil(m)) {
+    const sign = stimpillMerkis(m);
+    return "Merki í Teikning: " + (stimpilDef(sign)?.nafn ?? sign ?? "merki");
+  }
+  const t = taeki?.find((x) => merkiLykill(x.id) === merkiLykill(s.uttektUnitId));
+  return t ? `Tæki: ${t.type || "tæki"} · ${t.serial || "#" + t.id}` : `Tæki #${String(s.uttektUnitId)}`;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

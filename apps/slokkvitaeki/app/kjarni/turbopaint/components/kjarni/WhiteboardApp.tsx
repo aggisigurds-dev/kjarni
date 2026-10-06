@@ -39,20 +39,26 @@ import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
 import type { OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
 import {
-  erStimpil,
   finnaTengduMynd,
   giskaFrumStaerd,
   innflutningsSlod,
-  merkiIBord,
+  merkiLykill,
   saekjaUttekt,
   skurdurIBord,
+  stimpilDef,
   stimpilStaerdABladi,
-  symbolFyrirMerki,
+  stimpilStaerdBords,
+  stuttNumer,
+  symbolFyrirTegund,
+  taknFyrirMerki,
   uttektBordNafn,
   veggirIBord,
   veljaUttektHaed,
   vistaIUttekt,
 } from "../../lib/board/uttekt";
+import { afvopna, useTaekjaVal, useUttektGogn, type TaekjaVal } from "../../lib/board/uttekt-gogn";
+import { adgerdVidSetningu } from "../../lib/board/taekjalisti";
+import { grunnStaerdHaedar } from "../../lib/board/merkjasafn";
 import { veggirHaedar } from "../../lib/board/teikning-veggir";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
@@ -335,10 +341,11 @@ export function WhiteboardApp() {
     }
     // Miðjar á stimpilstærðinni, ekki fastri 32 — annars lenti táknið út undan
     // bendlinum um leið og stærðin var stillt.
-    const half = getStampSize() / 2;
+    const px = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize());
+    const half = px / 2;
     // Engin grind-festing: táknið lendir þar sem því var sleppt (sbr. dráttinn).
     const spot = { x: world.x - half, y: world.y - half };
-    const obj = makeSymbol(symbolId, spot.x, spot.y);
+    const obj = makeSymbol(symbolId, spot.x, spot.y, undefined, px);
     useBoardStore.getState().addObjects([obj], true);
     useBoardStore.getState().setTool("select");
   }, []);
@@ -829,29 +836,26 @@ export function WhiteboardApp() {
         const frum =
           haed.frum && haed.frum.b > 0 ? haed.frum : urlFrum.b > 0 && urlFrum.h > 0 ? urlFrum : giskaFrumStaerd(mynd);
         const sk = haed.skurdur && haed.skurdur.w > 8 && haed.skurdur.h > 8 ? haed.skurdur : null;
+        // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið.
+        const staerd = stimpilStaerdABladi(mynd, getStampSize(), sk, frum);
+        const takn = (haed.markers || []).map((m) => taknFyrirMerki(m, u.taeki, mynd, frum, staerd, grunnStaerdHaedar(haed)));
+        // `merki` = það sem borðið sýnir af hæðinni: tæki/merki sem hverfa af borðinu fara úr hæðinni við vistun.
         useBoardStore.getState().patchObject(
           mynd.id,
           {
-            uttekt: { companyId: cid, haedId: haed.id, frumB: frum.b, frumH: frum.h, skurdur: sk },
+            uttekt: {
+              companyId: cid,
+              haedId: haed.id,
+              frumB: frum.b,
+              frumH: frum.h,
+              skurdur: sk,
+              merki: takn.map((s) => merkiLykill(s.uttektUnitId)),
+            },
           } as Partial<BoardObject>,
           false
         );
-        // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið.
-        const staerd = stimpilStaerdABladi(mynd, getStampSize(), sk, frum);
-        const takn = (haed.markers || []).map((m) => {
-          const t = typeof m.unitId === "number" ? u.taeki.find((x) => x.id === m.unitId) : undefined;
-          const stadur = merkiIBord(m, mynd, frum, staerd);
-          const merki = erStimpil(m) ? (m.sign || "ÚT") : t?.serial ? String(t.serial).slice(-6) : "";
-          const obj = makeSymbol(symbolFyrirMerki(m, t?.type), stadur.x, stadur.y, merki, staerd);
-          return {
-            ...obj,
-            parentId: mynd.id,
-            uttektUnitId: m.unitId,
-            uttektKind: m.kind,
-            uttektSign: m.sign,
-          } as BoardObject;
-        });
-        if (takn.length) useBoardStore.getState().addObjects(takn, false);
+        useUttektGogn.getState().setGogn({ companyId: cid, nafn: u.nafn, haedir: u.haedir, taeki: u.taeki });
+        if (takn.length) useBoardStore.getState().addObjects(withLayerId(takn, LAYER_ALMENNT), false);
         // Veggir hæðarinnar á lagið „Veggir": þeir sem TurboPaint vistaði áður (veggjaLinur), annars veggir
         // Teikning-gluggans (PDF-veggflatir paraðir í miðlínur + handdregnir) — ritanlegir, til leiðréttingar.
         const vh = veggirHaedar(haed, frum);
@@ -882,13 +886,51 @@ export function WhiteboardApp() {
   const vistaUttekt = useCallback(async () => {
     setUttektVistar(true);
     try {
-      const r = await vistaIUttekt(useBoardStore.getState().objects);
+      const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize());
+      const st = useBoardStore.getState();
+      // Nýir stimplar fá unitId sitt á borðinu — næsta vistun færir þá í stað þess að bæta öðrum við.
+      for (const n of r.nyirStimplar) {
+        st.patchObject(n.objId, { uttektUnitId: n.unitId, uttektKind: "sign", uttektSign: n.sign } as Partial<BoardObject>, false);
+      }
+      // Merki sem bættust við í appinu eftir opnun (eða eldra borð án `merki`) eru í hæðinni en ekki á borðinu:
+      // sett á borðið svo það sýni úttektina eins og hún er.
+      const mynd = finnaTengduMynd(useBoardStore.getState().objects);
+      let sott = 0;
+      if (mynd?.uttekt) {
+        const frum = { b: mynd.uttekt.frumB, h: mynd.uttekt.frumH };
+        const staerd = stimpilStaerdABladi(mynd, getStampSize(), mynd.uttekt.skurdur, frum);
+        const haedNu = r.haedir.find((h) => h.id === mynd.uttekt?.haedId);
+        const ny = r.utanBords.map((m) => taknFyrirMerki(m, r.taeki, mynd, frum, staerd, grunnStaerdHaedar(haedNu)));
+        if (ny.length) st.addObjects(withLayerId(ny, LAYER_ALMENNT), false);
+        sott = ny.length;
+        // Stærðin sem var vistuð er nú viðmiðið: næsta vistun skrifar `staerd` aðeins ef táknið er stækkað aftur.
+        const tengd = useBoardStore
+          .getState()
+          .objects.filter((o) => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== "" && o.uttektPx !== o.size);
+        if (tengd.length) {
+          useBoardStore.getState().updateObjects(
+            tengd.map((o) => o.id),
+            (o) => (o.type === "symbol" ? { ...o, uttektPx: o.size } : o),
+            false
+          );
+        }
+        st.patchObject(
+          mynd.id,
+          {
+            uttekt: { ...mynd.uttekt, merki: [...r.merkiABordi, ...ny.map((s) => merkiLykill(s.uttektUnitId))] },
+          } as Partial<BoardObject>,
+          false
+        );
+      }
+      useUttektGogn.getState().setGogn({ companyId: r.tenging.companyId, nafn: r.nafn, haedir: r.haedir, taeki: r.taeki });
       const auka = [
-        r.otengd ? `${r.otengd} ný tákn eru ekki skráð tæki og vistast ekki` : "",
+        r.otengd ? `${r.otengd} tákn án tengingar vistast ekki í úttekt` : "",
         r.utan ? `${r.utan} tæki standa utan teikningar og voru ekki færð` : "",
+        r.tvitekin ? `${r.tvitekin} afrit af tæki vistast ekki (tæki er á einum stað)` : "",
+        sott ? `${sott} merki úr appinu sett á borðið` : "",
       ].filter(Boolean);
       toast.success(
-        `${r.nafn}: ${r.fjoldi} staðsetningar vistaðar (${r.breytt} færðar, ${r.ny} nýjar)` +
+        `${r.nafn}: ${r.fjoldi} merki vistuð (${r.breytt} færð, ${r.ny} ný, ${r.tekin} tekin af)` +
           (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
           (auka.length ? " · " + auka.join(" · ") : "")
       );
@@ -898,6 +940,75 @@ export function WhiteboardApp() {
       setUttektVistar(false);
     }
   }, []);
+
+  // Tæki eða stimpill úr tækjalistanum sett á teikninguna (smellur eða dráttur). Tæki sem er á hæðinni færist (aldrei
+  // tvítekið); tæki á annarri hæð er fært hingað eftir staðfestingu (það fer af hinni hæðinni við vistun).
+  const setjaVal = useCallback((world: { x: number; y: number }, gefid?: TaekjaVal) => {
+    const val = gefid ?? useTaekjaVal.getState().val;
+    if (!val) return false;
+    const st = useBoardStore.getState();
+    const mynd = finnaTengduMynd(st.objects);
+    if (!mynd?.uttekt) {
+      afvopna();
+      toast.error("Borðið er ekki tengt úttektarteikningu.");
+      return true;
+    }
+    if (world.x < mynd.x || world.y < mynd.y || world.x > mynd.x + mynd.width || world.y > mynd.y + mynd.height) {
+      toast.message("Smelltu á teikninguna sjálfa");
+      return true;
+    }
+    const t = mynd.uttekt;
+    const frum = { b: t.frumB, h: t.frumH };
+    const staerd = stimpilStaerdABladi(mynd, getStampSize(), t.skurdur, frum);
+    const ljuka = (id: string) => {
+      afvopna();
+      useBoardStore.getState().setTool("select");
+      useBoardStore.getState().setSelected([id]);
+    };
+    if (val.teg === "stimpill") {
+      const def = stimpilDef(val.sign);
+      // Eins og í Teikning-glugganum: platan ein, enginn merkimiði á merkjum.
+      const obj = makeSymbol(def?.symbolId ?? val.symbolId, world.x - staerd / 2, world.y - staerd / 2, "", staerd);
+      st.addObjects(
+        [{ ...obj, parentId: mynd.id, layerId: LAYER_ALMENNT, uttektKind: "sign", uttektSign: val.sign, uttektPx: staerd }],
+        true
+      );
+      ljuka(obj.id);
+      return true;
+    }
+    const gogn = useUttektGogn.getState().gogn;
+    const haedir = gogn && gogn.companyId === t.companyId ? gogn.haedir : [];
+    const taeki = gogn?.taeki.find((x) => merkiLykill(x.id) === merkiLykill(val.unitId));
+    const a = adgerdVidSetningu(st.objects, haedir, t.haedId, val.unitId);
+    if (a.teg === "faera") {
+      const s = st.objects.find((o) => o.id === a.objId);
+      const size = s && s.type === "symbol" ? s.size : staerd;
+      st.patchObject(a.objId, { x: world.x - size / 2, y: world.y - size / 2, hidden: false } as Partial<BoardObject>);
+      ljuka(a.objId);
+      return true;
+    }
+    if (a.annarriHaed && !window.confirm(`Tækið er á ${a.annarriHaed} — færa það hingað?`)) {
+      afvopna();
+      useBoardStore.getState().setTool("select");
+      return true;
+    }
+    const obj = makeSymbol(symbolFyrirTegund(taeki?.type), world.x - staerd / 2, world.y - staerd / 2, stuttNumer(taeki?.serial), staerd);
+    st.addObjects([{ ...obj, parentId: mynd.id, layerId: LAYER_ALMENNT, uttektUnitId: val.unitId, uttektPx: staerd }], true);
+    ljuka(obj.id);
+    return true;
+  }, []);
+
+  const taekiDregid = useCallback(
+    (data: string, world: { x: number; y: number }) => {
+      try {
+        const v = JSON.parse(data) as TaekjaVal;
+        if (v && (v.teg === "taeki" || v.teg === "stimpill")) setjaVal(world, v);
+      } catch {
+        /* ekki okkar */
+      }
+    },
+    [setjaVal]
+  );
 
   useEffect(() => {
     if (planFromQuery.current) return;
@@ -1074,12 +1185,22 @@ export function WhiteboardApp() {
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        store.deleteIds(
-          store.selectedIds.filter((id) => {
-            const obj = store.objects.find((o) => o.id === id);
-            return obj && !isDrawnLocked(obj, store.layers);
-          })
-        );
+        const ids = store.selectedIds.filter((id) => {
+          const obj = store.objects.find((o) => o.id === id);
+          return obj && !isDrawnLocked(obj, store.layers);
+        });
+        // Tengt tæki/merki: Delete = „Taka af teikningu" — tækið sjálft er áfram í tækjalistanum.
+        const tengd = ids.filter((id) => {
+          const o = store.objects.find((x) => x.id === id);
+          return o?.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== "";
+        }).length;
+        store.deleteIds(ids);
+        if (tengd) {
+          toast.message(
+            `${tengd === 1 ? "Tekið" : tengd + " tekin"} af teikningunni — tækin eru áfram í tækjalistanum. Vistast með „Vista í úttekt“.`,
+            { duration: 2500 }
+          );
+        }
       }
       if (!meta && !e.altKey) {
         const map: Record<string, Parameters<typeof store.setTool>[0]> = {
@@ -1178,7 +1299,7 @@ export function WhiteboardApp() {
               disabled={uttektVistar}
               onClick={() => void vistaUttekt()}
               className="shrink-0 rounded-full bg-[#FE653F] px-3.5 py-1.5 font-semibold text-white hover:bg-[#ff7a58] disabled:opacity-60"
-              title="Skrifar staðsetningar tækjanna aftur í úttektarteikninguna í Slökkvitæki-appinu"
+              title="Skrifar tækin, merkin (NÚ, ÚT, skilti …) og veggina á þessari hæð aftur í úttektarteikninguna í Slökkvitæki-appinu — tæki sem tekin voru af teikningunni fara úr hæðinni"
             >
               {uttektVistar ? "Vistar…" : "💾 Vista í úttekt"}
             </button>
@@ -1215,6 +1336,8 @@ export function WhiteboardApp() {
               onEydaLinuSveima={sveimaEydaLinu}
               ljosLina={ljosLina}
               onRequestStrip={(planId) => setStripPlanId(planId)}
+              onSetjaVal={(world) => setjaVal(world)}
+              onTaekiDropped={taekiDregid}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-stone-500">

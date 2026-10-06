@@ -23,17 +23,17 @@ import {
 import type { BoardObject } from "./types";
 import { VEGG_LITIR } from "./veggja-leidretting";
 
-test("device types map to TurboPaint symbols", () => {
-  assert.equal(symbolFyrirTegund("Léttvatn"), "extinguisher-lettvatn");
-  assert.equal(symbolFyrirTegund("ABC Duft"), "extinguisher-duft");
-  assert.equal(symbolFyrirTegund("CO₂"), "extinguisher-co2");
-  assert.equal(symbolFyrirTegund("CO2"), "extinguisher-co2");
-  assert.equal(symbolFyrirTegund("Brunaslanga"), "hose");
-  assert.equal(symbolFyrirTegund("Slönguskápur"), "hose");
-  assert.equal(symbolFyrirTegund("Reykskynjari"), "detector");
-  assert.equal(symbolFyrirTegund("Eldvarnarteppi"), "blanket");
-  assert.equal(symbolFyrirTegund("Óþekkt"), "extinguisher");
-  assert.equal(symbolFyrirTegund(null), "extinguisher");
+test("device types map to the Teikning catalogue symbols (same rule as 434 fjold)", () => {
+  assert.equal(symbolFyrirTegund("Léttvatn"), "teikn:lettvatn");
+  assert.equal(symbolFyrirTegund("ABC Duft"), "teikn:duft");
+  assert.equal(symbolFyrirTegund("CO2"), "teikn:co2");
+  assert.equal(symbolFyrirTegund("Brunaslanga"), "teikn:slanga");
+  assert.equal(symbolFyrirTegund("CO₂"), "teikn:co2");
+  assert.equal(symbolFyrirTegund("Slönguskápur"), "teikn:slanga");
+  // Teikning-glugginn les þessar sem „annað" — TurboPaint sýnir þær eins (sjá merkjasafn.test.ts)
+  assert.equal(symbolFyrirTegund("Reykskynjari"), "teikn:annad");
+  assert.equal(symbolFyrirTegund("Óþekkt"), "teikn:annad");
+  assert.equal(symbolFyrirTegund(null), "teikn:annad");
 });
 
 test("marker → board → marker is lossless when the plan is imported at another size", () => {
@@ -77,9 +77,9 @@ test("positions update one floor, keep untouched devices and pull a moved device
 });
 
 test("sign stamps round-trip with string unit ids and keep kind/sign", () => {
-  assert.equal(symbolFyrirStimpil("ut"), "exit");
-  assert.equal(symbolFyrirStimpil("skilti_slt"), "sign-extinguisher");
-  assert.equal(symbolFyrirMerki({ unitId: "s:ut:abc", x: 1, y: 2, kind: "sign", sign: "ut" }), "exit");
+  assert.equal(symbolFyrirStimpil("ut"), "teikn:ut");
+  assert.equal(symbolFyrirStimpil("skilti_slt"), "teikn:skilti_slt");
+  assert.equal(symbolFyrirMerki({ unitId: "s:ut:abc", x: 1, y: 2, kind: "sign", sign: "ut" }), "teikn:ut");
   assert.equal(erStimpil({ unitId: "s:ut:abc", kind: "sign" }), true);
   assert.equal(erStimpil({ unitId: 25442 }), false);
   assert.equal(merkiLykill("s:ut:abc"), "s:ut:abc");

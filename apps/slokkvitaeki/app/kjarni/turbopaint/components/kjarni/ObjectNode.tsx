@@ -454,7 +454,7 @@ export function ObjectNode({
           });
         }}
       >
-        <SymbolNode symbolId={obj.symbolId} size={obj.size} label={obj.label} />
+        <SymbolNode symbolId={obj.symbolId} size={obj.size} label={obj.label} litur={obj.uttektLitur} />
       </Group>
     );
   }

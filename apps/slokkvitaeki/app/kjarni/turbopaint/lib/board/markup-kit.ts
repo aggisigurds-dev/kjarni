@@ -86,3 +86,5 @@ export const TRAY_SYMBOLS = [
 ] as const;
 
 export const SYMBOL_DRAG_TYPE = "application/x-turbopaint-symbol";
+/** Röð úr tækjalistanum dregin á teikninguna: JSON af TaekjaVal (lib/board/uttekt-gogn.ts). */
+export const TAEKI_DRAG_TYPE = "application/x-turbopaint-taeki";

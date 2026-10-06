@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Circle, Group, Image as KonvaImage, Line, Rect, Text as KonvaText } from "react-konva";
+import { Circle, Group, Image as KonvaImage, Line, Rect, Shape, Text as KonvaText } from "react-konva";
+import { teiknaLykil } from "../../lib/board/merkjasafn";
 import { getSymbol, symbolPaint } from "../../lib/board/symbols";
 import { subscribeSymbolSettings, symbolOverride } from "../../lib/board/symbol-settings";
 
@@ -245,14 +246,56 @@ function Glyph({
   }
 }
 
+/** Merkjasafn Teikning-gluggans: málmplatan teiknuð með SAMA strigakóða og í Slökkvitæki-appinu (merkjasafn.ts
+ * teiknaTakn) svo táknið líti eins út í báðum. Snúningur kemur frá hópnum (obj.rotation). */
+function TeikningPlata({ lykill, size, litur }: { lykill: string; size: number; litur?: string }) {
+  return (
+    <Shape
+      width={size}
+      height={size}
+      sceneFunc={(context) => {
+        const ctx = (context as unknown as { _context: CanvasRenderingContext2D })._context;
+        teiknaLykil(ctx, lykill, size / 2, size / 2, size, 0, litur);
+      }}
+      hitFunc={(context, shape) => {
+        context.beginPath();
+        context.rect(0, 0, size, size);
+        context.closePath();
+        context.fillStrokeShape(shape);
+      }}
+    />
+  );
+}
+
+function Merkimidi({ size, label }: { size: number; label: string }) {
+  return (
+    <KonvaText
+      y={size + 4}
+      width={size + 28}
+      x={-14}
+      text={label}
+      fontSize={Math.max(10, size * 0.22)}
+      fontFamily="Inter, sans-serif"
+      fill="#1c1917"
+      stroke="#ffffff"
+      strokeWidth={3}
+      fillAfterStrokeEnabled
+      align="center"
+    />
+  );
+}
+
 export function SymbolNode({
   symbolId,
   size,
   label,
+  litur,
 }: {
   symbolId: string;
   size: number;
   label: string;
+  /** Plötulitur merkis úr úttektinni (433 `color`). */
+  litur?: string;
 }) {
   const def = getSymbol(symbolId);
   const colors = symbolPaint(def);
@@ -261,7 +304,15 @@ export function SymbolNode({
   const [, bump] = useState(0);
   useEffect(() => subscribeSymbolSettings(() => bump((n) => n + 1)), []);
   const ov = symbolOverride(symbolId);
-  const customImg = useSymbolImage(ov.imageUrl);
+  const customImg = useSymbolImage(def.teikn ? undefined : ov.imageUrl);
+  if (def.teikn) {
+    return (
+      <Group>
+        <TeikningPlata lykill={def.teikn} size={size} litur={litur} />
+        {label ? <Merkimidi size={size} label={label} /> : null}
+      </Group>
+    );
+  }
   if (def.id === "firewall") {
     // Eldveggur is a wall overlay, not a badge: a thin translucent bar so the
     // plan's own wall stays visible underneath.
