@@ -275,16 +275,16 @@ export function WhiteboardApp() {
     files: File[],
     world?: { x: number; y: number },
     opts?: { asPlan?: boolean }
-  ) => {
+  ): Promise<BoardObject[]> => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
       await importKjarniJson(json);
-      return;
+      return [];
     }
     const supported = files.filter((f) => classifyFile(f) !== "unknown");
     if (!supported.length) {
       toast.error("Stuðningur er við PDF, TIF, PNG, JPG og SVG.");
-      return;
+      return [];
     }
     const origin = world ?? {
       x: boardBounds(useBoardStore.getState().objects).x,
@@ -301,7 +301,7 @@ export function WhiteboardApp() {
       useBoardStore.getState().setImportProgress(null);
       if (!incoming.length) {
         toast.error(warnings[0] || "Ekkert kom inn");
-        return;
+        return [];
       }
       const isPlan = opts?.asPlan || supported.some((f) => {
         const kind = classifyFile(f);
@@ -326,9 +326,11 @@ export function WhiteboardApp() {
       warnings.forEach((w) => toast.message(w));
       // Ekki keyra OCR sjálfkrafa. Á TIF (og JPEG af skjalasafninu) tók
       // Tesseract svo langan tíma að innflutningurinn virtist stoppa.
+      return incoming;
     } catch (err) {
       useBoardStore.getState().setImportProgress(null);
       toast.error(err instanceof Error ? err.message : "Innflutningur mistókst");
+      return [];
     }
   }, []);
 
@@ -769,7 +771,12 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        await runImport([file], undefined, { asPlan: opts?.asPlan !== false });
+        const komnar = await runImport([file], undefined, { asPlan: opts?.asPlan !== false });
+        // Hvaðan blaðið kom og stærð þess á borðinu — 3D les þá blaðstærðina (teikn-blad) og fær raunkvarða.
+        for (const o of komnar) {
+          if (o.type !== "image") continue;
+          useBoardStore.getState().patchObject(o.id, { heimild: { slod: trimmed, b: o.width, h: o.height } } as Partial<BoardObject>, false);
+        }
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         if (opts?.throwOnError) throw err;
