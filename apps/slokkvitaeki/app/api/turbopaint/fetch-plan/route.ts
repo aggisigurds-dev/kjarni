@@ -6,6 +6,8 @@ import { MAPIS_TEIKNINGA_HOSTS } from "../mapis";
 // vafranum að gera það sjálfur). Skilur FotoWeb-permalink skjalasafns
 // Reykjavíkur (…/<skrá>.tif.info): les asset-JSON og velur cache-JPEG
 // (t.d. 6006 px) á undan ORIGINAL TIF svo síminn frjósi ekki við afþjöppun.
+// prefer=tif (skörp skönnun, lib/board/skonnun.ts): AÐEINS TIF-frumritið —
+// 415 ef teikningin er ekki skönnuð TIF; aldrei JPEG í staðinn.
 // Einnig bein PDF af teikningasöfnum Hafnarfjarðar, Garðabæjar og Kópavogs
 // (kortasjár map.is — sjá ../mapis.ts).
 
@@ -120,7 +122,10 @@ export async function GET(req: NextRequest) {
       const prefer = req.nextUrl.searchParams.get("prefer");
       const preferImage = prefer === "image";
       const preferOriginal = prefer === "original";   // „Há gæði": upprunalega skönnunin / TIF á undan cache-JPEG
-      for (const cand of fotowebDownloadOrder(asset, target.pathname, { preferImage, preferOriginal })) {
+      const preferTif = prefer === "tif";             // skörp skönnun: TIF-frumritið eitt, aldrei JPEG í staðinn
+      const rod = fotowebDownloadOrder(asset, target.pathname, { preferImage, preferOriginal, preferTif });
+      if (preferTif && !rod.length) return bad(415, "Teikningin er ekki skönnuð TIF");
+      for (const cand of rod) {
         const href = cand.href.startsWith("http") ? cand.href : base + cand.href;
         if (cand.kind === "original") {
           try {

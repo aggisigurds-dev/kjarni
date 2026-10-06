@@ -73,6 +73,9 @@ export interface ImageObject extends BaseObject {
   hvittad?: { x: number; y: number; w: number; h: number }[];
   /** Tenging við úttektarteikningu Slökkvitæki-appsins (lib/board/uttekt.ts). */
   uttekt?: UttektTenging;
+  /** Hvaðan teikningin kom (skjalasafnsslóð — permalink eða bein PDF-slóð) og stærð alls blaðsins á borðinu við
+   * innflutning. 3D les blaðstærðina (teikn-blad) og fær þannig raunkvarða í 1:100; skurður síðar breytir ekki b/h. */
+  heimild?: { slod: string; b: number; h: number };
 }
 
 /** Mynd á borðinu ↔ hæð í teikning_bord. frumB/frumH = stærð frummyndar; skurdur = svæði hússins á blaðinu

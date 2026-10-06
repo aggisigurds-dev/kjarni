@@ -2,7 +2,14 @@
  * freezing the tab. Archive originals are often 9k-wide LZW TIF (~70 MP,
  * ~280 MB RGBA). UTIF decode is fast; allocating that canvas on a phone
  * is what "stoppar á miðri leið" looked like. Prefer the cache JPEG
- * (typically 6006 px) and only fall back to the original TIF. */
+ * (typically 6006 px) and only fall back to the original TIF.
+ *
+ * SKANNAÐAR TEIKNINGAR (3. áfangi, 06.10.2026): TurboPaint setur nú TIF-frumritið á borðið (lib/board/skonnun.ts —
+ * afkóðað í vinnuþræði, snúningur úr TIFF-merkinu og fylgni, stillt við JPEG-ið). JPEG-ið er þó áfram VIÐMIÐIÐ:
+ * úttektarmerkin eru vistuð í dílum þess (Teikning-glugginn sýnir það um teikn-mynd → prefer=image), svo sjálfgefna
+ * röðin og prefer=image halda JPEG fremst fyrir skannanir. prefer=tif skilar AÐEINS frumritinu (aldrei JPEG í
+ * staðinn) — þá veit kallarinn hvað hann fékk. Hrátt TIF fer ekki lengur beint á borðið (prefer=original sneri
+ * Þingholti á hvolf: Orientation 3, og litaspjaldið varð grátóna). */
 
 export type FotowebRendition = {
   href?: string;
@@ -43,6 +50,11 @@ export function fotowebBaseName(asset: FotowebAsset, pathname: string): string {
   return raw.replace(/\.info$/i, "");
 }
 
+/** Skönnuð teikning: frumrit skjalasafnsins er TIF. */
+export function erSkonnudTif(asset: FotowebAsset, pathname: string): boolean {
+  return /\.tiff?$/i.test(fotowebBaseName(asset, pathname));
+}
+
 function quickLongEdge(q: FotowebQuickRendition): number {
   return Math.max(q.width ?? 0, q.height ?? 0, q.size ?? 0);
 }
@@ -50,12 +62,18 @@ function quickLongEdge(q: FotowebQuickRendition): number {
 export function fotowebDownloadOrder(
   asset: FotowebAsset,
   pathname: string,
-  opts: { preferImage?: boolean; preferOriginal?: boolean } = {}
+  opts: { preferImage?: boolean; preferOriginal?: boolean; preferTif?: boolean } = {}
 ): FotowebCandidate[] {
   const baseName = fotowebBaseName(asset, pathname);
   const jpegName = baseName.replace(/\.(tiff?|pdf)$/i, "") + ".jpg";
   const out: FotowebCandidate[] = [];
   const original = asset.renditions?.find((r) => r.original && r.href);
+
+  // preferTif (skörp skönnun): TIF-frumritið eitt — eða ekkert. Aldrei JPEG í staðinn, því kallarinn stillir TIF-ið
+  // sjálfur við JPEG-ið sem hann sótti sér (prefer=image).
+  if (opts.preferTif) {
+    return original?.href && erSkonnudTif(asset, pathname) ? [{ href: original.href, name: baseName, kind: "original" }] : [];
+  }
 
   // preferOriginal (Agnar 03.10.2026: „when I search … it will download the best quality — eins og download
   // tiff version"): upprunalega skráin FREMST, líka skannað PDF og 9k TIF. Innflutningurinn í vafranum ræður

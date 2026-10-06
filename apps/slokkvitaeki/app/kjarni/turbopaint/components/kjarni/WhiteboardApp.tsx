@@ -28,7 +28,8 @@ import {
   whiteOutWords,
 } from "../../lib/board/strip";
 import { cropPlanAsset, hvitPensillPlanAsset, hvittaPlanAsset, hvittaStrik } from "../../lib/board/crop";
-import { classifyFile, importFiles } from "../../lib/board/import-files";
+import { classifyFile, importFiles, importSkonnun } from "../../lib/board/import-files";
+import { erSkonnunarSlod, saekjaSkarpaSkonnun, tifBorgarSig } from "../../lib/board/skonnun";
 import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
 import { getStampSize } from "../../lib/board/symbol-settings";
@@ -274,34 +275,37 @@ export function WhiteboardApp() {
   const runImport = useCallback(async (
     files: File[],
     world?: { x: number; y: number },
-    opts?: { asPlan?: boolean }
-  ) => {
+    opts?: { asPlan?: boolean; skonnun?: { blob: Blob; nafn: string; b: number; h: number } }
+  ): Promise<BoardObject[]> => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
       await importKjarniJson(json);
-      return;
+      return [];
     }
     const supported = files.filter((f) => classifyFile(f) !== "unknown");
-    if (!supported.length) {
+    if (!supported.length && !opts?.skonnun) {
       toast.error("Stuðningur er við PDF, TIF, PNG, JPG og SVG.");
-      return;
+      return [];
     }
     const origin = world ?? {
       x: boardBounds(useBoardStore.getState().objects).x,
       y: boardBounds(useBoardStore.getState().objects).y + boardBounds(useBoardStore.getState().objects).height + 80,
     };
     try {
-      const { objects: incoming, warnings } = await importFiles(
-        supported,
-        useBoardStore.getState().importQuality,
-        origin,
-        (fileName, percent, message) =>
-          useBoardStore.getState().setImportProgress({ fileName, percent, message })
-      );
+      // Skörp skönnun: myndin er þegar tilbúin (TIF-frumritið í ramma JPEG skjalasafnsins).
+      const { objects: incoming, warnings } = opts?.skonnun
+        ? await importSkonnun(opts.skonnun, origin)
+        : await importFiles(
+            supported,
+            useBoardStore.getState().importQuality,
+            origin,
+            (fileName, percent, message) =>
+              useBoardStore.getState().setImportProgress({ fileName, percent, message })
+          );
       useBoardStore.getState().setImportProgress(null);
       if (!incoming.length) {
         toast.error(warnings[0] || "Ekkert kom inn");
-        return;
+        return [];
       }
       const isPlan = opts?.asPlan || supported.some((f) => {
         const kind = classifyFile(f);
@@ -326,9 +330,11 @@ export function WhiteboardApp() {
       warnings.forEach((w) => toast.message(w));
       // Ekki keyra OCR sjálfkrafa. Á TIF (og JPEG af skjalasafninu) tók
       // Tesseract svo langan tíma að innflutningurinn virtist stoppa.
+      return incoming;
     } catch (err) {
       useBoardStore.getState().setImportProgress(null);
       toast.error(err instanceof Error ? err.message : "Innflutningur mistókst");
+      return [];
     }
   }, []);
 
@@ -741,7 +747,7 @@ export function WhiteboardApp() {
   // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
   // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
-    async (raw: string, opts?: { throwOnError?: boolean; asPlan?: boolean }) => {
+    async (raw: string, opts?: { throwOnError?: boolean; asPlan?: boolean; fokus?: { x: number; y: number; w: number; h: number } | null }) => {
       const trimmed = raw.trim();
       if (!/^https?:\/\//i.test(trimmed)) {
         const msg = "Þetta lítur ekki út eins og slóð";
@@ -749,14 +755,50 @@ export function WhiteboardApp() {
         toast.error(msg);
         return;
       }
+      const merkjaHeimild = (komnar: BoardObject[]) => {
+        // Hvaðan blaðið kom og stærð þess á borðinu — 3D les þá blaðstærðina (teikn-blad) og fær raunkvarða.
+        for (const o of komnar) {
+          if (o.type !== "image") continue;
+          useBoardStore.getState().patchObject(o.id, { heimild: { slod: trimmed, b: o.width, h: o.height } } as Partial<BoardObject>, false);
+        }
+      };
       try {
         useBoardStore.getState().setImportProgress({
           fileName: "skjalasafn",
           percent: 10,
           message: "Sæki teikningu…",
         });
-        // „Há gæði" (sjálfgefið): upprunalega skönnunin / TIF á undan 6006 px cache-JPEG safnsins
-        const prefer = useBoardStore.getState().importQuality === "print" ? "&prefer=original" : "";
+        const quality = useBoardStore.getState().importQuality;
+        // SKÖNNUÐ TEIKNING (.tif.info): taplausa TIF-frumritið á borðið, stillt við JPEG skjalasafnsins svo hnit merkja
+        // haldist (lib/board/skonnun.ts). Mistakist það kemur JPEG-ið eins og áður.
+        if (erSkonnunarSlod(trimmed) && tifBorgarSig(quality)) {
+          const framvinda = (percent: number, message: string) =>
+            useBoardStore.getState().setImportProgress({ fileName: "skjalasafn", percent, message });
+          const sk = await saekjaSkarpaSkonnun(trimmed, quality, { fokus: opts?.fokus, framvinda });
+          useBoardStore.getState().setImportProgress(null);
+          if (sk.ok) {
+            const komnar = await runImport([], undefined, {
+              asPlan: opts?.asPlan !== false,
+              skonnun: { blob: sk.blob, nafn: sk.nafn, b: sk.frum.b, h: sk.frum.h },
+            });
+            merkjaHeimild(komnar);
+            toast.message(
+              `Skönnunin úr TIF-frumritinu: ${sk.upplausn.w}×${sk.upplausn.h} dílar (JPEG skjalasafnsins ${sk.frum.b}×${sk.frum.h})`,
+              { duration: 4000 }
+            );
+            return;
+          }
+          if (sk.jpeg) {
+            toast.message(sk.villa, { duration: 5000 });
+            const file = new File([sk.jpeg], sk.nafn + ".jpg", { type: sk.jpeg.type || "image/jpeg" });
+            merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false }));
+            return;
+          }
+          // JPEG-ið náðist ekki heldur — venjulega leiðin hér að neðan reynir aftur
+        }
+        // „Há gæði" (sjálfgefið): upprunalega skjalið (vigur-PDF) á undan 6006 px cache-JPEG safnsins
+        // Skönnun fær aldrei hrátt TIF hér: snúningur og hliðrun eru aðeins leyst í skörpu leiðinni hér að ofan.
+        const prefer = quality === "print" && !erSkonnunarSlod(trimmed) ? "&prefer=original" : "";
         const res = await fetch(`/api/turbopaint/fetch-plan?url=${encodeURIComponent(trimmed)}${prefer}`);
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -769,7 +811,7 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        await runImport([file], undefined, { asPlan: opts?.asPlan !== false });
+        merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false }));
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         if (opts?.throwOnError) throw err;
@@ -829,7 +871,8 @@ export function WhiteboardApp() {
           grid: true,
           snap: true,
         });
-        await runUrlImport(slod, { throwOnError: true, asPlan: true });
+        // Hliðrun skarprar skönnunar mæld á húsinu sjálfu (skurður hæðarinnar, dílar JPEG-sins)
+        await runUrlImport(slod, { throwOnError: true, asPlan: true, fokus: haed.skurdur ?? null });
         const myndir = useBoardStore.getState().objects.filter((o) => o.type === "image");
         const mynd = myndir[myndir.length - 1];
         if (!mynd || mynd.type !== "image") throw new Error("Teikningin kom ekki inn á borðið.");
