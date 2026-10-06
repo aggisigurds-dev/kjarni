@@ -194,11 +194,11 @@ test("snúningur (rot) og eigin stærð (staerd) sjást á borðinu og fara óbr
   assert.equal(u1.breytt, 1);
 });
 
-test("stærð: viðmið hæðarinnar og klemming eins og 433 (24–160)", () => {
+test("stærð: viðmið hæðarinnar og klemming eins og 433 (10–160)", () => {
   assert.equal(grunnStaerdHaedar({ stimpilStaerd: 26 }), 26);
   assert.equal(grunnStaerdHaedar({}), 56);
   assert.equal(klemmaStaerd(500), 160);
-  assert.equal(klemmaStaerd(3), 24);
+  assert.equal(klemmaStaerd(3), 10);
   assert.equal(klemmaStaerd(undefined), 0);
   assert.equal(staerdABordi({}, 110, 26), 110);
   assert.equal(staerdABordi({ staerd: 39 }, 110, 26), 165);
