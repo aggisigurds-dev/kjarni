@@ -71,7 +71,7 @@ import {
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
-import type { BoardDocument, BoardObject } from "../../lib/board/types";
+import type { BoardDocument, BoardObject, LineObject } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
@@ -506,8 +506,6 @@ export function WhiteboardApp() {
           return hreinsaTeikningu();
         case "veggir":
           return greinaVeggi();
-        case "veggjaritill":
-          return useVeggjaRitill.getState().virkur ? useVeggjaRitill.getState().slokkva() : useVeggjaRitill.getState().kveikja();
         case "thrividd":
           return setThrividd(true);
         case "slt-brsl":

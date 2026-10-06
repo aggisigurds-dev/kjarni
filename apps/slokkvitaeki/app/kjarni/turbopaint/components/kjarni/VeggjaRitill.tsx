@@ -18,6 +18,7 @@ import {
   Lock,
   MousePointer2,
   PencilLine,
+  PencilRuler,
   ScanSearch,
   Scissors,
   Square,
@@ -159,7 +160,7 @@ export function VeggjaRitill() {
   return (
     <>
       {virkur || forskodun ? <RitilYfirlag virkur={virkur} /> : null}
-      {virkur ? <RitilSpjald /> : null}
+      {virkur ? <RitilSpjald /> : <RitilOpnari />}
       {virkur && hjalp ? <RitilHjalp /> : null}
       {greining ? <VeggjaGreining key={greining.planId} planId={greining.planId} /> : null}
     </>
@@ -901,6 +902,27 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     >
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />
     </div>
+  );
+}
+
+/** „Breyta veggjum": opnar ritilinn — á borðinu sjálfu í Teikning-ham (við hlið verkfærasúlunnar), og W gerir það sama. */
+function RitilOpnari() {
+  const hamur = useHamur((s) => s.hamur);
+  const erMynd = useBoardStore((s) => s.objects.some((o) => o.type === "image"));
+  const fjoldi = useBoardStore((s) => veggjaTalning(s.objects).alls);
+  if (!RITIL_HAMIR.includes(hamur) || !erMynd) return null;
+  return (
+    <button
+      type="button"
+      title="Veggjaritill (W): teikna, velja, eyða, kljúfa, sameina og lengja veggi — teikningin læst á meðan"
+      onClick={() => useVeggjaRitill.getState().kveikja()}
+      className="pointer-events-auto absolute top-3 left-16 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-3 pl-2.5 text-[12px] font-semibold text-stone-100 shadow-xl hover:bg-[#252a40] sm:left-20"
+    >
+      <PencilRuler className="size-3.5 text-[#FE653F]" />
+      Breyta veggjum
+      <span className="font-normal text-white/50">{fjoldi}</span>
+      <kbd className="text-[10px] font-normal text-white/40">W</kbd>
+    </button>
   );
 }
 
