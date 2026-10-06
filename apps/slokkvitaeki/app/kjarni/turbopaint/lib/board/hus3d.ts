@@ -88,7 +88,8 @@ export function husUrBordi(objects: BoardObject[]): Haed3D[] {
         }
         if (o.type !== "polyline" && o.type !== "line") continue;
         const eld = ELD_NOFN.some((n) => o.name.startsWith(n));
-        const litur = eld ? o.stroke : "#3f3a33";
+        // eldveggir og leiðréttar tegundir (gler blátt, hurð brún) halda sínum lit
+        const litur = eld || o.veggTegund === "gler" || o.veggTegund === "hurd" ? o.stroke : "#3f3a33";
         const p = o.points;
         for (let i = 2; i + 1 < p.length; i += 2) {
           const ax = o.x + p[i - 2] - a, ay = o.y + p[i - 1] - b, bx = o.x + p[i] - a, by = o.y + p[i + 1] - b;

@@ -6,6 +6,8 @@ import {
   innflutningsSlod,
   merkiIBord,
   merkiLykill,
+  skrifaVeggiIHaed,
+  skurdurIBord,
   stimpilStaerdABladi,
   symbolFyrirMerki,
   symbolFyrirStimpil,
@@ -19,6 +21,7 @@ import {
   type UttektHaed,
 } from "./uttekt";
 import type { BoardObject } from "./types";
+import { VEGG_LITIR } from "./veggja-leidretting";
 
 test("device types map to TurboPaint symbols", () => {
   assert.equal(symbolFyrirTegund("Léttvatn"), "extinguisher-lettvatn");
@@ -140,7 +143,60 @@ test("veggir fara fram og til baka milli borðs og frummyndar (TurboPaint → te
   assert.deepEqual(bord[0].points.map((n) => Math.round(n)), [100, 50, 2100, 50, 2100, 1450]);
   assert.ok(Math.abs(bord[0].strokeWidth - 50 * (2000 / 9933)) < 1e-9);
   const aftur = veggirIFrum(bord as BoardObject[], mynd, frum);
-  assert.deepEqual(aftur, [{ p: [0, 0, 9933, 0, 9933, 6953], t: 50 }]);
+  assert.deepEqual(aftur, [{ p: [0, 0, 9933, 0, 9933, 6953], t: 50, tegund: "veggur" }]);
   // aðeins greindir veggir ÞESSARAR myndar fara með
   assert.equal(veggirIFrum([{ ...bord[0], parentId: "annad" }] as BoardObject[], mynd, frum).length, 0);
+});
+
+test("tegund veggjar (gler/hurð) fer fram og til baka og ræður litnum", () => {
+  const mynd = { id: "m", x: 0, y: 0, width: 4244, height: 6006 };
+  const frum = { b: 4244, h: 6006 };
+  const bord = veggirIBord(
+    [
+      { p: [0, 0, 100, 0], t: 7 },
+      { p: [0, 10, 100, 10], t: 7, tegund: "gler" },
+      { p: [0, 20, 100, 20], t: 7, tegund: "hurd" },
+    ],
+    mynd,
+    frum
+  );
+  assert.deepEqual(bord.map((o) => o.stroke), ["#1c1917", VEGG_LITIR.gler, VEGG_LITIR.hurd]);
+  assert.deepEqual(bord.map((o) => o.veggTegund), [undefined, "gler", "hurd"]);
+  const aftur = veggirIFrum(bord as BoardObject[], mynd, frum);
+  assert.deepEqual(aftur.map((v) => v.tegund), ["veggur", "gler", "hurd"]);
+});
+
+test("veggur teiknaður með W-tólinu ofan á myndina vistast; utan myndar ekki", () => {
+  const mynd = { id: "m", x: 100, y: 100, width: 1000, height: 1000 };
+  const frum = { b: 2000, h: 2000 };
+  const w = (points: number[]) =>
+    ({ id: "w" + points[0], type: "polyline", x: 0, y: 0, points, stroke: "#000", strokeWidth: 4, dash: "solid",
+       rotation: 0, opacity: 1, locked: false, hidden: false, name: "Veggir", layerId: "almennt" }) as BoardObject;
+  const v = veggirIFrum([w([200, 200, 600, 200]), w([1500, 1500, 1800, 1500])], mynd, frum);
+  assert.deepEqual(v, [{ p: [200, 200, 1000, 200], t: 8, tegund: "veggur" }]);
+});
+
+test("skurður hæðarinnar → rammi á borðinu (myndin sjálf ósnert)", () => {
+  // Fiskislóð 41: frummynd 4244×6006, borðið teiknaði PDF-ið í 5086×7200 á (80, 120)
+  const r = skurdurIBord({ x: 861, y: 1590, w: 2605, h: 3068 }, { x: 80, y: 120, width: 5086, height: 7200 }, { b: 4244, h: 6006 })!;
+  const k = 5086 / 4244;
+  assert.ok(Math.abs(r.x - (80 + 861 * k)) < 1e-6 && Math.abs(r.width - 2605 * k) < 1e-6);
+  assert.ok(Math.abs(r.y - (120 + 1590 * (7200 / 6006))) < 1e-6 && Math.abs(r.height - 3068 * (7200 / 6006)) < 1e-6);
+  assert.equal(skurdurIBord(null, { x: 0, y: 0, width: 1, height: 1 }, { b: 1, h: 1 }), null);
+  assert.equal(skurdurIBord({ x: 0, y: 0, w: 2, h: 2 }, { x: 0, y: 0, width: 1, height: 1 }, { b: 1, h: 1 }), null);
+});
+
+test("Vista í úttekt: veggjaLinur + leidrett á einni hæð; aðrar hæðir og annað ósnert; engir veggir = engin breyting", () => {
+  const haedir: UttektHaed[] = [
+    { id: "a", nafn: "1. hæð", markers: [], pdfVeggir: [[1, 2, 3, 4]], skurdur: { x: 1, y: 2, w: 30, h: 40 } },
+    { id: "b", nafn: "2. hæð", markers: [], veggjaLinur: [{ p: [0, 0, 5, 5], t: 2 }] },
+  ];
+  const veggir = [{ p: [0, 0, 10, 0], t: 7, tegund: "gler" as const }];
+  const ut = skrifaVeggiIHaed(haedir, "a", veggir, "2026-10-06T12:00:00.000Z");
+  assert.deepEqual(ut[0].veggjaLinur, veggir);
+  assert.deepEqual(ut[0].leidrett, { af: "turbopaint", kl: "2026-10-06T12:00:00.000Z" });
+  assert.deepEqual(ut[0].pdfVeggir, [[1, 2, 3, 4]]);
+  assert.deepEqual(ut[0].skurdur, haedir[0].skurdur);
+  assert.equal(ut[1], haedir[1]);
+  assert.equal(skrifaVeggiIHaed(haedir, "a", [], "x"), haedir);
 });

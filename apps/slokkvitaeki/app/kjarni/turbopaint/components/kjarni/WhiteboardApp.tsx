@@ -45,14 +45,15 @@ import {
   innflutningsSlod,
   merkiIBord,
   saekjaUttekt,
+  skurdurIBord,
   stimpilStaerdABladi,
   symbolFyrirMerki,
   uttektBordNafn,
   veggirIBord,
   veljaUttektHaed,
-  type UttektVeggur,
   vistaIUttekt,
 } from "../../lib/board/uttekt";
+import { veggirHaedar } from "../../lib/board/teikning-veggir";
 import { dataUrlToBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
 import {
@@ -74,7 +75,8 @@ import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
-import { getHamur, useHamur, type HamAdgerd } from "../../lib/board/hamir";
+import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
+import { VeggjaStika } from "./VeggjaStika";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -788,10 +790,12 @@ export function WhiteboardApp() {
     if (!haedId && !planUrl) return;
     uttektFromQuery.current = true;
     planFromQuery.current = true;
-    // Úttektarteikning úr Slökkvitæki-appinu = tækin raðast: byrja í Slökkvitækjaham.
-    useHamur.getState().setHamur("slokkvitaeki");
+    // Úttektarteikning úr Slökkvitæki-appinu = tækin raðast: byrja í Slökkvitækjaham. `&ham=teikning` (t.d. „Leiðrétta
+    // veggi" í Teikning-glugganum) opnar beint í Teikning-ham þar sem veggjastikan er.
+    const hamQ = q.get("ham") || "";
+    useHamur.getState().setHamur(HAMIR.some((x) => x.id === hamQ) ? (hamQ as HamurId) : "slokkvitaeki");
     const hrein = new URL(window.location.href);
-    ["uttekt", "haed", "b", "h", "plan"].forEach((k) => hrein.searchParams.delete(k));
+    ["uttekt", "haed", "b", "h", "plan", "ham"].forEach((k) => hrein.searchParams.delete(k));
     window.history.replaceState({}, "", hrein.pathname + hrein.search);
     const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
     void (async () => {
@@ -824,13 +828,15 @@ export function WhiteboardApp() {
         if (!mynd || mynd.type !== "image") throw new Error("Teikningin kom ekki inn á borðið.");
         const frum =
           haed.frum && haed.frum.b > 0 ? haed.frum : urlFrum.b > 0 && urlFrum.h > 0 ? urlFrum : giskaFrumStaerd(mynd);
+        const sk = haed.skurdur && haed.skurdur.w > 8 && haed.skurdur.h > 8 ? haed.skurdur : null;
         useBoardStore.getState().patchObject(
           mynd.id,
-          { uttekt: { companyId: cid, haedId: haed.id, frumB: frum.b, frumH: frum.h } } as Partial<BoardObject>,
+          {
+            uttekt: { companyId: cid, haedId: haed.id, frumB: frum.b, frumH: frum.h, skurdur: sk },
+          } as Partial<BoardObject>,
           false
         );
         // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið.
-        const sk = haed.skurdur as { w: number; h: number } | null | undefined;
         const staerd = stimpilStaerdABladi(mynd, getStampSize(), sk, frum);
         const takn = (haed.markers || []).map((m) => {
           const t = typeof m.unitId === "number" ? u.taeki.find((x) => x.id === m.unitId) : undefined;
@@ -846,16 +852,27 @@ export function WhiteboardApp() {
           } as BoardObject;
         });
         if (takn.length) useBoardStore.getState().addObjects(takn, false);
-        // Veggir sem TurboPaint greindi áður á þessari hæð koma aftur á borðið (lagið „Veggir").
-        const veggjaLinur = Array.isArray(haed.veggjaLinur) ? (haed.veggjaLinur as UttektVeggur[]) : [];
-        const veggir = veggirIBord(veggjaLinur, mynd, frum);
+        // Veggir hæðarinnar á lagið „Veggir": þeir sem TurboPaint vistaði áður (veggjaLinur), annars veggir
+        // Teikning-gluggans (PDF-veggflatir paraðir í miðlínur + handdregnir) — ritanlegir, til leiðréttingar.
+        const vh = veggirHaedar(haed, frum);
+        const veggir = veggirIBord(vh.veggir, mynd, frum);
         if (veggir.length) useBoardStore.getState().addObjects(withLayerId(veggir, LAYER_VEGGIR), false);
+        // Opnast rammað á húsið (skurð hæðarinnar) — myndin sjálf er ekki skorin, svo hnitin haldast.
         const view = shellRef.current;
         if (view) {
-          useBoardStore.getState().setCamera(cameraFit(boardBounds(useBoardStore.getState().objects), view.clientWidth, view.clientHeight));
+          const ramma = skurdurIBord(sk, mynd, frum) ?? boardBounds(useBoardStore.getState().objects);
+          useBoardStore.getState().setCamera(cameraFit(ramma, view.clientWidth, view.clientHeight));
         }
         await persistBoard();
-        toast.success(`${nafn}: ${takn.length} merki á teikningunni. Færðu þau til og ýttu á „Vista í úttekt".`);
+        toast.success(
+          `${nafn}: ${takn.length} merki á teikningunni` +
+            (vh.heimild === "teikning"
+              ? ` · ${veggir.length} veggir úr Teikning — leiðréttu þá í Teikning-ham`
+              : vh.heimild === "turbopaint"
+                ? ` · ${veggir.length} veggir`
+                : "") +
+            `. Ýttu á „Vista í úttekt" til að skrifa til baka.`
+        );
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
       }
@@ -1235,13 +1252,19 @@ export function WhiteboardApp() {
                 </button>
               </div>
             ) : null}
-            <div className="absolute top-3 left-1/2 -translate-x-1/2">
+            {/* Undir „Vista í úttekt"-borðanum þegar hann er uppi — annars skyggði hann á stikurnar. */}
+            <div
+              className={`absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 ${
+                tengdMynd?.uttekt ? "top-16" : "top-3"
+              }`}
+            >
               <SelectionBar
                 onExportSelection={() => {
                   setExportTarget("selection");
                   setExportOpen(true);
                 }}
               />
+              <VeggjaStika />
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               <SymbolTray />

@@ -55,6 +55,32 @@ function FloorplanImage({ obj }: { obj: Extract<BoardObject, { type: "image" }> 
   );
 }
 
+/** Úttektarteikning: blaðið utan við skurð hæðarinnar (húsið) dekkist lítillega — aðeins á skjánum (ui-only fer ekki í
+ * útflutning) og myndin sjálf er ósnert, svo hnit merkja og veggja haldast. */
+function SkurdarSkuggi({ obj }: { obj: Extract<BoardObject, { type: "image" }> }) {
+  const t = obj.uttekt;
+  const sk = t?.skurdur;
+  if (!t || !sk || !(sk.w > 8) || !(sk.h > 8) || !(t.frumB > 0) || !(t.frumH > 0)) return null;
+  const kx = obj.width / t.frumB, ky = obj.height / t.frumH;
+  const x0 = Math.max(0, sk.x * kx), y0 = Math.max(0, sk.y * ky);
+  const x1 = Math.min(obj.width, (sk.x + sk.w) * kx), y1 = Math.min(obj.height, (sk.y + sk.h) * ky);
+  if (x1 <= x0 || y1 <= y0) return null;
+  const fill = "rgba(28,25,23,0.16)";
+  const reitir = [
+    { x: 0, y: 0, width: obj.width, height: y0 },
+    { x: 0, y: y1, width: obj.width, height: obj.height - y1 },
+    { x: 0, y: y0, width: x0, height: y1 - y0 },
+    { x: x1, y: y0, width: obj.width - x1, height: y1 - y0 },
+  ].filter((r) => r.width > 0 && r.height > 0);
+  return (
+    <>
+      {reitir.map((r, i) => (
+        <Rect key={i} {...r} fill={fill} listening={false} name="ui-only" />
+      ))}
+    </>
+  );
+}
+
 export function ObjectNode({
   obj,
   isSelected = false,
@@ -155,6 +181,7 @@ export function ObjectNode({
         }}
       >
         <FloorplanImage obj={obj} />
+        <SkurdarSkuggi obj={obj} />
       </Group>
     );
   }
