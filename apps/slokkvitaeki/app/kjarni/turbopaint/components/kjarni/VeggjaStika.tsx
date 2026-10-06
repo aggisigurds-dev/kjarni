@@ -3,9 +3,10 @@
 // Veggjastikan: birtist þegar einn eða fleiri veggir eru valdir í hömunum Teikning og Brunaþéttingar (þar sem
 // veggjaaðgerðirnar búa — lib/board/hamir.ts). Agnar 06.10.2026: TurboPaint er leiðréttingarborð grunnmynda —
 // tegund (veggur / gler / hurð), Tengja lausa enda og Eyða. Hver aðgerð er ein ⌘Z-færsla.
+// Veggjaritillinn bætti við: þykkt valinna veggja, Sameina (samlínu → einn), Lengja að (tveir valdir) og Hurð í bil.
 
-import { AppWindow, BrickWall, DoorOpen, Link2, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { AppWindow, BrickWall, DoorOpen, Link2, Merge, MoveHorizontal, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isDrawnLocked, isDrawnVisible } from "../../lib/board/layers";
 import { useHamur, type HamurId } from "../../lib/board/hamir";
@@ -21,13 +22,17 @@ import {
   veggTegundAf,
   VEGG_LITIR,
 } from "../../lib/board/veggja-leidretting";
+import { metraTexti, THYKKTIR_CM, veggLengd } from "../../lib/board/veggja-ritill";
+import { cmIDila, ritillDilarAMetra, setjaThykkt } from "../../lib/board/veggja-ritill-adgerdir";
+import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
+import { hurdIBilValda, lengjaValda, sameinaValda } from "./VeggjaRitill";
 
 export const VEGGJA_HAMIR: HamurId[] = ["teikning", "brunathettingar"];
 
 const TEGUNDIR: { id: VeggTegund; texti: string; titill: string; takn: ReactNode }[] = [
-  { id: "veggur", texti: "Veggur", titill: "Venjulegur veggur", takn: <BrickWall className="size-3.5" /> },
-  { id: "gler", texti: "Gler", titill: "Glerveggur / gluggi — blár", takn: <AppWindow className="size-3.5" /> },
-  { id: "hurd", texti: "Hurð", titill: "Hurð — brún", takn: <DoorOpen className="size-3.5" /> },
+  { id: "veggur", texti: "Veggur", titill: "Venjulegur veggur (1)", takn: <BrickWall className="size-3.5" /> },
+  { id: "gler", texti: "Gler", titill: "Glerveggur / gluggi — blár (2)", takn: <AppWindow className="size-3.5" /> },
+  { id: "hurd", texti: "Hurð", titill: "Hurð — brún (3)", takn: <DoorOpen className="size-3.5" /> },
 ];
 
 function valdirVeggir(objects: BoardObject[], selectedIds: string[]): LineObject[] {
@@ -40,11 +45,18 @@ export function VeggjaStika() {
   const selectedIds = useBoardStore((s) => s.selectedIds);
   const objects = useBoardStore((s) => s.objects);
   const layers = useBoardStore((s) => s.layers);
+  const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
+  const [thykktOpin, setThykktOpin] = useState(false);
+  // Aukaaðgerðir ritilsins (þykkt, sameina, lengja, hurð í bil) aðeins meðan hann er opinn — utan hans er stikan
+  // eins og í 1. áfanga og skyggir ekki meira á teikninguna.
+  const ritill = useVeggjaRitill((s) => s.virkur);
   if (!VEGGJA_HAMIR.includes(hamur) || !selectedIds.length) return null;
   const veggir = valdirVeggir(objects, selectedIds).filter((o) => !isDrawnLocked(o, layers));
   if (!veggir.length) return null;
   const tegundir = new Set(veggir.map(veggTegundAf));
   const sameiginleg = tegundir.size === 1 ? [...tegundir][0] : null;
+  const dpm = ritillDilarAMetra(objects, pixelsPerMeter);
+  const thykktCm = (o: LineObject) => (dpm ? Math.round((o.strokeWidth / dpm) * 100) : null);
 
   const ids = () => {
     const s = useBoardStore.getState();
@@ -79,14 +91,18 @@ export function VeggjaStika() {
 
   const btn =
     "flex items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-medium text-stone-100 hover:bg-white/10 disabled:opacity-50";
+  const einn = veggir.length === 1 ? veggir[0] : null;
+  const thykktir = new Set(veggir.map((o) => thykktCm(o)));
+  const sameiginThykkt = thykktir.size === 1 ? [...thykktir][0] : null;
   return (
     <div
       role="toolbar"
       aria-label="Leiðrétta veggi"
-      className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#1a1d2e]/95 px-1.5 py-1 shadow-xl"
+      className="pointer-events-auto flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-0.5 rounded-xl border border-white/10 bg-[#1a1d2e]/95 px-1.5 py-1 shadow-xl"
     >
       <span className="px-1.5 text-[11px] whitespace-nowrap text-white/45">
         {veggir.length} {veggir.length === 1 ? "veggur" : "veggir"}
+        {einn && ritill ? ` · ${metraTexti(veggLengd(einn), dpm)}` : ""}
       </span>
       {TEGUNDIR.map((t) => (
         <button
@@ -101,6 +117,37 @@ export function VeggjaStika() {
           {t.texti}
         </button>
       ))}
+      {ritill ? (
+        <>
+          <span className="mx-0.5 h-4 w-px bg-white/15" />
+          <button
+            type="button"
+            title="Þykkt valinna veggja ([ / ] í veggjaritlinum)"
+            aria-expanded={thykktOpin}
+            onClick={() => setThykktOpin(!thykktOpin)}
+            className={btn}
+          >
+            Þykkt{sameiginThykkt != null ? ` ${sameiginThykkt} cm` : ""}
+          </button>
+        </>
+      ) : null}
+      {ritill && thykktOpin
+        ? THYKKTIR_CM.map((cm) => (
+            <button
+              key={cm}
+              type="button"
+              title={`Setja ${cm} cm á valda veggi`}
+              aria-label={`Þykkt ${cm} cm`}
+              onClick={() => {
+                setjaThykkt(ids(), cmIDila(cm, dpm));
+                setThykktOpin(false);
+              }}
+              className={`${btn} ${sameiginThykkt === cm ? "bg-white/12 ring-1 ring-white/25" : "bg-white/5"}`}
+            >
+              {cm}
+            </button>
+          ))
+        : null}
       <span className="mx-0.5 h-4 w-px bg-white/15" />
       <button
         type="button"
@@ -111,6 +158,29 @@ export function VeggjaStika() {
         <Link2 className="size-3.5" />
         Tengja
       </button>
+      {ritill && veggir.length >= 2 ? (
+        <button type="button" title="Sameina valda samlínu veggi í einn (J)" onClick={sameinaValda} className={btn}>
+          <Merge className="size-3.5" />
+          Sameina
+        </button>
+      ) : null}
+      {ritill && veggir.length === 2 ? (
+        <>
+          <button
+            type="button"
+            title="Lengja / stytta fyrst valda vegginn að þeim seinni (L)"
+            onClick={lengjaValda}
+            className={btn}
+          >
+            <MoveHorizontal className="size-3.5" />
+            Lengja að
+          </button>
+          <button type="button" title="Hurð í opið milli tveggja samlínu veggja (D)" onClick={hurdIBilValda} className={btn}>
+            <DoorOpen className="size-3.5 text-[#b45309]" />
+            Hurð í bil
+          </button>
+        </>
+      ) : null}
       <button type="button" title="Eyða völdum veggjum (Delete) — ⌘Z afturkallar" onClick={eyda} className={btn}>
         <Trash2 className="size-3.5 text-[#FE653F]" />
         Eyða

@@ -322,6 +322,63 @@ export interface PdfVeggjaStillingar {
   lagmarkM?: number;
   /** Gler úr þunnum pörum í línu veggja (sjálfgefið já). */
   gler?: boolean;
+  /** Einingar strikanna á pt (sjálfgefið: dílar frummyndar, A1-forsenda). Veggjaritillinn les PDF-síðuna sjálfa og
+   * gefur strik í ¼ pt (4). */
+  dilarAPunkt?: number;
+  /** Stakar línur → veggir (veggjaritillinn, Agnar 06.10.2026): lína veggjaflokksins sem enginn paraður veggur þekur
+   * og er a.m.k. `stakarLagmarkM` löng verður veggur með dæmigerðri þykkt (miðgildi paraðra veggja). Sjálfgefið nei
+   * (innflutningur hæðar heldur reglu Teikning-gluggans). */
+  stakar?: boolean;
+  /** Sjálfgefið 1,2 m — hurðarblöð (0,8–1,0 m) verða ekki veggir. */
+  stakarLagmarkM?: number;
+}
+
+/** Línur sem enginn veggur þekur (miðlína ± t/2 + 1,5 pt) og eru ≥ lagmark → veggir með þykkt `t`, á línunni sjálfri.
+ * Hver nýr veggur þekur þá næstu (tvær línur þétt saman verða einn veggur). */
+function stakarLinur(pt: Strik[], V: PtVeggur[], lagmark: number, t: number): PtVeggur[] {
+  const ut: PtVeggur[] = [];
+  const thekur = (x: number, y: number, w: PtVeggur) => {
+    const dx = w.b[0] - w.a[0], dy = w.b[1] - w.a[1], L2 = dx * dx + dy * dy;
+    const u = L2 > 0 ? Math.max(0, Math.min(1, ((x - w.a[0]) * dx + (y - w.a[1]) * dy) / L2)) : 0;
+    return Math.hypot(x - (w.a[0] + u * dx), y - (w.a[1] + u * dy)) <= w.t / 2 + 1.5;
+  };
+  const rodun = pt
+    .map((s) => ({ s, L: Math.hypot(s[2] - s[0], s[3] - s[1]) }))
+    .filter((x) => x.L >= lagmark)
+    .sort((a, b) => b.L - a.L);
+  for (const { s, L } of rodun) {
+    const n = Math.max(2, Math.ceil(L / 1)); // sýni á ~1 pt fresti
+    const kandidatar = [...V, ...ut].filter((w) => {
+      // grófsía: umgjörð veggjar nálægt línunni
+      const m = w.t / 2 + 2;
+      return !(
+        Math.max(w.a[0], w.b[0]) + m < Math.min(s[0], s[2]) ||
+        Math.min(w.a[0], w.b[0]) - m > Math.max(s[0], s[2]) ||
+        Math.max(w.a[1], w.b[1]) + m < Math.min(s[1], s[3]) ||
+        Math.min(w.a[1], w.b[1]) - m > Math.max(s[1], s[3])
+      );
+    });
+    let byrjun = -1;
+    const bil: [number, number][] = [];
+    for (let k = 0; k <= n; k++) {
+      const f = k / n, x = s[0] + (s[2] - s[0]) * f, y = s[1] + (s[3] - s[1]) * f;
+      const thakid = kandidatar.some((w) => thekur(x, y, w));
+      if (!thakid && byrjun < 0) byrjun = f;
+      if ((thakid || k === n) && byrjun >= 0) {
+        bil.push([byrjun, thakid ? f : 1]);
+        byrjun = -1;
+      }
+    }
+    for (const [f0, f1] of bil) {
+      if ((f1 - f0) * L < lagmark) continue;
+      ut.push({
+        a: [s[0] + (s[2] - s[0]) * f0, s[1] + (s[3] - s[1]) * f0],
+        b: [s[0] + (s[2] - s[0]) * f1, s[1] + (s[3] - s[1]) * f1],
+        t,
+      });
+    }
+  }
+  return ut;
 }
 
 /** pdfVeggir (veggflatir, dílar frummyndar) → miðlínuveggir með þykkt (dílar frummyndar). */
@@ -330,7 +387,7 @@ export function veggirUrPdfStrikum(
   frum: { b: number; h: number },
   st: PdfVeggjaStillingar = {}
 ): FrumVeggur[] {
-  const k = dilarAPunkt(frum);
+  const k = st.dilarAPunkt && st.dilarAPunkt > 0 ? st.dilarAPunkt : dilarAPunkt(frum);
   const pt: Strik[] = [];
   for (const s of strik || []) {
     if (!Array.isArray(s) || s.length < 4 || !s.slice(0, 4).every((n) => Number.isFinite(n))) continue;
@@ -357,6 +414,12 @@ export function veggirUrPdfStrikum(
   if (stakir.length) V = fellaTvitalda(sameinaSamlinu([...V, ...stakir], 18, 1.2), 1);
   const G = st.gler === false ? [] : glerUrThunnumPorum(pt, V, Math.max(lagmark, 0.5 / PT_I_METRUM));
   const glerSet = new Set(G);
+  if (st.stakar) {
+    const thykktir = V.map((v) => v.t).sort((a, b) => a - b);
+    const t = thykktir.length ? thykktir[thykktir.length >> 1] : 0.15 / PT_I_METRUM;
+    const S = stakarLinur(pt, [...V, ...G], (st.stakarLagmarkM ?? 1.2) / PT_I_METRUM, t);
+    if (S.length) V = [...V, ...S];
+  }
   const allir = [...V, ...G];
   smellaHornum(allir, 13);
   return allir
