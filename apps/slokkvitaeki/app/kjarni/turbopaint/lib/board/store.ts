@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { newId } from "./ids";
-import { cloneForPaste, objectsOrigin } from "./clipboard";
+import { anUttektarTengingar, cloneForPaste, objectsOrigin } from "./clipboard";
 import {
   DEFAULT_LAYERS,
   LAYER_ALMENNT,
@@ -469,7 +469,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const copies = objects
       .filter((o) => selectedIds.includes(o.id) && !o.locked)
       .map((o) => {
-        const copy = { ...structuredClone(o), id: newId(), x: o.x + 24, y: o.y + 24 };
+        const copy = { ...anUttektarTengingar(structuredClone(o)), id: newId(), x: o.x + 24, y: o.y + 24 };
         if (copy.groupId) {
           if (!groupMap.has(copy.groupId)) groupMap.set(copy.groupId, newId());
           copy.groupId = groupMap.get(copy.groupId);

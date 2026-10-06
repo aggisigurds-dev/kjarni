@@ -13,6 +13,7 @@ import { useBoardStore } from "../../lib/board/store";
 import { cn } from "../../lib/utils";
 import { SymbolManager } from "./SymbolManager";
 import { taknIHam, useHamur } from "../../lib/board/hamir";
+import { afvopna } from "../../lib/board/uttekt-gogn";
 
 export function SymbolTray() {
   const style = useBoardStore((s) => s.style);
@@ -73,6 +74,8 @@ export function SymbolTray() {
               e.dataTransfer.effectAllowed = "copy";
             }}
             onClick={() => {
+              // Laust tákn úr slánni — tæki/merki sem var valið í tækjalistanum sleppur.
+              afvopna();
               setStyle({ symbolId: id });
               if (id === "firewall") {
                 useBoardStore.getState().startFirewall();

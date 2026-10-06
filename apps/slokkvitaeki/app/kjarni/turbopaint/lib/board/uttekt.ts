@@ -12,18 +12,34 @@
  *   tákn.uttektKind / uttektSign = kind/sign á stimplum
  *   veggur (lag „Veggir").veggTegund = veggur / gler / hurð → veggjaLinur[].tegund
  *
- * Tákn sem notandinn bætir við í TurboPaint án tengingar vistast ekki til baka. Veggir gera það: TurboPaint er
- * leiðréttingarborð hæðarinnar (Agnar 06.10.2026) — veggir Teikning-gluggans (pdfVeggir/veggir) koma inn sem
- * ritanlegir veggir þegar hæðin á engar veggjaLinur, og „Vista í úttekt" skrifar þá sem veggjaLinur + `leidrett`. */
+ * Veggir: TurboPaint er leiðréttingarborð hæðarinnar (Agnar 06.10.2026) — veggir Teikning-gluggans (pdfVeggir/veggir)
+ * koma inn sem ritanlegir veggir þegar hæðin á engar veggjaLinur, og „Vista í úttekt" skrifar þá sem veggjaLinur +
+ * `leidrett`.
+ *
+ * Tæki og merki (2. áfangi, Agnar 06.10.2026): tækjalisti staðarins (uttaeki) er í hliðarspjaldinu og tæki er sett á
+ * teikninguna, fært eða tekið af. Merki hæðarinnar við vistun = öll tengd tæki á borðinu + stimplar Teikning-gluggans
+ * (neyðarútgangur, ÚT, slöngumerki, rafmagnstafla, skilti …). Tákn TurboPaint sem samsvarar stimpli (TEIKNING_STIMPLAR)
+ * vistast sem stimpill (`kind:'sign'`, `unitId:'s:<merki>:<id>'`) svo Teikning-glugginn sýnir það; tákn án samsvörunar
+ * vistast ekki. Tæki/merki sem var á borðinu (`uttekt.merki`) en er horfið af því fer úr hæðinni. */
 
 import { newId } from "./ids";
 import { getSupabase } from "./supabase";
+import { getSymbol } from "./symbols";
 import { erVeggTegund, type FrumVeggur } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject, SymbolObject, UttektTenging } from "./types";
 import { erVeggur, VEGG_LITIR, VEGG_NOFN } from "./veggja-leidretting";
 
 export type { UttektTenging };
-export type UttektMerki = { unitId: number | string; x: number; y: number; kind?: string; sign?: string; [k: string]: unknown };
+export type UttektMerki = {
+  unitId: number | string;
+  x: number;
+  y: number;
+  kind?: string;
+  sign?: string;
+  color?: string;
+  rot?: number;
+  [k: string]: unknown;
+};
 /** Merki um að veggir hæðarinnar voru leiðréttir annars staðar en í Teikning-glugganum. */
 export type UttektLeidrett = { af: "turbopaint"; kl: string };
 export type UttektHaed = {
@@ -44,10 +60,70 @@ export type UttektHaed = {
   [k: string]: unknown;
 };
 export type UttektTaeki = { id: number; serial: string | null; type: string | null; status: string | null };
-export type UttektStada = { x: number; y: number; unitId: number | string; kind?: string; sign?: string };
+export type UttektStada = {
+  x: number;
+  y: number;
+  unitId: number | string;
+  kind?: string;
+  sign?: string;
+  /** Aðeins á NÝJUM stimplum (litur Teikning-gluggans); eldri merki halda sínum lit og snúningi. */
+  color?: string;
+  rot?: number;
+};
 
 type MyndMedTengingu = ImageObject;
-type TaknMedTaeki = SymbolObject & { uttektUnitId?: number | string; uttektKind?: string; uttektSign?: string };
+type TaknMedTaeki = SymbolObject;
+
+/** Stimplar Teikning-gluggans (slokkvitaeki js/patches/433-teikning-merking.js STIMPLAR) og táknið sem sýnir þá í
+ * TurboPaint. Tveir stimplar geta deilt tákni (NÚ/ÚT, reyk-/hitaskynjari) — táknið ber þá `uttektSign`. */
+export interface TeikningStimpill {
+  id: string;
+  nafn: string;
+  stutt: string;
+  litur: string;
+  symbolId: string;
+}
+
+export const TEIKNING_STIMPLAR: TeikningStimpill[] = [
+  { id: "neyðarútgangur", nafn: "Neyðarútgangur", stutt: "NÚ", litur: "#15803d", symbolId: "exit" },
+  { id: "ut", nafn: "Út", stutt: "ÚT", litur: "#15803d", symbolId: "exit" },
+  { id: "hose", nafn: "Slöngumerki", stutt: "SL", litur: "#c93c1d", symbolId: "hose" },
+  { id: "rafmagn", nafn: "Rafmagnstafla", stutt: "RAF", litur: "#eab308", symbolId: "electric" },
+  { id: "skilti_slt", nafn: "Skilti slökkvitæki", stutt: "SKL", litur: "#c93c1d", symbolId: "sign-extinguisher" },
+  { id: "skilti_slanga", nafn: "Skilti brunaslanga", stutt: "SLS", litur: "#c93c1d", symbolId: "sign-hose" },
+  { id: "reykskynjari", nafn: "Reykskynjari", stutt: "RS", litur: "#c93c1d", symbolId: "detector" },
+  { id: "hitaskynjari", nafn: "Hitaskynjari", stutt: "HS", litur: "#c93c1d", symbolId: "detector" },
+  { id: "bjalla", nafn: "Viðvörunarbjalla", stutt: "BJ", litur: "#c93c1d", symbolId: "alarm" },
+  { id: "segull", nafn: "Segulloki", stutt: "SG", litur: "#c93c1d", symbolId: "pin" },
+];
+
+/** Tákn TurboPaint sem sett er án tengingar → stimpillinn sem það vistast sem. Tákn utan listans (slökkvitæki sem ekki
+ * er skráð, neyðarljós, eigin tákn …) eiga engan stimpil í Teikning-glugganum og vistast ekki. */
+const STIMPILL_TAKNS: Record<string, string> = {
+  exit: "neyðarútgangur",
+  hose: "hose",
+  electric: "rafmagn",
+  "sign-extinguisher": "skilti_slt",
+  "sign-hose": "skilti_slanga",
+  detector: "reykskynjari",
+  alarm: "bjalla",
+};
+
+export function stimpilDef(sign: string | null | undefined): TeikningStimpill | null {
+  const s = String(sign || "").toLowerCase().normalize("NFC");
+  return TEIKNING_STIMPLAR.find((x) => x.id === s) ?? null;
+}
+
+/** Ótengt tákn → stimpill Teikning-gluggans (eða null = vistast ekki). `uttektSign` ræður sé hann settur. */
+export function stimpillFyrirTakn(symbolId: string, uttektSign?: string | null): string | null {
+  if (uttektSign) return stimpilDef(uttektSign)?.id ?? uttektSign;
+  return STIMPILL_TAKNS[symbolId] ?? null;
+}
+
+/** Síðustu sex stafir raðnúmers (TMP-N5VABN → N5VABN) — merkimiði tækis á teikningunni og í listanum. */
+export function stuttNumer(serial: string | null | undefined): string {
+  return serial ? String(serial).slice(-6) : "";
+}
 
 /** Tegund tækis í kerfinu → tákn TurboPaint. Óþekkt tegund fær almenna slökkvitækið. */
 export function symbolFyrirTegund(tegund: string | null | undefined): string {
@@ -61,23 +137,10 @@ export function symbolFyrirTegund(tegund: string | null | undefined): string {
   return "extinguisher";
 }
 
-/** FloorPlan-stimpill (kind=sign) → tákn TurboPaint. */
+/** FloorPlan-stimpill (kind=sign) → tákn TurboPaint. Óþekktur stimpill fær hlutlausa staðsetningarpinnann (áður
+ * neyðarútgang — rangt tákn á brunavarnateikningu); stimpillinn sjálfur fylgir tákninu í `uttektSign` og vistast óbreyttur. */
 export function symbolFyrirStimpil(sign: string | null | undefined): string {
-  switch (String(sign || "").toLowerCase()) {
-    case "neyðarútgangur":
-    case "ut":
-      return "exit";
-    case "hose":
-      return "hose";
-    case "rafmagn":
-      return "electric";
-    case "skilti_slt":
-      return "sign-extinguisher";
-    case "skilti_slanga":
-      return "sign-hose";
-    default:
-      return "exit";
-  }
+  return stimpilDef(sign)?.symbolId ?? "pin";
 }
 
 export function erStimpil(m: { kind?: string; unitId?: unknown; sign?: string } | null | undefined): boolean {
@@ -85,8 +148,15 @@ export function erStimpil(m: { kind?: string; unitId?: unknown; sign?: string } 
   return m.kind === "sign" || (typeof m.unitId === "string" && String(m.unitId).startsWith("s:"));
 }
 
+/** Stimpill merkis: `sign`, annars miðhluti unitId (`s:<merki>:<id>`). */
+export function stimpillMerkis(m: { sign?: string; unitId?: unknown }): string {
+  if (m.sign) return m.sign;
+  const s = String(m.unitId ?? "");
+  return s.startsWith("s:") ? s.split(":")[1] || "" : "";
+}
+
 export function symbolFyrirMerki(m: UttektMerki, tegund?: string | null): string {
-  if (erStimpil(m)) return symbolFyrirStimpil(m.sign);
+  if (erStimpil(m)) return symbolFyrirStimpil(stimpillMerkis(m));
   return symbolFyrirTegund(tegund);
 }
 
@@ -231,46 +301,175 @@ export function merkiFraTakni(s: TaknMedTaeki, p: { x: number; y: number }): Utt
   return stada;
 }
 
-/** Færir staðsetningar táknanna inn í hæðina. Tæki sem eiga ekkert tákn á borðinu halda sinni stöðu; tæki sem fær
- * stöðu hér er tekið af ÖÐRUM hæðum (tæki er aðeins á einni hæð — sama regla og ritillinn í appinu). */
-export function uppfaeraHaedir(haedir: UttektHaed[], haedId: string, stodur: Map<string, UttektStada> | Map<number, { x: number; y: number }>) {
+/** Færir staðsetningar táknanna inn í hæðina. Tæki sem fær stöðu hér er tekið af ÖÐRUM hæðum (tæki er aðeins á einni
+ * hæð — sama regla og ritillinn í appinu). Merki hæðarinnar sem á enga stöðu heldur sér, NEMA lykill þess sé í
+ * `fjarlaegja` (það var á borðinu og var tekið af teikningunni). Óhreyfð merki halda nákvæmum hnitum sínum (líka
+ * brotatölum úr appinu) svo merki fari óbreytt fram og til baka. */
+export function uppfaeraHaedir(
+  haedir: UttektHaed[],
+  haedId: string,
+  stodur: Map<string, UttektStada> | Map<number, { x: number; y: number }>,
+  opts: { fjarlaegja?: Iterable<string> } = {}
+) {
   const map = new Map<string, UttektStada>();
   stodur.forEach((s, k) => {
     const unitId = "unitId" in s && s.unitId != null ? kodaUnitId(s.unitId) : kodaUnitId(k);
     const stada: UttektStada = { x: s.x, y: s.y, unitId };
     if ("kind" in s && s.kind) stada.kind = s.kind;
     if ("sign" in s && s.sign) stada.sign = s.sign;
+    if ("color" in s && s.color) stada.color = s.color;
+    if ("rot" in s && s.rot != null) stada.rot = s.rot;
     map.set(merkiLykill(unitId), stada);
   });
+  const burt = new Set<string>();
+  for (const k of opts.fjarlaegja ?? []) if (!map.has(k)) burt.add(k);
   let breytt = 0;
   let ny = 0;
+  let tekin = 0;
   const ut = haedir.map((h) => {
     const merki = Array.isArray(h.markers) ? h.markers : [];
-    if (h.id !== haedId) return { ...h, markers: merki.filter((m) => !map.has(merkiLykill(m.unitId))) };
+    if (h.id !== haedId) {
+      const eftir = merki.filter((m) => !map.has(merkiLykill(m.unitId)));
+      return eftir.length === merki.length ? h : { ...h, markers: eftir };
+    }
     const sed = new Set<string>();
-    const uppf = merki.map((m) => {
+    const uppf: UttektMerki[] = [];
+    for (const m of merki) {
       const key = merkiLykill(m.unitId);
       const s = map.get(key);
       sed.add(key);
-      if (!s) return m;
-      if (s.x !== Math.round(Number(m.x)) || s.y !== Math.round(Number(m.y))) breytt++;
-      const next: UttektMerki = { ...m, x: s.x, y: s.y, unitId: m.unitId };
+      if (!s) {
+        if (burt.has(key)) tekin++;
+        else uppf.push(m);
+        continue;
+      }
+      const kyrrt = s.x === Math.round(Number(m.x)) && s.y === Math.round(Number(m.y));
+      if (!kyrrt) breytt++;
+      const next: UttektMerki = { ...m, x: kyrrt ? m.x : s.x, y: kyrrt ? m.y : s.y, unitId: m.unitId };
       if (s.kind) next.kind = s.kind;
       if (s.sign) next.sign = s.sign;
-      return next;
-    });
+      uppf.push(next);
+    }
     map.forEach((s, key) => {
-      if (!sed.has(key)) {
-        const merkiNy: UttektMerki = { unitId: s.unitId, x: s.x, y: s.y };
-        if (s.kind) merkiNy.kind = s.kind;
-        if (s.sign) merkiNy.sign = s.sign;
-        uppf.push(merkiNy);
-        ny++;
-      }
+      if (sed.has(key)) return;
+      const merkiNy: UttektMerki = { unitId: s.unitId, x: s.x, y: s.y };
+      if (s.kind) merkiNy.kind = s.kind;
+      if (s.sign) merkiNy.sign = s.sign;
+      if (s.color) merkiNy.color = s.color;
+      if (s.rot != null) merkiNy.rot = s.rot;
+      uppf.push(merkiNy);
+      ny++;
     });
     return { ...h, markers: uppf };
   });
-  return { haedir: ut, breytt, ny };
+  return { haedir: ut, breytt, ny, tekin };
+}
+
+/** Nýtt stimpils-id á sniði Teikning-gluggans (433 setjaStimpil): `s:<merki>:<tími36><slembi4>`. */
+export function nyttStimpilId(sign: string): string {
+  return "s:" + sign + ":" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/** Hönnunarstaðir úr „SLT/BRSL af teikningunni" (165.BR1) eru vinnugögn, ekki merki á staðnum — þeir vistast ekki. */
+function erHonnunarstadur(o: { name?: string }): boolean {
+  return String(o.name || "").startsWith("165.BR1");
+}
+
+export type StodurBords = {
+  /** Staðsetningar sem skrifast í hæðina (lykill = unitId sem strengur). */
+  stodur: Map<string, UttektStada>;
+  /** Allir tengdir lyklar á borðinu — líka falin tákn og tákn utan teikningar, sem halda fyrri stöðu og teljast EKKI
+   * tekin af teikningunni. */
+  aBordi: Set<string>;
+  /** Ótengd tákn sem vistast sem nýir stimplar; borðið fær unitId þeirra eftir vistun (svo næsta vistun tvöfaldi ekki). */
+  nyirStimplar: { objId: string; unitId: string; sign: string }[];
+  /** Sýnileg tákn á teikningunni sem eiga hvorki tæki né stimpil — vistast ekki í úttekt. */
+  otengd: number;
+  /** Tengd tákn sem standa utan teikningar — staða þeirra er óbreytt. */
+  utan: number;
+  /** Afrit af tæki sem er þegar á borðinu (tæki er aðeins á einum stað) — fyrsta táknið gildir. */
+  tvitekin: number;
+};
+
+/** Merki hæðarinnar eins og borðið sýnir þau: tengd tæki + stimplar (tengdir eða samsvarandi tákn). */
+export function byggjaStodur(
+  objects: BoardObject[],
+  mynd: { x: number; y: number; width: number; height: number },
+  frum: { b: number; h: number },
+  nyttId: (sign: string) => string = nyttStimpilId
+): StodurBords {
+  const ut: StodurBords = { stodur: new Map(), aBordi: new Set(), nyirStimplar: [], otengd: 0, utan: 0, tvitekin: 0 };
+  for (const o of objects) {
+    if (o.type !== "symbol") continue;
+    const s = o as TaknMedTaeki;
+    const p = taknIMerki(s, mynd, frum);
+    const inni = p.x >= 0 && p.y >= 0 && p.x <= frum.b && p.y <= frum.h;
+    if (s.uttektUnitId != null && s.uttektUnitId !== "") {
+      const unitId = kodaUnitId(s.uttektUnitId);
+      const key = merkiLykill(unitId);
+      if (!ut.aBordi.has(key)) {
+        ut.aBordi.add(key);
+        if (s.hidden) continue;
+        if (!inni) {
+          ut.utan++;
+          continue;
+        }
+        ut.stodur.set(key, merkiFraTakni(s, p));
+        continue;
+      }
+      // Sami lykill aftur = afrit. Afrit af stimpli verður nýr stimpill; afrit af tæki vistast ekki.
+      if (!erStimpil({ unitId, kind: s.uttektKind })) {
+        ut.tvitekin++;
+        continue;
+      }
+    }
+    if (s.hidden || !inni) continue;
+    const sign = erHonnunarstadur(s) ? null : stimpillFyrirTakn(s.symbolId, s.uttektSign || stimpillMerkis({ unitId: s.uttektUnitId }));
+    if (!sign) {
+      ut.otengd++;
+      continue;
+    }
+    const unitId = nyttId(sign);
+    ut.stodur.set(unitId, { x: p.x, y: p.y, unitId, kind: "sign", sign, color: stimpilDef(sign)?.litur, rot: 0 });
+    ut.aBordi.add(unitId);
+    ut.nyirStimplar.push({ objId: s.id, unitId, sign });
+  }
+  return ut;
+}
+
+/** Merki hæðar → tákn á borðinu, miðjað á staðnum og fest við myndina. Tæki fær táknið eftir tegund og síðustu sex
+ * stafi raðnúmers; stimpill fær tákn Teikning-gluggans og stuttheitið (NÚ, ÚT, SL …). */
+export function taknFyrirMerki(
+  m: UttektMerki,
+  taeki: UttektTaeki[],
+  mynd: { id: string; x: number; y: number; width: number; height: number },
+  frum: { b: number; h: number },
+  staerd: number
+): SymbolObject {
+  const stimpill = erStimpil(m);
+  const t = stimpill ? undefined : taeki.find((x) => merkiLykill(x.id) === merkiLykill(m.unitId));
+  const symbolId = symbolFyrirMerki(m, t?.type);
+  const stadur = merkiIBord(m, mynd, frum, staerd);
+  const sign = stimpill ? stimpillMerkis(m) : "";
+  const s: SymbolObject = {
+    id: newId(),
+    type: "symbol",
+    symbolId,
+    x: stadur.x,
+    y: stadur.y,
+    size: staerd,
+    label: stimpill ? stimpilDef(sign)?.stutt ?? (sign || "ÚT") : stuttNumer(t?.serial),
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    name: getSymbol(symbolId).name,
+    parentId: mynd.id,
+    uttektUnitId: m.unitId,
+  };
+  if (m.kind) s.uttektKind = m.kind;
+  if (m.sign) s.uttektSign = m.sign;
+  return s;
 }
 
 /** Stærð tákns á borðinu (borðdílar).
@@ -290,6 +489,14 @@ export function stimpilStaerdABladi(
   const grunnur =
     skurdur && skurdur.w > 8 && skurdur.h > 8 && k > 0 ? (Math.max(skurdur.w, skurdur.h) * k) / 28 : long / 40;
   return Math.max(24, Math.round(grunnur * kv));
+}
+
+/** Stimpilstærð nýs tákns á borðinu: á borði tengdu úttekt sama stærð og tæki/merki hæðarinnar (miðað við húsið), svo
+ * tákn úr slánni verði ekki margfalt stærri en hin; annars stimpilstærð notandans óbreytt. */
+export function stimpilStaerdBords(objects: BoardObject[], bound: number): number {
+  const m = finnaTengduMynd(objects);
+  if (!m?.uttekt || !(m.uttekt.frumB > 0)) return bound;
+  return stimpilStaerdABladi(m, bound, m.uttekt.skurdur, { b: m.uttekt.frumB, h: m.uttekt.frumH });
 }
 
 /** '/.netlify/functions/teikn-mynd?url=<permalink>' → permalinkurinn (þá sækir fetch-plan vigur-PDF). Annars slóðin sjálf. */
@@ -355,41 +562,60 @@ export async function saekjaUttekt(companyId: number) {
   };
 }
 
+/** Hvað „Vista í úttekt" skrifar, reiknað úr borðinu og FERSKRI röð (án þess að skrifa): merki hæðarinnar = tengd tæki
+ * + stimplar á borðinu; tæki sem var á borðinu (`uttekt.merki`) og er horfið fer úr hæðinni; tæki sem fær stöðu hér
+ * fer af öðrum hæðum. Veggirnir fylgja (1. áfangi). Aðrar hæðir og annað á hæðinni er ósnert. */
+export function utbuaVistun(
+  objects: BoardObject[],
+  haedir: UttektHaed[],
+  kl: string,
+  nyttId: (sign: string) => string = nyttStimpilId
+) {
+  const mynd = finnaTengduMynd(objects);
+  if (!mynd || !mynd.uttekt) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
+  const t = mynd.uttekt;
+  if (!haedir.some((h) => h.id === t.haedId)) throw new Error("Hæðin er ekki lengur til í úttektinni — henni var eytt í appinu.");
+  const frum = { b: t.frumB, h: t.frumH };
+  const b = byggjaStodur(objects, mynd, frum, nyttId);
+  const thekkt = Array.isArray(t.merki) ? t.merki : null;
+  const fjarlaegja = thekkt ? thekkt.filter((k) => !b.aBordi.has(k)) : [];
+  const u = uppfaeraHaedir(haedir, t.haedId, b.stodur, { fjarlaegja });
+  // Veggirnir fylgja með, með tegund (veggur/gler/hurð), og hæðin merkist leiðrétt í TurboPaint — ef einhverjir eru á
+  // borðinu; annars haldast þeir sem fyrir voru.
+  const veggir = veggirIFrum(objects, mynd, frum);
+  u.haedir = skrifaVeggiIHaed(u.haedir, t.haedId, veggir, kl);
+  const haed = u.haedir.find((h) => h.id === t.haedId)!;
+  return {
+    tenging: t,
+    haedir: u.haedir,
+    fjoldi: b.stodur.size,
+    breytt: u.breytt,
+    ny: u.ny,
+    tekin: u.tekin,
+    otengd: b.otengd,
+    utan: b.utan,
+    tvitekin: b.tvitekin,
+    veggir: veggir.length,
+    nyirStimplar: b.nyirStimplar,
+    /** Merki hæðarinnar sem borðið sýnir ekki (bættust við í appinu eftir opnun, eða eldra borð án `merki`). */
+    utanBords: (haed.markers || []).filter((m) => !b.aBordi.has(merkiLykill(m.unitId))),
+    /** Lyklar hæðarinnar sem borðið sýnir eftir vistun — verða `uttekt.merki`. */
+    merkiABordi: (haed.markers || []).map((m) => merkiLykill(m.unitId)).filter((k) => b.aBordi.has(k)),
+    anThekkingar: !thekkt,
+  };
+}
+
 /** Skrifar staðsetningar tengdra tákna aftur í teikning_bord. Les röðina FERSKA fyrst svo breytingar úr appinu
- * (nýjar hæðir, skurður, veggir) tapist ekki — aðeins `markers` tengdu hæðarinnar og tækja sem fluttu breytast. */
+ * (nýjar hæðir, skurður, veggir, merki sett eftir opnun) tapist ekki — aðeins `markers`/veggir tengdu hæðarinnar og
+ * tækja sem fluttu breytast. */
 export async function vistaIUttekt(objects: BoardObject[]) {
   const mynd = finnaTengduMynd(objects);
   if (!mynd || !mynd.uttekt) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
   const t = mynd.uttekt;
-  const frum = { b: t.frumB, h: t.frumH };
-  const stodur = new Map<string, UttektStada>();
-  let otengd = 0;
-  let utan = 0;
-  objects.forEach((o) => {
-    if (o.type !== "symbol" || o.hidden) return;
-    const s = o as TaknMedTaeki;
-    const p = taknIMerki(s, mynd, frum);
-    const inni = p.x >= 0 && p.y >= 0 && p.x <= frum.b && p.y <= frum.h;
-    if (s.uttektUnitId == null || s.uttektUnitId === "") {
-      if (inni) otengd++;
-      return;
-    }
-    if (!inni) {
-      utan++;
-      return;
-    }
-    const stada = merkiFraTakni(s, p);
-    stodur.set(merkiLykill(stada.unitId), stada);
-  });
   const sb = getSupabase();
   if (!sb) throw new Error("Engin tenging við gagnagrunn");
   const nu = await saekjaUttekt(t.companyId);
-  if (!nu.haedir.some((h) => h.id === t.haedId)) throw new Error("Hæðin er ekki lengur til í úttektinni — henni var eytt í appinu.");
-  const u = uppfaeraHaedir(nu.haedir, t.haedId, stodur);
-  // Veggirnir fylgja með, með tegund (veggur/gler/hurð), og hæðin merkist leiðrétt í TurboPaint — ef einhverjir eru á
-  // borðinu; annars haldast þeir sem fyrir voru.
-  const veggir = veggirIFrum(objects, mynd, frum);
-  u.haedir = skrifaVeggiIHaed(u.haedir, t.haedId, veggir, new Date().toISOString());
+  const u = utbuaVistun(objects, nu.haedir, new Date().toISOString());
   const fyrsta = u.haedir[0];
   const { error, data } = await sb
     .from("teikning_bord")
@@ -403,5 +629,5 @@ export async function vistaIUttekt(objects: BoardObject[]) {
     .select("company_id");
   if (error) throw new Error(error.message);
   if (!data || !data.length) throw new Error("Ekkert var skrifað — röðin fannst ekki eða aðgangi var hafnað.");
-  return { fjoldi: stodur.size, breytt: u.breytt, ny: u.ny, otengd, utan, nafn: nu.nafn, veggir: veggir.length };
+  return { ...u, nafn: nu.nafn, taeki: nu.taeki };
 }

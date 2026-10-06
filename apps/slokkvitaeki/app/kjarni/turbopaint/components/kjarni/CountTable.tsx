@@ -9,9 +9,11 @@ import { listRooms, roomAreaPx } from "../../lib/board/rooms";
 import { useBoardStore } from "../../lib/board/store";
 import { NOTKUNARFLOKKAR, greinaTharfir, type Notkunarflokkur } from "../../lib/board/krofur";
 import { getSymbol } from "../../lib/board/symbols";
+import { erStimpil } from "../../lib/board/uttekt";
 import type { ImageObject } from "../../lib/board/types";
 
-type Row = { key: string; label: string; count: number; group: number };
+/** `skrad` = þar af tengd tæki úr tækjalista staðarins (uttaeki) — hin eru tákn sett án tækis (t.d. í tilboði). */
+type Row = { key: string; label: string; count: number; group: number; skrad: number };
 
 const GENERIC_LABELS: Record<string, string> = {
   rect: "Ferningar",
@@ -61,14 +63,18 @@ export function CountTable() {
       (o) => !o.hidden && o.name !== "Magntafla"
     );
     const map = new Map<string, Row>();
-    const bump = (key: string, label: string, group: number) => {
+    const bump = (key: string, label: string, group: number, skrad = 0) => {
       const row = map.get(key);
-      if (row) row.count += 1;
-      else map.set(key, { key, label, count: 1, group });
+      if (row) {
+        row.count += 1;
+        row.skrad += skrad;
+      } else map.set(key, { key, label, count: 1, group, skrad });
     };
     for (const o of on) {
       if (o.type === "symbol") {
-        bump(`sym:${o.symbolId}`, getSymbol(o.symbolId).name, 0);
+        // Tæki úr tækjalistanum bera tákn sinnar tegundar (Léttvatn, Duft, CO₂, Brunaslanga …) — talin eftir tegund.
+        const taeki = o.uttektUnitId != null && o.uttektUnitId !== "" && !erStimpil({ unitId: o.uttektUnitId, kind: o.uttektKind });
+        bump(`sym:${o.symbolId}`, getSymbol(o.symbolId).name, 0, taeki ? 1 : 0);
         continue;
       }
       const fireName =
@@ -158,7 +164,8 @@ export function CountTable() {
       // Kefli eða úðakerfi á hæðinni helmingar slökkviþörfina (165.BR1).
       keflaEdaUdakerfi: kefli > 0 || telja("sprinkler") > 0,
       komid: {
-        slokkvitaeki: telja("extinguisher"),
+        // Tegundirnar þrjár (Léttvatn/Duft/CO₂) eru líka slökkvitæki — áður taldist aðeins almenna táknið.
+        slokkvitaeki: telja("extinguisher", "extinguisher-lettvatn", "extinguisher-duft", "extinguisher-co2"),
         kefli,
         skiltiSlokkvitaekis: telja("sign-extinguisher"),
         skiltiKeflis: telja("sign-hose"),
@@ -184,7 +191,7 @@ export function CountTable() {
     const lines = [
       `MAGNTAFLA — ${plan.name}`,
       "".padEnd(24, "—"),
-      ...equipmentRows.map((r) => `${r.count}× ${r.label}`),
+      ...equipmentRows.map((r) => `${r.count}× ${r.label}${r.skrad ? ` (${r.skrad} skráð tæki)` : ""}`),
       "".padEnd(24, "—"),
       `Samtals búnaður: ${total}`,
       ...(rooms.length
@@ -252,8 +259,18 @@ export function CountTable() {
                 <tbody>
                   {equipmentRows.map((r) => (
                     <tr key={r.key} className="border-b border-white/5 last:border-0">
-                      <td className="py-0.5 pr-2">{r.label}</td>
-                      <td className="py-0.5 text-right font-semibold tabular-nums">{r.count}</td>
+                      <td className="py-0.5 pr-2">
+                        {r.label}
+                        {r.skrad ? (
+                          <span
+                            className="block text-[10px] text-white/40"
+                            title="Tengd tæki úr tækjalista staðarins — hin eru tákn án tækis"
+                          >
+                            {r.skrad === r.count ? "öll skráð tæki" : `${r.skrad} skráð tæki`}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-0.5 text-right align-top font-semibold tabular-nums">{r.count}</td>
                     </tr>
                   ))}
                   {otherRows.length ? (

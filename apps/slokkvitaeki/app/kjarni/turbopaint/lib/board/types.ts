@@ -83,6 +83,10 @@ export interface UttektTenging {
   frumB: number;
   frumH: number;
   skurdur?: { x: number; y: number; w: number; h: number } | null;
+  /** Lyklar merkjanna (unitId) sem borðið sýnir af hæðinni — sett við opnun og eftir hverja vistun. Merki á listanum
+   * sem er horfið af borðinu var tekið af teikningunni og fer úr hæðinni við vistun; merki sem bættist við í appinu
+   * eftir opnun (ekki á listanum) er látið í friði. Vantar (eldra borð) = ekkert er fjarlægt. */
+  merki?: string[];
 }
 
 export interface RectObject extends BaseObject {
@@ -157,6 +161,14 @@ export interface SymbolObject extends BaseObject {
   symbolId: string;
   size: number;
   label: string;
+  /** Tenging við úttektarteikninguna (lib/board/uttekt.ts): uttaeki.id tækisins, eða stimpils-id Teikning-gluggans
+   * (`s:<merki>:<id>`). Vantar = tákn sem notandinn setti sjálfur. */
+  uttektUnitId?: number | string;
+  /** `kind` merkisins í teikning_bord — „sign" á stimplum. */
+  uttektKind?: string;
+  /** Stimpill Teikning-gluggans (neyðarútgangur, ut, hose, rafmagn, skilti_slt …). Á ótengdu tákni = stimpillinn sem
+   * það vistast sem (valið í „Merki" í tækjalistanum). */
+  uttektSign?: string;
 }
 
 export type BoardObject =
