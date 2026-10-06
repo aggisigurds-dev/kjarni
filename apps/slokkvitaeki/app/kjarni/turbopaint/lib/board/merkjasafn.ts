@@ -150,15 +150,16 @@ export const STIMPIL_LYKILL: Record<string, string> = {
 
 export type TaekjaLykill = "lettvatn" | "duft" | "co2" | "slanga" | "annad";
 
-/** 434 fjold — tegund tækis (uttaeki.type) → lykill. Nákvæmlega sama regla og Teikning-glugginn. */
+/** 434 fjold — tegund tækis (uttaeki.type) → lykill. Nákvæmlega sama regla og Teikning-glugginn. NFKD (06.10.2026):
+ * lækkað ₂ verður 2 svo „CO₂" er co2, og „slong" grípur Slönguskáp (ö → o). */
 export function fjold(tegund: string | null | undefined): TaekjaLykill {
   const t = String(tegund || "")
     .toLowerCase()
-    .normalize("NFD")
+    .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "");
   if (/co2|kolsyr/.test(t)) return "co2";
   if (/duft|abc|pfc/.test(t)) return "duft";
-  if (/slang/.test(t)) return "slanga";
+  if (/slang|slong/.test(t)) return "slanga";
   if (/lettvatn|vatn|abf|frod/.test(t)) return "lettvatn";
   return "annad";
 }

@@ -99,6 +99,21 @@ test("hvert merki fer 1:1 fram og til baka: sign → tákn → sign (öll tíu),
   assert.equal(takn.size, STIMPLAR.length, "NÚ og ÚT, reyk- og hitaskynjari eiga hvert sitt tákn");
 });
 
+test("fjold er sama fall og í 434 (keyrt á frumkóðanum)", { skip: !fruminn && "slokkvitaeki-repóið er ekki á vélinni" }, () => {
+  const k434 = readFileSync(P434, "utf8");
+  const i = k434.indexOf("function fjold(u) {");
+  assert.ok(i >= 0, "fjold fannst ekki í 434");
+  let d = 0, k = k434.indexOf("{", i);
+  for (; k < k434.length; k++) {
+    if (k434[k] === "{") d++;
+    else if (k434[k] === "}" && --d === 0) break;
+  }
+  const frum = new Function("return " + k434.slice(i, k + 1))() as (u: { type: string }) => string;
+  for (const t of ["Léttvatn", "ABC Duft", "Duft", "CO2", "CO₂", "CO₂ 5kg", "Kolsýra", "Brunaslanga", "Slönguskápur", "Slöngukefli", "Reykskynjari", "Eldvarnarteppi", "Óþekkt", "Froða ABF", ""]) {
+    assert.equal(fjold(t), frum({ type: t }), t);
+  }
+});
+
 test("tækjategundir: sama regla og Teikning (434 fjold), nöfn og stuttheiti Teikning-gluggans", () => {
   assert.equal(fjold("Léttvatn"), "lettvatn");
   assert.equal(fjold("ABC Duft"), "duft");
@@ -109,8 +124,15 @@ test("tækjategundir: sama regla og Teikning (434 fjold), nöfn og stuttheiti Te
   assert.equal(symbolFyrirTegund("Léttvatn"), "teikn:lettvatn");
   assert.equal(symbolFyrirTegund("CO2"), "teikn:co2");
   assert.equal(symbolFyrirTegund("Brunaslanga"), "teikn:slanga");
+  // NFKD (06.10.2026): lækkað ₂ og ö → o
+  assert.equal(fjold("CO₂ 5kg"), "co2");
+  assert.equal(fjold("CO₂"), "co2");
+  assert.equal(fjold("Slönguskápur"), "slanga");
+  assert.equal(symbolFyrirTegund("CO₂ 5kg"), "teikn:co2");
+  assert.equal(symbolFyrirTegund("Slönguskápur"), "teikn:slanga");
   // Það sem Teikning-glugginn les sem „annað" er líka annað hér — svo sama tækið líti eins út í báðum.
-  for (const t of ["CO₂", "Slönguskápur", "Reykskynjari", "Eldvarnarteppi", "Óþekkt"]) {
+  for (const t of ["Reykskynjari", "Eldvarnarteppi", "Óþekkt"]) {
+    assert.equal(fjold(t), "annad", t);
     assert.equal(symbolFyrirTegund(t), "teikn:annad", t);
   }
   assert.deepEqual(
