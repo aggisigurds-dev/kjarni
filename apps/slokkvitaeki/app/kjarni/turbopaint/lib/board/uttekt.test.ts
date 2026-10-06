@@ -115,12 +115,21 @@ test("the archive permalink is recovered from the app's image proxy URL", () => 
   assert.equal(innflutningsSlod(null), "");
 });
 
-test("round-trip stamps stay readable when a 6006 px sheet is fit to a phone", () => {
-  const s = stimpilStaerdABladi({ width: 4244, height: 6006 }, 56);
-  assert.ok(s >= 400, "world size must scale with the sheet, got " + s);
-  const css = s * (390 / 6006);
-  assert.ok(css >= 26, "phone fit must be ≥26 CSS px, got " + css.toFixed(1));
-  assert.equal(stimpilStaerdABladi({ width: 400, height: 300 }, 56), 56);
+test("stamps are sized to the building (floor crop), not the whole sheet", () => {
+  // Fiskislóð 41 (A1, 4244×6006, skurður 2666×3068): tákn ≈ 1/28 af húsinu, ekki 1/14 af blaðinu (Agnar 06.10.2026).
+  const frum = { b: 4244, h: 6006 };
+  const s = stimpilStaerdABladi({ width: 4244, height: 6006 }, 56, { w: 2666, h: 3068 }, frum);
+  assert.equal(s, Math.round(3068 / 28));
+  assert.ok(s < 6006 / 14 / 3, "must be far smaller than the old sheet-based size, got " + s);
+  // Borðið getur verið hærri upplausn en frummyndin (Há gæði 12.5k): stærðin fylgir.
+  const hq = stimpilStaerdABladi({ width: 8838, height: 12500 }, 56, { w: 2666, h: 3068 }, frum);
+  assert.ok(Math.abs(hq - s * (8838 / 4244)) <= 2, "scales with board resolution, got " + hq);
+  // Stimpilstærð notandans kvarðar í báðar áttir (ekki lengur aðeins lágmark).
+  assert.ok(stimpilStaerdABladi({ width: 4244, height: 6006 }, 28, { w: 2666, h: 3068 }, frum) < s);
+  assert.ok(stimpilStaerdABladi({ width: 4244, height: 6006 }, 112, { w: 2666, h: 3068 }, frum) > s);
+  // Án skurðar: lengri hlið blaðsins ÷ 40; lágmark 24.
+  assert.equal(stimpilStaerdABladi({ width: 4244, height: 6006 }, 56), Math.round(6006 / 40));
+  assert.equal(stimpilStaerdABladi({ width: 400, height: 300 }, 56), 24);
 });
 
 test("veggir fara fram og til baka milli borðs og frummyndar (TurboPaint → teikning_bord → TurboPaint)", () => {

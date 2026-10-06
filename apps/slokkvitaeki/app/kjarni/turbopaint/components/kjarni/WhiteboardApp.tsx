@@ -829,8 +829,9 @@ export function WhiteboardApp() {
           { uttekt: { companyId: cid, haedId: haed.id, frumB: frum.b, frumH: frum.h } } as Partial<BoardObject>,
           false
         );
-        // Táknin miðast við blaðið: 56 px stimpill hverfur á 7.200 px uppdrætti.
-        const staerd = stimpilStaerdABladi(mynd, getStampSize());
+        // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið.
+        const sk = haed.skurdur as { w: number; h: number } | null | undefined;
+        const staerd = stimpilStaerdABladi(mynd, getStampSize(), sk, frum);
         const takn = (haed.markers || []).map((m) => {
           const t = typeof m.unitId === "number" ? u.taeki.find((x) => x.id === m.unitId) : undefined;
           const stadur = merkiIBord(m, mynd, frum, staerd);
