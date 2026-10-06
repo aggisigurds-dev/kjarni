@@ -223,13 +223,23 @@ export function uppfaeraHaedir(haedir: UttektHaed[], haedId: string, stodur: Map
   return { haedir: ut, breytt, ny };
 }
 
-/** World-px stamp so a 390 px phone fit of a 6006 px grunnmynd still reads (~28 CSS px). */
+/** Stærð tákns á borðinu (borðdílar).
+ * Agnar 06.10.2026 (Fiskislóð 41 opnuð í TurboPaint: „merkin allt of stór"): áður 1/14 af lengri hlið BLAÐSINS — á
+ * A1-blaði ≈ 6 m í raunstærð — og stimpilstærð notandans var aðeins lágmark, svo ekki var hægt að minnka. Nú miðað
+ * við HÚSIÐ, eins og Teikning-glugginn í Slökkvitæki-appinu: lengri hlið skurðar hæðarinnar ÷ 28 (Fiskislóð ≈ 1,5 m);
+ * án skurðar lengri hlið blaðsins ÷ 40. Stimpilstærð notandans (sjálfgefið 56) kvarðar hlutfallslega í báðar áttir. */
 export function stimpilStaerdABladi(
   mynd: { width: number; height: number },
-  bound = 56
+  bound = 56,
+  skurdur?: { w: number; h: number } | null,
+  frum?: { b: number; h: number } | null
 ): number {
   const long = Math.max(mynd.width || 0, mynd.height || 0, 1);
-  return Math.max(bound, Math.round(long / 14));
+  const kv = (bound > 0 ? bound : 56) / 56;
+  const k = frum && frum.b > 0 ? (mynd.width || 0) / frum.b : 0;
+  const grunnur =
+    skurdur && skurdur.w > 8 && skurdur.h > 8 && k > 0 ? (Math.max(skurdur.w, skurdur.h) * k) / 28 : long / 40;
+  return Math.max(24, Math.round(grunnur * kv));
 }
 
 /** '/.netlify/functions/teikn-mynd?url=<permalink>' → permalinkurinn (þá sækir fetch-plan vigur-PDF). Annars slóðin sjálf. */
