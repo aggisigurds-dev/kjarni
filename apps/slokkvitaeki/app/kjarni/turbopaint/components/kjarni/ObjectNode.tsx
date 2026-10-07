@@ -76,6 +76,9 @@ function SkurdarSkuggi({ obj }: { obj: Extract<BoardObject, { type: "image" }> }
   const x0 = Math.max(0, ox + sk.x * kx), y0 = Math.max(0, oy + sk.y * ky);
   const x1 = Math.min(obj.width, ox + (sk.x + sk.w) * kx), y1 = Math.min(obj.height, oy + (sk.y + sk.h) * ky);
   if (x1 <= x0 || y1 <= y0) return null;
+  // Myndin croppuð (nánast) að skurði hæðarinnar: ekkert utan hússins að skyggja — örmjóar ræmur sýndust bara sem rammi.
+  const tolX = obj.width * 0.03, tolY = obj.height * 0.03;
+  if (x0 <= tolX && y0 <= tolY && obj.width - x1 <= tolX && obj.height - y1 <= tolY) return null;
   const fill = "rgba(28,25,23,0.16)";
   const reitir = [
     { x: 0, y: 0, width: obj.width, height: y0 },

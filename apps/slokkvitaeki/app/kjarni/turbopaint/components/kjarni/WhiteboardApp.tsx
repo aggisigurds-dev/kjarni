@@ -78,7 +78,7 @@ import {
 } from "../../lib/board/layers";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
-import type { BoardDocument, BoardObject, ImageObject, LineObject, UttektTenging } from "../../lib/board/types";
+import type { BoardDocument, BoardObject, ImageObject, UttektTenging } from "../../lib/board/types";
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";

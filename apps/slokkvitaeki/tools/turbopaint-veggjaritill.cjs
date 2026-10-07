@@ -4,7 +4,7 @@
  *   node tools/turbopaint-veggjaritill.cjs [http://localhost:4123] [úttaksmappa]
  *
  * Skref: opna hæðina (veggir Teikning-gluggans koma inn) → „Breyta veggjum" → smellur á teikninguna velur/færir hana
- * aldrei → teikna 3 veggi (smellur á línu, Shift-hornalás, smellur á enda) → kassaval 5 veggja + Delete → kljúfa vegg →
+ * aldrei → teikna 3 veggi (smellur á línu, hornalás — sjálfgefin, smellur á enda) → kassaval 5 veggja + Delete → kljúfa vegg →
  * draga endapunkt (⌘Z / ⌘Y) → vegg í gler (⌘Z / ⌘Y) → „Greina veggi": línuflokkar (0,24 + 0,48 pt forskoðun), Bæta
  * við (tvítekningar felldar, leiðréttingar haldast), Skipta út + ⌘Z → „Vista í úttekt".
  * ENGIN skrif fara í teikning_bord: öll skrif þangað eru gripin (route), svarað 200, og sendingin skoðuð. Borðið sjálft
@@ -160,7 +160,7 @@ const check = (n, c, extra) => {
     JSON.stringify({ sel: s2.sel, mynd: s2.mynd, var: s0.mynd })
   );
 
-  // ── 2) teikna 3 veggi: smellur á línu (lína), Shift-hornalás, Shift-hornalás, smellur á fyrsta enda (lokar) ──────────
+  // ── 2) teikna 3 veggi: smellur á línu (lína), hornalás, hornalás, smellur á fyrsta enda (lokar) ──────────
   const V = await page.evaluate(() => {
     const s = window.__tpStore.getState(), cam = s.camera;
     const r = document.querySelector(".tp-sheet").getBoundingClientRect();
@@ -184,8 +184,7 @@ const check = (n, c, extra) => {
   // bendillinn 5 dílum hægra megin við miðlínuna: smellur á línuna
   await page.mouse.move(P1s.x + 5, P1s.y, { steps: 3 });
   await page.mouse.click(P1s.x + 5, P1s.y);
-  // Shift + skakkur bendill: hornalás → láréttur veggur
-  await page.keyboard.down("Shift");
+  // Skakkur bendill: hornalás (sjálfgefin síðan „+ Teikna vegg“ 07.10 — Shift víxlar henni AF) → láréttur veggur
   await page.mouse.move(P1s.x + 120, P1s.y + 9, { steps: 5 });
   await page.mouse.move(P1s.x + 200, P1s.y + 11, { steps: 5 });
   await page.waitForTimeout(150);
@@ -193,7 +192,6 @@ const check = (n, c, extra) => {
   await page.mouse.click(P1s.x + 200, P1s.y + 11);
   await page.mouse.move(P1s.x + 192, P1s.y + 140, { steps: 5 });
   await page.mouse.click(P1s.x + 192, P1s.y + 140);
-  await page.keyboard.up("Shift");
   // aftur á fyrsta punktinn (smellur á enda — 4 dílum frá) → keðjan lokast
   await page.mouse.move(P1s.x + 3, P1s.y - 4, { steps: 5 });
   await page.waitForTimeout(100);
@@ -205,8 +203,8 @@ const check = (n, c, extra) => {
   const N = await Promise.all(nyjar.map(veggur));
   const n1 = heims(N[0]), n2 = heims(N[1]), n3 = heims(N[2]);
   check("1. veggur byrjar Á miðlínu lóðrétta veggjarins (smellur á línu)", Math.abs(n1[0] - V.x) < 1e-6, JSON.stringify(n1));
-  check("1. veggur er nákvæmlega láréttur (Shift-hornalás)", Math.abs(n1[1] - n1[3]) < 1e-9, JSON.stringify(n1));
-  check("2. veggur er nákvæmlega lóðréttur (Shift-hornalás)", Math.abs(n2[0] - n2[2]) < 1e-9 && Math.abs(n2[0] - n1[2]) < 1e-9, JSON.stringify(n2));
+  check("1. veggur er nákvæmlega láréttur (hornalás)", Math.abs(n1[1] - n1[3]) < 1e-9, JSON.stringify(n1));
+  check("2. veggur er nákvæmlega lóðréttur (hornalás)", Math.abs(n2[0] - n2[2]) < 1e-9 && Math.abs(n2[0] - n1[2]) < 1e-9, JSON.stringify(n2));
   check("3. veggur endar nákvæmlega á upphafi þess fyrsta (smellur á enda — keðjan lokuð)", Math.abs(n3[2] - n1[0]) < 1e-9 && Math.abs(n3[3] - n1[1]) < 1e-9, JSON.stringify({ n1, n3 }));
   const dpm = await page.evaluate(() => {
     const s = window.__tpStore.getState();

@@ -158,6 +158,8 @@ export interface PdfSida {
 const pdfSidur = new Map<string, Promise<PdfSida | null>>();
 export function lesaPdfSidu(plan: ImageObject, onProgress?: (percent: number) => void): Promise<PdfSida | null> {
   if (!plan.frumAssetId) return Promise.resolve(null);
+  // Hluti af blaði („Croppa oft" / skorin tengd mynd) sýnir aðeins hluta síðunnar — síðuhnitin passa ekki (sjá neðst).
+  if (plan.bladhluti || plan.uttekt?.myndSkurdur) return Promise.resolve(null);
   const lykill = plan.frumAssetId + "#" + (plan.frumSida ?? 0);
   let p = pdfSidur.get(lykill);
   if (!p) {
