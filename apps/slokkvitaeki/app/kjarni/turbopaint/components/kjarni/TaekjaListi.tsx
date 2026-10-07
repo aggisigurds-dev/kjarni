@@ -16,9 +16,10 @@ import {
   taekjaListi,
   type TaekiILista,
 } from "../../lib/board/taekjalisti";
-import { byggjaStodur, finnaTengduMynd, TEIKNING_STIMPLAR } from "../../lib/board/uttekt";
+import { byggjaStodurMargar, finnaTengduMynd, myndirTengdar, myndUndir, TEIKNING_STIMPLAR, vorpunMyndar } from "../../lib/board/uttekt";
 import { afvopna, useTaekjaVal, useUttektGogn, vopna, type TaekjaVal } from "../../lib/board/uttekt-gogn";
 import { MerkiTakn } from "./MerkiTakn";
+import { StaerdAllraMerkja } from "./StaerdAllra";
 
 const MERKI_LITUR: Record<TaekiILista["stada"], string> = {
   her: "bg-emerald-500/15 text-emerald-300",
@@ -30,8 +31,22 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
   const objects = useBoardStore((s) => s.objects);
   const selectedIds = useBoardStore((s) => s.selectedIds);
   const hamur = useHamur((s) => s.hamur);
-  const mynd = useMemo(() => finnaTengduMynd(objects), [objects]);
-  const t = mynd?.uttekt;
+  // Margar hæðir á borðinu („Croppa oft"): listinn miðast við hæð valinnar myndar (eða myndarinnar sem valið tákn
+  // stendur á), annars fyrstu tengdu myndina.
+  const mynd = useMemo(() => {
+    const valid = objects.find((o) => selectedIds.includes(o.id));
+    if (valid?.type === "image" && valid.uttekt) return valid;
+    if (valid?.type === "symbol") {
+      const m = myndUndir(objects, { x: valid.x + valid.size / 2, y: valid.y + valid.size / 2 });
+      if (m) return m;
+    }
+    return finnaTengduMynd(objects);
+  }, [objects, selectedIds]);
+  const hlutiCid = useMemo(() => {
+    const h = objects.find((o) => o.type === "image" && o.bladhluti?.companyId);
+    return h && h.type === "image" ? h.bladhluti?.companyId ?? null : null;
+  }, [objects]);
+  const t = mynd?.uttekt ?? (hlutiCid ? { companyId: hlutiCid, haedId: "" } : null);
   const gogn = useUttektGogn((s) => s.gogn);
   const hledur = useUttektGogn((s) => s.hledur);
   const villa = useUttektGogn((s) => s.villa);
@@ -53,10 +68,13 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
     [rettGogn, objects, t]
   );
   const hopar = useMemo(() => flokkaTaekjalista(siaTaekjalista(listi, leit, adeinsOstadsett)), [listi, leit, adeinsOstadsett]);
-  const otengd = useMemo(
-    () => (mynd && t ? byggjaStodur(objects, mynd, { b: t.frumB, h: t.frumH }, () => "s:x:0").otengd : 0),
-    [objects, mynd, t]
-  );
+  const otengd = useMemo(() => {
+    const lidir = myndirTengdar(objects).flatMap((m) => {
+      const v = vorpunMyndar(m);
+      return v ? [{ mynd: m, frum: v.frum, svaedi: v.svaedi }] : [];
+    });
+    return byggjaStodurMargar(objects, lidir, () => "s:x:0").hlutar.reduce((s, h) => s + h.otengd, 0);
+  }, [objects]);
 
   if (!t) return null;
   const her = listi.filter((x) => x.stada === "her").length;
@@ -88,6 +106,7 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
       </button>
       {opid ? (
         <div className="space-y-2 px-2 pb-2">
+          {mynd?.uttekt ? <StaerdAllraMerkja myndId={mynd.id} /> : null}
           {rettGogn ? (
             <div className="text-[10.5px] leading-snug text-stone-400">
               {her} á teikningu · {onnur} á öðrum hæðum · {ekki} óstaðsett

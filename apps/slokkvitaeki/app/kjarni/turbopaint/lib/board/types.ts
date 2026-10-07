@@ -19,7 +19,8 @@ export type Tool =
   | "hvitpensill"
   | "eydalinu"
   | "room"
-  | "checkbox";
+  | "checkbox"
+  | "fjolcrop";
 
 export type ImportQuality = "fast" | "standard" | "print";
 
@@ -76,6 +77,25 @@ export interface ImageObject extends BaseObject {
   /** Hvaðan teikningin kom (skjalasafnsslóð — permalink eða bein PDF-slóð) og stærð alls blaðsins á borðinu við
    * innflutning. 3D les blaðstærðina (teikn-blad) og fær þannig raunkvarða í 1:100; skurður síðar breytir ekki b/h. */
   heimild?: { slod: string; b: number; h: number };
+  /** Hluti af blaði („Croppa oft", Agnar 06.10.2026: 1–3 grunnmyndir hlið við hlið á EINU blaði): myndin var skorin úr
+   * blaðinu og man hvaðan — svæðið í dílum FRUMMYNDAR, stærð frummyndar og slóð blaðsins í sniði teikning_bord. „Tengja
+   * við hæð" gerir úr þessu úttektartengingu (uttekt.myndSkurdur = svaedi). */
+  bladhluti?: BladHluti;
+}
+
+/** Hluti af blaði (sjá ImageObject.bladhluti). */
+export interface BladHluti {
+  /** Númer hlutans í „Croppa oft" (1, 2, 3 …) — merkið á myndinni meðan hún er ótengd. */
+  nr: number;
+  /** Svæði blaðsins sem myndin sýnir, dílar frummyndar (heiltölur). */
+  svaedi: { x: number; y: number; w: number; h: number };
+  frumB: number;
+  frumH: number;
+  /** image_url blaðsins í teikning_bord (`/.netlify/functions/teikn-mynd?url=<permalink>`) — sama strengur og hæðin
+   * sem var opnuð ber, svo hæðir á sama blaði beri sömu slóð. Vantar = ekki hægt að stofna nýja hæð af hlutanum. */
+  imageUrl?: string | null;
+  /** Staðurinn (fyrirtaeki.id) sem blaðið var opnað úr. */
+  companyId?: number;
 }
 
 /** Mynd á borðinu ↔ hæð í teikning_bord. frumB/frumH = stærð frummyndar; skurdur = svæði hússins á blaðinu
@@ -86,10 +106,26 @@ export interface UttektTenging {
   frumB: number;
   frumH: number;
   skurdur?: { x: number; y: number; w: number; h: number } | null;
+  /** Myndin á borðinu er SKORIN úr blaðinu („Croppa oft" / „Croppa teikningu"): svæði blaðsins sem hún sýnir, dílar
+   * frummyndar. Öll hnit fara þá um skurðinn: frum = myndSkurdur.x + (borðX − mynd.x) / mynd.width · myndSkurdur.w.
+   * Vantar = myndin er allt blaðið (eins og áður). */
+  myndSkurdur?: { x: number; y: number; w: number; h: number } | null;
+  /** Hæðin er NÝ — stofnuð með „Tengja við hæð → + Ný hæð" og ekki enn til í teikning_bord. „Vista í úttekt" bætir
+   * henni við (aftast) og fjarlægir þetta merki. */
+  nyHaed?: { nafn: string };
   /** Lyklar merkjanna (unitId) sem borðið sýnir af hæðinni — sett við opnun og eftir hverja vistun. Merki á listanum
    * sem er horfið af borðinu var tekið af teikningunni og fer úr hæðinni við vistun; merki sem bættist við í appinu
    * eftir opnun (ekki á listanum) er látið í friði. Vantar (eldra borð) = ekkert er fjarlægt. */
   merki?: string[];
+  /** „Stærð allra merkja" (Agnar 07.10.2026): sjálfgefin stærð merkja hæðarinnar í skjápunktum Teikning-gluggans
+   * (= `stimpilStaerd` hæðarinnar, 10–160). Tákn á borðinu eru `stimpilStaerd · taknEining` borðdílar (eða eigin
+   * `staerd` merkis · taknEining). Vantar (eldra borð) = gamla stærðarreglan (stimpilstærð TurboPaint). */
+  stimpilStaerd?: number;
+  /** `stimpilStaerd` hæðarinnar við opnun / síðustu vistun — vistun skrifar `stimpilStaerd` aðeins ef hún breyttist. */
+  stimpilStaerdVid?: number;
+  /** Borðdílar á hvern skjádíl Teikning-gluggans (sett við opnun/tengingu: lengri hlið hússins ÷ 28 = 56 px). Geymt svo
+   * stærðirnar haldist þótt skurður myndarinnar breytist síðar („Croppa teikningu"). */
+  taknEining?: number;
 }
 
 export interface RectObject extends BaseObject {
@@ -138,6 +174,8 @@ export interface LineObject extends BaseObject {
   veggur?: boolean;
   /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi eða hurð. Vantar = veggur. */
   veggTegund?: "veggur" | "gler" | "hurd";
+  /** Veggurinn kom úr „Greina veggi" — auðkenni lotunnar (`g<tími36>`), svo hægt sé að eyða einni greiningu í heild. */
+  greining?: string;
 }
 
 export interface TextObject extends BaseObject {

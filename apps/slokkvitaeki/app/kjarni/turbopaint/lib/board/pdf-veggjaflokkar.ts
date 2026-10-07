@@ -25,21 +25,60 @@ export interface PdfFlokkur {
   tillaga: boolean;
   /** Hárlína (< 0,3 pt): skástrikun, húsgögn, málsetning — sjaldan veggir. */
   harlina: boolean;
+  /** Lítur EKKI út eins og veggir (hárlína, eða mjög mörg stutt strik = skástrikun / húsgögn / bílar / málstrik).
+   * Agnar 07.10.2026: 0,24 + 0,48 pt saman gáfu 599 „veggi" — svartar klessur yfir allri teikningunni. */
+  ekkiVeggir: boolean;
+  /** Skýring á `ekkiVeggir` (birt í viðvöruninni). */
+  astaeda?: string;
 }
+
+/** Flokkur með svona mörgum strikum … */
+const MORG_STRIK = 3000;
+/** … og svona stuttum að meðaltali (m í 1:100 á strik, löngu strikin) er skástrikun / húsgögn, ekki veggir. */
+const STUTT_MEDALLENGD_M = 0.4;
 
 /** Línuflokkar síðunnar, lengstir fyrst, tillagan merkt. Tómir flokkar sleppa. */
 export function flokkaYfirlit(flokkar: Record<string, Strik[]>, bladB: number, bladH: number): PdfFlokkur[] {
   const val = veljaVeggjaflokk(flokkar, bladB, bladH);
   return val.yfirlit
     .filter((y) => y.strik > 0)
-    .map((y) => ({
-      breidd: y.breidd,
-      strik: y.strik,
-      long: y.long,
-      lengdM: Math.round(y.lengd * PT_I_METRUM),
-      tillaga: y.breidd === val.valinn,
-      harlina: +y.breidd < 0.3,
-    }));
+    .map((y) => {
+      const lengdM = Math.round(y.lengd * PT_I_METRUM);
+      const harlina = +y.breidd < 0.3;
+      const morgStutt = y.strik >= MORG_STRIK && lengdM / y.strik < STUTT_MEDALLENGD_M;
+      const f: PdfFlokkur = {
+        breidd: y.breidd,
+        strik: y.strik,
+        long: y.long,
+        lengdM,
+        tillaga: y.breidd === val.valinn,
+        harlina,
+        ekkiVeggir: (harlina || morgStutt) && y.breidd !== val.valinn,
+      };
+      if (f.ekkiVeggir) f.astaeda = harlina ? "hárlína — skástrikun, húsgögn, málsetning" : "mjög mörg stutt strik — skástrikun / húsgögn";
+      return f;
+    });
+}
+
+/** Hámarksþykkt greinds veggjar (cm): mistök í greiningu mega aldrei mála þykkar svartar klessur. */
+export const GREINDUR_VEGGUR_HAMARK_CM = 40;
+
+/** Klemmir þykkt greindra veggja (borðdílar): ≤ 40 cm í kvarða borðsins; óþekktur kvarði → ≤ 3× miðgildi þykktar. */
+export function klemmaGreindaThykkt<T extends { t: number }>(veggir: T[], dilarAMetra: number | null): T[] {
+  if (!veggir.length) return veggir;
+  let hamark: number;
+  if (dilarAMetra && dilarAMetra > 0) hamark = (GREINDUR_VEGGUR_HAMARK_CM / 100) * dilarAMetra;
+  else {
+    const t = veggir.map((v) => v.t).sort((a, b) => a - b);
+    hamark = Math.max(1, t[t.length >> 1] * 3);
+  }
+  return veggir.map((v) => (v.t > hamark ? { ...v, t: hamark } : v));
+}
+
+/** Greining sem þarf skýrt já áður en henni er beitt: > 120 nýir veggir, eða > 3× þeir sem fyrir eru. */
+export const GREINING_STADFESTA_YFIR = 120;
+export function greiningKrefstStadfestingar(nyir: number, fyrir: number): boolean {
+  return nyir > GREINING_STADFESTA_YFIR || (fyrir > 0 && nyir > 3 * fyrir);
 }
 
 export interface SvaediPt {

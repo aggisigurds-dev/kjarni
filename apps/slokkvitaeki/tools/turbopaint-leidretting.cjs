@@ -5,7 +5,7 @@
  * Opnar hæðina úr úttekt, sannar að borðið opnist rammað á húsið og að veggir Teikning-gluggans (pdfVeggir) komi inn
  * á lagið „Veggir", velur vegg með músarsmelli, setur Gler / Hurð, tengir tvo veggi og eyðir einum með stikunni, og
  * ýtir á „Vista í úttekt". ENGIN skrif fara í teikning_bord: öll skrif þangað eru gripin (route) og svarað 200, og
- * gripna sendingin er skoðuð (tegund + leidrett). Lestur fer í gegn. Borðið sjálft (turbopaint_boards) má endurskapast. */
+ * gripna sendingin er skoðuð (tegund + leidrett). Lestur fer í gegn. Borðið sjálft (turbopaint_boards) og myndir eru líka gripin (turbopaint-vordur.cjs) — ekkert skrifast. */
 const path = require("path");
 const fs = require("fs");
 let chromium;
@@ -25,6 +25,8 @@ const check = (n, c, extra) => (c ? ok : bad).push(n + (c ? "" : `   ← ${extra
 (async () => {
   const b = await chromium.launch({ headless: true });
   const ctx = await b.newContext({ viewport: { width: 1600, height: 950 } });
+  // Engin skrif fara út — hvorki borðið (turbopaint_boards), myndir né annað (07.10: prófun á 1612 skrifaði yfir lifandi borð Agnars).
+  const verndud = await require("./turbopaint-vordur.cjs").vernda(ctx);
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));
@@ -39,7 +41,7 @@ const check = (n, c, extra) => (c ? ok : bad).push(n + (c ? "" : `   ← ${extra
       try {
         const j = await res.json();
         const rod = Array.isArray(j) ? j[0] : j; // maybeSingle: hlutur eða fylki eftir útgáfu
-        if (rod && rod.haedir) fersk = rod;
+        if (rod && rod.haedir && req.url().includes("company_id=eq." + CID)) fersk = rod; // aðeins prófunarstaðurinn (síðasta borð vafrans getur verið annar)
       } catch { /* ekki json */ }
       return route.fulfill({ response: res });
     }

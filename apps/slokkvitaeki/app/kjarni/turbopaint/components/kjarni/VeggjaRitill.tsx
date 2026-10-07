@@ -34,9 +34,10 @@ import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
 import type { LineObject } from "../../lib/board/types";
-import { tengjaVeggi, tengjaVikmork, VEGG_LITIR } from "../../lib/board/veggja-leidretting";
+import { erVeggur, tengjaVeggi, tengjaVikmork, VEGG_LITIR } from "../../lib/board/veggja-leidretting";
 import {
   faeraEnda,
+  greiningarLotur,
   heimsPunktar,
   hlidra,
   metraTexti,
@@ -479,6 +480,8 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     if (!virkur) return;
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target)) return;
+      // Lyklar í glugga (t.d. „Hætta við" í staðfestingu greiningar — Enter á að smella á hnappinn) stýra ekki ritlinum.
+      if (e.target instanceof Element && e.target.closest('[role="dialog"],[role="alertdialog"]')) return;
       if (e.key === "Shift") {
         shift.current = true;
         if (bendill.current && useVeggjaRitill.getState().tol === "teikna") smellurRef.current = smellaHer(bendill.current);
@@ -964,6 +967,8 @@ function RitilSpjald() {
   const layers = useBoardStore((s) => s.layers);
   const [eigin, setEigin] = useState("");
   const talning = veggjaTalning(objects);
+  // Lotur „Greina veggi" á borðinu (nýjasta fyrst) — „Eyða síðustu greiningu" tekur heila lotu í einu skrefi.
+  const lotur = greiningarLotur(objects.filter((o): o is LineObject => erVeggur(o) && !o.hidden));
   const teikningLaest = layers.find((l) => l.id === LAYER_TEIKNING)?.locked ?? false;
   const veggirSjast = layers.find((l) => l.id === LAYER_VEGGIR)?.visible ?? true;
   const r = useVeggjaRitill.getState();
@@ -1123,8 +1128,39 @@ function RitilSpjald() {
           Eyða
         </button>
       </div>
+      {lotur.length ? (
+        <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label="Veggir úr greiningu">
+          <button
+            type="button"
+            data-eyda-greiningu="sidasta"
+            title="Eyðir öllum veggjum sem síðasta „Greina veggi“ bætti við (líka þeim sem voru lagaðir síðan) — ⌘Z afturkallar"
+            onClick={() => eydaGreiningu(lotur[0].ids)}
+            className={`${btn} flex-1 justify-center bg-white/5`}
+          >
+            <Trash2 className="size-3.5 text-[#FE653F]" />
+            Eyða síðustu greiningu ({lotur[0].ids.length})
+          </button>
+          {lotur.length > 1 ? (
+            <button
+              type="button"
+              data-eyda-greiningu="allri"
+              title="Eyðir öllum veggjum sem komu úr „Greina veggi“ — handteiknaðir og innfluttir veggir haldast. ⌘Z afturkallar"
+              onClick={() => eydaGreiningu(lotur.flatMap((l) => l.ids))}
+              className={`${btn} flex-1 justify-center bg-white/5`}
+            >
+              Öllum úr greiningu ({lotur.reduce((s, l) => s + l.ids.length, 0)})
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+/** Eyðir veggjum úr greiningu í einu skrefi (⌘Z skilar þeim öllum). */
+function eydaGreiningu(ids: string[]) {
+  const n = eydaVeggjum(ids);
+  if (n) toast.message(`${n} ${n === 1 ? "veggur" : "veggir"} úr greiningu ${n === 1 ? "eyddur" : "eyddir"} · ⌘Z afturkallar`);
 }
 
 const FLYTILYKLAR: [string, string][] = [
@@ -1134,7 +1170,7 @@ const FLYTILYKLAR: [string, string][] = [
   ["Delete / ⌫", "Eyða völdum veggjum"],
   ["B", "Eyða í kassa — dragðu yfir veggina sem eiga að hverfa"],
   ["W", "Teikna veggi — smelltu horn af horni; smellur á enda (□) og línur (×) annarra veggja"],
-  ["Shift", "Hornalás 0/45/90° meðan teiknað er eða endi dreginn"],
+  ["Shift", "Víxlar hornalás 0/45/90° (sjálfgefið á) meðan teiknað er eða endi dreginn"],
   ["Enter / tvísmellur / Esc", "Ljúka vegg-keðjunni"],
   ["R", "Rétthyrningur — dragðu kassa, fjórir veggir (herbergi)"],
   ["Dráttur á enda", "Færir endapunktinn (□); endar annarra veggja í sama horni fylgja — Alt losar"],

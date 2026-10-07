@@ -10,7 +10,7 @@
  * ENGIN skrif fara í teikning_bord: öll skrif þangað eru gripin (route) og svarað 200, og gripna sendingin er skoðuð.
  * Lestur fer í gegn en er AUKINN í prófinu (aldrei skrifaður): tæki 25448 + ÚT-merki sett á 2. hæð (til að prófa „á 2.
  * hæð" og að tækið fari þaðan), og frá og með öðrum lestri bjalla á 1. hæð sem „appið" setti eftir opnun (má ekki týnast).
- * Borðið sjálft (turbopaint_boards) má endurskapast (leyfi Agnars). */
+ * Borðið sjálft (turbopaint_boards) og myndir eru líka gripin (turbopaint-vordur.cjs) — ekkert skrifast. */
 const path = require("path");
 const fs = require("fs");
 let chromium;
@@ -31,6 +31,8 @@ const mynd = (n) => path.join(OUT, n);
 (async () => {
   const b = await chromium.launch({ headless: true });
   const ctx = await b.newContext({ viewport: { width: 1600, height: 950 } });
+  // Engin skrif fara út — hvorki borðið (turbopaint_boards), myndir né annað (07.10: prófun á 1612 skrifaði yfir lifandi borð Agnars).
+  const verndud = await require("./turbopaint-vordur.cjs").vernda(ctx);
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));
@@ -51,8 +53,9 @@ const mynd = (n) => path.join(OUT, n);
     const raf = rod.haedir.find((h) => h.id === HAED).markers.find((m) => m.unitId === "s:rafmagn:mur14paumv8v");
     if (raf) Object.assign(raf, { rot: 90, staerd: 52 });
     const h2 = rod.haedir.find((h) => h.id === HAED2);
+    // 25447 er óstaðsett í prófinu (lifandi gögn 07.10 settu það á 2. hæð — tekið af hér svo prófið mæli það sama)
     h2.markers = [
-      ...(h2.markers || []).filter((m) => m.unitId !== 25448),
+      ...(h2.markers || []).filter((m) => m.unitId !== 25448 && m.unitId !== 25447),
       { x: 1200, y: 2000, unitId: 25448 },
       { x: 1500, y: 2100, kind: "sign", sign: "ut", color: "#15803d", rot: 0, unitId: "s:ut:prof2haed" },
     ];
@@ -61,6 +64,8 @@ const mynd = (n) => path.join(OUT, n);
   await ctx.route("**/rest/v1/teikning_bord*", async (route) => {
     const req = route.request();
     if (req.method() === "GET" || req.method() === "HEAD") {
+      // Aðeins Fiskislóð er aukin — síðasta borð vafrans getur verið annar staður sem tækjalistinn les líka (lestur fer í gegn)
+      if (!/company_id=eq\.1612\b/.test(req.url())) return route.fallback();
       const res = await route.fetch();
       let j;
       try {
@@ -302,7 +307,9 @@ const mynd = (n) => path.join(OUT, n);
   // rot/staerd úr úttektinni sjást á borðinu
   const rafT = takniFyrir(st, "s:rafmagn:mur14paumv8v")[0];
   const tSt = takniFyrir(st, 25445)[0];
-  check("rafmagnstaflan snúin 90° og tvöföld stærð (rot/staerd 433 sýnd)", rafT && rafT.rotation === 90 && Math.abs(rafT.size / tSt.size - 2) < 0.01, JSON.stringify([rafT, tSt && tSt.size]));
+  // staerd 52 á móti stimpilStaerd hæðarinnar (var 26 → tvöföld; lifandi gögn 07.10: 22 → 2,36×)
+  const st1 = Math.max(10, Math.min(160, Math.round(Number(fersk.haedir.find((h) => h.id === HAED).stimpilStaerd) || 56)));
+  check(`rafmagnstaflan snúin 90° og ${(52 / st1).toFixed(2)}× stærð (rot/staerd 433 sýnd: 52 á hæð með stimpilStaerd ${st1})`, rafT && rafT.rotation === 90 && Math.abs(rafT.size / tSt.size - 52 / st1) < 0.01, JSON.stringify([rafT, tSt && tSt.size, st1]));
   await page.screenshot({ path: mynd("06_magntafla_og_athugasemd.png") });
 
   // ── 9) Vista í úttekt (gripið) ─────────────────────────────────────────────────────────────────────────────────
@@ -351,7 +358,9 @@ const mynd = (n) => path.join(OUT, n);
   check("merki sem appið setti EFTIR opnun heldur sér (fersk röð)", merki("s:bjalla:fraappinu").length === 1, "");
   // 25442 + 7 óhreyfð tæki + 4 eldri stimplar + bjalla úr appinu + 5 ný (25447, 25448, 25451, ÚT, Segulloki)
   check("laust Léttvatn (án tækis) EKKI skrifað", hd.markers.length === 1 + 7 + 4 + 1 + 5, `markers=${hd.markers.length}: ${JSON.stringify(hd.markers.map((m) => m.unitId))}`);
-  check("2. hæð: 25448 farið, ÚT-merkið þar ósnert", hd2.markers.length === 1 && hd2.markers[0].unitId === "s:ut:prof2haed" && JSON.stringify(hd2.markers[0]) === JSON.stringify(f2.markers.find((m) => m.unitId === "s:ut:prof2haed")), JSON.stringify(hd2.markers));
+  // (lifandi gögn 07.10: 2. hæð ber nú líka bjöllu, ÚT og skilti — þau eiga öll að standa óbreytt)
+  const f2Eftir = f2.markers.filter((m) => m.unitId !== 25448);
+  check("2. hæð: 25448 farið, ÚT-merkið (og önnur merki hæðarinnar) ósnert", !hd2.markers.some((m) => m.unitId === 25448) && hd2.markers.some((m) => m.unitId === "s:ut:prof2haed") && JSON.stringify(hd2.markers) === JSON.stringify(f2Eftir), JSON.stringify(hd2.markers));
   const { markers: _a, ...hd2Annad } = hd2;
   const { markers: _b, ...f2Annad } = f2;
   check("2. hæð að öðru leyti óbreytt", JSON.stringify(hd2Annad) === JSON.stringify(f2Annad), "breyttist");

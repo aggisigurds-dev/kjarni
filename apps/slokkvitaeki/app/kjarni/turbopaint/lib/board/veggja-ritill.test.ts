@@ -4,12 +4,14 @@ import type { BoardObject, LineObject } from "./types";
 import {
   bilMilli,
   faeraEnda,
+  greiningarLotur,
   heimsPunktar,
   hlidra,
   hornalas,
   kljufaVegg,
   lengjaAd,
   metraTexti,
+  nyGreiningarLota,
   nyrVeggur,
   rettHyrningur,
   sameinaVeggi,
@@ -236,4 +238,17 @@ test("hornalás heldur hnitum nákvæmum (enginn fljótandi skekkja á 90°)", (
   const A: P = [123.4, 56.7];
   const B = hornalas(A, [123.9, 300]);
   assert.equal(B[0], 123.4);
+});
+
+test("greiningarlotur: veggir merktir lotu, nýjasta lotan fyrst; ómerktir veggir ekki með", () => {
+  const a = nyGreiningarLota(1_791_000_000_000), b = nyGreiningarLota(1_791_000_090_000), c = nyGreiningarLota(3_000_000_000_000);
+  assert.ok(a < b, "tímaröð");
+  assert.ok(c.length > b.length, "lengra auðkenni = seinna (raðast samt rétt)");
+  const v = (id: string, greining?: string) => ({ ...nyrVeggur([0, 0, 10, 0], { id, thykkt: 4, tegund: "veggur", greining }) });
+  assert.equal(v("x", a).greining, a);
+  assert.equal("greining" in v("y"), false, "handteiknaður veggur fær ekki merki");
+  const l = greiningarLotur([v("1", a), v("2", b), v("3"), v("4", b), v("5", c), v("6", a)]);
+  assert.deepEqual(l.map((x) => x.id), [c, b, a]);
+  assert.deepEqual(l[1].ids, ["2", "4"]);
+  assert.deepEqual(l[2].ids, ["1", "6"]);
 });

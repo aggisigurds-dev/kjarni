@@ -41,9 +41,11 @@ export function bordDilarAMetra(objects: BoardObject[], pixelsPerMeter: number |
   if (pixelsPerMeter && pixelsPerMeter > 0) return pixelsPerMeter;
   for (const o of objects) {
     if (o.type !== "image" || !o.uttekt) continue;
-    const { frumB, frumH } = o.uttekt;
+    const { frumB, frumH, myndSkurdur } = o.uttekt;
     if (!(frumB > 0) || !(frumH > 0) || !(o.width > 0)) continue;
-    return (o.width / frumB) * dilarAMetraGisk({ b: frumB, h: frumH });
+    // Skorin mynd („Croppa oft") sýnir aðeins myndSkurdur.w dílar frummyndar á breidd sinni.
+    const frumBreidd = myndSkurdur && myndSkurdur.w > 0 ? myndSkurdur.w : frumB;
+    return (o.width / frumBreidd) * dilarAMetraGisk({ b: frumB, h: frumH });
   }
   return null;
 }

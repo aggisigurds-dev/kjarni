@@ -228,6 +228,8 @@ export interface NyrVeggurStillingar {
   thykkt: number;
   tegund: VeggTegund;
   parentId?: string;
+  /** Lota „Greina veggi" sem veggurinn kom úr. */
+  greining?: string;
 }
 
 /** Nýr veggur á laginu „Veggir" (heimshnit, x = y = 0) — sama útlit og innfluttir veggir. */
@@ -251,7 +253,27 @@ export function nyrVeggur(heims: number[], st: NyrVeggurStillingar): LineObject 
   };
   if (st.parentId) o.parentId = st.parentId;
   if (st.tegund !== "veggur") o.veggTegund = st.tegund;
+  if (st.greining) o.greining = st.greining;
   return o;
+}
+
+/** Veggir úr „Greina veggi" eftir lotum, nýjasta lotan fyrst (auðkenni `g<tími36>` raðast í tímaröð). */
+export function greiningarLotur(veggir: readonly { id: string; greining?: string }[]): { id: string; ids: string[] }[] {
+  const lotur = new Map<string, string[]>();
+  for (const o of veggir) {
+    if (!o.greining) continue;
+    const l = lotur.get(o.greining);
+    if (l) l.push(o.id);
+    else lotur.set(o.greining, [o.id]);
+  }
+  return [...lotur.entries()]
+    .sort((a, b) => b[0].length - a[0].length || (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+    .map(([id, ids]) => ({ id, ids }));
+}
+
+/** Auðkenni nýrrar greiningarlotu (tími í grunni 36 — raðast rétt). */
+export function nyGreiningarLota(nu = Date.now()): string {
+  return "g" + nu.toString(36);
 }
 
 /** Afrit af vegg með nýjum punktum (heimshnit) og nýju id — allt annað (tegund, þykkt, festing, lag) helst. */

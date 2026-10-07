@@ -24,7 +24,8 @@ export type HamAdgerd =
   | "eldveggur"
   | "gegnumtok"
   | "rymi"
-  | "gatreitur";
+  | "gatreitur"
+  | "croppa-oft";
 
 export interface Hamur {
   id: HamurId;
@@ -60,7 +61,19 @@ export const HAMIR: Hamur[] = [
     heiti: "Teikning og greining",
     stutt: "Teikning",
     lysing: "Flyttu inn teikninguna, kvarðaðu, hreinsaðu og greindu veggina — grunnurinn fyrir hina hamana.",
-    adgerdir: ["kvarda", "eyda-linu", "strokledur", "hreinsa-svaedi", "hreinsa", "veggir", "teikna-vegg", "teikna-hurd", "teikna-gler", "thrividd"],
+    adgerdir: [
+      "croppa-oft",
+      "kvarda",
+      "eyda-linu",
+      "strokledur",
+      "hreinsa-svaedi",
+      "hreinsa",
+      "veggir",
+      "teikna-vegg",
+      "teikna-hurd",
+      "teikna-gler",
+      "thrividd",
+    ],
     takn: null,
   },
   {
