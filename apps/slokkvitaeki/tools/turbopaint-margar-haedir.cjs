@@ -10,7 +10,7 @@
  *
  * ENGIN skrif fara í teikning_bord: staðurinn á enga röð þar, svo lestur 194 er svaraður með prófunarröð (ein hæð,
  * „1. hæð", á blaðinu, með ÚT-merki og tæki 21940) og ÖLL skrif þangað eru gripin (svarað 200) og skoðuð. Önnur
- * skrif (borðið sjálft, turbopaint_boards + myndir) mega fara — Agnar leyfði að borð 194 endurskapist. */
+ * skrif (borðið sjálft, turbopaint_boards + myndir) eru líka gripin (turbopaint-vordur.cjs) — ekkert skrifast. */
 const path = require("path");
 const fs = require("fs");
 let chromium;
@@ -70,6 +70,8 @@ let _page = null;
 (async () => {
   const b = await chromium.launch({ headless: true });
   const ctx = await b.newContext({ viewport: { width: 1600, height: 950 } });
+  // Engin skrif fara út — hvorki borðið (turbopaint_boards), myndir né annað (07.10: prófun á 1612 skrifaði yfir lifandi borð Agnars).
+  const verndud = await require("./turbopaint-vordur.cjs").vernda(ctx);
   const page = await ctx.newPage();
   _page = page;
   const errs = [];
@@ -381,7 +383,7 @@ let _page = null;
 
   console.log(ok.map((n) => "  ✔ " + n).join("\n"));
   if (bad.length) console.log(bad.map((n) => "  ✘ " + n).join("\n"));
-  console.log(`\n${ok.length}/${ok.length + bad.length} · lestrar 194: ${lestrar} · skrif í teikning_bord gripin: ${gripin.length} · önnur skrif: ${[...new Set(adrarSkrifanir)].join(", ") || "engin"} · villur: ${errs.length ? errs.join(" | ") : "engar"}`);
+  console.log(`\n${ok.length}/${ok.length + bad.length} · lestrar 194: ${lestrar} · skrif í teikning_bord gripin: ${gripin.length} · önnur skrif (gripin, ekki send): ${[...new Set(adrarSkrifanir)].join(", ") || "engin"} · villur: ${errs.length ? errs.join(" | ") : "engar"}`);
   await b.close();
   process.exit(bad.length ? 1 : 0);
 })().catch(async (e) => {

@@ -8,7 +8,7 @@
  * draga endapunkt (⌘Z / ⌘Y) → vegg í gler (⌘Z / ⌘Y) → „Greina veggi": línuflokkar (0,24 + 0,48 pt forskoðun), Bæta
  * við (tvítekningar felldar, leiðréttingar haldast), Skipta út + ⌘Z → „Vista í úttekt".
  * ENGIN skrif fara í teikning_bord: öll skrif þangað eru gripin (route), svarað 200, og sendingin skoðuð. Borðið sjálft
- * (turbopaint_boards) má endurskapast (Agnar). */
+ * (turbopaint_boards) er líka gripið (turbopaint-vordur.cjs) — ekkert skrifast. */
 const path = require("path");
 const fs = require("fs");
 let chromium;
@@ -31,6 +31,8 @@ const check = (n, c, extra) => {
 (async () => {
   const b = await chromium.launch({ headless: true });
   const ctx = await b.newContext({ viewport: { width: 1600, height: 950 } });
+  // Engin skrif fara út — hvorki borðið (turbopaint_boards), myndir né annað (07.10: prófun á 1612 skrifaði yfir lifandi borð Agnars).
+  const verndud = await require("./turbopaint-vordur.cjs").vernda(ctx);
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));

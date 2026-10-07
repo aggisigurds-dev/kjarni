@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import fiskislod from "./fixtures/fiskislod41-1haed.json";
 import type { Strik } from "./pdf-veggir";
-import { flokkaYfirlit, ptIBord, skurdurIPt, strikValinna, veggirUrStrikumPt } from "./pdf-veggjaflokkar";
+import {
+  flokkaYfirlit,
+  GREINDUR_VEGGUR_HAMARK_CM,
+  greiningKrefstStadfestingar,
+  klemmaGreindaThykkt,
+  ptIBord,
+  skurdurIPt,
+  strikValinna,
+  veggirUrStrikumPt,
+} from "./pdf-veggjaflokkar";
 import { dilarAPunkt, veggirHaedar, veggirUrPdfStrikum } from "./teikning-veggir";
 import { maelaThekju, veggjaFletir } from "./veggja-thekja";
 import { sameinaVidVeggi } from "./veggja-ritill";
@@ -93,4 +102,44 @@ test("stakar línur → veggir með dæmigerðri þykkt; hurðarblöð (< 1,2 m)
 test("ptIBord: síðuhnit → borð (teikning á x/y með breidd/hæð)", () => {
   const b = ptIBord([{ p: [0, 0, 100, 50], t: 4, tegund: "gler" }], { x: 10, y: 20, width: 200, height: 100 }, 100, 50);
   assert.deepEqual(b, [{ p: [10, 20, 210, 120], t: 8, tegund: "gler" }]);
+});
+
+test("vörn 07.10: hárlína og mjög mörg stutt strik merkt „ekki veggir“; tillagan aldrei", () => {
+  // eins og Fiskislóð: 0,24 pt með þúsundum stuttra strika (skástrikun, bílar, málstrik)
+  const mikil: Strik[] = Array.from({ length: 4000 }, (_, i) => [100 + (i % 200) * 5, 300 + Math.floor(i / 200) * 4, 103 + (i % 200) * 5, 300 + Math.floor(i / 200) * 4] as Strik);
+  // 0,66 pt: mörg stutt strik en EKKI hárlína
+  const stutt66: Strik[] = Array.from({ length: 3500 }, (_, i) => [200 + (i % 100) * 6, 900 + Math.floor(i / 100) * 5, 204 + (i % 100) * 6, 900 + Math.floor(i / 100) * 5] as Strik);
+  const y = flokkaYfirlit({ ...flokkar, "0.24": mikil, "0.66": stutt66 }, B, H);
+  const f = (b: string) => y.find((x) => x.breidd === b)!;
+  assert.equal(f("0.24").ekkiVeggir, true);
+  assert.match(f("0.24").astaeda!, /hárlína/);
+  assert.equal(f("0.66").ekkiVeggir, true, "3500 stutt strik");
+  assert.match(f("0.66").astaeda!, /stutt strik/);
+  assert.equal(f("0.48").ekkiVeggir, false, "veggjaflokkurinn");
+  assert.equal(f("0.48").tillaga, true);
+  assert.equal(f("1.38").ekkiVeggir, false, "fáar langar línur");
+  assert.equal(f("1.38").astaeda, undefined);
+});
+
+test("vörn 07.10: staðfesting yfir 120 veggjum eða > 3× þeim sem fyrir eru", () => {
+  assert.equal(greiningKrefstStadfestingar(63, 0), false, "Fiskislóð 0,48 á tóma teikningu");
+  assert.equal(greiningKrefstStadfestingar(120, 0), false);
+  assert.equal(greiningKrefstStadfestingar(121, 0), true);
+  assert.equal(greiningKrefstStadfestingar(537, 62), true, "0,24 + 0,48 ofan á 62 veggi");
+  assert.equal(greiningKrefstStadfestingar(6, 61), false, "Bæta við +6");
+  assert.equal(greiningKrefstStadfestingar(63, 61), false, "Skipta út 61 → 63");
+  assert.equal(greiningKrefstStadfestingar(31, 10), true, "> 3× þeir sem fyrir eru");
+  assert.equal(greiningKrefstStadfestingar(30, 10), false);
+});
+
+test("vörn 07.10: þykkt greindra veggja klemmd við 40 cm (kvarði þekktur) eða 3× miðgildi (óþekktur)", () => {
+  const v = [{ p: [0, 0, 10, 0], t: 5 }, { p: [0, 0, 10, 0], t: 12 }, { p: [0, 0, 10, 0], t: 90 }];
+  // 50 borðdílar á metra → 40 cm = 20 dílar
+  const k = klemmaGreindaThykkt(v, 50);
+  assert.deepEqual(k.map((x) => x.t), [5, 12, 20]);
+  assert.equal(k[0], v[0], "óbreyttur veggur er sami hlutur");
+  assert.equal(GREINDUR_VEGGUR_HAMARK_CM, 40);
+  // óþekktur kvarði: miðgildi 12 → hámark 36
+  assert.deepEqual(klemmaGreindaThykkt(v, null).map((x) => x.t), [5, 12, 36]);
+  assert.deepEqual(klemmaGreindaThykkt([], 50), []);
 });

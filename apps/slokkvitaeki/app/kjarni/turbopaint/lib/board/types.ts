@@ -165,6 +165,8 @@ export interface LineObject extends BaseObject {
   veggur?: boolean;
   /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi eða hurð. Vantar = veggur. */
   veggTegund?: "veggur" | "gler" | "hurd";
+  /** Veggurinn kom úr „Greina veggi" — auðkenni lotunnar (`g<tími36>`), svo hægt sé að eyða einni greiningu í heild. */
+  greining?: string;
 }
 
 export interface TextObject extends BaseObject {

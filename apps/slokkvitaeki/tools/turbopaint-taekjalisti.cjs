@@ -10,7 +10,7 @@
  * ENGIN skrif fara í teikning_bord: öll skrif þangað eru gripin (route) og svarað 200, og gripna sendingin er skoðuð.
  * Lestur fer í gegn en er AUKINN í prófinu (aldrei skrifaður): tæki 25448 + ÚT-merki sett á 2. hæð (til að prófa „á 2.
  * hæð" og að tækið fari þaðan), og frá og með öðrum lestri bjalla á 1. hæð sem „appið" setti eftir opnun (má ekki týnast).
- * Borðið sjálft (turbopaint_boards) má endurskapast (leyfi Agnars). */
+ * Borðið sjálft (turbopaint_boards) og myndir eru líka gripin (turbopaint-vordur.cjs) — ekkert skrifast. */
 const path = require("path");
 const fs = require("fs");
 let chromium;
@@ -31,6 +31,8 @@ const mynd = (n) => path.join(OUT, n);
 (async () => {
   const b = await chromium.launch({ headless: true });
   const ctx = await b.newContext({ viewport: { width: 1600, height: 950 } });
+  // Engin skrif fara út — hvorki borðið (turbopaint_boards), myndir né annað (07.10: prófun á 1612 skrifaði yfir lifandi borð Agnars).
+  const verndud = await require("./turbopaint-vordur.cjs").vernda(ctx);
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));

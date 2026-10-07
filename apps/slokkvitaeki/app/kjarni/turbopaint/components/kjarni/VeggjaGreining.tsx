@@ -10,12 +10,22 @@
 import { ScanSearch, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { flokkaYfirlit, ptIBord, skurdurIPt, strikValinna, veggirUrStrikumPt, type PdfFlokkur } from "../../lib/board/pdf-veggjaflokkar";
+import {
+  flokkaYfirlit,
+  GREINDUR_VEGGUR_HAMARK_CM,
+  greiningKrefstStadfestingar,
+  klemmaGreindaThykkt,
+  ptIBord,
+  skurdurIPt,
+  strikValinna,
+  veggirUrStrikumPt,
+  type PdfFlokkur,
+} from "../../lib/board/pdf-veggjaflokkar";
 import { greinaVeggiTeikningar, lesaPdfSidu, type PdfSida } from "../../lib/board/strip";
 import { newId, useBoardStore } from "../../lib/board/store";
 import type { BoardObject, ImageObject, LineObject } from "../../lib/board/types";
 import { erVeggur } from "../../lib/board/veggja-leidretting";
-import { nyrVeggur, sameinaVidVeggi, semButur, talningTexti, veggjaTalning, type Butur } from "../../lib/board/veggja-ritill";
+import { nyGreiningarLota, nyrVeggur, sameinaVidVeggi, semButur, talningTexti, veggjaTalning, type Butur } from "../../lib/board/veggja-ritill";
 import { ritillDilarAMetra, skiptaUt } from "../../lib/board/veggja-ritill-adgerdir";
 import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { maelaThekju } from "../../lib/board/veggja-thekja";
@@ -51,7 +61,14 @@ export function VeggjaGreining({ planId }: { planId: string }) {
   const [fleiri, setFleiri] = useState(false);
   const [nid, setNid] = useState<Nidurstada | null>(null);
   const [reiknar, setReiknar] = useState(false);
+  // Staðfesting áður en mjög mörgum veggjum er beitt (Agnar 07.10.2026: 599 svartar klessur af 0,24 + 0,48 pt).
+  const [stadfesta, setStadfesta] = useState<{ ham: "baeta" | "skipta"; n: number } | null>(null);
   const loka = () => useVeggjaRitill.getState().lokaGreiningu();
+  /** Kvarði borðsins núna (dílar á metra) — fyrir þykktarþakið. */
+  const kvardiNu = () => {
+    const s = useBoardStore.getState();
+    return ritillDilarAMetra(s.objects, s.pixelsPerMeter);
+  };
 
   // 1) lesa: vigur-PDF ef til, annars myndgreining
   useEffect(() => {
@@ -87,7 +104,10 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         if (haett) return;
         const sx = p.width / m.breidd, sy = p.height / m.haed;
         setNid({
-          veggir: m.midlinur.map((l) => ({ p: l.punktar.map((v, i) => (i % 2 === 0 ? p.x + v * sx : p.y + v * sy)), t: Math.max(1, l.thykkt * sx) })),
+          veggir: klemmaGreindaThykkt(
+            m.midlinur.map((l) => ({ p: l.punktar.map((v, i) => (i % 2 === 0 ? p.x + v * sx : p.y + v * sy)), t: Math.max(1, l.thykkt * sx) })),
+            kvardiNu()
+          ),
           linur: 0,
           thekja: null,
           aths: m.holir ? `${m.holir} holir veggir` : undefined,
@@ -142,7 +162,8 @@ export function VeggjaGreining({ planId }: { planId: string }) {
             pt.map((v) => ({ ...v, p: v.p.map((n) => n * q), t: v.t * q }))
           ).thekja;
         }
-        const bord = ptIBord(pt, plan, sida.breidd, sida.haed);
+        // Þykktarþak (≤ 40 cm): skástrikun pöruð í „veggi" verður aldrei að þykkum svörtum klessum.
+        const bord = klemmaGreindaThykkt(ptIBord(pt, plan, sida.breidd, sida.haed), kvardiNu());
         setNid({ veggir: bord, linur: strik.length, thekja });
         const kx = plan.width / sida.breidd, ky = plan.height / sida.haed;
         useVeggjaRitill.getState().setForskodun({
@@ -158,6 +179,9 @@ export function VeggjaGreining({ planId }: { planId: string }) {
     // plan breytist við hverja breytingu á borðinu — aðeins id/staða skipta máli hér
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hamur, sida, valdir, innanHuss, gler, stakar, plan?.id, plan?.x, plan?.y, plan?.width, plan?.height]);
+
+  // Ný niðurstaða (annað val) = spurt upp á nýtt.
+  useEffect(() => setStadfesta(null), [nid]);
 
   // myndgreining: forskoðun veggjanna
   useEffect(() => {
@@ -176,15 +200,18 @@ export function VeggjaGreining({ planId }: { planId: string }) {
     });
   }, [fyrir, nid, dpm]);
 
-  const beita = (ham: "baeta" | "skipta") => {
+  const beita = (ham: "baeta" | "skipta", stadfest = false) => {
     if (!plan || !nid || !samruni) return;
     const listi = ham === "baeta" ? samruni.baeta : nid.veggir;
-    // 07.10.2026 vörn (Fiskislóð: 0,24 pt-skástrikun varð 599 svartar klessur): mörg hundruð veggir í einu er nær alltaf
-    // skástrikun / húsgögn — spurt fyrst. Þykkt veggja úr greiningu fer aldrei yfir ~40 cm (engar klessur).
-    const fjoldiNyrra = listi.length;
-    if (fjoldiNyrra > 120 && !window.confirm(`Bæta við ${fjoldiNyrra} veggjum? Svona mikið lítur yfirleitt út eins og skástrikun eða húsgögn — veldu aðeins veggjalínurnar (t.d. 0,48 pt).`)) return;
-    const thykktHamark = Math.max(4, Math.max(plan.width, plan.height) / 200);
-    const nyir = listi.map((v) => nyrVeggur(v.p, { id: newId(), thykkt: Math.min(v.t, thykktHamark), tegund: v.tegund ?? "veggur", parentId: plan.id }));
+    // Mörg hundruð veggir í einu (eða > 3× þeir sem fyrir eru) er nær alltaf skástrikun / húsgögn — skýrt já fyrst.
+    if (!stadfest && greiningKrefstStadfestingar(listi.length, fyrir.length)) {
+      setStadfesta({ ham, n: listi.length });
+      return;
+    }
+    setStadfesta(null);
+    // Ein lota: veggirnir merktir svo „Eyða síðustu greiningu" í ritlinum taki þá alla (og ⌘Z afturkallar í einu skrefi).
+    const lota = nyGreiningarLota();
+    const nyir = listi.map((v) => nyrVeggur(v.p, { id: newId(), thykkt: v.t, tegund: v.tegund ?? "veggur", parentId: plan.id, greining: lota }));
     const eyda = ham === "skipta" ? fyrir.map((o) => o.id) : [];
     if (!nyir.length && !eyda.length) {
       toast.message("Ekkert nýtt — allir greindu veggirnir eru þegar á teikningunni");
@@ -197,7 +224,7 @@ export function VeggjaGreining({ planId }: { planId: string }) {
       (ham === "baeta"
         ? `${nyir.length} veggir bættust við` + (samruni.tviteknir ? ` (${samruni.tviteknir} tvíteknir slepptir)` : "")
         : `${eyda.length} veggjum skipt út fyrir ${nyir.length}`) +
-        ` · alls ${talningTexti(t)} · ⌘Z afturkallar`
+        ` · alls ${talningTexti(t)} · ⌘Z afturkallar alla greininguna í einu skrefi`
     );
     loka();
   };
@@ -206,7 +233,9 @@ export function VeggjaGreining({ planId }: { planId: string }) {
     const g = v.filter((x) => x.tegund === "gler").length;
     return `${v.length - g} ${v.length - g === 1 ? "veggur" : "veggir"}` + (g ? ` · ${g} gler` : "");
   };
-  const synd = fleiri ? flokkar : flokkar.slice(0, 8);
+  const valdirEkkiVeggir = flokkar.filter((f) => f.ekkiVeggir && valdir.includes(f.breidd));
+  // Flokkur sem ekki eru veggir og er valinn sést alltaf (líka utan átta efstu) — svo viðvörunin vísi á eitthvað.
+  const synd = fleiri ? flokkar : flokkar.filter((f, i) => i < 8 || valdir.includes(f.breidd));
   const btn = "rounded-md px-2.5 py-1.5 text-[12px] font-semibold";
 
   return (
@@ -259,10 +288,28 @@ export function VeggjaGreining({ planId }: { planId: string }) {
                     <span className="text-white/60 tabular-nums">
                       {fjoldi(f.strik)} strik · {fjoldi(f.lengdM)} m
                     </span>
-                    <span className="ml-auto text-[10px] text-white/45">{f.tillaga ? "tillaga" : f.harlina ? "hárlína" : ""}</span>
+                    <span
+                      data-ekki-veggir={f.ekkiVeggir ? "" : undefined}
+                      title={f.astaeda}
+                      className={`ml-auto text-[10px] ${f.ekkiVeggir ? "font-semibold text-red-300" : "text-white/45"}`}
+                    >
+                      {f.tillaga ? "tillaga" : f.ekkiVeggir ? "ekki veggir" : ""}
+                    </span>
                   </button>
                 );
               })}
+              {valdirEkkiVeggir.length ? (
+                <div
+                  role="alert"
+                  data-vidvorun-flokkar
+                  className="rounded-lg border border-red-400/50 bg-red-500/15 px-2 py-1.5 text-[11.5px] leading-snug text-red-200"
+                >
+                  ⚠{" "}
+                  {valdirEkkiVeggir.map((f) => `${f.breidd.replace(".", ",")} pt (${fjoldi(f.strik)} strik — ${f.astaeda})`).join(" · ")}{" "}
+                  lítur ekki út eins og veggir. Línur úr {valdirEkkiVeggir.length === 1 ? "honum" : "þeim"} verða að klessum — taktu
+                  hakið af nema þú sért viss.
+                </div>
+              ) : null}
               {flokkar.length > 8 ? (
                 <button type="button" onClick={() => setFleiri(!fleiri)} className="text-left text-[11px] text-white/50 hover:text-white/80">
                   {fleiri ? "Færri flokkar" : `Sýna alla ${flokkar.length} flokka`}
@@ -309,7 +356,31 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         ) : null}
       </div>
 
-      {nid && samruni && hamur !== "les" ? (
+      {stadfesta && nid && samruni && hamur !== "les" ? (
+        <div role="alertdialog" aria-label="Staðfesta greiningu" data-stadfesta-greiningu className="mt-2 rounded-lg border border-red-400/60 bg-red-500/15 p-2">
+          <div className="text-[12.5px] font-semibold text-red-100">
+            {stadfesta.ham === "baeta"
+              ? `Bæta við ${fjoldi(stadfesta.n)} veggjum?`
+              : `Skipta ${fjoldi(fyrir.length)} veggjum út fyrir ${fjoldi(stadfesta.n)}?`}{" "}
+            Þetta lítur út eins og skástrikun.
+          </div>
+          <div className="mt-1 text-[11.5px] leading-snug text-red-200/90">
+            {fyrir.length ? `Á teikningunni eru ${fjoldi(fyrir.length)} veggir. ` : ""}
+            Svona margir veggir í einu koma nær alltaf úr skástrikun, húsgögnum eða málstrikum — veldu aðeins veggjalínurnar (oftast
+            tillöguna). Þykkt hvers veggjar er þó aldrei meiri en {GREINDUR_VEGGUR_HAMARK_CM} cm og ⌘Z afturkallar allt í einu skrefi.
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            <button type="button" autoFocus onClick={() => setStadfesta(null)} className={`${btn} bg-white/15 ring-1 ring-white/40 hover:bg-white/20`}>
+              Hætta við
+            </button>
+            <button type="button" onClick={() => beita(stadfesta.ham, true)} className={`${btn} bg-red-600/80 text-white hover:bg-red-600`}>
+              {stadfesta.ham === "baeta" ? `Já, bæta við ${fjoldi(stadfesta.n)}` : `Já, skipta út`}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {nid && samruni && hamur !== "les" && !stadfesta ? (
         <div className="mt-2 border-t border-white/10 pt-2">
           {fyrir.length ? (
             <>
