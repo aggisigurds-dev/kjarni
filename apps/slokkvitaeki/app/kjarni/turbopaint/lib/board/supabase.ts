@@ -21,6 +21,11 @@ export function getSupabase(): SupabaseClient | null {
   return client;
 }
 
+/** Slóð Supabase-verkefnisins (t.d. til að sannreyna að niðurstöðuskrá sé í okkar geymslu). */
+export function supabaseUrl() {
+  return SUPABASE_URL;
+}
+
 export function assetPublicUrl(assetId: string) {
   return `${SUPABASE_URL}/storage/v1/object/public/turbopaint/${assetId}.png`;
 }

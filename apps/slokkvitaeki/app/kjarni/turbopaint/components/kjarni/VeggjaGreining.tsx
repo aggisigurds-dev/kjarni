@@ -8,9 +8,13 @@
 //     skonnun-veggir.ts) — Agnar 07.10.2026: „kerfið fann enga veggi á efri hæð" (Álfaborg 2. hæð, FotoWeb-PDF: PDF-ið
 //     var lesið, enginn línuflokkur fannst og útkoman var 0 veggir). Eldri myndgreiningin er varaleið;
 //   • séu veggir fyrir er spurt: Bæta við (sjálfgefið — tvítekningar felldar, leiðréttingar haldast) / Skipta út / Hætta við.
+//   • „Veggjavél (skrifstofutölvan)" (Agnar 07.10.2026): eigið veggjalíkan Slökkvitækis keyrir á skrifstofutölvunni um
+//     luna-bridge (lib/board/veggjavel.ts) — beiðni í automation_triggers, framvinda á skjánum, niðurstaðan fer í SAMA
+//     flæði (Bæta við / Skipta út, ⌘Z, „Eyða síðustu greiningu"); gler verður gler. Síðasta niðurstaða hæðarinnar opnast
+//     strax (samanburður við greininguna í vafranum); „Greina aftur" sendir nýja beiðni.
 
-import { ScanSearch, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Cpu, ScanSearch, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   flokkaYfirlit,
@@ -33,11 +37,43 @@ import { nyGreiningarLota, nyrVeggur, sameinaVidVeggi, semButur, talningTexti, v
 import { ritillDilarAMetra, skiptaUt } from "../../lib/board/veggja-ritill-adgerdir";
 import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { maelaThekju } from "../../lib/board/veggja-thekja";
+import { bladMyndar } from "../../lib/board/margar-haedir";
+import { getSupabase, supabaseUrl } from "../../lib/board/supabase";
+import {
+  beidniGogn,
+  dagsTexti,
+  lesaNidurstodu,
+  lesaVeggjavelJson,
+  leyfdSlod,
+  metaStodu,
+  VEGGJAVEL_HAMARK_MS,
+  VEGGJAVEL_SVARAR_EKKI_MS,
+  VEGGJAVEL_WORKFLOW,
+  velLinurIBord,
+  velMinni,
+  velMinniLykill,
+  type VelMinni,
+} from "../../lib/board/veggjavel";
 
 /** Þúsundapunktar: 23.363 */
 const fjoldi = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
 type Nidurstada = { veggir: Butur[]; linur: number; thekja: number | null; aths?: string };
+
+/** Staða „Veggjavél (skrifstofutölvan)" á skjánum. */
+type VelUI =
+  | { s: "sendi" }
+  | { s: "bida"; upptekin: string | null; hafnad: boolean }
+  | { s: "vinnur"; texti: string; pros: number | null }
+  | { s: "saekir" }
+  | { s: "lokid"; kl: number; veggir: number; gler: number; sek: number | null; fyrri: boolean }
+  | { s: "villa"; texti: string };
+
+const VEL_BIL_MS = 3000;
+const klukka = (ms: number) => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
 
 /** Veggir borðsins sem tilheyra teikningunni: festir við hana, eða lausir með miðju á henni. */
 function veggirTeikningar(objects: BoardObject[], plan: ImageObject): LineObject[] {
@@ -54,7 +90,7 @@ export function VeggjaGreining({ planId }: { planId: string }) {
   const objects = useBoardStore((s) => s.objects);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   const plan = objects.find((o): o is ImageObject => o.id === planId && o.type === "image") ?? null;
-  const [hamur, setHamur] = useState<"les" | "pdf" | "mynd" | "villa">("les");
+  const [hamur, setHamur] = useState<"les" | "pdf" | "mynd" | "villa" | "vel">("les");
   const [villa, setVilla] = useState("");
   const [sida, setSida] = useState<PdfSida | null>(null);
   const [flokkar, setFlokkar] = useState<PdfFlokkur[]>([]);
@@ -67,6 +103,13 @@ export function VeggjaGreining({ planId }: { planId: string }) {
   const [reiknar, setReiknar] = useState(false);
   // Staðfesting áður en mjög mörgum veggjum er beitt (Agnar 07.10.2026: 599 svartar klessur af 0,24 + 0,48 pt).
   const [stadfesta, setStadfesta] = useState<{ ham: "baeta" | "skipta"; n: number } | null>(null);
+  // Veggjavél (skrifstofutölvan): staðan, hvaðan var komið (til að fara til baka) og greining vafrans til samanburðar.
+  const [vel, setVel] = useState<VelUI | null>(null);
+  const [adurHamur, setAdurHamur] = useState<"pdf" | "mynd" | "villa" | null>(null);
+  const [nidVafri, setNidVafri] = useState<Nidurstada | null>(null);
+  const [nu, setNu] = useState(() => Date.now());
+  const beidni = useRef<{ id: number; byrjad: number; hafnadFra: number | null; lykill: string } | null>(null);
+  const velTimi = useRef<number | null>(null);
   const loka = () => useVeggjaRitill.getState().lokaGreiningu();
   /** Kvarði borðsins núna (dílar á metra) — fyrir þykktarþakið. */
   const kvardiNu = () => {
@@ -198,10 +241,174 @@ export function VeggjaGreining({ planId }: { planId: string }) {
   // Ný niðurstaða (annað val) = spurt upp á nýtt.
   useEffect(() => setStadfesta(null), [nid]);
 
-  // myndgreining: forskoðun veggjanna
+  // myndgreining / veggjavél: forskoðun veggjanna
   useEffect(() => {
-    if (hamur === "mynd" && nid) useVeggjaRitill.getState().setForskodun({ linur: [], veggir: nid.veggir });
+    if ((hamur === "mynd" || hamur === "vel") && nid) useVeggjaRitill.getState().setForskodun({ linur: [], veggir: nid.veggir });
+    else if (hamur === "vel") useVeggjaRitill.getState().setForskodun(null);
   }, [hamur, nid]);
+
+  // ── Veggjavél (skrifstofutölvan) ────────────────────────────────────────────────────────────────────────────
+  const velGogn = plan ? beidniGogn(plan) : null;
+  const stoppaVel = () => {
+    beidni.current = null;
+    if (velTimi.current != null) window.clearTimeout(velTimi.current);
+    velTimi.current = null;
+  };
+  // Lokað á meðan unnið er: hætt að spyrja (verkið heldur áfram á skrifstofutölvunni og opnast aftur við næsta smell).
+  useEffect(() => stoppaVel, []);
+  // Klukkan í biðröðinni hreyfist milli fyrirspurna.
+  useEffect(() => {
+    if (!vel || (vel.s !== "bida" && vel.s !== "vinnur" && vel.s !== "sendi")) return;
+    const t = window.setInterval(() => setNu(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [vel]);
+
+  /** Niðurstaða vélarinnar (dílar frummyndar) → veggir á borðinu, í sama flæði og greining vafrans. */
+  const synaVel = (m: VelMinni, fyrri: boolean) => {
+    const p = useBoardStore.getState().objects.find((o): o is ImageObject => o.id === planId && o.type === "image");
+    if (!p) return;
+    const blad = bladMyndar(p);
+    const veggir = klemmaGreindaThykkt(velLinurIBord(m.linur, p, blad.frum, blad.svaedi), kvardiNu());
+    setNid({ veggir, linur: 0, thekja: null });
+    setVel({ s: "lokid", kl: m.kl, veggir: m.veggir, gler: m.gler, sek: m.sek, fyrri });
+  };
+
+  const saekjaNidurstodu = async (id: number, n: NonNullable<ReturnType<typeof lesaNidurstodu>>, kl: number, fyrri: boolean, lykill: string) => {
+    setVel({ s: "saekir" });
+    if (!leyfdSlod(n.slod, supabaseUrl())) throw new Error("niðurstaðan er ekki í geymslu TurboPaint");
+    const r = await fetch(n.slod, { cache: "no-store" });
+    if (!r.ok) throw new Error(`niðurstaðan fékkst ekki (${r.status})`);
+    const linur = lesaVeggjavelJson(await r.json());
+    const m: VelMinni = { id, kl, linur, veggir: n.veggir, gler: n.gler, sek: n.sek };
+    velMinni.setja(lykill, m);
+    if (beidni.current && beidni.current.id !== id) return;
+    synaVel(m, fyrri);
+  };
+
+  const kannaVel = async () => {
+    const b = beidni.current;
+    const sb = getSupabase();
+    if (!b || !sb) return;
+    let naesta = true;
+    try {
+      const r = await sb.from("automation_triggers").select("status,result,requested_at").eq("id", b.id).limit(1);
+      if (beidni.current !== b) return;
+      const rod = (r.data as { status: string; result: string | null }[] | null)?.[0];
+      if (rod) {
+        if (rod.status === "error" && /^Unknown workflow/i.test(String(rod.result || "")) && b.hafnadFra == null) b.hafnadFra = Date.now();
+        let upptekin: string | null = null;
+        const bidur = rod.status === "bida" || rod.status === "pending";
+        if (bidur && Date.now() - b.byrjad > VEGGJAVEL_SVARAR_EKKI_MS) {
+          // Annað verk í gangi á brúnni (t.d. Blender, 8–10 mín)? Þá bíður beiðnin — skrifstofutölvan er í gangi.
+          const u = await sb
+            .from("automation_triggers")
+            .select("workflow,started_at")
+            .eq("status", "running")
+            .gt("started_at", new Date(Date.now() - 15 * 60_000).toISOString())
+            .limit(3);
+          upptekin = ((u.data as { workflow: string }[] | null) || [])[0]?.workflow ?? null;
+          if (beidni.current !== b) return;
+        }
+        const st = metaStodu(rod, { nu: Date.now(), byrjad: b.byrjad, hafnadFra: b.hafnadFra, upptekin });
+        if (st.s === "lokid") {
+          naesta = false;
+          await saekjaNidurstodu(b.id, st.nid, Date.now(), false, b.lykill);
+          return;
+        }
+        if (st.s === "villa") {
+          naesta = false;
+          stoppaVel();
+          setVel({ s: "villa", texti: st.texti });
+          return;
+        }
+        setVel(st.s === "bida" ? { s: "bida", upptekin: st.upptekin, hafnad: st.hafnad } : { s: "vinnur", texti: st.texti, pros: st.pros });
+      }
+    } catch (err) {
+      if (!naesta) {
+        stoppaVel();
+        setVel({ s: "villa", texti: err instanceof Error ? err.message : "niðurstaðan fékkst ekki" });
+        return;
+      }
+      console.warn("[veggjavél] staða", err);
+    }
+    if (naesta && beidni.current === b) velTimi.current = window.setTimeout(() => void kannaVel(), VEL_BIL_MS);
+  };
+
+  /** „Veggjavél (skrifstofutölvan)": síðasta niðurstaða hæðarinnar strax (eða verk í gangi), annars ný beiðni. */
+  const byrjaVel = async (nytt: boolean) => {
+    if (!plan || !velGogn || !("gogn" in velGogn)) return;
+    const gogn = velGogn.gogn;
+    const sb = getSupabase();
+    if (!sb) {
+      setVel({ s: "villa", texti: "Engin tenging við gagnagrunninn" });
+      return;
+    }
+    stoppaVel();
+    if (hamur !== "vel") {
+      setAdurHamur(hamur === "pdf" || hamur === "mynd" || hamur === "villa" ? hamur : null);
+      setNidVafri(nid);
+      setHamur("vel");
+    }
+    setNid(null);
+    setVel({ s: "sendi" });
+    setNu(Date.now());
+    const lykill = velMinniLykill(gogn);
+    try {
+      if (!nytt) {
+        const m = velMinni.fa(lykill);
+        if (m) {
+          synaVel(m, true);
+          return;
+        }
+        const r = await sb
+          .from("automation_triggers")
+          .select("id,status,result,requested_at,finished_at")
+          .eq("workflow", VEGGJAVEL_WORKFLOW)
+          .eq("gogn->>company_id", String(gogn.company_id))
+          .eq("gogn->>haed_id", gogn.haed_id)
+          .eq("gogn->>image_url", gogn.image_url)
+          .order("id", { ascending: false })
+          .limit(6);
+        if (!r.error) {
+          const radir = (r.data || []) as { id: number; status: string; result: string | null; requested_at: string; finished_at: string | null }[];
+          const iGangi = radir.find(
+            (x) => (x.status === "bida" || x.status === "pending" || x.status === "running") && Date.now() - Date.parse(x.requested_at) < VEGGJAVEL_HAMARK_MS
+          );
+          if (iGangi) {
+            beidni.current = { id: iGangi.id, byrjad: Date.parse(iGangi.requested_at) || Date.now(), hafnadFra: null, lykill };
+            setVel({ s: "bida", upptekin: null, hafnad: false });
+            void kannaVel();
+            return;
+          }
+          for (const x of radir) {
+            const n = x.status === "done" ? lesaNidurstodu(x.result) : null;
+            if (!n) continue;
+            beidni.current = { id: x.id, byrjad: Date.parse(x.requested_at) || Date.now(), hafnadFra: null, lykill };
+            await saekjaNidurstodu(x.id, n, Date.parse(x.finished_at || "") || Date.now(), true, lykill);
+            beidni.current = null;
+            return;
+          }
+        }
+      }
+      const ins = await sb.from("automation_triggers").insert({ workflow: VEGGJAVEL_WORKFLOW, status: "bida", requested_by: "turbopaint", gogn }).select("id");
+      const id = (ins.data as { id: number }[] | null)?.[0]?.id;
+      if (ins.error || !id) throw new Error("beiðnin vistaðist ekki (" + (ins.error?.message || "ekkert auðkenni") + ")");
+      beidni.current = { id, byrjad: Date.now(), hafnadFra: null, lykill };
+      setVel({ s: "bida", upptekin: null, hafnad: false });
+      velTimi.current = window.setTimeout(() => void kannaVel(), VEL_BIL_MS);
+    } catch (err) {
+      stoppaVel();
+      setVel({ s: "villa", texti: err instanceof Error ? err.message : "Veggjavélin náðist ekki" });
+    }
+  };
+
+  /** Aftur í greiningu vafrans (samanburður) — verk í gangi heldur áfram á skrifstofutölvunni. */
+  const tilVafra = () => {
+    stoppaVel();
+    setVel(null);
+    setHamur(adurHamur ?? "mynd");
+    setNid(nidVafri);
+  };
 
   const fyrir = useMemo(() => (plan ? veggirTeikningar(objects, plan) : []), [objects, plan]);
   const dpm = ritillDilarAMetra(objects, pixelsPerMeter);
@@ -269,6 +476,88 @@ export function VeggjaGreining({ planId }: { planId: string }) {
       <div className="mt-0.5 truncate text-[11px] text-white/50">{plan?.name}</div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
+        {hamur !== "les" && hamur !== "vel" ? (
+          <div data-veggjavel-val className="mb-2 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
+            <button
+              type="button"
+              data-veggjavel
+              disabled={!velGogn || !("gogn" in velGogn)}
+              onClick={() => void byrjaVel(false)}
+              title={
+                velGogn && "astaeda" in velGogn
+                  ? velGogn.astaeda
+                  : "Eigið veggjalíkan Slökkvitækis greinir hæðina á skrifstofutölvunni (oftast 1–3 mín). Síðasta niðurstaða hæðarinnar opnast strax."
+              }
+              className={`${btn} inline-flex shrink-0 items-center gap-1.5 bg-white/10 hover:bg-white/15 disabled:opacity-40`}
+            >
+              <Cpu className="size-3.5" />
+              Veggjavél (skrifstofutölvan)
+            </button>
+            <span className="text-[10.5px] leading-tight text-white/50">
+              {velGogn && "astaeda" in velGogn ? velGogn.astaeda : "Eigið líkan Slökkvitækis · gler verður gler"}
+            </span>
+          </div>
+        ) : null}
+        {hamur === "vel" && vel ? (
+          <div data-veggjavel-stada={vel.s} className="text-[12px] text-white/80">
+            {vel.s === "sendi" ? <div className="font-semibold">Sendi beiðni til skrifstofutölvunnar…</div> : null}
+            {vel.s === "bida" ? (
+              <>
+                <div className="font-semibold">
+                  Í biðröð — bíð eftir skrifstofutölvunni… <span className="tabular-nums text-white/60">{klukka(nu - (beidni.current?.byrjad ?? nu))}</span>
+                </div>
+                {vel.upptekin ? (
+                  <div className="mt-1 text-[11.5px] text-amber-300">
+                    Skrifstofutölvan er upptekin við annað verk ({vel.upptekin}) — beiðnin bíður á eftir því.
+                  </div>
+                ) : vel.hafnad ? (
+                  <div className="mt-1 text-[11.5px] text-amber-300">Eldri brúartölva hafnaði beiðninni — skrifstofutölvan tekur við henni…</div>
+                ) : null}
+              </>
+            ) : null}
+            {vel.s === "vinnur" ? (
+              <>
+                <div className="font-semibold">
+                  {vel.texti.split(" — ")[0]}{" "}
+                  <span className="tabular-nums text-white/60">{klukka(nu - (beidni.current?.byrjad ?? nu))}</span>
+                </div>
+                {vel.texti.includes(" — ") ? <div className="text-[11px] text-white/55">{vel.texti.split(" — ").slice(1).join(" — ")}</div> : null}
+              </>
+            ) : null}
+            {vel.s === "saekir" ? <div className="font-semibold">Sæki veggina frá skrifstofutölvunni…</div> : null}
+            {vel.s === "sendi" || vel.s === "bida" || vel.s === "vinnur" || vel.s === "saekir" ? (
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-white/10">
+                <div
+                  data-veggjavel-pros={vel.s === "vinnur" ? vel.pros ?? "" : ""}
+                  className="h-full rounded bg-[#FE653F] transition-[width] duration-500"
+                  style={{ width: `${vel.s === "vinnur" ? vel.pros ?? 8 : vel.s === "saekir" ? 98 : 3}%` }}
+                />
+              </div>
+            ) : null}
+            {vel.s === "villa" ? (
+              <div role="alert" data-veggjavel-villa className="rounded-lg border border-red-400/50 bg-red-500/15 px-2 py-1.5 text-[12px] font-semibold text-red-200">
+                {vel.texti}
+              </div>
+            ) : null}
+            {vel.s === "lokid" ? (
+              <div className="text-[11.5px] text-white/65">
+                Veggjavél · greint á skrifstofutölvunni {dagsTexti(vel.kl)}
+                {vel.sek != null ? ` (${vel.sek} s)` : ""}
+                {vel.fyrri ? " — síðasta niðurstaða hæðarinnar" : ""}
+              </div>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {vel.s === "lokid" || vel.s === "villa" ? (
+                <button type="button" onClick={() => void byrjaVel(true)} className={`${btn} bg-white/10 hover:bg-white/15`} title="Ný greining á skrifstofutölvunni">
+                  {vel.s === "villa" ? "Reyna aftur" : "Greina aftur"}
+                </button>
+              ) : null}
+              <button type="button" onClick={tilVafra} className={`${btn} bg-white/5 hover:bg-white/10`} title="Greiningin í vafranum (til samanburðar)">
+                ← Greining í vafranum{nidVafri ? ` (${nidVafri.veggir.length})` : ""}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {hamur === "les" ? <div className="py-3 text-[12px] text-white/70">Les teikninguna…</div> : null}
         {hamur === "villa" ? <div className="py-3 text-[12px] text-red-300">{villa}</div> : null}
         {hamur === "mynd" ? (
