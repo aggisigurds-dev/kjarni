@@ -199,6 +199,11 @@ export function RightPanel({
                   variant="outline"
                   className="w-full border-white/10 bg-white/5 text-stone-200"
                   onClick={() => {
+                    // 07.10.2026 vörn: croppun á TENGDRI úttektarmynd varpaði skugga og merkjum rangt (lagað í samantektinni)
+                    if ((primary as { uttekt?: unknown }).uttekt) {
+                      toast.message("Úttektarteikningin opnast þegar á húsinu — croppun á tengdri hæð kemur í næstu uppfærslu.");
+                      return;
+                    }
                     useBoardStore.getState().setTool("crop");
                     toast.message("Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af");
                   }}
