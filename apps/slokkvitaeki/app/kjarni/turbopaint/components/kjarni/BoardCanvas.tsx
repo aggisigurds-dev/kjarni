@@ -1604,6 +1604,11 @@ export function BoardCanvas({
                           type="button"
                           className={item}
                           onClick={act(() => {
+                            // 07.10.2026 vörn: croppun á TENGDRI úttektarmynd varpaði skugga og merkjum rangt
+                            if ((target as { uttekt?: unknown }).uttekt) {
+                              toast.message("Úttektarteikningin opnast þegar á húsinu — croppun á tengdri hæð kemur í næstu uppfærslu.");
+                              return;
+                            }
                             useBoardStore.getState().setTool("crop");
                             toast.message(
                               "Dragðu ramma yfir svæðið sem á að HALDA — restin sníðst af"

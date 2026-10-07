@@ -171,6 +171,8 @@ type Drag =
   | { kind: "pan"; sx: number; sy: number; cx: number; cy: number }
   | { kind: "kassi"; A: P; B: P; eyda: boolean; baeta: boolean; sx: number; sy: number }
   | { kind: "rettur"; A: P; B: P }
+  // Agnar 07.10.2026: „hún dregst þegar ég held inni vinstri músartakkanum og stoppar þegar ég sleppi" — einn veggur á drátt
+  | { kind: "teikna-drag"; sx: number; sy: number }
   | { kind: "endi"; id: string; hlid: 0 | 1; fylgja: { id: string; hlid: 0 | 1 }[]; akkeri: P; byrjad: boolean; sx: number; sy: number }
   | { kind: "faera"; ids: string[]; X0: P; upphaf: Map<string, LineObject>; smellId: string; byrjad: boolean; sx: number; sy: number; varValinn: boolean }
   | { kind: "pinch"; dist: number; mid: P };
@@ -637,8 +639,12 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     switch (r.tol) {
       case "teikna": {
         const s = smellaHer(X);
+        const iKedju = kedja.current.length > 0;
         baetaVidKedju(s.P);
         smellurRef.current = smellaHer(X);
+        // Ný byrjun: haldið inni og dregið = EINN beinn veggur frá þessum punkti þangað sem músinni er sleppt.
+        // (Smellur án dráttar heldur áfram í keðju-ham: smellur, smellur, … Enter.)
+        if (!iKedju) drag.current = { kind: "teikna-drag", sx: e.clientX, sy: e.clientY };
         break;
       }
       case "rettur": {
@@ -773,6 +779,9 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     }
     const b = useBoardStore.getState();
     switch (d.kind) {
+      case "teikna-drag":
+        smellurRef.current = smellaHer(X);
+        break;
       case "kassi":
         d.B = X;
         break;
@@ -864,6 +873,14 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         } else {
           b.setSelected(d.baeta ? [...new Set([...b.selectedIds, ...ids])] : ids);
         }
+      }
+    } else if (d.kind === "teikna-drag") {
+      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= 6) {
+        const s = smellaHer(tilHeims(e.clientX, e.clientY));
+        baetaVidKedju(s.P);
+        ljukaKedju();
+        toast.message("Veggur · haltu inni og dragðu næsta · ⌘Z afturkallar", { duration: 1500 });
+        return;
       }
     } else if (d.kind === "rettur") {
       const k = cam().scale;

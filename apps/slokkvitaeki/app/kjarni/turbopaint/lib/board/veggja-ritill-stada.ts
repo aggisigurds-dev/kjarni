@@ -39,13 +39,13 @@ function lesa(): Vistad {
       return {
         thykktCm: Number(v.thykktCm) > 0 && Number(v.thykktCm) <= 200 ? Number(v.thykktCm) : 15,
         tegund: v.tegund === "gler" || v.tegund === "hurd" ? v.tegund : "veggur",
-        hornalas: v.hornalas === true,
+        hornalas: v.hornalas !== false,
       };
     }
   } catch {
     /* einkagluggi */
   }
-  return { thykktCm: 15, tegund: "veggur", hornalas: false };
+  return { thykktCm: 15, tegund: "veggur", hornalas: true };
 }
 
 interface RitilStada extends Vistad {
@@ -93,7 +93,7 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
   setForskodun: (forskodun) => set({ forskodun }),
   thykktCm: 15,
   tegund: "veggur",
-  hornalas: false,
+  hornalas: true,
   kveikja: (tol = "velja") => {
     const b = useBoardStore.getState();
     const vistad = typeof window !== "undefined" ? lesa() : null;

@@ -179,7 +179,12 @@ export function VeggjaGreining({ planId }: { planId: string }) {
   const beita = (ham: "baeta" | "skipta") => {
     if (!plan || !nid || !samruni) return;
     const listi = ham === "baeta" ? samruni.baeta : nid.veggir;
-    const nyir = listi.map((v) => nyrVeggur(v.p, { id: newId(), thykkt: v.t, tegund: v.tegund ?? "veggur", parentId: plan.id }));
+    // 07.10.2026 vörn (Fiskislóð: 0,24 pt-skástrikun varð 599 svartar klessur): mörg hundruð veggir í einu er nær alltaf
+    // skástrikun / húsgögn — spurt fyrst. Þykkt veggja úr greiningu fer aldrei yfir ~40 cm (engar klessur).
+    const fjoldiNyrra = listi.length;
+    if (fjoldiNyrra > 120 && !window.confirm(`Bæta við ${fjoldiNyrra} veggjum? Svona mikið lítur yfirleitt út eins og skástrikun eða húsgögn — veldu aðeins veggjalínurnar (t.d. 0,48 pt).`)) return;
+    const thykktHamark = Math.max(4, Math.max(plan.width, plan.height) / 200);
+    const nyir = listi.map((v) => nyrVeggur(v.p, { id: newId(), thykkt: Math.min(v.t, thykktHamark), tegund: v.tegund ?? "veggur", parentId: plan.id }));
     const eyda = ham === "skipta" ? fyrir.map((o) => o.id) : [];
     if (!nyir.length && !eyda.length) {
       toast.message("Ekkert nýtt — allir greindu veggirnir eru þegar á teikningunni");
@@ -335,7 +340,21 @@ export function VeggjaGreining({ planId }: { planId: string }) {
                 <button type="button" onClick={loka} className={`${btn} bg-white/5 hover:bg-white/10`}>
                   Hætta við
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    loka();
+                    useVeggjaRitill.getState().kveikja("teikna");
+                  }}
+                  className={`${btn} bg-white/10 hover:bg-white/15`}
+                  title="Teikna veggina sem vantar: haltu inni vinstri músartakkanum og dragðu"
+                >
+                  + Teikna vegg
+                </button>
               </div>
+              {samruni.baeta.length === 0 ? (
+                <div className="mt-1.5 text-[11px] text-amber-300">Greiningin fann ekkert nýtt — teiknaðu veggina sem vantar með „+ Teikna vegg".</div>
+              ) : null}
             </>
           ) : (
             <div className="flex flex-wrap gap-1.5">

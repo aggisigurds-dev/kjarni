@@ -506,6 +506,18 @@ export function WhiteboardApp() {
           return hreinsaTeikningu();
         case "veggir":
           return greinaVeggi();
+        case "teikna-vegg":
+        case "teikna-hurd":
+        case "teikna-gler": {
+          const tg = a === "teikna-hurd" ? "hurd" : a === "teikna-gler" ? "gler" : "veggur";
+          useVeggjaRitill.getState().kveikja("teikna");
+          useVeggjaRitill.getState().setTegund(tg);
+          toast.message(
+            tg === "hurd" ? "Hurð: haltu inni og dragðu á milli karmanna — slepptu til að ljúka" : tg === "gler" ? "Gler: haltu inni og dragðu yfir gluggann — slepptu til að ljúka" : "Haltu inni vinstri músartakkanum og dragðu vegginn — slepptu til að ljúka",
+            { duration: 2500 }
+          );
+          return;
+        }
         case "thrividd":
           return setThrividd(true);
         case "slt-brsl":
