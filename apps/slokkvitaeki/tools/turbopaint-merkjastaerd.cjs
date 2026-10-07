@@ -1,6 +1,6 @@
-/* Sannar að SJÁLFGERÐU merkin fylgi stærðarstillingunni — keyrir sjálfa
- * 165.BR1-merkingarvélina með tilbúnum OCR-orðum, og að stærðin lagi valin
- * tákn en láti óvalin í friði. */
+/* Sannar að stærðin lagi valin tákn en láti óvalin í friði. (Hluti um sjálfgerðu 165.BR1-merkin —
+ * placeMvs165Equipment — var tekinn út 07.10.2026 með fallinu; „SLT / BRSL af teikningu" setur tækin í stærð hæðarinnar
+ * og er prófað í turbopaint-slt-brsl.cjs.) */
 const { chromium } = require("playwright");
 const OUT = "/tmp/claude-0/-home-user/357c1d3d-b8ca-5909-8704-0dc2fc40aa5f/scratchpad";
 const ok = [], bad = [];
@@ -16,21 +16,6 @@ const check = (n, c, extra) => (c ? ok : bad).push(n + (c ? "" : `   ← ${extra
   await page.waitForTimeout(6000);
   const before = await page.evaluate(() => window.__tpSettings.getStampSize());
 
-  const run = (size) => page.evaluate(async (S) => {
-    await window.__tpSettings.setStampSize(S);
-    const plan = { id: "p", type: "image", assetId: "a", x: 0, y: 0, width: 2000, height: 1400,
-                   name: "prufa", rotation: 0, opacity: 1, locked: false, hidden: false };
-    const w = (text, x, y) => ({ text, x, y, width: 40, height: 14, confidence: 90, vertical: false });
-    const r = window.__tpKit.placeMvs165Equipment(plan, [w("SLT", 400, 400), w("ÚT", 900, 400)], { pixelsPerMeter: null });
-    const by = (id) => r.objects.filter(o => o.symbolId === id).map(o => o.size);
-    return { slt: by("extinguisher"), skilti: by("sign-extinguisher"), ut: by("exit") };
-  }, size);
-
-  const big = await run(56), small = await run(24);
-  check("sjálfgert slökkvitæki fylgir 56", big.slt[0] === 56, JSON.stringify(big));
-  check("sjálfgert slökkvitæki fylgir 24", small.slt[0] === 24, JSON.stringify(small));
-  check("skiltið kvarðast hlutfallslega (36 → 15)", big.skilti[0] === 36 && small.skilti[0] === 15, JSON.stringify([big.skilti, small.skilti]));
-  check("ÚT kvarðast hlutfallslega (44 → 19)", big.ut[0] === 44 && small.ut[0] === 19, JSON.stringify([big.ut, small.ut]));
 
   // Valin tákn breytast; óvalin standa
   await page.evaluate(() => {

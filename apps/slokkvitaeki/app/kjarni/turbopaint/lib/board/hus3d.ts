@@ -10,7 +10,8 @@
 // (teikn-blad / PDF-síðan í 1:100) eða A1-ágiskun — með sömu trúverðugleikamörkum og 383 (hús 4–300 m).
 
 import { objectsOnDocument } from "./geometry";
-import { lykillTakns, STIMPLAR, stimpillSigns } from "./merkjasafn";
+import { erNyttLykill, lykillTakns, STIMPLAR, stimpillSigns } from "./merkjasafn";
+import { erOtengtTaekjaTakn, MIDI_NYTT, MIDI_OTENGT, MIDI_TENGT, MIDI_YFIR, TEGUND_HEITI, tegundTakns } from "./sjalftenging";
 import { getSymbol, symbolPaint } from "./symbols";
 import { dilarAMetraGisk } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject, SymbolObject } from "./types";
@@ -219,6 +220,7 @@ function erTengtTaeki(o: Pick<SymbolObject, "uttektUnitId" | "uttektKind">): boo
   const u = o.uttektUnitId;
   if (u == null || u === "") return false;
   if (o.uttektKind === "sign") return false;
+  if (erNyttLykill(u)) return false; // Nýtt (n:…) á sér ekkert skráð tæki
   return !(typeof u === "string" && u.startsWith("s:"));
 }
 
@@ -237,7 +239,10 @@ export function taknMidja(o: Pick<SymbolObject, "x" | "y" | "size" | "rotation">
 }
 
 /** Miðatexti og litur eins og Teikning-glugginn (383 undirbua): tæki → tegundin (raðnúmer ef tegund vantar), grænt
- * eða rautt ef komið fram yfir; stimpill → nafn merkisins í sínum lit; laust tákn → merkimiði eða nafn táknsins. */
+ * eða rautt ef komið fram yfir; stimpill → nafn merkisins í sínum lit; laust tákn → merkimiði eða nafn táknsins.
+ * Agnar 07.10.2026 („stundum rautt léttvatn og stundum grænt"): ótengt tækjatákn fékk lit táknsins — rautt á léttvatni
+ * og slöngu — svo rautt þýddi bæði „komið fram yfir" og „ótengt". Nú er rautt AÐEINS tengt tæki komið fram yfir;
+ * Nýtt-tæki (bíður samþykkis) fær „Nýtt · <tegund>" í hlutlausu indígó og ótengt tækjatákn „<nafn> · ótengt" í gráu. */
 export function midiTakns(o: SymbolObject, taeki?: Taekjaupplysingar | null): { texti: string; litur: string } {
   const sign = stimpillTakns(o);
   if (sign || o.uttektKind === "sign") {
@@ -247,8 +252,12 @@ export function midiTakns(o: SymbolObject, taeki?: Taekjaupplysingar | null): { 
   if (erTengtTaeki(o)) {
     const radnr = taeki ? String(taeki.serial || "") : "";
     const texti = taeki?.type ? String(taeki.type) : radnr.slice(-6) || o.label || getSymbol(o.symbolId).name;
-    return { texti, litur: taeki?.status === "overdue" ? "#c93c1d" : "#2f9e55" };
+    return { texti, litur: taeki?.status === "overdue" ? MIDI_YFIR : MIDI_TENGT };
   }
+  if (erNyttLykill(o.uttektUnitId)) {
+    return { texti: `Nýtt · ${TEGUND_HEITI[tegundTakns(o.symbolId) ?? "annad"]}`, litur: MIDI_NYTT };
+  }
+  if (erOtengtTaekjaTakn(o)) return { texti: `${getSymbol(o.symbolId).name} · ótengt`, litur: MIDI_OTENGT };
   const s = getSymbol(o.symbolId);
   return { texti: o.label || s.name, litur: symbolPaint(s).bg };
 }

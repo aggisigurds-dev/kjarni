@@ -33,14 +33,17 @@ import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/
 import { getStampSize } from "../../lib/board/symbol-settings";
 import * as symbolSettingsApi from "../../lib/board/symbol-settings";
 import * as symbolsApi from "../../lib/board/symbols";
-import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark } from "../../lib/board/detect-firewalls";
+import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaSvaedi, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
+import { DRAEGI_LYKILL, endurlestrarRammar, husSvaediIMynd, sltBrslOrd, sltBrslStadir, stadirABord } from "../../lib/board/slt-brsl";
+import { beitaSltBrsl, type SltBrslTeikning } from "../../lib/board/slt-brsl-bord";
+import { nyttTexti, TEGUND_HEITI, type TaekjaTegund } from "../../lib/board/sjalftenging";
 import type { EiMidi, FestiVeggur } from "../../lib/board/ei-festing";
 import { beitaEi, veggirTeikningar } from "../../lib/board/ei-beiting";
 import { sjalfvirkirVeggir } from "../../lib/board/ei-greining";
 import { replaceCrossingMarks } from "../../lib/board/crossings";
 import { ritillDilarAMetra } from "../../lib/board/veggja-ritill-adgerdir";
 import { nyGreiningarLota } from "../../lib/board/veggja-ritill";
-import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
+import { drawingScaleFromWords, pixelsPerMeterFromScale } from "../../lib/board/mvs165";
 import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
 import {
@@ -66,6 +69,9 @@ import {
   veljaUttektHaed,
   vistaIUttekt,
   vorpunMyndar,
+  NYTT_MIDI,
+  type UttektHaed,
+  type UttektTaeki,
 } from "../../lib/board/uttekt";
 import { aetlaHluta, beitaFjolcrop, bladMyndar, finnaGrunnmyndir, rodAnSkorunar, skurdurEftirCrop } from "../../lib/board/margar-haedir";
 import { raesaFjolcrop, useFjolcrop } from "../../lib/board/fjolcrop";
@@ -217,7 +223,7 @@ export function WhiteboardApp() {
     w.__tpFjolcrop = useFjolcrop;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
-    w.__tpKit = { makeSymbol, placeMvs165Equipment, exportTiledPdf, getRegisteredStage };
+    w.__tpKit = { makeSymbol, exportTiledPdf, getRegisteredStage, detectFirewallsOnPlan, loadPlanCanvas, lesaTextaTeikningar, sltBrslOrd, sltBrslStadir };
   }, []);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
@@ -285,13 +291,12 @@ export function WhiteboardApp() {
       markBusyRef.current = true;
       try {
         const nidurstodur: EiNidurstada[] = [];
-        let gear = 0;
         for (let i = 0; i < images.length; i++) {
           const plan = images[i];
           useBoardStore.getState().setImportProgress({
             fileName: plan.name,
             percent: 8,
-            message: `Les teikningu og 165.BR1 (${i + 1}/${images.length})…`,
+            message: `Les EI-merkingar teikningarinnar (${i + 1}/${images.length})…`,
           });
           const res = await detectFirewallsOnPlan(plan, {
             extraWords: textByObjectId[plan.id],
@@ -302,30 +307,29 @@ export function WhiteboardApp() {
                 message,
               }),
           });
-          const equipment = placeMvs165Equipment(plan, res.words, {
-            pixelsPerMeter: useBoardStore.getState().pixelsPerMeter,
-          });
-          if (equipment.pixelsPerMeter && !useBoardStore.getState().pixelsPerMeter) {
-            useBoardStore.getState().setPixelsPerMeter(equipment.pixelsPerMeter);
+          // Kvarði úr „1:100" á blaðinu ef borðið hefur engan (PDF-síða: borðeiningar á pt)
+          const kvardi = drawingScaleFromWords(res.words);
+          if (kvardi && plan.pixelsPerPdfPoint && !useBoardStore.getState().pixelsPerMeter) {
+            useBoardStore.getState().setPixelsPerMeter(pixelsPerMeterFromScale(kvardi, plan.pixelsPerPdfPoint));
           }
-          nidurstodur.push({ plan, merki: [...res.objects, ...equipment.objects], hits: res.hits, midar: res.midar });
-          gear += equipment.objects.filter((o) => o.type === "symbol").length;
+          // EI-greiningin gerir AÐEINS eldveggi — SLT/BRSL á sinn eigin takka (Agnar 07.10.2026: „slt/brsl lesturinn er
+          // ekki að lesa það heldur ei-60")
+          nidurstodur.push({ plan, merki: res.objects, hits: res.hits, midar: res.midar });
           // Öndun milli teikninga — látum React mála framvinduna og GC hreinsa
           await new Promise((resolve) => setTimeout(resolve, 60));
         }
-        const t = await beitaEiNidurstodum(nidurstodur, (o) => isFirewallMark(o) || isMvsMark(o));
+        const t = await beitaEiNidurstodum(nidurstodur, (o) => isFirewallMark(o));
         useBoardStore.getState().setImportProgress(null);
-        if (t.hits || gear) {
+        if (t.hits) {
           toast.success(
             `${t.hits} EI-merki: ${t.eldveggir} eldveggir festir á veggi` +
               (t.nyir ? ` (${t.nyir} nýir — teikningin átti enga veggi)` : t.breyttir ? ` (${t.breyttir} veggir fengu eldflokk)` : "") +
               (t.lausir ? ` · ${t.lausir} miðar fundu engan vegg — engin lína` : "") +
-              (gear ? ` · ${gear} tæki / slöngur / skilti skv. 165.BR1` : "") +
               " · ⌘Z afturkallar",
             { duration: 6000 }
           );
         } else {
-          toast.message("Fann engin E-30 / E-60 eða SLT/BRSL merki á teikningunni");
+          toast.message("Fann engin EI-30 / EI-60 merki á teikningunni");
         }
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
@@ -336,6 +340,147 @@ export function WhiteboardApp() {
     },
     []
   );
+
+  // „SLT / BRSL af teikningu" (Slökkvitæki-hamur) — AÐEINS slökkvitæki, slöngur og skilti; eldveggir eiga sinn takka
+  // („EI-30 / EI-60"). Agnar 07.10.2026, Álfaborg 1. hæð: „slt/brsl lesturinn er ekki að lesa það heldur ei-60". Hver
+  // BRSL-merking verður slanga Á TÁKNI slöngukeflisins (ekki á textanum), SLT við hliðina eða þar sem textinn stendur;
+  // hvert tæki tengist óstaðsettu tæki staðarins af réttri tegund, annars „ótengt" (Nýtt við vistun). Eitt ⌘Z-skref.
+  const sltBusyRef = useRef(false);
+  const merkjaSltBrsl = useCallback(async () => {
+    const st0 = useBoardStore.getState();
+    const allar = st0.objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden);
+    const valdar = allar.filter((o) => st0.selectedIds.includes(o.id));
+    const images = valdar.length ? valdar : allar;
+    if (!images.length) {
+      toast.message("Engin teikning á borðinu til að lesa");
+      return;
+    }
+    if (sltBusyRef.current || markBusyRef.current) {
+      toast.message("Lestur teikningar er þegar í gangi — augnablik…");
+      return;
+    }
+    sltBusyRef.current = true;
+    const t0 = performance.now();
+    try {
+      const teikningar: SltBrslTeikning[] = [];
+      for (let i = 0; i < images.length; i++) {
+        const plan = images[i];
+        const framvinda = (message: string, percent: number) =>
+          useBoardStore.getState().setImportProgress({ fileName: plan.name, percent, message });
+        framvinda(`Les SLT / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
+        // SLT/BRSL eru láréttir: aðeins láréttur lestur (⅓ tímans — Álfaborg: ~115 s í stað ~300 s)
+        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: false, onProgress: framvinda });
+        const src = { b: r.srcW, h: r.srcH };
+        const v = vorpunMyndar(plan);
+        const hus = v ? husSvaediIMynd(plan.uttekt?.skurdur, v.frum, v.svaedi, src) : null;
+        let ord = sltBrslOrd(r.words, src, hus);
+        let stadir = sltBrslStadir(ord, r.blek);
+        // Slöngukefli sem fékk ekkert SLT: reiturinn kringum það lesinn aftur (OCR missir stök orð á fullri síðu)
+        const hMid = ord.length ? [...ord].sort((a, b) => a.h - b.h)[Math.floor(ord.length / 2)].h : 20;
+        const rammar = r.blek ? endurlestrarRammar(stadir, hMid) : [];
+        let endurlesid = 0;
+        let aukaOrd: string[] = [];
+        if (rammar.length && r.blek) {
+          framvinda(`Les aftur við ${rammar.length} slöngukefli…`, 90);
+          const auka = await lesaSvaedi(r.blek, rammar);
+          aukaOrd = auka.filter((w) => w.text.length <= 8).map((w) => `${w.text}@${Math.round(w.x)},${Math.round(w.y)}:${Math.round(w.confidence)}`);
+          const ord2 = sltBrslOrd([...r.words, ...auka], src, hus);
+          if (ord2.length > ord.length) {
+            endurlesid = ord2.length - ord.length;
+            ord = ord2;
+            stadir = sltBrslStadir(ord, r.blek);
+          }
+        }
+        console.info(
+          "[SLT] " +
+            JSON.stringify({
+              teikning: plan.name,
+              mynd: [r.srcW, r.srcH],
+              bord: [Math.round(plan.x), Math.round(plan.y), Math.round(plan.width), Math.round(plan.height)],
+              hus: hus && [Math.round(hus.x0), Math.round(hus.y0), Math.round(hus.x1), Math.round(hus.y1)],
+              ord: ord.map((o) => [o.tegund, Math.round(o.x), Math.round(o.y), Math.round(o.vissa), o.texti]),
+              stadir: stadir.map((s) => [Math.round(s.x), Math.round(s.y), s.brsl ? 1 : 0, s.slt ? 1 : 0, s.takn ? 1 : 0]),
+              endurlesid,
+              aukaOrd,
+            })
+        );
+        const bord = useBoardStore.getState();
+        const metri = ritillDilarAMetra(bord.objects, bord.pixelsPerMeter) ?? dilarAMetraGisk({ b: plan.width, h: plan.height });
+        const staerd = plan.uttekt
+          ? stimpilStaerdMyndar(plan, getStampSize())
+          : stimpilStaerdBords(bord.objects, getStampSize(), { x: plan.x + plan.width / 2, y: plan.y + plan.height / 2 });
+        teikningar.push({ plan, stadir: stadirABord(stadir, plan, src), staerd, metri });
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+      // Tæki staðarins — FERSK úr úttektinni (tæki sem eru merki á einhverri hæð eru staðsett og ekki tekin)
+      const cid = images.find((p) => p.uttekt)?.uttekt?.companyId ?? null;
+      let taeki: UttektTaeki[] | null = null;
+      let haedir: UttektHaed[] = [];
+      if (cid) {
+        useBoardStore.getState().setImportProgress({ fileName: images[0].name, percent: 96, message: "Sæki tæki staðarins…" });
+        try {
+          const u = await saekjaUttekt(cid);
+          taeki = u.taeki;
+          haedir = u.haedir;
+          useUttektGogn.getState().setGogn({ companyId: cid, nafn: u.nafn, haedir: u.haedir, taeki: u.taeki });
+        } catch (err) {
+          toast.error("Gat ekki sótt tæki staðarins — tækin verða ótengd: " + (err instanceof Error ? err.message : String(err)));
+        }
+      }
+      let draegi = false;
+      try {
+        draegi = localStorage.getItem(DRAEGI_LYKILL) === "1";
+      } catch {
+        /* einkagluggi */
+      }
+      const st = useBoardStore.getState();
+      st.commitHistory();
+      const b = beitaSltBrsl(st.objects, teikningar, { taeki, haedir, draegi });
+      useBoardStore.setState({ objects: b.objects, selectedIds: [] });
+      useBoardStore.getState().setImportProgress(null);
+      const brsl = b.samantekt.reduce((s, x) => s + x.brsl, 0);
+      const slt = b.samantekt.reduce((s, x) => s + x.slt, 0);
+      const tengd = b.samantekt.reduce((s, x) => s + x.tengd.length, 0);
+      const fyrir = b.samantekt.reduce((s, x) => s + x.fyrir, 0);
+      const otengdT: Partial<Record<TaekjaTegund, number>> = {};
+      for (const x of b.samantekt) {
+        for (const [k, n] of Object.entries(x.otengdTegundir) as [TaekjaTegund, number][]) otengdT[k] = (otengdT[k] ?? 0) + n;
+      }
+      const otengd = Object.values(otengdT).reduce((s, n) => s + (n ?? 0), 0);
+      console.info(
+        "[SLT] " +
+          JSON.stringify({
+            ms: Math.round(performance.now() - t0),
+            brsl,
+            slt,
+            tengd: b.samantekt.flatMap((x) => x.tengd.map((t) => [t.hvad, t.unitId, t.serial])),
+            otengd: otengdT,
+            fyrir,
+            fjarlaegd: b.fjarlaegd,
+          })
+      );
+      if (!brsl && !slt) {
+        toast.message("Fann engin SLT / BRSL á teikningunni" + (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : ""));
+        return;
+      }
+      toast.success(
+        `${brsl} BRSL · ${slt} SLT á teikningunni` +
+          (tengd ? ` · ${tengd} tengd við tæki staðarins` : "") +
+          (otengd
+            ? ` · ${otengd} ótengd (${(Object.keys(otengdT) as TaekjaTegund[]).map((k) => `${TEGUND_HEITI[k]} ${otengdT[k]}`).join(", ")}) — verða „Nýtt“ við vistun`
+            : "") +
+          (fyrir ? ` · ${fyrir} áttu tæki fyrir` : "") +
+          (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : "") +
+          " · ⌘Z afturkallar",
+        { duration: 8000 }
+      );
+    } catch (err) {
+      useBoardStore.getState().setImportProgress(null);
+      toast.error(err instanceof Error ? err.message : "Gat ekki lesið SLT / BRSL");
+    } finally {
+      sltBusyRef.current = false;
+    }
+  }, []);
 
   const runImport = useCallback(async (
     files: File[],
@@ -584,6 +729,7 @@ export function WhiteboardApp() {
         case "thrividd":
           return setThrividd(true);
         case "slt-brsl":
+          return void merkjaSltBrsl();
         case "ei":
           return merkjaEldveggi();
         case "eldveggur":
@@ -616,7 +762,7 @@ export function WhiteboardApp() {
           return;
       }
     },
-    [greinaVeggi, hreinsaTeikningu, merkjaEldveggi]
+    [greinaVeggi, hreinsaTeikningu, merkjaEldveggi, merkjaSltBrsl]
   );
 
   const runCrop = useCallback(
@@ -1121,6 +1267,19 @@ export function WhiteboardApp() {
       for (const n of r.nyirStimplar) {
         st.patchObject(n.objId, { uttektUnitId: n.unitId, uttektKind: "sign", uttektSign: n.sign } as Partial<BoardObject>, false);
       }
+      // Sjálftengd tækjatákn fá tækið (verða græn, raðnúmer undir) og ný Nýtt-tákn n:-lykilinn — næsta vistun færir þau í
+      // stað þess að tengja / bæta við aftur (tæki eru fjöldi: aldrei tvítalið).
+      for (const n of r.sjalftengd) {
+        const o = st.objects.find((x) => x.id === n.objId);
+        st.patchObject(
+          n.objId,
+          { uttektUnitId: n.unitId, label: stuttNumer(n.serial), uttektPx: o && o.type === "symbol" ? o.size : undefined } as Partial<BoardObject>,
+          false
+        );
+      }
+      for (const n of r.nyttMerki) {
+        st.patchObject(n.objId, { uttektUnitId: n.unitId, label: NYTT_MIDI, name: `Nýtt · ${n.tegund} (í bið)` } as Partial<BoardObject>, false);
+      }
       // Merki sem bættust við í appinu eftir opnun (eða eldra borð án `merki`) eru í hæðinni en ekki á borðinu:
       // sett á borðið svo það sýni úttektina eins og hún er — hver hæð á sína mynd (margar hæðir: „Croppa oft").
       let sott = 0;
@@ -1164,6 +1323,8 @@ export function WhiteboardApp() {
         if (useBoardStore.getState().name !== bordNafn) useBoardStore.getState().setName(bordNafn);
       }
       const auka = [
+        r.sjalftengd.length ? `${r.sjalftengd.length} tæki tengd sjálfkrafa við skráð tæki staðarins` : "",
+        nyttTexti(r.nytt),
         r.otengd ? `${r.otengd} tákn án tengingar vistast ekki í úttekt` : "",
         r.utan ? `${r.utan} tæki standa utan teikningar og voru ekki færð` : "",
         r.tvitekin ? `${r.tvitekin} afrit af tæki vistast ekki (tæki er á einum stað)` : "",

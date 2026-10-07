@@ -22,8 +22,9 @@ import {
   SquareDashed,
   Waypoints,
 } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
+import { DRAEGI_LYKILL } from "../../lib/board/slt-brsl";
 
 export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
   "croppa-oft": {
@@ -51,7 +52,12 @@ export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: 
     takn: <Flame className="size-3.5 text-[#ef5350]" />,
   },
   thrividd: { texti: "3D", titill: "Hús í 3D — veggir og tæki á öllum hæðum", takn: <Box className="size-3.5" /> },
-  "slt-brsl": { texti: "SLT / BRSL af teikningu", titill: "Lesa SLT, BRSL og skilti af teikningunni og setja tækin á hönnuðu staðina (165.BR1)", takn: <ScanSearch className="size-3.5" /> },
+  "slt-brsl": {
+    texti: "SLT / BRSL af teikningu",
+    titill:
+      "Lesa SLT og BRSL af teikningunni: slanga á tákni slöngukeflisins, slökkvitæki við hliðina — tengt við óstaðsett tæki staðarins (annars „ótengt“ → Nýtt við vistun), og skilti. Eldveggir ekki (EI-30 / EI-60). ⌘Z afturkallar.",
+    takn: <ScanSearch className="size-3.5" />,
+  },
   ei: { texti: "EI-30 / EI-60", titill: "Lesa EI-merkingar og merkja eldveggina", takn: <Flame className="size-3.5 text-[#FE653F]" /> },
   eldveggur: { texti: "Eldveggur", titill: "Teikna eldvegg EI-60 — haltu inni og dragðu", takn: <Waypoints className="size-3.5" /> },
   gegnumtok: { texti: "Gegnumtök", titill: "Merkja þar sem lagnir krossa veggi — sterkari merki á EI-veggjum", takn: <Crosshair className="size-3.5" /> },
@@ -64,6 +70,15 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const setHamur = useHamur((s) => s.setHamur);
   useEffect(() => hladaHam(), []);
   const h = getHamur(hamur);
+  // „Sýna drægi slangna (165.BR1)" — sjálfgefið AF (Agnar 07.10.2026: „og taka þennan rauða hring")
+  const [draegi, setDraegi] = useState(false);
+  useEffect(() => {
+    try {
+      setDraegi(localStorage.getItem(DRAEGI_LYKILL) === "1");
+    } catch {
+      /* einkagluggi */
+    }
+  }, []);
 
   return (
     <div className="border-b border-white/8 py-2.5 pr-6 pl-3" title={h.lysing}>
@@ -101,6 +116,24 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
           );
         })}
       </div>
+      {h.adgerdir.includes("slt-brsl") ? (
+        <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[10.5px] text-stone-400" title="Teiknar 25 m drægi kringum hverja brunaslöngu næst þegar „SLT / BRSL af teikningu“ er keyrt">
+          <input
+            type="checkbox"
+            checked={draegi}
+            data-draegi-slangna
+            onChange={(e) => {
+              setDraegi(e.target.checked);
+              try {
+                localStorage.setItem(DRAEGI_LYKILL, e.target.checked ? "1" : "0");
+              } catch {
+                /* einkagluggi */
+              }
+            }}
+          />
+          Sýna drægi slangna (165.BR1)
+        </label>
+      ) : null}
     </div>
   );
 }

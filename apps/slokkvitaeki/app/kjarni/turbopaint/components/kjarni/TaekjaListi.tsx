@@ -18,6 +18,7 @@ import {
 } from "../../lib/board/taekjalisti";
 import { byggjaStodurMargar, finnaTengduMynd, myndirTengdar, myndUndir, TEIKNING_STIMPLAR, vorpunMyndar } from "../../lib/board/uttekt";
 import { afvopna, useTaekjaVal, useUttektGogn, vopna, type TaekjaVal } from "../../lib/board/uttekt-gogn";
+import { MIDI_NYTT, nyttEftirTegund, type TaekjaTegund } from "../../lib/board/sjalftenging";
 import { MerkiTakn } from "./MerkiTakn";
 import { StaerdAllraMerkja } from "./StaerdAllra";
 
@@ -68,13 +69,29 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
     [rettGogn, objects, t]
   );
   const hopar = useMemo(() => flokkaTaekjalista(siaTaekjalista(listi, leit, adeinsOstadsett)), [listi, leit, adeinsOstadsett]);
-  const otengd = useMemo(() => {
+  // Forskoðun vistunar: ótengd tákn (vistast ekki), tækjatákn sem tengjast skráðum tækjum við vistun, og Nýtt-tæki eftir
+  // tegund (tillaga sem bíður samþykkis eiganda — talningin er grunnur tilboðs). Ekkert skrifast hér.
+  const forskodun = useMemo(() => {
     const lidir = myndirTengdar(objects).flatMap((m) => {
       const v = vorpunMyndar(m);
       return v ? [{ mynd: m, frum: v.frum, svaedi: v.svaedi }] : [];
     });
-    return byggjaStodurMargar(objects, lidir, () => "s:x:0").hlutar.reduce((s, h) => s + h.otengd, 0);
-  }, [objects]);
+    const b = byggjaStodurMargar(
+      objects,
+      lidir,
+      () => "s:x:0",
+      rettGogn ? { taeki: rettGogn.taeki, haedir: rettGogn.haedir, nyttLykill: (t) => "n:" + t + ":forskodun" } : undefined
+    );
+    const nytt: Partial<Record<TaekjaTegund, number>> = {};
+    for (const h of b.hlutar) for (const [k, n] of Object.entries(h.nytt) as [TaekjaTegund, number][]) nytt[k] = (nytt[k] ?? 0) + n;
+    return {
+      otengd: b.hlutar.reduce((s, h) => s + h.otengd, 0),
+      tengjast: b.hlutar.reduce((s, h) => s + h.sjalftengd.length, 0),
+      nytt: nyttEftirTegund(nytt),
+    };
+  }, [objects, rettGogn]);
+  const otengd = forskodun.otengd;
+  const nyttAlls = forskodun.nytt.reduce((s, l) => s + l.fjoldi, 0);
 
   if (!t) return null;
   const her = listi.filter((x) => x.stada === "her").length;
@@ -232,6 +249,21 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
               })}
             </div>
           </div>
+          {forskodun.tengjast ? (
+            <div className="text-[10.5px] leading-snug text-emerald-300/90" data-tengjast>
+              {forskodun.tengjast} tækjatákn tengjast óstaðsettum tækjum staðarins við „Vista í úttekt“
+            </div>
+          ) : null}
+          {nyttAlls ? (
+            <div className="rounded border border-indigo-400/30 bg-indigo-400/8 px-2 py-1 text-[10.5px] leading-snug" data-nytt-talning>
+              <div className="font-semibold" style={{ color: "#a5b4fc" }} title="Tæki sem á eftir að skrá á félagið — tillaga sem bíður samþykkis eiganda">
+                <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: MIDI_NYTT }} />
+                Nýtt — í bið: {nyttAlls} {nyttAlls === 1 ? "tæki" : "tæki"}
+              </div>
+              <div className="text-stone-400">{forskodun.nytt.map((l) => `${l.heiti} ${l.fjoldi}`).join(" · ")}</div>
+              <div className="text-stone-500">Bíða samþykkis eiganda — tengjast sjálfkrafa þegar tækin hafa verið skráð</div>
+            </div>
+          ) : null}
           {otengd ? (
             <div className="text-[10.5px] leading-snug text-amber-300/90">
               {otengd} tákn án tengingar vistast ekki í úttekt

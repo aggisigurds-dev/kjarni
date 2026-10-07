@@ -16,7 +16,7 @@ const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 /** Svart blek á hvítu fyrir OCR: rauð/bleik ský og lituð yfirstrikun sem
  * liggja yfir EI-merkingum á skönnuðum teikningum drekkja textanum annars.
  * Keyrt í bútum með yield svo aðalþráðurinn frjósi ekki (19M+ pixlar). */
-async function binarizeForOcr(canvas: HTMLCanvasElement) {
+async function binarizeForOcr(canvas: HTMLCanvasElement, blek?: Uint8Array) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -32,6 +32,7 @@ async function binarizeForOcr(canvas: HTMLCanvasElement) {
       const max = Math.max(r, g, b);
       const sat = max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
       const ink = data[i + 3] > 60 && lum < 165 && sat < 0.45;
+      if (blek && ink) blek[i >> 2] = 1;
       const v = ink ? 0 : 255;
       data[i] = v;
       data[i + 1] = v;
@@ -240,7 +241,8 @@ function mapCcwRotatedWord(word: OcrWord, srcWidth: number): OcrWord {
 async function ocrPlan(
   prepared: { canvas: HTMLCanvasElement; scale: number },
   extra: OcrWord[],
-  onProgress?: (message: string, percent: number) => void
+  onProgress?: (message: string, percent: number) => void,
+  lodrett = true
 ) {
   const { canvas, scale } = prepared;
   const worker = await getWorker(onProgress);
@@ -250,16 +252,21 @@ async function ocrPlan(
   });
   onProgress?.("Les láréttar merkingar…", 48);
   const horiz = await worker.recognize(canvas, {}, { blocks: true, text: true });
-  onProgress?.("Les lóðréttar merkingar (neðan-upp)…", 66);
-  const rotatedCw = rotate90cw(canvas);
-  const vertCw = await worker.recognize(rotatedCw, {}, { blocks: true, text: true });
-  rotatedCw.width = 0;
-  rotatedCw.height = 0;
-  onProgress?.("Les lóðréttar merkingar (ofan-niður)…", 80);
-  const rotatedCcw = rotate90ccw(canvas);
-  const vertCcw = await worker.recognize(rotatedCcw, {}, { blocks: true, text: true });
-  rotatedCcw.width = 0;
-  rotatedCcw.height = 0;
+  // Lóðréttu lestrarnir (2/3 tímans) aðeins þegar lóðréttur texti skiptir máli (EI-merkingar meðfram veggjum)
+  let vertCw: Awaited<ReturnType<TesseractWorker["recognize"]>> | null = null;
+  let vertCcw: Awaited<ReturnType<TesseractWorker["recognize"]>> | null = null;
+  if (lodrett) {
+    onProgress?.("Les lóðréttar merkingar (neðan-upp)…", 66);
+    const rotatedCw = rotate90cw(canvas);
+    vertCw = await worker.recognize(rotatedCw, {}, { blocks: true, text: true });
+    rotatedCw.width = 0;
+    rotatedCw.height = 0;
+    onProgress?.("Les lóðréttar merkingar (ofan-niður)…", 80);
+    const rotatedCcw = rotate90ccw(canvas);
+    vertCcw = await worker.recognize(rotatedCcw, {}, { blocks: true, text: true });
+    rotatedCcw.width = 0;
+    rotatedCcw.height = 0;
+  }
   const srcW = canvas.width;
   const srcH = canvas.height;
   canvas.width = 0;
@@ -267,8 +274,8 @@ async function ocrPlan(
 
   const words = [
     ...wordsFromResult(horiz.data, false),
-    ...wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, srcH)),
-    ...wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, srcW)),
+    ...(vertCw ? wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, srcH)) : []),
+    ...(vertCcw ? wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, srcW)) : []),
   ].map((w) => ({
     ...w,
     x: w.x / scale,
@@ -350,18 +357,25 @@ export async function loadPlanCanvas(plan: ImageObject) {
   return canvas;
 }
 
-export async function detectFirewallsOnPlan(
+/** Blekgríma OCR-myndarinnar: 1 = blek (svart, ómettað), 0 = autt. `kvardi` = OCR-dílar á hvern díl myndarinnar. */
+export type BlekGrima = { w: number; h: number; kvardi: number; data: Uint8Array };
+
+/** Texti teikningarinnar eins og TurboPaint les hann (sama leið og EI-greiningin): orðin í DÍLUM MYNDARINNAR (srcW ×
+ * srcH — ekki borðeiningum; borðið fær plan.x + x · plan.width / srcW). `medBlek` skilar líka blekgrímu OCR-myndarinnar
+ * (til að finna tákn við orðin) — annars er hún ekki geymd. */
+export async function lesaTextaTeikningar(
   plan: ImageObject,
   options?: {
     extraWords?: OcrWord[];
     onProgress?: (message: string, percent: number) => void;
+    medBlek?: boolean;
+    /** false = aðeins láréttur texti (⅓ tímans) — SLT/BRSL. Sjálfgefið: allar þrjár stefnur (EI). */
+    lodrett?: boolean;
   }
-): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[] }> {
+): Promise<{ words: OcrWord[]; hits: FirewallHit[]; srcW: number; srcH: number; blek: BlekGrima | null }> {
   const canvas = await loadPlanCanvas(plan);
   const srcW = canvas.width;
   const srcH = canvas.height;
-  const sx = plan.width / srcW;
-  const sy = plan.height / srcH;
   const extra = options?.extraWords ?? [];
 
   // OCR-afritið STRAX og risastóra frumritið losað — full upplausn (permalink-TIF 9933×7016 ≈ 280 MB per getImageData)
@@ -370,9 +384,75 @@ export async function detectFirewallsOnPlan(
   const ocrFit = fitCanvas(canvas, OCR_MAX, OCR_MIN);
   canvas.width = 0;
   canvas.height = 0;
-  await binarizeForOcr(ocrFit.canvas);
+  const bw = ocrFit.canvas.width, bh = ocrFit.canvas.height;
+  const blekData = options?.medBlek ? new Uint8Array(bw * bh) : undefined;
+  await binarizeForOcr(ocrFit.canvas, blekData);
 
-  const { words, hits: rawHits } = await ocrPlan(ocrFit, extra, options?.onProgress);
+  const { words, hits } = await ocrPlan(ocrFit, extra, options?.onProgress, options?.lodrett !== false);
+  return {
+    words,
+    hits,
+    srcW,
+    srcH,
+    blek: blekData ? { w: bw, h: bh, kvardi: ocrFit.scale, data: blekData } : null,
+  };
+}
+
+/** Endurlestur afmarkaðra svæða (myndardílar) úr blekgrímunni: svart á hvítu, 2× stækkað, PSM 11. Á fullri síðu missir
+ * OCR stök stutt orð (Álfaborg 1. hæð: 4 af 8 „SLT" við slöngukeflin) — á litlum reit les hann þau. Orðin í myndardílum. */
+export async function lesaSvaedi(
+  blek: BlekGrima,
+  rammar: { x0: number; y0: number; x1: number; y1: number }[]
+): Promise<OcrWord[]> {
+  if (!rammar.length) return [];
+  const worker = await getWorker();
+  await worker.setParameters({ tessedit_pageseg_mode: "11", user_defined_dpi: "220" });
+  const S = 2;
+  const k = blek.kvardi;
+  const ut: OcrWord[] = [];
+  for (const r of rammar) {
+    const bx0 = Math.max(0, Math.floor(r.x0 * k)), by0 = Math.max(0, Math.floor(r.y0 * k));
+    const bx1 = Math.min(blek.w, Math.ceil(r.x1 * k)), by1 = Math.min(blek.h, Math.ceil(r.y1 * k));
+    const w = bx1 - bx0, h = by1 - by0;
+    if (w < 8 || h < 8) continue;
+    const canvas = document.createElement("canvas");
+    canvas.width = w * S;
+    canvas.height = h * S;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+    const img = ctx.createImageData(w * S, h * S);
+    const d = img.data;
+    for (let y = 0; y < h * S; y++) {
+      const sy = by0 + ((y / S) | 0);
+      for (let x = 0; x < w * S; x++) {
+        const v = blek.data[sy * blek.w + bx0 + ((x / S) | 0)] ? 0 : 255;
+        const i = (y * w * S + x) * 4;
+        d[i] = d[i + 1] = d[i + 2] = v;
+        d[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const res = await worker.recognize(canvas, {}, { blocks: true, text: true });
+    canvas.width = 0;
+    canvas.height = 0;
+    for (const o of wordsFromResult(res.data, false)) {
+      ut.push({ ...o, x: (o.x / S + bx0) / k, y: (o.y / S + by0) / k, width: o.width / S / k, height: o.height / S / k });
+    }
+    await yieldToUi();
+  }
+  return ut;
+}
+
+export async function detectFirewallsOnPlan(
+  plan: ImageObject,
+  options?: {
+    extraWords?: OcrWord[];
+    onProgress?: (message: string, percent: number) => void;
+  }
+): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[]; srcW: number; srcH: number }> {
+  const { words, hits: rawHits, srcW, srcH } = await lesaTextaTeikningar(plan, options);
+  const sx = plan.width / srcW;
+  const sy = plan.height / srcH;
   const hits = rawHits.filter((hit) => !inTitleBlock(hit, srcW, srcH));
 
   const objects: BoardObject[] = [];
@@ -400,6 +480,8 @@ export async function detectFirewallsOnPlan(
     hits,
     words,
     midar,
+    srcW,
+    srcH,
   };
 }
 

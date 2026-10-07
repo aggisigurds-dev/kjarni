@@ -26,6 +26,8 @@
 import { newId } from "./ids";
 import { getSupabase } from "./supabase";
 import {
+  erNyttLykill,
+  erNyttMerki,
   erStimpilMerki,
   faerslaLykils,
   faerslaTakns,
@@ -45,6 +47,7 @@ import {
   type Stimpill,
 } from "./merkjasafn";
 import { getSymbol } from "./symbols";
+import { nyttMerkisId, stadsettirLyklar, TaekjaSjodur, TEGUND_HEITI, tegundTakns, type TaekjaTegund } from "./sjalftenging";
 import { erVeggTegund, tegundUrVistun, vistunarSnid, type FrumVeggur } from "./teikning-veggir";
 import type { BladHluti, BoardObject, ImageObject, LineObject, SymbolObject, UttektTenging } from "./types";
 import { erVeggur, VEGG_LITIR, VEGG_NOFN } from "./veggja-leidretting";
@@ -62,6 +65,12 @@ export type UttektMerki = {
   staerd?: number;
   /** Tákn sem notandinn valdi á tækið í Teikning-glugganum (434 lykill/stimpill). */
   takn?: string;
+  /** „Nýtt": tæki sem á eftir að skrá (unitId `n:<lykill>:<id>`) — tillaga sem bíður samþykkis eiganda. */
+  nytt?: boolean;
+  /** Tegund Nýtt-tækis eins og tæki eru skráð (Léttvatn, ABC Duft, CO2, Brunaslanga). */
+  tegund?: string;
+  /** Staða Nýtt-tækis: „bid" = bíður samþykkis. */
+  stada?: string;
   [k: string]: unknown;
 };
 /** Merki um að veggir hæðarinnar voru leiðréttir annars staðar en í Teikning-glugganum. */
@@ -98,6 +107,9 @@ export type UttektStada = {
   rot?: number;
   /** Eigin stærð merkis (433 `staerd`, skjápunktar Teikning-gluggans) — aðeins þegar táknið var stækkað/minnkað. */
   staerd?: number;
+  /** Nýtt-merki: tegundin (fylgir tákninu) — sjá UttektMerki.nytt. */
+  nytt?: boolean;
+  tegund?: string;
 };
 
 type MyndMedTengingu = ImageObject;
@@ -403,7 +415,18 @@ export function merkiFraTakni(s: TaknMedTaeki, p: { x: number; y: number }, vidm
     stada.kind = "sign";
     stada.sign = sign || undefined;
   }
+  if (erNyttLykill(unitId)) {
+    // Nýtt-tæki: tegundin fylgir tákninu (sé því breytt í annað tæki breytist tegundin líka)
+    stada.nytt = true;
+    stada.tegund = TEGUND_HEITI[tegundTakns(s.symbolId) ?? nyttTegundUrLykli(unitId)];
+  }
   return stada;
+}
+
+/** Tegund úr Nýtt-lykli `n:<lykill>:<id>` (annað = „annad"). */
+function nyttTegundUrLykli(unitId: unknown): TaekjaTegund {
+  const l = String(unitId ?? "").split(":")[1] || "";
+  return (["lettvatn", "duft", "co2", "slanga"] as string[]).includes(l) ? (l as TaekjaTegund) : "annad";
 }
 
 /** Færir staðsetningar táknanna inn í hæðina. Tæki sem fær stöðu hér er tekið af ÖÐRUM hæðum (tæki er aðeins á einni
@@ -431,6 +454,10 @@ export function uppfaeraHaedir(
     if ("color" in s && s.color) stada.color = s.color;
     if ("rot" in s && s.rot != null) stada.rot = s.rot;
     if ("staerd" in s && s.staerd != null) stada.staerd = s.staerd;
+    if ("nytt" in s && s.nytt) {
+      stada.nytt = true;
+      if (s.tegund) stada.tegund = s.tegund;
+    }
     map.set(merkiLykill(unitId), stada);
   });
   const burt = new Set<string>();
@@ -467,7 +494,14 @@ export function uppfaeraHaedir(
       const virk = klemmaStaerd(m.staerd) || (g != null ? g : 0);
       const staerd = s.staerd != null && s.staerd !== virk;
       if (staerd) next.staerd = s.staerd;
-      if (!kyrrt || snuid || staerd) breytt++;
+      // Nýtt-tæki: tegundin fylgir tákninu; merkið heldur `nytt` og stöðunni (bíður samþykkis)
+      const tegundBreytt = !!s.nytt && !!s.tegund && s.tegund !== m.tegund;
+      if (s.nytt) {
+        next.nytt = true;
+        if (s.tegund) next.tegund = s.tegund;
+        if (!next.stada) next.stada = "bid";
+      }
+      if (!kyrrt || snuid || staerd || tegundBreytt) breytt++;
       uppf.push(next);
     }
     map.forEach((s, key) => {
@@ -479,6 +513,11 @@ export function uppfaeraHaedir(
       // 433 skrifar rot á hvern stimpil (0 líka); á tæki aðeins ef því er snúið
       if (s.rot != null && (s.rot !== 0 || s.kind === "sign")) merkiNy.rot = s.rot;
       if (s.staerd != null && (g == null || s.staerd !== g)) merkiNy.staerd = s.staerd;
+      if (s.nytt) {
+        merkiNy.nytt = true;
+        merkiNy.tegund = s.tegund;
+        merkiNy.stada = "bid";
+      }
       uppf.push(merkiNy);
       ny++;
     });
@@ -492,7 +531,8 @@ export function nyttStimpilId(sign: string): string {
   return "s:" + sign + ":" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-/** Hönnunarstaðir úr „SLT/BRSL af teikningunni" (165.BR1) eru vinnugögn, ekki merki á staðnum — þeir vistast ekki. */
+/** Hönnunarmerki úr „SLT / BRSL af teikningu" (165.BR1: skilti, drægi, yfirlitsmiði) eru vinnugögn, ekki merki á staðnum
+ * — þau vistast ekki og teljast ekki „án tengingar". (Tækin sem lesturinn setur eru venjuleg tækjatákn.) */
 function erHonnunarstadur(o: { name?: string }): boolean {
   return String(o.name || "").startsWith("165.BR1");
 }
@@ -505,13 +545,23 @@ export type StodurBords = {
   aBordi: Set<string>;
   /** Ótengd tákn sem vistast sem nýir stimplar; borðið fær unitId þeirra eftir vistun (svo næsta vistun tvöfaldi ekki). */
   nyirStimplar: { objId: string; unitId: string; sign: string }[];
-  /** Sýnileg tákn á teikningunni sem eiga hvorki tæki né stimpil — vistast ekki í úttekt. */
+  /** Sýnileg tákn á teikningunni sem eiga hvorki tæki, stimpil né tækjategund — vistast ekki í úttekt. */
   otengd: number;
   /** Tengd tákn sem standa utan teikningar — staða þeirra er óbreytt. */
   utan: number;
   /** Afrit af tæki sem er þegar á borðinu (tæki er aðeins á einum stað) — fyrsta táknið gildir. */
   tvitekin: number;
+  /** Sjálftenging: ótengt tækjatákn (eða Nýtt) sem fékk óstaðsett tæki af sömu tegund — borðið fær unitId eftir vistun. */
+  sjalftengd: { objId: string; unitId: number; serial: string | null; type: string | null; varNytt: string | null }[];
+  /** Tækjatákn sem fékk ekkert tæki og vistast sem NÝ Nýtt-merki — borðið fær n:-lykilinn eftir vistun. */
+  nyttMerki: { objId: string; unitId: string; tegund: string }[];
+  /** Öll Nýtt-merki hæðarinnar eftir vistun, eftir tegund (ný og eldri). */
+  nytt: Partial<Record<TaekjaTegund, number>>;
 };
+
+/** Sjálftenging og Nýtt (Agnar 07.10.2026): tæki staðarins og FERSKAR hæðir úttektarinnar. Án hennar (eldri hegðun)
+ * eru ótengd tækjatákn „án tengingar" og vistast ekki. */
+export type SjalfTenging = { taeki: UttektTaeki[] | null; haedir: UttektHaed[]; nyttLykill?: (t: TaekjaTegund) => string };
 
 /** Ein tengd mynd í vistun: myndin, stærð frummyndar, skurður hennar (null = allt blaðið) og stærðarviðmið. */
 export type MyndILotu = {
@@ -536,15 +586,32 @@ function myndTakns(s: SymbolObject, lidir: MyndILotu[]): number {
 
 /** Merki hverrar tengdrar myndar eins og borðið sýnir þau: tengd tæki + stimplar (tengdir eða samsvarandi tákn). Tákn
  * tilheyrir einni mynd (myndTakns) og vistast í hennar hæð; `aBordi` er sameiginlegt öllu borðinu (tæki er á einum
- * stað — afrit vistast ekki, og tákn sem stendur á annarri mynd telst ekki tekið af). */
+ * stað — afrit vistast ekki, og tákn sem stendur á annarri mynd telst ekki tekið af).
+ *
+ * Með `sjalf` (Vista í úttekt): hvert ótengt TÆKJAtákn — og hvert Nýtt-tákn — tengist óstaðsettu tæki af SÖMU tegund
+ * (sjalftenging.ts: tæki á engri hæð og ekki tengt á borðinu, aldrei tvisvar, úrelt aldrei); fái það ekkert verður það
+ * Nýtt-merki `{ unitId: "n:<lykill>:<id>", nytt: true, tegund, stada: "bid" }` — tæki eru aldrei búin til. */
 export function byggjaStodurMargar(
   objects: BoardObject[],
   lidir: MyndILotu[],
-  nyttId: (sign: string) => string = nyttStimpilId
+  nyttId: (sign: string) => string = nyttStimpilId,
+  sjalf?: SjalfTenging
 ): { hlutar: StodurBords[]; aBordi: Set<string> } {
   const aBordi = new Set<string>();
-  const hlutar: StodurBords[] = lidir.map(() => ({ stodur: new Map(), aBordi, nyirStimplar: [], otengd: 0, utan: 0, tvitekin: 0 }));
+  const hlutar: StodurBords[] = lidir.map(() => ({
+    stodur: new Map(),
+    aBordi,
+    nyirStimplar: [],
+    otengd: 0,
+    utan: 0,
+    tvitekin: 0,
+    sjalftengd: [],
+    nyttMerki: [],
+    nytt: {},
+  }));
   if (!lidir.length) return { hlutar, aBordi };
+  /** Tækjatákn sem fá tæki eða verða Nýtt — í röð borðsins, eftir að tengdu táknin eru talin. */
+  const kostir: { s: TaknMedTaeki; i: number; p: { x: number; y: number }; nyttKey: string | null; tegund: TaekjaTegund }[] = [];
   for (const o of objects) {
     if (o.type !== "symbol") continue;
     const s = o as TaknMedTaeki;
@@ -553,10 +620,16 @@ export function byggjaStodurMargar(
     const ut = hlutar[i];
     const p = taknIMerki(s, mynd, frum, svaedi);
     const inni = innanSvaedis(p, svaediMyndar(frum, svaedi));
+    let afritNytts = false;
     if (s.uttektUnitId != null && s.uttektUnitId !== "") {
       const unitId = kodaUnitId(s.uttektUnitId);
       const key = merkiLykill(unitId);
       if (!aBordi.has(key)) {
+        if (sjalf && erNyttLykill(key) && !s.hidden && inni) {
+          // Nýtt-tákn: tengist skráðu tæki ef það er komið (sjálftenging), annars helst það Nýtt
+          kostir.push({ s, i, p, nyttKey: key, tegund: tegundTakns(s.symbolId) ?? nyttTegundUrLykli(key) });
+          continue;
+        }
         aBordi.add(key);
         if (s.hidden) continue;
         if (!inni) {
@@ -564,16 +637,28 @@ export function byggjaStodurMargar(
           continue;
         }
         ut.stodur.set(key, merkiFraTakni(s, p, vidmid));
+        if (erNyttLykill(key)) {
+          const t = tegundTakns(s.symbolId) ?? nyttTegundUrLykli(key);
+          ut.nytt[t] = (ut.nytt[t] ?? 0) + 1;
+        }
         continue;
       }
-      // Sami lykill aftur = afrit. Afrit af stimpli verður nýr stimpill; afrit af tæki vistast ekki.
-      if (!erStimpil({ unitId, kind: s.uttektKind })) {
+      // Sami lykill aftur = afrit. Afrit af stimpli verður nýr stimpill; afrit af Nýtt-tæki verður nýtt Nýtt-tæki;
+      // afrit af tæki vistast ekki.
+      afritNytts = erNyttLykill(key);
+      if (!erStimpil({ unitId, kind: s.uttektKind }) && !afritNytts) {
         ut.tvitekin++;
         continue;
       }
     }
     if (s.hidden || !inni) continue;
-    const sign = erHonnunarstadur(s) ? null : stimpillFyrirTakn(s.symbolId, s.uttektSign || stimpillMerkis({ unitId: s.uttektUnitId }));
+    if (erHonnunarstadur(s)) continue;
+    const tegund = tegundTakns(s.symbolId);
+    if (sjalf && tegund && (afritNytts || !s.uttektSign)) {
+      kostir.push({ s, i, p, nyttKey: null, tegund });
+      continue;
+    }
+    const sign = stimpillFyrirTakn(s.symbolId, s.uttektSign || stimpillMerkis({ unitId: s.uttektUnitId }));
     if (!sign) {
       ut.otengd++;
       continue;
@@ -584,6 +669,28 @@ export function byggjaStodurMargar(
     ut.stodur.set(unitId, stada);
     aBordi.add(unitId);
     ut.nyirStimplar.push({ objId: s.id, unitId, sign });
+  }
+  if (sjalf && kostir.length) {
+    const sjodur = new TaekjaSjodur(sjalf.taeki ?? [], stadsettirLyklar(sjalf.haedir, objects));
+    const nyLykill = sjalf.nyttLykill ?? nyttMerkisId;
+    for (const k of kostir) {
+      const { s, i, p } = k;
+      const ut = hlutar[i];
+      const vidmid = lidir[i].vidmid;
+      const t = sjodur.taka([k.tegund]);
+      if (t) {
+        const key = merkiLykill(t.id);
+        aBordi.add(key);
+        ut.stodur.set(key, merkiFraTakni({ ...s, uttektUnitId: t.id, uttektKind: undefined, uttektSign: undefined }, p, vidmid));
+        ut.sjalftengd.push({ objId: s.id, unitId: t.id, serial: t.serial, type: t.type, varNytt: k.nyttKey });
+        continue;
+      }
+      const key = k.nyttKey ?? nyLykill(k.tegund);
+      aBordi.add(key);
+      ut.stodur.set(key, merkiFraTakni({ ...s, uttektUnitId: key, uttektKind: undefined, uttektSign: undefined }, p, vidmid));
+      if (!k.nyttKey) ut.nyttMerki.push({ objId: s.id, unitId: key, tegund: TEGUND_HEITI[k.tegund] });
+      ut.nytt[k.tegund] = (ut.nytt[k.tegund] ?? 0) + 1;
+    }
   }
   return { hlutar, aBordi };
 }
@@ -596,14 +703,20 @@ export function byggjaStodur(
   frum: { b: number; h: number },
   nyttId: (sign: string) => string = nyttStimpilId,
   vidmid?: StaerdarVidmid,
-  svaedi?: Svaedi | null
+  svaedi?: Svaedi | null,
+  sjalf?: SjalfTenging
 ): StodurBords {
-  return byggjaStodurMargar(objects, [{ mynd: { id: "", ...mynd }, frum, svaedi, vidmid }], nyttId).hlutar[0];
+  return byggjaStodurMargar(objects, [{ mynd: { id: "", ...mynd }, frum, svaedi, vidmid }], nyttId, sjalf).hlutar[0];
 }
 
 /** Merki hæðar → tákn á borðinu eins og Teikning-glugginn sýnir það: tákn úr merkjasafninu (434 lykillFyrir), plötulitur
  * merkisins (`color`), snúningur (`rot`) og eigin stærð (`staerd`, sama hlutfall við sjálfgefna stærð hæðarinnar og í
  * Teikning). Miðjað á staðnum og fest við myndina. Tæki fá síðustu sex stafi raðnúmers undir táknið. */
+/** Miði Nýtt-tækis á borðinu (2D) — tillaga sem bíður samþykkis eiganda. */
+export const NYTT_MIDI = "Nýtt";
+/** Miði ótengds tækjatákns (enn hvorki tæki né Nýtt — ræðst við „Vista í úttekt"). */
+export const OTENGT_MIDI = "ótengt";
+
 export function taknFyrirMerki(
   m: UttektMerki,
   taeki: UttektTaeki[],
@@ -614,7 +727,9 @@ export function taknFyrirMerki(
   svaedi?: Svaedi | null
 ): SymbolObject {
   const stimpill = erStimpil(m);
-  const t = stimpill ? undefined : taeki.find((x) => merkiLykill(x.id) === merkiLykill(m.unitId));
+  const nytt = !stimpill && erNyttMerki(m);
+  const t = stimpill || nytt ? undefined : taeki.find((x) => merkiLykill(x.id) === merkiLykill(m.unitId));
+  // Nýtt-merki: tákn tegundarinnar (434 lykillFyrir les `tegund`), miðinn „Nýtt"
   const lykill = lykillFyrir(m, t?.type);
   const symbolId = symbolIdLykils(lykill);
   const px = staerdABordi(m, staerd, grunnTeikning);
@@ -627,12 +742,12 @@ export function taknFyrirMerki(
     x: stadur.x,
     y: stadur.y,
     size: px,
-    label: stimpill ? "" : stuttNumer(t?.serial),
+    label: stimpill ? "" : nytt ? NYTT_MIDI : stuttNumer(t?.serial),
     rotation: rot,
     opacity: 1,
     locked: false,
     hidden: false,
-    name: getSymbol(symbolId).name,
+    name: nytt ? `Nýtt · ${typeof m.tegund === "string" && m.tegund ? m.tegund : getSymbol(symbolId).name} (í bið)` : getSymbol(symbolId).name,
     parentId: mynd.id,
     uttektUnitId: m.unitId,
     uttektPx: px,
@@ -888,13 +1003,17 @@ export type VistunarHluti = {
  *
  * Margar hæðir á einu borði („Croppa oft"): hver tengd mynd skrifar SÍNA hæð — tákn og veggir sem standa á henni,
  * varpað um skurð hennar. Skorin mynd (`bladhluti`) skrifar líka blaðið, frum og skurðinn (= hlutann) í hæðina; ný hæð
- * (`nyHaed`) bætist aftast. Aðeins hæðir sem eru tengdar á borðinu breytast — engri hæð er eytt. */
+ * (`nyHaed`) bætist aftast. Aðeins hæðir sem eru tengdar á borðinu breytast — engri hæð er eytt.
+ *
+ * `sjalf` (tæki staðarins): ótengd tækjatákn tengjast óstaðsettum tækjum af sömu tegund, og það sem ekki fær tæki
+ * vistast sem Nýtt-merki (byggjaStodurMargar). Án þess: eldri hegðun (ótengd tákn vistast ekki). */
 export function utbuaVistun(
   objects: BoardObject[],
   haedir: UttektHaed[],
   kl: string,
   nyttId: (sign: string) => string = nyttStimpilId,
-  stimpilBound = 56
+  stimpilBound = 56,
+  sjalf?: { taeki: UttektTaeki[] | null; nyttLykill?: (t: TaekjaTegund) => string }
 ) {
   const myndir = myndirTengdar(objects);
   if (!myndir.length) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
@@ -949,7 +1068,9 @@ export function utbuaVistun(
             },
     };
   });
-  const b = byggjaStodurMargar(objects, lidir, nyttId);
+  const b = byggjaStodurMargar(objects, lidir, nyttId, sjalf ? { taeki: sjalf.taeki, haedir: hs, nyttLykill: sjalf.nyttLykill } : undefined);
+  // Nýtt-merki sem fengu skráð tæki (sjálftenging) fara úr hæðinni — tækið kemur í staðinn
+  const nyttTengd = b.hlutar.flatMap((h) => h.sjalftengd.flatMap((x) => (x.varNytt ? [x.varNytt] : [])));
   let breytt = 0, ny = 0, tekin = 0, veggirAlls = 0;
   /** Hæðir sem fengu nýja stimpilStaerd („Stærð allra merkja"). */
   const stimpilBreytt: string[] = [];
@@ -959,7 +1080,7 @@ export function utbuaVistun(
     const t = m.uttekt!;
     const thekkt = Array.isArray(t.merki) ? t.merki : null;
     thekking.push(thekkt);
-    const fjarlaegja = thekkt ? thekkt.filter((k) => !b.aBordi.has(k)) : [];
+    const fjarlaegja = [...(thekkt ? thekkt.filter((k) => !b.aBordi.has(k)) : []), ...nyttTengd];
     const T = lidir[i].vidmid?.alltaf ? lidir[i].vidmid!.grunnTeikning : undefined;
     const u = uppfaeraHaedir(hs, t.haedId, b.hlutar[i].stodur, { fjarlaegja, grunnStaerd: T });
     hs = u.haedir;
@@ -1018,6 +1139,15 @@ export function utbuaVistun(
     nyjarHaedir: nyjar.map((n) => n.haed.id),
     /** Hæðir sem fengu nýja `stimpilStaerd` (Stærð allra merkja breytt á borðinu). */
     stimpilBreytt,
+    /** Sjálftengd tákn (fá unitId tækisins á borðinu eftir vistun). */
+    sjalftengd: b.hlutar.flatMap((h) => h.sjalftengd),
+    /** Ný Nýtt-merki (fá n:-lykilinn á borðinu eftir vistun). */
+    nyttMerki: b.hlutar.flatMap((h) => h.nyttMerki),
+    /** Öll Nýtt-tæki á vistuðu hæðunum eftir tegund — tillaga sem bíður samþykkis (upplýsingalína / tilboð). */
+    nytt: b.hlutar.reduce<Partial<Record<TaekjaTegund, number>>>((s, h) => {
+      for (const [k, n] of Object.entries(h.nytt) as [TaekjaTegund, number][]) s[k] = (s[k] ?? 0) + n;
+      return s;
+    }, {}),
   };
 }
 
@@ -1031,7 +1161,8 @@ export async function vistaIUttekt(objects: BoardObject[], stimpilBound = 56) {
   const sb = getSupabase();
   if (!sb) throw new Error("Engin tenging við gagnagrunn");
   const nu = await saekjaUttekt(t.companyId);
-  const u = utbuaVistun(objects, nu.haedir, new Date().toISOString(), nyttStimpilId, stimpilBound);
+  // Sjálftenging við tæki staðarins (ferskur listi): ótengd tækjatákn → óstaðsett tæki af sömu tegund, afgangurinn Nýtt
+  const u = utbuaVistun(objects, nu.haedir, new Date().toISOString(), nyttStimpilId, stimpilBound, { taeki: nu.taeki });
   const fyrsta = u.haedir[0];
   const { error, data } = await sb
     .from("teikning_bord")
