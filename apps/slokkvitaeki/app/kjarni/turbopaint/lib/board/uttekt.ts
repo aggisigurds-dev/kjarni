@@ -10,7 +10,8 @@
  *   mynd.uttekt = { companyId, haedId, frumB, frumH, skurdur? }
  *   tákn.uttektUnitId = uttaeki.id eða stimpils-id (s:…)
  *   tákn.uttektKind / uttektSign = kind/sign á stimplum
- *   veggur (lag „Veggir").veggTegund = veggur / gler / hurð → veggjaLinur[].tegund
+ *   veggur (lag „Veggir").veggTegund = veggur / gler / hurð → veggjaLinur[].tegund; eldveggur (ei60 / ei30) →
+ *   veggjaLinur[] = { tegund: "veggur", eld: 60 | 30 } (sjá vistunarSnid í teikning-veggir.ts)
  *
  * Veggir: TurboPaint er leiðréttingarborð hæðarinnar (Agnar 06.10.2026) — veggir Teikning-gluggans (pdfVeggir/veggir)
  * koma inn sem ritanlegir veggir þegar hæðin á engar veggjaLinur, og „Vista í úttekt" skrifar þá sem veggjaLinur +
@@ -44,7 +45,7 @@ import {
   type Stimpill,
 } from "./merkjasafn";
 import { getSymbol } from "./symbols";
-import { erVeggTegund, type FrumVeggur } from "./teikning-veggir";
+import { erVeggTegund, tegundUrVistun, vistunarSnid, type FrumVeggur } from "./teikning-veggir";
 import type { BladHluti, BoardObject, ImageObject, LineObject, SymbolObject, UttektTenging } from "./types";
 import { erVeggur, VEGG_LITIR, VEGG_NOFN } from "./veggja-leidretting";
 
@@ -289,7 +290,7 @@ export function veggirIFrum(
       for (let i = 0; i < p.length; i += 2) { sx += p[i]; sy += p[i + 1]; }
       if (!innanSvaedis({ x: sx / n, y: sy / n }, sv)) continue;
     }
-    if (p.length >= 4) ut.push({ p, t: Math.max(1, Math.round(o.strokeWidth * kx)), tegund: o.veggTegund ?? "veggur" });
+    if (p.length >= 4) ut.push({ p, t: Math.max(1, Math.round(o.strokeWidth * kx)), ...vistunarSnid(o.veggTegund) });
   }
   return ut;
 }
@@ -307,7 +308,7 @@ export function veggirIBord(
   return veggir
     .filter((v) => Array.isArray(v.p) && v.p.length >= 4)
     .map((v) => {
-      const tegund = erVeggTegund(v.tegund) ? v.tegund : "veggur";
+      const tegund = erVeggTegund(v.tegund) || v.eld ? tegundUrVistun(v.tegund, v.eld) : "veggur";
       const lina: LineObject = {
         id: newId(),
         type: "polyline",

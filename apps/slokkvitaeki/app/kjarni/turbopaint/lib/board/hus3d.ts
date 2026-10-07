@@ -363,8 +363,10 @@ export function husUrBordi(objects: BoardObject[], taeki: Taekjaupplysingar[] = 
         if (o.type !== "polyline" && o.type !== "line") continue;
         const lina = o as LineObject;
         const erMerking = ELD_NOFN.some((n) => lina.name.startsWith(n));
-        const tegund: VeggTegund3D = erMerking ? "veggur" : lina.veggTegund ?? "veggur";
-        const eld = erMerking ? eldflokkurNafns(lina.name) : 0;
+        // Eldveggur (tegund ei60/ei30) er veggur með eldflokk — ekki merking sem leitar að vegg undir sér.
+        const vt = lina.veggTegund;
+        const tegund: VeggTegund3D = erMerking || vt === "ei60" || vt === "ei30" ? "veggur" : vt ?? "veggur";
+        const eld: Eldflokkur = erMerking ? eldflokkurNafns(lina.name) : vt === "ei60" ? 60 : vt === "ei30" ? 30 : 0;
         const p = lina.points;
         for (let i = 2; i + 1 < p.length; i += 2) {
           const ax = lina.x + p[i - 2] - a, ay = lina.y + p[i - 1] - b, bx = lina.x + p[i] - a, by = lina.y + p[i + 1] - b;

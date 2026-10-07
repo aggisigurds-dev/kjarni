@@ -60,6 +60,16 @@ export function flokkaYfirlit(flokkar: Record<string, Strik[]>, bladB: number, b
     });
 }
 
+/** SKÖNNUÐ PDF (Agnar 07.10.2026, Álfaborg 2. hæð — FotoWeb-PDF): síðan er ein mynd og engin vigurstrik, svo „Greina
+ * veggi" fann enga línuflokka og skilaði 0 veggjum. PDF með minna en 30 m af strokuðum línum (1:100) — stimpill,
+ * undirskrift, rammi — er skönnun: veggirnir eru þá greindir úr myndinni eins og í Teikning-glugganum. */
+export const SKONNUN_HAMARK_M = 30;
+export function pdfErSkonnun(flokkar: Record<string, Strik[]>): boolean {
+  let pt = 0;
+  for (const listi of Object.values(flokkar)) for (const s of listi) pt += Math.hypot(s[2] - s[0], s[3] - s[1]);
+  return pt * PT_I_METRUM < SKONNUN_HAMARK_M;
+}
+
 /** Hámarksþykkt greinds veggjar (cm): mistök í greiningu mega aldrei mála þykkar svartar klessur. */
 export const GREINDUR_VEGGUR_HAMARK_CM = 40;
 

@@ -22,6 +22,8 @@ import { stimpilStaerdBords } from "../../lib/board/uttekt";
 import { raesaFjolcrop, useFjolcrop } from "../../lib/board/fjolcrop";
 import { getHamur, useHamur } from "../../lib/board/hamir";
 import type { BoardObject, LineKind, Tool } from "../../lib/board/types";
+import { teiknaEldvegg } from "../../lib/board/veggja-ritill-stada";
+import { erVeggur, stillaVeggTegund, VEGG_HEITI, VEGG_LITIR } from "../../lib/board/veggja-leidretting";
 import { FIREWALL_OPACITY, FIREWALL_PALETTE } from "../../lib/board/firewall-rating";
 import { DEFAULT_ROOM_NAME, fillAlpha, roomOfSelection } from "../../lib/board/rooms";
 import { isRightMouseButton, shouldPanView } from "../../lib/board/pan";
@@ -779,9 +781,9 @@ export function BoardCanvas({
       if (onSetjaVal?.(world)) return;
       const { style: st, addObjects } = useBoardStore.getState();
       if (st.symbolId === "firewall") {
-        useBoardStore.getState().startFirewall();
-        polyRef.current = [world.x, world.y];
-        setDraftState({ kind: "polyline", points: [world.x, world.y] });
+        // Eldveggur er veggur með tegund (EI-60): veggjaritillinn tekur við — haldið inni og dregið.
+        teiknaEldvegg("ei60");
+        toast.message("Eldveggur EI-60: haltu inni og dragðu eftir veggnum — slepptu til að ljúka");
         return;
       }
       const stampPx = stimpilStaerdBords(useBoardStore.getState().objects, getStampSize(), world);
@@ -1675,7 +1677,32 @@ export function BoardCanvas({
                         Afhópa
                       </button>
                     ) : null}
-                    {target.type === "polyline" || target.type === "line" || target.type === "pen" ? (
+                    {(target.type === "polyline" || target.type === "line") && erVeggur(target) ? (
+                      <>
+                        <div className="my-1 h-px bg-white/10" />
+                        <div className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium tracking-wide text-white/40">
+                          GERA AÐ
+                        </div>
+                        <div className="flex gap-1 px-1.5 pb-1">
+                          {(["ei60", "ei30", "veggur"] as const).map((tg) => (
+                            <button
+                              key={tg}
+                              type="button"
+                              data-gera-ad={tg}
+                              className="flex-1 rounded-md px-1 py-1 text-[10px] font-semibold text-white hover:opacity-85"
+                              style={{ background: tg === "veggur" ? "#44403c" : VEGG_LITIR[tg] }}
+                              onClick={act(() => {
+                                const s = useBoardStore.getState();
+                                const ids = s.selectedIds.includes(target.id) ? s.selectedIds : [target.id];
+                                s.updateObjects(ids, (o) => (erVeggur(o) ? stillaVeggTegund(o, tg) : o));
+                              })}
+                            >
+                              {tg === "veggur" ? "Veggur" : VEGG_HEITI[tg]}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : target.type === "polyline" || target.type === "line" || target.type === "pen" ? (
                       <>
                         <div className="my-1 h-px bg-white/10" />
                         <div className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium tracking-wide text-white/40">
@@ -1834,7 +1861,10 @@ export function BoardCanvas({
                     <button
                       type="button"
                       className={item}
-                      onClick={act(() => useBoardStore.getState().startFirewall())}
+                      onClick={act(() => {
+                        teiknaEldvegg("ei60");
+                        toast.message("Eldveggur EI-60: haltu inni og dragðu eftir veggnum — slepptu til að ljúka");
+                      })}
                     >
                       🔥 Eldveggur
                     </button>
