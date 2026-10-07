@@ -335,7 +335,21 @@ export function VeggjaGreining({ planId }: { planId: string }) {
                 <button type="button" onClick={loka} className={`${btn} bg-white/5 hover:bg-white/10`}>
                   Hætta við
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    loka();
+                    useVeggjaRitill.getState().kveikja("teikna");
+                  }}
+                  className={`${btn} bg-white/10 hover:bg-white/15`}
+                  title="Teikna veggina sem vantar: haltu inni vinstri músartakkanum og dragðu"
+                >
+                  + Teikna vegg
+                </button>
               </div>
+              {samruni.baeta.length === 0 ? (
+                <div className="mt-1.5 text-[11px] text-amber-300">Greiningin fann ekkert nýtt — teiknaðu veggina sem vantar með „+ Teikna vegg".</div>
+              ) : null}
             </>
           ) : (
             <div className="flex flex-wrap gap-1.5">

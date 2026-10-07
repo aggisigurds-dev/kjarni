@@ -4,6 +4,9 @@
 // „frekar sett þetta í hægri sidepannel — of mikið fyrir þarna" — á borðinu sjálfu skyggði hún á teikninguna).
 
 import {
+  PencilLine,
+  DoorOpen,
+  PanelTop,
   Box,
   Slash,
   Brush,
@@ -28,6 +31,9 @@ export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: 
   "hreinsa-svaedi": { texti: "Hreinsa svæði", titill: "Dragðu kassa yfir það sem á að hverfa af teikningunni — hvítast, ⌘Z afturkallar", takn: <SquareDashed className="size-3.5" /> },
   hreinsa: { texti: "Hreinsa", titill: "Hreinsa teikningu — sýna bara veggi og þær merkingar sem þú velur", takn: <Eraser className="size-3.5" /> },
   veggir: { texti: "Veggir", titill: "Greina veggi — úr vigur-PDF þegar það er til, annars úr myndinni", takn: <BrickWall className="size-3.5" /> },
+  "teikna-vegg": { texti: "+ Teikna vegg", titill: "Haltu inni vinstri músartakkanum og dragðu — beinn veggur (0/45/90°, Shift víxlar); slepptu til að ljúka. ⌘Z afturkallar.", takn: <PencilLine className="size-3.5" /> },
+  "teikna-hurd": { texti: "+ Hurð", titill: "Haltu inni og dragðu línu á milli hurðarkarmanna — smellur á veggendana; slepptu til að ljúka. ⌘Z afturkallar.", takn: <DoorOpen className="size-3.5" /> },
+  "teikna-gler": { texti: "+ Gler", titill: "Haltu inni og dragðu línu yfir gluggann / glervegginn; slepptu til að ljúka. ⌘Z afturkallar.", takn: <PanelTop className="size-3.5" /> },
   thrividd: { texti: "3D", titill: "Hús í 3D — veggir og tæki á öllum hæðum", takn: <Box className="size-3.5" /> },
   "slt-brsl": { texti: "SLT / BRSL af teikningu", titill: "Lesa SLT, BRSL og skilti af teikningunni og setja tækin á hönnuðu staðina (165.BR1)", takn: <ScanSearch className="size-3.5" /> },
   ei: { texti: "EI-30 / EI-60", titill: "Lesa EI-merkingar og merkja eldveggina", takn: <Flame className="size-3.5 text-[#FE653F]" /> },
