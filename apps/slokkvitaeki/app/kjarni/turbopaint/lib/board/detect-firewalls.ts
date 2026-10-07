@@ -1,27 +1,15 @@
 import { getAssetBlob } from "./assets";
-import { straightenWall } from "./geometry";
 import { newId } from "./ids";
-import {
-  collectFirewallHits,
-  FIREWALL_OPACITY,
-  ratingColor,
-  ratingDash,
-  type FirewallHit,
-  type FirewallRating,
-  type OcrWord,
-} from "./firewall-rating";
+import type { EiMidi } from "./ei-festing";
+import { collectFirewallHits, ratingColor, type FirewallHit, type FirewallRating, type OcrWord } from "./firewall-rating";
 import { makeSymbol } from "./markup-kit";
 import { getStampSize } from "./symbol-settings";
-import type { BoardObject, ImageObject, LineObject, RectObject, TextObject } from "./types";
+import type { BoardObject, ImageObject, RectObject, TextObject } from "./types";
 
 export const FIREWALL_MARK_NAMES = ["Eldveggur", "Eldhurð", "Eldveggir"] as const;
 
 const OCR_MAX = 5200;
 const OCR_MIN = 3600;
-/** Veggja-rakningin þarf ekki fulla upplausn — 4200px á lengri hlið dugar og
- * getImageData verður ~45 MB í stað ~280 MB á permalink-teikningu (9933px).
- * Full upplausn þarna var það sem frysti símann/vafrann. */
-const TRACE_MAX = 4200;
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -293,165 +281,14 @@ async function ocrPlan(
   return { words: allWords, hits: collectFirewallHits(allWords) };
 }
 
-function grayAt(data: Uint8ClampedArray, width: number, height: number, x: number, y: number) {
-  if (x < 0 || y < 0 || x >= width || y >= height) return 255;
-  const i = (y * width + x) * 4;
-  return (data[i] + data[i + 1] + data[i + 2]) / 3;
-}
-
-function wallish(v: number) {
-  return v > 70 && v < 195;
-}
-
-function findOffset(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  cx: number,
-  cy: number,
-  vertical: boolean
-) {
-  let best = { score: -Infinity, dx: 0, dy: 0 };
-  for (let d = -55; d <= 55; d++) {
-    let count = 0;
-    let dark = 0;
-    if (vertical) {
-      const x = Math.round(cx + d);
-      if (x < 0 || x >= width) continue;
-      for (let t = -140; t <= 140; t++) {
-        const v = grayAt(data, width, height, x, Math.round(cy + t));
-        if (wallish(v)) count++;
-        if (Math.abs(t) <= 30 && v < 70) dark++;
-      }
-    } else {
-      const y = Math.round(cy + d);
-      if (y < 0 || y >= height) continue;
-      for (let t = -140; t <= 140; t++) {
-        const v = grayAt(data, width, height, Math.round(cx + t), y);
-        if (wallish(v)) count++;
-        if (Math.abs(t) <= 30 && v < 70) dark++;
-      }
-    }
-    let score = count - dark * 8;
-    if (Math.abs(d) < 8) score -= 30;
-    if (score > best.score) {
-      best = { score, dx: vertical ? d : 0, dy: vertical ? 0 : d };
-    }
-  }
-  return best;
-}
-
-function walk(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  x0: number,
-  y0: number,
-  ux: number,
-  uy: number
-) {
-  const pts: number[] = [];
-  let x = x0;
-  let y = y0;
-  let miss = 0;
-  for (let i = 0; i < 1600; i++) {
-    let best: { score: number; x: number; y: number } | null = null;
-    for (let s = -5; s <= 5; s++) {
-      const xx = Math.round(x + ux + (uy === 0 ? 0 : s));
-      const yy = Math.round(y + uy + (ux === 0 ? 0 : s));
-      const v = grayAt(data, width, height, xx, yy);
-      let score = wallish(v) ? 195 - v : -50;
-      if (ux !== 0) {
-        if (wallish(grayAt(data, width, height, xx, yy - 1))) score += 8;
-        if (wallish(grayAt(data, width, height, xx, yy + 1))) score += 8;
-      } else {
-        if (wallish(grayAt(data, width, height, xx - 1, yy))) score += 8;
-        if (wallish(grayAt(data, width, height, xx + 1, yy))) score += 8;
-      }
-      if (!best || score > best.score) best = { score, x: xx, y: yy };
-    }
-    if (!best || best.score < 0) {
-      miss++;
-      if (miss > 18) break;
-      x += ux;
-      y += uy;
-      continue;
-    }
-    miss = 0;
-    x = best.x;
-    y = best.y;
-    if (i % 6 === 0) {
-      pts.push(x, y);
-    }
-  }
-  if (pts.length < 2 || pts[pts.length - 2] !== x) pts.push(x, y);
-  return pts;
-}
-
-function traceWall(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  hit: FirewallHit
-) {
-  const cx = hit.x + hit.width / 2;
-  const cy = hit.y + hit.height / 2;
-  const off = findOffset(data, width, height, cx, cy, hit.vertical);
-  const wx = cx + off.dx;
-  const wy = cy + off.dy;
-  let pts: number[];
-  if (hit.vertical) {
-    const a = walk(data, width, height, wx, wy, 0, -1);
-    const b = walk(data, width, height, wx, wy, 0, 1);
-    pts = [...reversePairs(a), wx, wy, ...b];
-  } else {
-    const a = walk(data, width, height, wx, wy, -1, 0);
-    const b = walk(data, width, height, wx, wy, 1, 0);
-    pts = [...reversePairs(a), wx, wy, ...b];
-  }
-  // Bein lína frá horni til horns — ekki þræða meðfram veggnum.
-  const simplified = straightenWall(pts);
-  if (simplified.length >= 4) return simplified;
-  const stub = hit.vertical ? 90 : 110;
-  return hit.vertical
-    ? [wx, wy - stub, wx, wy + stub]
-    : [wx - stub, wy, wx + stub, wy];
-}
-
-function reversePairs(pts: number[]) {
-  const out: number[] = [];
-  for (let i = pts.length - 2; i >= 0; i -= 2) {
-    out.push(pts[i], pts[i + 1]);
-  }
-  return out;
-}
+// (Áður: traceWall/walk/findOffset — lína rakin á myndinni frá miðanum þar til hún endaði. Hún elti ásalínur /
+// hnitalínur blaðsins þvert yfir blaðið, út fyrir húsið — Agnar 07.10.2026, Álfaborg 2. hæð. Nú festist miðinn við
+// raunverulegan vegg: ei-festing.ts / ei-beiting.ts.)
 
 function inTitleBlock(hit: FirewallHit, width: number, height: number) {
   const cx = hit.x + hit.width / 2;
   const cy = hit.y + hit.height / 2;
   return cx > width * 0.84 && cy > height * 0.45;
-}
-
-function polyline(
-  points: number[],
-  rating: FirewallRating,
-  name: string
-): LineObject {
-  return {
-    id: newId(),
-    type: "polyline",
-    x: 0,
-    y: 0,
-    points,
-    stroke: ratingColor(rating),
-    strokeWidth: rating.minutes === 60 ? 8 : 6,
-    dash: ratingDash(rating),
-    rotation: 0,
-    opacity: FIREWALL_OPACITY,
-    locked: false,
-    hidden: false,
-    name,
-  };
 }
 
 function badge(x: number, y: number, rating: FirewallRating): BoardObject[] {
@@ -519,7 +356,7 @@ export async function detectFirewallsOnPlan(
     extraWords?: OcrWord[];
     onProgress?: (message: string, percent: number) => void;
   }
-): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[] }> {
+): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[] }> {
   const canvas = await loadPlanCanvas(plan);
   const srcW = canvas.width;
   const srcH = canvas.height;
@@ -527,12 +364,10 @@ export async function detectFirewallsOnPlan(
   const sy = plan.height / srcH;
   const extra = options?.extraWords ?? [];
 
-  // Bæði vinnslu-afritin STRAX og risastóra frumritið losað — full upplausn
-  // (permalink-TIF 9933×7016 ≈ 280 MB per getImageData) er það sem frysti
-  // vafrann/símann. OCR fær binaríseraða afritið, rakningin lit-afritið.
+  // OCR-afritið STRAX og risastóra frumritið losað — full upplausn (permalink-TIF 9933×7016 ≈ 280 MB per getImageData)
+  // er það sem frysti vafrann/símann.
   options?.onProgress?.("Undirbý greiningu…", 20);
   const ocrFit = fitCanvas(canvas, OCR_MAX, OCR_MIN);
-  const traceFit = fitCanvas(canvas, TRACE_MAX);
   canvas.width = 0;
   canvas.height = 0;
   await binarizeForOcr(ocrFit.canvas);
@@ -540,81 +375,66 @@ export async function detectFirewallsOnPlan(
   const { words, hits: rawHits } = await ocrPlan(ocrFit, extra, options?.onProgress);
   const hits = rawHits.filter((hit) => !inTitleBlock(hit, srcW, srcH));
 
-  const ctx = traceFit.canvas.getContext("2d");
-  if (!ctx) throw new Error("Gat ekki lesið pixla");
-  const image = ctx.getImageData(0, 0, traceFit.canvas.width, traceFit.canvas.height);
-  const tw = traceFit.canvas.width;
-  const th = traceFit.canvas.height;
-  const ts = traceFit.scale;
-  traceFit.canvas.width = 0;
-  traceFit.canvas.height = 0;
   const objects: BoardObject[] = [];
-  const counts = new Map<string, number>();
+  const midar: EiMidi[] = [];
 
   for (const hit of hits) {
-    counts.set(hit.rating.label, (counts.get(hit.rating.label) ?? 0) + 1);
-    const traceHit = {
-      ...hit,
-      x: hit.x * ts,
-      y: hit.y * ts,
-      width: hit.width * ts,
-      height: hit.height * ts,
-    };
-    const local = traceWall(image.data, tw, th, traceHit);
-    const world: number[] = [];
-    for (let i = 0; i < local.length; i += 2) {
-      world.push(plan.x + (local[i] / ts) * sx, plan.y + (local[i + 1] / ts) * sy);
-    }
-    await yieldToUi();
-    const name = hit.rating.smoke
-      ? `Eldhurð ${hit.rating.label}`
-      : `Eldveggur ${hit.rating.label}`;
-    objects.push(polyline(world, hit.rating, name));
-    const bx = plan.x + (hit.x + hit.width / 2) * sx + 8;
-    const by = plan.y + (hit.y + hit.height / 2) * sy - 28;
-    objects.push(...badge(bx, by, hit.rating));
+    const cx = plan.x + (hit.x + hit.width / 2) * sx;
+    const cy = plan.y + (hit.y + hit.height / 2) * sy;
+    // Miðinn: hvar á borðinu, hvernig hann snýr og hvaða flokkur. Veggurinn sem hann á við er fundinn síðar (ei-beiting).
+    midar.push({ x: cx, y: cy, lodrett: hit.vertical, minutur: hit.rating.minutes, reyk: hit.rating.smoke });
+    objects.push(...badge(cx + 8, cy - 28, hit.rating));
     if (hit.rating.smoke) {
       // Sama regla og í 165.BR1-merkingunni: eldhurðin fylgir stimpilstærðinni
       // í stað fastrar 44, svo öll sjálfgerð merki komi út í valinni stærð.
       const doorPx = Math.round((44 * getStampSize()) / 56);
-      const door = makeSymbol(
-        "firedoor",
-        plan.x + (hit.x + hit.width / 2) * sx - doorPx / 2,
-        plan.y + (hit.y + hit.height / 2) * sy - doorPx / 2,
-        hit.rating.label,
-        doorPx
-      );
+      const door = makeSymbol("firedoor", cx - doorPx / 2, cy - doorPx / 2, hit.rating.label, doorPx);
       door.name = `Eldhurð ${hit.rating.label}`;
       objects.push(door);
     }
-  }
-
-  if (hits.length) {
-    const lines = [...counts.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([label, n]) => `${n}× ${label}`)
-      .join("\n");
-    objects.push({
-      id: newId(),
-      type: "sticky",
-      x: plan.x + plan.width + 48,
-      y: plan.y + 180,
-      width: 240,
-      height: 170,
-      text: `Sjálfvirk merking eldveggja\n${lines}\n\nAppelsínugult = EI-60, blátt = E-30, ljósblátt = EI-CS hurð. Dragðu línurnar til ef þær þurfa lagfæringu.`,
-      fill: "#fecaca",
-      fontSize: 15,
-      rotation: 0,
-      opacity: 1,
-      locked: false,
-      hidden: false,
-      name: "Eldveggir — sjálfvirk merking",
-    });
+    await yieldToUi();
   }
 
   return {
     objects: objects.map((obj) => ({ ...obj, parentId: plan.id })),
     hits,
     words,
+    midar,
+  };
+}
+
+/** Yfirlitsmiði EI-greiningarinnar: fjöldi merkja og hve mörg festust við vegg. */
+export function eiYfirlitsmidi(
+  plan: ImageObject,
+  hits: FirewallHit[],
+  festir: number,
+  lausir: number
+): BoardObject | null {
+  if (!hits.length) return null;
+  const counts = new Map<string, number>();
+  for (const h of hits) counts.set(h.rating.label, (counts.get(h.rating.label) ?? 0) + 1);
+  const lines = [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([label, n]) => `${n}× ${label}`)
+    .join("\n");
+  return {
+    id: newId(),
+    type: "sticky",
+    x: plan.x + plan.width + 48,
+    y: plan.y + 180,
+    width: 260,
+    height: 200,
+    text:
+      `Sjálfvirk merking eldveggja\n${lines}\n\n${festir} eldveggjabútar á veggjum` +
+      (lausir ? ` · ${lausir} miðar fundu engan vegg (engin lína)` : "") +
+      `\n\nRautt = EI-60, ljósrautt = EI-30 — eldveggur er veggur með tegund: veldu hann og breyttu í veggjastikunni.`,
+    fill: "#fecaca",
+    fontSize: 15,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    name: "Eldveggir — sjálfvirk merking",
+    parentId: plan.id,
   };
 }

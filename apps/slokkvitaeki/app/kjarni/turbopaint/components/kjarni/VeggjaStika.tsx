@@ -5,7 +5,7 @@
 // tegund (veggur / gler / hurð), Tengja lausa enda og Eyða. Hver aðgerð er ein ⌘Z-færsla.
 // Veggjaritillinn bætti við: þykkt valinna veggja, Sameina (samlínu → einn), Lengja að (tveir valdir) og Hurð í bil.
 
-import { AppWindow, BrickWall, DoorOpen, Link2, Merge, MoveHorizontal, Trash2 } from "lucide-react";
+import { AppWindow, BrickWall, DoorOpen, Flame, Link2, Merge, MoveHorizontal, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isDrawnLocked, isDrawnVisible } from "../../lib/board/layers";
@@ -33,6 +33,9 @@ const TEGUNDIR: { id: VeggTegund; texti: string; titill: string; takn: ReactNode
   { id: "veggur", texti: "Veggur", titill: "Venjulegur veggur (1)", takn: <BrickWall className="size-3.5" /> },
   { id: "gler", texti: "Gler", titill: "Glerveggur / gluggi — blár (2)", takn: <AppWindow className="size-3.5" /> },
   { id: "hurd", texti: "Hurð", titill: "Hurð — brún (3)", takn: <DoorOpen className="size-3.5" /> },
+  // „Gera að EI-60 / EI-30" (Agnar 07.10.2026): eldveggur er veggur með tegund — rauður á teikningunni og í Teikning/3D.
+  { id: "ei60", texti: "EI-60", titill: "Gera að eldvegg EI-60 — rauður (4)", takn: <Flame className="size-3.5" /> },
+  { id: "ei30", texti: "EI-30", titill: "Gera að eldvegg EI-30 — ljósrauður (5)", takn: <Flame className="size-3.5" /> },
 ];
 
 function valdirVeggir(objects: BoardObject[], selectedIds: string[]): LineObject[] {
@@ -110,6 +113,7 @@ export function VeggjaStika() {
           type="button"
           title={t.titill}
           aria-pressed={sameiginleg === t.id}
+          data-stika-tegund={t.id}
           onClick={() => setjaTegund(t.id)}
           className={`${btn} ${sameiginleg === t.id ? "bg-white/12 ring-1 ring-white/25" : ""}`}
         >

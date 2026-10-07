@@ -172,8 +172,8 @@ export interface LineObject extends BaseObject {
   meters?: number;
   /** Greindur veggur (miðlína úr veggjagreiningu; strokeWidth = þykkt veggjarins). */
   veggur?: boolean;
-  /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi eða hurð. Vantar = veggur. */
-  veggTegund?: "veggur" | "gler" | "hurd";
+  /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi, hurð eða eldveggur EI-60 / EI-30. Vantar = veggur. */
+  veggTegund?: "veggur" | "gler" | "hurd" | "ei60" | "ei30";
   /** Veggurinn kom úr „Greina veggi" — auðkenni lotunnar (`g<tími36>`), svo hægt sé að eyða einni greiningu í heild. */
   greining?: string;
 }

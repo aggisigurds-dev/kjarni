@@ -16,11 +16,37 @@
 
 import { paraVeggi, type Strik } from "./pdf-veggir";
 
-export type VeggTegund = "veggur" | "gler" | "hurd";
-export const VEGG_TEGUNDIR: VeggTegund[] = ["veggur", "gler", "hurd"];
+/** Tegund veggjar. ei60 / ei30 = ELDVEGGUR (Agnar 07.10.2026: „eins og veggi") — veggur með eldflokk, ekki sérstakt yfirlag. */
+export type VeggTegund = "veggur" | "gler" | "hurd" | "ei60" | "ei30";
+export const VEGG_TEGUNDIR: VeggTegund[] = ["veggur", "gler", "hurd", "ei60", "ei30"];
 
-/** Veggur hæðar í dílum frummyndar: p = miðlína (x0, y0, x1, y1, …), t = þykkt. */
-export type FrumVeggur = { p: number[]; t: number; tegund?: VeggTegund };
+/** Eldflokkur veggjategundar í mínútum (0 = ekki eldveggur). */
+export function eldflokkurTegundar(t: VeggTegund | undefined | null): 0 | 30 | 60 {
+  return t === "ei60" ? 60 : t === "ei30" ? 30 : 0;
+}
+
+/** Veggur hæðar í dílum frummyndar: p = miðlína (x0, y0, x1, y1, …), t = þykkt.
+ *
+ * VISTAÐ SNIÐ (teikning_bord.haedir[].veggjaLinur): eldveggur er `{ tegund: "veggur", eld: 60 | 30 }` — Teikning-glugginn
+ * (383) les `eld` sem eldflokk veggjarins (rauður í 2D og 3D, brunahólf) en eldri útgáfa hans sér venjulegan vegg, svo
+ * ekkert hverfur meðan útgáfurnar tvær lifa hlið við hlið. Inni í TurboPaint er tegundin ei60 / ei30 (sjá vistunarSnid /
+ * tegundUrVistun). */
+export type FrumVeggur = { p: number[]; t: number; tegund?: VeggTegund; eld?: 30 | 60 };
+
+/** TurboPaint-tegund → vistað snið veggjaLinur (tegund + eld). */
+export function vistunarSnid(t: VeggTegund | undefined | null): { tegund: "veggur" | "gler" | "hurd"; eld?: 30 | 60 } {
+  if (t === "ei60") return { tegund: "veggur", eld: 60 };
+  if (t === "ei30") return { tegund: "veggur", eld: 30 };
+  return { tegund: t === "gler" || t === "hurd" ? t : "veggur" };
+}
+
+/** Vistað snið (tegund + eld) → TurboPaint-tegund. Les líka `tegund: "ei60"` beint. */
+export function tegundUrVistun(tegund: unknown, eld: unknown): VeggTegund {
+  if (tegund === "ei60" || tegund === "ei30") return tegund;
+  const e = Number(eld);
+  if ((tegund == null || tegund === "veggur") && (e === 60 || e === 30)) return e === 60 ? "ei60" : "ei30";
+  return tegund === "gler" || tegund === "hurd" ? tegund : "veggur";
+}
 
 /** 1 pt á blaði í kvarða 1:100 = 0,3528 mm × 100 = 0,03528 m í raun. */
 const PT_I_METRUM = (0.0254 / 72) * 100;
@@ -36,7 +62,7 @@ export function dilarAMetraGisk(frum: { b: number; h: number }): number {
 }
 
 export function erVeggTegund(x: unknown): x is VeggTegund {
-  return x === "veggur" || x === "gler" || x === "hurd";
+  return x === "veggur" || x === "gler" || x === "hurd" || x === "ei60" || x === "ei30";
 }
 
 type PtVeggur = { a: [number, number]; b: [number, number]; t: number };
@@ -456,10 +482,11 @@ export function lesaVeggjaLinur(x: unknown): FrumVeggur[] {
   const ut: FrumVeggur[] = [];
   for (const v of x) {
     if (!v || typeof v !== "object") continue;
-    const o = v as { p?: unknown; t?: unknown; tegund?: unknown };
+    const o = v as { p?: unknown; t?: unknown; tegund?: unknown; eld?: unknown };
     if (!Array.isArray(o.p) || o.p.length < 4 || !o.p.every((n) => Number.isFinite(n))) continue;
     const vg: FrumVeggur = { p: (o.p as number[]).slice(0, o.p.length - (o.p.length % 2)), t: Number(o.t) > 0 ? Number(o.t) : 1 };
-    if (erVeggTegund(o.tegund)) vg.tegund = o.tegund;
+    // eldveggur (`eld: 60/30` á vegg) → ei60 / ei30
+    if (erVeggTegund(o.tegund) || o.eld != null) vg.tegund = tegundUrVistun(o.tegund, o.eld);
     ut.push(vg);
   }
   return ut;

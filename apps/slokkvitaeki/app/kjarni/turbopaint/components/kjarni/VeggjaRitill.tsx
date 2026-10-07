@@ -69,6 +69,7 @@ import {
   valdirVeggir,
 } from "../../lib/board/veggja-ritill-adgerdir";
 import { TOL_HEITI, useVeggjaRitill, type RitilTol } from "../../lib/board/veggja-ritill-stada";
+import { LITA_VEGGI_FLYTILYKILL, SKAERIR_VEGGLITIR, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { newId } from "../../lib/board/store";
 import { VeggjaGreining } from "./VeggjaGreining";
 
@@ -84,6 +85,9 @@ const TEGUNDIR: { id: VeggTegund; texti: string; lykill: string }[] = [
   { id: "veggur", texti: "Veggur", lykill: "1" },
   { id: "gler", texti: "Gler", lykill: "2" },
   { id: "hurd", texti: "Hurð", lykill: "3" },
+  // Eldveggur = veggur með tegund (Agnar 07.10.2026) — dreginn eins og veggur, núverandi veggur fær hann með 4 / 5.
+  { id: "ei60", texti: "EI-60", lykill: "4" },
+  { id: "ei30", texti: "EI-30", lykill: "5" },
 ];
 
 /** Aðgerðir á völdum veggjum — sameiginlegar lyklaborðinu, spjaldinu og veggjastikunni. */
@@ -128,6 +132,20 @@ export function VeggjaRitill() {
   const forskodun = useVeggjaRitill((s) => s.forskodun);
   const greining = useVeggjaRitill((s) => s.greining);
   const hjalp = useVeggjaRitill((s) => s.hjalp);
+
+  // „Lita veggi" (F): aðeins sýn — skráð á undan lyklum ritilsins svo F virki líka meðan hann er opinn.
+  useEffect(() => {
+    useVeggjaSyn.getState().hlada();
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.toLowerCase() !== LITA_VEGGI_FLYTILYKILL) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      useVeggjaSyn.getState().vixla();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
 
   // W í Teikning-ham opnar ritilinn beint með teikni-tólinu (annars væri það gamla „Veggir"-línutólið)
   useEffect(() => {
@@ -549,7 +567,9 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         }
         case "1":
         case "2":
-        case "3": {
+        case "3":
+        case "4":
+        case "5": {
           stoppa();
           const t = TEGUNDIR[Number(lykill) - 1].id;
           if (sel.length) setjaTegund(sel, t);
@@ -932,16 +952,45 @@ function RitilOpnari() {
   const fjoldi = useBoardStore((s) => veggjaTalning(s.objects).alls);
   if (!RITIL_HAMIR.includes(hamur) || !erMynd) return null;
   return (
+    <div className="pointer-events-auto absolute top-3 left-16 z-20 flex items-center gap-1.5 sm:left-20">
+      <button
+        type="button"
+        title="Veggjaritill (W): teikna, velja, eyða, kljúfa, sameina og lengja veggi — teikningin læst á meðan"
+        onClick={() => useVeggjaRitill.getState().kveikja()}
+        className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-3 pl-2.5 text-[12px] font-semibold text-stone-100 shadow-xl hover:bg-[#252a40]"
+      >
+        <PencilRuler className="size-3.5 text-[#FE653F]" />
+        Breyta veggjum
+        <span className="font-normal text-white/50">{fjoldi}</span>
+        <kbd className="text-[10px] font-normal text-white/40">W</kbd>
+      </button>
+      <LitaVeggiTakki />
+    </div>
+  );
+}
+
+/** „Lita veggi" (F): veggir teiknast í skærum lit (venjulegur veggur fjólublár) — aðeins sýn, ekkert vistast. */
+function LitaVeggiTakki({ samthjappad = false }: { samthjappad?: boolean }) {
+  const lita = useVeggjaSyn((s) => s.lita);
+  return (
     <button
       type="button"
-      title="Veggjaritill (W): teikna, velja, eyða, kljúfa, sameina og lengja veggi — teikningin læst á meðan"
-      onClick={() => useVeggjaRitill.getState().kveikja()}
-      className="pointer-events-auto absolute top-3 left-16 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-3 pl-2.5 text-[12px] font-semibold text-stone-100 shadow-xl hover:bg-[#252a40] sm:left-20"
+      role="switch"
+      aria-checked={lita}
+      data-lita-veggi={lita ? "a" : "af"}
+      title="Lita veggi (F): allir veggir í skærum lit eftir tegund — fjólublár veggur, blátt gler, appelsínugul hurð, rauður eldveggur. Aðeins sýn: ekkert breytist í gögnunum."
+      onClick={() => useVeggjaSyn.getState().vixla()}
+      className={
+        samthjappad
+          ? `flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium ${lita ? "bg-[#8b2cff] text-white" : "bg-white/5 text-stone-100 hover:bg-white/10"}`
+          : `flex items-center gap-1.5 rounded-full border py-1.5 pr-3 pl-2.5 text-[12px] font-semibold shadow-xl ${
+              lita ? "border-[#8b2cff] bg-[#8b2cff] text-white" : "border-white/10 bg-[#1a1d2e]/95 text-stone-100 hover:bg-[#252a40]"
+            }`
+      }
     >
-      <PencilRuler className="size-3.5 text-[#FE653F]" />
-      Breyta veggjum
-      <span className="font-normal text-white/50">{fjoldi}</span>
-      <kbd className="text-[10px] font-normal text-white/40">W</kbd>
+      <span className="inline-block size-2.5 rounded-full border border-white/60" style={{ background: SKAERIR_VEGGLITIR.veggur }} />
+      Lita veggi
+      <kbd className={`text-[10px] font-normal ${lita ? "text-white/70" : "text-white/40"}`}>F</kbd>
     </button>
   );
 }
@@ -1057,7 +1106,7 @@ function RitilSpjald() {
         />
         <span className="text-[10.5px] text-white/45">cm</span>
       </div>
-      <div className="mt-1 flex gap-1" role="group" aria-label="Tegund nýrra veggja">
+      <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label="Tegund nýrra veggja">
         {TEGUNDIR.map((t) => (
           <button
             key={t.id}
@@ -1065,10 +1114,12 @@ function RitilSpjald() {
             title={`${t.texti} (${t.lykill}) — valdir veggir fá tegundina, annars næsti veggur`}
             aria-pressed={tegund === t.id}
             onClick={() => r.setTegund(t.id)}
-            className={`${btn} flex-1 justify-center ${tegund === t.id ? "bg-white/15 ring-1 ring-white/30" : "bg-white/5"}`}
+            data-tegund={t.id}
+            className={`${btn} justify-center ${t.id === "ei60" || t.id === "ei30" ? "w-[calc(50%-2px)]" : "flex-1"} ${tegund === t.id ? "bg-white/15 ring-1 ring-white/30" : "bg-white/5"}`}
           >
             <span className="inline-block size-2.5 rounded-full" style={{ background: t.id === "veggur" ? "#d6d3d1" : VEGG_LITIR[t.id] }} />
             {t.texti}
+            <kbd className="ml-0.5 text-[9.5px] opacity-50">{t.lykill}</kbd>
           </button>
         ))}
       </div>
@@ -1099,6 +1150,7 @@ function RitilSpjald() {
           {veggirSjast ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
           Veggir
         </button>
+        <LitaVeggiTakki samthjappad />
         <button
           type="button"
           title="Fela teikninguna og öll önnur lög — aðeins veggirnir sjást"
@@ -1182,6 +1234,8 @@ const FLYTILYKLAR: [string, string][] = [
   ["T", "Tengja — lausir endar valinna veggja mætast (horn, T, samlína)"],
   ["D", "Hurð í bil — tveir samlínu veggir valdir, hurð í opið á milli"],
   ["1 / 2 / 3", "Veggur / Gler / Hurð — valdir veggir, annars næsti veggur"],
+  ["4 / 5", "Eldveggur EI-60 / EI-30 — valdir veggir verða eldveggir (rautt), annars næsti veggur"],
+  ["F", "Lita veggi — allir veggir í skærum lit (fjólublár veggur) svo sjáist hvað er veggur; aðeins sýn"],
   ["[ / ]", "Þynnri / þykkari (10 · 15 · 20 · 30 cm) — valdir veggir og næsti"],
   ["Ctrl+Z / Ctrl+Y", "Afturkalla / endurgera — hver aðgerð er eitt skref"],
   ["Hjól · Bil+dráttur · hægri hnappur", "Zoom og færa borðið"],

@@ -589,14 +589,18 @@ export interface VeggjaTalning {
   veggur: number;
   gler: number;
   hurd: number;
+  /** Eldveggir (EI-60 + EI-30). */
+  eld: number;
   alls: number;
 }
 
 export function veggjaTalning(objects: BoardObject[]): VeggjaTalning {
-  const t: VeggjaTalning = { veggur: 0, gler: 0, hurd: 0, alls: 0 };
+  const t: VeggjaTalning = { veggur: 0, gler: 0, hurd: 0, eld: 0, alls: 0 };
   for (const o of objects) {
     if (!erVeggur(o) || o.hidden) continue;
-    t[o.veggTegund ?? "veggur"]++;
+    const tg = o.veggTegund ?? "veggur";
+    if (tg === "ei60" || tg === "ei30") t.eld++;
+    else t[tg]++;
     t.alls++;
   }
   return t;
@@ -612,6 +616,7 @@ export function talningTexti(t: VeggjaTalning): string {
   const hlutar = [`${t.veggur} ${eintala(t.veggur) ? "veggur" : "veggir"}`];
   if (t.gler) hlutar.push(`${t.gler} gler`);
   if (t.hurd) hlutar.push(`${t.hurd} ${eintala(t.hurd) ? "hurð" : "hurðir"}`);
+  if (t.eld) hlutar.push(`${t.eld} ${eintala(t.eld) ? "eldveggur" : "eldveggir"}`);
   return hlutar.join(" · ");
 }
 

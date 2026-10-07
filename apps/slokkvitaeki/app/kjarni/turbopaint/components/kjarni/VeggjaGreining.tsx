@@ -4,7 +4,9 @@
 // leiðréttingum) og setti 98 hráa PDF-búta í staðinn (ekkert gler, 18 m styttri). Nú:
 //   • vigur-PDF: notandinn velur LÍNUFLOKKA (þykkt í pt, einn eða fleiri) og sér á borðinu hvaða línur verða veggir
 //     (appelsínugular) og veggina sem verða til (grænir, gler blátt) — sama heildarferli og innflutningur hæðar;
-//   • mynd (skönnun/TIF): myndgreiningin eins og áður;
+//   • mynd (skönnun/TIF — og SKÖNNUÐ PDF, sem er ein mynd án vigurstrika): sama greining og Teikning-glugginn (383,
+//     skonnun-veggir.ts) — Agnar 07.10.2026: „kerfið fann enga veggi á efri hæð" (Álfaborg 2. hæð, FotoWeb-PDF: PDF-ið
+//     var lesið, enginn línuflokkur fannst og útkoman var 0 veggir). Eldri myndgreiningin er varaleið;
 //   • séu veggir fyrir er spurt: Bæta við (sjálfgefið — tvítekningar felldar, leiðréttingar haldast) / Skipta út / Hætta við.
 
 import { ScanSearch, X } from "lucide-react";
@@ -15,6 +17,7 @@ import {
   GREINDUR_VEGGUR_HAMARK_CM,
   greiningKrefstStadfestingar,
   klemmaGreindaThykkt,
+  pdfErSkonnun,
   ptIBord,
   skurdurIPt,
   strikValinna,
@@ -22,6 +25,7 @@ import {
   type PdfFlokkur,
 } from "../../lib/board/pdf-veggjaflokkar";
 import { greinaVeggiTeikningar, lesaPdfSidu, type PdfSida } from "../../lib/board/strip";
+import { greinaVeggiSkonnunar } from "../../lib/board/skonnun-veggir-mynd";
 import { newId, useBoardStore } from "../../lib/board/store";
 import type { BoardObject, ImageObject, LineObject } from "../../lib/board/types";
 import { erVeggur } from "../../lib/board/veggja-leidretting";
@@ -88,7 +92,9 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         console.warn("[veggir] PDF-lestur mistókst — myndgreining í staðinn", err);
       }
       if (haett) return;
-      if (s) {
+      // Skönnuð PDF (ein mynd, nær engin strik) er mynd — ekki „Engar strokaðar línur" og 0 veggir.
+      const skonnudPdf = !!s && pdfErSkonnun(s.flokkar);
+      if (s && !skonnudPdf) {
         useBoardStore.getState().setImportProgress(null);
         const y = flokkaYfirlit(s.flokkar, s.breidd, s.haed);
         setSida(s);
@@ -99,19 +105,28 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         return;
       }
       try {
-        const m = await greinaVeggiTeikningar(p, 1, framvinda("Greini veggi úr myndinni…"));
+        // 1) sama greining og Teikning-glugginn (383): húsið (skurður hæðarinnar), fastur kvarði blaðsins
+        let veggir: Butur[] = [];
+        let aths: string | undefined;
+        try {
+          const g = await greinaVeggiSkonnunar(p, framvinda("Greini veggi úr myndinni (eins og Teikning)…"));
+          veggir = g.veggir;
+          const t = g.talning;
+          console.info(`[veggir] skönnun: ${JSON.stringify(t)}`);
+          aths = (skonnudPdf ? "PDF-ið er skönnun (mynd) — " : "") + `greint eins og í Teikning · ${t.metrar ?? 0} m${t.gler ? ` · ${t.gler} gler` : ""}`;
+        } catch (err) {
+          console.warn("[veggir] skönnunargreining mistókst — eldri myndgreining í staðinn", err);
+        }
+        // 2) varaleið: eldri myndgreiningin (holir/fylltir veggir á fullri upplausn)
+        if (!veggir.length) {
+          const m = await greinaVeggiTeikningar(p, 1, framvinda("Greini veggi úr myndinni…"));
+          const sx = p.width / m.breidd, sy = p.height / m.haed;
+          veggir = m.midlinur.map((l) => ({ p: l.punktar.map((v, i) => (i % 2 === 0 ? p.x + v * sx : p.y + v * sy)), t: Math.max(1, l.thykkt * sx) }));
+          aths = m.holir ? `${m.holir} holir veggir` : undefined;
+        }
         useBoardStore.getState().setImportProgress(null);
         if (haett) return;
-        const sx = p.width / m.breidd, sy = p.height / m.haed;
-        setNid({
-          veggir: klemmaGreindaThykkt(
-            m.midlinur.map((l) => ({ p: l.punktar.map((v, i) => (i % 2 === 0 ? p.x + v * sx : p.y + v * sy)), t: Math.max(1, l.thykkt * sx) })),
-            kvardiNu()
-          ),
-          linur: 0,
-          thekja: null,
-          aths: m.holir ? `${m.holir} holir veggir` : undefined,
-        });
+        setNid({ veggir: klemmaGreindaThykkt(veggir, kvardiNu()), linur: 0, thekja: null, aths });
         setHamur("mynd");
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
@@ -258,7 +273,8 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         {hamur === "villa" ? <div className="py-3 text-[12px] text-red-300">{villa}</div> : null}
         {hamur === "mynd" ? (
           <div className="text-[12px] text-white/75">
-            Teikningin er mynd (skönnun / TIF) — ekkert vigur-PDF að lesa. Veggirnir eru greindir úr myndinni.
+            Teikningin er mynd (skönnun / TIF / skönnuð PDF) — engar vigurlínur að lesa. Veggirnir eru greindir úr myndinni, eins og
+            Teikning-glugginn gerir (grænt = veggir, blátt = gler).
           </div>
         ) : null}
         {hamur === "pdf" ? (

@@ -12,7 +12,7 @@ export type RitilTol = "velja" | "teikna" | "rettur" | "kljufa" | "lengja" | "ey
 
 export const TOL_HEITI: Record<RitilTol, { texti: string; lykill: string; titill: string }> = {
   velja: { texti: "Velja", lykill: "V", titill: "Velja veggi: smellur, Shift+smellur bætir við, dragðu kassa (til hægri = allur inni, til vinstri = snertir)" },
-  teikna: { texti: "Teikna", lykill: "W", titill: "Teikna veggi: smelltu horn af horni — Enter / tvísmellur / Esc lýkur keðjunni" },
+  teikna: { texti: "Teikna", lykill: "W", titill: "Teikna veggi: haltu inni og dragðu (einn beinn veggur), eða smelltu horn af horni — Enter / tvísmellur / Esc lýkur keðjunni" },
   rettur: { texti: "Rétthyrningur", lykill: "R", titill: "Dragðu kassa → fjórir veggir (herbergi)" },
   kljufa: { texti: "Kljúfa", lykill: "S", titill: "Smelltu á vegg þar sem á að kljúfa hann í tvennt" },
   lengja: { texti: "Lengja að", lykill: "L", titill: "Smelltu á vegginn sem á að lengja/stytta, svo á vegginn sem hann á að mæta" },
@@ -32,6 +32,8 @@ interface Vistad {
   hornalas: boolean;
 }
 
+/** Vistuð tegund nýrra veggja er aðeins veggur / gler / hurð: eldveggur er valinn hverju sinni („+ Eldveggur"), svo
+ * „Breyta veggjum" daginn eftir teiknar ekki óvart eldveggi. */
 function lesa(): Vistad {
   try {
     const v = JSON.parse(window.localStorage.getItem(LYKILL) || "null") as Partial<Vistad> | null;
@@ -80,6 +82,14 @@ function vista(s: Vistad) {
   } catch {
     /* ekkert */
   }
+}
+
+/** „+ Eldveggur EI-60 / EI-30" (Agnar 07.10.2026: „erfiðara að setja þá, þarf að klikka 2svar og koma þá svartir
+ * veggir"): ritillinn opnast með teikni-tólinu og tegundinni ei60/ei30 — haldið inni og dregið = einn beinn eldveggur,
+ * sama hegðun og „+ Teikna vegg" (hornalás, smellur á veggenda). Eldveggurinn er veggur með tegund, rauður. */
+export function teiknaEldvegg(tegund: "ei60" | "ei30") {
+  useVeggjaRitill.getState().kveikja("teikna");
+  useVeggjaRitill.getState().setTegund(tegund);
 }
 
 export const useVeggjaRitill = create<RitilStada>((set, get) => ({

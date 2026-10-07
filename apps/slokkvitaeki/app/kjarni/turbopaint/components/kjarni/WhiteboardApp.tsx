@@ -33,9 +33,15 @@ import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/
 import { getStampSize } from "../../lib/board/symbol-settings";
 import * as symbolSettingsApi from "../../lib/board/symbol-settings";
 import * as symbolsApi from "../../lib/board/symbols";
-import { detectFirewallsOnPlan, isFirewallMark } from "../../lib/board/detect-firewalls";
+import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark } from "../../lib/board/detect-firewalls";
+import type { EiMidi, FestiVeggur } from "../../lib/board/ei-festing";
+import { beitaEi, veggirTeikningar } from "../../lib/board/ei-beiting";
+import { sjalfvirkirVeggir } from "../../lib/board/ei-greining";
+import { replaceCrossingMarks } from "../../lib/board/crossings";
+import { ritillDilarAMetra } from "../../lib/board/veggja-ritill-adgerdir";
+import { nyGreiningarLota } from "../../lib/board/veggja-ritill";
 import { isMvsMark, placeMvs165Equipment } from "../../lib/board/mvs165";
-import type { OcrWord } from "../../lib/board/firewall-rating";
+import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
 import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
 import {
   finnaTengduMynd,
@@ -66,7 +72,7 @@ import { raesaFjolcrop, useFjolcrop } from "../../lib/board/fjolcrop";
 import { afvopna, useTaekjaVal, useUttektGogn, type TaekjaVal } from "../../lib/board/uttekt-gogn";
 import { adgerdVidSetningu } from "../../lib/board/taekjalisti";
 import { grunnStaerdHaedar } from "../../lib/board/merkjasafn";
-import { veggirHaedar } from "../../lib/board/teikning-veggir";
+import { dilarAMetraGisk, veggirHaedar } from "../../lib/board/teikning-veggir";
 import { dataUrlToBlob, getAssetBlob, putAsset } from "../../lib/board/assets";
 import { getRegisteredStage } from "../../lib/board/stage-ref";
 import {
@@ -91,7 +97,7 @@ import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { VeggjaStika } from "./VeggjaStika";
 import { VeggjaRitill } from "./VeggjaRitill";
-import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
+import { teiknaEldvegg, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -108,6 +114,57 @@ type ExportScale = 1 | 2 | 3 | 4;
 function isTyping(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
   return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+
+/** EI-greining einnar teikningar: miðar (badges, eldhurðir, 165.BR1-tæki) og staðir EI-miðanna. */
+type EiNidurstada = { plan: ImageObject; merki: BoardObject[]; hits: FirewallHit[]; midar: EiMidi[] };
+
+/** Beitir EI-greiningu á borðið í EINU skrefi (⌘Z tekur allt): gamlar merkingar (`fjarlaegja`) fara, miðarnir koma, og
+ * hver EI-miði verður eldveggur á veggnum sem hann stendur við (ei-beiting). Eigi teikningin enga veggi eru þeir greindir
+ * sjálfkrafa fyrst og aðeins eldveggjabútarnir bætast við. */
+async function beitaEiNidurstodum(nidurstodur: EiNidurstada[], fjarlaegja: (o: BoardObject) => boolean) {
+  const st0 = useBoardStore.getState();
+  const dpm = ritillDilarAMetra(st0.objects, st0.pixelsPerMeter);
+  const sjalf = new Map<string, FestiVeggur[]>();
+  for (const n of nidurstodur) {
+    if (!n.midar.some((m) => !m.reyk)) continue;
+    if (veggirTeikningar(useBoardStore.getState().objects, n.plan).length) continue;
+    useBoardStore.getState().setImportProgress({ fileName: n.plan.name, percent: 90, message: "Engir veggir á teikningunni — greini þá fyrst (eins og Teikning)…" });
+    try {
+      sjalf.set(n.plan.id, await sjalfvirkirVeggir(n.plan, dpm));
+    } catch (err) {
+      console.warn("[EI] sjálfvirk veggjagreining mistókst — miðarnir standa án eldveggja", err);
+    }
+  }
+  const lota = nyGreiningarLota();
+  const st = useBoardStore.getState();
+  st.commitHistory();
+  let objs = st.objects.filter((o) => !fjarlaegja(o));
+  const t = { hits: 0, eldveggir: 0, breyttir: 0, nyir: 0, lausir: 0 };
+  for (const n of nidurstodur) {
+    const kvardi = dpm ?? dilarAMetraGisk({ b: n.plan.width, h: n.plan.height });
+    const b = beitaEi(objs, n.plan, n.midar, { seiling: 1.1 * kvardi, sjalf: sjalf.get(n.plan.id) ?? null, lota, nyttId: newId });
+    objs = b.objects;
+    t.hits += n.hits.length;
+    t.eldveggir += b.eldveggir;
+    t.breyttir += b.breyttir;
+    t.nyir += b.nyir;
+    t.lausir += b.festing.lausir.length;
+    console.info(
+      "[EI] " +
+        JSON.stringify({
+          teikning: n.plan.name,
+          midar: n.midar.map((m) => [Math.round(m.x), Math.round(m.y), m.lodrett ? 1 : 0, m.minutur, m.reyk ? 1 : 0]),
+          festir: b.festing.festingar.map((f) => [f.veggId, f.butur, Math.round(f.s0), Math.round(f.s1), f.minutur]),
+          lausir: b.festing.lausir,
+          sjalf: sjalf.get(n.plan.id)?.length ?? 0,
+        })
+    );
+    const midi = eiYfirlitsmidi(n.plan, n.hits, b.eldveggir, b.festing.lausir.length);
+    objs = [...objs, ...withLayerId([...n.merki, ...(midi ? [midi] : [])], LAYER_ALMENNT)];
+  }
+  useBoardStore.setState({ objects: replaceCrossingMarks(objs), selectedIds: [] });
+  return t;
 }
 
 export function WhiteboardApp() {
@@ -226,14 +283,9 @@ export function WhiteboardApp() {
         return;
       }
       markBusyRef.current = true;
-      const existing = useBoardStore
-        .getState()
-        .objects.filter((o) => isFirewallMark(o) || isMvsMark(o))
-        .map((o) => o.id);
-      if (existing.length) useBoardStore.getState().deleteIds(existing);
-      let total = 0;
-      let gear = 0;
       try {
+        const nidurstodur: EiNidurstada[] = [];
+        let gear = 0;
         for (let i = 0; i < images.length; i++) {
           const plan = images[i];
           useBoardStore.getState().setImportProgress({
@@ -241,7 +293,7 @@ export function WhiteboardApp() {
             percent: 8,
             message: `Les teikningu og 165.BR1 (${i + 1}/${images.length})…`,
           });
-          const { objects: marks, hits, words } = await detectFirewallsOnPlan(plan, {
+          const res = await detectFirewallsOnPlan(plan, {
             extraWords: textByObjectId[plan.id],
             onProgress: (message, percent) =>
               useBoardStore.getState().setImportProgress({
@@ -250,23 +302,27 @@ export function WhiteboardApp() {
                 message,
               }),
           });
-          const equipment = placeMvs165Equipment(plan, words, {
+          const equipment = placeMvs165Equipment(plan, res.words, {
             pixelsPerMeter: useBoardStore.getState().pixelsPerMeter,
           });
           if (equipment.pixelsPerMeter && !useBoardStore.getState().pixelsPerMeter) {
             useBoardStore.getState().setPixelsPerMeter(equipment.pixelsPerMeter);
           }
-          const incomingMarks = withLayerId([...marks, ...equipment.objects], LAYER_ALMENNT);
-          if (incomingMarks.length) useBoardStore.getState().addObjects(incomingMarks, false);
-          total += hits.length;
+          nidurstodur.push({ plan, merki: [...res.objects, ...equipment.objects], hits: res.hits, midar: res.midar });
           gear += equipment.objects.filter((o) => o.type === "symbol").length;
           // Öndun milli teikninga — látum React mála framvinduna og GC hreinsa
           await new Promise((resolve) => setTimeout(resolve, 60));
         }
+        const t = await beitaEiNidurstodum(nidurstodur, (o) => isFirewallMark(o) || isMvsMark(o));
         useBoardStore.getState().setImportProgress(null);
-        if (total || gear) {
+        if (t.hits || gear) {
           toast.success(
-            `Merkti ${total} eldveggi og staðsetti slökkvitæki / slöngur / skilti skv. 165.BR1`
+            `${t.hits} EI-merki: ${t.eldveggir} eldveggir festir á veggi` +
+              (t.nyir ? ` (${t.nyir} nýir — teikningin átti enga veggi)` : t.breyttir ? ` (${t.breyttir} veggir fengu eldflokk)` : "") +
+              (t.lausir ? ` · ${t.lausir} miðar fundu engan vegg — engin lína` : "") +
+              (gear ? ` · ${gear} tæki / slöngur / skilti skv. 165.BR1` : "") +
+              " · ⌘Z afturkallar",
+            { duration: 6000 }
           );
         } else {
           toast.message("Fann engin E-30 / E-60 eða SLT/BRSL merki á teikningunni");
@@ -349,9 +405,9 @@ export function WhiteboardApp() {
 
   const dropSymbol = useCallback((symbolId: string, world: { x: number; y: number }) => {
     if (symbolId === "firewall") {
-      // Eldveggur is drawn along the wall, not stamped as a badge.
-      useBoardStore.getState().startFirewall();
-      toast.message("Eldveggur: smelltu horn af horni — Enter lýkur vegg, Esc hættir og heldur veggnum");
+      // Eldveggur er VEGGUR með tegund EI-60, dreginn eins og veggur — ekki stimplaður sem merki.
+      teiknaEldvegg("ei60");
+      toast.message("Eldveggur EI-60: haltu inni og dragðu eftir veggnum — slepptu til að ljúka");
       return;
     }
     // Miðjar á stimpilstærðinni, ekki fastri 32 — annars lenti táknið út undan
@@ -438,12 +494,10 @@ export function WhiteboardApp() {
               useBoardStore.getState().patchObject(plan.id, { assetId }, false);
             }
             if (opts.keepFw && res.objects.length) {
-              const stale = useBoardStore
-                .getState()
-                .objects.filter((o) => isFirewallMark(o) && o.parentId === plan.id)
-                .map((o) => o.id);
-              if (stale.length) useBoardStore.getState().deleteIds(stale);
-              useBoardStore.getState().addObjects(withLayerId(res.objects, LAYER_ALMENNT), false);
+              await beitaEiNidurstodum(
+                [{ plan: updated, merki: res.objects, hits: res.hits, midar: res.midar }],
+                (o) => isFirewallMark(o) && o.parentId === plan.id
+              );
             }
           }
         }
@@ -533,9 +587,16 @@ export function WhiteboardApp() {
         case "ei":
           return merkjaEldveggi();
         case "eldveggur":
-          st.startFirewall();
-          toast.message("Eldveggur: smelltu horn af horni — Enter lýkur vegg og næsti getur byrjað, Esc hættir og heldur veggnum");
+        case "teikna-ei60":
+        case "teikna-ei30": {
+          const tg = a === "teikna-ei30" ? "ei30" : "ei60";
+          teiknaEldvegg(tg);
+          toast.message(
+            `Eldveggur ${tg === "ei60" ? "EI-60" : "EI-30"}: haltu inni og dragðu — slepptu til að ljúka. Núverandi vegg: veldu hann og ýttu á ${tg === "ei60" ? "4" : "5"}.`,
+            { duration: 3000 }
+          );
           return;
+        }
         case "gegnumtok": {
           const n = st.refreshCrossings();
           toast.message(n ? `Gegnumtök: ${n} krossar vegg` : "Engin lögn krossar vegg");

@@ -17,6 +17,8 @@ export type HamAdgerd =
   | "teikna-vegg"
   | "teikna-hurd"
   | "teikna-gler"
+  | "teikna-ei60"
+  | "teikna-ei30"
   | "kvarda"
   | "thrividd"
   | "slt-brsl"
@@ -72,6 +74,8 @@ export const HAMIR: Hamur[] = [
       "teikna-vegg",
       "teikna-hurd",
       "teikna-gler",
+      "teikna-ei60",
+      "teikna-ei30",
       "thrividd",
     ],
     takn: null,
@@ -91,7 +95,9 @@ export const HAMIR: Hamur[] = [
     heiti: "Brunaþéttingar",
     stutt: "Brunaþéttingar",
     lysing: "Eldveggir (EI-30 / EI-60), eldvarnarhurðir og gegnumtök lagna í gegnum brunahólfandi veggi.",
-    adgerdir: ["ei", "eldveggur", "gegnumtok", "veggir", "teikna-vegg", "teikna-hurd"],
+    // „+ Eldveggur" teiknar VEGG með tegund EI-60 / EI-30 (dregið eins og „+ Teikna vegg") — gamla smell-horn-af-horni
+    // yfirlagið („Eldveggur") var ekki veggur og gaf svarta veggi þegar „+ Teikna vegg" var notað í staðinn.
+    adgerdir: ["ei", "teikna-ei60", "teikna-ei30", "gegnumtok", "veggir", "teikna-vegg", "teikna-hurd"],
     takn: ["firewall", "firedoor", "pin"],
   },
   {

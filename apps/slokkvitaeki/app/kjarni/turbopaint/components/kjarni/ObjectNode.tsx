@@ -26,6 +26,8 @@ import type { BoardObject } from "../../lib/board/types";
 import { merkiMyndar } from "../../lib/board/margar-haedir";
 import { bladIBordi } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
+import { erVeggur } from "../../lib/board/veggja-leidretting";
+import { synilegurVegglitur, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { SkarptPdfLag } from "./SkarptPdfLag";
 import { SymbolNode } from "./SymbolNode";
 
@@ -143,6 +145,8 @@ export function ObjectNode({
 }) {
   const layers = useBoardStore((s) => s.layers);
   const symbolOpacity = useBoardStore((s) => s.symbolOpacity);
+  // „Lita veggi" (F): veggir teiknaðir í skærum lit eftir tegund — aðeins sýn, geymdi liturinn breytist ekki.
+  const litaVeggi = useVeggjaSyn((s) => s.lita);
   const selGlow = isSelected
     ? { shadowColor: "#FE653F", shadowBlur: 22, shadowOpacity: 0.85, shadowEnabled: true }
     : { shadowEnabled: false };
@@ -375,11 +379,12 @@ export function ObjectNode({
     obj.type === "measure"
   ) {
     const length = obj.type === "measure" ? lineLength(obj.points) : 0;
+    const vegglitur = litaVeggi && erVeggur(obj) ? synilegurVegglitur(obj.stroke, obj.veggTegund, true) : null;
     return (
-      <Group {...common}>
+      <Group {...common} opacity={vegglitur ? 1 : common.opacity}>
         <Line
           points={obj.points}
-          stroke={obj.stroke}
+          stroke={vegglitur ?? obj.stroke}
           strokeWidth={obj.strokeWidth}
           lineCap="round"
           lineJoin="round"

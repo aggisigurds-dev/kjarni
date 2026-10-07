@@ -1,5 +1,6 @@
 "use client";
 
+import { teiknaEldvegg } from "../../lib/board/veggja-ritill-stada";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
@@ -93,10 +94,9 @@ export function SymbolTray() {
               afvopna();
               setStyle({ symbolId: id });
               if (id === "firewall") {
-                useBoardStore.getState().startFirewall();
-                toast.message(
-                  "Eldveggur: smelltu horn af horni — Enter lýkur vegg og næsti getur byrjað, Esc hættir og heldur veggnum. Litur og breidd í stikunni að neðan."
-                );
+                // Eldveggur = veggur með tegund EI-60, dreginn eins og „+ Teikna vegg" (Agnar 07.10.2026).
+                teiknaEldvegg("ei60");
+                toast.message("Eldveggur EI-60: haltu inni og dragðu eftir veggnum — slepptu til að ljúka. EI-30: veldu vegginn og ýttu á 5.");
               } else {
                 setTool("symbol");
               }

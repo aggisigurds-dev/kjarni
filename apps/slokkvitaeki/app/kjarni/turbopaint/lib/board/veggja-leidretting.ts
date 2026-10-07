@@ -6,21 +6,40 @@ import { LAYER_VEGGIR } from "./layers";
 import { dilarAMetraGisk, type VeggTegund } from "./teikning-veggir";
 import type { BoardObject, LineObject } from "./types";
 
+/** Eldveggir: EI-60 rauður, EI-30 ljósrauður — sömu litir og Teikning (383 ELDLITIR_3D) og FIREWALL_PALETTE. */
 export const VEGG_LITIR: Record<VeggTegund, string> = {
   veggur: "#1c1917",
   gler: "#2563eb",
   hurd: "#b45309",
+  ei60: "#d32f2f",
+  ei30: "#ef5350",
 };
 
-/** Nafnið heldur „Veggur"-forskeytinu: gegnumtök (crossings) og 3D (hus3d) þekkja veggi á því. */
+/** Nafnið heldur „Veggur"-forskeytinu: gegnumtök (crossings) og 3D (hus3d) þekkja veggi á því. „EI-60" í nafni eldveggjar
+ * gerir hann að brunahólfandi vegg í gegnumtökum (crossings isRatedFirewallWall). */
 export const VEGG_NOFN: Record<VeggTegund, string> = {
   veggur: "Veggur",
   gler: "Veggur · gler",
   hurd: "Veggur · hurð",
+  ei60: "Veggur · EI-60",
+  ei30: "Veggur · EI-30",
 };
 
-/** Veggur á borðinu: greindur/innfluttur (veggur), á laginu „Veggir", eða teiknaður með Veggja-tólinu (W). Eldveggir
- * (EI-veggur / Eldveggur) eru merkingar, ekki veggir hússins. */
+/** Heiti tegundar í viðmótinu. */
+export const VEGG_HEITI: Record<VeggTegund, string> = {
+  veggur: "Veggur",
+  gler: "Gler",
+  hurd: "Hurð",
+  ei60: "EI-60",
+  ei30: "EI-30",
+};
+
+export function erEldveggur(o: { veggTegund?: VeggTegund }): boolean {
+  return o.veggTegund === "ei60" || o.veggTegund === "ei30";
+}
+
+/** Veggur á borðinu: greindur/innfluttur (veggur), á laginu „Veggir", eða teiknaður með Veggja-tólinu (W) — líka eldveggur
+ * (tegund ei60/ei30). Gömlu eldveggja-YFIRLÖGIN (EI-veggur / Eldveggur) eru merkingar, ekki veggir hússins. */
 export function erVeggur(o: BoardObject): o is LineObject {
   if (o.type !== "polyline" && o.type !== "line") return false;
   if (o.points.length < 4) return false;
