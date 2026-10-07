@@ -2,6 +2,7 @@ import "./polyfills";
 import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from "pdfjs-dist";
 import * as UTIF from "utif";
 import { canvasToBlob, fitSize, putAsset } from "./assets";
+import { eignarIdUrLykli, frumEignarId, hashSkrar, skjamyndarLykill } from "./eignalykill";
 import { boostSheetCanvas } from "./sheet-contrast";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
@@ -24,6 +25,15 @@ export type ImportResult = {
 };
 
 type ProgressFn = (percent: number, message: string) => void;
+
+/** Auðkenni skjámyndar síðu `sida` (0-grunnur): fast (eignalykill.ts) ef hash frumskrárinnar náðist, annars slembi. */
+type IdFyrir = (sida: number) => Promise<string>;
+const slembiId: IdFyrir = async () => newId();
+
+function idFyrirSkra(skraHash: string | null, gaedi: ImportQuality): IdFyrir {
+  if (!skraHash) return slembiId;
+  return async (sida) => (await eignarIdUrLykli(skjamyndarLykill(skraHash, gaedi, sida))) ?? newId();
+}
 
 const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -100,7 +110,8 @@ async function importPdf(
   file: File,
   quality: ImportQuality,
   onProgress: ProgressFn,
-  origin: { x: number; y: number }
+  origin: { x: number; y: number },
+  idFyrir: IdFyrir = slembiId
 ): Promise<ImportResult> {
   const maxPx = IMPORT_MAX_PX[quality];
   const data = await file.arrayBuffer();
@@ -128,7 +139,7 @@ async function importPdf(
     const worldViewport = page.getViewport({ scale: target.scale });
     const words = await extractPdfWords(page, worldViewport);
     const blob = file.size > SCAN_PDF_BYTES ? await scanBlob(canvas) : await canvasToBlob(canvas);
-    const assetId = newId();
+    const assetId = await idFyrir(i - 1);
     await putAsset(assetId, blob);
     const name =
       pdf.numPages > 1 ? `${file.name} · síða ${i}` : file.name.replace(/\.[^.]+$/, "");
@@ -230,7 +241,8 @@ async function importTiff(
   file: File,
   quality: ImportQuality,
   onProgress: ProgressFn,
-  origin: { x: number; y: number }
+  origin: { x: number; y: number },
+  idFyrir: IdFyrir = slembiId
 ): Promise<ImportResult> {
   const maxPx = IMPORT_MAX_PX[quality];
   onProgress(8, "Les TIF…");
@@ -286,7 +298,7 @@ async function importTiff(
       sctx.putImageData(imageData, 0, 0);
       boostSheetCanvas(canvas);
       const blob = await scanBlob(canvas);
-        const assetId = newId();
+      const assetId = await idFyrir(ifds.indexOf(ifd));
       await putAsset(assetId, blob);
       const name =
         pages.length > 1 ? `${file.name} · síða ${i + 1}` : file.name.replace(/\.[^.]+$/, "");
@@ -312,7 +324,8 @@ async function importRaster(
   file: File,
   quality: ImportQuality,
   onProgress: ProgressFn,
-  origin: { x: number; y: number }
+  origin: { x: number; y: number },
+  idFyrir: IdFyrir = slembiId
 ): Promise<ImportResult> {
   onProgress(15, "Les mynd…");
   const url = URL.createObjectURL(file);
@@ -326,7 +339,7 @@ async function importRaster(
     );
     boostSheetCanvas(canvas);
     const blob = await canvasToBlob(canvas);
-        const assetId = newId();
+    const assetId = await idFyrir(0);
     await putAsset(assetId, blob);
     onProgress(100, "Mynd tilbúin");
     return {
@@ -361,10 +374,11 @@ function loadHtmlImage(url: string) {
  * Á borðinu fær hún stærð JPEG-sins (b × h), sömu stærð og JPEG-innflutningur hefði gefið, svo úttektarmerki og veggir
  * lenda á sama stað; eignin sjálf er í upplausn frumritsins. */
 export async function importSkonnun(
-  s: { blob: Blob; nafn: string; b: number; h: number },
+  s: { blob: Blob; nafn: string; b: number; h: number; lykill?: string },
   origin: { x: number; y: number }
 ): Promise<ImportResult> {
-  const assetId = newId();
+  // Fast auðkenni úr inntaki skönnunarinnar (eignalykill.ts skonnunarLykill) — sama teikning hleðst ekki upp aftur.
+  const assetId = (s.lykill ? await eignarIdUrLykli(s.lykill) : null) ?? newId();
   await putAsset(assetId, s.blob);
   return { objects: [makeImageObject(assetId, s.b, s.h, s.nafn, origin.x, origin.y)], warnings: [], textByObjectId: {} };
 }
@@ -390,16 +404,19 @@ export async function importFiles(
     if (sizeNote) warnings.push(sizeNote);
     const report: ProgressFn = (percent, message) =>
       onProgress(file.name, percent, message);
+    // SAMA skrá (sömu bæti) → sömu auðkenni: skjámynd eftir gæðum + síðu, frumskrá eftir bætunum (eignalykill.ts).
+    const skraHash = await hashSkrar(file);
+    const idFyrir = idFyrirSkra(skraHash, quality);
     let result: ImportResult;
-    if (kind === "pdf") result = await importPdf(file, quality, report, { x, y: origin.y });
-    else if (kind === "tiff") result = await importTiff(file, quality, report, { x, y: origin.y });
-    else result = await importRaster(file, quality, report, { x, y: origin.y });
+    if (kind === "pdf") result = await importPdf(file, quality, report, { x, y: origin.y }, idFyrir);
+    else if (kind === "tiff") result = await importTiff(file, quality, report, { x, y: origin.y }, idFyrir);
+    else result = await importRaster(file, quality, report, { x, y: origin.y }, idFyrir);
 
     // Frumskráin (TIF/PDF) er geymd óbreytt svo greining (veggir, litir, texti) geti unnið í fullri upplausn
     // síðar — skjámyndin er klemmd við 40 MP. Mistakist geymslan stendur innflutningurinn samt.
     if ((kind === "pdf" || kind === "tiff") && result.objects.length) {
       try {
-        const frumId = newId();
+        const frumId = skraHash ? frumEignarId(skraHash) : newId();
         await putAsset(frumId, file);
         for (const o of result.objects) {
           o.frumAssetId = frumId;

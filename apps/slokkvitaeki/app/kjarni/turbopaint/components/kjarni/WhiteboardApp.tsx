@@ -27,6 +27,7 @@ import {
 } from "../../lib/board/strip";
 import { cropPlanAsset, hvitPensillPlanAsset, hvittaPlanAsset, hvittaStrik } from "../../lib/board/crop";
 import { classifyFile, importFiles, importSkonnun } from "../../lib/board/import-files";
+import { skonnunarLykill } from "../../lib/board/eignalykill";
 import { erSkonnunarSlod, saekjaSkarpaSkonnun, tifBorgarSig } from "../../lib/board/skonnun";
 import { IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
 import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/markup-kit";
@@ -70,6 +71,7 @@ import {
   vistaIUttekt,
   vorpunMyndar,
   NYTT_MIDI,
+  OTENGT_MIDI,
   type UttektHaed,
   type UttektTaeki,
 } from "../../lib/board/uttekt";
@@ -465,7 +467,7 @@ export function WhiteboardApp() {
       }
       toast.success(
         `${brsl} BRSL · ${slt} SLT á teikningunni` +
-          (tengd ? ` · ${tengd} tengd við tæki staðarins` : "") +
+          (tengd ? ` · ${tengd} tengd við tæki staðarins (bráðabirgða — tákn með tegund ganga fyrir við „Vista í úttekt“)` : "") +
           (otengd
             ? ` · ${otengd} ótengd (${(Object.keys(otengdT) as TaekjaTegund[]).map((k) => `${TEGUND_HEITI[k]} ${otengdT[k]}`).join(", ")}) — verða „Nýtt“ við vistun`
             : "") +
@@ -485,7 +487,7 @@ export function WhiteboardApp() {
   const runImport = useCallback(async (
     files: File[],
     world?: { x: number; y: number },
-    opts?: { asPlan?: boolean; skonnun?: { blob: Blob; nafn: string; b: number; h: number } }
+    opts?: { asPlan?: boolean; skonnun?: { blob: Blob; nafn: string; b: number; h: number; lykill?: string } }
   ): Promise<BoardObject[]> => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
@@ -1101,7 +1103,14 @@ export function WhiteboardApp() {
           if (sk.ok) {
             const komnar = await runImport([], undefined, {
               asPlan: opts?.asPlan !== false,
-              skonnun: { blob: sk.blob, nafn: sk.nafn, b: sk.frum.b, h: sk.frum.h },
+              // Fast auðkenni (slóð + gæði + fókus + stærð JPEG-sins): sama teikning hleðst ekki upp aftur við hverja opnun
+              skonnun: {
+                blob: sk.blob,
+                nafn: sk.nafn,
+                b: sk.frum.b,
+                h: sk.frum.h,
+                lykill: skonnunarLykill(trimmed, quality, opts?.fokus, sk.frum),
+              },
             });
             merkjaHeimild(komnar);
             toast.message(
@@ -1269,16 +1278,36 @@ export function WhiteboardApp() {
       }
       // Sjálftengd tækjatákn fá tækið (verða græn, raðnúmer undir) og ný Nýtt-tákn n:-lykilinn — næsta vistun færir þau í
       // stað þess að tengja / bæta við aftur (tæki eru fjöldi: aldrei tvítalið).
+      // Tæki lestursins (SLT / BRSL) fá endanlega tækið hér — bráðabirgðamerkið (`sltLestur`) fer af þeim.
       for (const n of r.sjalftengd) {
         const o = st.objects.find((x) => x.id === n.objId);
         st.patchObject(
           n.objId,
-          { uttektUnitId: n.unitId, label: stuttNumer(n.serial), uttektPx: o && o.type === "symbol" ? o.size : undefined } as Partial<BoardObject>,
+          {
+            uttektUnitId: n.unitId,
+            label: stuttNumer(n.serial),
+            uttektPx: o && o.type === "symbol" ? o.size : undefined,
+            ...(n.symbolId ? { symbolId: n.symbolId } : {}),
+            sltLestur: undefined,
+          } as Partial<BoardObject>,
           false
         );
       }
       for (const n of r.nyttMerki) {
-        st.patchObject(n.objId, { uttektUnitId: n.unitId, label: NYTT_MIDI, name: `Nýtt · ${n.tegund} (í bið)` } as Partial<BoardObject>, false);
+        st.patchObject(
+          n.objId,
+          {
+            uttektUnitId: n.unitId,
+            label: NYTT_MIDI,
+            name: `Nýtt · ${n.tegund} (í bið)`,
+            ...(n.symbolId ? { symbolId: n.symbolId } : {}),
+            sltLestur: undefined,
+          } as Partial<BoardObject>,
+          false
+        );
+      }
+      for (const id of r.slepptBradabirgda) {
+        st.patchObject(id, { uttektUnitId: undefined, label: OTENGT_MIDI } as Partial<BoardObject>, false);
       }
       // Merki sem bættust við í appinu eftir opnun (eða eldra borð án `merki`) eru í hæðinni en ekki á borðinu:
       // sett á borðið svo það sýni úttektina eins og hún er — hver hæð á sína mynd (margar hæðir: „Croppa oft").

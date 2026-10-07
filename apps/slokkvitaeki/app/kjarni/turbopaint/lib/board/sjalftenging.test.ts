@@ -13,6 +13,7 @@ import {
   stadsettirLyklar,
   TaekjaSjodur,
   tegundTakns,
+  uthlutaTaekjum,
 } from "./sjalftenging";
 import type { BoardObject, ImageObject, SymbolObject } from "./types";
 import { taknFyrirMerki, utbuaVistun, type UttektHaed, type UttektMerki, type UttektTaeki } from "./uttekt";
@@ -215,4 +216,158 @@ test("Nýtt-merki opnast í TurboPaint sem tákn tegundarinnar með miðanum „
   assert.equal(s.uttektUnitId, "n:slanga:abc");
   assert.equal(lykillFyrir(m), "slanga");
   assert.equal(lykillFyrir({ unitId: "n:co2:x", nytt: true, tegund: "CO2" }), "co2");
+});
+
+/* ── Forgangsröð úthlutunar (lifandi prófun 1404, 07.10.2026): tákn með tegund → SLT lestursins → BRSL lestursins ── */
+
+// Staðurinn: 1 Léttvatn, 2 ABC Duft, 1 CO2, 2 Brunaslanga lausar; úrelt duft og duft á 2. hæð má aldrei taka.
+const ROD_TAEKI: UttektTaeki[] = [
+  { id: 500, serial: "A-00", type: "ABC Duft", status: "urelt" },
+  { id: 501, serial: "A-01", type: "Léttvatn", status: "active" },
+  { id: 502, serial: "A-02", type: "ABC Duft", status: "active" },
+  { id: 503, serial: "A-03", type: "ABC Duft 6 kg", status: "active" },
+  { id: 504, serial: "A-04", type: "CO2", status: "active" },
+  { id: 505, serial: "A-05", type: "Brunaslanga", status: "active" },
+  { id: 506, serial: "A-06", type: "Brunaslanga", status: "active" },
+  { id: 509, serial: "A-09", type: "ABC Duft", status: "active" },
+];
+const rodHaedir = (): UttektHaed[] => [
+  { id: "h1", nafn: "1. hæð", markers: [] },
+  { id: "h2", nafn: "2. hæð", markers: [{ x: 10, y: 10, unitId: 509 }] },
+];
+// Lesturinn: 3 SLT (án tegundar) og 2 BRSL — langt frá táknum Agnars (seiling 40)
+const ROD_STADIR = [
+  { x: 100, y: 200, brsl: false, slt: true, takn: null, sltVid: { x: 100, y: 200 }, ord: [] },
+  { x: 300, y: 200, brsl: false, slt: true, takn: null, sltVid: { x: 300, y: 200 }, ord: [] },
+  { x: 500, y: 200, brsl: false, slt: true, takn: null, sltVid: { x: 500, y: 200 }, ord: [] },
+  { x: 700, y: 200, brsl: true, slt: false, takn: null, sltVid: null, ord: [] },
+  { x: 900, y: 200, brsl: true, slt: false, takn: null, sltVid: null, ord: [] },
+];
+/** Táknin sem Agnar setti sjálfur: 2 Duft, 1 CO₂, 1 Slanga (föst id). */
+const taknAgnars = (): SymbolObject[] => [
+  takn("teikn:duft", 100, 800, { id: "a-duft1" }),
+  takn("teikn:duft", 200, 800, { id: "a-duft2" }),
+  takn("teikn:co2", 300, 800, { id: "a-co2" }),
+  takn("teikn:slanga", 400, 800, { id: "a-slanga" }),
+];
+async function lesa(objects: BoardObject[]) {
+  const { beitaSltBrsl } = await import("./slt-brsl-bord");
+  const plan = objects.find((o): o is ImageObject => o.type === "image")!;
+  return beitaSltBrsl(objects, [{ plan, stadir: ROD_STADIR, staerd: S, metri: 20 }], { taeki: ROD_TAEKI, haedir: rodHaedir() }).objects;
+}
+const vista = (objects: BoardObject[]) =>
+  utbuaVistun(objects, rodHaedir(), "k", (s) => `s:${s}:t`, 56, { taeki: ROD_TAEKI, nyttLykill: lyklar() });
+/** Niðurstaðan eftir hlutverki (óháð röð og id lestrar-táknanna): „hlutverk@x,y → tæki / Nýtt:tegund". */
+function eftirHlutverki(objects: BoardObject[], u: ReturnType<typeof vista>): string[] {
+  return objects
+    .filter((o): o is SymbolObject => o.type === "symbol" && !o.name.startsWith("165.BR1"))
+    .map((o) => {
+      const c = `${Math.round(o.x + o.size / 2)},${Math.round(o.y + o.size / 2)}`;
+      const hver = o.sltLestur ? o.sltLestur : o.id;
+      const st = u.sjalftengd.find((x) => x.objId === o.id);
+      const nm = u.nyttMerki.find((x) => x.objId === o.id);
+      return `${hver}@${c} → ${st ? st.unitId : nm ? "Nýtt:" + nm.tegund : "?"}`;
+    })
+    .sort();
+}
+
+test("uthlutaTaekjum: (a) tákn með tegund fyrst, svo (b) SLT hvaða slökkvitæki sem er, svo (c) BRSL — óháð röð kostanna", () => {
+  const sj = new TaekjaSjodur(ROD_TAEKI, new Set(["509"]));
+  const kostir = [
+    { flokkur: "slt" as const, tegund: "lettvatn" as const },
+    { flokkur: "brsl" as const, tegund: "slanga" as const },
+    { flokkur: "slt" as const, tegund: "lettvatn" as const },
+    { flokkur: "tegund" as const, tegund: "duft" as const },
+    { flokkur: "tegund" as const, tegund: "co2" as const },
+    { flokkur: "tegund" as const, tegund: "duft" as const },
+    { flokkur: "tegund" as const, tegund: "slanga" as const },
+    { flokkur: "brsl" as const, tegund: "slanga" as const },
+  ];
+  const t = uthlutaTaekjum(kostir, sj).map((x) => x?.id ?? null);
+  assert.deepEqual(t, [501, 506, null, 502, 504, 503, 505, null], "Duft/CO2/Slanga Agnars fá sína; SLT fær léttvatnið, svo ekkert; BRSL afgangsslönguna");
+  const fengin = t.filter((x) => x != null);
+  assert.equal(new Set(fengin).size, fengin.length, "aldrei sama tæki tvisvar");
+  assert.ok(!t.includes(500), "úrelt aldrei");
+  assert.ok(!t.includes(509), "tæki á annarri hæð aldrei");
+});
+
+test("SLT / BRSL lesið FYRST, tákn Agnars á eftir: lesturinn tók Duft (bráðabirgða) — vistunin gefur Duft/CO₂-táknunum tækin", async () => {
+  const lesid = await lesa([mynd("m1", "h1")]);
+  const lesturTakn = lesid.filter((o): o is SymbolObject => o.type === "symbol" && !!o.sltLestur);
+  assert.equal(lesturTakn.length, 5);
+  // gamla villan, sýnd: SLT án tegundar greip léttvatnið OG bæði duftin strax
+  assert.deepEqual(
+    lesturTakn.filter((o) => o.sltLestur === "slt").map((o) => o.uttektUnitId ?? null),
+    [501, 502, 503],
+    "bráðabirgðatenging lestursins"
+  );
+  const bord = [...lesid, ...taknAgnars()];
+  const u = vista(bord);
+  assert.deepEqual(eftirHlutverki(bord, u), [
+    "a-co2@300,800 → 504",
+    "a-duft1@100,800 → 502",
+    "a-duft2@200,800 → 503",
+    "a-slanga@400,800 → 505",
+    "brsl@700,200 → 506",
+    "brsl@900,200 → Nýtt:Brunaslanga",
+    "slt@100,200 → 501",
+    "slt@300,200 → Nýtt:Léttvatn",
+    "slt@500,200 → Nýtt:Léttvatn",
+  ]);
+  assert.deepEqual(u.nytt, { lettvatn: 2, slanga: 1 }, "Duft og CO₂ Agnars urðu EKKI Nýtt");
+  // SLT-táknið sem fær tæki sýnir tegund tækisins; Nýtt-SLT verður léttvatn
+  assert.equal(u.sjalftengd.find((x) => x.unitId === 501)?.symbolId, "teikn:lettvatn");
+  assert.ok(u.nyttMerki.filter((x) => x.tegund === "Léttvatn").every((x) => x.symbolId === "teikn:lettvatn"));
+  const h1 = u.haedir.find((h) => h.id === "h1")!.markers!;
+  const oll = u.haedir.flatMap((h) => (h.markers || []).map((m) => String(m.unitId)));
+  assert.equal(new Set(oll).size, oll.length, "ekkert unitId tvisvar yfir hæðir");
+  assert.ok(!h1.some((m) => m.unitId === 500 || m.unitId === 509), "úrelt og tæki 2. hæðar aldrei");
+  assert.deepEqual(u.haedir.find((h) => h.id === "h2")!.markers, rodHaedir()[1].markers, "2. hæð ósnert");
+});
+
+test("Röðin skiptir ekki máli: tákn Agnars á undan lestrinum gefa SÖMU niðurstöðu — og lesturinn tekur strax frá fyrir þau", async () => {
+  const fyrst = await lesa([mynd("m1", "h1")]);
+  const a = [...fyrst, ...taknAgnars()];
+  const b = await lesa([mynd("m1", "h1"), ...taknAgnars()]);
+  // lesturinn á eftir táknunum: Duft/CO₂/Slanga Agnars teknar frá — SLT fær aðeins léttvatnið, BRSL aðeins afgangsslönguna
+  const bLestur = b.filter((o): o is SymbolObject => o.type === "symbol" && !!o.sltLestur);
+  assert.deepEqual(bLestur.map((o) => o.uttektUnitId ?? null), [501, null, null, 506, null]);
+  assert.deepEqual(eftirHlutverki(a, vista(a)), eftirHlutverki(b, vista(b)));
+});
+
+test("Eftir vistun er tengingin endanleg: borðið fær tækin, `sltLestur` fer — önnur vistun tengir ekkert upp á nýtt", async () => {
+  const bord = [...(await lesa([mynd("m1", "h1")])), ...taknAgnars()];
+  const u1 = vista(bord);
+  // eins og WhiteboardApp gerir eftir vistun
+  const eftir = bord.map((o) => {
+    if (o.type !== "symbol") return o;
+    const st = u1.sjalftengd.find((x) => x.objId === o.id);
+    if (st) return { ...o, uttektUnitId: st.unitId, ...(st.symbolId ? { symbolId: st.symbolId } : {}), sltLestur: undefined };
+    const nm = u1.nyttMerki.find((x) => x.objId === o.id);
+    if (nm) return { ...o, uttektUnitId: nm.unitId, ...(nm.symbolId ? { symbolId: nm.symbolId } : {}), sltLestur: undefined };
+    return o;
+  });
+  (eftir[0] as ImageObject).uttekt!.merki = u1.hlutar[0].merkiABordi;
+  const u2 = utbuaVistun(eftir, u1.haedir, "k2", (s) => `s:${s}:t2`, 56, { taeki: ROD_TAEKI, nyttLykill: lyklar() });
+  assert.equal(u2.sjalftengd.length, 0);
+  assert.equal(u2.nyttMerki.length, 0);
+  assert.deepEqual(u2.nytt, u1.nytt);
+  // nýtt Duft-tákn eftir vistun: ekkert duft laust lengur → Nýtt (vistað SLT heldur sínu)
+  const u3 = utbuaVistun([...eftir, takn("teikn:duft", 600, 800, { id: "a-duft3" })], u1.haedir, "k3", (s) => `s:${s}:t3`, 56, {
+    taeki: ROD_TAEKI,
+    nyttLykill: lyklar(),
+  });
+  assert.deepEqual(u3.nyttMerki.map((x) => `${x.objId}:${x.tegund}`), ["a-duft3:ABC Duft"]);
+  assert.equal(u3.sjalftengd.length, 0);
+});
+
+test("Falið tæki lestursins sleppir bráðabirgðatækinu — það fer til tákns með tegund, ekki tvisvar", async () => {
+  const lesid = await lesa([mynd("m1", "h1")]);
+  const duftSlt = lesid.find((o): o is SymbolObject => o.type === "symbol" && o.uttektUnitId === 502)!;
+  const bord: BoardObject[] = lesid.map((o) => (o.id === duftSlt.id ? { ...o, hidden: true } : o));
+  bord.push(takn("teikn:duft", 100, 800, { id: "a-duft1" }));
+  const u = vista(bord);
+  assert.deepEqual(u.slepptBradabirgda, [duftSlt.id]);
+  assert.equal(u.sjalftengd.find((x) => x.objId === "a-duft1")?.unitId, 502);
+  assert.equal(u.haedir[0].markers!.filter((m) => m.unitId === 502).length, 1);
 });

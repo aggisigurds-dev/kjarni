@@ -171,14 +171,34 @@ async function loadUploadedSet() {
   return uploadedAssets;
 }
 
+/** Er eignin þegar í fötunni? HEAD á opinberu slóðina (engin bæti sótt). Föst auðkenni (eignalykill.ts) — sama teikning
+ * opnuð aftur, á öðru tæki eða í öðrum vafra — eru þar þegar; borð sem kom úr skýinu líka. Óvissa (net) = nei, þá er
+ * hlaðið upp eins og áður (upsert á sömu slóð bætir engri skrá við). */
+async function erIFotu(id: string): Promise<boolean> {
+  try {
+    const sig = timeoutSignal(6000);
+    const res = await fetch(assetPublicUrl(id), { method: "HEAD", cache: "no-store", ...(sig ? { signal: sig } : {}) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function pushAssets(doc: BoardDocument) {
   const sb = getSupabase();
   if (!sb) return;
   const uploaded = await loadUploadedSet();
-  for (const id of [...(doc.assetIds ?? []), ...(doc.frumAssetIds ?? [])]) {
+  for (const id of new Set([...(doc.assetIds ?? []), ...(doc.frumAssetIds ?? [])])) {
     if (uploaded.has(id)) continue;
     const blob = getAssetBlob(id);
     if (!blob) continue;
+    // Lifandi prófun 07.10.2026: hver opnun úttektarborðs hlóð teikningunni upp aftur (~17 MB). Nú: sé skráin þegar
+    // í fötunni er hún aðeins skráð sem upphlaðin.
+    if (await erIFotu(id)) {
+      uploaded.add(id);
+      await set(UPLOADED_KEY, [...uploaded]);
+      continue;
+    }
     const { error } = await sb.storage.from("turbopaint").upload(`${id}.png`, blob, {
       contentType: blob.type || "image/png",
       upsert: true,

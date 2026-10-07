@@ -128,6 +128,69 @@ export class TaekjaSjodur {
   }
 }
 
+/* ── Forgangsröð úthlutunar (lifandi prófun 1404, 07.10.2026) ─────────────────────────────────────────────────────
+ * „SLT / BRSL af teikningu" (SLT án tegundar) tók lausu ABC Duft- og CO2-tækin STRAX, svo Duft/CO₂-tákn sem Agnar setti
+ * sjálfur fengu ekkert og urðu Nýtt. Röðin sem táknin voru sett í réð því hver fékk tækið. Nú, við „Vista í úttekt":
+ *   (a) tákn með ákveðna tegund (Duft → ABC Duft, CO₂ → CO2, Léttvatn → Léttvatn, Slanga → Brunaslanga; líka Nýtt-tákn)
+ *       fá fyrst laus tæki af SINNI tegund;
+ *   (b) SLT-tákn lestursins (án tegundar) fá svo það sem eftir er af slökkvitækjum, hvaða tegund sem er;
+ *   (c) BRSL-tákn lestursins fá Brunaslöngur.
+ * Tenging lestursins er bráðabirgða (SymbolObject.sltLestur): tækið losnar við vistun og úthlutunin er reiknuð upp á nýtt
+ * — sama niðurstaða hvort sem táknin með tegund komu á undan lestrinum eða eftir (lesturinn tekur frá fyrir þau sem eru
+ * komin, takaFraFyrirTegund). Sjóðurinn gætir þess að sama tæki fari aldrei tvisvar, staðsett tæki (á hvaða hæð sem er)
+ * og úrelt tæki aldrei. */
+
+/** SLT-tegundir í röð: almennt slökkvitæki — léttvatn, svo duft, svo CO₂. */
+export const SLT_TEGUNDIR: TaekjaTegund[] = ["lettvatn", "duft", "co2"];
+
+export type TaekjaFlokkur = "tegund" | "slt" | "brsl";
+export const UTHLUTUNARROD: readonly TaekjaFlokkur[] = ["tegund", "slt", "brsl"];
+
+export type TaekjaKostur = {
+  /** `tegund` = tákn með ákveðna tegund (notandinn setti, eða Nýtt-tákn); `slt` / `brsl` = tákn úr lestrinum. */
+  flokkur: TaekjaFlokkur;
+  /** Tegund táknsins (`tegund`); fyrir `slt` sú sem Nýtt fær ef ekkert er eftir (léttvatn), `brsl` = slanga. */
+  tegund: TaekjaTegund;
+};
+
+/** Hvaða tegundir tákn í flokknum má fá. */
+export function tegundirFlokks(k: TaekjaKostur): TaekjaTegund[] {
+  return k.flokkur === "slt" ? SLT_TEGUNDIR : k.flokkur === "brsl" ? ["slanga"] : [k.tegund];
+}
+
+/** Úthlutar lausum tækjum á kostina í forgangsröð (a) tegund → (b) SLT → (c) BRSL; innan flokks í röð kostanna.
+ * Skilar tæki (eða null = verður Nýtt) á sama stað og kosturinn í `kostir`. Hrein aðgerð nema sjóðurinn tæmist. */
+export function uthlutaTaekjum(kostir: TaekjaKostur[], sjodur: TaekjaSjodur): (Tki | null)[] {
+  const ut: (Tki | null)[] = kostir.map(() => null);
+  for (const flokkur of UTHLUTUNARROD) {
+    kostir.forEach((k, i) => {
+      if (k.flokkur !== flokkur) return;
+      ut[i] = sjodur.taka(tegundirFlokks(k));
+    });
+  }
+  return ut;
+}
+
+/** Tæki lestursins með bráðabirgðatengingu (eða ótengt) — úthlutað upp á nýtt við vistun. */
+export function erLesturTakn(o: BoardObject): o is SymbolObject & { sltLestur: "slt" | "brsl" } {
+  return o.type === "symbol" && (o.sltLestur === "slt" || o.sltLestur === "brsl");
+}
+
+/** Lausu tækin sem tákn með ákveðna tegund eiga tilkall til á undan lestrinum (a): ótengd tækjatákn og Nýtt-tákn sem
+ * notandinn setti (ekki tákn lestursins, ekki falin, ekki 165.BR1-hönnunarmerki). Tekin frá í sjóðnum — svo lesturinn
+ * sýni strax sömu niðurstöðu og vistunin. */
+export function takaFraFyrirTegund(objects: BoardObject[], sjodur: TaekjaSjodur): number {
+  let n = 0;
+  for (const o of objects) {
+    if (o.type !== "symbol" || o.hidden || erLesturTakn(o)) continue;
+    if (String(o.name || "").startsWith("165.BR1")) continue;
+    if (!erOtengtTaekjaTakn(o) && !erNyttTakn(o)) continue;
+    const k = tegundTakns(o.symbolId);
+    if (k && sjodur.taka([k])) n++;
+  }
+  return n;
+}
+
 /** Talning Nýtt-tækja eftir tegund, í fastri röð (Léttvatn, ABC Duft, CO2, Brunaslanga, Annað) — fyrir upplýsingalínuna
  * og tilboð. */
 export function nyttEftirTegund(nytt: Partial<Record<TaekjaTegund, number>>): { tegund: TaekjaTegund; heiti: string; fjoldi: number }[] {

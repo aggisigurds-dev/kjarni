@@ -10,7 +10,7 @@ import { LAYER_ALMENNT } from "./layers";
 import { makeSymbol } from "./markup-kit";
 import { symbolIdLykils } from "./merkjasafn";
 import { isMvsMark } from "./mvs165";
-import { stadsettirLyklar, TaekjaSjodur, TEGUND_HEITI, type TaekjaTegund } from "./sjalftenging";
+import { stadsettirLyklar, TaekjaSjodur, takaFraFyrirTegund, TEGUND_HEITI, type TaekjaTegund } from "./sjalftenging";
 import { aetlaSltBrsl, DRAEGI_SLONGU_M, type SbStadur, type SbTaekiABord } from "./slt-brsl";
 import type { BoardObject, EllipseObject, ImageObject, StickyObject, SymbolObject } from "./types";
 import { OTENGT_MIDI, stuttNumer, symbolFyrirTegund, type UttektHaed, type UttektTaeki } from "./uttekt";
@@ -57,11 +57,12 @@ function draegiHringur(cx: number, cy: number, r: number, nafn: string, parentId
 }
 
 /** Tækjatákn á staðnum: tengt (unitId, raðnúmer undir) eða ótengt („ótengt" undir, grátt). Venjulegt tækjatákn — ekki
- * 165.BR1-hönnunarmerki — svo það vistast (tengt eða sem Nýtt) og endurkeyrsla hendir því ekki. */
+ * 165.BR1-hönnunarmerki — svo það vistast (tengt eða sem Nýtt) og endurkeyrsla hendir því ekki. Merkt `sltLestur`:
+ * tengingin er BRÁÐABIRGÐA — „Vista í úttekt" úthlutar upp á nýtt, tákn með tegund fyrst (sjalftenging.ts). */
 function taeknTakn(t: SbTaekiABord, plan: ImageObject, s: number): SymbolObject {
   const symbolId = t.taeki ? symbolFyrirTegund(t.taeki.type) : symbolIdLykils(t.tegund);
   const o = makeSymbol(symbolId, t.x - s / 2, t.y - s / 2, t.taeki ? stuttNumer(t.taeki.serial) : OTENGT_MIDI, s);
-  const ut: SymbolObject = { ...o, parentId: plan.id, layerId: LAYER_ALMENNT, uttektPx: s };
+  const ut: SymbolObject = { ...o, parentId: plan.id, layerId: LAYER_ALMENNT, uttektPx: s, sltLestur: t.hvad };
   if (t.taeki) ut.uttektUnitId = t.taeki.id;
   return ut;
 }
@@ -80,6 +81,9 @@ export function beitaSltBrsl(
   const fjarlaegd = objects.length - eftir.length;
   const taekiEftirId = new Map((st.taeki ?? []).map((t) => [String(t.id), t]));
   const sjodur = st.taeki ? new TaekjaSjodur(st.taeki, stadsettirLyklar(st.haedir, eftir)) : null;
+  // (a) á undan (b)/(c): laus tæki sem tákn með tegund á borðinu eiga tilkall til eru tekin frá — lesturinn tekur ekki
+  // Duft/CO2 sem Agnar setti sjálfur tákn fyrir (lifandi prófun 1404, 07.10.2026). Vistunin reiknar það sama upp á nýtt.
+  if (sjodur) takaFraFyrirTegund(eftir, sjodur);
   const ny: BoardObject[] = [];
   const samantekt: SltBrslSamantekt[] = [];
   for (const tk of teikningar) {
@@ -147,7 +151,7 @@ function yfirlitsmidi(s: SltBrslSamantekt): StickyObject {
   const lines = [
     "SLT / BRSL af teikningu",
     `${s.brsl} brunaslöngur (BRSL) · ${s.slt} slökkvitæki (SLT)`,
-    `Tengd við tæki staðarins: ${tSlongur} slöngur, ${tSlt} slökkvitæki`,
+    `Tengd við tæki staðarins: ${tSlongur} slöngur, ${tSlt} slökkvitæki (bráðabirgða — tákn með tegund ganga fyrir við vistun)`,
     s.otengd.brsl + s.otengd.slt
       ? `Ótengt: ${s.otengd.brsl + s.otengd.slt} (${otengdTexti}) — verða „Nýtt" (í bið) við „Vista í úttekt" nema tæki bætist við`
       : "Öll tækin tengd skráðum tækjum.",

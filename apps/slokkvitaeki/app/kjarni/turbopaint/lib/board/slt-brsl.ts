@@ -14,7 +14,7 @@
  * þau duga ekki kemur ótengt tákn („ótengt" → „Nýtt" við vistun). */
 
 import type { OcrWord } from "./firewall-rating";
-import { erTengtTaekiTakn, tegundABordi, TaekjaSjodur, type TaekjaTegund } from "./sjalftenging";
+import { erTengtTaekiTakn, SLT_TEGUNDIR, tegundABordi, TaekjaSjodur, type TaekjaTegund } from "./sjalftenging";
 import type { BoardObject, SymbolObject } from "./types";
 
 export type SbTegund = "brsl" | "slt";
@@ -365,8 +365,8 @@ export interface SbAetlun {
   fyrir: { hvad: SbTegund; stadur: number }[];
 }
 
-/** SLT-tegundir í röð: almennt slökkvitæki — léttvatn, svo duft, svo CO₂. */
-export const SLT_TEGUNDIR: TaekjaTegund[] = ["lettvatn", "duft", "co2"];
+/** SLT-tegundir í röð (býr í sjalftenging.ts — forgangsröð úthlutunar notar hana líka). */
+export { SLT_TEGUNDIR };
 
 /** Hvar hvert tæki fer og við hvaða skráða tæki það tengist. `stadir` í BORÐHNITUM (miðja; takn.r í borðeiningum).
  * Tæki af sömu tegund sem er þegar innan `seiling` (borðeiningar) frá staðnum — sett handvirkt, eða í fyrri lestri —

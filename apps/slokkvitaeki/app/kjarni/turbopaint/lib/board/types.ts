@@ -215,6 +215,10 @@ export interface SymbolObject extends BaseObject {
   uttektPx?: number;
   /** `color` merkisins í teikning_bord — plötuliturinn eins og Teikning-glugginn teiknar hann. */
   uttektLitur?: string;
+  /** Tæki sem „SLT / BRSL af teikningu" setti: `slt` = slökkvitæki án ákveðinnar tegundar, `brsl` = brunaslanga.
+   * Tenging þess (uttektUnitId) er BRÁÐABIRGÐA þar til vistað er — „Vista í úttekt" úthlutar upp á nýtt (tákn með
+   * tegund fyrst, svo SLT, svo BRSL; sjalftenging.ts uthlutaTaekjum) og tekur merkið af. */
+  sltLestur?: "slt" | "brsl";
 }
 
 export type BoardObject =
