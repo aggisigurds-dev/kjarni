@@ -64,6 +64,8 @@ const mynd = (n) => path.join(OUT, n);
   await ctx.route("**/rest/v1/teikning_bord*", async (route) => {
     const req = route.request();
     if (req.method() === "GET" || req.method() === "HEAD") {
+      // Aðeins Fiskislóð er aukin — síðasta borð vafrans getur verið annar staður sem tækjalistinn les líka (lestur fer í gegn)
+      if (!/company_id=eq\.1612\b/.test(req.url())) return route.fallback();
       const res = await route.fetch();
       let j;
       try {

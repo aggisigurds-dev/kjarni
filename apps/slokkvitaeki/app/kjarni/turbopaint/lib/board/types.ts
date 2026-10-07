@@ -117,6 +117,15 @@ export interface UttektTenging {
    * sem er horfið af borðinu var tekið af teikningunni og fer úr hæðinni við vistun; merki sem bættist við í appinu
    * eftir opnun (ekki á listanum) er látið í friði. Vantar (eldra borð) = ekkert er fjarlægt. */
   merki?: string[];
+  /** „Stærð allra merkja" (Agnar 07.10.2026): sjálfgefin stærð merkja hæðarinnar í skjápunktum Teikning-gluggans
+   * (= `stimpilStaerd` hæðarinnar, 10–160). Tákn á borðinu eru `stimpilStaerd · taknEining` borðdílar (eða eigin
+   * `staerd` merkis · taknEining). Vantar (eldra borð) = gamla stærðarreglan (stimpilstærð TurboPaint). */
+  stimpilStaerd?: number;
+  /** `stimpilStaerd` hæðarinnar við opnun / síðustu vistun — vistun skrifar `stimpilStaerd` aðeins ef hún breyttist. */
+  stimpilStaerdVid?: number;
+  /** Borðdílar á hvern skjádíl Teikning-gluggans (sett við opnun/tengingu: lengri hlið hússins ÷ 28 = 56 px). Geymt svo
+   * stærðirnar haldist þótt skurður myndarinnar breytist síðar („Croppa teikningu"). */
+  taknEining?: number;
 }
 
 export interface RectObject extends BaseObject {

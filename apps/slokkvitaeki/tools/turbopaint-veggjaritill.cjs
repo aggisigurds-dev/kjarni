@@ -42,13 +42,31 @@ const check = (n, c, extra) => {
   await ctx.route("**/rest/v1/teikning_bord*", async (route) => {
     const req = route.request();
     if (req.method() === "GET" || req.method() === "HEAD") {
+      // aðeins prófunarstaðurinn (síðasta borð vafrans getur verið annar staður — lestur hans fer óbreyttur í gegn)
+      if (!req.url().includes("company_id=eq." + CID)) return route.fallback();
       const res = await route.fetch();
+      let j;
       try {
-        const j = await res.json();
-        const rod = Array.isArray(j) ? j[0] : j;
-        if (rod && rod.haedir) fersk = rod;
-      } catch { /* ekki json */ }
-      return route.fulfill({ response: res });
+        j = await res.json();
+      } catch {
+        return route.fulfill({ response: res });
+      }
+      const rod = Array.isArray(j) ? j[0] : j;
+      if (rod && rod.haedir) {
+        // Prófið gengur út frá veggjum TEIKNING-gluggans (62 = 57 + 5 gler úr pdfVeggir). Agnar vistaði 07.10 sínar eigin
+        // leiðréttingar úr TurboPaint (veggjaLinur, 90 með 27 hurðum) — þær eru teknar úr lestrinum hér svo prófið mæli það
+        // sama og áður. Lifandi röðin er ósnert (aðeins lesin).
+        const h = rod.haedir.find((x) => x.id === HAED);
+        if (h) {
+          delete h.veggjaLinur;
+          delete h.leidrett;
+        }
+        fersk = JSON.parse(JSON.stringify(rod));
+      }
+      const headers = { ...res.headers() };
+      delete headers["content-length"];
+      delete headers["content-encoding"];
+      return route.fulfill({ status: res.status(), headers, body: JSON.stringify(j) });
     }
     gripin.push({ method: req.method(), url: req.url(), body: req.postData() });
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ company_id: CID }]) });

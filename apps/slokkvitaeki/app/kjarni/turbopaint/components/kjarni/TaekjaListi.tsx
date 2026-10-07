@@ -19,6 +19,7 @@ import {
 import { byggjaStodurMargar, finnaTengduMynd, myndirTengdar, myndUndir, TEIKNING_STIMPLAR, vorpunMyndar } from "../../lib/board/uttekt";
 import { afvopna, useTaekjaVal, useUttektGogn, vopna, type TaekjaVal } from "../../lib/board/uttekt-gogn";
 import { MerkiTakn } from "./MerkiTakn";
+import { StaerdAllraMerkja } from "./StaerdAllra";
 
 const MERKI_LITUR: Record<TaekiILista["stada"], string> = {
   her: "bg-emerald-500/15 text-emerald-300",
@@ -105,6 +106,7 @@ export function TaekjaListi({ onFocusObject }: { onFocusObject?: (id: string) =>
       </button>
       {opid ? (
         <div className="space-y-2 px-2 pb-2">
+          {mynd?.uttekt ? <StaerdAllraMerkja myndId={mynd.id} /> : null}
           {rettGogn ? (
             <div className="text-[10.5px] leading-snug text-stone-400">
               {her} á teikningu · {onnur} á öðrum hæðum · {ekki} óstaðsett

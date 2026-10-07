@@ -33,6 +33,7 @@ import {
   STAMP_SIZE_MIN,
 } from "../../lib/board/symbol-settings";
 import type { Tool } from "../../lib/board/types";
+import { finnaTengduMynd, medStaerdUmMidju } from "../../lib/board/uttekt";
 import { cn } from "../../lib/utils";
 
 const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = [
@@ -182,12 +183,8 @@ function resizeSelectedSymbols(next: number) {
   if (!selectedIds.length) return 0;
   const ids = objects.filter((o) => selectedIds.includes(o.id) && o.type === "symbol").map((o) => o.id);
   if (!ids.length) return 0;
-  // Miðjan helst kyrr — annars hlypu táknin til því x/y er efra vinstra hornið.
-  updateObjects(ids, (o) => {
-    if (o.type !== "symbol") return o;
-    const d = (o.size - next) / 2;
-    return { ...o, size: next, x: o.x + d, y: o.y + d };
-  });
+  // Miðjan helst kyrr (líka á snúnu tákni) — annars hlypu táknin til því x/y er efra vinstra hornið.
+  updateObjects(ids, (o) => (o.type !== "symbol" ? o : medStaerdUmMidju(o, next)));
   return ids.length;
 }
 
@@ -202,6 +199,9 @@ function MerkingarStrip({ withSize }: { withSize: boolean }) {
   };
   const symbolOpacity = useBoardStore((s) => s.symbolOpacity);
   const setSymbolOpacity = useBoardStore((s) => s.setSymbolOpacity);
+  // Borð tengt úttekt: stærð merkjanna fylgir hæðinni („Stærð allra merkja" í Tæki staðarins, stærð valinna í
+  // eiginleikaspjaldinu) — stimpilstærð TurboPaint á ekki við þar, svo sleðinn hennar víkur.
+  const tengt = useBoardStore((s) => !!finnaTengduMynd(s.objects));
   // Stimpilstærðin er sameiginleg öllum borðum og berst milli tækja, svo sláin
   // verður að endurteikna þegar hún kemur að utan.
   useEffect(() => subscribeSymbolSettings(() => setPx(getStampSize())), []);
@@ -219,7 +219,15 @@ function MerkingarStrip({ withSize }: { withSize: boolean }) {
   return (
     <>
       <span className="hidden shrink-0 sm:inline text-stone-500">Merkingar</span>
-      {withSize ? (
+      {withSize && tengt ? (
+        <span
+          data-staerd-fylgir-haed
+          className="shrink-0 text-stone-500"
+          title="Á úttektarteikningu fylgir stærð merkjanna hæðinni: „Stærð allra merkja“ í Tæki staðarins, eða stærð valinna tákna í eiginleikaspjaldinu."
+        >
+          Stærð fylgir hæðinni
+        </span>
+      ) : withSize ? (
         <label
           className="flex shrink-0 items-center gap-1.5"
           title="Stærð á nýjum táknum — líka á sjálfgerðum merkingum (E-30/E-60). Séu tákn valin breytast ÞAU líka; annars stendur borðið óbreytt."

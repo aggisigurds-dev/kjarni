@@ -367,18 +367,34 @@ export function taknIMerki(
 }
 
 /** Miðja tákns á borðinu (líka snúins). */
-function taknMidjaABordi(takn: { x: number; y: number; size: number; rotation?: number }) {
+export function taknMidjaABordi(takn: { x: number; y: number; size: number; rotation?: number }) {
   const h = midjuHlidrun(takn.size, takn.rotation || 0);
   return { x: takn.x + h.dx, y: takn.y + h.dy };
 }
 
-/** Viðmið stærðar við vistun: stærð nýs tákns á borðinu og sjálfgefin stærð hæðarinnar í Teikning-glugganum. */
-export type StaerdarVidmid = { grunnPx: number; grunnTeikning: number };
+/** Tákn með nýrri stærð og SÖMU miðju (líka snúið — upphafspunkturinn er efra vinstra horn fyrir snúning). */
+export function medStaerdUmMidju<T extends { x: number; y: number; size: number; rotation?: number }>(takn: T, staerd: number): T {
+  const c = taknMidjaABordi(takn);
+  const h = midjuHlidrun(staerd, takn.rotation || 0);
+  return { ...takn, size: staerd, x: c.x - h.dx, y: c.y - h.dy };
+}
+
+/** Viðmið stærðar við vistun: stærð nýs tákns á borðinu og sjálfgefin stærð hæðarinnar í Teikning-glugganum.
+ * `alltaf` („Stærð allra merkja", tenging með `stimpilStaerd`): stærð hvers merkis er reiknuð beint úr stærð táknsins
+ * (grunnPx = stimpilStaerd · taknEining) — ekki aðeins ef táknið var stækkað síðan við opnun. */
+export type StaerdarVidmid = { grunnPx: number; grunnTeikning: number; alltaf?: boolean };
+
+/** Á að reikna `staerd` merkis úr tákninu? Nýja reglan: alltaf; eldri: aðeins ef táknið var stækkað/minnkað. */
+function reiknaStaerd(s: { size: number; uttektPx?: number }, vidmid?: StaerdarVidmid): vidmid is StaerdarVidmid {
+  if (!vidmid) return false;
+  if (vidmid.alltaf) return true;
+  return !!s.uttektPx && Math.abs(s.size - s.uttektPx) > 0.5;
+}
 
 export function merkiFraTakni(s: TaknMedTaeki, p: { x: number; y: number }, vidmid?: StaerdarVidmid): UttektStada {
   const unitId = kodaUnitId(s.uttektUnitId);
   const stada: UttektStada = { x: p.x, y: p.y, unitId, rot: rotGradur(s.rotation) };
-  if (vidmid && s.uttektPx && Math.abs(s.size - s.uttektPx) > 0.5) {
+  if (reiknaStaerd(s, vidmid)) {
     stada.staerd = staerdUrBordi(s.size, vidmid.grunnPx, vidmid.grunnTeikning);
   }
   const sign = s.uttektSign || (typeof unitId === "string" && unitId.startsWith("s:") ? unitId.split(":")[1] : "");
@@ -397,8 +413,14 @@ export function uppfaeraHaedir(
   haedir: UttektHaed[],
   haedId: string,
   stodur: Map<string, UttektStada> | Map<number, { x: number; y: number }>,
-  opts: { fjarlaegja?: Iterable<string> } = {}
+  opts: {
+    fjarlaegja?: Iterable<string>;
+    /** Sjálfgefin stærð hæðarinnar (Teikning-px) í nýju stærðarreglunni: `staerd` stöðu sem er jöfn virkri stærð merkisins
+     * (eigin staerd, annars þessi) skrifast ekki — merki án eigin stærðar fylgja þá áfram stærð hæðarinnar. */
+    grunnStaerd?: number;
+  } = {}
 ) {
+  const g = opts.grunnStaerd;
   const map = new Map<string, UttektStada>();
   stodur.forEach((s, k) => {
     const unitId = "unitId" in s && s.unitId != null ? kodaUnitId(s.unitId) : kodaUnitId(k);
@@ -441,7 +463,8 @@ export function uppfaeraHaedir(
       // Snúningur og eigin stærð (433 rot/staerd) breytast aðeins ef táknið var snúið eða stækkað á borðinu.
       const snuid = s.rot != null && s.rot !== rotGradur(m.rot);
       if (snuid) next.rot = s.rot;
-      const staerd = s.staerd != null && s.staerd !== klemmaStaerd(m.staerd);
+      const virk = klemmaStaerd(m.staerd) || (g != null ? g : 0);
+      const staerd = s.staerd != null && s.staerd !== virk;
       if (staerd) next.staerd = s.staerd;
       if (!kyrrt || snuid || staerd) breytt++;
       uppf.push(next);
@@ -454,7 +477,7 @@ export function uppfaeraHaedir(
       if (s.color) merkiNy.color = s.color;
       // 433 skrifar rot á hvern stimpil (0 líka); á tæki aðeins ef því er snúið
       if (s.rot != null && (s.rot !== 0 || s.kind === "sign")) merkiNy.rot = s.rot;
-      if (s.staerd != null) merkiNy.staerd = s.staerd;
+      if (s.staerd != null && (g == null || s.staerd !== g)) merkiNy.staerd = s.staerd;
       uppf.push(merkiNy);
       ny++;
     });
@@ -556,7 +579,7 @@ export function byggjaStodurMargar(
     }
     const unitId = nyttId(sign);
     const stada: UttektStada = { x: p.x, y: p.y, unitId, kind: "sign", sign, color: stimpilDef(sign)?.litur, rot: rotGradur(s.rotation) };
-    if (vidmid && s.uttektPx && Math.abs(s.size - s.uttektPx) > 0.5) stada.staerd = staerdUrBordi(s.size, vidmid.grunnPx, vidmid.grunnTeikning);
+    if (reiknaStaerd(s, vidmid)) stada.staerd = staerdUrBordi(s.size, vidmid.grunnPx, vidmid.grunnTeikning);
     ut.stodur.set(unitId, stada);
     aBordi.add(unitId);
     ut.nyirStimplar.push({ objId: s.id, unitId, sign });
@@ -634,12 +657,43 @@ export function stimpilStaerdABladi(
   skurdur?: { w: number; h: number } | null,
   frum?: { b: number; h: number } | null
 ): number {
-  const long = Math.max(mynd.width || 0, mynd.height || 0, 1);
   const kv = (bound > 0 ? bound : 56) / 56;
+  return Math.max(24, Math.round(husEining(mynd, skurdur, frum) * kv));
+}
+
+/** Borðstærð merkis sem er 56 px í Teikning-glugganum (STAERD_SJALF): lengri hlið skurðar hæðarinnar ÷ 28, án skurðar
+ * lengri hlið blaðsins ÷ 40 (`mynd` = allt blaðið á borðinu). Línulegt — engin námundun né lágmark. */
+export function husEining(
+  mynd: { width: number; height: number },
+  skurdur?: { w: number; h: number } | null,
+  frum?: { b: number; h: number } | null
+): number {
+  const long = Math.max(mynd.width || 0, mynd.height || 0, 1);
   const k = frum && frum.b > 0 ? (mynd.width || 0) / frum.b : 0;
-  const grunnur =
-    skurdur && skurdur.w > 8 && skurdur.h > 8 && k > 0 ? (Math.max(skurdur.w, skurdur.h) * k) / 28 : long / 40;
-  return Math.max(24, Math.round(grunnur * kv));
+  return skurdur && skurdur.w > 8 && skurdur.h > 8 && k > 0 ? (Math.max(skurdur.w, skurdur.h) * k) / 28 : long / 40;
+}
+
+/** Borðdílar á hvern skjádíl Teikning-gluggans: tákn sem er `s` px í Teikning (stimpilStaerd hæðar eða eigin staerd) er
+ * `s · taknEiningABladi(…)` borðdílar í TurboPaint — sama vörpun og stimpilStaerdABladi, línuleg í báðar áttir. */
+export function taknEiningABladi(
+  blad: { width: number; height: number },
+  skurdur?: { w: number; h: number } | null,
+  frum?: { b: number; h: number } | null
+): number {
+  return husEining(blad, skurdur, frum) / STAERD_SJALF;
+}
+
+/** „Stærð allra merkja" tengingarinnar (Teikning-px, 10–160), eða null ef tengingin er eldri en reglan. */
+export function stimpilStaerdTengingar(t: UttektTenging | null | undefined): number | null {
+  return (t && klemmaStaerd(t.stimpilStaerd)) || null;
+}
+
+/** Borðdílar á Teikning-díl fyrir tengda mynd: geymd eining tengingarinnar (sett við opnun), annars reiknuð. */
+export function taknEiningMyndar(m: ImageObject): number | null {
+  const t = m.uttekt;
+  if (t?.taknEining && t.taknEining > 0) return t.taknEining;
+  const v = vorpunMyndar(m);
+  return v ? taknEiningABladi(v.blad, t?.skurdur, v.frum) : null;
 }
 
 /** Stimpilstærð nýs tákns á borðinu: á borði tengdu úttekt sama stærð og tæki/merki hæðarinnar (miðað við húsið), svo
@@ -650,11 +704,26 @@ export function stimpilStaerdBords(objects: BoardObject[], bound: number, vid?: 
   return m ? stimpilStaerdMyndar(m, bound) : bound;
 }
 
-/** Stimpilstærð tengdrar myndar (miðað við húsið — skurð hæðarinnar), líka skorinnar. */
+/** Stimpilstærð tengdrar myndar (miðað við húsið — skurð hæðarinnar), líka skorinnar. Tenging með „Stærð allra merkja"
+ * (`stimpilStaerd`): sú stærð hæðarinnar · taknEining — óháð stimpilstærð TurboPaint (`bound`). */
 export function stimpilStaerdMyndar(m: ImageObject, bound: number): number {
+  const t = m.uttekt;
+  if (t?.stimpilStaerd) {
+    const e = taknEiningMyndar(m);
+    if (e) return t.stimpilStaerd * e;
+  }
   const v = vorpunMyndar(m);
   if (!v) return bound;
   return stimpilStaerdABladi(v.blad, bound, m.uttekt?.skurdur, v.frum);
+}
+
+/** Tengda myndin sem táknið tilheyrir (sama regla og vistunin: myndin sem miðjan stendur á, annars sú sem það er fest
+ * við, annars fyrsta tengda myndin). null = borðið er ekki tengt úttekt. */
+export function myndTaknsins(objects: BoardObject[], s: SymbolObject): ImageObject | null {
+  const myndir = myndirTengdar(objects);
+  if (!myndir.length) return null;
+  const i = myndTakns(s, myndir.map((m) => ({ mynd: m, frum: { b: m.uttekt!.frumB, h: m.uttekt!.frumH } })));
+  return myndir[i] ?? null;
 }
 
 /** Tengdar myndir borðsins (hver tengd sinni hæð), í röð borðsins. */
@@ -863,18 +932,26 @@ export function utbuaVistun(
     const t = m.uttekt!;
     const frum = { b: t.frumB, h: t.frumH };
     const svaedi = gilturSkurdur(t.myndSkurdur);
+    const T = stimpilStaerdTengingar(t);
+    const e = T ? taknEiningMyndar(m) : null;
     return {
       mynd: m,
       frum,
       svaedi,
-      vidmid: {
-        grunnPx: stimpilStaerdABladi(bladIBordi(m, frum, svaedi), stimpilBound, t.skurdur, frum),
-        grunnTeikning: grunnStaerdHaedar(hs.find((h) => h.id === t.haedId)),
-      },
+      // „Stærð allra merkja": stærð hvers merkis = táknið ÷ taknEining (Teikning-px); annars eldri reglan.
+      vidmid:
+        T && e
+          ? { grunnPx: T * e, grunnTeikning: T, alltaf: true }
+          : {
+              grunnPx: stimpilStaerdABladi(bladIBordi(m, frum, svaedi), stimpilBound, t.skurdur, frum),
+              grunnTeikning: grunnStaerdHaedar(hs.find((h) => h.id === t.haedId)),
+            },
     };
   });
   const b = byggjaStodurMargar(objects, lidir, nyttId);
   let breytt = 0, ny = 0, tekin = 0, veggirAlls = 0;
+  /** Hæðir sem fengu nýja stimpilStaerd („Stærð allra merkja"). */
+  const stimpilBreytt: string[] = [];
   const veggjaFjoldi: number[] = [];
   const thekking: (string[] | null)[] = [];
   myndir.forEach((m, i) => {
@@ -882,8 +959,14 @@ export function utbuaVistun(
     const thekkt = Array.isArray(t.merki) ? t.merki : null;
     thekking.push(thekkt);
     const fjarlaegja = thekkt ? thekkt.filter((k) => !b.aBordi.has(k)) : [];
-    const u = uppfaeraHaedir(hs, t.haedId, b.hlutar[i].stodur, { fjarlaegja });
+    const T = lidir[i].vidmid?.alltaf ? lidir[i].vidmid!.grunnTeikning : undefined;
+    const u = uppfaeraHaedir(hs, t.haedId, b.hlutar[i].stodur, { fjarlaegja, grunnStaerd: T });
     hs = u.haedir;
+    // „Stærð allra merkja" breytt á borðinu → stimpilStaerd hæðarinnar (Teikning sýnir þá sömu stærð); annars ósnert.
+    if (T != null && T !== (t.stimpilStaerdVid ?? grunnStaerdHaedar(hs.find((h) => h.id === t.haedId)))) {
+      hs = hs.map((h) => (h.id === t.haedId ? { ...h, stimpilStaerd: T } : h));
+      stimpilBreytt.push(t.haedId);
+    }
     breytt += u.breytt;
     ny += u.ny;
     tekin += u.tekin;
@@ -932,6 +1015,8 @@ export function utbuaVistun(
     hlutar,
     /** Hæðir sem bættust við (+ Ný hæð). */
     nyjarHaedir: nyjar.map((n) => n.haed.id),
+    /** Hæðir sem fengu nýja `stimpilStaerd` (Stærð allra merkja breytt á borðinu). */
+    stimpilBreytt,
   };
 }
 

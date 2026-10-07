@@ -353,7 +353,14 @@ export function tengjaVidHaed(
   myndId: string,
   val: { haedId: string; nyttNafn?: string },
   haedir: UttektHaed[],
-  opts: { taeki?: UttektTaeki[]; staerd?: number } = {}
+  opts: {
+    taeki?: UttektTaeki[];
+    /** Borðstærð sjálfgefins tákns hæðarinnar. */
+    staerd?: number;
+    /** „Stærð allra merkja": stærð hæðarinnar (Teikning-px) og borðdílar á Teikning-px — tengingin fær nýju regluna. */
+    grunnT?: number;
+    taknEining?: number;
+  } = {}
 ): { objects: BoardObject[]; vikid: string | null; sett: number; veggir: number } {
   const mynd = objects.find((o): o is ImageObject => o.type === "image" && o.id === myndId);
   if (!mynd) throw new Error("Myndin fannst ekki á borðinu.");
@@ -386,7 +393,7 @@ export function tengjaVidHaed(
       for (const m of markers) {
         const k = merkiLykill(m.unitId);
         if (aBordi.has(k) || !innanSvaedis(m, svaedi)) continue;
-        nyTakn.push(taknFyrirMerki(m, opts.taeki ?? [], mynd, frum, opts.staerd, grunnStaerdHaedar(til), svaedi));
+        nyTakn.push(taknFyrirMerki(m, opts.taeki ?? [], mynd, frum, opts.staerd, opts.grunnT ?? grunnStaerdHaedar(til), svaedi));
         merki.push(k);
       }
       const veggirAMynd = objects.some((o) => erVeggur(o) && o.parentId === mynd.id);
@@ -412,6 +419,8 @@ export function tengjaVidHaed(
     myndSkurdur: svaedi,
     ...(merki ? { merki } : {}),
     ...(!til && val.nyttNafn ? { nyHaed: { nafn: val.nyttNafn } } : {}),
+    // Ný hæð ber enga stimpilStaerd enn — viðmiðið vantar svo vistunin skrifi stærðina á hana.
+    ...(opts.grunnT && opts.taknEining ? { stimpilStaerd: opts.grunnT, taknEining: opts.taknEining, ...(til ? { stimpilStaerdVid: opts.grunnT } : {}) } : {}),
   };
   const ut = objects.map((o) => {
     if (o.id === myndId) return { ...mynd, uttekt: t };

@@ -41,7 +41,7 @@ const check = (n, c, extra) => (c ? ok : bad).push(n + (c ? "" : `   ← ${extra
       try {
         const j = await res.json();
         const rod = Array.isArray(j) ? j[0] : j; // maybeSingle: hlutur eða fylki eftir útgáfu
-        if (rod && rod.haedir) fersk = rod;
+        if (rod && rod.haedir && req.url().includes("company_id=eq." + CID)) fersk = rod; // aðeins prófunarstaðurinn (síðasta borð vafrans getur verið annar)
       } catch { /* ekki json */ }
       return route.fulfill({ response: res });
     }

@@ -9,6 +9,7 @@ import { isMvsMark } from "../../lib/board/mvs165";
 import { FILL_PRESETS, STICKY_COLORS, STROKE_PRESETS, type BoardObject, type SymbolObject } from "../../lib/board/types";
 import { erStimpil, merkiLykill, stimpilDef, stimpillMerkis, type UttektTaeki } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
+import { StaerdValinna } from "./StaerdAllra";
 import { TaekjaListi } from "./TaekjaListi";
 import { TengjaVidHaed } from "./TengjaVidHaed";
 import { raesaFjolcrop } from "../../lib/board/fjolcrop";
@@ -90,6 +91,7 @@ export function RightPanel({
   const primary = selected[0];
   const roomSelected = primary?.type === "rect" && Boolean(primary.isRoom);
   const gogn = useUttektGogn((s) => s.gogn);
+  const valdirTakn = selected.filter((o): o is SymbolObject => o.type === "symbol");
   const tengdTakn = selected.filter(
     (o): o is SymbolObject => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== ""
   );
@@ -179,6 +181,8 @@ export function RightPanel({
                 />
               </Field>
             ) : null}
+            {/* Stærð: öll valin tákn í einu (Agnar 07.10.2026: „þarf að gera hvert fyrir sig") */}
+            {valdirTakn.length ? <StaerdValinna takn={valdirTakn} /> : null}
             {primary.type === "text" || primary.type === "sticky" ? (
               <Field label="Texti">
                 <Textarea

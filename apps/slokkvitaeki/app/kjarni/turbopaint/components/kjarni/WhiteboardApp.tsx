@@ -47,12 +47,13 @@ import {
   saekjaUttekt,
   skurdurIBord,
   stimpilDef,
-  stimpilStaerdABladi,
   stimpilStaerdBords,
   stimpilStaerdMyndar,
+  stimpilStaerdTengingar,
   stuttNumer,
   svaediMyndar,
   symbolFyrirTegund,
+  taknEiningABladi,
   taknFyrirMerki,
   uttektBordNafn,
   veggirIBord,
@@ -996,9 +997,13 @@ export function WhiteboardApp() {
         const frum =
           haed.frum && haed.frum.b > 0 ? haed.frum : urlFrum.b > 0 && urlFrum.h > 0 ? urlFrum : giskaFrumStaerd(mynd);
         const sk = haed.skurdur && haed.skurdur.w > 8 && haed.skurdur.h > 8 ? haed.skurdur : null;
-        // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið.
-        const staerd = stimpilStaerdABladi(mynd, getStampSize(), sk, frum);
-        const takn = (haed.markers || []).map((m) => taknFyrirMerki(m, u.taeki, mynd, frum, staerd, grunnStaerdHaedar(haed)));
+        // Táknin miðast við húsið (skurð hæðarinnar), eins og í Teikning-glugganum — ekki allt blaðið — og stærð
+        // hæðarinnar í Teikning („Stærð tákna" = stimpilStaerd) gildir: sjálfgefið tákn er stimpilStaerd · taknEining
+        // borðdílar, merki með eigin stærð í sama hlutfalli. „Stærð allra merkja" breytir T og vistast á hæðina.
+        const T = grunnStaerdHaedar(haed);
+        const taknEining = taknEiningABladi(mynd, sk, frum);
+        const staerd = T * taknEining;
+        const takn = (haed.markers || []).map((m) => taknFyrirMerki(m, u.taeki, mynd, frum, staerd, T));
         // `merki` = það sem borðið sýnir af hæðinni: tæki/merki sem hverfa af borðinu fara úr hæðinni við vistun.
         useBoardStore.getState().patchObject(
           mynd.id,
@@ -1010,6 +1015,9 @@ export function WhiteboardApp() {
               frumH: frum.h,
               skurdur: sk,
               merki: takn.map((s) => merkiLykill(s.uttektUnitId)),
+              stimpilStaerd: T,
+              stimpilStaerdVid: T,
+              taknEining,
             },
           } as Partial<BoardObject>,
           false
@@ -1060,16 +1068,20 @@ export function WhiteboardApp() {
         if (!mynd?.uttekt) continue;
         const v = vorpunMyndar(mynd);
         if (!v) continue;
-        const staerd = stimpilStaerdABladi(v.blad, getStampSize(), mynd.uttekt.skurdur, v.frum);
+        // Stærð hæðarinnar: „Stærð allra merkja" tengingarinnar (ný regla), annars eldri reglan.
+        const staerd = stimpilStaerdMyndar(mynd, getStampSize());
         const haedNu = r.haedir.find((h) => h.id === hl.haedId);
+        const grunnT = stimpilStaerdTengingar(mynd.uttekt) ?? grunnStaerdHaedar(haedNu);
         const svaediM = svaediMyndar(v.frum, v.svaedi);
         // Skorinn hluti sýnir aðeins sitt svæði — merki hæðarinnar utan þess (t.d. á gamalli teikningu) fara ekki á hann.
         const inni = hl.utanBords.filter((m) => !v.svaedi || innanSvaedis(m, svaediM));
-        const ny = inni.map((m) => taknFyrirMerki(m, r.taeki, mynd, v.frum, staerd, grunnStaerdHaedar(haedNu), v.svaedi));
+        const ny = inni.map((m) => taknFyrirMerki(m, r.taeki, mynd, v.frum, staerd, grunnT, v.svaedi));
         if (ny.length) st.addObjects(withLayerId(ny, LAYER_ALMENNT), false);
         sott += ny.length;
         const tenging: UttektTenging = { ...mynd.uttekt, merki: [...hl.merkiABordi, ...ny.map((s) => merkiLykill(s.uttektUnitId))] };
         delete tenging.nyHaed; // hæðin er nú til í úttektinni
+        // Vistaða stærðin er nú viðmiðið: næsta vistun skrifar stimpilStaerd aðeins ef henni er breytt aftur.
+        if (tenging.stimpilStaerd) tenging.stimpilStaerdVid = tenging.stimpilStaerd;
         st.patchObject(mynd.id, { uttekt: tenging } as Partial<BoardObject>, false);
       }
       // Stærðin sem var vistuð er nú viðmiðið: næsta vistun skrifar `staerd` aðeins ef táknið er stækkað aftur.
@@ -1313,8 +1325,10 @@ export function WhiteboardApp() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e.target)) return;
       const meta = e.metaKey || e.ctrlKey;
+      // ⌘Z / ⌘Y virka líka strax eftir drátt á sleða („Stærð allra merkja") — sleðinn heldur fókus en er ekki textareitur.
+      const sledi = e.target instanceof HTMLInputElement && e.target.type === "range";
+      if (isTyping(e.target) && !(sledi && meta && /^[zy]$/i.test(e.key))) return;
       const store = useBoardStore.getState();
       if (e.code === "Space") {
         e.preventDefault();

@@ -8,9 +8,16 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { afleidingTengingar, haedirTilTengingar, merkiMyndar, tengjaVidHaed } from "../../lib/board/margar-haedir";
 import { useBoardStore } from "../../lib/board/store";
-import { getStampSize } from "../../lib/board/symbol-settings";
+import { grunnStaerdHaedar, STAERD_SJALF } from "../../lib/board/merkjasafn";
 import type { ImageObject } from "../../lib/board/types";
-import { bladIBordi, nyttHaedId, stimpilStaerdABladi, tillagaHaedarNafns } from "../../lib/board/uttekt";
+import {
+  bladIBordi,
+  myndirTengdar,
+  nyttHaedId,
+  stimpilStaerdTengingar,
+  taknEiningABladi,
+  tillagaHaedarNafns,
+} from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 
 export function TengjaVidHaed({ mynd }: { mynd: ImageObject }) {
@@ -53,8 +60,19 @@ export function TengjaVidHaed({ mynd }: { mynd: ImageObject }) {
     }
     try {
       const frum = { b: bh.frumB, h: bh.frumH };
-      const staerd = stimpilStaerdABladi(bladIBordi(mynd, frum, bh.svaedi), getStampSize(), bh.svaedi, frum);
-      const r = tengjaVidHaed(st.objects, mynd.id, { haedId, nyttNafn: nafnNyrrar }, haedir, { taeki: rett?.taeki, staerd });
+      // „Stærð allra merkja": stærð hæðarinnar í Teikning (stimpilStaerd); ný hæð fær stærð annarrar tengdrar hæðar á
+      // borðinu (sama hús), annars sjálfgefnu stærðina.
+      const til = haedir.find((h) => h.id === haedId);
+      const grunnT = til
+        ? grunnStaerdHaedar(til)
+        : myndirTengdar(st.objects).map((m) => stimpilStaerdTengingar(m.uttekt)).find((n): n is number => !!n) ?? STAERD_SJALF;
+      const taknEining = taknEiningABladi(bladIBordi(mynd, frum, bh.svaedi), bh.svaedi, frum);
+      const r = tengjaVidHaed(st.objects, mynd.id, { haedId, nyttNafn: nafnNyrrar }, haedir, {
+        taeki: rett?.taeki,
+        staerd: grunnT * taknEining,
+        grunnT,
+        taknEining,
+      });
       if (r.objects === st.objects) {
         setOpid(false);
         return;
