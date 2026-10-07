@@ -12,7 +12,7 @@ import {
   type UttektHaed,
   type UttektTaeki,
 } from "./uttekt";
-import { MERKJASAFN } from "./merkjasafn";
+import { erNyttLykill, MERKJASAFN } from "./merkjasafn";
 import type { BoardObject } from "./types";
 
 export type TaekjaStada = "her" | "onnur" | "ekki";
@@ -48,6 +48,7 @@ export function taekiABordi(objects: BoardObject[]): Map<string, string> {
   for (const o of objects) {
     if (o.type !== "symbol" || o.uttektUnitId == null || o.uttektUnitId === "") continue;
     if (erStimpil({ unitId: o.uttektUnitId, kind: o.uttektKind })) continue;
+    if (erNyttLykill(o.uttektUnitId)) continue; // Nýtt á sér ekkert skráð tæki
     const key = merkiLykill(o.uttektUnitId);
     if (!ut.has(key)) ut.set(key, o.id);
   }

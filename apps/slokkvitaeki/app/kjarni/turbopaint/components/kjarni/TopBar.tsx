@@ -402,7 +402,10 @@ export function TopBar({
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
           {/* Á síma eru þessar tvær aðgerðir hamsins efst í valmyndinni — ekki tvítaka. */}
           <DropdownMenuItem className="max-lg:hidden" onClick={() => onMarkFirewalls?.()}>
-            Merkja eldveggi og 165.BR1 (SLT / slöngur / skilti)
+            Merkja eldveggi (EI-30 / EI-60)
+          </DropdownMenuItem>
+          <DropdownMenuItem className="max-lg:hidden" onClick={() => onHamAdgerd?.("slt-brsl")}>
+            SLT / BRSL af teikningu (slökkvitæki, slöngur, skilti)
           </DropdownMenuItem>
           <DropdownMenuItem
             className="max-lg:hidden"

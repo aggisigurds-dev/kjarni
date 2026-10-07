@@ -267,7 +267,7 @@ function TeikningPlata({ lykill, size, litur }: { lykill: string; size: number; 
   );
 }
 
-function Merkimidi({ size, label }: { size: number; label: string }) {
+function Merkimidi({ size, label, fill = "#1c1917" }: { size: number; label: string; fill?: string }) {
   return (
     <KonvaText
       y={size + 4}
@@ -276,7 +276,7 @@ function Merkimidi({ size, label }: { size: number; label: string }) {
       text={label}
       fontSize={Math.max(10, size * 0.22)}
       fontFamily="Inter, sans-serif"
-      fill="#1c1917"
+      fill={fill}
       stroke="#ffffff"
       strokeWidth={3}
       fillAfterStrokeEnabled
@@ -290,12 +290,15 @@ export function SymbolNode({
   size,
   label,
   litur,
+  midiLitur,
 }: {
   symbolId: string;
   size: number;
   label: string;
   /** Plötulitur merkis úr úttektinni (433 `color`). */
   litur?: string;
+  /** Litur merkimiðans: Nýtt (indígó) / ótengt (grátt) — annars dökkur. */
+  midiLitur?: string;
 }) {
   const def = getSymbol(symbolId);
   const colors = symbolPaint(def);
@@ -309,7 +312,7 @@ export function SymbolNode({
     return (
       <Group>
         <TeikningPlata lykill={def.teikn} size={size} litur={litur} />
-        {label ? <Merkimidi size={size} label={label} /> : null}
+        {label ? <Merkimidi size={size} label={label} fill={midiLitur} /> : null}
       </Group>
     );
   }

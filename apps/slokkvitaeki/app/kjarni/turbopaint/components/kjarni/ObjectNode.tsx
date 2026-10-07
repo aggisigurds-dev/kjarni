@@ -26,6 +26,7 @@ import type { BoardObject } from "../../lib/board/types";
 import { merkiMyndar } from "../../lib/board/margar-haedir";
 import { bladIBordi } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
+import { liturMerkimida } from "../../lib/board/sjalftenging";
 import { erVeggur } from "../../lib/board/veggja-leidretting";
 import { synilegurVegglitur, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { SkarptPdfLag } from "./SkarptPdfLag";
@@ -495,7 +496,7 @@ export function ObjectNode({
           });
         }}
       >
-        <SymbolNode symbolId={obj.symbolId} size={obj.size} label={obj.label} litur={obj.uttektLitur} />
+        <SymbolNode symbolId={obj.symbolId} size={obj.size} label={obj.label} litur={obj.uttektLitur} midiLitur={liturMerkimida(obj)} />
       </Group>
     );
   }

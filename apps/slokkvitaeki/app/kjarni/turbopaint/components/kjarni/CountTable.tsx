@@ -10,6 +10,7 @@ import { useBoardStore } from "../../lib/board/store";
 import { NOTKUNARFLOKKAR, greinaTharfir, type Notkunarflokkur } from "../../lib/board/krofur";
 import { getSymbol } from "../../lib/board/symbols";
 import { erStimpil } from "../../lib/board/uttekt";
+import { erNyttLykill } from "../../lib/board/merkjasafn";
 import type { ImageObject } from "../../lib/board/types";
 
 /** `skrad` = þar af tengd tæki úr tækjalista staðarins (uttaeki) — hin eru tákn sett án tækis (t.d. í tilboði). */
@@ -73,7 +74,12 @@ export function CountTable() {
     for (const o of on) {
       if (o.type === "symbol") {
         // Tæki úr tækjalistanum bera tákn sinnar tegundar (Léttvatn, Duft, CO₂, Brunaslanga …) — talin eftir tegund.
-        const taeki = o.uttektUnitId != null && o.uttektUnitId !== "" && !erStimpil({ unitId: o.uttektUnitId, kind: o.uttektKind });
+        // Nýtt (n:…) er EKKI skráð tæki — telst ekki með skráðum (tvítalning er versta villan)
+        const taeki =
+          o.uttektUnitId != null &&
+          o.uttektUnitId !== "" &&
+          !erStimpil({ unitId: o.uttektUnitId, kind: o.uttektKind }) &&
+          !erNyttLykill(o.uttektUnitId);
         bump(`sym:${o.symbolId}`, getSymbol(o.symbolId).name, 0, taeki ? 1 : 0);
         continue;
       }

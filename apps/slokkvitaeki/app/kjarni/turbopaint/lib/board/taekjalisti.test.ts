@@ -203,8 +203,8 @@ test("Vista í úttekt: tæki sett, fært, tekið af, ÚT-merki bætt við — T
   assert.deepEqual(raf[1], { unitId: "s:rafmagn:test2", x: 900, y: 300, kind: "sign", sign: "rafmagn", color: "#eab308", rot: 0 });
   assert.ok(lyklar.includes("s:bjalla:fraappinu"), "merki sett í appinu eftir opnun heldur sér");
   assert.equal(h1.markers!.length, 9);
-  // ótengt tákn og hönnunarstaður vistast ekki
-  assert.equal(u.otengd, 2);
+  // ótengt tákn og hönnunarstaður vistast ekki; hönnunarmerki 165.BR1 teljast ekki „án tengingar" (vinnugögn lestursins)
+  assert.equal(u.otengd, 1);
   assert.equal(h1.markers!.some((m) => m.x === 1000 && m.y === 1000), false);
   // aðrar hæðir: aðeins tækið sem flutti fer, stimpill þar ósnertur
   assert.deepEqual(h2.markers, [{ x: 300, y: 300, kind: "sign", sign: "ut", color: "#15803d", rot: 0, unitId: "s:ut:zzz" }]);

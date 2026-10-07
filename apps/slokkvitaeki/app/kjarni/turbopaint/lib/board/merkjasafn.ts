@@ -169,9 +169,21 @@ export function erStimpilMerki(m: { kind?: string; unitId?: unknown } | null | u
   return m.kind === "sign" || (typeof m.unitId === "string" && String(m.unitId).startsWith("s:"));
 }
 
+/** „Nýtt"-merki (Agnar 07.10.2026: tæki sem á eftir að skrá — tillaga sem bíður samþykkis eiganda): `nytt: true` og
+ * `unitId: "n:<lykill>:<id>"` (sama snið og stimplar `s:…`, svo vistun Teikning-gluggans — sem parar merki á unitId
+ * — haldi þeim). ALDREI skráð tæki: telst hvorki í tækjatalningu né sem staðsett tæki. */
+export function erNyttLykill(unitId: unknown): boolean {
+  return typeof unitId === "string" && unitId.startsWith("n:");
+}
+
+export function erNyttMerki(m: { nytt?: unknown; unitId?: unknown } | null | undefined): boolean {
+  if (!m) return false;
+  return m.nytt === true || erNyttLykill(m.unitId);
+}
+
 /** 434 lykillFyrir — `takn` merkis ræður fyrst, svo stimpill (sign), svo tegund tækisins. */
 export function lykillFyrir(
-  m: { kind?: string; unitId?: unknown; sign?: string; takn?: unknown },
+  m: { kind?: string; unitId?: unknown; sign?: string; takn?: unknown; nytt?: unknown; tegund?: unknown },
   tegund?: string | null
 ): string {
   const takn = typeof m.takn === "string" ? m.takn : "";
@@ -183,6 +195,8 @@ export function lykillFyrir(
     const sign = m.sign || (typeof m.unitId === "string" ? m.unitId.split(":")[1] : "") || "";
     return STIMPIL_LYKILL[sign] || "annad";
   }
+  // Nýtt-merki á sér ekkert skráð tæki: tegundin sem það var vistað með ræður
+  if (!tegund && erNyttMerki(m) && typeof m.tegund === "string") return fjold(m.tegund);
   return fjold(tegund);
 }
 
