@@ -126,6 +126,8 @@ export interface UttektTenging {
   /** Borðdílar á hvern skjádíl Teikning-gluggans (sett við opnun/tengingu: lengri hlið hússins ÷ 28 = 56 px). Geymt svo
    * stærðirnar haldist þótt skurður myndarinnar breytist síðar („Croppa teikningu"). */
   taknEining?: number;
+  /** `skurdur` var fundinn af sjálfvirka verkferlinu (húsið á blaðinu) — „Vista í úttekt" skrifar hann í hæðina. */
+  skurdurSjalfvirkt?: boolean;
 }
 
 export interface RectObject extends BaseObject {

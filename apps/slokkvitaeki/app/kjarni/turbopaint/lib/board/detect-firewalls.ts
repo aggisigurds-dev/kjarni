@@ -450,7 +450,16 @@ export async function detectFirewallsOnPlan(
     onProgress?: (message: string, percent: number) => void;
   }
 ): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[]; srcW: number; srcH: number }> {
-  const { words, hits: rawHits, srcW, srcH } = await lesaTextaTeikningar(plan, options);
+  return eiUrTexta(plan, await lesaTextaTeikningar(plan, options));
+}
+
+/** EI-niðurstaða úr texta sem þegar var lesinn (lesaTextaTeikningar) — sjálfvirka verkferlið les textann EINU sinni fyrir
+ * bæði EI og SLT / BRSL. */
+export async function eiUrTexta(
+  plan: ImageObject,
+  texti: { words: OcrWord[]; hits: FirewallHit[]; srcW: number; srcH: number }
+): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[]; srcW: number; srcH: number }> {
+  const { words, hits: rawHits, srcW, srcH } = texti;
   const sx = plan.width / srcW;
   const sy = plan.height / srcH;
   const hits = rawHits.filter((hit) => !inTitleBlock(hit, srcW, srcH));

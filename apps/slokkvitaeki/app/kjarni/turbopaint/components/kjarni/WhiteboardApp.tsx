@@ -34,8 +34,9 @@ import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/
 import { getStampSize } from "../../lib/board/symbol-settings";
 import * as symbolSettingsApi from "../../lib/board/symbol-settings";
 import * as symbolsApi from "../../lib/board/symbols";
-import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaSvaedi, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
-import { DRAEGI_LYKILL, endurlestrarRammar, husSvaediIMynd, sltBrslOrd, sltBrslStadir, stadirABord } from "../../lib/board/slt-brsl";
+import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
+import { DRAEGI_LYKILL, sltBrslOrd, sltBrslStadir } from "../../lib/board/slt-brsl";
+import { sltBrslUrTexta } from "../../lib/board/slt-brsl-lestur";
 import { beitaSltBrsl, type SltBrslTeikning } from "../../lib/board/slt-brsl-bord";
 import { nyttTexti, TEGUND_HEITI, type TaekjaTegund } from "../../lib/board/sjalftenging";
 import type { EiMidi, FestiVeggur } from "../../lib/board/ei-festing";
@@ -72,6 +73,7 @@ import {
   vorpunMyndar,
   NYTT_MIDI,
   OTENGT_MIDI,
+  type LeidrettAf,
   type UttektHaed,
   type UttektTaeki,
 } from "../../lib/board/uttekt";
@@ -105,6 +107,9 @@ import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { VeggjaStika } from "./VeggjaStika";
 import { VeggjaRitill } from "./VeggjaRitill";
+import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
+import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
+import { useSjalfvirkt } from "../../lib/board/sjalfvirkt-stada";
 import { teiknaEldvegg, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { Button } from "../ui/button";
 import {
@@ -223,6 +228,7 @@ export function WhiteboardApp() {
     const w = window as unknown as Record<string, unknown>;
     w.__tpStore = useBoardStore;
     w.__tpFjolcrop = useFjolcrop;
+    w.__tpSjalfvirkt = useSjalfvirkt;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
     w.__tpKit = { makeSymbol, exportTiledPdf, getRegisteredStage, detectFirewallsOnPlan, loadPlanCanvas, lesaTextaTeikningar, sltBrslOrd, sltBrslStadir };
@@ -372,46 +378,9 @@ export function WhiteboardApp() {
         framvinda(`Les SLT / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
         // SLT/BRSL eru láréttir: aðeins láréttur lestur (⅓ tímans — Álfaborg: ~115 s í stað ~300 s)
         const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: false, onProgress: framvinda });
-        const src = { b: r.srcW, h: r.srcH };
-        const v = vorpunMyndar(plan);
-        const hus = v ? husSvaediIMynd(plan.uttekt?.skurdur, v.frum, v.svaedi, src) : null;
-        let ord = sltBrslOrd(r.words, src, hus);
-        let stadir = sltBrslStadir(ord, r.blek);
-        // Slöngukefli sem fékk ekkert SLT: reiturinn kringum það lesinn aftur (OCR missir stök orð á fullri síðu)
-        const hMid = ord.length ? [...ord].sort((a, b) => a.h - b.h)[Math.floor(ord.length / 2)].h : 20;
-        const rammar = r.blek ? endurlestrarRammar(stadir, hMid) : [];
-        let endurlesid = 0;
-        let aukaOrd: string[] = [];
-        if (rammar.length && r.blek) {
-          framvinda(`Les aftur við ${rammar.length} slöngukefli…`, 90);
-          const auka = await lesaSvaedi(r.blek, rammar);
-          aukaOrd = auka.filter((w) => w.text.length <= 8).map((w) => `${w.text}@${Math.round(w.x)},${Math.round(w.y)}:${Math.round(w.confidence)}`);
-          const ord2 = sltBrslOrd([...r.words, ...auka], src, hus);
-          if (ord2.length > ord.length) {
-            endurlesid = ord2.length - ord.length;
-            ord = ord2;
-            stadir = sltBrslStadir(ord, r.blek);
-          }
-        }
-        console.info(
-          "[SLT] " +
-            JSON.stringify({
-              teikning: plan.name,
-              mynd: [r.srcW, r.srcH],
-              bord: [Math.round(plan.x), Math.round(plan.y), Math.round(plan.width), Math.round(plan.height)],
-              hus: hus && [Math.round(hus.x0), Math.round(hus.y0), Math.round(hus.x1), Math.round(hus.y1)],
-              ord: ord.map((o) => [o.tegund, Math.round(o.x), Math.round(o.y), Math.round(o.vissa), o.texti]),
-              stadir: stadir.map((s) => [Math.round(s.x), Math.round(s.y), s.brsl ? 1 : 0, s.slt ? 1 : 0, s.takn ? 1 : 0]),
-              endurlesid,
-              aukaOrd,
-            })
-        );
-        const bord = useBoardStore.getState();
-        const metri = ritillDilarAMetra(bord.objects, bord.pixelsPerMeter) ?? dilarAMetraGisk({ b: plan.width, h: plan.height });
-        const staerd = plan.uttekt
-          ? stimpilStaerdMyndar(plan, getStampSize())
-          : stimpilStaerdBords(bord.objects, getStampSize(), { x: plan.x + plan.width / 2, y: plan.y + plan.height / 2 });
-        teikningar.push({ plan, stadir: stadirABord(stadir, plan, src), staerd, metri });
+        const { teikning, log } = await sltBrslUrTexta(plan, r, framvinda);
+        console.info("[SLT] " + JSON.stringify(log));
+        teikningar.push(teikning);
         await new Promise((resolve) => setTimeout(resolve, 60));
       }
       // Tæki staðarins — FERSK úr úttektinni (tæki sem eru merki á einhverri hæð eru staðsett og ekki tekin)
@@ -1068,6 +1037,8 @@ export function WhiteboardApp() {
     }
   }, []);
 
+  // Hvaðan síðasta teikning kom (TIF-frumrit, vigur-PDF, JPEG) — skref a) sjálfvirka verkferlisins segir frá því.
+  const gaediRef = useRef<GaediLysing | null>(null);
   // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
   // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
@@ -1100,6 +1071,9 @@ export function WhiteboardApp() {
             useBoardStore.getState().setImportProgress({ fileName: "skjalasafn", percent, message });
           const sk = await saekjaSkarpaSkonnun(trimmed, quality, { fokus: opts?.fokus, framvinda });
           useBoardStore.getState().setImportProgress(null);
+          gaediRef.current = sk.ok
+            ? { gerd: "tif", b: sk.upplausn.w, h: sk.upplausn.h, texti: `TIF-frumrit ${sk.upplausn.w}×${sk.upplausn.h} dílar (JPEG skjalasafnsins ${sk.frum.b}×${sk.frum.h})` }
+            : { gerd: "jpeg", b: 0, h: 0, texti: `JPEG skjalasafnsins — TIF-frumritið fékkst ekki (${sk.villa})` };
           if (sk.ok) {
             const komnar = await runImport([], undefined, {
               asPlan: opts?.asPlan !== false,
@@ -1142,7 +1116,16 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false }));
+        const komnar = await runImport([file], undefined, { asPlan: opts?.asPlan !== false });
+        merkjaHeimild(komnar);
+        const fyrsta = komnar.find((o) => o.type === "image") as ImageObject | undefined;
+        const pdf = /pdf/i.test(blob.type) || /\.pdf$/i.test(name);
+        gaediRef.current = {
+          gerd: pdf ? "pdf" : "mynd",
+          b: fyrsta?.width ?? 0,
+          h: fyrsta?.height ?? 0,
+          texti: (pdf ? "PDF-frumskjalið" : "Mynd skjalasafnsins") + (fyrsta ? ` ${fyrsta.width}×${fyrsta.height} dílar á borðinu` : ""),
+        };
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         if (opts?.throwOnError) throw err;
@@ -1176,9 +1159,13 @@ export function WhiteboardApp() {
     // Úttektarteikning úr Slökkvitæki-appinu = tækin raðast: byrja í Slökkvitækjaham. `&ham=teikning` (t.d. „Leiðrétta
     // veggi" í Teikning-glugganum) opnar beint í Teikning-ham þar sem veggjastikan er.
     const hamQ = q.get("ham") || "";
-    useHamur.getState().setHamur(HAMIR.some((x) => x.id === hamQ) ? (hamQ as HamurId) : "slokkvitaeki");
+    // `&sjalfvirkt=1` („Sjálfvirkt" í Teikning-glugganum, Agnar 08.10.2026): sjálfvirka verkferlið keyrir eftir opnun —
+    // hæstu gæði, skurður að húsinu, veggir, hreinsun, hurðir, EI, SLT/BRSL og vistun (lib/board/sjalfvirkt.ts).
+    const sjalfvirkt = q.get("sjalfvirkt") === "1";
+    useHamur.getState().setHamur(HAMIR.some((x) => x.id === hamQ) ? (hamQ as HamurId) : sjalfvirkt ? "teikning" : "slokkvitaeki");
+    if (sjalfvirkt) useBoardStore.getState().setImportQuality("print");
     const hrein = new URL(window.location.href);
-    ["uttekt", "haed", "b", "h", "plan", "ham"].forEach((k) => hrein.searchParams.delete(k));
+    ["uttekt", "haed", "b", "h", "plan", "ham", "sjalfvirkt"].forEach((k) => hrein.searchParams.delete(k));
     window.history.replaceState({}, "", hrein.pathname + hrein.search);
     const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
     void (async () => {
@@ -1259,18 +1246,30 @@ export function WhiteboardApp() {
               : vh.heimild === "turbopaint"
                 ? ` · ${veggir.length} veggir`
                 : "") +
-            `. Ýttu á „Vista í úttekt" til að skrifa til baka.`
+            (sjalfvirkt ? ". Sjálfvirka verkferlið byrjar…" : `. Ýttu á „Vista í úttekt" til að skrifa til baka.`)
         );
+        if (sjalfvirkt) {
+          await keyraSjalfvirkt(mynd.id, {
+            vista: (o) => vistaRef.current(o),
+            gaedi: gaediRef.current,
+            ramma: (r) => {
+              const v = shellRef.current;
+              if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
+            },
+          });
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
+        if (sjalfvirkt) useSjalfvirkt.getState().set({ synilegt: true, keyrir: false, yfirlit: "Gat ekki opnað hæðina: " + (err instanceof Error ? err.message : String(err)) });
       }
     })();
   }, [runUrlImport]);
 
-  const vistaUttekt = useCallback(async () => {
+  // `leidrettAf`: „Vista í úttekt"-takkinn = turbopaint (Agnar lagaði); sjálfvirka verkferlið vistar með „sjalfvirkt".
+  const vistaUttekt = useCallback(async (opts?: { leidrettAf?: LeidrettAf }): Promise<{ ok: true; texti: string } | { ok: false; villa: string }> => {
     setUttektVistar(true);
     try {
-      const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize());
+      const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize(), { leidrettAf: opts?.leidrettAf });
       const st = useBoardStore.getState();
       // Nýir stimplar fá unitId sitt á borðinu — næsta vistun færir þá í stað þess að bæta öðrum við.
       for (const n of r.nyirStimplar) {
@@ -1329,6 +1328,7 @@ export function WhiteboardApp() {
         sott += ny.length;
         const tenging: UttektTenging = { ...mynd.uttekt, merki: [...hl.merkiABordi, ...ny.map((s) => merkiLykill(s.uttektUnitId))] };
         delete tenging.nyHaed; // hæðin er nú til í úttektinni
+        delete tenging.skurdurSjalfvirkt; // sjálfvirki skurðurinn er nú skurður hæðarinnar
         // Vistaða stærðin er nú viðmiðið: næsta vistun skrifar stimpilStaerd aðeins ef henni er breytt aftur.
         if (tenging.stimpilStaerd) tenging.stimpilStaerdVid = tenging.stimpilStaerd;
         st.patchObject(mynd.id, { uttekt: tenging } as Partial<BoardObject>, false);
@@ -1365,18 +1365,23 @@ export function WhiteboardApp() {
           : r.nyjarHaedir.length
             ? ` · ný hæð „${r.hlutar[0].nafn}“`
             : "";
-      toast.success(
+      const texti =
         `${r.nafn}: ${r.fjoldi} merki vistuð (${r.breytt} færð, ${r.ny} ný, ${r.tekin} tekin af)` +
-          haedaTexti +
-          (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
-          (auka.length ? " · " + auka.join(" · ") : "")
-      );
+        haedaTexti +
+        (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
+        (auka.length ? " · " + auka.join(" · ") : "");
+      toast.success(texti);
+      return { ok: true, texti };
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Vistun í úttekt mistókst");
+      const villa = err instanceof Error ? err.message : "Vistun í úttekt mistókst";
+      toast.error(villa);
+      return { ok: false, villa };
     } finally {
       setUttektVistar(false);
     }
   }, []);
+  const vistaRef = useRef(vistaUttekt);
+  vistaRef.current = vistaUttekt;
 
   // Tæki eða stimpill úr tækjalistanum sett á teikninguna (smellur eða dráttur). Tæki sem er á hæðinni færist (aldrei
   // tvítekið); tæki á annarri hæð er fært hingað eftir staðfestingu (það fer af hinni hæðinni við vistun).
@@ -1804,6 +1809,7 @@ export function WhiteboardApp() {
             </div>
           )}
           {hydrated ? <VeggjaRitill /> : null}
+          <SjalfvirktSpjald />
           <div className="pointer-events-none absolute inset-0">
             {/* Verkfærasúlan var lóðrétt MIÐJUÐ (top-1/2 + -translate-y-1/2).
                 Á síma er hún hærri en borðið, svo hún klipptist af að ofan OG
