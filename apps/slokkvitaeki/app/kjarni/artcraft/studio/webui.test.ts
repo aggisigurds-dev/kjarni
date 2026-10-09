@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_WEBUI_URL, normalizeWebuiUrl, pingWebui, txt2img } from "./webui.ts";
+import { canEmbedLocalWebui, DEFAULT_WEBUI_URL, normalizeWebuiUrl, pingWebui, txt2img } from "./webui.ts";
+
+test("embeds the local WebUI only on http Kjarni", () => {
+  assert.equal(canEmbedLocalWebui("http:"), true);
+  assert.equal(canEmbedLocalWebui("https:"), false);
+});
 
 test("normalizes local WebUI URLs", () => {
   assert.equal(normalizeWebuiUrl(""), DEFAULT_WEBUI_URL);

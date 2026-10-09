@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { HeimilisfangLeit } from "../turbopaint/components/kjarni/HeimilisfangLeit";
+import { ARTCRAFT_INTERFACES } from "../artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SKINS, type SkinId } from "../skins";
 import { useStationSkin } from "../StationChrome";
@@ -42,6 +43,7 @@ const DIM = "#bf9a5d";
 
 const SYSTEMS: { name: string; kind: string; desc: string; href: string; state: "VIRKT" | "DRÖG" | "YTRA" }[] = [
   { name: "TurboPaint", kind: "TÓL", desc: "Gólfplön — leitaðu eftir heimilisfangi og settu teikninguna á borðið.", href: "/kjarni/turbopaint", state: "VIRKT" },
+  { name: "ArtCraft", kind: "TÓL", desc: "Sjö sköpunarviðmót og einkastúdíó — opnaðu þau beint hér úr Kjarnanum.", href: "/kjarni/artcraft", state: "VIRKT" },
   { name: "Borð", kind: "TÓL", desc: "Sérsniðið stjórnborð — draganleg spjöld með lifandi gögnum, tenglum og klukku.", href: "/bord", state: "VIRKT" },
   { name: "Stjórnborð", kind: "VEFUR", desc: "Stjórnborð vefsins — síður, pantanir, mælingar og tengingar.", href: "/stjorn", state: "VIRKT" },
   { name: "Kerfi", kind: "EINING", desc: "Þjónustukerfið — viðskiptavinir, búnaður, skoðanir, sala og verkstæði.", href: "/kerfi", state: "VIRKT" },
@@ -182,6 +184,24 @@ export function RagnarokView(d: RagnarokData) {
                   window.location.href = `/kjarni/turbopaint?plan=${encodeURIComponent(infoUrl)}`;
                 }}
               />
+            </div>
+          </Panel>
+
+          <Panel className="rgk-leit">
+            <div className="rgk-h2row">
+              <h2 className="rg-h2">ArtCraft — viðmót</h2>
+              <a className="rgk-link" href="/kjarni/artcraft">OPNA YFIRLIT →</a>
+            </div>
+            <p className="rgk-sub">Smelltu á viðmót — það opnast á Kjarnasíðunni.</p>
+            <div className="rgk-launch ac-launch">
+              {ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub").map((item) => (
+                <a key={item.id} href={item.href} className="rgk-lnk">
+                  <span>
+                    <i className="rg-diamond" />
+                    {item.name}
+                  </span>
+                </a>
+              ))}
             </div>
           </Panel>
 

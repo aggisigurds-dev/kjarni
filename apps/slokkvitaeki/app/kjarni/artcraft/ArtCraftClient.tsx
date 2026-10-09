@@ -47,12 +47,21 @@ export default function ArtCraftClient({ app }: { app: ArtcraftApp }) {
             </p>
           </div>
         ) : (
-          <iframe
-            src={src}
-            title={`${app.name} — ${app.role}`}
-            allow="fullscreen; clipboard-read; clipboard-write"
-            allowFullScreen
-          />
+          <>
+            <div className="ac-stage-bar">
+              <b>{app.name}</b>
+              <span>{app.role}</span>
+              <a href={src} target="_blank" rel="noreferrer">
+                Opna stórt
+              </a>
+            </div>
+            <iframe
+              src={src}
+              title={`${app.name} — ${app.role}`}
+              allow="fullscreen; clipboard-read; clipboard-write"
+              allowFullScreen
+            />
+          </>
         )}
       </div>
     </StationChrome>

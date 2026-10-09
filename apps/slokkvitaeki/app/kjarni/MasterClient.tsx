@@ -6,6 +6,7 @@ import { StationChrome, useStationSkin } from "./StationChrome";
 import { SKINS } from "./skins";
 import { HeimilisfangLeit } from "./turbopaint/components/kjarni/HeimilisfangLeit";
 import "./heimilisfang-leit.css";
+import { ARTCRAFT_INTERFACES } from "./artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "./data";
 import { RagnarokView } from "./ragnarok/RagnarokView";
 
@@ -226,6 +227,26 @@ export default function MasterClient() {
                 window.location.href = `/kjarni/turbopaint?plan=${encodeURIComponent(infoUrl)}`;
               }}
             />
+          </div>
+        </div>
+        <div className="ms-card" style={{ marginBottom: 18, padding: 14 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <h2 className="ms-h2" style={{ margin: 0 }}>ArtCraft — viðmót</h2>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--m-soft, #5a6b80)" }}>
+                Smelltu á viðmót — það opnast á Kjarnasíðunni.
+              </p>
+            </div>
+            <a href="/kjarni/artcraft" style={{ fontWeight: 700, fontSize: 13 }}>
+              Opna yfirlit →
+            </a>
+          </div>
+          <div className="ms-launch ac-launch" style={{ marginTop: 12 }}>
+            {ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub").map((item) => (
+              <a key={item.id} href={item.href}>
+                <span aria-hidden="true">{item.icon}</span> {item.name}
+              </a>
+            ))}
           </div>
         </div>
         <div className="ms-kpis">

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MARKS_3DWORK_ORIGIN,
   rewriteRetiredKjarniUrl,
+  ARTCRAFT_HUB,
   TURBOPAINT_APP,
   TURBOPAINT_HUB,
   TURBOPAINT_ORIGIN,
@@ -12,6 +13,7 @@ describe('kjarni hosts', () => {
     expect(TURBOPAINT_ORIGIN).toBe('https://kjarni.vercel.app');
     expect(TURBOPAINT_HUB).toBe('https://kjarni.vercel.app/kjarni');
     expect(TURBOPAINT_APP).toBe('https://kjarni.vercel.app/kjarni/turbopaint');
+    expect(ARTCRAFT_HUB).toBe('https://kjarni.vercel.app/kjarni/artcraft');
     expect(MARKS_3DWORK_ORIGIN).toBe('https://kjarni-3dwork.vercel.app');
     expect(TURBOPAINT_APP.startsWith(MARKS_3DWORK_ORIGIN)).toBe(false);
   });

@@ -12,6 +12,62 @@
   display: none;
 }
 
+.ac-dock {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: none;
+  padding: 6px clamp(12px, 3vw, 24px);
+  border-bottom: 1px solid var(--m-line, #d5dee8);
+  background: var(--m-head, rgba(238, 243, 248, 0.94));
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ac-dock::-webkit-scrollbar { display: none; }
+
+.ac-dock a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--m-soft, #5a6b80);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ac-dock a:hover { color: var(--m-ink, #102038); }
+
+.ac-dock a.on {
+  background: var(--m-navy, #102038);
+  color: #fff;
+}
+
+.stn[data-skin="ragnarok"] .ac-dock {
+  background: #070707;
+  border-bottom-color: rgba(201, 152, 47, 0.35);
+}
+
+.stn[data-skin="ragnarok"] .ac-dock a {
+  border-radius: 0;
+  color: var(--rg-text-dim, #8a7350);
+}
+
+.stn[data-skin="ragnarok"] .ac-dock a:hover,
+.stn[data-skin="ragnarok"] .ac-dock a.on {
+  color: var(--rg-text-gold, #ffd98a);
+}
+
+.stn[data-skin="ragnarok"] .ac-dock a.on {
+  background: none;
+  box-shadow: inset 0 -2px 0 var(--rg-ember-600, #ff8c2a);
+}
+
 .ac-hub {
   flex: 1;
   min-height: 0;
@@ -118,12 +174,39 @@
   background: #111;
 }
 
-.ac-stage iframe {
+.ac-stage-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 14px;
+  background: #161616;
+  color: #d8d8d8;
+  font-size: 13px;
+}
+
+.ac-stage-bar b { color: #fff; }
+.ac-stage-bar span { color: #8c8c8c; }
+.ac-stage-bar a {
+  margin-left: auto;
+  color: #fff;
+  font-weight: 700;
+}
+
+.ac-stage iframe,
+.ac-webui {
   flex: 1;
   width: 100%;
   height: 100%;
   border: 0;
   background: #111;
+}
+
+.ac-webui {
+  min-height: 62vh;
+  margin-top: 12px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 10px;
 }
 
 .ac-missing {

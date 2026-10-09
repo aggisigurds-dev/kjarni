@@ -13,7 +13,7 @@
  * board is nested folder columns, not free-position cards.
  */
 
-import { rewriteRetiredKjarniUrl, TURBOPAINT_APP, TURBOPAINT_HUB } from '@/lib/kjarni-hosts';
+import { ARTCRAFT_HUB, rewriteRetiredKjarniUrl, TURBOPAINT_APP, TURBOPAINT_HUB } from '@/lib/kjarni-hosts';
 
 export { rewriteRetiredKjarniUrl } from '@/lib/kjarni-hosts';
 
@@ -800,7 +800,8 @@ export function seedDoc(now = 1): MarksDoc {
     ]),
     linkAt('lnk_marks', kjarni.id, 'Marks', '/marks', 'This start page', 1, ['kjarni']),
     linkAt('lnk_paint', kjarni.id, 'TurboPaint', TURBOPAINT_APP, 'Floor plans', 2, ['kjarni']),
-    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', TURBOPAINT_HUB, 'Stjórnstöð', 3, ['kjarni']),
+    linkAt('lnk_artcraft', kjarni.id, 'ArtCraft', ARTCRAFT_HUB, 'Crafting apps', 3, ['kjarni']),
+    linkAt('lnk_hub', kjarni.id, 'Kjarni hub', TURBOPAINT_HUB, 'Stjórnstöð', 4, ['kjarni']),
     linkAt('lnk_slokk', apps.id, 'Slökkvitæki', 'https://slokkvitaeki.netlify.app', '', 0, ['app']),
     linkAt('lnk_bruna', apps.id, 'Brunahólf', 'https://brunaholf.netlify.app', '', 1, ['app']),
     linkAt('lnk_github', shop.id, 'GitHub · kjarni', 'https://github.com/aggisigurds-dev/kjarni', 'Website code', 0, [
