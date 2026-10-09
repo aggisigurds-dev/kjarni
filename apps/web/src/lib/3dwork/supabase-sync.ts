@@ -132,6 +132,34 @@ export async function listCloudProjects(): Promise<CloudProjectIndexEntry[]> {
   }));
 }
 
+/** A build on Supabase with the parts in it, for the Partasafn's list of every part. */
+export interface CloudBuildParts {
+  id: string;
+  name: string;
+  updatedAt: number;
+  parts: Part[];
+}
+
+/** Every build on Supabase with its parts — the documents, not the meshes. */
+export async function listCloudBuildParts(): Promise<CloudBuildParts[]> {
+  const sb = getWork3dSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from(WORK3D_TABLE)
+    .select('id, name, updated_at, parts:project->parts')
+    .eq('deleted', false)
+    .neq('id', FAVORITES_ID)
+    .order('updated_at', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: (row.name as string) || 'Untitled blaster',
+    updatedAt: asUpdatedAt(row.updated_at),
+    parts: Array.isArray(row.parts) ? (row.parts as unknown as Part[]) : [],
+  }));
+}
+
 export async function saveToCloud(
   project: Project,
   geometries: Map<string, Float32Array>,
@@ -241,6 +269,23 @@ export async function loadCloudGeometry(
   }
   if (!file) return null;
   return new Float32Array(await file.arrayBuffer());
+}
+
+/** Give a build on Supabase a new name — the row and the document it holds — without moving its stamp. */
+export async function renameCloudBuild(projectId: string, name: string): Promise<void> {
+  const sb = getWork3dSupabase();
+  if (!sb) return;
+  const { data, error } = await sb.from(WORK3D_TABLE).select('project').eq('id', projectId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return;
+  const { error: updateError } = await sb
+    .from(WORK3D_TABLE)
+    .update({
+      name,
+      project: { ...(data.project as Project), name },
+    })
+    .eq('id', projectId);
+  if (updateError) throw new Error(updateError.message);
 }
 
 export async function newestCloudProject(): Promise<CloudProjectIndexEntry | null> {

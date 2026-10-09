@@ -76,6 +76,8 @@ export interface Part {
    * wherever the part sat when free mode was first entered.
    */
   freePos?: Vec3;
+  /** In the Partasafn: shown under Uppáhalds as well. */
+  starred?: boolean;
   addedAt: number;
 }
 
