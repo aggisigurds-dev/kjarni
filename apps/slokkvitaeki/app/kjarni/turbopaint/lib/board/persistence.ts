@@ -1,7 +1,8 @@
 import { del, get, set } from "idb-keyval";
-import { getAssetBlob, hydrateAssets, putAsset } from "./assets";
+import { festaIGeymslu, getAssetBlob, hydrateAssets, putAsset } from "./assets";
 import { createDemoBoard } from "./demo-board";
 import { newId } from "./ids";
+import { erSkodun, useSkodun } from "./skodun";
 import { isDuplicateStorageError } from "./storage-errors";
 import { assetPublicUrl, getSupabase } from "./supabase";
 import { useBoardStore } from "./store";
@@ -216,6 +217,8 @@ async function pushAssets(doc: BoardDocument) {
 }
 
 async function pushBoard() {
+  // Skoðun: ekkert fer í skýið (hvorki borð né mynd) — fyrr en „Vista sem borð".
+  if (erSkodun()) return;
   const sb = getSupabase();
   if (!sb || !currentBoardId) return;
   if (pushInFlight) {
@@ -251,7 +254,7 @@ async function pushBoard() {
 }
 
 function schedulePush() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || erSkodun()) return;
   window.clearTimeout(pushTimer);
   pushTimer = window.setTimeout(() => void pushBoard(), 2500);
 }
@@ -259,7 +262,7 @@ function schedulePush() {
 /** Pull the current board from the cloud if a newer copy exists there. */
 export async function pullIfNewer() {
   const sb = getSupabase();
-  if (!sb || !currentBoardId || pushInFlight) return;
+  if (!sb || !currentBoardId || pushInFlight || erSkodun()) return;
   // Óstaðfestar breytingar á þessu tæki eru rétthærri — aldrei draga skýið
   // yfir vinnu sem hefur ekki náð að ýtast ("datt allt út"-veilan).
   if (dirtySincePush) return;
@@ -348,6 +351,8 @@ async function openBoardId(id: string, fallbackDoc?: BoardDocument) {
 }
 
 export async function loadBoard() {
+  // Skoðun opnar ekkert borð — síðasta borðið (og borðalistinn) er látið ósnert.
+  if (erSkodun()) return;
   installSyncListeners();
   const index = await readIndex();
 
@@ -424,6 +429,8 @@ export async function loadBoard() {
 }
 
 export async function persistBoard() {
+  // Skoðun: borðið er AÐEINS í minni — engin IndexedDB-færsla, enginn borðalisti, engin ský-ýting.
+  if (erSkodun()) return;
   if (!currentBoardId) currentBoardId = newId();
   const content = contentSnapshot();
   const changed = content !== lastContentJson;
@@ -493,12 +500,15 @@ export async function listBoards(): Promise<BoardListEntry[]> {
 export async function switchBoard(id: string) {
   if (id === currentBoardId) return;
   await persistBoard();
+  // Úr skoðun yfir í vistað borð: skoðuninni er hent (hún var aldrei skrifuð neitt).
+  haettaSkodun();
   useBoardStore.getState().setSyncState("idle");
   await openBoardId(id);
 }
 
 export async function createBoard(name = "Nýtt borð") {
   await persistBoard();
+  haettaSkodun();
   currentBoardId = newId();
   lastContentJson = "";
   lastUpdatedAt = "";
@@ -518,7 +528,7 @@ export async function createBoard(name = "Nýtt borð") {
 /** Soft-delete the current board (cloud keeps the row with deleted=true). */
 export async function deleteCurrentBoard() {
   const id = currentBoardId;
-  if (!id) return;
+  if (!id || erSkodun()) return;
   const sb = getSupabase();
   if (sb) {
     try {
@@ -567,10 +577,71 @@ export async function clearBoard() {
   await persistBoard();
 }
 
+// ── Skoðunarhamur (skodun.ts) ─────────────────────────────────────────────────────────────────────────────────────
+// Teikning opnuð til skoðunar (`?skoda=`): ekkert borð er opnað eða búið til, ekkert fer í IndexedDB né skýið. Allir
+// skrif-staðir hér að ofan (persistBoard, schedulePush, pushBoard, loadBoard, deleteCurrentBoard) og putAsset/deleteAsset
+// í assets.ts lesa erSkodun() og gera ekkert. Lokun/endurhleðsla = ekkert eftir.
+
+/** Opnar tómt skoðunarborð í minni. Síðasta borðið, borðalistinn og samstillingin eru ósnert. */
+export function opnaSkodun(titill: string, slod: string) {
+  useSkodun.setState({ virk: true, titill, slod, grunnur: null, vistar: false });
+  if (typeof window !== "undefined") window.clearTimeout(pushTimer);
+  currentBoardId = null;
+  lastContentJson = "";
+  lastUpdatedAt = "";
+  dirtySincePush = false;
+  useBoardStore.getState().replaceBoard({
+    name: titill,
+    objects: [],
+    camera: { x: 80, y: 80, scale: 1 },
+    pixelsPerMeter: null,
+    grid: true,
+    snap: true,
+  });
+  useBoardStore.getState().setSyncState("idle");
+  useBoardStore.getState().setHydrated(true);
+}
+
+/** Skoðun lýkur (vistuð, eða skipt yfir á annað borð) — venjuleg vistun tekur við. */
+function haettaSkodun() {
+  if (!erSkodun()) return;
+  useSkodun.setState({ virk: false, grunnur: null, vistar: false });
+  installSyncListeners();
+}
+
+/** „Vista sem borð": skoðunin verður venjulegt borð — SAMA leið og nýtt borð + innflutningur: myndirnar í IndexedDB,
+ * borðið í IndexedDB og borðalistann (persistBoard), svo upphleðsla mynda í geymsluna og upsert í turbopaint_boards
+ * (pushBoard). Ýtt strax (ekki eftir 2,5 s) svo „Vistað" þýði vistað. Skilar auðkenni nýja borðsins. */
+export async function vistaSkodunSemBord(): Promise<{ id: string; sky: "synced" | "error" | "idle" | "saving" }> {
+  if (!erSkodun()) throw new Error("Ekki í skoðun");
+  useSkodun.setState({ vistar: true });
+  try {
+    const myndir = useBoardStore
+      .getState()
+      .objects.filter((o): o is Extract<BoardObject, { type: "image" }> => o.type === "image");
+    await festaIGeymslu([
+      ...myndir.map((o) => o.assetId),
+      ...myndir.map((o) => o.frumAssetId).filter((x): x is string => !!x),
+    ]);
+    haettaSkodun();
+    const id = newId();
+    currentBoardId = id;
+    lastContentJson = "";
+    lastUpdatedAt = "";
+    dirtySincePush = false;
+    await persistBoard();
+    if (typeof window !== "undefined") window.clearTimeout(pushTimer);
+    await pushBoard();
+    return { id, sky: useBoardStore.getState().syncState };
+  } finally {
+    useSkodun.setState({ vistar: false });
+  }
+}
+
 let saveTimer: number | undefined;
 
 export function schedulePersist() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || erSkodun()) return;
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
     void persistBoard();

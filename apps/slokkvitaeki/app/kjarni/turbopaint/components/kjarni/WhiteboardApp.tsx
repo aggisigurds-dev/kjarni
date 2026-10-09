@@ -47,7 +47,28 @@ import { ritillDilarAMetra } from "../../lib/board/veggja-ritill-adgerdir";
 import { nyGreiningarLota } from "../../lib/board/veggja-ritill";
 import { drawingScaleFromWords, pixelsPerMeterFromScale } from "../../lib/board/mvs165";
 import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
-import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
+import {
+  clearBoard,
+  createBoard,
+  listBoards,
+  loadBoard,
+  migrateBoardObjects,
+  opnaSkodun,
+  persistBoard,
+  schedulePersist,
+  switchBoard,
+  vistaSkodunSemBord,
+} from "../../lib/board/persistence";
+import {
+  erSkjalasafnsSlod,
+  erSkodun,
+  heitiUrSlod,
+  lesaSkodunarBeidni,
+  skodunBreytt,
+  useSkodun,
+  SKODUN_BREYTA,
+  TITILL_BREYTA,
+} from "../../lib/board/skodun";
 import {
   finnaTengduMynd,
   giskaFrumStaerd,
@@ -219,9 +240,15 @@ export function WhiteboardApp() {
   }, []);
   const camera = useBoardStore((s) => s.camera);
   const selectedIds = useBoardStore((s) => s.selectedIds);
+  // Skoðunarhamur (`?skoda=<slóð teikningar>&titill=<heiti>`, lib/board/skodun.ts): teikningin opnast í minni, ekkert
+  // borð verður til fyrr en „Vista sem borð". Lesið einu sinni við ræsingu (síðan er aðeins teiknuð í vafranum).
+  const [skodunBeidni] = useState(() => (typeof window === "undefined" ? null : lesaSkodunarBeidni(window.location.search)));
+  const skodunVirk = useSkodun((s) => s.virk);
+  const skodunVistar = useSkodun((s) => s.vistar);
 
   useEffect(() => {
-    void loadBoard();
+    if (skodunBeidni) opnaSkodun(skodunBeidni.titill, skodunBeidni.slod);
+    else void loadBoard();
     // Prófunar-krókur: reykprófin (tools/turbopaint-smoke.cjs) lesa raun-stöðu
     // borðsins gegnum window.__tpStore í stað þess að giska út frá DOM.
     // Táknin fylgja með svo hægt sé að sanna litina, stimpilstærðina og
@@ -233,7 +260,10 @@ export function WhiteboardApp() {
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
     w.__tpKit = { makeSymbol, exportTiledPdf, getRegisteredStage, detectFirewallsOnPlan, loadPlanCanvas, lesaTextaTeikningar, sltBrslOrd, sltBrslStadir };
-  }, []);
+    // Skoðunarprófið (tools/turbopaint-skodun.cjs) les stöðu skoðunar og mælir upplausn myndarinnar sjálfrar.
+    w.__tpSkodun = useSkodun;
+    w.__tpEign = getAssetBlob;
+  }, [skodunBeidni]);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
   const focusObject = useCallback(
@@ -457,7 +487,12 @@ export function WhiteboardApp() {
   const runImport = useCallback(async (
     files: File[],
     world?: { x: number; y: number },
-    opts?: { asPlan?: boolean; skonnun?: { blob: Blob; nafn: string; b: number; h: number; lykill?: string } }
+    opts?: {
+      asPlan?: boolean;
+      skonnun?: { blob: Blob; nafn: string; b: number; h: number; lykill?: string };
+      /** Skoðun: teikningin ein — enginn 165.BR1-miði við hliðina. */
+      anMerkja?: boolean;
+    }
   ): Promise<BoardObject[]> => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
@@ -493,7 +528,7 @@ export function WhiteboardApp() {
         const kind = classifyFile(f);
         return kind === "pdf" || kind === "tiff";
       });
-      const kit = isPlan ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
+      const kit = isPlan && !opts?.anMerkja ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
       useBoardStore.getState().addObjects([...incoming, ...kit], false);
       useBoardStore.getState().setTool("select");
       const bounds = boardBounds([...incoming, ...kit]);
@@ -1043,8 +1078,12 @@ export function WhiteboardApp() {
   // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
   // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
-    async (raw: string, opts?: { throwOnError?: boolean; asPlan?: boolean; fokus?: { x: number; y: number; w: number; h: number } | null }) => {
+    async (
+      raw: string,
+      opts?: { throwOnError?: boolean; asPlan?: boolean; fokus?: { x: number; y: number; w: number; h: number } | null; anMerkja?: boolean }
+    ) => {
       const trimmed = raw.trim();
+      const anMerkja = opts?.anMerkja === true;
       if (!/^https?:\/\//i.test(trimmed)) {
         const msg = "Þetta lítur ekki út eins og slóð";
         if (opts?.throwOnError) throw new Error(msg);
@@ -1078,6 +1117,7 @@ export function WhiteboardApp() {
           if (sk.ok) {
             const komnar = await runImport([], undefined, {
               asPlan: opts?.asPlan !== false,
+              anMerkja,
               // Fast auðkenni (slóð + gæði + fókus + stærð JPEG-sins): sama teikning hleðst ekki upp aftur við hverja opnun
               skonnun: {
                 blob: sk.blob,
@@ -1097,7 +1137,7 @@ export function WhiteboardApp() {
           if (sk.jpeg) {
             toast.message(sk.villa, { duration: 5000 });
             const file = new File([sk.jpeg], sk.nafn + ".jpg", { type: sk.jpeg.type || "image/jpeg" });
-            merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false }));
+            merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false, anMerkja }));
             return;
           }
           // JPEG-ið náðist ekki heldur — venjulega leiðin hér að neðan reynir aftur
@@ -1117,7 +1157,7 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        const komnar = await runImport([file], undefined, { asPlan: opts?.asPlan !== false });
+        const komnar = await runImport([file], undefined, { asPlan: opts?.asPlan !== false, anMerkja });
         merkjaHeimild(komnar);
         const fyrsta = komnar.find((o) => o.type === "image") as ImageObject | undefined;
         const pdf = /pdf/i.test(blob.type) || /\.pdf$/i.test(name);
@@ -1148,11 +1188,13 @@ export function WhiteboardApp() {
   // „Vista í úttekt" (Agnar 09.10.2026: „gera vista gluggann minni"): í síma aðeins lítill hnappur í hægra horni borðsins
   // (ofan við magntöfluna) — borðinn með textanum fyllti breiddina og lá ofan á veggjaritlinum og verkfærasúlunni.
   const simi = useErSimi();
-  const vistaSyn = !!tengdMynd?.uttekt || hlutarABordi > 0;
+  // Í skoðun er „Vista í úttekt" falið — skoðun skrifar hvergi (aðeins „Vista sem borð").
+  const vistaSyn = !skodunVirk && (!!tengdMynd?.uttekt || hlutarABordi > 0);
   const uttektFromQuery = useRef(false);
   const planFromQuery = useRef(false);
   useEffect(() => {
-    if (uttektFromQuery.current) return;
+    // Skoðun (`?skoda=`) gengur fyrir: hún opnar aldrei úttektarborð né skrifar í úttekt.
+    if (uttektFromQuery.current || skodunBeidni) return;
     const q = new URLSearchParams(window.location.search);
     const cid = Number(q.get("uttekt") || 0);
     const haedId = q.get("haed") || "";
@@ -1268,7 +1310,66 @@ export function WhiteboardApp() {
         if (sjalfvirkt) useSjalfvirkt.getState().set({ synilegt: true, keyrir: false, yfirlit: "Gat ekki opnað hæðina: " + (err instanceof Error ? err.message : String(err)) });
       }
     })();
-  }, [runUrlImport]);
+  }, [runUrlImport, skodunBeidni]);
+
+  // ── Skoðun: `?skoda=<slóð teikningar>&titill=<heiti>` (Greining fasteignar í Slökkvitæki-appinu) ──────────────────
+  // Teikningin kemur á skoðunarborðið (aðeins í minni) í HÆSTU gæðum: skönnun úr TIF-frumritinu, PDF teiknað með pdf.js í
+  // allt að 12.500 px / 40 MP (og skarpa PDF-lagið við aðdrátt). Ekkert vistast fyrr en ýtt er á „Vista sem borð".
+  const skodunHafin = useRef(false);
+  useEffect(() => {
+    if (!skodunBeidni || !hydrated || skodunHafin.current) return;
+    skodunHafin.current = true;
+    useBoardStore.getState().setImportQuality("print");
+    void (async () => {
+      const { slod, titill } = skodunBeidni;
+      if (erSkjalasafnsSlod(slod)) {
+        await runUrlImport(slod, { asPlan: true, anMerkja: true });
+      } else {
+        // Ekki skjalasafn (t.d. upphlaðin mynd í Supabase-geymslunni) — sótt beint; CORS þeirrar slóðar ræður.
+        try {
+          useBoardStore.getState().setImportProgress({ fileName: titill, percent: 10, message: "Sæki teikningu…" });
+          const res = await fetch(slod);
+          if (!res.ok) throw new Error(`Gat ekki sótt teikninguna (${res.status})`);
+          const blob = await res.blob();
+          const ending = /pdf/i.test(blob.type) ? ".pdf" : /tiff/i.test(blob.type) ? ".tif" : /png/i.test(blob.type) ? ".png" : ".jpg";
+          useBoardStore.getState().setImportProgress(null);
+          await runImport([new File([blob], heitiUrSlod(slod) + ending, { type: blob.type })], undefined, { asPlan: true, anMerkja: true });
+        } catch (err) {
+          useBoardStore.getState().setImportProgress(null);
+          toast.error(err instanceof Error ? err.message : "Gat ekki sótt teikninguna");
+        }
+      }
+      // Grunnlínan: það sem kom inn. Teikni/merki notandinn eitthvað er varað við áður en skoðuninni er hent.
+      if (erSkodun()) useSkodun.setState({ grunnur: useBoardStore.getState().objects });
+    })();
+  }, [skodunBeidni, hydrated, runUrlImport, runImport]);
+
+  // Lokun/endurhleðsla: ekkert er eftir á þjóninum — en hafi eitthvað verið teiknað spyr vafrinn fyrst.
+  useEffect(() => {
+    if (!skodunVirk) return;
+    const vid = (e: BeforeUnloadEvent) => {
+      if (!skodunBreytt(useBoardStore.getState().objects)) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", vid);
+    return () => window.removeEventListener("beforeunload", vid);
+  }, [skodunVirk]);
+
+  const vistaSemBord = useCallback(async () => {
+    try {
+      const r = await vistaSkodunSemBord();
+      // Endurhleðsla opnar nú nýja borðið, ekki nýja skoðun.
+      const hrein = new URL(window.location.href);
+      [SKODUN_BREYTA, TITILL_BREYTA].forEach((k) => hrein.searchParams.delete(k));
+      window.history.replaceState({}, "", hrein.pathname + hrein.search);
+      const nafn = useBoardStore.getState().name;
+      if (r.sky === "synced") toast.success(`Vistað sem borð „${nafn}" — opnast á öllum tækjum`);
+      else toast.message(`„${nafn}" er vistað á þessu tæki — skýið reynir aftur sjálfkrafa`, { duration: 6000 });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gat ekki vistað borðið");
+    }
+  }, []);
 
   // `leidrettAf`: „Vista í úttekt"-takkinn = turbopaint (Agnar lagaði); sjálfvirka verkferlið vistar með „sjalfvirkt".
   const vistaUttekt = useCallback(async (opts?: { leidrettAf?: LeidrettAf }): Promise<{ ok: true; texti: string } | { ok: false; villa: string }> => {
@@ -1466,7 +1567,7 @@ export function WhiteboardApp() {
   );
 
   useEffect(() => {
-    if (planFromQuery.current) return;
+    if (planFromQuery.current || skodunBeidni) return;
     const q = new URLSearchParams(window.location.search);
     if (q.get("uttekt")) return;
     const raw = q.get("plan");
@@ -1476,7 +1577,7 @@ export function WhiteboardApp() {
     url.searchParams.delete("plan");
     window.history.replaceState({}, "", url.pathname + url.search);
     void runUrlImport(raw);
-  }, [runUrlImport]);
+  }, [runUrlImport, skodunBeidni]);
 
   // ⌘C / ⌘X / ⌘V on the board itself. The browser's own copy/cut/paste
   // events carry the data (no clipboard permission prompts); the keydown
@@ -1745,6 +1846,31 @@ export function WhiteboardApp() {
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
+      {skodunVirk ? (
+        <div
+          data-skodun-bordi
+          className="flex shrink-0 items-center gap-2 border-b border-amber-300/25 bg-[#2b2513] py-1.5 pr-1.5 pl-3 text-[12.5px] text-amber-100"
+        >
+          <span aria-hidden>👁</span>
+          <span className="min-w-0 flex-1 truncate">
+            <b className="font-semibold">Skoðun — ekki vistað</b>
+            <span className="text-amber-100/70 max-sm:hidden">
+              {" "}
+              · teikningin hverfur þegar glugganum er lokað nema hún sé vistuð sem borð
+            </span>
+          </span>
+          <button
+            type="button"
+            data-vista-sem-bord
+            disabled={skodunVistar || !!importProgress || !objects.length}
+            onClick={() => void vistaSemBord()}
+            title="Býr til venjulegt TurboPaint-borð úr þessari skoðun (teikningin hleðst upp í skýið) og skiptir yfir í það"
+            className="shrink-0 rounded-full bg-[#FE653F] px-3 py-1 font-semibold whitespace-nowrap text-white shadow-md hover:bg-[#ff7a58] active:translate-y-px disabled:opacity-50"
+          >
+            {skodunVistar ? "Vistar…" : "💾 Vista sem borð"}
+          </button>
+        </div>
+      ) : null}
       {thrividd ? (
         <Hus3D objects={objects} pixelsPerMeter={pixelsPerMeter} onClose={() => setThrividd(false)} />
       ) : null}
