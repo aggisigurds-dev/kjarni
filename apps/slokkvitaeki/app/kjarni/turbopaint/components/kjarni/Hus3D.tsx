@@ -353,10 +353,11 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           veggEfni.push(kE, kTopp);
           const veggLitur = (v: Haed3D["veggir"][number]) =>
             v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
-          const sjalfg = lengd * 0.004;
+          const sjalfg = Math.max(metri * 0.12, lengd * 0.004);
           const kassi = (v: Haed3D["veggir"][number], y: number, hH: number, lengdAuki: number, thykktK = 1) => {
             q.setFromAxisAngle(ofan, -Math.atan2(v.by - v.ay, v.bx - v.ax));
-            const th = Math.max(0.8, v.thykkt || sjalfg) * thykktK;
+            // Skönnun gefur stundum 50–70 cm „vegg" (húsgögn / tvöfalt strik). Í yfirliti eru veggir 12–20 cm.
+            const th = Math.min(metri * 0.2, Math.max(metri * 0.12, v.thykkt || sjalfg)) * thykktK;
             m4.compose(st3.set((v.ax + v.bx) / 2, y, (v.ay + v.by) / 2), q, kv3.set(Math.hypot(v.bx - v.ax, v.by - v.ay) + (lengdAuki ? th : 0), hH, th));
             return m4;
           };
