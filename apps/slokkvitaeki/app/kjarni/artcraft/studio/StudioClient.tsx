@@ -8,6 +8,7 @@ import { assertAdultPrompt } from "./guard";
 import {
   DEFAULT_WEBUI_URL,
   WEBUI_URL_KEY,
+  canEmbedLocalWebui,
   pingWebui,
   readStoredWebuiUrl,
   txt2img,
@@ -163,8 +164,24 @@ export default function StudioClient() {
                   >
                     Prófa tengingu
                   </button>
+                  <a className="ac-btn" href={webui} target="_blank" rel="noreferrer">
+                    Opna WebUI-viðmót
+                  </a>
                 </div>
                 <p className={`ac-status ${status}`}>{statusText}</p>
+                {canEmbedLocalWebui() ? (
+                  <iframe
+                    className="ac-webui"
+                    src={webui}
+                    title="Staðbundið WebUI"
+                    allow="fullscreen"
+                  />
+                ) : (
+                  <p className="ac-hint">
+                    WebUI-viðmótið opnast í nýjum flipa. HTTPS-Kjarni getur ekki fellt
+                    HTTP-viðmótið inn, en formið hér talar samt við vélina þína.
+                  </p>
+                )}
                 {models.length > 0 && (
                   <p className="ac-hint">
                     Í gangi: {models.slice(0, 4).map((m) => m.title || m.model_name).join(" · ")}

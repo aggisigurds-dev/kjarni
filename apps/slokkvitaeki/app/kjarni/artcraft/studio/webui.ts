@@ -35,6 +35,12 @@ export function readStoredWebuiUrl(): string {
   return window.localStorage.getItem(WEBUI_URL_KEY) || DEFAULT_WEBUI_URL;
 }
 
+/** HTTPS Kjarni cannot iframe an HTTP localhost WebUI (mixed content). */
+export function canEmbedLocalWebui(protocol?: string): boolean {
+  const value = protocol ?? (typeof window === "undefined" ? "https:" : window.location.protocol);
+  return value === "http:";
+}
+
 async function webuiFetch(base: string, path: string, init?: RequestInit): Promise<Response> {
   const url = `${normalizeWebuiUrl(base)}${path}`;
   const res = await fetch(url, {
