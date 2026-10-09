@@ -14,6 +14,7 @@ import {
   husUrBordi,
   klippaBut,
   merkjaEldveggi,
+  siaVeggiFyrirYfirlit,
   midiTakns,
   pdfDilarAMetra,
   taknMidja,
@@ -253,4 +254,24 @@ test("bladSlod: slóðin sem innflutningurinn geymdi, annars úttektarslóðin �
   assert.deepEqual(bladSlod({ width: 6006, height: 4251, uttekt }, haedir), { slod: p, b: 6006, h: 4251 });
   assert.equal(bladSlod({ width: 3000, height: 4251, uttekt }, haedir), null, "skorin teikning");
   assert.equal(bladSlod({ width: 6006, height: 4251 }), null);
+});
+
+test("siaVeggiFyrirYfirlit: stuttir húsgagna-bútar detta út, gler/hurðir/eldveggir haldast", () => {
+  const hus = 260;
+  const langur = butur(0, 0, 80, 0);
+  const stuttur = butur(10, 10, 14, 10);
+  const gler = butur(0, 20, 8, 20, { tegund: "gler" });
+  const hurd = butur(20, 0, 24, 0, { tegund: "hurd" });
+  const eld = butur(0, 40, 6, 40, { eld: 60 });
+  const ut = siaVeggiFyrirYfirlit([langur, stuttur, gler, hurd, eld, butur(1, 1, 2, 1), butur(3, 3, 4, 3), butur(5, 5, 6, 5)], hus);
+  assert.equal(ut.includes(stuttur), false);
+  assert.ok(ut.includes(langur));
+  assert.ok(ut.includes(gler));
+  assert.ok(ut.includes(hurd));
+  assert.ok(ut.includes(eld));
+});
+
+test("siaVeggiFyrirYfirlit: fáir veggir (handteiknað) eru ekki síaðir", () => {
+  const stuttur = butur(0, 0, 4, 0);
+  assert.deepEqual(siaVeggiFyrirYfirlit([stuttur], 200), [stuttur]);
 });
