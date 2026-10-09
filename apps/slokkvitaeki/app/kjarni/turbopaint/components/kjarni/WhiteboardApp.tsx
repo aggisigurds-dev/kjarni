@@ -106,7 +106,8 @@ import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { VeggjaStika } from "./VeggjaStika";
-import { VeggjaRitill } from "./VeggjaRitill";
+import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
+import { useErSimi } from "../../lib/board/simi";
 import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
 import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
 import { useSjalfvirkt } from "../../lib/board/sjalfvirkt-stada";
@@ -1144,6 +1145,10 @@ export function WhiteboardApp() {
   // „Croppa oft": hlutar blaðs á borðinu og hve margir eru tengdir hæð.
   const hlutarABordi = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti).length);
   const tengdirHlutar = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti && o.uttekt).length);
+  // „Vista í úttekt" (Agnar 09.10.2026: „gera vista gluggann minni"): í síma aðeins lítill hnappur í hægra horni borðsins
+  // (ofan við magntöfluna) — borðinn með textanum fyllti breiddina og lá ofan á veggjaritlinum og verkfærasúlunni.
+  const simi = useErSimi();
+  const vistaSyn = !!tengdMynd?.uttekt || hlutarABordi > 0;
   const uttektFromQuery = useRef(false);
   const planFromQuery = useRef(false);
   useEffect(() => {
@@ -1743,9 +1748,9 @@ export function WhiteboardApp() {
       {thrividd ? (
         <Hus3D objects={objects} pixelsPerMeter={pixelsPerMeter} onClose={() => setThrividd(false)} />
       ) : null}
-      {(tengdMynd?.uttekt || hlutarABordi > 0) && (
+      {vistaSyn && !simi && (
         <div className="pointer-events-none absolute inset-x-0 top-[6.75rem] z-30 flex justify-center px-2">
-          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
+          <div data-vista-uttekt-bordi className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
             <span className="min-w-0 truncate">
               🧯 Úttektarteikning ·{" "}
               {hlutarABordi > 0
@@ -1820,11 +1825,41 @@ export function WhiteboardApp() {
             <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
             </div>
-            {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
-              <div className="pointer-events-auto absolute top-3 right-3">
-                <CountTable />
-              </div>
-            ) : null}
+            <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+              {vistaSyn && simi ? (
+                <button
+                  type="button"
+                  data-vista-uttekt-bordi
+                  disabled={uttektVistar}
+                  onClick={() => void vistaUttekt()}
+                  aria-label="Vista í úttekt"
+                  title={
+                    "Vista í úttekt — skrifar tækin, merkin (NÚ, ÚT, skilti …) og veggina á þessari hæð aftur í úttektarteikninguna í Slökkvitæki-appinu" +
+                    (hlutarABordi > 0 ? ` · ${tengdirHlutar} af ${hlutarABordi} hlutum tengdir hæðum` : "")
+                  }
+                  className="pointer-events-auto flex items-center gap-1 rounded-full bg-[#FE653F] py-1.5 pr-3 pl-2.5 text-[12px] font-semibold whitespace-nowrap text-white shadow-xl shadow-black/40 active:translate-y-px disabled:opacity-60"
+                >
+                  {uttektVistar ? (
+                    "Vistar…"
+                  ) : (
+                    <>
+                      <span aria-hidden>💾</span>
+                      Vista
+                      {hlutarABordi > 0 ? (
+                        <span className="font-normal text-white/80">
+                          {tengdirHlutar}/{hlutarABordi}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </button>
+              ) : null}
+              {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
+                <div className="pointer-events-auto" data-magntafla>
+                  <CountTable />
+                </div>
+              ) : null}
+            </div>
             {selectedIds.length ? (
               <div className="pointer-events-auto absolute right-3 bottom-28 lg:hidden">
                 <button
@@ -1840,7 +1875,7 @@ export function WhiteboardApp() {
             {/* Undir „Vista í úttekt"-borðanum þegar hann er uppi — annars skyggði hann á stikurnar. */}
             <div
               className={`absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 ${
-                tengdMynd?.uttekt ? "top-16" : "top-3"
+                tengdMynd?.uttekt || (simi && vistaSyn) ? "top-16" : "top-3"
               }`}
             >
               <SelectionBar
@@ -1852,6 +1887,7 @@ export function WhiteboardApp() {
               <VeggjaStika />
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+              <RitilThettStika />
               <SymbolTray />
               <StyleStrip />
             </div>

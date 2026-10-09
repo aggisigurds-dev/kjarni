@@ -16,6 +16,8 @@ import {
   EyeOff,
   HelpCircle,
   Lock,
+  Maximize2,
+  Minimize2,
   MousePointer2,
   PencilLine,
   PencilRuler,
@@ -23,6 +25,7 @@ import {
   Scissors,
   Square,
   Trash2,
+  Undo2,
   Unlock,
   X,
   MoveHorizontal,
@@ -31,6 +34,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner";
 import { useHamur, type HamurId } from "../../lib/board/hamir";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
+import { useErSimi } from "../../lib/board/simi";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
 import type { LineObject } from "../../lib/board/types";
@@ -132,6 +136,7 @@ export function VeggjaRitill() {
   const forskodun = useVeggjaRitill((s) => s.forskodun);
   const greining = useVeggjaRitill((s) => s.greining);
   const hjalp = useVeggjaRitill((s) => s.hjalp);
+  const thett = useVeggjaRitill((s) => s.thett);
 
   // „Lita veggi" (F): aðeins sýn — skráð á undan lyklum ritilsins svo F virki líka meðan hann er opinn.
   useEffect(() => {
@@ -179,8 +184,9 @@ export function VeggjaRitill() {
   return (
     <>
       {virkur || forskodun ? <RitilYfirlag virkur={virkur} /> : null}
-      {virkur ? <RitilSpjald /> : <RitilOpnari />}
-      {virkur && hjalp ? <RitilHjalp /> : null}
+      {/* Þéttur hamur: ræman (RitilThettStika) býr neðst á borðinu hjá táknaborðinu — sjá WhiteboardApp */}
+      {virkur ? thett ? null : <RitilSpjald /> : <RitilOpnari />}
+      {virkur && hjalp && !thett ? <RitilHjalp /> : null}
       {greining ? <VeggjaGreining key={greining.planId} planId={greining.planId} /> : null}
     </>
   );
@@ -430,7 +436,7 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
   useEffect(() => {
     const u1 = useBoardStore.subscribe(teiknaNu);
     const u2 = useVeggjaRitill.subscribe((s, p) => {
-      if (s.tol !== p.tol) {
+      if (s.tol !== p.tol || s.kedjuRof !== p.kedjuRof) {
         kedja.current = [];
         lengjaFyrsti.current = null;
         smellurRef.current = null;
@@ -950,9 +956,15 @@ function RitilOpnari() {
   const hamur = useHamur((s) => s.hamur);
   const erMynd = useBoardStore((s) => s.objects.some((o) => o.type === "image"));
   const fjoldi = useBoardStore((s) => veggjaTalning(s.objects).alls);
+  const simi = useErSimi();
   if (!RITIL_HAMIR.includes(hamur) || !erMynd) return null;
   return (
-    <div className="pointer-events-auto absolute top-3 left-16 z-20 flex items-center gap-1.5 sm:left-20">
+    <div
+      className={`pointer-events-auto absolute top-3 left-16 z-20 flex items-center gap-1.5 sm:left-20 ${
+        // í síma: hægra hornið er „💾 Vista" — hnapparnir brotna frekar í tvær línur en að lenda undir honum
+        simi ? "max-w-[calc(100%-4rem-6.5rem)] flex-wrap sm:max-w-[calc(100%-5rem-6.5rem)]" : ""
+      }`}
+    >
       <button
         type="button"
         title="Veggjaritill (W): teikna, velja, eyða, kljúfa, sameina og lengja veggi — teikningin læst á meðan"
@@ -961,16 +973,21 @@ function RitilOpnari() {
       >
         <PencilRuler className="size-3.5 text-[#FE653F]" />
         Breyta veggjum
-        <span className="font-normal text-white/50">{fjoldi}</span>
-        <kbd className="text-[10px] font-normal text-white/40">W</kbd>
+        {/* flýtilyklar og talning eiga ekki erindi á snertiskjá — plássið fer í teikninguna */}
+        {simi ? null : (
+          <>
+            <span className="font-normal text-white/50">{fjoldi}</span>
+            <kbd className="text-[10px] font-normal text-white/40">W</kbd>
+          </>
+        )}
       </button>
-      <LitaVeggiTakki />
+      <LitaVeggiTakki simi={simi} />
     </div>
   );
 }
 
 /** „Lita veggi" (F): veggir teiknast í skærum lit (venjulegur veggur fjólublár) — aðeins sýn, ekkert vistast. */
-function LitaVeggiTakki({ samthjappad = false }: { samthjappad?: boolean }) {
+function LitaVeggiTakki({ samthjappad = false, simi = false }: { samthjappad?: boolean; simi?: boolean }) {
   const lita = useVeggjaSyn((s) => s.lita);
   return (
     <button
@@ -990,7 +1007,7 @@ function LitaVeggiTakki({ samthjappad = false }: { samthjappad?: boolean }) {
     >
       <span className="inline-block size-2.5 rounded-full border border-white/60" style={{ background: SKAERIR_VEGGLITIR.veggur }} />
       Lita veggi
-      <kbd className={`text-[10px] font-normal ${lita ? "text-white/70" : "text-white/40"}`}>F</kbd>
+      {simi ? null : <kbd className={`text-[10px] font-normal ${lita ? "text-white/70" : "text-white/40"}`}>F</kbd>}
     </button>
   );
 }
@@ -1021,6 +1038,7 @@ function RitilSpjald() {
   const teikningLaest = layers.find((l) => l.id === LAYER_TEIKNING)?.locked ?? false;
   const veggirSjast = layers.find((l) => l.id === LAYER_VEGGIR)?.visible ?? true;
   const r = useVeggjaRitill.getState();
+  const simi = useErSimi();
 
   const btn = "flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-stone-100 hover:bg-white/10";
   const valid = "bg-[#FE653F] text-white hover:bg-[#ff7a58]";
@@ -1037,14 +1055,29 @@ function RitilSpjald() {
     <div
       role="region"
       aria-label="Veggjaritill"
-      className="pointer-events-auto absolute top-3 left-16 z-20 w-[272px] rounded-xl border border-white/10 bg-[#1a1d2e]/95 p-2 text-stone-100 shadow-2xl sm:left-20"
+      className={`pointer-events-auto absolute left-16 z-20 w-[272px] rounded-xl border border-white/10 bg-[#1a1d2e]/95 p-2 text-stone-100 shadow-2xl sm:left-20 ${
+        // í síma: undir „💾 Vista"-hnappnum í hægra horninu, svo hann lendi aldrei ofan á glugganum
+        simi ? "top-14 max-h-[calc(100%-4.5rem)] overflow-y-auto" : "top-3"
+      }`}
     >
       <div className="flex items-center gap-1">
         <span className="text-[12.5px] font-semibold">✏️ Veggjaritill</span>
         <span className="ml-auto" />
-        <button type="button" title="Flýtilyklar (?)" aria-label="Flýtilyklar" onClick={() => r.setHjalp(!useVeggjaRitill.getState().hjalp)} className={btn}>
-          <HelpCircle className="size-3.5" />
+        <button
+          type="button"
+          data-ritill-minna
+          title="Þéttur hamur: aðeins Velja · Teikna · Eyða · Afturkalla — glugginn víkur fyrir teikningunni"
+          onClick={() => r.setThett(true)}
+          className={btn}
+        >
+          <Minimize2 className="size-3.5" />
+          Minna
         </button>
+        {simi ? null : (
+          <button type="button" title="Flýtilyklar (?)" aria-label="Flýtilyklar" onClick={() => r.setHjalp(!useVeggjaRitill.getState().hjalp)} className={btn}>
+            <HelpCircle className="size-3.5" />
+          </button>
+        )}
         <button type="button" title="Loka veggjaritlinum — teikningin opnast aftur" onClick={() => r.slokkva()} className={btn}>
           <X className="size-3.5" />
           Loka
@@ -1205,6 +1238,124 @@ function RitilSpjald() {
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Þétti veggjaritillinn (Agnar 09.10.2026: „compact … Sýna bara… velja. Teikna. Eyða. Undo."): lítil lárétt ræma neðst
+ * á borðinu (þumalfjarlægð í síma) í stað gluggans. Sömu aðgerðir og í glugganum — Eyða = „Eyða" neðst í glugganum (valdir
+ * veggir), Afturkalla = sama saga og ⌘Z. „Meira" opnar allan gluggann aftur. Birtist í WhiteboardApp ofan við táknaborðið
+ * svo hún skarist aldrei við það. */
+export function RitilThettStika() {
+  const virkur = useVeggjaRitill((s) => s.virkur);
+  const thett = useVeggjaRitill((s) => s.thett);
+  const tol = useVeggjaRitill((s) => s.tol);
+  const tegund = useVeggjaRitill((s) => s.tegund);
+  const kannAfturkalla = useBoardStore((s) => s.past.length > 0);
+  const valdir = useBoardStore((s) => {
+    if (!s.selectedIds.length) return 0;
+    const sel = new Set(s.selectedIds);
+    let n = 0;
+    for (const o of s.objects) if (sel.has(o.id) && erVeggur(o)) n++;
+    return n;
+  });
+  if (!virkur || !thett) return null;
+  const r = useVeggjaRitill.getState();
+
+  const takki =
+    "relative flex min-w-10 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1 text-[10px] leading-none font-medium text-stone-100 transition active:translate-y-px disabled:opacity-40";
+  const valid = "bg-[#FE653F] text-white";
+  const eyda = () => {
+    const ids = valdirVeggir().map((o) => o.id);
+    if (!ids.length) return toast.message("Veldu vegg fyrst: „Velja“ og smelltu á vegginn", { duration: 1800 });
+    const n = eydaVeggjum(ids);
+    if (n) toast.message(`${n} ${n === 1 ? "veggur eyddur" : "veggjum eytt"} · Afturkalla skilar`, { duration: 1500 });
+  };
+  const afturkalla = () => {
+    r.rjufaKedju(); // keðja í vinnslu má ekki halda áfram frá vegg sem var tekinn til baka
+    useBoardStore.getState().undo();
+  };
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="Veggjaritill — þéttur"
+      data-ritill-thett
+      className="pointer-events-auto flex items-stretch gap-0.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-md"
+    >
+      <button
+        type="button"
+        data-thett="velja"
+        aria-pressed={tol === "velja"}
+        title={TOL_HEITI.velja.titill}
+        onClick={() => r.setTol("velja")}
+        className={`${takki} ${tol === "velja" ? valid : "hover:bg-white/10"}`}
+      >
+        <MousePointer2 className="size-4" />
+        Velja
+      </button>
+      <button
+        type="button"
+        data-thett="teikna"
+        aria-pressed={tol === "teikna"}
+        title={TOL_HEITI.teikna.titill}
+        onClick={() => r.setTol("teikna")}
+        className={`${takki} ${tol === "teikna" ? valid : "hover:bg-white/10"}`}
+      >
+        <PencilLine className="size-4" />
+        Teikna
+        {tegund !== "veggur" ? (
+          // ný tegund (gler / hurð / eldveggur) sést líka í þétta hamnum
+          <span
+            className="absolute top-1 right-1 size-2 rounded-full ring-1 ring-white/70"
+            style={{ background: VEGG_LITIR[tegund] }}
+            title={TEGUNDIR.find((t) => t.id === tegund)?.texti}
+          />
+        ) : null}
+      </button>
+      <button
+        type="button"
+        data-thett="eyda"
+        title="Eyða völdum veggjum (Delete)"
+        onClick={eyda}
+        className={`${takki} hover:bg-white/10 ${valdir ? "" : "opacity-55"}`}
+      >
+        <Trash2 className="size-4 text-[#FE653F]" />
+        {valdir > 1 ? `Eyða ${valdir}` : "Eyða"}
+      </button>
+      <button
+        type="button"
+        data-thett="afturkalla"
+        title="Afturkalla síðustu aðgerð (⌘Z)"
+        disabled={!kannAfturkalla}
+        onClick={afturkalla}
+        className={`${takki} hover:bg-white/10`}
+      >
+        <Undo2 className="size-4" />
+        Afturkalla
+      </button>
+      <span className="mx-0.5 my-1.5 w-px bg-white/12" aria-hidden />
+      <button
+        type="button"
+        data-thett="meira"
+        title="Allur veggjaritillinn: rétthyrningur, kljúfa, lengja, þykkt, tegund, lög, greina veggi …"
+        onClick={() => r.setThett(false)}
+        className={`${takki} text-white/80 hover:bg-white/10`}
+      >
+        <Maximize2 className="size-4" />
+        Meira
+      </button>
+      <button
+        type="button"
+        data-thett="loka"
+        title="Loka veggjaritlinum — teikningin opnast aftur"
+        aria-label="Loka veggjaritlinum"
+        onClick={() => r.slokkva()}
+        className={`${takki} min-w-8 text-white/70 hover:bg-white/10`}
+      >
+        <X className="size-4" />
+        Loka
+      </button>
     </div>
   );
 }

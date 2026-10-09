@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import {
   ArrowUpRight,
+  ChevronRight,
   Circle,
   Eraser,
   Slash,
@@ -12,6 +13,7 @@ import {
   Hand,
   Minus,
   MousePointer2,
+  PanelLeftClose,
   Pencil,
   PencilRuler,
   Pentagon,
@@ -32,6 +34,7 @@ import {
   STAMP_SIZE_MAX,
   STAMP_SIZE_MIN,
 } from "../../lib/board/symbol-settings";
+import { lesaSulu, vistaSulu } from "../../lib/board/simi";
 import type { Tool } from "../../lib/board/types";
 import { finnaTengduMynd, medStaerdUmMidju } from "../../lib/board/uttekt";
 import { cn } from "../../lib/utils";
@@ -91,9 +94,56 @@ export function Toolbar() {
   const setTool = useBoardStore((s) => s.setTool);
   const style = useBoardStore((s) => s.style);
   const symbol = getSymbol(style.symbolId);
+  // Samanbrot (Agnar 09.10.2026: „collapse takka fyrir hliðarstikuna"): í síma byrjar súlan samanbrotin í einn hnapp,
+  // í tölvu opin — og vafrinn man síðasta val. Flýtilyklarnir virka áfram þó hún sé samanbrotin.
+  const [samanbrotin, setSamanbrotin] = useState(lesaSulu);
+  const breyta = (v: boolean) => {
+    setSamanbrotin(v);
+    vistaSulu(v);
+  };
+  const virkt = TOOLS.find((t) => t.id === tool);
+
+  if (samanbrotin) {
+    return (
+      <button
+        type="button"
+        data-sula-opna
+        aria-expanded={false}
+        aria-label="Opna verkfærasúluna"
+        title={`Opna verkfærasúluna${virkt ? ` — núna: ${virkt.label}` : tool === "symbol" ? ` — núna: Tákn` : ""}`}
+        onClick={() => breyta(false)}
+        className="tp-sula-opna pointer-events-auto relative flex size-10 shrink-0 items-center justify-center self-start rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-[#FE653F] shadow-2xl shadow-black/40 backdrop-blur-md active:translate-y-px"
+      >
+        {virkt ? (
+          virkt.icon
+        ) : tool === "symbol" ? (
+          <span
+            className="flex size-5 items-center justify-center rounded-sm text-[8px] font-bold"
+            style={{ background: symbolColors(symbol.kind).bg, color: symbolColors(symbol.kind).fg }}
+          >
+            {symbol.short.slice(0, 2)}
+          </span>
+        ) : (
+          <MousePointer2 className="size-4" />
+        )}
+        <ChevronRight className="absolute right-0 bottom-0.5 size-3 text-white/55" aria-hidden />
+      </button>
+    );
+  }
 
   return (
     <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
+      <button
+        type="button"
+        data-sula-loka
+        aria-expanded
+        aria-label="Fella verkfærasúluna saman"
+        title="Fella verkfærasúluna saman í einn hnapp (teikningin fær plássið)"
+        onClick={() => breyta(true)}
+        className="tp-sula-loka flex h-6 w-full shrink-0 items-center justify-center rounded-lg text-stone-400 transition hover:bg-white/8 hover:text-white"
+      >
+        <PanelLeftClose className="size-3.5" />
+      </button>
       {TOOLS.map((item, index) => (
         <div key={item.id}>
           {index === 2 || index === 8 ? <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" /> : null}
@@ -305,7 +355,7 @@ export function StyleStrip() {
 
   if (tool === "symbol") {
     return (
-      <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+      <div className="tp-strip-skrun pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
         {pipesOpen ? <LagPicker /> : null}
         <MerkingarStrip withSize />
       </div>
@@ -313,7 +363,7 @@ export function StyleStrip() {
   }
 
   return (
-    <div className="tp-stylestrip pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+    <div className="tp-stylestrip tp-strip-skrun pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
       {pipesOpen ? (
         <>
           <LagPicker />
