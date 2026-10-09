@@ -18,6 +18,7 @@ import {
   bladSlod,
   festaAVegg,
   giskDilarAMetra,
+  haedarNumer,
   husLengd,
   husUrBordi,
   pdfDilarAMetra,
@@ -33,6 +34,7 @@ import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
 import { saekjaBladstaerd } from "../../lib/board/teikn-thjonusta";
 import type { BoardObject } from "../../lib/board/types";
+import { useBoardStore } from "../../lib/board/store";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 
 const THREE_SLOD = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
@@ -121,6 +123,7 @@ interface Handfang {
 export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const gamur = useRef<HTMLDivElement>(null);
   const gogn = useUttektGogn((s) => s.gogn);
+  const bordNafn = useBoardStore((s) => s.name);
   const skodunTitill = useSkodun((s) => (s.virk ? s.titill : ""));
   const haedir = useMemo(() => husUrBordi(objects, gogn?.taeki ?? []), [objects, gogn]);
   const [syna, setSyna] = useState<number | "allar">("allar");
@@ -883,10 +886,13 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const veggjaFjoldi = haedir.reduce((s, h) => s + h.veggir.length, 0);
   const taekjaFjoldi = haedir.reduce((s, h) => s + h.taeki.length, 0);
   const synHaedir = syna === "allar" ? haedir : haedir[syna] ? [haedir[syna]] : [];
-  const kynningTitill = kynningarTitill(
-    skodunTitill || gogn?.nafn,
-    syna === "allar" && haedir.length > 1 ? `${haedir.length} hæðir` : synHaedir[0]?.nafn,
-  );
+  const haedNafn =
+    syna === "allar" && haedir.length > 1
+      ? `${haedir.length} hæðir`
+      : synHaedir[0] && haedarNumer(synHaedir[0].nafn) != null
+        ? synHaedir[0].nafn
+        : "";
+  const kynningTitill = kynningarTitill(skodunTitill || gogn?.nafn || bordNafn, haedNafn);
   const kynningLykill = kynningarLykill(synHaedir.flatMap((h) => h.taeki));
   const kynningUndir = [gogn?.nafn && gogn.nafn !== kynningTitill ? gogn.nafn : "", kynningarDags()].filter(Boolean).join(" · ");
   const takki = "rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors";
