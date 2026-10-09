@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@imgly/background-removal", "onnxruntime-web"],
-  serverExternalPackages: ["tesseract.js", "@imgly/background-removal", "onnxruntime-web"],
+  serverExternalPackages: ["tesseract.js"],
   async redirects() {
     return [
       // 3dwork and Marks live on kjarni-3dwork.vercel.app (apps/web).
