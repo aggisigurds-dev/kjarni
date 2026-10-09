@@ -9,6 +9,7 @@
 export const TURBOPAINT_ORIGIN = 'https://kjarni.vercel.app';
 export const TURBOPAINT_HUB = `${TURBOPAINT_ORIGIN}/kjarni`;
 export const TURBOPAINT_APP = `${TURBOPAINT_ORIGIN}/kjarni/turbopaint`;
+export const ARTCRAFT_HUB = `${TURBOPAINT_ORIGIN}/kjarni/artcraft`;
 export const MARKS_3DWORK_ORIGIN = 'https://kjarni-3dwork.vercel.app';
 
 const RETIRED_KJARNI_PREFIXES = [
