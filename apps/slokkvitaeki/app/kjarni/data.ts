@@ -62,6 +62,7 @@ export const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "📄", nafn: "PdfCraft", desc: "Lesa, sameina, kljúfa og læsa PDF", tag: "Tól", ready: true, href: "/kjarni/artcraft/pdfcraft" },
       { icon: "✨", nafn: "EffectCraft", desc: "Hreyfimyndir og sjónbrellur", tag: "Tól", ready: true, href: "/kjarni/artcraft/effectcraft" },
       { icon: "📰", nafn: "DesignCraft", desc: "Síðuhönnun og umbrot", tag: "Tól", ready: true, href: "/kjarni/artcraft/designcraft" },
+      { icon: "🔓", nafn: "Einkastúdíó", desc: "Staðbundið líkan — fullorðinsmyndefni, engin skýjasía", tag: "Tól", ready: true, href: "/kjarni/artcraft/studio" },
     ],
   },
 ];
@@ -92,6 +93,7 @@ export const QUICK_GROUPS: { title: string; items: { icon: string; label: string
       { icon: "📄", label: "PdfCraft", href: "/kjarni/artcraft/pdfcraft" },
       { icon: "✨", label: "EffectCraft", href: "/kjarni/artcraft/effectcraft" },
       { icon: "📰", label: "DesignCraft", href: "/kjarni/artcraft/designcraft" },
+      { icon: "🔓", label: "Einkastúdíó", href: "/kjarni/artcraft/studio" },
     ],
   },
   {

@@ -1,7 +1,7 @@
 "use client";
 
 import { StationChrome } from "../StationChrome";
-import { ARTCRAFT_APPS, artcraftAppHref } from "./apps";
+import { ARTCRAFT_APPS, artcraftAppHref, artcraftStudioHref } from "./apps";
 import "./artcraft.css";
 
 export default function ArtCraftHub() {
@@ -16,6 +16,16 @@ export default function ArtCraftHub() {
             vektorar, myndbönd, RAW, PDF, hreyfimyndir og síðuhönnun — allt í vafranum,
             á þínum skrám.
           </p>
+          <a className="ac-card ac-card-studio" href={artcraftStudioHref()}>
+            <span className="ac-ico" aria-hidden="true">🔓</span>
+            <b>Einkastúdíó</b>
+            <span className="ac-role">Staðbundið líkan</span>
+            <p>
+              Texti → mynd á þinni vél. Fullorðinsmyndefni leyfilegt. Engin skýjasía.
+              Ekkert sem snýr að börnum.
+            </p>
+            <span className="ac-meta">Automatic1111 · Forge · SD.Next</span>
+          </a>
           <div className="ac-grid">
             {ARTCRAFT_APPS.map((app) => (
               <a key={app.id} className="ac-card" href={artcraftAppHref(app.id)}>

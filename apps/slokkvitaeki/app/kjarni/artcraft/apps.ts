@@ -125,6 +125,10 @@ export function artcraftHubHref(): string {
   return "/kjarni/artcraft";
 }
 
+export function artcraftStudioHref(): string {
+  return "/kjarni/artcraft/studio";
+}
+
 export function artcraftAppHref(id: ArtcraftAppId): string {
   return `/kjarni/artcraft/${id}`;
 }

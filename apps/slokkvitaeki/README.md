@@ -8,6 +8,11 @@ EffectCraft, DesignCraft) eru opin WASM-útgáfur frá
 [getartcraft.com/apps](https://getartcraft.com/apps). Þau eru sótt við
 `pnpm artcraft:install` / `prebuild` og hýst undir `/artcraft/<app>/`.
 
+Einkastúdíó (`/kjarni/artcraft/studio`) myndar staðbundið gegnum Automatic1111 /
+Forge / SD.Next (`--api` + CORS). Fullorðinsmyndefni er leyfilegt; kynferðislegt
+myndefni af börnum er lokað. Keyrðu `scripts/private-studio-webui.sh` til að
+sjá ræsi-skipunina.
+
 ## Deploy
 
 Deployast sjálfkrafa á Vercel við push á `main`:

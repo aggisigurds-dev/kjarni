@@ -6,6 +6,7 @@ import {
   artcraftAppHref,
   artcraftReleaseUrl,
   artcraftStaticPath,
+  artcraftStudioHref,
   getArtcraftApp,
   isArtcraftAppId,
 } from "./apps.ts";
@@ -34,6 +35,11 @@ test("each app has a pinned web zip, sha256 and kjarni route", () => {
       `https://github.com/storytold/${app.id}/releases/download/${app.tag}/${app.zip}`,
     );
   }
+});
+
+test("private studio is a dedicated route, not a Crafting App", () => {
+  assert.equal(artcraftStudioHref(), "/kjarni/artcraft/studio");
+  assert.equal(isArtcraftAppId("studio"), false);
 });
 
 test("lookup rejects unknown slugs", () => {
