@@ -371,9 +371,9 @@ export function skurdurIBord(
 }
 
 /** Veggirnir skrifast í hæðina sem veggjaLinur og hún fær `leidrett` (Teikning veit þá að veggirnir voru leiðréttir í
- * TurboPaint). Aðrar hæðir og annað á hæðinni er ósnert. Engir veggir = ekkert breytist (þeir sem fyrir voru haldast). */
+ * TurboPaint). Aðrar hæðir og annað á hæðinni er ósnert. Tómur listi er líka leiðrétting: notandinn hefur fjarlægt
+ * alla veggi og gamla `veggjaLinur` má ekki lifna aftur í 3D. */
 export function skrifaVeggiIHaed<T extends UttektHaed>(haedir: T[], haedId: string, veggir: UttektVeggur[], kl: string, af: LeidrettAf = "turbopaint"): T[] {
-  if (!veggir.length) return haedir;
   const leidrett: UttektLeidrett = { af, kl };
   return haedir.map((h) => (h.id === haedId ? { ...h, veggjaLinur: veggir, leidrett } : h));
 }

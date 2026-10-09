@@ -186,7 +186,7 @@ test("skurður hæðarinnar → rammi á borðinu (myndin sjálf ósnert)", () =
   assert.equal(skurdurIBord({ x: 0, y: 0, w: 2, h: 2 }, { x: 0, y: 0, width: 1, height: 1 }, { b: 1, h: 1 }), null);
 });
 
-test("Vista í úttekt: veggjaLinur + leidrett á einni hæð; aðrar hæðir og annað ósnert; engir veggir = engin breyting", () => {
+test("Vista í úttekt: veggjaLinur + leidrett á einni hæð; tóm leiðrétting hreinsar gamla 3D-veggi", () => {
   const haedir: UttektHaed[] = [
     { id: "a", nafn: "1. hæð", markers: [], pdfVeggir: [[1, 2, 3, 4]], skurdur: { x: 1, y: 2, w: 30, h: 40 } },
     { id: "b", nafn: "2. hæð", markers: [], veggjaLinur: [{ p: [0, 0, 5, 5], t: 2 }] },
@@ -198,5 +198,8 @@ test("Vista í úttekt: veggjaLinur + leidrett á einni hæð; aðrar hæðir og
   assert.deepEqual(ut[0].pdfVeggir, [[1, 2, 3, 4]]);
   assert.deepEqual(ut[0].skurdur, haedir[0].skurdur);
   assert.equal(ut[1], haedir[1]);
-  assert.equal(skrifaVeggiIHaed(haedir, "a", [], "x"), haedir);
+  const tomt = skrifaVeggiIHaed(haedir, "a", [], "x");
+  assert.deepEqual(tomt[0].veggjaLinur, []);
+  assert.deepEqual(tomt[0].leidrett, { af: "turbopaint", kl: "x" });
+  assert.equal(tomt[1], haedir[1]);
 });
