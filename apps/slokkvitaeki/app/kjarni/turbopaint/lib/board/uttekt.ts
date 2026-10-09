@@ -1090,6 +1090,17 @@ export function utbuaVistun(
   }
   nyjar.sort((a, b) => (haedNumer(a.haed.nafn) ?? 999) - (haedNumer(b.haed.nafn) ?? 999));
   let hs: UttektHaed[] = [...haedir, ...nyjar.map((n) => n.haed)];
+  // Hnit merkja eru í dílum frummyndarinnar. Geymdu því stærð frummyndar á HVERRI tengdri hæð við hverja vistun,
+  // líka þegar myndin er heilt blað. Áður var `frum` aðeins skrifað fyrir skorinn blaðhluta; annar klient gat þá
+  // þurft að giska á 6006 px og hnikað öllum tækjum ef teikningin hafði aðra stærð eða hlutföll.
+  for (const m of myndir) {
+    const t = m.uttekt!;
+    if (!(t.frumB > 0) || !(t.frumH > 0)) continue;
+    const frum = { b: t.frumB, h: t.frumH };
+    hs = hs.map((h) =>
+      h.id === t.haedId && (h.frum?.b !== frum.b || h.frum?.h !== frum.h) ? { ...h, frum } : h
+    );
+  }
   // Skornar myndir: blaðið, frum og skurðurinn (= hlutinn) í hæðina.
   for (const m of myndir) {
     const t = m.uttekt!;
