@@ -83,10 +83,11 @@ export default function StudioClient() {
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
       setStatus("up");
     } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
       setError(
-        err instanceof Error
-          ? err.message
-          : "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api?",
+        /fetch|network|failed to load/i.test(raw)
+          ? "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api og CORS?"
+          : raw || "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api og CORS?",
       );
     } finally {
       setBusy(false);
