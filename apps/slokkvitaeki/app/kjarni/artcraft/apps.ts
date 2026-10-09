@@ -129,6 +129,14 @@ export function artcraftStudioHref(): string {
   return "/kjarni/artcraft/studio";
 }
 
+export function artcraftToolsHref(): string {
+  return "/kjarni/artcraft/tol";
+}
+
+export function artcraftBakgrunnurHref(): string {
+  return "/kjarni/artcraft/bakgrunnur";
+}
+
 export function artcraftAppHref(id: ArtcraftAppId): string {
   return `/kjarni/artcraft/${id}`;
 }
@@ -137,7 +145,7 @@ export function artcraftStaticPath(id: ArtcraftAppId): string {
   return `/artcraft/${id}/index.html`;
 }
 
-/** Every ArtCraft UI that opens on the Kjarni page — hub, seven editors, studio. */
+/** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio. */
 export const ARTCRAFT_INTERFACES = [
   { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨" },
   ...ARTCRAFT_APPS.map((app) => ({
@@ -146,6 +154,8 @@ export const ARTCRAFT_INTERFACES = [
     href: artcraftAppHref(app.id),
     icon: app.icon,
   })),
+  { id: "tol", name: "Tól", href: artcraftToolsHref(), icon: "⚡" },
+  { id: "bakgrunnur", name: "Bakgrunnur", href: artcraftBakgrunnurHref(), icon: "✂️" },
   { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓" },
 ] as const;
 
@@ -154,6 +164,8 @@ export type ArtcraftInterfaceId = (typeof ARTCRAFT_INTERFACES)[number]["id"];
 export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId {
   const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
   if (path === "/kjarni/artcraft") return "hub";
+  if (path === "/kjarni/artcraft/tol") return "tol";
+  if (path === "/kjarni/artcraft/bakgrunnur") return "bakgrunnur";
   if (path === "/kjarni/artcraft/studio") return "studio";
   const slug = path.split("/").pop() || "";
   if (isArtcraftAppId(slug)) return slug;

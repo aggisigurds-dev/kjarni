@@ -8,7 +8,9 @@ import {
   artcraftInterfaceFromPath,
   artcraftReleaseUrl,
   artcraftStaticPath,
+  artcraftBakgrunnurHref,
   artcraftStudioHref,
+  artcraftToolsHref,
   getArtcraftApp,
   isArtcraftAppId,
 } from "./apps.ts";
@@ -41,17 +43,22 @@ test("each app has a pinned web zip, sha256 and kjarni route", () => {
 
 test("private studio is a dedicated route, not a Crafting App", () => {
   assert.equal(artcraftStudioHref(), "/kjarni/artcraft/studio");
+  assert.equal(artcraftToolsHref(), "/kjarni/artcraft/tol");
+  assert.equal(artcraftBakgrunnurHref(), "/kjarni/artcraft/bakgrunnur");
   assert.equal(isArtcraftAppId("studio"), false);
+  assert.equal(isArtcraftAppId("bakgrunnur"), false);
 });
 
 test("kjarni can open every ArtCraft interface from one list", () => {
   assert.deepEqual(
     ARTCRAFT_INTERFACES.map((item) => item.id),
-    ["hub", ...ARTCRAFT_APP_IDS, "studio"],
+    ["hub", ...ARTCRAFT_APP_IDS, "tol", "bakgrunnur", "studio"],
   );
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft"), "hub");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/"), "hub");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/photocraft"), "photocraft");
+  assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/tol"), "tol");
+  assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/bakgrunnur"), "bakgrunnur");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/studio?x=1"), "studio");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/missing"), "hub");
 });

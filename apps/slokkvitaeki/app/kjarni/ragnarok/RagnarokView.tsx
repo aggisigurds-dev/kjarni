@@ -43,7 +43,7 @@ const DIM = "#bf9a5d";
 
 const SYSTEMS: { name: string; kind: string; desc: string; href: string; state: "VIRKT" | "DRÖG" | "YTRA" }[] = [
   { name: "TurboPaint", kind: "TÓL", desc: "Gólfplön — leitaðu eftir heimilisfangi og settu teikninguna á borðið.", href: "/kjarni/turbopaint", state: "VIRKT" },
-  { name: "ArtCraft", kind: "TÓL", desc: "Sjö sköpunarviðmót og einkastúdíó — opnaðu þau beint hér úr Kjarnanum.", href: "/kjarni/artcraft", state: "VIRKT" },
+  { name: "ArtCraft", kind: "TÓL", desc: "Sjö sköpunarviðmót, sjálfvirk tól og einkastúdíó — opnaðu þau beint hér úr Kjarnanum.", href: "/kjarni/artcraft", state: "VIRKT" },
   { name: "Borð", kind: "TÓL", desc: "Sérsniðið stjórnborð — draganleg spjöld með lifandi gögnum, tenglum og klukku.", href: "/bord", state: "VIRKT" },
   { name: "Stjórnborð", kind: "VEFUR", desc: "Stjórnborð vefsins — síður, pantanir, mælingar og tengingar.", href: "/stjorn", state: "VIRKT" },
   { name: "Kerfi", kind: "EINING", desc: "Þjónustukerfið — viðskiptavinir, búnaður, skoðanir, sala og verkstæði.", href: "/kerfi", state: "VIRKT" },
