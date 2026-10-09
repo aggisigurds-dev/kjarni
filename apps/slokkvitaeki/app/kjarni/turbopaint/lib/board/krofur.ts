@@ -6,7 +6,7 @@ import { MVS165 } from "./mvs165";
  * sem er komið á borðið. Allar tölur og heimildir koma frá Arnold
  * (brunavarna-sérfræðingi Slökkvitækis):
  *
- *   • Byggingarreglugerð 112/2012, gr. 9.4.3, 9.4.5, 9.4.6, 9.8.7
+ *   • Byggingarreglugerð 112/2012 (útgáfa í gildi frá 1. maí 2026), gr. 9.4.2–9.4.5, 9.8.7
  *   • Brunamálastofnun 165.BR1 — val og staðsetning handslökkvitækja
  *   • Reglugerð 1068/2011 um slökkvitæki
  *
@@ -22,8 +22,8 @@ export const NOTKUNARFLOKKAR: { gildi: Notkunarflokkur; heiti: string }[] = [
   { gildi: 2, heiti: "2 · Verslun, samkomur" },
   { gildi: 3, heiti: "3 · Íbúðir" },
   { gildi: 4, heiti: "4 · Gisting" },
-  { gildi: 5, heiti: "5 · Sjúkra- og vistheimili" },
-  { gildi: 6, heiti: "6 · Leikskólar, skólar" },
+  { gildi: 5, heiti: "5 · Sjúkrahús, hjúkrunarheimili, leikskólar" },
+  { gildi: 6, heiti: "6 · Fangelsi, lokaðar deildir" },
 ];
 
 export type Stada = "í lagi" | "vantar" | "óvíst";
@@ -117,7 +117,7 @@ export function greinaTharfir(inn: TharfaInntak): {
       rokstudningur: keflaEdaUdakerfi
         ? `0,065 × ${Math.round(m2)} m² = ${Math.ceil(grunn)}A, helmingað vegna kefla/úðakerfis → ${slokkvigildi}A (aldrei < 26A). Gönguleið ≤ 25 m.`
         : `0,065 × ${Math.round(m2)} m² = ${slokkvigildi}A (aldrei < 26A). Gönguleið að næsta tæki ≤ 25 m, minnst 2 tæki á hæð.`,
-      heimild: "165.BR1 · byggingarreglugerð gr. 9.4.5",
+      heimild: "165.BR1 · byggingarreglugerð gr. 9.4.4",
     },
     {
       bunadur: "Slöngukefli",
@@ -129,8 +129,8 @@ export function greinaTharfir(inn: TharfaInntak): {
         ? `Notkunarflokkur ${flokkur} yfir 500 m². Drægni 25–30 m slanga + 9 m buna — öll horn verða að nást; ≈ eitt kefli á 35–40 m.`
         : keflaOvisst
           ? `Notkunarflokkur ${flokkur}: krafa metin af brunaálagi, ekki flatarmáli einu.`
-          : `Notkunarflokkur ${flokkur} undir 500 m² — ekki skylda skv. gr. 9.4.6.`,
-      heimild: "byggingarreglugerð gr. 9.4.6 · HMS-leiðbeining",
+          : `Notkunarflokkur ${flokkur} undir 500 m² — ekki skylda skv. gr. 9.4.5.`,
+      heimild: "byggingarreglugerð gr. 9.4.5 · HMS-leiðbeining",
     },
     {
       bunadur: "Skilti slökkvitækja (F001)",
@@ -170,7 +170,7 @@ export function greinaTharfir(inn: TharfaInntak): {
       rokstudningur: tharfSkynjarar
         ? `Notkunarflokkur 3: minnst einn á hverja 80 m² og einn á hverri hæð. ≥ 75 dB(A) í svefnherbergjum.`
         : "Atvinnuhúsnæði: sjálfvirkt brunaviðvörunarkerfi hannað sérstaklega.",
-      heimild: "byggingarreglugerð gr. 9.4.3–9.4.4",
+      heimild: "byggingarreglugerð gr. 9.4.2–9.4.3",
     },
   ];
 
