@@ -32,6 +32,7 @@ import {
   switchBoard,
   type BoardListEntry,
 } from "../../lib/board/persistence";
+import { skodunBreytt, useSkodun } from "../../lib/board/skodun";
 import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
 import { HeimilisfangLeit } from "./HeimilisfangLeit";
@@ -44,6 +45,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+
+/** Skoðun (skodun.ts) er hent þegar skipt er um borð — spyrja fyrst hafi eitthvað verið teiknað á hana. */
+function maHendaSkodun() {
+  if (!skodunBreytt(useBoardStore.getState().objects)) return true;
+  return window.confirm("Skoðunin er ekki vistuð — henda því sem var teiknað á hana? („Vista sem borð\" geymir hana.)");
+}
 
 /** Sjálfgefin borðanöfn — smellur í reitinn velur þá allan textann svo
  * innsláttur SKIPTIR nafninu út (annars lendir hann inni í miðju orði). */
@@ -94,6 +101,7 @@ export function TopBar({
   const snap = useBoardStore((s) => s.snap);
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
+  const skodun = useSkodun((s) => s.virk);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
@@ -114,8 +122,9 @@ export function TopBar({
     }
   };
 
-  const syncLook =
-    syncState === "synced"
+  const syncLook = skodun
+    ? { color: "text-amber-300", label: "Skoðun — ekki vistað (hverfur þegar glugganum er lokað)" }
+    : syncState === "synced"
       ? { color: "text-emerald-400", label: "Vistað í ský — opnast á öllum tækjum" }
       : syncState === "saving"
         ? { color: "text-amber-300 animate-pulse", label: "Vistar í ský…" }
@@ -169,7 +178,7 @@ export function TopBar({
         >
           {boards.length ? (
             boards.map((b) => (
-              <DropdownMenuItem key={b.id} onClick={() => void switchBoard(b.id)}>
+              <DropdownMenuItem key={b.id} onClick={() => maHendaSkodun() && void switchBoard(b.id)}>
                 <span className="min-w-0 flex-1 truncate">
                   {b.id === getCurrentBoardId() ? "● " : ""}
                   {b.name || "Ónefnt borð"}
@@ -184,16 +193,19 @@ export function TopBar({
             <DropdownMenuItem disabled>Sæki borð…</DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void createBoard().then(focusNameSoon)}>➕ Nýtt borð</DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              if (window.confirm("Eyða þessu borði? (Það hverfur af öllum tækjum)")) {
-                void deleteCurrentBoard();
-              }
-            }}
-          >
-            🗑 Eyða þessu borði
-          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => maHendaSkodun() && void createBoard().then(focusNameSoon)}>➕ Nýtt borð</DropdownMenuItem>
+          {/* Skoðun er ekkert borð — ekkert að eyða (lokun hendir henni). */}
+          {skodun ? null : (
+            <DropdownMenuItem
+              onClick={() => {
+                if (window.confirm("Eyða þessu borði? (Það hverfur af öllum tækjum)")) {
+                  void deleteCurrentBoard();
+                }
+              }}
+            >
+              🗑 Eyða þessu borði
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <input
