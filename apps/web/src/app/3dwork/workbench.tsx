@@ -44,6 +44,7 @@ import {
   Upload,
   Paintbrush,
   Brush,
+  Library,
   ScanSearch,
   Cloud,
   Github,
@@ -245,9 +246,18 @@ import { KitBoard } from './kit-board';
 import { CloudPicker } from './cloud-picker';
 import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 import { BuilderPanel } from './builder-panel';
-import { FavoritesGallery } from './favorites-gallery';
+import { PartsLibrary, type LibraryTab } from './parts-library';
+import { NameDialog } from './name-dialog';
 import { HammerDialog } from './hammer-dialog';
-import { addFavorite, loadFavoriteGeometry, type Favorite } from '@/lib/3dwork/favorites';
+import { addFavorite } from '@/lib/3dwork/favorites';
+import {
+  bumpVersionName,
+  copyBuild,
+  failureNote,
+  FROM_LIBRARY,
+  suggestLibraryName,
+  type BoardItem,
+} from '@/lib/3dwork/parts-library';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
@@ -442,7 +452,12 @@ export function Workbench({
   const [outlineBusy, setOutlineBusy] = useState(false);
   const [showGithub, setShowGithub] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
-  const [showFavorites, setShowFavorites] = useState(false);
+  // The Partasafn, open on one of its tabs; null when closed.
+  const [libraryTab, setLibraryTab] = useState<LibraryTab | null>(null);
+  // "Vista í Partasafn…" for the selected part, and "Vista sem…" for the build.
+  const [saveAsPart, setSaveAsPart] = useState<{ partId: string; name: string } | null>(null);
+  const [saveAsStarred, setSaveAsStarred] = useState(false);
+  const [saveBuildAs, setSaveBuildAs] = useState(false);
   const [showHammer, setShowHammer] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
   const [githubToken, setGithubToken] = useState('');
@@ -4149,114 +4164,151 @@ export function Workbench({
     [selectedBounds, sliceSpec.axis]
   );
 
-  /** Put the selected part on the favourites shelf, as it is turned and scaled here. */
-  const saveFavorite = useCallback(async () => {
+  /** Ask what to call the selected part in the Partasafn — then `storeInLibrary` saves it. */
+  const saveFavorite = useCallback(() => {
     const part = selectedPart;
-    const soup = part ? soupOfPart(part.id) : undefined;
-    if (!part || !soup) {
+    if (!part) {
       toast.error('Select a part first.');
       return;
     }
-    setBusy(`Saving ${part.name} to favorites…`);
-    try {
-      const { rotation, scale } = part.transform;
-      const turned =
-        rotation.x !== 0 || rotation.y !== 0 || rotation.z !== 0 ||
-        scale.x !== 1 || scale.y !== 1 || scale.z !== 1;
-      const mesh = turned
-        ? bakeTransform(soup, { position: { x: 0, y: 0, z: 0 }, rotation, scale })
-        : soup;
-      const look = lookFor(part);
-      await addFavorite(
-        {
-          name: part.name,
-          color: part.color,
-          materialId: part.materialId,
-          finishId: part.finishId,
-          thumbnail: part.thumbnail ?? renderThumbnail(mesh, look.color, look),
-        },
-        mesh
-      );
-      toast.success(`Saved ${part.name} to favorites — on the shelf on every computer.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save that favorite.');
-    } finally {
-      setBusy(null);
-    }
-  }, [selectedPart, soupOfPart]);
+    setSaveAsStarred(false);
+    setSaveAsPart({ partId: part.id, name: suggestLibraryName(part) });
+  }, [selectedPart]);
 
-  /** Put a favourite on the bench, past the far end of whatever is there. */
-  const addFavoriteToBench = useCallback(
-    async (favorite: Favorite) => {
-      setBusy(`Fetching ${favorite.name} from favorites…`);
+  /** Put a part into the Partasafn under a name, as it is turned and scaled here. */
+  const storeInLibrary = useCallback(
+    async (partId: string, name: string, starred: boolean) => {
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      const soup = part ? soupOfPart(part.id) : undefined;
+      if (!part || !soup) {
+        toast.error('That part is no longer on the bench.');
+        return;
+      }
+      setBusy(`Vista ${name} í Partasafn…`);
       try {
-        const soup = await loadFavoriteGeometry(favorite.versionId);
-        if (!soup) {
-          toast.error('That favorite’s mesh is missing from the shelf.');
-          return;
-        }
-        const id = newPartId();
-        const versionId = newVersionId();
-        setGeometries((current) => new Map(current).set(versionId, soup));
-        void saveGeometry(versionId, soup);
-        const triangles = Math.floor(soup.length / 9);
-        // Beside the table's right-hand edge, so it does not land inside another part.
-        const rightEdge = snapNeighbors.reduce(
-          (edge, entry) => Math.max(edge, entry.box.max[0]),
-          -Infinity
+        const { rotation, scale } = part.transform;
+        const turned =
+          rotation.x !== 0 || rotation.y !== 0 || rotation.z !== 0 ||
+          scale.x !== 1 || scale.y !== 1 || scale.z !== 1;
+        const mesh = turned
+          ? bakeTransform(soup, { position: { x: 0, y: 0, z: 0 }, rotation, scale })
+          : soup;
+        const look = lookFor(part);
+        await addFavorite(
+          {
+            name,
+            color: part.color,
+            materialId: part.materialId,
+            finishId: part.finishId,
+            thumbnail: turned || !part.thumbnail ? renderThumbnail(mesh, look.color, look) : part.thumbnail,
+            starred,
+          },
+          mesh
         );
-        const freePos = Number.isFinite(rightEdge)
-          ? { x: rightEdge + 20 - computeBounds(soup).min[0], y: 200, z: 0 }
-          : { x: 0, y: 200, z: 0 };
-        patchProject((current) => ({
-          ...current,
-          parts: [
-            ...current.parts,
-            {
-              id,
-              name: favorite.name,
-              fileName: '',
-              slotId: '',
-              color: favorite.color,
-              finishId: favorite.finishId,
-              visible: true,
-              transform: {
-                position: { x: 0, y: 0, z: 0 },
-                rotation: { x: 0, y: 0, z: 0 },
-                scale: { x: 1, y: 1, z: 1 },
-              },
-              ...(freePos ? { freePos } : {}),
-              triangles,
-              materialId: favorite.materialId,
-              notes: 'From favorites',
-              versions: [
-                {
-                  id: versionId,
-                  label: 'v1 favorite',
-                  note: `From favorites: ${favorite.name}`,
-                  triangles,
-                  createdAt: Date.now(),
-                },
-              ],
-              activeVersionId: versionId,
-              thumbnail: favorite.thumbnail ?? renderThumbnail(soup, favorite.color),
-              addedAt: Date.now(),
-            },
-          ],
-        }));
-        setSelectedId(id);
-        setMarked(new Set());
-        setShowFavorites(false);
-        setWorkspace('bench');
-        setFrameToken((token) => token + 1);
-        toast.success(`Added ${favorite.name} from favorites.`);
+        setSaveAsPart(null);
+        toast.success(`Vistað í Partasafn sem „${name}“ — á öllum tölvum.`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not fetch that favorite.');
+        toast.error(failureNote(error, 'Náði ekki að vista í Partasafn.'));
       } finally {
         setBusy(null);
       }
     },
+    [project.parts, soupOfPart]
+  );
+
+  /** Put parts from the Partasafn on the bench, in a row past the far end of whatever is there. */
+  const addItemsToBench = useCallback(
+    (items: BoardItem[]) => {
+      if (items.length === 0) return;
+      const now = Date.now();
+      // Beside the table's right-hand edge, so nothing lands inside another part.
+      let edge = snapNeighbors.reduce((far, entry) => Math.max(far, entry.box.max[0]), -Infinity);
+      if (!Number.isFinite(edge)) edge = -20;
+      const added: Part[] = [];
+      const meshes = new Map<string, Float32Array>();
+      for (const item of items) {
+        const id = newPartId();
+        const versionId = newVersionId();
+        const bounds = computeBounds(item.soup);
+        const triangles = Math.floor(item.soup.length / 9);
+        meshes.set(versionId, item.soup);
+        void saveGeometry(versionId, item.soup);
+        added.push({
+          id,
+          name: item.name,
+          fileName: '',
+          slotId: '',
+          color: item.color,
+          finishId: item.finishId,
+          visible: true,
+          transform: {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+          freePos: { x: edge + 20 - bounds.min[0], y: 0 - bounds.min[1], z: 0 - bounds.center[2] },
+          triangles,
+          materialId: item.materialId,
+          notes: FROM_LIBRARY,
+          versions: [
+            { id: versionId, label: 'v1 partasafn', note: `Úr Partasafni: ${item.name}`, triangles, createdAt: now },
+          ],
+          activeVersionId: versionId,
+          thumbnail: item.thumbnail ?? renderThumbnail(item.soup, item.color),
+          addedAt: now,
+        });
+        edge += 20 + bounds.size[0];
+      }
+      setGeometries((current) => {
+        const next = new Map(current);
+        for (const [id, soup] of meshes) next.set(id, soup);
+        return next;
+      });
+      patchProject((current) => ({ ...current, parts: [...current.parts, ...added] }));
+      setSelectedId(added[added.length - 1].id);
+      setMarked(new Set());
+      setLibraryTab(null);
+      setWorkspace('bench');
+      setFrameToken((token) => token + 1);
+      toast.success(
+        added.length === 1 ? `${added[0].name} kominn á bekkinn.` : `${added.length} partar komnir á bekkinn.`
+      );
+    },
     [patchProject, snapNeighbors]
+  );
+
+  /** A board made in the Partasafn: kept on this computer, then opened here — which saves it to Supabase. */
+  const openLibraryBoard = useCallback(
+    async (board: { project: Project; geometries: Map<string, Float32Array> }) => {
+      await persistLocal(board.project, board.geometries, board.project.updatedAt);
+      setLibraryTab(null);
+      await openProject(board.project.id);
+      toast.success(`„${board.project.name}“ opnað með ${board.project.parts.length} pörtum.`);
+    },
+    [persistLocal, openProject]
+  );
+
+  /**
+   * "Vista sem…": go on working in a copy of the build under a new name. The
+   * build as it stands now stays as it is, to go back to if the work goes wrong.
+   */
+  const saveCurrentBuildAs = useCallback(
+    async (name: string) => {
+      setBusy(`Vista sem ${name}…`);
+      try {
+        const copy = copyBuild(project, name, geometries);
+        await persistLocal(project, new Map(), project.updatedAt || undefined);
+        await persistLocal(copy.project, copy.geometries, copy.project.updatedAt);
+        setSaveBuildAs(false);
+        setBusy(null);
+        await openProject(copy.project.id);
+        toast.success(`Vistað sem „${copy.project.name}“. „${project.name}“ stendur óbreytt.`);
+      } catch (error) {
+        setBusy(null);
+        toast.error(failureNote(error, 'Náði ekki að vista afritið.'));
+      }
+    },
+    [project, geometries, persistLocal, openProject]
   );
 
   const exportCombined = useCallback(() => {
@@ -5354,6 +5406,11 @@ export function Workbench({
         return;
       }
 
+      if (meta && event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (project.parts.length > 0) setSaveBuildAs(true);
+        return;
+      }
       if (meta && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo();
@@ -5579,7 +5636,7 @@ export function Workbench({
         {
           cap: 'Library',
           tools: [
-            { icon: Star, label: 'Favorites', onClick: () => setShowFavorites(true) },
+            { icon: Library, label: 'Partasafn', onClick: () => setLibraryTab('library') },
             { icon: Upload, label: 'Import', onClick: () => fileInputRef.current?.click() },
             { icon: HardDrive, label: 'Drive', onClick: () => setShowDrive(true) },
           ],
@@ -5625,7 +5682,7 @@ export function Workbench({
           tools: [
             { icon: EyeOff, label: 'Hide', disabled: !hasSel, onClick: () => selectedId && patchPart(selectedId, { visible: false }) },
             { icon: Focus, label: 'Isolate', disabled: !hasSel, onClick: () => selectedId && setFocusId((c) => (c === selectedId ? null : selectedId)) },
-            { icon: Star, label: 'Favorite', disabled: !hasSel || busyB, onClick: () => void saveFavorite() },
+            { icon: Star, label: 'Í Partasafn', disabled: !hasSel || busyB, onClick: () => saveFavorite() },
             { icon: Trash2, label: 'Delete', tone: 'danger', disabled: !hasSel, onClick: () => selectedId && removePart(selectedId) },
           ],
         },
@@ -5811,8 +5868,17 @@ export function Workbench({
           </button>
           <button
             type="button"
-            onClick={() => setShowFavorites(true)}
-            title="Favorites — parts saved from any build, on every computer"
+            onClick={() => setLibraryTab('library')}
+            title="Partasafn — partar sem þú hefur vistað, og allir partar úr öllum verkefnum"
+            className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-amber-800 hover:bg-amber-100"
+          >
+            <Library className="h-3 w-3" />
+            <span className="hidden sm:inline">Partasafn</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLibraryTab('starred')}
+            title="Uppáhalds — stjörnumerktir partar í Partasafninu"
             className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-amber-800 hover:bg-amber-100"
           >
             <Star className="h-3 w-3" />
@@ -5854,6 +5920,15 @@ export function Workbench({
           <Menu label="Project">
             <MenuItem onClick={() => createProjectFolder()} icon={FolderPlus}>
               New project
+            </MenuItem>
+            <MenuItem
+              onClick={() => setSaveBuildAs(true)}
+              icon={Save}
+              shortcut="⌘⇧S"
+              disabled={project.parts.length === 0 || Boolean(busy)}
+              hint="Afrit undir nýju nafni til að vinna áfram í — þetta stendur óbreytt"
+            >
+              Vista sem…
             </MenuItem>
             <MenuItem
               onClick={() => fileInputRef.current?.click()}
@@ -5942,12 +6017,12 @@ export function Workbench({
           {false && (<>
           <Menu label="Add">
             <MenuItem
-              onClick={() => setShowFavorites(true)}
-              icon={Star}
+              onClick={() => setLibraryTab('library')}
+              icon={Library}
               tone="primary"
               hint="Parts you saved from other builds"
             >
-              From favorites…
+              Úr Partasafni…
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Primitives</MenuLabel>
@@ -6028,12 +6103,12 @@ export function Workbench({
               Duplicate as variant
             </MenuItem>
             <MenuItem
-              onClick={() => void saveFavorite()}
+              onClick={() => saveFavorite()}
               disabled={!selectedId || Boolean(busy)}
               icon={Star}
-              hint="Kept on Supabase outside this build — for any build, on any computer"
+              hint="Undir nafni, utan verkefnisins — fyrir öll verkefni á öllum tölvum"
             >
-              Save to favorites
+              Vista í Partasafn…
             </MenuItem>
             <MenuItem
               onClick={() => setShowHammer(true)}
@@ -6693,14 +6768,17 @@ export function Workbench({
               Blaster assembly slots
             </MenuCheckItem>
             <MenuItem
-              onClick={() => void saveFavorite()}
+              onClick={() => saveFavorite()}
               disabled={!selectedId || Boolean(busy)}
               icon={Star}
-              hint="Kept on Supabase, for any build on any computer"
+              hint="Undir nafni, fyrir öll verkefni á öllum tölvum"
             >
-              Save to favorites
+              Vista í Partasafn…
             </MenuItem>
-            <MenuItem onClick={() => setShowFavorites(true)} icon={Star} hint="Parts saved from other builds">
+            <MenuItem onClick={() => setLibraryTab('library')} icon={Library} hint="Vistaðir partar og allir partar úr öllum verkefnum">
+              Partasafn…
+            </MenuItem>
+            <MenuItem onClick={() => setLibraryTab('starred')} icon={Star} hint="Stjörnumerktir partar í Partasafninu">
               Favorites…
             </MenuItem>
             <MenuItem onClick={() => setShowHammer(true)} icon={Zap} hint="Spring, hammer speed, valve dwell">
@@ -7151,7 +7229,7 @@ export function Workbench({
               canMove={Boolean(selectedId) && !moveModeId}
               onSplit={() => openSlice(true)}
               canSplit={Boolean(selectedId) && !busy}
-              onFavorite={() => void saveFavorite()}
+              onFavorite={() => saveFavorite()}
               canFavorite={Boolean(selectedId) && !busy}
               onCoaxial={alignCoaxial}
               canCoaxial={pickedOnTable.length >= 2}
@@ -7321,7 +7399,7 @@ export function Workbench({
             onCenter={centerPart}
             onDuplicate={duplicatePart}
             onToggleVisible={togglePartVisible}
-            onSaveFavorite={() => void saveFavorite()}
+            onSaveFavorite={() => saveFavorite()}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
             onFixMisalignment={runFixMisalignment}
@@ -7975,13 +8053,40 @@ export function Workbench({
         selected={hammerCandidate}
       />
 
-      <FavoritesGallery
-        open={showFavorites}
-        onClose={() => setShowFavorites(false)}
-        onAdd={addFavoriteToBench}
-        onSaveSelected={saveFavorite}
-        selectedName={selectedPart?.name ?? null}
+      <PartsLibrary
+        open={libraryTab !== null}
+        initialTab={libraryTab ?? 'library'}
+        onClose={() => setLibraryTab(null)}
+        onOpenBoard={openLibraryBoard}
+        onAddToBench={addItemsToBench}
+      />
+
+      <NameDialog
+        open={saveAsPart !== null}
+        title="Vista í Partasafn"
+        hint="Partinn eins og hann er hér, undir nafni — á öllum tölvum. Vistaðu aftur seinna sem nýja útgáfu."
+        defaultName={saveAsPart?.name ?? ''}
+        confirmLabel="Vista"
         busy={Boolean(busy)}
+        onCancel={() => setSaveAsPart(null)}
+        onConfirm={(name) => (saveAsPart ? storeInLibrary(saveAsPart.partId, name, saveAsStarred) : undefined)}
+      >
+        <label className="flex items-center gap-2 text-[0.75rem] text-[var(--wb-ink)]">
+          <input type="checkbox" checked={saveAsStarred} onChange={(event) => setSaveAsStarred(event.target.checked)} />
+          <Star className="h-3.5 w-3.5 text-amber-500" />
+          Líka í Uppáhalds
+        </label>
+      </NameDialog>
+
+      <NameDialog
+        open={saveBuildAs}
+        title="Vista verkefnið sem…"
+        hint={`Þú heldur áfram í afritinu. „${project.name}“ stendur eins og það er núna — þangað geturðu farið aftur ef eitthvað fer úrskeiðis.`}
+        defaultName={bumpVersionName(project.name)}
+        confirmLabel="Vista sem"
+        busy={Boolean(busy)}
+        onCancel={() => setSaveBuildAs(false)}
+        onConfirm={(name) => saveCurrentBuildAs(name)}
       />
 
       <CloudPicker

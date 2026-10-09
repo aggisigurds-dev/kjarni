@@ -10,9 +10,10 @@
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { Boxes, ChevronDown, Cloud } from 'lucide-react';
-import { classifyPart } from '@/lib/3dwork/project';
-import { rememberOpenProject } from '@/lib/3dwork/storage';
+import { Boxes, ChevronDown, Cloud, Library } from 'lucide-react';
+import { toast } from 'sonner';
+import { classifyPart, type Project } from '@/lib/3dwork/project';
+import { rememberOpenProject, saveGeometry, saveProject } from '@/lib/3dwork/storage';
 import { CloudPicker } from './cloud-picker';
 import { KitBoard } from './kit-board';
 import { RecentBuilds } from './recent-builds';
@@ -20,6 +21,12 @@ import { ACTION_GHOST, LABEL, PANEL } from './ui';
 
 const DriveBrowser = dynamic(
   () => import('./drive-browser').then((mod) => ({ default: mod.DriveBrowser })),
+  { ssr: false }
+);
+
+// Draws its pictures with three.js, so it loads only when opened.
+const PartsLibrary = dynamic(
+  () => import('./parts-library').then((mod) => ({ default: mod.PartsLibrary })),
   { ssr: false }
 );
 
@@ -46,6 +53,17 @@ export function KitsHome() {
   const [showDrive, setShowDrive] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [showKits, setShowKits] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+
+  /** A board made in the Partasafn: kept on this computer, then opened on the bench, which saves it to Supabase. */
+  const openBoard = async (board: { project: Project; geometries: Map<string, Float32Array> }) => {
+    for (const [id, soup] of board.geometries) await saveGeometry(id, soup);
+    await saveProject(board.project, board.project.updatedAt);
+    rememberOpenProject(board.project.id);
+    setShowLibrary(false);
+    toast.success(`Opna „${board.project.name}“ með ${board.project.parts.length} pörtum.`);
+    setEngine('bench');
+  };
 
   if (engine) {
     return (
@@ -59,7 +77,7 @@ export function KitsHome() {
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col gap-2 bg-slate-200 p-2 text-slate-800">
+    <div className="wb-theme flex h-dvh max-h-dvh flex-col gap-2 bg-[var(--wb-ground)] p-2 text-[var(--wb-ink)]">
       <div className={`${PANEL} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
         <div className="flex min-w-0 items-center gap-2">
           <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
@@ -90,6 +108,14 @@ export function KitsHome() {
             2D sketch
           </button>
         </div>
+        <button
+          type="button"
+          className={`${ACTION_GHOST} inline-flex items-center gap-1`}
+          onClick={() => setShowLibrary(true)}
+        >
+          <Library className="h-3.5 w-3.5" />
+          Partasafn
+        </button>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
@@ -143,6 +169,10 @@ export function KitsHome() {
           setEngine('bench');
         }}
       />
+
+      {showLibrary && (
+        <PartsLibrary open onClose={() => setShowLibrary(false)} onOpenBoard={openBoard} />
+      )}
 
       {showDrive && (
         <DriveBrowser

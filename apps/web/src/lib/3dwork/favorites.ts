@@ -1,6 +1,9 @@
 /**
- * The favourites shelf: parts kept on Supabase outside any build, so a part
- * saved from one build can be dropped into another, on any computer.
+ * The Partasafn — the parts library, which began as the favourites shelf:
+ * parts kept on Supabase outside any build, each under a name of its own, so
+ * a part saved from one build can be dropped into another, on any computer.
+ * Starred ones show under Uppáhalds as well; everything saved before there
+ * was a library was a favourite, and stays one.
  *
  * The shelf is one row of the projects table, `prj_favorites`, holding a
  * project document whose parts are the favourites — no table of its own, the
@@ -32,6 +35,8 @@ export interface Favorite {
   versionId: string;
   materialId: string;
   finishId?: string;
+  /** Shown under Uppáhalds. */
+  starred: boolean;
   addedAt: number;
 }
 
@@ -42,6 +47,7 @@ export interface FavoriteCard {
   materialId: string;
   finishId?: string;
   thumbnail?: string;
+  starred?: boolean;
 }
 
 /** The table keeps a document under 1 MB; the shelf refuses a card past this. */
@@ -76,6 +82,7 @@ export function shelfPart(card: FavoriteCard, soup: Float32Array, now = Date.now
     ],
     activeVersionId: versionId,
     thumbnail: card.thumbnail,
+    starred: card.starred ?? false,
     addedAt: now,
   };
 }
@@ -93,6 +100,8 @@ export function favoritesOf(shelf: Project): Favorite[] {
       versionId: part.activeVersionId,
       materialId: part.materialId,
       finishId: part.finishId,
+      // Saved before the library had stars: those were all favourites.
+      starred: part.starred ?? true,
       addedAt: part.addedAt,
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
@@ -159,16 +168,27 @@ export async function addFavorite(card: FavoriteCard, soup: Float32Array): Promi
   return favoritesOf({ ...shelf, parts: [part] })[0];
 }
 
-/** Take a favourite off the shelf. It is hidden, not erased, so a slip loses nothing. */
-export async function removeFavorite(id: string): Promise<void> {
+/** Change one part on the shelf and store it back. */
+async function changeOnShelf(id: string, change: (part: Part) => Part): Promise<void> {
   const { shelf, manifest } = await fetchShelf();
-  await storeShelf(
-    {
-      ...shelf,
-      parts: shelf.parts.map((part) => (part.id === id ? { ...part, visible: false } : part)),
-    },
-    manifest
-  );
+  await storeShelf({ ...shelf, parts: shelf.parts.map((part) => (part.id === id ? change(part) : part)) }, manifest);
+}
+
+/** Take a favourite off the shelf. It is hidden, not erased, so a slip loses nothing. */
+export function removeFavorite(id: string): Promise<void> {
+  return changeOnShelf(id, (part) => ({ ...part, visible: false }));
+}
+
+/** Give a part in the library a name of its own. */
+export function renameFavorite(id: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) return Promise.reject(new Error('A part needs a name.'));
+  return changeOnShelf(id, (part) => ({ ...part, name: trimmed }));
+}
+
+/** Put a part in the library under Uppáhalds, or take it out of there. */
+export function starFavorite(id: string, starred: boolean): Promise<void> {
+  return changeOnShelf(id, (part) => ({ ...part, starred }));
 }
 
 /** The mesh of a favourite, from the bucket; null when the bucket has no such file. */
