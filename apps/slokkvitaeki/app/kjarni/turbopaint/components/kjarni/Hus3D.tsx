@@ -18,6 +18,7 @@ import {
   bladSlod,
   festaAVegg,
   giskDilarAMetra,
+  haedarNumer,
   husLengd,
   husUrBordi,
   pdfDilarAMetra,
@@ -27,9 +28,13 @@ import {
   type KvardaHeimild,
   type TaekjaGerd,
 } from "../../lib/board/hus3d";
+import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
+import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
+import { useSkodun } from "../../lib/board/skodun";
 import { saekjaBladstaerd } from "../../lib/board/teikn-thjonusta";
 import type { BoardObject } from "../../lib/board/types";
+import { useBoardStore } from "../../lib/board/store";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 
 const THREE_SLOD = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
@@ -110,23 +115,30 @@ interface Props {
 interface Handfang {
   gegnsaett: (a: boolean) => void;
   ganga: (a: boolean) => boolean;
+  kynning: (a: boolean) => void;
+  vista: () => HTMLCanvasElement | null;
   stada: () => { ganga: boolean; x: number; y: number; z: number; fov: number; metri: number | null };
 }
 
 export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const gamur = useRef<HTMLDivElement>(null);
   const gogn = useUttektGogn((s) => s.gogn);
+  const bordNafn = useBoardStore((s) => s.name);
+  const skodunTitill = useSkodun((s) => (s.virk ? s.titill : ""));
   const haedir = useMemo(() => husUrBordi(objects, gogn?.taeki ?? []), [objects, gogn]);
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
   const [gegn, setGegn] = useState(false);
   const [ganga, setGanga] = useState(false);
+  const [kynning, setKynning] = useState(false);
   const [villa, setVilla] = useState<string | null>(null);
   const [hledst, setHledst] = useState(true);
   const [kvardar, setKvardar] = useState<Kvardi[] | null>(null);
   const handfang = useRef<Handfang | null>(null);
   const gegnRef = useRef(gegn);
   gegnRef.current = gegn;
+  const kynningRef = useRef(kynning);
+  kynningRef.current = kynning;
   const loka = useRef(onClose);
   loka.current = onClose;
 
@@ -206,6 +218,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const sporM: Three[] = [];
         const lag: { hopur: Three; golfE: Three; nr: number; veggH: number; metri: number; hd: Haed3D }[] = [];
         const midar: { midi: Three; hlutfall: number }[] = [];
+        const skraut: Three[] = [];
         const hamarkAferdar = Math.min(valdar.length > 2 ? 2048 : 4096, teiknari.capabilities.maxTextureSize || 2048);
 
         // Efni tækjalíkana — eitt eintak á lit (383 efni()).
@@ -438,6 +451,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             kula.position.set(fest.x, toppur + rad, fest.y);
             hopur.add(kula);
             losa.push(sG, sE, kG2, kE2);
+            skraut.push(stong, kula);
             const txt = String(t.texti || t.stutt || "").slice(0, 18);
             if (!txt) return;
             const letur = "700 34px system-ui,sans-serif";
@@ -492,6 +506,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             hopur.add(midi);
             losa.push(mA, mE);
             midar.push({ midi, hlutfall: ms.width / ms.height });
+            skraut.push(midi);
           });
           haedY += syna === "allar" ? veggH * 3.2 : 0;
         }
@@ -500,6 +515,27 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const fyrsta = valdar[0];
         const u0 = fyrsta.umfang;
         const efstaY = lag.length ? lag[lag.length - 1].hopur.position.y : 0;
+        {
+          const skC = document.createElement("canvas");
+          skC.width = 256;
+          skC.height = 256;
+          const skx = skC.getContext("2d");
+          if (skx) {
+            const grd = skx.createRadialGradient(128, 128, 16, 128, 128, 128);
+            grd.addColorStop(0, "rgba(40,36,30,0.2)");
+            grd.addColorStop(1, "rgba(40,36,30,0)");
+            skx.fillStyle = grd;
+            skx.fillRect(0, 0, 256, 256);
+          }
+          const skT = new T.CanvasTexture(skC);
+          const skG = new T.PlaneGeometry(husStaerst * 1.4, husStaerst * 1.4);
+          const skE = new T.MeshBasicMaterial({ map: skT, transparent: true, depthWrite: false });
+          const skuggi = new T.Mesh(skG, skE);
+          skuggi.rotation.x = -Math.PI / 2;
+          skuggi.position.set(u0 ? (u0.x0 + u0.x1) / 2 : 0, -Math.max(0.4, husStaerst * 0.004), u0 ? (u0.y0 + u0.y1) / 2 : 0);
+          svid.add(skuggi);
+          losa.push(skT, skG, skE);
+        }
         const vel = new T.PerspectiveCamera(42, b / h, Math.max(0.01, husStaerst * 0.001), bladStaerst * 20 + efstaY * 6);
         const midjaY = syna === "allar" ? efstaY * 0.5 : 0;
         const mid = new T.Vector3(u0 ? (u0.x0 + u0.x1) / 2 : 0, midjaY, u0 ? (u0.y0 + u0.y1) / 2 : 0);
@@ -739,12 +775,23 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           });
         };
         gegnsaett(gegnRef.current);
+        const synaKynningu = (a: boolean) => {
+          skraut.forEach((o) => {
+            o.visible = !a;
+          });
+        };
+        synaKynningu(kynningRef.current);
         handfang.current = {
           gegnsaett,
           ganga: (a) => {
             if (a) return gangaByrja();
             gangaHaetta();
             return false;
+          },
+          kynning: synaKynningu,
+          vista: () => {
+            teiknari.render(svid, vel);
+            return canvas;
           },
           stada: () => ({
             ganga: !!gongu,
@@ -823,6 +870,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
     handfang.current?.gegnsaett(gegn);
   }, [gegn]);
 
+  useEffect(() => {
+    handfang.current?.kynning(kynning);
+  }, [kynning]);
+
   // Staða myndavélarinnar fyrir prófanir (tools/turbopaint-3d.cjs) — aðeins lesin, breytir engu.
   useEffect(() => {
     const w = window as unknown as { __hus3dStada?: () => ReturnType<Handfang["stada"]> | null };
@@ -834,6 +885,16 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
 
   const veggjaFjoldi = haedir.reduce((s, h) => s + h.veggir.length, 0);
   const taekjaFjoldi = haedir.reduce((s, h) => s + h.taeki.length, 0);
+  const synHaedir = syna === "allar" ? haedir : haedir[syna] ? [haedir[syna]] : [];
+  const haedNafn =
+    syna === "allar" && haedir.length > 1
+      ? `${haedir.length} hæðir`
+      : synHaedir[0] && haedarNumer(synHaedir[0].nafn) != null
+        ? synHaedir[0].nafn
+        : "";
+  const kynningTitill = kynningarTitill(skodunTitill || gogn?.nafn || bordNafn, haedNafn);
+  const kynningLykill = kynningarLykill(synHaedir.flatMap((h) => h.taeki));
+  const kynningUndir = [gogn?.nafn && gogn.nafn !== kynningTitill ? gogn.nafn : "", kynningarDags()].filter(Boolean).join(" · ");
   const takki = "rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors";
   const virkur = "bg-[#FE653F] text-white";
   const ovirkur = "bg-white/10 hover:bg-white/20";
@@ -889,6 +950,33 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         >
           Gegnsætt
         </button>
+        <button
+          type="button"
+          aria-pressed={kynning}
+          title="Kynning: fela miða á stöngum, sýna lykil og titil — tilbúið fyrir viðskiptavin"
+          className={`${takki} ${kynning ? virkur : ovirkur}`}
+          onClick={() => setKynning((k) => !k)}
+        >
+          Kynning
+        </button>
+        <button
+          type="button"
+          title="Vista 3D-myndina sem blað með heiti staðar og tækjalykli"
+          className={`${takki} ${ovirkur}`}
+          onClick={() => {
+            const mynd = handfang.current?.vista();
+            if (!mynd) return;
+            const blad = teiknaKynningarblad({
+              mynd,
+              titill: kynningTitill,
+              undirtitill: kynningUndir,
+              lykill: kynningLykill,
+            });
+            saekjaKynningarMynd(blad, kynningarSkrarnafn(kynningTitill));
+          }}
+        >
+          Vista mynd
+        </button>
         <span className="ml-auto text-[11.5px] text-stone-400">
           {ganga
             ? "Ganga: draga = líta í kring · hjól / W S / ↑ ↓ = áfram og aftur · A D / ← → = til hliðar · shift = hraðar · tvísmella á gólf = fara þangað · Esc = hætta"
@@ -916,6 +1004,30 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-stone-500">Byggi húsið…</p>
         ) : null}
         {villa ? <p className="p-6 text-sm text-red-300">{villa}</p> : null}
+        {kynning && !hledst && !villa ? (
+          <div className="pointer-events-none absolute inset-0 z-10 p-4 text-[#1a1814]">
+            <div className="max-w-md rounded-lg bg-[#f3efe6]/92 px-4 py-3 shadow-sm ring-1 ring-black/10">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#5c574f]">
+                Slökkvitæki ehf · Brunavarnir
+              </p>
+              <h2 className="mt-1 text-[20px] font-extrabold leading-tight">{kynningTitill}</h2>
+              <p className="mt-1 text-[12px] font-semibold text-[#5c574f]">{kynningUndir}</p>
+            </div>
+            {kynningLykill.length > 0 ? (
+              <div className="absolute bottom-4 left-4 min-w-[200px] rounded-lg bg-[#f3efe6]/92 px-3 py-2.5 shadow-sm ring-1 ring-black/10">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c574f]">Tæki á teikningu</p>
+                <ul className="space-y-0.5 text-[12.5px] font-semibold">
+                  {kynningLykill.map((lid) => (
+                    <li key={lid.heiti} className="flex justify-between gap-6">
+                      <span>{lid.heiti}</span>
+                      <span className="tabular-nums text-[#5c574f]">{lid.fjoldi}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
