@@ -1,0 +1,189 @@
+.stn[data-tool="artcraft"] {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.stn[data-tool="artcraft"] .stn-body {
+  min-height: 0;
+}
+
+.stn[data-tool="artcraft"] .stn-skins {
+  display: none;
+}
+
+.ac-hub {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 28px clamp(16px, 3vw, 36px) 48px;
+}
+
+.ac-hub-in {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.ac-kicker {
+  margin: 0 0 8px;
+  font: 700 11px/1 var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-hub h1 {
+  margin: 0 0 10px;
+  font: 800 clamp(28px, 4vw, 44px)/1.05 var(--font-sans, system-ui, sans-serif);
+}
+
+.ac-lead {
+  margin: 0 0 28px;
+  max-width: 62ch;
+  color: var(--m-soft, #5a6b80);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.ac-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.ac-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 180px;
+  padding: 18px 16px 16px;
+  border: 1px solid var(--m-line, #d5dee8);
+  background: var(--m-card, #fff);
+  color: inherit;
+  text-decoration: none;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px -20px rgba(16, 32, 56, 0.6);
+}
+
+.ac-card:hover {
+  border-color: var(--m-navy, #102038);
+}
+
+.ac-ico {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.ac-card b {
+  font-size: 18px;
+}
+
+.ac-role {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-card p {
+  margin: 0;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-meta {
+  margin-top: 8px;
+  font: 600 11px/1.3 var(--font-mono, ui-monospace, monospace);
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-legal {
+  margin: 28px 0 0;
+  font-size: 12px;
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-legal a {
+  color: inherit;
+}
+
+.ac-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #111;
+}
+
+.ac-stage iframe {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #111;
+}
+
+.ac-missing {
+  margin: auto;
+  max-width: 36rem;
+  padding: 28px 20px;
+  color: #e8e8e8;
+  text-align: center;
+}
+
+.ac-missing h2 {
+  margin: 0 0 10px;
+}
+
+.ac-missing p,
+.ac-missing pre {
+  margin: 0 0 12px;
+  color: #bdbdbd;
+}
+
+.ac-missing pre {
+  padding: 10px 12px;
+  background: #1c1c1c;
+  border-radius: 8px;
+  overflow: auto;
+  text-align: left;
+}
+
+.stn[data-skin="ragnarok"][data-tool="artcraft"] {
+  background: #020202;
+}
+
+.stn[data-skin="ragnarok"] .ac-kicker {
+  color: var(--rg-gold-500);
+}
+
+.stn[data-skin="ragnarok"] .ac-hub h1 {
+  color: var(--rg-text);
+}
+
+.stn[data-skin="ragnarok"] .ac-lead,
+.stn[data-skin="ragnarok"] .ac-legal,
+.stn[data-skin="ragnarok"] .ac-role,
+.stn[data-skin="ragnarok"] .ac-card p,
+.stn[data-skin="ragnarok"] .ac-meta {
+  color: var(--rg-text-muted);
+}
+
+.stn[data-skin="ragnarok"] .ac-card {
+  background: var(--rg-steel-800, #070707);
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  box-shadow: var(--rg-glow), var(--rg-shadow);
+}
+
+.stn[data-skin="ragnarok"] .ac-card:hover {
+  border-color: var(--rg-gold-500);
+}
+
+.stn[data-skin="ragnarok"] .ac-card b {
+  color: var(--rg-text-gold);
+}

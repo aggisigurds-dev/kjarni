@@ -91,6 +91,7 @@ export default function MasterClient() {
     "Kerfi-einingar": true,
     "Vef-blokkir": false,
     "Tól & tengingar": true,
+    ArtCraft: true,
   });
   const [saving, setSaving] = useState(false);
 

@@ -47,8 +47,21 @@ export const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "🔖", nafn: "Marks", desc: "Whiteboard · möppur · covers", tag: "Tól", ready: true, href: "/marks" },
       { icon: "✎", nafn: "Prufusvæði", desc: "Blokkir · þemu · skikt", tag: "Tól", ready: true, href: "/draft" },
       { icon: "🖌️", nafn: "TurboPaint", desc: "Gólfplön — leita eftir heimilisfangi, svo teikning á borð", tag: "Tól", ready: true, href: "/kjarni/turbopaint" },
+      { icon: "🎨", nafn: "ArtCraft", desc: "Sjö opin sköpunartól — myndir, vektorar, myndbönd, PDF", tag: "Tól", ready: true, href: "/kjarni/artcraft" },
       { icon: "💳", nafn: "Payday", desc: "Reikningar", tag: "Verkfæri", ready: false },
       { icon: "📘", nafn: "Facebook", desc: "Tenging", tag: "Verkfæri", ready: false },
+    ],
+  },
+  {
+    group: "ArtCraft", sub: "Opin uppspretta sköpunartól frá getartcraft.com/apps",
+    items: [
+      { icon: "🖼️", nafn: "PhotoCraft", desc: "Myndvinnsla — lög, grímur, PSD", tag: "Tól", ready: true, href: "/kjarni/artcraft/photocraft" },
+      { icon: "✏️", nafn: "VectorCraft", desc: "Vektorteikning í Rust", tag: "Tól", ready: true, href: "/kjarni/artcraft/vectorcraft" },
+      { icon: "🎬", nafn: "FilmCraft", desc: "Myndbandsvinnsla, litur og hljóð", tag: "Tól", ready: true, href: "/kjarni/artcraft/filmcraft" },
+      { icon: "📷", nafn: "LightCraft", desc: "Myndasafn og RAW-framköllun", tag: "Tól", ready: true, href: "/kjarni/artcraft/lightcraft" },
+      { icon: "📄", nafn: "PdfCraft", desc: "Lesa, sameina, kljúfa og læsa PDF", tag: "Tól", ready: true, href: "/kjarni/artcraft/pdfcraft" },
+      { icon: "✨", nafn: "EffectCraft", desc: "Hreyfimyndir og sjónbrellur", tag: "Tól", ready: true, href: "/kjarni/artcraft/effectcraft" },
+      { icon: "📰", nafn: "DesignCraft", desc: "Síðuhönnun og umbrot", tag: "Tól", ready: true, href: "/kjarni/artcraft/designcraft" },
     ],
   },
 ];
@@ -66,6 +79,19 @@ export const QUICK_GROUPS: { title: string; items: { icon: string; label: string
       { icon: "🔖", label: "Marks", href: "/marks" },
       { icon: "✎", label: "Prufusvæði", href: "/draft" },
       { icon: "🖌️", label: "TurboPaint", href: "/kjarni/turbopaint" },
+      { icon: "🎨", label: "ArtCraft", href: "/kjarni/artcraft" },
+    ],
+  },
+  {
+    title: "ArtCraft",
+    items: [
+      { icon: "🖼️", label: "PhotoCraft", href: "/kjarni/artcraft/photocraft" },
+      { icon: "✏️", label: "VectorCraft", href: "/kjarni/artcraft/vectorcraft" },
+      { icon: "🎬", label: "FilmCraft", href: "/kjarni/artcraft/filmcraft" },
+      { icon: "📷", label: "LightCraft", href: "/kjarni/artcraft/lightcraft" },
+      { icon: "📄", label: "PdfCraft", href: "/kjarni/artcraft/pdfcraft" },
+      { icon: "✨", label: "EffectCraft", href: "/kjarni/artcraft/effectcraft" },
+      { icon: "📰", label: "DesignCraft", href: "/kjarni/artcraft/designcraft" },
     ],
   },
   {
