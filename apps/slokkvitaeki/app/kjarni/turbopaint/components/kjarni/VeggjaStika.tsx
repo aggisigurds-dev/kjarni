@@ -53,7 +53,10 @@ export function VeggjaStika() {
   // Aukaaðgerðir ritilsins (þykkt, sameina, lengja, hurð í bil) aðeins meðan hann er opinn — utan hans er stikan
   // eins og í 1. áfanga og skyggir ekki meira á teikninguna.
   const ritill = useVeggjaRitill((s) => s.virkur);
-  if (!VEGGJA_HAMIR.includes(hamur) || !selectedIds.length) return null;
+  // Þéttur veggjaritill (Agnar 09.10.2026: „Margt fyrir … Sýna bara velja, teikna, eyða, undo"): stikan víkur líka —
+  // tegund, þykkt, tengja o.fl. eru í „Meira".
+  const thettur = useVeggjaRitill((s) => s.virkur && s.thett);
+  if (thettur || !VEGGJA_HAMIR.includes(hamur) || !selectedIds.length) return null;
   const veggir = valdirVeggir(objects, selectedIds).filter((o) => !isDrawnLocked(o, layers));
   if (!veggir.length) return null;
   const tegundir = new Set(veggir.map(veggTegundAf));

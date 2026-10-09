@@ -4,6 +4,7 @@
 
 import { create } from "zustand";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "./layers";
+import { erSimi } from "./simi";
 import { useBoardStore } from "./store";
 import type { VeggTegund } from "./teikning-veggir";
 import { erVeggur } from "./veggja-leidretting";
@@ -62,6 +63,13 @@ interface RitilStada extends Vistad {
   adeinsVeggir: Record<string, boolean> | null;
   /** Forskoðun greiningar á borðinu (heimshnit): línur valinna PDF-flokka og veggirnir sem yrðu til. */
   forskodun: Forskodun | null;
+  /** Þéttur hamur (Agnar 09.10.2026: „Sýna bara… velja. Teikna. Eyða. Undo."): aðeins lítil ræma í stað gluggans.
+   * Sjálfgefinn í síma í hvert sinn sem ritillinn opnast, fullur gluggi í tölvu; „Meira" / „Minna" víxla. */
+  thett: boolean;
+  setThett: (v: boolean) => void;
+  /** Hækkar þegar vegg-keðja í vinnslu á að slitna (t.d. „Afturkalla"-hnappurinn) — yfirlagið hlustar. */
+  kedjuRof: number;
+  rjufaKedju: () => void;
   setForskodun: (f: Forskodun | null) => void;
   kveikja: (tol?: RitilTol) => void;
   slokkva: () => void;
@@ -101,6 +109,10 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
   adeinsVeggir: null,
   forskodun: null,
   setForskodun: (forskodun) => set({ forskodun }),
+  thett: false,
+  setThett: (thett) => set({ thett, hjalp: false }),
+  kedjuRof: 0,
+  rjufaKedju: () => set({ kedjuRof: get().kedjuRof + 1 }),
   thykktCm: 15,
   tegund: "veggur",
   hornalas: true,
@@ -123,7 +135,13 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
     // aðeins veggir haldast valdir
     const vegg = new Set(st.objects.filter(erVeggur).map((o) => o.id));
     st.setSelected(st.selectedIds.filter((id) => vegg.has(id)));
-    set({ virkur: true, tol, laestiTeikningu: laesti, ...(get().virkur ? {} : vistad ?? {}) });
+    set({
+      virkur: true,
+      tol,
+      laestiTeikningu: laesti,
+      // opnast þéttur í síma, fullur í tölvu — val innan opnunar („Meira"/„Minna") helst þar til lokað er
+      ...(get().virkur ? {} : { ...vistad, thett: erSimi() }),
+    });
   },
   slokkva: () => {
     const s = get();
