@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/install-artcraft.mjs",
+    "artcraft:install": "node scripts/install-artcraft.mjs",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"

@@ -2199,6 +2199,9 @@ html[data-desk-lock] .stn[data-tool="kerfi"] .k-side {
 }
 .stn[data-tool="draft"] .dw-stage { background:var(--m-bg); }
 .stn[data-tool="draft"] .dw-layer-btns button { background:var(--m-muted); color:var(--m-ink); min-width:44px; min-height:44px; }
+.stn[data-tool="artcraft"] {
+  height:100dvh; max-height:100dvh; overflow:hidden;
+}
 .stn[data-tool="turbopaint"] {
   height:100dvh; max-height:100dvh; overflow:hidden;
   --stn-h:40px;

@@ -42,7 +42,7 @@ export function StationChrome({
 
   return (
     <SkinCtx.Provider value={{ skin, setSkin }}>
-      <DesktopView enabled={tool !== "turbopaint" && tool !== "bord"}>
+      <DesktopView enabled={tool !== "turbopaint" && tool !== "artcraft" && tool !== "bord"}>
         <div className={`stn ${rgFont.variable} ${rgMono.variable}`} data-skin={skin} data-tool={tool}>
           <header className="stn-bar">
             <a className="stn-home" href="/kjarni">

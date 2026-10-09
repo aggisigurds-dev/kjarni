@@ -1,7 +1,17 @@
 # apps/slokkvitaeki
 
 Slökkvitæki/Kjarni vefurinn — Stjórnstöðin (`/kjarni`), TurboPaint
-(`/kjarni/turbopaint`), Kerfi, Skjalarinn o.fl.
+(`/kjarni/turbopaint`), ArtCraft (`/kjarni/artcraft`), Kerfi, Skjalarinn o.fl.
+
+ArtCraft-öppin sjö (PhotoCraft, VectorCraft, FilmCraft, LightCraft, PdfCraft,
+EffectCraft, DesignCraft) eru opin WASM-útgáfur frá
+[getartcraft.com/apps](https://getartcraft.com/apps). Þau eru sótt við
+`pnpm artcraft:install` / `prebuild` og hýst undir `/artcraft/<app>/`.
+
+Einkastúdíó (`/kjarni/artcraft/studio`) myndar staðbundið gegnum Automatic1111 /
+Forge / SD.Next (`--api` + CORS). Fullorðinsmyndefni er leyfilegt; kynferðislegt
+myndefni af börnum er lokað. Keyrðu `scripts/private-studio-webui.sh` til að
+sjá ræsi-skipunina.
 
 ## Deploy
 
@@ -20,7 +30,7 @@ Kjarni-monorepoið keyrir **tvö** production-lén. Þau eru ekki tvær TurboPai
 
 | Lén | App | Hvað er þarna |
 | --- | --- | --- |
-| https://kjarni.vercel.app | `apps/slokkvitaeki` | Stjórnstöð + **TurboPaint** (`/kjarni/turbopaint`) |
+| https://kjarni.vercel.app | `apps/slokkvitaeki` | Stjórnstöð + **TurboPaint** + **ArtCraft** |
 | https://slokkvitaeki.vercel.app | sama app | alias á lénið að ofan |
 | https://kjarni-3dwork.vercel.app | `apps/web` | Marks + 3dwork. `/kjarni/turbopaint` var 404; nú vísar það á kjarni.vercel.app |
 
