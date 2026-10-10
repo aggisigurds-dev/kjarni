@@ -10,4 +10,5 @@ allowBuilds:
   msgpackr-extract: true
   sharp: true
   supabase: true
+  protobufjs: false
   tesseract.js: false
