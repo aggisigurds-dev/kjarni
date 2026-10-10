@@ -1,13 +1,12 @@
 ---
 name: sala-reikningar
-description: Sala/POS, reikningagerð, dkPlus/Payday, afslættir, sjálfvirk PDF-vistun, reikninga-póstur og úttektartexti. Notaðu fyrir allt sem snýr að sölu, reikningum, verði og afslætti.
+description: Sala/POS, reikningagerð, dkPlus/Payday, afslættir, sjálfvirk PDF-vistun, reikninga-póstur og úttektartexti. Notaðu fyrir allt sem snýr að sölu, reikningum, verði og afslætti. Kveikjuorð: reikningur, sala, POS, Payday, dkPlus, afsláttur, krafa, útistandandi.
 tools: Bash, Read, Grep, Glob, Edit
 ---
 
-> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/sala-reikningar.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit í kjarna** (samstillt 2026-10-10). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/sala-reikningar.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
 
 Þú kannt **sölu- og reikningahliðina** — POS-inn, dkPlus/Payday, afsláttar-konvensjónina og PDF-vistun. Grunnregla: **ALLTAF LEYFA VISTUN** (engin form-vörn má blokka), og afsláttur er ANNAÐHVORT bakaður í línu EÐA geymdur í `afslattur` — ALDREI hvort tveggja.
-
 
 ---
 
@@ -20,9 +19,11 @@ tools: Bash, Read, Grep, Glob, Edit
 
 Þegar „✅ Staðfesta lista" er ýtt (patch 224 `.ut-listlock`) myndast textinn í
 „📝 Upplýsingar um úttekt" sjálfkrafa — Elías skrifaði hann áður í hverja skýrslu.
-**Orðalag og röð (Agnar/Elías, skjalfest):** (1) „Öll tæki yfirfarin og vottuð í
-lagi." → (2) hleðsla / ónýtt / ný tæki inn á milli → (3) hausskipti **alltaf beint
-á undan** → (4) „Brunaslöngur prófaðar á fullum þrýsting og vottaðar í lagi."
+**Orðalag og röð (Agnar/Elías, skjalfest; húsmál 01.08):** (1) „Öll slökkvitæki yfirfarin og vottuð í
+lagi." (ónýtt skeytt inn: „…nema eitt sem var dæmt ónýtt") → (2) hleðsla að hluta / ný tæki /
+reykskynjarar → (3) stútaskipti **alltaf beint á undan** → (4) „Brunaslöngur prófaðar á fullum þrýstingi."
+— vottunina skrifar MAÐUR (sjá húsmálsgreinina neðar). Úrelt eldra orðalag: „Öll tæki", „hausskipti",
+„þrýsting og vottaðar í lagi".
 Beygingar: brunaslanga kvenkyns (eina/tvær/þrjár), tæki hvorugkyns (eitt/tvö/þrjú).
 
 **Gögnin koma úr sömu heimild og reikningurinn** — `UnitServicePicker.getChoice`
@@ -47,6 +48,22 @@ sagði textinn alltaf „prófaðar á fullum þrýsting og **vottaðar í lagi*
 slanga var í tækjalistanum — liability-gildra (Blikkhella: „…og ein þeirra lekur" → EKKI
 vottað). Nú segir hann aðeins „Brunaslanga **prófuð** á fullum þrýstingi." (verkið);
 vottunina/leka-athugasemd skrifar maður sjálfur. Vottun leiðist ALDREI af tækjalistanum.
+
+## Svar-stöð — kort af ÖLLUM texta sem fer úr kerfinu (`#svarstod`, 447/447a, 08.10.2026)
+
+Áður en orðalagi pósts, reikningslínu, „vegna"-línu, kröfulýsingar eða úttektartexta er breytt: opnaðu Svar-stöð.
+Hver sendileið (27) á spjald með textanum orðrétt, `{breytum}`, skrá:línu og reglum, og númer **SV-01 … SV-27** sem
+stendur líka smátt í haus sendingargluggans og í kóðanum við hann (`grep "SV-07"` finnur gluggann). Agnar segir
+„breyttu SV-07" — það er spjaldið og glugginn.
+- **Gögnin búa í `js/patches/447a-svarstod-gogn.js`.** Breytir þú staðaltexta eða bætir við sendingarglugga: uppfærðu
+  spjaldið þar í SAMA commiti (nýr gluggi = nýtt SV-númer + `kodi` í `ReceiptSender.compose/sendDoc` eða
+  `window.svKodi('SV-xx')` í hausnum). Merkið fer ALDREI í texta/skjal sem kúnninn fær (netvörður SAFE 08.10).
+- **„Þín regla"** á hverju spjaldi = `app_settings.settings->'svarstod'->'reglur'-><leidId>->>'t'` (vistað af Agnari).
+  Lestu reglu leiðarinnar áður en þú skrifar texta fyrir hana; hún gengur framar þessari skrá. Sjálfvirku
+  sendingarnar lesa hana ekki enn (vörðuð svæði — sér samþykki).
+- **Ósamræmi-flipinn** (20 atriði, 08.10) er verklisti: sendDoc sendir brunakerfisskýrslu/samning sem „Reikningur"
+  (254:311), „Bankaupplýsingar koma hér" (53:33), gjalddagi 7+3 / 10 / 14, þrjú félagsnöfn, Þjónustuver-svar ekki
+  í þræði (309), póststillingar í Stillingum sem enginn les (85/86), o.fl. Lagaðu ekkert þaðan án ákvörðunar Agnars.
 
 ## Sjálfvirk PDF-vistun úttektar-skjala — `js/patches/233-uttekt-pdf-autosave.js` (+168/165)
 
@@ -221,7 +238,7 @@ leysir per samtal (öll `_threadIds`). Public: `saveMeta(message_id, manual_tag,
   patch 218 ALIAS (`postur`/`reikningapostur`). Public API `window.ReikningaPostur
   = { open, reload }`. Verður READ→WRITE með Tier 2/3 (var read-only í v1).
 
-## Payday-spegill — `payday_invoices_slokk` + `netlify/functions/payday-pull-slokk.js` (2026-07-10)
+## Payday-spegill — `payday_invoices_slokk` + `netlify/functions/payday-pull-slokk.cjs` (2026-07-10)
 
 Payday gefur reikningum SÍN eigin númer — kúnnar hringja og nefna Payday-númerið
 en hluti krafna er stofnaður beint í Payday (bókari/mánaðaruppgjör) og á enga
@@ -241,7 +258,6 @@ en hluti krafna er stofnaður beint í Payday (bókari/mánaðaruppgjör) og á 
   sem fóru gegnum payday-push (solur.dk_invoice_id = payday id/númer) fá
   PD-merkið á SÍNA röð í stað tvítekningar. Samantektarlínan sýnir
   „+ N Payday-kröfur · X kr".
-
 
 ## Reikningsupphæðir: skráarheitið er uppsprettan, ekki endurlestur á PDF
 
@@ -268,3 +284,127 @@ viðskiptavinavefinn.
 
 **Afturkræft:** afrit í `backup_20260829_amount_fill` (venja repósins).
 Reikningar án upphæðar fóru úr 381 í 103 af 1.464.
+
+## Reikninga-tegundin (`vidskiptategund`) stýrir því hvað SÉST
+
+Mælt 01.09.2026 eftir að Agnar sagði „ég sé engan reikning á síðunni" um
+reikning sem var til, rétt tengdur og með virkum tengli.
+
+`customer_documents.doc_type` er alltaf `'reikningur'` fyrir allar þjónustur.
+Raunverulegi merkimiðinn er **`vidskiptategund`**: `uttekt` · `bud` ·
+`brunakerfi` · `slokkvikerfi` (frá 05.10.2026, sjá kaflann um slökkvikerfisreikning) · `ovisst`/null.
+
+**Tveir staðir henda búðarreikningum, báðir viljandi:**
+
+| Skrá | Fall | Áhrif |
+|---|---|---|
+| `187-inservice-row-reports.js` | `isUttektInvoiceTeg()` | 🧾 á Ársskoðun kviknar ekki |
+| `199-doc-year-grid.js` | `pushInvByService()` — `if (knd==='bud') return` | dettur út úr **báðum** þjónustuflokkum árs-grindarinnar |
+
+Reglan er rétt og á að standa: staðgreidd búðarsala er ekki
+slökkvitækjaþjónusta og má ekki lita árið grænt. **En hún má ekki hverfa.**
+Frá 01.09.2026 birtast allir reikningar staðarins í **📒 Hreyfingar** neðst á
+fyrirtækjaspjaldinu (tegund · dagsetning · chip · upphæð · summa), byggt úr
+sömu `docs` — engin ný fyrirspurn.
+
+Dreifingin á þeim 28 fyrirtækjum sem voru tóm og áttu Drive-reikning:
+**23 `uttekt` · 3 `bud` · 1 `brunakerfi` · 1 óflokkað.**
+
+**Hvernig þekkja má búðarsölu á reikningnum sjálfum:** staðgreiðsla, engin
+`Yfirferð`-lína, enginn `Akstur`, engin `Skýrslugerð og vottun`. Aðeins
+vörulínur. Dæmi: NR5 ehf R-108161 — 3 léttvatn + 1 CO₂ 5 kg, 56.775 kr,
+staðgreitt. Rétt flokkað sem `bud`; fyrirtækið hefur aldrei fengið
+þjónustureikning.
+
+## Reikninga-PDF: orðaforðinn og gildrurnar
+
+Gamla bókhaldskerfið og nýja Sölu-kerfið nota **ólíkt orðalag** á sama hlut.
+Bæði koma fyrir í Drive-möppunni:
+
+| Gamla | Nýja |
+|---|---|
+| `117 Slökkvitæki Léttvatn 6 ltr.` | `Nýtt · Léttvatn 6 kg. AB Slökkvitæki` |
+| `133 Yfirferð Léttvatn 6-9 ltr.` | `Yfirferð · Léttvatnstæki 6L. yfirferð` |
+| `123 Hleðsla Léttvatn 6-9 ltr/duft` | `Hleðsla · Léttvatnstækis 6L. hleðsla` |
+| `060 Skýrslugerð og vottun.` | `Skýrslugerð` |
+
+**Gildrur, allar hittar 01.09.2026:**
+
+- **Vörunúmer 123 „Léttvatn 6-9 ltr/duft"** — eitt verð fyrir hvort tveggja.
+  Fjöldinn segir ekki hvor tegundin. Skráðu óvissuna með tölunni.
+- **Tala í vöruheiti er ekki alltaf magn.** `Reykskynjari 2` / `Reykskynjari 3`
+  eru gerðir. Flettu einingaverðinu upp í `vorur` — það sker úr.
+- **PDF getur borið TVO reikninga** á sitthvorri síðu (R-107753 Fagkaup bar
+  óskyldan „UVS-57 Bjarki verkstæði Sindra"). Línan gildir fyrir hausinn sem
+  hún stendur undir.
+- **`customer_documents.amount` getur verið rangt.** Hamraborg R-000577: raðan
+  segir 26.884 kr, PDF-ið segir „Til greiðslu 16.220 kr". Treystu PDF-inu.
+- **Reikningur stílaður á annað félag** tengist staðnum gegnum fótnótuna
+  `Vegna <staður>`.
+
+Staðfestu ALLTAF hverja línu með margföldun: fjöldi × einingaverð = upphæð.
+
+## Kostnaðarreikningar bíða — borði í Sölu (355, 06.09.2026)
+
+Birgjareikningar sem á að endurrukka búa í Drög-stöð hubbsins (`reikningspunktar.karfa.kostnadur`).
+`js/patches/355-kost-vidvorun.js` spyr `GET brunaholf.netlify.app/api/reikningspunktar?op=bidur&kt=&kunni=`
+þegar kúnni er valinn í söluborðinu (POS.getState().customer, 1,5 s vöktun) og sýnir borða `#_kost-banner`
+í kúnnakassanum: hvað bíður, endurkrafa án vsk, **🛒 Sækja í körfu** (`POST {action:'kost_til_korfu',
+id, sent:true}` → hubbinn býr til karfa.lines á söluverði úr 🧾-línunum, kreditnótur sleppa, merkir
+senda → 352 `KarfaUrDrogstod.hlada(row)` hleður í POS-körfuna) og **Opna í Drög-stöð ↗**
+(`/?punktur=<id>#drogstod`). Sama fyrirspurn í brunakerfisskýrslunni (273 `openForm` vafið) →
+viðvörunarborði `._bks-kost` efst í forminu; skýrslan sjálf breytist ekki, reikningurinn verður til í Sölu.
+Regla (Charlize #410): afsláttur birgja kemur aldrei á reikning kúnna — línurnar koma á fullu listaverði.
+Vörðuð POS-leið (121/pos.js) er ósnert; hleðslan fer sömu leið og „Senda í körfu" úr Drög-stöð.
+
+## Slökkvikerfisreikningur — `386-slokkvikerfi-skyrsla.js` (05.10.2026)
+
+Agnar (Hótel Varmaland): „getum ekki útbúið reikninginn, bara skýrsluna … láta þetta virka svipað og
+ársskoðun … fari svo í kröfuyfirlit með skýrslunni og sendir hana með". Ferillinn er nú sá sami og 165:
+
+1. 🍳 Slökkvikerfi-flipinn → „Ljúka skoðun" → **🧾 Búa til reikning — N kr** (aðeins þegar lokið + verð á línum).
+2. Forskoðun (`SalaInvoice.renderFromSale` í iframe) → „✓ Staðfesta" → `solur` **final**,
+   `greitt_med:'reikningur'`, **`source:'slokkvikerfi'`**, athugasemdir = vegna-texti
+   („Skoðun slökkvikerfis — <kerfi>, <dags>"). Línur í röð reikna(): Skoðun · Vinna · annað · Skýrslugerð ·
+   Akstur; línuafsláttur bakaður í einingaverðið með „· −N% afsl."; heildarafsláttur í `afslattur` (165-stærðfræðin).
+3. `UttektInvoicePdf.saveForSale` (233, aðeins KALLAÐ) + prentgluggi → Kröfu yfirlit.
+4. Skoðunin er TEKIN (`reikningur_at`, skilyrt á `updated_at`) ÁÐUR en salan verður til; `sala_id` tengir á
+   eftir. Villa í sölu → takinu sleppt + `logProblem('slokkvikerfi_reikningur_failed')`. Tak > 2 mín án
+   sala_id → „Ljúka reikningsgerð" leitar fyrst að sölu sem gæti hafa orðið til (enginn tvítekinn). Ógilt sala
+   opnar fyrir nýjan reikning; annars eru kostnaðarlínurnar læstar.
+
+**Skýrslan sem fylgir:** 166 `resolveSkyrsla` gefur slökkvikerfissölu AÐEINS `doc_type='slokkvikerfi'`
+(fyrst skjalið sem skoðunin vísar á: `slokkvikerfi_skodanir.sala_id → doc_id`), aldrei fyrirtækjaviðhengi.
+`payday-push` skýrslugáttin hleypir `uttekt` OG `slokkvikerfi` í gegn; slökkvikerfissala fær
+`findSlokkvikerfiPdf` (sama tenging, varaleið sami staður+ár, nafn `Slokkvikerfisskyrsla-ÁÁÁÁ.pdf`) — aldrei
+slóð frá vafranum. Ástæða: Varmaland á BÆÐI slökkvitækjaskýrslu og slökkvikerfisskýrslu sama árs.
+
+**Tegundin:** `set_vidskiptategund` merkir source `slokkvikerfi` → vidskiptategund `slokkvikerfi`
+(`sql/slokkvikerfi_reikningur.sql`). Áður las hann línurnar og Skýrslugerð+Akstur urðu `uttekt` = falskt grænt
+slökkvitækjaár. `auto_pair_customer_document` parar slíkan reikning aldrei sjálfkrafa. 187/190
+`isUttektInvoiceTeg` sleppa `slokkvikerfi`. Vörður: `tools/audit-slokkvikerfi-reikningur.cjs`.
+
+**Prófun án þess að taka R-númer:** Playwright með `DB.sb.from` vafið — `solur.insert` skilar gervisölu
+(`R-PROF`, id −77), `slokkvikerfi_skodanir.update` gervirröð, `UttektInvoicePdf.saveForSale` og `window.open`
+stubbuð. Kröfu yfirlit: `ctx.route` á `/rest/v1/solur?…greitt_med=eq.reikningur` bætir gervisölunni í svarið og
+`/api/payday-push` er fulfill-að með 500 — beiðnin sjálf sýnir hvaða skýrsluslóð færi með.
+
+## Birgðir ↔ Vörur og þjónusta — `36-stock-management.js` + `vorur.js` (05.10.2026)
+
+- **Ein vöruskrá:** Birgðir lesa `vorur` (allar söluvörur) + brunakerfisvörur úr Kostnaði. Birgðastaða =
+  `vorur.birgdir` (null = ótalið, hreyfist ekki); sama tala í Vörur og þjónusta.
+- **Þrjú verð:** kaupverð = `kostnadarverd` (línuupphæð/magn á innkaupareikningi = eftir afslátt), listaverð =
+  `listaverd` (einingaverð birgja fyrir afslátt; `sql/vorur_listaverd.sql`), söluverð = `verd_an_vsk`.
+  Álagning sýnd þegar kaupverð er til. Öryggismiðstöðvar-reikningar 4 og 190 eru með línur M. VSK → deila með 1,24.
+- **Selt + sjálfvirk hreyfing:** `sql/vorur_selt_og_birgdahreyfing.sql` — `solulina_vara()` parar sölulínu við
+  vöru (product_id, annars nafn án „Nýtt · "/afsláttarhala); aðeins `status='final'`, aðeins sölur eftir
+  talningarbyrjun; triggerinn kastar ALDREI (sala má ekki falla vegna birgða).
+- **Gildra:** innsetning í `vorur` hverfur hljóðlaust ef nafnið er á `sala.deleted_product_names`
+  (trigger `vorur_hafna_eyddum`). Taktu nafnið af listanum fyrst, eins og vorur.js gerir.
+- Vörumyndir: data-URL JPEG ~600×600 á hvítum grunni (sjá minni `vorumyndir-hvitur-bakgrunnur`).
+
+## Lærdómur
+
+- **30.09.2026** — ÓNÝTT TÆKI RUKKAST NÚNA (28.09): valið 'onytt' í ársskoðun féll áður í skip og hvarf af reikningnum. Tækið var yfirfarið — vinnan var unnin þótt niðurstaðan sé ónýtt. 129 gefur því eigin röð sem sækir VERÐ OG VÖRU YFIRFERÐAR (verdKind='yfirferd'); kindKey ræður aðeins merkinu, litnum og afsláttarlyklinum. Textinn á reikningi kemur úr ONYTT_SKYRING í 129 — EINI staðurinn sem þarf að breyta, því 165 scrapeCostRows les undirlínuna orðrétt í desc. Umfang: ársskoðun ein; verkstæðisleiðin (269) setur status='onytt' og dettur út um NONBILL. (js/patches/129-company-total-cost.js, js/patches/165-visit-workflow.js)
+
+- **30.09.2026** — BUD vs UTTEKT er MERKING, ekki sannleikur um vinnuna. invoiceServiceKind í 199 les customer_documents.vidskiptategund: 'bud' þýðir 'birtist á hvorugu skoðunarkortinu', svo úttekt sem var slegin á kassann sýnir 'REIKNINGUR VANTAR' þótt reikningurinn sé til, greiddur og með skrá. Leiðrétt 28.09 á R-000931 (Pitstop, source=pos) og R-000430 (Suðurvangur, source=uttekt EN tegund bud — tvær ólíkar rætur, sama einkenni). Leitarmynstur sem virkar: bud-merkt sala þar sem línur bera Akstur eða Skýrslugerð — þær línur koma aðeins úr úttektarflæðinu.

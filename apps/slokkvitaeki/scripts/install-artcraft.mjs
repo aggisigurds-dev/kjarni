@@ -22,7 +22,9 @@ const APPS_PATH = path.join(ROOT, "app/kjarni/artcraft/apps.ts");
 
 function parseApps(source) {
   const blocks = [...source.matchAll(/\{\s*id:\s*"([^"]+)"([\s\S]*?)\n\s*\},?/g)];
-  return blocks.map((block) => {
+  // Aðeins uppsetjanleg öpp (með útgáfumerki): leiðsagnarfærslur eins og { id: "hub" } og { id: "studio" } í
+  // ARTCRAFT_NAV hafa ekkert tag og eiga ekki heima hér (#183 braut bygginguna: „hub missing tag").
+  return blocks.filter((block) => /\btag:\s*"/.test(block[2])).map((block) => {
     const id = block[1];
     const body = block[2];
     const field = (name) => {
