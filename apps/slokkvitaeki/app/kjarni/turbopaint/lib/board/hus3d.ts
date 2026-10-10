@@ -17,7 +17,7 @@ import { dilarAMetraGisk } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject, SymbolObject } from "./types";
 import { innflutningsSlod } from "./uttekt";
 
-export type VeggTegund3D = "veggur" | "gler" | "hurd";
+export type VeggTegund3D = "veggur" | "gler" | "hurd" | "svalir";
 /** Eldflokkur veggjar í mínútum: 60 = EI-60, 30 = EI-30, 0 = ekki brunaveggur (eða óþekktur flokkur). */
 export type Eldflokkur = 0 | 30 | 60;
 
