@@ -62,6 +62,7 @@ import {
 import {
   DROG_BREYTA,
   drogIBord,
+  drogFingur,
   erSkjalasafnsSlod,
   erSkodun,
   heitiUrSlod,
@@ -1359,6 +1360,8 @@ export function WhiteboardApp() {
         const plan = myndir.find((o) => o.uttekt) ?? myndir[myndir.length - 1];
         if (plan && !plan.rotation) {
           useVeggjaRitill.getState().setTillogur({ planId: plan.id, lota: nyGreiningarLota(), veggir: drogIBord(drog, plan) });
+          // „Vista sem borð" merkir þessa mynd `thjalfun` (yfirfarin drög → þjálfunargögn veggjavélarinnar).
+          useSkodun.setState({ drog: { fingur: drogFingur(skodunBeidni.drog ?? ""), planId: plan.id } });
           useHamur.getState().setHamur("veggir");
           if (!useVeggjaRitill.getState().virkur) useVeggjaRitill.getState().kveikja("velja");
           const n = (t: string) => drog.filter((l) => l.tegund === t).length;

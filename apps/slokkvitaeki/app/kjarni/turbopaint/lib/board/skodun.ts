@@ -112,6 +112,29 @@ export function drogIBord(linur: readonly DrogLina[], plan: { x: number; y: numb
   }));
 }
 
+/** Fingur draga-strengsins (FNV-1a 32 bita, 8 hex-stafir): borð sem var vistað úr drögum ber hann í merkinu
+ * `thjalfun` á myndinni, svo þjálfunarpípa veggjavélarinnar (teikning-greining/thjalfun/raun_saekja.js, sama fall)
+ * þekki hvaða drög voru yfirfarin — án þess að drögin sjálf eða lykill þeirra liggi á þjóninum. */
+export function drogFingur(drog: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < drog.length; i++) {
+    h ^= drog.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** Merki sem „Vista sem borð" setur á teikninguna þegar skoðunin var opnuð með drögum: Agnar hefur yfirfarið þau og
+ * borðið er þjálfunargögn veggjavélarinnar. Myndarhluturinn ber það (`image.thjalfun`), ekki borðið, því borð getur
+ * haft fleiri blöð. */
+export interface ThjalfunMerki {
+  /** drogFingur(drög) */
+  drog: string;
+  yfirfarid: true;
+  /** Hvenær vistað (ISO). */
+  kl: string;
+}
+
 /** Þjappa drögum í `drog`-gildi (sama snið og lesaDrog les). Hnit í dílum myndar sem er `breidd` × `haed`. */
 export function skrifaDrog(linur: readonly { p: number[]; t: number; tegund?: string }[], breidd: number, haed: number): string {
   const staf: Record<string, string> = { veggur: "v", gler: "g", hurd: "h", ei60: "e", ei30: "f" };
@@ -153,9 +176,11 @@ interface SkodunState {
   grunnur: unknown;
   /** „Vista sem borð" í gangi. */
   vistar: boolean;
+  /** Drögin sem skoðunin opnaðist með (fingur + myndin sem tillögurnar fóru á) — „Vista sem borð" merkir myndina. */
+  drog: { fingur: string; planId: string } | null;
 }
 
-export const useSkodun = create<SkodunState>(() => ({ virk: false, titill: "", slod: "", grunnur: null, vistar: false }));
+export const useSkodun = create<SkodunState>(() => ({ virk: false, titill: "", slod: "", grunnur: null, vistar: false, drog: null }));
 
 export function erSkodun(): boolean {
   return useSkodun.getState().virk;

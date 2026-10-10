@@ -152,9 +152,11 @@ test("engin vistun í skoðunarham: teiknað, merkt, persistBoard/schedulePersis
 
 test("„Vista sem borð\": SAMA leið og nýtt borð + innflutningur — IndexedDB, borðalisti, upphleðsla, upsert", async () => {
   const p = await import("./persistence");
-  const { erSkodun } = await import("./skodun");
+  const { erSkodun, useSkodun, drogFingur } = await import("./skodun");
   const { useBoardStore } = await import("./store");
 
+  // Skoðunin opnaðist með drögum (#drog=) á mynd1 → „Vista sem borð" merkir myndina `thjalfun` (þjálfunargögn)
+  useSkodun.setState({ drog: { fingur: drogFingur("d1~33717,40483,34322,40481,153v"), planId: "mynd1" } });
   const r = await p.vistaSkodunSemBord();
   assert.equal(erSkodun(), false);
   assert.equal(p.getCurrentBoardId(), r.id);
@@ -183,6 +185,12 @@ test("„Vista sem borð\": SAMA leið og nýtt borð + innflutningur — Indexe
   assert.deepEqual(upsert.doc.assetIds, ["skjamynd1"]);
   assert.deepEqual(upsert.doc.frumAssetIds, ["frum1"]);
   assert.equal(upsert.doc.objects.length, 2);
+  const mynd = upsert.doc.objects.find((o: { id: string }) => o.id === "mynd1");
+  assert.equal(mynd.thjalfun.drog, "f4e8b068");
+  assert.equal(mynd.thjalfun.yfirfarid, true);
+  assert.ok(!Number.isNaN(Date.parse(mynd.thjalfun.kl)));
+  assert.equal(upsert.doc.objects.find((o: { id: string }) => o.id === "pen1").thjalfun, undefined, "aðeins teikningin merkt");
+  assert.equal(useSkodun.getState().drog, null, "drögin gleymast eftir vistun");
 
   // Eftir vistun er þetta venjulegt borð: næsta breyting vistast eins og alltaf
   idbSkrif.length = 0;
@@ -217,4 +225,26 @@ test("drög: þjappað snið fram og til baka, rusl hunsað, borðhnit", async (
   // í brotinu (#drog=…): kommur og ~ óbreytt
   const u = new URL(skodunarSlod(SLOD) + "#drog=" + s);
   assert.equal(lesaSkodunarBeidni(u.search, u.hash)?.drog, s);
+});
+
+test("drogFingur: FNV-1a 32 (sama fall og raun_saekja.js í þjálfunarpípunni)", async () => {
+  const { drogFingur } = await import("./skodun");
+  assert.equal(drogFingur(""), "811c9dc5");
+  assert.equal(drogFingur("a"), "e40c292c");
+  assert.equal(drogFingur("d1~33717,40483,34322,40481,153v"), "f4e8b068");
+});
+
+test("skoðun án draga: „Vista sem borð\" merkir ekkert", async () => {
+  const p = await import("./persistence");
+  const { useSkodun } = await import("./skodun");
+  const { useBoardStore } = await import("./store");
+  p.opnaSkodun("Án draga", SLOD);
+  assert.equal(useSkodun.getState().drog, null, "ný skoðun byrjar án draga");
+  useBoardStore.getState().addObjects([
+    { id: "mynd2", type: "image", assetId: "skjamynd1", x: 0, y: 0, width: 100, height: 70, rotation: 0, opacity: 1, locked: false, hidden: false, name: "B" },
+  ]);
+  netkoll.length = 0;
+  await p.vistaSkodunSemBord();
+  const upsert = JSON.parse(netkoll.filter((k) => k.method === "POST" && k.url.includes("/rest/v1/turbopaint_boards")).pop()?.body || "{}");
+  assert.equal(upsert.doc.objects[0].thjalfun, undefined);
 });
