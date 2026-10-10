@@ -29,6 +29,10 @@ export interface BuildPart {
   thumbnail?: string;
   /** Other builds the very same part is in. */
   alsoIn: string[];
+  /** What the bench knows about the part — for sorting it into a category. */
+  notes: string;
+  fileName: string;
+  slotId: string;
 }
 
 /** A build as the list is made from it: the parts it holds, and when it last changed. */
@@ -89,6 +93,9 @@ export function partsOfBuilds(local: BuildWithParts[], cloud: BuildWithParts[]):
         versionId: part.activeVersionId,
         thumbnail: part.thumbnail ?? pictures.get(part.activeVersionId),
         alsoIn: [],
+        notes: part.notes ?? '',
+        fileName: part.fileName ?? '',
+        slotId: part.slotId ?? '',
       };
       byIdentity.set(identity, entry);
       list.push(entry);
