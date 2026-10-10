@@ -9,7 +9,10 @@ import { useBoardStore } from "./store";
 import type { VeggTegund } from "./teikning-veggir";
 import { erVeggur } from "./veggja-leidretting";
 
-export type RitilTol = "velja" | "teikna" | "rettur" | "kljufa" | "lengja" | "eyda-kassi";
+export type RitilTol = "velja" | "teikna" | "rettur" | "kljufa" | "lengja" | "eyda-kassi" | "samthykkja-kassi" | "hafna-kassi";
+
+/** Tól sem aðeins eiga við tillögur „Finna veggi" (Veggir-hamur) — ekki í tólalista gluggans. */
+export const TILLOGU_TOL: RitilTol[] = ["samthykkja-kassi", "hafna-kassi"];
 
 export const TOL_HEITI: Record<RitilTol, { texti: string; lykill: string; titill: string }> = {
   velja: { texti: "Velja", lykill: "V", titill: "Velja veggi: smellur, Shift+smellur bætir við, dragðu kassa (til hægri = allur inni, til vinstri = snertir)" },
@@ -18,7 +21,18 @@ export const TOL_HEITI: Record<RitilTol, { texti: string; lykill: string; titill
   kljufa: { texti: "Kljúfa", lykill: "S", titill: "Smelltu á vegg þar sem á að kljúfa hann í tvennt" },
   lengja: { texti: "Lengja að", lykill: "L", titill: "Smelltu á vegginn sem á að lengja/stytta, svo á vegginn sem hann á að mæta" },
   "eyda-kassi": { texti: "Eyða í kassa", lykill: "B", titill: "Dragðu kassa — veggir í honum eyðast (til hægri = allir inni, til vinstri = snerta)" },
+  "samthykkja-kassi": { texti: "Samþykkja í kassa", lykill: "", titill: "Dragðu kassa — allar tillögur í honum verða veggir (til hægri = allar inni, til vinstri = snerta)" },
+  "hafna-kassi": { texti: "Hafna í kassa", lykill: "", titill: "Dragðu kassa — tillögum í honum er hafnað (til hægri = allar inni, til vinstri = snerta)" },
 };
+
+/** Tillögur „Finna veggi" í Veggir-ham (Agnar 10.10.2026: „aðstoð við að reyna að finna veggina"): greindir veggir birtast
+ * sem punktalínur — aðeins þeir sem eru samþykktir (smellur / kassi / allar) verða veggir. Viðmótsstaða, ekki gögn. */
+export interface Tillogur {
+  planId: string;
+  /** Greiningarlota samþykktra veggja („Eyða síðustu greiningu" tekur þá saman). */
+  lota: string;
+  veggir: { p: number[]; t: number; tegund?: VeggTegund }[];
+}
 
 const LYKILL = "tp_veggjaritill";
 
@@ -31,6 +45,8 @@ interface Vistad {
   thykktCm: number;
   tegund: VeggTegund;
   hornalas: boolean;
+  /** „Smella á línu" (Veggir-hamur): dreginn veggur festist á línur teikningarinnar undir. */
+  smellaLinu: boolean;
 }
 
 /** Vistuð tegund nýrra veggja er aðeins veggur / gler / hurð: eldveggur er valinn hverju sinni („+ Eldveggur"), svo
@@ -43,20 +59,24 @@ function lesa(): Vistad {
         thykktCm: Number(v.thykktCm) > 0 && Number(v.thykktCm) <= 200 ? Number(v.thykktCm) : 15,
         tegund: v.tegund === "gler" || v.tegund === "hurd" ? v.tegund : "veggur",
         hornalas: v.hornalas !== false,
+        smellaLinu: v.smellaLinu !== false,
       };
     }
   } catch {
     /* einkagluggi */
   }
-  return { thykktCm: 15, tegund: "veggur", hornalas: true };
+  return { thykktCm: 15, tegund: "veggur", hornalas: true, smellaLinu: true };
 }
 
 interface RitilStada extends Vistad {
   virkur: boolean;
   tol: RitilTol;
   hjalp: boolean;
-  /** Teikningin sem „Greina veggi"-spjaldið vinnur á (null = lokað). */
-  greining: { planId: string } | null;
+  /** Teikningin sem „Greina veggi"-spjaldið vinnur á (null = lokað); `tillogur` = niðurstaðan verður tillögur. */
+  greining: { planId: string; tillogur?: boolean } | null;
+  tillogur: Tillogur | null;
+  setTillogur: (t: Tillogur | null) => void;
+  setSmellaLinu: (v: boolean) => void;
   /** Lagið „Teikning" var ólæst þegar ritillinn opnaðist — það opnast aftur þegar honum er lokað. */
   laestiTeikningu: boolean;
   /** „Sýna aðeins veggi": sýnileiki laganna áður (endurheimtur þegar slökkt er). */
@@ -78,7 +98,7 @@ interface RitilStada extends Vistad {
   setTegund: (t: VeggTegund) => void;
   setHornalas: (v: boolean) => void;
   setHjalp: (v: boolean) => void;
-  opnaGreiningu: (planId: string) => void;
+  opnaGreiningu: (planId: string, tillogur?: boolean) => void;
   lokaGreiningu: () => void;
   laesaTeikningu: (laest: boolean) => void;
   setAdeinsVeggir: (v: boolean) => void;
@@ -86,7 +106,7 @@ interface RitilStada extends Vistad {
 
 function vista(s: Vistad) {
   try {
-    window.localStorage.setItem(LYKILL, JSON.stringify({ thykktCm: s.thykktCm, tegund: s.tegund, hornalas: s.hornalas }));
+    window.localStorage.setItem(LYKILL, JSON.stringify({ thykktCm: s.thykktCm, tegund: s.tegund, hornalas: s.hornalas, smellaLinu: s.smellaLinu }));
   } catch {
     /* ekkert */
   }
@@ -105,6 +125,13 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
   tol: "velja",
   hjalp: false,
   greining: null,
+  tillogur: null,
+  setTillogur: (tillogur) => set({ tillogur }),
+  smellaLinu: true,
+  setSmellaLinu: (smellaLinu) => {
+    set({ smellaLinu });
+    vista(get());
+  },
   laestiTeikningu: false,
   adeinsVeggir: null,
   forskodun: null,
@@ -168,7 +195,7 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
     vista(get());
   },
   setHjalp: (hjalp) => set({ hjalp }),
-  opnaGreiningu: (planId) => set({ greining: { planId } }),
+  opnaGreiningu: (planId, tillogur) => set({ greining: { planId, tillogur: !!tillogur } }),
   lokaGreiningu: () => set({ greining: null, forskodun: null }),
   laesaTeikningu: (laest) => {
     const t = useBoardStore.getState().layers.find((l) => l.id === LAYER_TEIKNING);

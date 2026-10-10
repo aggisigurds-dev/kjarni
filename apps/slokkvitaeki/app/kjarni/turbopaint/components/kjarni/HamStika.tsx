@@ -99,6 +99,7 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
           </button>
         ))}
       </div>
+      {h.adgerdir.length ? (
       <div className="mt-1.5 flex flex-wrap gap-1">
         {h.adgerdir.map((a) => {
           const d = ADGERDIR[a];
@@ -116,6 +117,7 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
           );
         })}
       </div>
+      ) : null}
       {h.adgerdir.includes("slt-brsl") ? (
         <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[10.5px] text-stone-400" title="Teiknar 25 m drægi kringum hverja brunaslöngu næst þegar „SLT / BRSL af teikningu“ er keyrt">
           <input

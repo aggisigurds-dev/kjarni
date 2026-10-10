@@ -178,12 +178,12 @@ export interface Kassi {
   height: number;
 }
 
-function inniKassa(x: number, y: number, k: Kassi) {
+export function inniKassa(x: number, y: number, k: Kassi) {
   return x >= k.x && y >= k.y && x <= k.x + k.width && y <= k.y + k.height;
 }
 
 /** Sker strik kassann? (Liang–Barsky) */
-function strikSkerKassa(ax: number, ay: number, bx: number, by: number, k: Kassi): boolean {
+export function strikSkerKassa(ax: number, ay: number, bx: number, by: number, k: Kassi): boolean {
   if (inniKassa(ax, ay, k) || inniKassa(bx, by, k)) return true;
   const dx = bx - ax, dy = by - ay;
   let t0 = 0, t1 = 1;
