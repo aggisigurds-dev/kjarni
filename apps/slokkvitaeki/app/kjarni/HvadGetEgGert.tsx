@@ -27,7 +27,7 @@ export function HvadGetEgGert() {
         </p>
       </header>
 
-      <div className="hvad-thririr">
+      <div className="hvad-grid">
         {THRIR.map((t) => (
           <div className="hvad-thrir" key={t.id}>
             <b>{t.nafn}</b>
