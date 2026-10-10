@@ -495,11 +495,15 @@ export function lesaVeggjaLinur(x: unknown): FrumVeggur[] {
 /** Veggirnir sem hæðin opnast með í TurboPaint: vistaðar veggjaLinur ganga fyrir; annars veggir Teikning-gluggans
  * (pdfVeggir paraðir + handdregnir) svo hægt sé að leiðrétta þá. */
 export function veggirHaedar(
-  haed: { veggjaLinur?: unknown; pdfVeggir?: unknown; veggir?: unknown },
+  haed: { veggjaLinur?: unknown; pdfVeggir?: unknown; veggir?: unknown; leidrett?: unknown },
   frum: { b: number; h: number }
 ): { veggir: FrumVeggur[]; heimild: "turbopaint" | "teikning" | null } {
   const vistadir = lesaVeggjaLinur(haed.veggjaLinur);
-  if (vistadir.length) return { veggir: vistadir, heimild: "turbopaint" };
+  // `leidrett` + fylki merkir að TurboPaint-yfirferðin sé sannleikurinn, líka þegar fylkið er tómt. Annars myndu
+  // PDF-veggirnir lifna aftur eftir að notandinn eyddi röngum veggjum og 3D sýndi annað en samþykkta 2D-yfirlagið.
+  if (vistadir.length || (haed.leidrett && Array.isArray(haed.veggjaLinur))) {
+    return { veggir: vistadir, heimild: "turbopaint" };
+  }
   const pdf = Array.isArray(haed.pdfVeggir) ? veggirUrPdfStrikum(haed.pdfVeggir as number[][], frum) : [];
   const hand = Array.isArray(haed.veggir) ? veggirUrHanddregnum(haed.veggir as number[][], frum) : [];
   const veggir = [...pdf, ...hand];
