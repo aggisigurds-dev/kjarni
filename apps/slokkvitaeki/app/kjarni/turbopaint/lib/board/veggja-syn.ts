@@ -29,8 +29,18 @@ function lesa(): boolean {
   }
 }
 
-export const useVeggjaSyn = create<{ lita: boolean; setLita: (v: boolean) => void; vixla: () => void; hlada: () => void }>((set, get) => ({
+export const useVeggjaSyn = create<{
+  lita: boolean;
+  setLita: (v: boolean) => void;
+  vixla: () => void;
+  hlada: () => void;
+  /** Veggir-hamur: allt annað en veggir dempað (teikningin hálfgagnsæ, tákn og annað nær ósýnilegt). Aðeins sýn. */
+  dempa: boolean;
+  setDempa: (v: boolean) => void;
+}>((set, get) => ({
   lita: false,
+  dempa: false,
+  setDempa: (dempa) => set({ dempa }),
   setLita: (lita) => {
     try {
       window.localStorage.setItem(LITA_VEGGI_LYKILL, lita ? "1" : "0");
@@ -43,6 +53,11 @@ export const useVeggjaSyn = create<{ lita: boolean; setLita: (v: boolean) => voi
   /** Les vistað val eftir hydration (forðast misræmi milli þjóns og vafra). */
   hlada: () => set({ lita: lesa() }),
 }));
+
+/** Ógagnsæi hlutar sem ekki er veggur í Veggir-ham: teikningin sést (til að rekja veggina), annað víkur. */
+export function dempadOgagnsaei(opacity: number, erMynd: boolean): number {
+  return opacity * (erMynd ? 0.6 : 0.25);
+}
 
 /** Liturinn sem veggurinn er TEIKNAÐUR í: skær litur tegundarinnar þegar „Lita veggi" er á, annars geymdi liturinn. */
 export function synilegurVegglitur(geymdur: string, tegund: VeggTegund | undefined, lita: boolean): string {

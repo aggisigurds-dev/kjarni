@@ -60,9 +60,12 @@ import {
   vistaSkodunSemBord,
 } from "../../lib/board/persistence";
 import {
+  DROG_BREYTA,
+  drogIBord,
   erSkjalasafnsSlod,
   erSkodun,
   heitiUrSlod,
+  lesaDrog,
   lesaSkodunarBeidni,
   skodunBreytt,
   useSkodun,
@@ -215,6 +218,15 @@ export function WhiteboardApp() {
   // Eiginleika-panellinn sem yfirlag á síma/spjaldtölvu (< lg) — á desktop er
   // hann fastur dálkur til hægri eins og áður.
   const [panelOpen, setPanelOpen] = useState(false);
+  // Veggir-hamur í síma: skúffan (hægra spjaldið) víkur þegar tól er valið eða „Finna veggi" opnast — annars skyggir
+  // hún (og bakgrunnur hennar) á teikninguna og greiningarspjaldið.
+  useEffect(
+    () =>
+      useVeggjaRitill.subscribe((s, p) => {
+        if ((s.greining && !p.greining) || (s.virkur && (s.tol !== p.tol || s.tegund !== p.tegund))) setPanelOpen(false);
+      }),
+    []
+  );
   const markBusyRef = useRef(false);
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);
@@ -242,7 +254,7 @@ export function WhiteboardApp() {
   const selectedIds = useBoardStore((s) => s.selectedIds);
   // Skoðunarhamur (`?skoda=<slóð teikningar>&titill=<heiti>`, lib/board/skodun.ts): teikningin opnast í minni, ekkert
   // borð verður til fyrr en „Vista sem borð". Lesið einu sinni við ræsingu (síðan er aðeins teiknuð í vafranum).
-  const [skodunBeidni] = useState(() => (typeof window === "undefined" ? null : lesaSkodunarBeidni(window.location.search)));
+  const [skodunBeidni] = useState(() => (typeof window === "undefined" ? null : lesaSkodunarBeidni(window.location.search, window.location.hash)));
   const skodunVirk = useSkodun((s) => s.virk);
   const skodunVistar = useSkodun((s) => s.vistar);
 
@@ -1339,6 +1351,20 @@ export function WhiteboardApp() {
           toast.error(err instanceof Error ? err.message : "Gat ekki sótt teikninguna");
         }
       }
+      // Drög (`&drog=`, þjálfunargögn veggjavélarinnar sem bíða yfirferðar): veggir / hurðir / gler sem TILLÖGUR í
+      // Veggir-ham — Agnar samþykkir (smellur / kassi / allar), hafnar (Shift+smellur) og vistar með „Vista sem borð".
+      const drog = lesaDrog(skodunBeidni.drog);
+      if (drog) {
+        const myndir = useBoardStore.getState().objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden);
+        const plan = myndir.find((o) => o.uttekt) ?? myndir[myndir.length - 1];
+        if (plan && !plan.rotation) {
+          useVeggjaRitill.getState().setTillogur({ planId: plan.id, lota: nyGreiningarLota(), veggir: drogIBord(drog, plan) });
+          useHamur.getState().setHamur("veggir");
+          if (!useVeggjaRitill.getState().virkur) useVeggjaRitill.getState().kveikja("velja");
+          const n = (t: string) => drog.filter((l) => l.tegund === t).length;
+          toast.message(`Drög: ${n("veggur") + n("ei60") + n("ei30")} veggir · ${n("hurd")} hurðir · ${n("gler")} gler sem tillögur — samþykktu / hafnaðu og „Vista sem borð"`, { duration: 6000 });
+        }
+      }
       // Grunnlínan: það sem kom inn. Teikni/merki notandinn eitthvað er varað við áður en skoðuninni er hent.
       if (erSkodun()) useSkodun.setState({ grunnur: useBoardStore.getState().objects });
     })();
@@ -1361,7 +1387,7 @@ export function WhiteboardApp() {
       const r = await vistaSkodunSemBord();
       // Endurhleðsla opnar nú nýja borðið, ekki nýja skoðun.
       const hrein = new URL(window.location.href);
-      [SKODUN_BREYTA, TITILL_BREYTA].forEach((k) => hrein.searchParams.delete(k));
+      [SKODUN_BREYTA, TITILL_BREYTA, DROG_BREYTA].forEach((k) => hrein.searchParams.delete(k));
       window.history.replaceState({}, "", hrein.pathname + hrein.search);
       const nafn = useBoardStore.getState().name;
       if (r.sky === "synced") toast.success(`Vistað sem borð „${nafn}" — opnast á öllum tækjum`);

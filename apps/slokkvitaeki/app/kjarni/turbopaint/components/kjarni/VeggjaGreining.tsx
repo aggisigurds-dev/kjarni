@@ -86,7 +86,7 @@ function veggirTeikningar(objects: BoardObject[], plan: ImageObject): LineObject
   });
 }
 
-export function VeggjaGreining({ planId }: { planId: string }) {
+export function VeggjaGreining({ planId, tillogur = false }: { planId: string; tillogur?: boolean }) {
   const objects = useBoardStore((s) => s.objects);
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   const plan = objects.find((o): o is ImageObject => o.id === planId && o.type === "image") ?? null;
@@ -152,7 +152,7 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         let veggir: Butur[] = [];
         let aths: string | undefined;
         try {
-          const g = await greinaVeggiSkonnunar(p, framvinda("Greini veggi úr myndinni (eins og Teikning)…"));
+          const g = await greinaVeggiSkonnunar(p, framvinda("Greini veggi úr myndinni (eins og Teikning)…"), kvardiNu());
           veggir = g.veggir;
           const t = g.talning;
           console.info(`[veggir] skönnun: ${JSON.stringify(t)}`);
@@ -220,7 +220,7 @@ export function VeggjaGreining({ planId }: { planId: string }) {
             pt.map((v) => ({ ...v, p: v.p.map((n) => n * q), t: v.t * q }))
           ).thekja;
         }
-        // Þykktarþak (≤ 40 cm): skástrikun pöruð í „veggi" verður aldrei að þykkum svörtum klessum.
+        // Þykktarþak (≤ 35 cm): skástrikun pöruð í „veggi" verður aldrei að þykkum svörtum klessum.
         const bord = klemmaGreindaThykkt(ptIBord(pt, plan, sida.breidd, sida.haed), kvardiNu());
         setNid({ veggir: bord, linur: strik.length, thekja });
         const kx = plan.width / sida.breidd, ky = plan.height / sida.haed;
@@ -448,6 +448,21 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         : `${eyda.length} veggjum skipt út fyrir ${nyir.length}`) +
         ` · alls ${talningTexti(t)} · ⌘Z afturkallar alla greininguna í einu skrefi`
     );
+    loka();
+  };
+
+  /** Veggir-hamur: niðurstaðan verður TILLÖGUR (punktalínur) — aðeins samþykktar verða veggir. */
+  const synaTillogur = () => {
+    if (!plan || !samruni) return;
+    const veggir = samruni.baeta;
+    if (!veggir.length) {
+      toast.message("Ekkert nýtt — allir greindu veggirnir eru þegar á teikningunni");
+      loka();
+      return;
+    }
+    useVeggjaRitill.getState().setTillogur({ planId: plan.id, lota: nyGreiningarLota(), veggir });
+    if (useVeggjaRitill.getState().tol !== "velja") useVeggjaRitill.getState().setTol("velja");
+    toast.success(`${veggir.length} tillögur — smelltu á punktalínu til að samþykkja, Shift+smellur hafnar`, { duration: 3500 });
     loka();
   };
 
@@ -685,7 +700,25 @@ export function VeggjaGreining({ planId }: { planId: string }) {
         </div>
       ) : null}
 
-      {nid && samruni && hamur !== "les" && !stadfesta ? (
+      {tillogur && nid && samruni && hamur !== "les" ? (
+        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-white/10 pt-2">
+          <button
+            type="button"
+            autoFocus
+            data-synatillogur
+            disabled={reiknar || !samruni.baeta.length}
+            onClick={synaTillogur}
+            className={`${btn} bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50`}
+            title={`${samruni.baeta.length} nýir veggir sem tillögur · ${samruni.tviteknir} tvíteknir slepptir — ekkert fer á teikninguna fyrr en þú samþykkir`}
+          >
+            Sýna sem tillögur ({samruni.baeta.length})
+          </button>
+          <button type="button" onClick={loka} className={`${btn} bg-white/5 hover:bg-white/10`}>
+            Hætta við
+          </button>
+        </div>
+      ) : null}
+      {!tillogur && nid && samruni && hamur !== "les" && !stadfesta ? (
         <div className="mt-2 border-t border-white/10 pt-2">
           {fyrir.length ? (
             <>

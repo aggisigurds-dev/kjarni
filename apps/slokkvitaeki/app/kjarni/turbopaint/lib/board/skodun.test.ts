@@ -190,3 +190,31 @@ test("„Vista sem borð\": SAMA leið og nýtt borð + innflutningur — Indexe
   await p.persistBoard();
   assert.ok(idbSkrif.includes("put tp-board-v1:" + r.id));
 });
+
+test("drög: þjappað snið fram og til baka, rusl hunsað, borðhnit", async () => {
+  const { lesaDrog, skrifaDrog, drogIBord, lesaSkodunarBeidni, skodunarSlod } = await import("./skodun");
+  const s = skrifaDrog(
+    [
+      { p: [100, 200, 900, 200], t: 15, tegund: "veggur" },
+      { p: [300, 200, 390, 200], t: 15, tegund: "hurd" },
+      { p: [500, 50, 700, 50], t: 8, tegund: "gler" },
+    ],
+    1000,
+    500
+  );
+  assert.ok(s.startsWith("d1~"));
+  const d = lesaDrog(s + "~rusl~1,2,3~99999999,0,0,0,5v")!;
+  assert.equal(d.length, 3);
+  assert.deepEqual(d.map((l) => l.tegund), ["veggur", "hurd", "gler"]);
+  const b = drogIBord(d, { x: 10, y: 20, width: 2000, height: 1000 });
+  assert.deepEqual(b[1].p, [10 + 600, 20 + 400, 10 + 780, 20 + 400]);
+  assert.equal(b[0].t, 30);
+  assert.equal(lesaDrog("rusl"), null);
+  assert.equal(lesaDrog("d1~"), null);
+  const slod = skodunarSlod(SLOD, "Berjavellir 6") + "&drog=" + encodeURIComponent(s);
+  assert.equal(lesaSkodunarBeidni(new URL(slod).search)?.drog, s);
+  assert.equal(lesaSkodunarBeidni(new URL(skodunarSlod(SLOD)).search)?.drog, undefined);
+  // í brotinu (#drog=…): kommur og ~ óbreytt
+  const u = new URL(skodunarSlod(SLOD) + "#drog=" + s);
+  assert.equal(lesaSkodunarBeidni(u.search, u.hash)?.drog, s);
+});
