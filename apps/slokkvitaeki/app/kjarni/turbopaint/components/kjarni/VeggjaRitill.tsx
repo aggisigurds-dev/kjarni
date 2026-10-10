@@ -25,6 +25,7 @@ import {
   MousePointer2,
   PencilLine,
   PencilRuler,
+  DoorOpen,
   ScanSearch,
   Scissors,
   Square,
@@ -41,13 +42,16 @@ import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
-import type { LineObject } from "../../lib/board/types";
+import type { ImageObject, LineObject } from "../../lib/board/types";
+import { hurdirTeikningar } from "../../lib/board/hurdabogar-mynd";
+import type { HLina } from "../../lib/board/veggja-hreinsun";
 import { erVeggur, tengjaVeggi, tengjaVikmork, VEGG_LITIR } from "../../lib/board/veggja-leidretting";
 import {
   faeraEnda,
   greiningarLotur,
   heimsPunktar,
   hlidra,
+  nyGreiningarLota,
   metraTexti,
   rettHyrningur,
   smella,
@@ -297,14 +301,15 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     }
     if (!virkur) return;
 
-    // tillögur „Finna veggi": punktalínur (blágrænar) — smellur samþykkir, Shift+smellur hafnar
+    // tillögur „Finna veggi" / „Finna hurðir": punktalínur (veggir blágrænir, gler blátt, hurðir rauðar) — smellur
+    // samþykkir, Shift+smellur hafnar
     if (r.tillogur) {
       ctx.setLineDash([9, 6]);
       ctx.lineCap = "butt";
       for (const v of r.tillogur.veggir) {
         ctx.beginPath();
         slod(v.p);
-        ctx.strokeStyle = v.tegund === "gler" ? "rgba(37,99,235,0.85)" : "rgba(13,148,136,0.9)";
+        ctx.strokeStyle = v.tegund === "gler" ? "rgba(37,99,235,0.85)" : v.tegund === "hurd" ? "rgba(220,38,38,0.9)" : "rgba(13,148,136,0.9)";
         ctx.lineWidth = Math.max(3, v.t * k.scale);
         ctx.stroke();
       }
@@ -1624,6 +1629,59 @@ export function VeggjaHamSpjald() {
     if (!useVeggjaRitill.getState().virkur) r.kveikja("velja");
     r.opnaGreiningu(id, true);
   };
+  const [leitarHurdir, setLeitarHurdir] = useState(false);
+  const finnaHurdir = async () => {
+    const id = teikningTilGreiningar();
+    if (!id) return;
+    const st = useBoardStore.getState();
+    const plan = st.objects.find((o): o is ImageObject => o.id === id && o.type === "image");
+    const dpm = ritillDilarAMetra(st.objects, st.pixelsPerMeter);
+    if (!plan || !dpm) {
+      toast.error("Kvarði teikningarinnar er óþekktur — settu kvarðann (K) fyrst");
+      return;
+    }
+    if (!useVeggjaRitill.getState().virkur) r.kveikja("velja");
+    setLeitarHurdir(true);
+    try {
+      const tl = useVeggjaRitill.getState().tillogur;
+      const tlHer = tl && tl.planId === id ? tl.veggir : [];
+      // veggir borðsins OG veggjatillögur sem bíða (Finna veggi → Finna hurðir áður en samþykkt er)
+      const allar: HLina[] = [
+        ...ritillVeggir().map((o) => ({ p: heimsPunktar(o), t: o.strokeWidth, ...(o.veggTegund ? { tegund: o.veggTegund } : {}) })),
+        ...tlHer.filter((v) => v.tegund !== "hurd"),
+      ];
+      const erV = (l: HLina) => !l.tegund || l.tegund === "veggur" || l.tegund === "ei60" || l.tegund === "ei30";
+      const veggir = allar.filter(erV), adrar = allar.filter((l) => !erV(l));
+      let kassi: { x0: number; y0: number; x1: number; y1: number } | null = null;
+      for (const l of veggir)
+        for (let i = 0; i + 1 < l.p.length; i += 2)
+          kassi = kassi
+            ? { x0: Math.min(kassi.x0, l.p[i]), y0: Math.min(kassi.y0, l.p[i + 1]), x1: Math.max(kassi.x1, l.p[i]), y1: Math.max(kassi.y1, l.p[i + 1]) }
+            : { x0: l.p[i], y0: l.p[i + 1], x1: l.p[i], y1: l.p[i + 1] };
+      if (kassi) kassi = { x0: kassi.x0 - 2 * dpm, y0: kassi.y0 - 2 * dpm, x1: kassi.x1 + 2 * dpm, y1: kassi.y1 + 2 * dpm };
+      const nid = await hurdirTeikningar(plan, veggir, adrar, dpm, { kassi });
+      console.info(`[hurðir] ${nid.bogar} bogar · ${nid.urBilum} úr bilum · ${nid.urBogum} úr bogum · ${nid.ms} ms`);
+      if (!nid.hurdir.length) {
+        toast.message(veggir.length ? `Engar hurðir fundust (${nid.bogar} hurðabogar)` : "Engar hurðir fundust — finndu eða teiknaðu veggina fyrst", { duration: 2500 });
+        return;
+      }
+      const nu = useVeggjaRitill.getState().tillogur;
+      const fyrri = nu && nu.planId === id ? nu.veggir.filter((v) => v.tegund !== "hurd") : [];
+      useVeggjaRitill.getState().setTillogur({
+        planId: id,
+        lota: nu && nu.planId === id ? nu.lota : nyGreiningarLota(),
+        veggir: [...fyrri, ...nid.hurdir.map((h) => ({ p: h.p, t: h.t, tegund: "hurd" as const }))],
+      });
+      toast.success(
+        `${nid.hurdir.length} hurðir (${nid.urBogum} úr hurðabogum, ${nid.urBilum} úr bilum) — rauðar punktalínur: smellur samþykkir, Shift+smellur hafnar`,
+        { duration: 4000 }
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Hurðagreining mistókst");
+    } finally {
+      setLeitarHurdir(false);
+    }
+  };
   const tolTakki = (t: RitilTol, texti: string, takn: ReactNode, titill: string) => (
     <button
       type="button"
@@ -1735,6 +1793,17 @@ export function VeggjaHamSpjald() {
       >
         <ScanSearch className="size-3.5" />
         {greinir ? "Greini…" : "Finna veggi (tillögur)"}
+      </button>
+      <button
+        type="button"
+        data-veggir-finna-hurdir
+        disabled={leitarHurdir || greinir}
+        onClick={() => void finnaHurdir()}
+        title="Finna hurðir: hurðabogar (fjórðungshringur frá hjör) og op í veggjum — birtast sem rauðar tillögur; samþykkt hurð klippir vegginn undir sér"
+        className={`${btn} mt-1 w-full justify-center bg-red-900/50 ring-1 ring-red-400/40 hover:bg-red-900/70 disabled:opacity-50`}
+      >
+        <DoorOpen className="size-3.5" />
+        {leitarHurdir ? "Leita að hurðum…" : "Finna hurðir (tillögur)"}
       </button>
       {tillogur ? (
         <div data-veggir-tillogur={tillogur} className="mt-1.5 rounded-md bg-teal-900/30 p-1.5 ring-1 ring-teal-400/25">
