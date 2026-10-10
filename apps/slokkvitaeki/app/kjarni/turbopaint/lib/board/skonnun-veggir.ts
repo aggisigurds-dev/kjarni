@@ -9,7 +9,12 @@
 // bútar [ax, ay, bx, by, þykkt] í dílum FRUMMYNDAR miðað við efra vinstra horn svæðisins (= „stig1" í 383).
 // Vafraleiðin (mynd → grátóna) er í skonnun-veggir-mynd.ts.
 
+import { siaVeggi, type SiaTalning } from "./veggja-linur";
+
 export type Butur5 = number[];
+
+/** Punktar (pt) blaðsins á metra í kvarða 1:100 (1 m = 1 cm á blaði). */
+const PT_A_METRA_1_100 = 72 / 2.54;
 
 // ── formfræði (383: summutafla, kassi, svaedi) ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +93,10 @@ export interface HreinsunStillingar {
   fylla?: boolean;
   /** Viðmiðsbreidd (vinnudílar) sem þröskuldarnir miðast við — 383 VIDMID_3D. */
   vidmid?: number;
+  /** Dílar FRUMMYNDAR á metra (kvarði borðsins); vantar = 1:100 reiknað af stærð blaðsins. */
+  dilarAMetra?: number | null;
+  /** Án síunar veggja (veggja-linur.ts) — aðeins til samanburðar. */
+  anSiu?: boolean;
 }
 
 export function hreinsaGogn(gra: Uint8Array, W: number, H: number, o: HreinsunStillingar = {}) {
@@ -849,6 +858,8 @@ export interface Talning {
   hurdir?: number;
   metrar?: number;
   ms?: number;
+  /** Felldir / klipptir í síun veggja (parket, skástrik, húsgögn, þykktarþak). */
+  sia?: SiaTalning;
 }
 
 /** 383 veggirUrMynd: veggir skönnunar sem heilir bútar í dílum myndarinnar sem hreinsað var (skurðurinn). */
@@ -928,6 +939,21 @@ export function skonnunarVeggir(gra: Uint8Array, W: number, H: number, kvardi: n
   talning.utiSia = butar.length - sia.length;
   if (sia.length >= butar.length * 0.5) butar = sia;
   const kE = Math.max(fb, fh) / 2384;
+  // Greina veggi betur (Agnar 10.10.2026, Berjavellir 6): hver veggur mældur í myndinni — parket / flísar, skástrik,
+  // húsgögn og bekkir felld, þykktin klippt í kjarnann (≤ 35 cm). Kvarðinn: borðsins, annars 1:100 af stærð blaðsins.
+  if (!o.anSiu) {
+    const dpmFrum = o.dilarAMetra && o.dilarAMetra > 0 ? o.dilarAMetra : PT_A_METRA_1_100 * kE;
+    const k = r.kvardi;
+    const s = siaVeggi(
+      butar.map((v) => [v[0] * k, v[1] * k, v[2] * k, v[3] * k, (v[4] || 0) * k]),
+      r.gra,
+      r.W,
+      r.H,
+      { dpm: dpmFrum * k }
+    );
+    talning.sia = s.talning;
+    butar = s.veggir.map((v) => v.map((n) => n / k));
+  }
   const gler = glerIBilum(butar, r.gra, r.W, r.H, r.kvardi, kE);
   const hurdir = hurdagot(butar, gler, kE);
   const tengdir = tengdirVeggir(butar, gler, hurdir, kE, 170 * kE);

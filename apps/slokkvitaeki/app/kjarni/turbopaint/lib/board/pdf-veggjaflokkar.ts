@@ -6,6 +6,7 @@
 //
 // Allt í punktum síðunnar (pt) þar til varpað er á borðið.
 
+import { VEGGUR_HAMARK_CM } from "./veggja-linur";
 import { veljaVeggjaflokk, type Strik } from "./pdf-veggir";
 import { veggirUrPdfStrikum, type FrumVeggur, type PdfVeggjaStillingar } from "./teikning-veggir";
 
@@ -70,10 +71,11 @@ export function pdfErSkonnun(flokkar: Record<string, Strik[]>): boolean {
   return pt * PT_I_METRUM < SKONNUN_HAMARK_M;
 }
 
-/** Hámarksþykkt greinds veggjar (cm): mistök í greiningu mega aldrei mála þykkar svartar klessur. */
-export const GREINDUR_VEGGUR_HAMARK_CM = 40;
+/** Hámarksþykkt greinds veggjar (cm): mistök í greiningu mega aldrei mála þykkar svartar klessur. 40 → 35 cm (Agnar
+ * 10.10.2026, Berjavellir 6: „koma leiðinlega þykkir út") — sama þak og síun skönnunar (veggja-linur.ts). */
+export const GREINDUR_VEGGUR_HAMARK_CM = VEGGUR_HAMARK_CM;
 
-/** Klemmir þykkt greindra veggja (borðdílar): ≤ 40 cm í kvarða borðsins; óþekktur kvarði → ≤ 3× miðgildi þykktar. */
+/** Klemmir þykkt greindra veggja (borðdílar): ≤ 35 cm í kvarða borðsins; óþekktur kvarði → ≤ 3× miðgildi þykktar. */
 export function klemmaGreindaThykkt<T extends { t: number }>(veggir: T[], dilarAMetra: number | null): T[] {
   if (!veggir.length) return veggir;
   let hamark: number;

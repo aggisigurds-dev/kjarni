@@ -4,6 +4,7 @@
  * table so alternatives for each slot sit side by side.
  */
 
+import type { CategoryValue } from './categories';
 import type { HardwareSpec } from './hardware';
 
 export interface Vec3 {
@@ -78,6 +79,12 @@ export interface Part {
   freePos?: Vec3;
   /** In the Partasafn: shown under Uppáhalds as well. */
   starred?: boolean;
+  /** In the Partasafn: which of the user's collections the part is saved in. */
+  collectionId?: string;
+  /** In the Partasafn: Body, Innvols, … — `none` when the user chose Óflokkað. */
+  category?: CategoryValue;
+  /** The category is the auto-sorter's suggestion, not yet confirmed by the user. */
+  categoryAuto?: boolean;
   addedAt: number;
 }
 

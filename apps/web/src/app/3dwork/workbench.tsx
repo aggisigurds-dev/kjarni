@@ -249,7 +249,9 @@ import { BuilderPanel } from './builder-panel';
 import { PartsLibrary, type LibraryTab } from './parts-library';
 import { NameDialog } from './name-dialog';
 import { HammerDialog } from './hammer-dialog';
+import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
 import { addFavorite } from '@/lib/3dwork/favorites';
+import { classifyPart, readMark } from '@/lib/3dwork/categories';
 import {
   bumpVersionName,
   copyBuild,
@@ -457,6 +459,8 @@ export function Workbench({
   // "Vista í Partasafn…" for the selected part, and "Vista sem…" for the build.
   const [saveAsPart, setSaveAsPart] = useState<{ partId: string; name: string } | null>(null);
   const [saveAsStarred, setSaveAsStarred] = useState(false);
+  // Which collection and category the part goes into.
+  const [saveAsTarget, setSaveAsTarget] = useState<SaveTarget>({});
   const [saveBuildAs, setSaveBuildAs] = useState(false);
   const [showHammer, setShowHammer] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
@@ -4172,12 +4176,23 @@ export function Workbench({
       return;
     }
     setSaveAsStarred(false);
+    const guess = classifyPart({
+      name: part.name,
+      notes: part.notes,
+      fileName: part.fileName,
+      slotId: part.slotId,
+      projectName: project.name,
+    }).category;
+    setSaveAsTarget({
+      collectionId: lastSaveCollection(),
+      category: readMark(part.category, part.categoryAuto) ?? (guess ? { category: guess, auto: true } : undefined),
+    });
     setSaveAsPart({ partId: part.id, name: suggestLibraryName(part) });
-  }, [selectedPart]);
+  }, [selectedPart, project.name]);
 
   /** Put a part into the Partasafn under a name, as it is turned and scaled here. */
   const storeInLibrary = useCallback(
-    async (partId: string, name: string, starred: boolean) => {
+    async (partId: string, name: string, starred: boolean, target: SaveTarget) => {
       const part = project.parts.find((candidate) => candidate.id === partId);
       const soup = part ? soupOfPart(part.id) : undefined;
       if (!part || !soup) {
@@ -4194,7 +4209,7 @@ export function Workbench({
           ? bakeTransform(soup, { position: { x: 0, y: 0, z: 0 }, rotation, scale })
           : soup;
         const look = lookFor(part);
-        await addFavorite(
+        const saved = await addFavorite(
           {
             name,
             color: part.color,
@@ -4202,9 +4217,13 @@ export function Workbench({
             finishId: part.finishId,
             thumbnail: turned || !part.thumbnail ? renderThumbnail(mesh, look.color, look) : part.thumbnail,
             starred,
+            collectionId: target.newCollectionName === undefined ? target.collectionId : undefined,
+            newCollectionName: target.newCollectionName?.trim() || undefined,
+            category: target.category,
           },
           mesh
         );
+        rememberSaveCollection(saved.collectionId);
         setSaveAsPart(null);
         toast.success(`Vistað í Partasafn sem „${name}“ — á öllum tölvum.`);
       } catch (error) {
@@ -8069,8 +8088,16 @@ export function Workbench({
         confirmLabel="Vista"
         busy={Boolean(busy)}
         onCancel={() => setSaveAsPart(null)}
-        onConfirm={(name) => (saveAsPart ? storeInLibrary(saveAsPart.partId, name, saveAsStarred) : undefined)}
+        onConfirm={(name) => {
+          if (!saveAsPart) return undefined;
+          if (!saveTargetReady(saveAsTarget)) {
+            toast.error('Gefðu nýja safninu nafn.');
+            return undefined;
+          }
+          return storeInLibrary(saveAsPart.partId, name, saveAsStarred, saveAsTarget);
+        }}
       >
+        <SaveTargetFields value={saveAsTarget} onChange={setSaveAsTarget} disabled={Boolean(busy)} />
         <label className="flex items-center gap-2 text-[0.75rem] text-[var(--wb-ink)]">
           <input type="checkbox" checked={saveAsStarred} onChange={(event) => setSaveAsStarred(event.target.checked)} />
           <Star className="h-3.5 w-3.5 text-amber-500" />

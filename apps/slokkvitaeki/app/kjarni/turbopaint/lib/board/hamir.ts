@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 
-export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunakerfi" | "rymi";
+export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunakerfi" | "rymi" | "veggir";
 
 /** Aðgerðir sem hamstikan getur sýnt; WhiteboardApp tengir hverja við sína virkni. */
 export type HamAdgerd =
@@ -116,6 +116,16 @@ export const HAMIR: Hamur[] = [
     lysing: "Teiknaðu rýmin og merktu hvað er klárt — gátreitir og staða hvers rýmis.",
     adgerdir: ["rymi", "gatreitur"],
     takn: ["wc", "stairs", "elevator", "pin"],
+  },
+  {
+    // Agnar 10.10.2026: „bætt við öðrum ham þarna sem er bara veggir, og aðstoð við að reyna að finna veggina". Aðeins
+    // veggjalagið er virkt (annað dempað, veggjaritillinn tekur við músinni); tólin búa í hægra spjaldinu (VeggjaHamSpjald).
+    id: "veggir",
+    heiti: "Veggir",
+    stutt: "Veggir",
+    lysing: "Aðeins veggirnir: teiknaðu, veldu og eyddu veggjum — „Finna veggi“ stingur upp á veggjum sem þú samþykkir eða hafnar, og nýr veggur smellur á línur teikningarinnar.",
+    adgerdir: [],
+    takn: null,
   },
 ];
 
