@@ -21,6 +21,7 @@ import { Slider } from "../ui/slider";
 import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
 import { HamStika } from "./HamStika";
+import { VeggjaHamSpjald } from "./VeggjaRitill";
 import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { RoomList } from "./RoomList";
 import { CustomColorSwatch } from "./ColorPicker";
@@ -62,6 +63,8 @@ const HAM_HOPAR: Record<HamurId, LayerGroupId[]> = {
   brunathettingar: ["eldveggur", "gegnumtak", "kalt", "heitt", "skolp", "loftræsting", "hitakerfi"],
   brunakerfi: ["takn"],
   rymi: ["rými"],
+  // Veggir-hamur: tólin í VeggjaHamSpjald — enginn hlutalisti
+  veggir: [],
 };
 
 function layerGroupOf(obj: BoardObject): LayerGroupId {
@@ -133,6 +136,7 @@ export function RightPanel({
         </button>
       ) : null}
       {onHamAdgerd ? <HamStika onAdgerd={onHamAdgerd} /> : null}
+      {hamur === "veggir" ? <VeggjaHamSpjald /> : null}
       {selected.length ? (
       <div className="border-b border-white/8 px-4 py-3">
         <div className="text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">EIGINLEIKAR</div>
@@ -342,6 +346,7 @@ export function RightPanel({
             <LayerList />
           </div>
         ) : null}
+        {HAM_HOPAR[hamur].length ? (
         <div className="mt-4">
           <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-stone-500">
             HLUTIR · {objects.filter((o) => HAM_HOPAR[hamur].includes(layerGroupOf(o))).length}
@@ -397,6 +402,7 @@ export function RightPanel({
             })}
           </div>
         </div>
+        ) : null}
       </div>
     </aside>
   );

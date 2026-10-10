@@ -25,7 +25,7 @@ export async function sjalfvirkirVeggir(plan: ImageObject, dpm: number | null, o
       return klemmaGreindaThykkt(ptIBord(pt, plan, sida.breidd, sida.haed), dpm).map((v, i) => ({ id: "sjalf:" + i, ...v }));
     }
   }
-  const g = await greinaVeggiSkonnunar(plan, onProgress);
+  const g = await greinaVeggiSkonnunar(plan, onProgress, dpm);
   return klemmaGreindaThykkt(g.veggir, dpm).map((v, i) => ({ id: "sjalf:" + i, ...v }));
 }
 

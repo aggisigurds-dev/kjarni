@@ -132,13 +132,13 @@ test("vörn 07.10: staðfesting yfir 120 veggjum eða > 3× þeim sem fyrir eru"
   assert.equal(greiningKrefstStadfestingar(30, 10), false);
 });
 
-test("vörn 07.10: þykkt greindra veggja klemmd við 40 cm (kvarði þekktur) eða 3× miðgildi (óþekktur)", () => {
+test("vörn 07.10 / 10.10: þykkt greindra veggja klemmd við 35 cm (kvarði þekktur) eða 3× miðgildi (óþekktur)", () => {
   const v = [{ p: [0, 0, 10, 0], t: 5 }, { p: [0, 0, 10, 0], t: 12 }, { p: [0, 0, 10, 0], t: 90 }];
-  // 50 borðdílar á metra → 40 cm = 20 dílar
+  // 50 borðdílar á metra → 35 cm = 17,5 dílar
   const k = klemmaGreindaThykkt(v, 50);
-  assert.deepEqual(k.map((x) => x.t), [5, 12, 20]);
+  assert.deepEqual(k.map((x) => x.t), [5, 12, 17.5]);
   assert.equal(k[0], v[0], "óbreyttur veggur er sami hlutur");
-  assert.equal(GREINDUR_VEGGUR_HAMARK_CM, 40);
+  assert.equal(GREINDUR_VEGGUR_HAMARK_CM, 35);
   // óþekktur kvarði: miðgildi 12 → hámark 36
   assert.deepEqual(klemmaGreindaThykkt(v, null).map((x) => x.t), [5, 12, 36]);
   assert.deepEqual(klemmaGreindaThykkt([], 50), []);
