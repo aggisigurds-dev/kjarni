@@ -5,7 +5,7 @@
 // tegund (veggur / gler / hurð), Tengja lausa enda og Eyða. Hver aðgerð er ein ⌘Z-færsla.
 // Veggjaritillinn bætti við: þykkt valinna veggja, Sameina (samlínu → einn), Lengja að (tveir valdir) og Hurð í bil.
 
-import { AppWindow, BrickWall, DoorOpen, Flame, Link2, Merge, MoveHorizontal, Trash2 } from "lucide-react";
+import { AppWindow, BrickWall, DoorOpen, Fence, Flame, Link2, Merge, MoveHorizontal, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isDrawnLocked, isDrawnVisible } from "../../lib/board/layers";
@@ -36,6 +36,7 @@ const TEGUNDIR: { id: VeggTegund; texti: string; titill: string; takn: ReactNode
   // „Gera að EI-60 / EI-30" (Agnar 07.10.2026): eldveggur er veggur með tegund — rauður á teikningunni og í Teikning/3D.
   { id: "ei60", texti: "EI-60", titill: "Gera að eldvegg EI-60 — rauður (4)", takn: <Flame className="size-3.5" /> },
   { id: "ei30", texti: "EI-30", titill: "Gera að eldvegg EI-30 — ljósrauður (5)", takn: <Flame className="size-3.5" /> },
+  { id: "svalir", texti: "Svalir", titill: "Svalir / svalahandrið — lágur veggur 1,1 m í 3D (6)", takn: <Fence className="size-3.5" /> },
 ];
 
 function valdirVeggir(objects: BoardObject[], selectedIds: string[]): LineObject[] {

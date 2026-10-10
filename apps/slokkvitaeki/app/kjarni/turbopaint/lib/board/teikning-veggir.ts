@@ -16,9 +16,14 @@
 
 import { paraVeggi, type Strik } from "./pdf-veggir";
 
-/** Tegund veggjar. ei60 / ei30 = ELDVEGGUR (Agnar 07.10.2026: „eins og veggi") — veggur með eldflokk, ekki sérstakt yfirlag. */
-export type VeggTegund = "veggur" | "gler" | "hurd" | "ei60" | "ei30";
-export const VEGG_TEGUNDIR: VeggTegund[] = ["veggur", "gler", "hurd", "ei60", "ei30"];
+/** Tegund veggjar. ei60 / ei30 = ELDVEGGUR (Agnar 07.10.2026: „eins og veggi") — veggur með eldflokk, ekki sérstakt yfirlag.
+ * svalir = svalaveggur / svalahandrið (Agnar 10.10.2026: „Hafðu svalirnar bara í 1.1m") — lágur veggur 1,1 m í 3D, ekki
+ * veggur í brunahólfum, hurðaleit né veggjagrímu. */
+export type VeggTegund = "veggur" | "gler" | "hurd" | "ei60" | "ei30" | "svalir";
+export const VEGG_TEGUNDIR: VeggTegund[] = ["veggur", "gler", "hurd", "ei60", "ei30", "svalir"];
+
+/** Hæð svalaveggjar í metrum (Teikning 383 SVALIR_M). */
+export const SVALIR_HAED_M = 1.1;
 
 /** Eldflokkur veggjategundar í mínútum (0 = ekki eldveggur). */
 export function eldflokkurTegundar(t: VeggTegund | undefined | null): 0 | 30 | 60 {
@@ -34,10 +39,10 @@ export function eldflokkurTegundar(t: VeggTegund | undefined | null): 0 | 30 | 6
 export type FrumVeggur = { p: number[]; t: number; tegund?: VeggTegund; eld?: 30 | 60 };
 
 /** TurboPaint-tegund → vistað snið veggjaLinur (tegund + eld). */
-export function vistunarSnid(t: VeggTegund | undefined | null): { tegund: "veggur" | "gler" | "hurd"; eld?: 30 | 60 } {
+export function vistunarSnid(t: VeggTegund | undefined | null): { tegund: "veggur" | "gler" | "hurd" | "svalir"; eld?: 30 | 60 } {
   if (t === "ei60") return { tegund: "veggur", eld: 60 };
   if (t === "ei30") return { tegund: "veggur", eld: 30 };
-  return { tegund: t === "gler" || t === "hurd" ? t : "veggur" };
+  return { tegund: t === "gler" || t === "hurd" || t === "svalir" ? t : "veggur" };
 }
 
 /** Vistað snið (tegund + eld) → TurboPaint-tegund. Les líka `tegund: "ei60"` beint. */
@@ -45,7 +50,7 @@ export function tegundUrVistun(tegund: unknown, eld: unknown): VeggTegund {
   if (tegund === "ei60" || tegund === "ei30") return tegund;
   const e = Number(eld);
   if ((tegund == null || tegund === "veggur") && (e === 60 || e === 30)) return e === 60 ? "ei60" : "ei30";
-  return tegund === "gler" || tegund === "hurd" ? tegund : "veggur";
+  return tegund === "gler" || tegund === "hurd" || tegund === "svalir" ? tegund : "veggur";
 }
 
 /** 1 pt á blaði í kvarða 1:100 = 0,3528 mm × 100 = 0,03528 m í raun. */
@@ -62,7 +67,7 @@ export function dilarAMetraGisk(frum: { b: number; h: number }): number {
 }
 
 export function erVeggTegund(x: unknown): x is VeggTegund {
-  return x === "veggur" || x === "gler" || x === "hurd" || x === "ei60" || x === "ei30";
+  return x === "veggur" || x === "gler" || x === "hurd" || x === "ei60" || x === "ei30" || x === "svalir";
 }
 
 type PtVeggur = { a: [number, number]; b: [number, number]; t: number };
