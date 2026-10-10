@@ -102,6 +102,8 @@ const TEGUNDIR: { id: VeggTegund; texti: string; lykill: string }[] = [
   // Eldveggur = veggur með tegund (Agnar 07.10.2026) — dreginn eins og veggur, núverandi veggur fær hann með 4 / 5.
   { id: "ei60", texti: "EI-60", lykill: "4" },
   { id: "ei30", texti: "EI-30", lykill: "5" },
+  // Svalir (Agnar 10.10.2026): svalaveggur/handrið — lágur veggur 1,1 m í 3D
+  { id: "svalir", texti: "Svalir", lykill: "6" },
 ];
 
 /** Aðgerðir á völdum veggjum — sameiginlegar lyklaborðinu, spjaldinu og veggjastikunni. */
@@ -644,7 +646,8 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         case "2":
         case "3":
         case "4":
-        case "5": {
+        case "5":
+        case "6": {
           stoppa();
           const t = TEGUNDIR[Number(lykill) - 1].id;
           if (sel.length) setjaTegund(sel, t);

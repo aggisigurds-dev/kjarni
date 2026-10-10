@@ -225,10 +225,10 @@ test("talning: 62 veggir · 5 gler · 3 hurðir (íslensk eintala), faldir og a�
     { ...vg("ei", [0, 0, 1, 0]), veggur: undefined, layerId: "almennt", name: "EI-veggur" },
   ];
   const t = veggjaTalning(O);
-  assert.deepEqual(t, { veggur: 21, gler: 1, hurd: 1, eld: 0, alls: 23 });
+  assert.deepEqual(t, { veggur: 21, gler: 1, hurd: 1, eld: 0, svalir: 0, alls: 23 });
   assert.equal(talningTexti(t), "21 veggur · 1 gler · 1 hurð");
-  assert.equal(talningTexti({ veggur: 62, gler: 5, hurd: 3, eld: 0, alls: 70 }), "62 veggir · 5 gler · 3 hurðir");
-  assert.equal(talningTexti({ veggur: 11, gler: 0, hurd: 0, eld: 0, alls: 11 }), "11 veggir");
+  assert.equal(talningTexti({ veggur: 62, gler: 5, hurd: 3, eld: 0, svalir: 0, alls: 70 }), "62 veggir · 5 gler · 3 hurðir");
+  assert.equal(talningTexti({ veggur: 11, gler: 0, hurd: 0, eld: 0, svalir: 0, alls: 11 }), "11 veggir");
   assert.equal(metraTexti(345, 100), "3,45 m");
   assert.equal(metraTexti(1234, 100), "12,3 m");
   assert.equal(metraTexti(50, null), "50 dílar");

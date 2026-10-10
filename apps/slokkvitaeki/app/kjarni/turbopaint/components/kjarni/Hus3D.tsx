@@ -33,6 +33,7 @@ import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } f
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
 import { saekjaBladstaerd } from "../../lib/board/teikn-thjonusta";
+import { SVALIR_HAED_M } from "../../lib/board/teikning-veggir";
 import type { BoardObject } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
@@ -365,6 +366,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           const veggir = hd.veggir.filter((v) => v.tegund === "veggur");
           const gler = hd.veggir.filter((v) => v.tegund === "gler");
           const hurdir = hd.veggir.filter((v) => v.tegund === "hurd");
+          const svalir = hd.veggir.filter((v) => v.tegund === "svalir");
           fjoldi.veggir += veggir.length;
           fjoldi.gler += gler.length;
           fjoldi.hurdir += hurdir.length;
@@ -405,6 +407,18 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             glM.renderOrder = 2;
             hopur.add(glM);
             losa.push(glE);
+          }
+          if (svalir.length) {
+            // Svalir (Agnar 10.10.2026: „Hafðu svalirnar bara í 1.1m"): lágur veggur í lit veggjanna, sama efni og veggirnir.
+            const svH = SVALIR_HAED_M * metri;
+            const svM = new T.InstancedMesh(kG, kEfni, svalir.length);
+            svalir.forEach((v, i) => {
+              svM.setMatrixAt(i, kassi(v, svH / 2, svH, 1));
+              svM.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+            });
+            svM.instanceMatrix.needsUpdate = true;
+            if (svM.instanceColor) svM.instanceColor.needsUpdate = true;
+            hopur.add(svM);
           }
           if (hurdir.length) {
             // Hurðargöt: veggurinn heldur áfram OFAN við hurðina (dyrakarmur, efsti fjórðungur vegghæðar) — gengt undir.
