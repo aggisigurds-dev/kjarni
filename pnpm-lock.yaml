@@ -4,6 +4,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+packageExtensionsChecksum: sha256-L15hUdzOxX1LWRB3GSD+h4NcMKHABUwMYjMGPpPZ/IM=
+
 importers:
 
   .:
@@ -153,7 +155,7 @@ importers:
         version: 2.2.0(react@19.2.6)
       '@hookform/resolvers':
         specifier: ^5.2.2
-        version: 5.2.2(react-hook-form@7.76.0(react@19.2.6))
+        version: 5.2.2(react-hook-form@7.76.0(react@19.2.6))(zod@4.4.3)
       '@playwright/test':
         specifier: ^1.60.0
         version: 1.60.0
@@ -890,6 +892,7 @@ packages:
     resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
     peerDependencies:
       react-hook-form: ^7.55.0
+      zod: ^4.0.0
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -5355,10 +5358,11 @@ snapshots:
     dependencies:
       react: 19.2.6
 
-  '@hookform/resolvers@5.2.2(react-hook-form@7.76.0(react@19.2.6))':
+  '@hookform/resolvers@5.2.2(react-hook-form@7.76.0(react@19.2.6))(zod@4.4.3)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.76.0(react@19.2.6)
+      zod: 4.4.3
 
   '@img/colour@1.1.0': {}
 
