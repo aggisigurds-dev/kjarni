@@ -7,6 +7,7 @@ import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SKINS, type SkinId } from "../skins";
 import { useStationSkin } from "../StationChrome";
 import { RagnarokRing } from "./Ring";
+import { HvadBanner } from "../HvadGetEgGert";
 
 /* Stjórnstöðin í Ragnarök-útliti (bráðið gull á svörtu stáli).
  * Fyrirmynd: „Kjarni Ragnarok" í hönnunarkerfinu — röðin er sú sama:
@@ -145,6 +146,7 @@ export function RagnarokView(d: RagnarokData) {
         </nav>
 
         <section id="rg-yfirlit" className="rgk-sec">
+          <HvadBanner />
           <div className="rgk-systems">
             {SYSTEMS.map((s) => (
               <a

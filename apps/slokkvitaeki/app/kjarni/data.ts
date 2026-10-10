@@ -75,6 +75,7 @@ export const QUICK_GROUPS: { title: string; items: { icon: string; label: string
     title: "Kjarni",
     items: [
       { icon: "🏠", label: "Forsíða", href: "/" },
+      { icon: "?", label: "Hvað get ég gert?", href: "/kjarni/hvad" },
       { icon: "🎛️", label: "Stjórnborð", href: "/stjorn" },
       { icon: "🧩", label: "Kerfi", href: "/kerfi" },
       { icon: "🛒", label: "Verslun", href: "/verslun" },

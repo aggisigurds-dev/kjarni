@@ -17,6 +17,7 @@ export const DEFAULT_SKIN: SkinId = "ragnarok";
 
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
+  { id: "hvad", label: "Hvað", href: "/kjarni/hvad" },
   { id: "turbopaint", label: "TurboPaint", href: "/kjarni/turbopaint" },
   { id: "artcraft", label: "ArtCraft", href: "/kjarni/artcraft" },
   { id: "bord", label: "Borð", href: "/bord" },
