@@ -487,7 +487,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
       };
       const vafri: Promise<HLina[]> = heilBladVeggir
         ? Promise.resolve(heilBladVeggir.filter(innan))
-        : greinaVeggiSkonnunar(p).then((gr) => klemmaGreindaThykkt(gr.veggir, dpm));
+        : greinaVeggiSkonnunar(p, undefined, dpm).then((gr) => klemmaGreindaThykkt(gr.veggir, dpm));
       vafri.catch(() => {});
       // Prófanir/samanburður: localStorage `tp_sjalfvirkt_leid` = „vafri" sleppir Veggjavélinni.
       let leidVal: string | null = null;

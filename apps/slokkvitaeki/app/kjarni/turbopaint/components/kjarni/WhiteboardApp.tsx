@@ -215,6 +215,15 @@ export function WhiteboardApp() {
   // Eiginleika-panellinn sem yfirlag á síma/spjaldtölvu (< lg) — á desktop er
   // hann fastur dálkur til hægri eins og áður.
   const [panelOpen, setPanelOpen] = useState(false);
+  // Veggir-hamur í síma: skúffan (hægra spjaldið) víkur þegar tól er valið eða „Finna veggi" opnast — annars skyggir
+  // hún (og bakgrunnur hennar) á teikninguna og greiningarspjaldið.
+  useEffect(
+    () =>
+      useVeggjaRitill.subscribe((s, p) => {
+        if ((s.greining && !p.greining) || (s.virkur && (s.tol !== p.tol || s.tegund !== p.tegund))) setPanelOpen(false);
+      }),
+    []
+  );
   const markBusyRef = useRef(false);
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);

@@ -12,6 +12,10 @@
 
 import {
   BoxSelect,
+  CheckCheck,
+  Flame,
+  Magnet,
+  XSquare,
   Eye,
   EyeOff,
   HelpCircle,
@@ -72,13 +76,15 @@ import {
   skiptaUt,
   valdirVeggir,
 } from "../../lib/board/veggja-ritill-adgerdir";
-import { TOL_HEITI, useVeggjaRitill, type RitilTol } from "../../lib/board/veggja-ritill-stada";
+import { teiknaEldvegg, TILLOGU_TOL, TOL_HEITI, useVeggjaRitill, type RitilTol } from "../../lib/board/veggja-ritill-stada";
+import { forhladaTeikningar, smellaVeggAMynd } from "../../lib/board/mynd-smellur";
+import { hafnaTillogum, samthykkjaTillogur, tillagaVid, tillogurIKassa } from "../../lib/board/veggja-tillogur";
 import { LITA_VEGGI_FLYTILYKILL, SKAERIR_VEGGLITIR, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { newId } from "../../lib/board/store";
 import { VeggjaGreining } from "./VeggjaGreining";
 
-/** Hamirnir þar sem ritillinn býr. */
-export const RITIL_HAMIR: HamurId[] = ["teikning"];
+/** Hamirnir þar sem ritillinn býr. Í Veggir-ham (10.10.2026) er hann alltaf opinn og annað dempað. */
+export const RITIL_HAMIR: HamurId[] = ["teikning", "veggir"];
 
 function isTyping(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -167,6 +173,28 @@ export function VeggjaRitill() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
+  // Veggir-hamur: ritillinn opnast (þéttur — tólin eru í hægra spjaldinu), allt annað en veggir dempast og myndir
+  // teikninganna eru lesnar fyrir „Smella á línu". Farið úr hamnum: dempunin fer.
+  useEffect(() => {
+    const inn = () => {
+      const r = useVeggjaRitill.getState();
+      if (!r.virkur) r.kveikja("velja");
+      useVeggjaRitill.getState().setThett(true);
+      useVeggjaSyn.getState().setDempa(true);
+      forhladaTeikningar();
+    };
+    if (useHamur.getState().hamur === "veggir") inn();
+    const u = useHamur.subscribe((s, p) => {
+      if (s.hamur === p.hamur) return;
+      if (s.hamur === "veggir") inn();
+      else if (p.hamur === "veggir") useVeggjaSyn.getState().setDempa(false);
+    });
+    return () => {
+      u();
+      useVeggjaSyn.getState().setDempa(false);
+    };
+  }, []);
+
   // Ritillinn lokast ef farið er í annan ham eða annað tól valið úr verkfærasúlunni
   useEffect(() => {
     const u1 = useHamur.subscribe((s) => {
@@ -187,14 +215,14 @@ export function VeggjaRitill() {
       {/* Þéttur hamur: ræman (RitilThettStika) býr neðst á borðinu hjá táknaborðinu — sjá WhiteboardApp */}
       {virkur ? thett ? null : <RitilSpjald /> : <RitilOpnari />}
       {virkur && hjalp && !thett ? <RitilHjalp /> : null}
-      {greining ? <VeggjaGreining key={greining.planId} planId={greining.planId} /> : null}
+      {greining ? <VeggjaGreining key={greining.planId} planId={greining.planId} tillogur={!!greining.tillogur} /> : null}
     </>
   );
 }
 
 type Drag =
   | { kind: "pan"; sx: number; sy: number; cx: number; cy: number }
-  | { kind: "kassi"; A: P; B: P; eyda: boolean; baeta: boolean; sx: number; sy: number }
+  | { kind: "kassi"; A: P; B: P; eyda: boolean; baeta: boolean; sx: number; sy: number; tillaga?: "samthykkja" | "hafna" }
   | { kind: "rettur"; A: P; B: P }
   // Agnar 07.10.2026: „hún dregst þegar ég held inni vinstri músartakkanum og stoppar þegar ég sleppi" — einn veggur á drátt
   | { kind: "teikna-drag"; sx: number; sy: number }
@@ -268,6 +296,21 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       ctx.stroke();
     }
     if (!virkur) return;
+
+    // tillögur „Finna veggi": punktalínur (blágrænar) — smellur samþykkir, Shift+smellur hafnar
+    if (r.tillogur) {
+      ctx.setLineDash([9, 6]);
+      ctx.lineCap = "butt";
+      for (const v of r.tillogur.veggir) {
+        ctx.beginPath();
+        slod(v.p);
+        ctx.strokeStyle = v.tegund === "gler" ? "rgba(37,99,235,0.85)" : "rgba(13,148,136,0.9)";
+        ctx.lineWidth = Math.max(3, v.t * k.scale);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.lineCap = "round";
+    }
 
     const V = ritillVeggir();
     const sel = new Set(b.selectedIds);
@@ -371,7 +414,7 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       const inni = d.B[0] >= d.A[0];
       const x = sx(Math.min(d.A[0], d.B[0])), y = sy(Math.min(d.A[1], d.B[1]));
       const w = Math.abs(d.B[0] - d.A[0]) * k.scale, h = Math.abs(d.B[1] - d.A[1]) * k.scale;
-      const lit = d.eyda ? "220,38,38" : inni ? "37,99,235" : "22,163,74";
+      const lit = d.tillaga === "samthykkja" ? "13,148,136" : d.eyda || d.tillaga === "hafna" ? "220,38,38" : inni ? "37,99,235" : "22,163,74";
       ctx.fillStyle = `rgba(${lit},0.08)`;
       ctx.fillRect(x, y, w, h);
       ctx.strokeStyle = `rgba(${lit},0.9)`;
@@ -379,7 +422,13 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       ctx.setLineDash(inni ? [] : [6, 4]);
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
-      merki((d.eyda ? "Eyða: " : "") + (inni ? "allur veggurinn inni" : "snertir"), x + w + 8, y + h + 4);
+      merki(
+        d.tillaga
+          ? (d.tillaga === "samthykkja" ? "Samþykkja: " : "Hafna: ") + (inni ? "öll tillagan inni" : "snertir")
+          : (d.eyda ? "Eyða: " : "") + (inni ? "allur veggurinn inni" : "snertir"),
+        x + w + 8,
+        y + h + 4
+      );
     }
     if (d?.kind === "endi" && d.byrjad) {
       const o = V.find((v) => v.id === d.id);
@@ -489,14 +538,29 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     const A = k[k.length - 1];
     if (Math.hypot(Pt[0] - A[0], Pt[1] - A[1]) * cam().scale < 3) return; // tvísmellur / sami punktur
     const r = useVeggjaRitill.getState(), b = useBoardStore.getState();
-    const [ny] = nyirVeggir([[A[0], A[1], Pt[0], Pt[1]]], r.tegund, cmIDila(r.thykktCm, ritillDilarAMetra(b.objects, b.pixelsPerMeter)));
+    const dpm = ritillDilarAMetra(b.objects, b.pixelsPerMeter);
+    let a: P = A, bp: P = Pt, thykkt = cmIDila(r.thykktCm, dpm);
+    // „Smella á línu" (Veggir-hamur): veggurinn festist á línur teikningarinnar undir; þykktin úr bili tveggja samsíða
+    // lína ef 10–35 cm. Endi sem þegar situr á öðrum vegg hreyfist ekki.
+    if (r.smellaLinu && useHamur.getState().hamur === "veggir") {
+      const V = ritillVeggir();
+      const fastur = (q: P) => smella(q, V, { vik: vik() * 0.5 }).tegund != null;
+      const sm = smellaVeggAMynd(A, Pt, { vik: Math.max(vik(), dpm ? 0.15 * dpm : 0), dpm, fastir: [fastur(A), fastur(Pt)] });
+      if (sm) {
+        a = sm.A;
+        bp = sm.B;
+        if (sm.thykkt && r.tegund !== "hurd") thykkt = sm.thykkt;
+      }
+    }
+    const [ny] = nyirVeggir([[a[0], a[1], bp[0], bp[1]]], r.tegund, thykkt);
     b.addObjects([ny], false);
+    k[k.length - 1] = a;
     if (k.length >= 2 && Math.hypot(Pt[0] - k[0][0], Pt[1] - k[0][1]) < 1e-6) {
       kedja.current = [];
       toast.message("Lokuð keðja — veggirnir mætast", { duration: 1500 });
       return;
     }
-    k.push(Pt);
+    k.push(bp);
   };
 
   // ── lyklaborð (aðeins meðan ritillinn er virkur) ─────────────────────────────────────────────────────
@@ -665,7 +729,25 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     bendill.current = X;
     const V = ritillVeggir();
     const r = useVeggjaRitill.getState();
+    // tillögur „Finna veggi": smellur á punktalínu samþykkir hana, Shift/Alt+smellur hafnar (Velja-tólið)
+    if (r.tillogur && r.tol === "velja") {
+      const i = tillagaVid(X, r.tillogur.veggir, vik());
+      if (i >= 0) {
+        if (e.shiftKey || e.altKey) {
+          hafnaTillogum([i]);
+          toast.message("Tillögu hafnað", { duration: 1200 });
+        } else {
+          samthykkjaTillogur([i]);
+          toast.message("Tillaga samþykkt — orðin veggur · ⌘Z afturkallar", { duration: 1400 });
+        }
+        return;
+      }
+    }
     switch (r.tol) {
+      case "samthykkja-kassi":
+      case "hafna-kassi":
+        drag.current = { kind: "kassi", A: X, B: X, eyda: false, baeta: false, sx: e.clientX, sy: e.clientY, tillaga: r.tol === "hafna-kassi" ? "hafna" : "samthykkja" };
+        break;
       case "teikna": {
         const s = smellaHer(X);
         const iKedju = kedja.current.length > 0;
@@ -892,7 +974,19 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         height: Math.abs(d.B[1] - d.A[1]),
       };
       const litill = Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4;
-      if (litill) {
+      const tl = useVeggjaRitill.getState().tillogur;
+      if (d.tillaga) {
+        const idx = !litill && tl ? tillogurIKassa(tl.veggir, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta") : [];
+        const n = d.tillaga === "samthykkja" ? samthykkjaTillogur(idx) : hafnaTillogum(idx);
+        toast.message(
+          n
+            ? d.tillaga === "samthykkja"
+              ? `${n} ${n === 1 ? "tillaga samþykkt" : "tillögur samþykktar"} · ⌘Z afturkallar`
+              : `${n} ${n === 1 ? "tillögu hafnað" : "tillögum hafnað"}`
+            : "Engin tillaga í kassanum",
+          { duration: 1500 }
+        );
+      } else if (litill) {
         if (!d.eyda && !d.baeta) b.setSelected([]);
       } else {
         const ids = veggirIKassa(ritillVeggir(), kassi, d.B[0] >= d.A[0] ? "inni" : "snerta");
@@ -1021,6 +1115,8 @@ const TOL_TAKN: Record<RitilTol, ReactNode> = {
   kljufa: <Scissors className="size-3.5" />,
   lengja: <MoveHorizontal className="size-3.5" />,
   "eyda-kassi": <BoxSelect className="size-3.5" />,
+  "samthykkja-kassi": <CheckCheck className="size-3.5" />,
+  "hafna-kassi": <XSquare className="size-3.5" />,
 };
 
 function RitilSpjald() {
@@ -1089,7 +1185,7 @@ function RitilSpjald() {
 
       <div className="mt-2 text-[10px] font-semibold tracking-wide text-white/40 uppercase">Tól</div>
       <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label="Tól veggjaritils">
-        {(Object.keys(TOL_HEITI) as RitilTol[]).map((t) => (
+        {(Object.keys(TOL_HEITI) as RitilTol[]).filter((t) => !TILLOGU_TOL.includes(t)).map((t) => (
           <button
             key={t}
             type="button"
@@ -1252,6 +1348,7 @@ export function RitilThettStika() {
   const tol = useVeggjaRitill((s) => s.tol);
   const tegund = useVeggjaRitill((s) => s.tegund);
   const kannAfturkalla = useBoardStore((s) => s.past.length > 0);
+  const tillogur = useVeggjaRitill((s) => s.tillogur?.veggir.length ?? 0);
   const valdir = useBoardStore((s) => {
     if (!s.selectedIds.length) return 0;
     const sel = new Set(s.selectedIds);
@@ -1334,6 +1431,33 @@ export function RitilThettStika() {
         <Undo2 className="size-4" />
         Afturkalla
       </button>
+      {tillogur ? (
+        // Veggir-hamur: tillögur „Finna veggi" — smellur á punktalínu samþykkir; kassarnir taka margar í einu
+        <>
+          <button
+            type="button"
+            data-thett="samthykkja-kassi"
+            aria-pressed={tol === "samthykkja-kassi"}
+            title={TOL_HEITI["samthykkja-kassi"].titill}
+            onClick={() => r.setTol(tol === "samthykkja-kassi" ? "velja" : "samthykkja-kassi")}
+            className={`${takki} ${tol === "samthykkja-kassi" ? "bg-teal-600 text-white" : "hover:bg-white/10"}`}
+          >
+            <CheckCheck className="size-4 text-teal-300" />
+            Samþ. {tillogur}
+          </button>
+          <button
+            type="button"
+            data-thett="hafna-kassi"
+            aria-pressed={tol === "hafna-kassi"}
+            title={TOL_HEITI["hafna-kassi"].titill}
+            onClick={() => r.setTol(tol === "hafna-kassi" ? "velja" : "hafna-kassi")}
+            className={`${takki} ${tol === "hafna-kassi" ? valid : "hover:bg-white/10"}`}
+          >
+            <XSquare className="size-4" />
+            Hafna
+          </button>
+        </>
+      ) : null}
       <span className="mx-0.5 my-1.5 w-px bg-white/12" aria-hidden />
       <button
         type="button"
@@ -1423,6 +1547,232 @@ function RitilHjalp() {
         Teikningin er læst meðan ritillinn er opinn — smellur velur aðeins veggi. „💾 Vista í úttekt“ skrifar veggina (með tegund) í
         úttektarteikninguna eins og áður.
       </p>
+    </div>
+  );
+}
+
+// ── Veggir-hamur: hægra spjaldið ─────────────────────────────────────────────────────────────────────────────
+
+/** Teikningin sem „Finna veggi" vinnur á (sama val og „Greina veggi…" í glugganum). */
+function teikningTilGreiningar(): string | null {
+  const st = useBoardStore.getState();
+  const myndir = st.objects.filter((o) => o.type === "image" && !o.hidden);
+  const plan = myndir.find((o) => o.type === "image" && o.uttekt) ?? (myndir.length === 1 ? myndir[0] : null);
+  if (!plan) {
+    toast.error("Engin teikning fannst — veldu teikninguna fyrst");
+    return null;
+  }
+  if (plan.rotation) {
+    toast.error("Teikningunni hefur verið snúið — veggjagreining styður aðeins óbreytta stefnu enn");
+    return null;
+  }
+  return plan.id;
+}
+
+/** Veggir-hamur (Agnar 10.10.2026: „annan ham þarna sem er bara veggir, og aðstoð við að reyna að finna veggina"):
+ * hægra spjaldið sýnir AÐEINS veggjatólin — sömu aðgerðir og veggjaritillinn (ein útgáfa af hverri). Þykktin gildir um
+ * nýja OG valda veggi. „Finna veggi" setur greininguna fram sem tillögur (punktalínur) sem eru samþykktar eða hafnaðar. */
+export function VeggjaHamSpjald() {
+  const virkur = useVeggjaRitill((s) => s.virkur);
+  const tol = useVeggjaRitill((s) => s.tol);
+  const tegund = useVeggjaRitill((s) => s.tegund);
+  const thykktCm = useVeggjaRitill((s) => s.thykktCm);
+  const adeinsVeggir = useVeggjaRitill((s) => s.adeinsVeggir);
+  const smellaLinu = useVeggjaRitill((s) => s.smellaLinu);
+  const tillogur = useVeggjaRitill((s) => s.tillogur?.veggir.length ?? 0);
+  const greinir = useVeggjaRitill((s) => !!s.greining);
+  const objects = useBoardStore((s) => s.objects);
+  const talning = veggjaTalning(objects);
+  const kannAfturkalla = useBoardStore((s) => s.past.length > 0);
+  const valdir = useBoardStore((s) => {
+    if (!s.selectedIds.length) return 0;
+    const sel = new Set(s.selectedIds);
+    let n = 0;
+    for (const o of s.objects) if (sel.has(o.id) && erVeggur(o)) n++;
+    return n;
+  });
+  const r = useVeggjaRitill.getState();
+  const teiknar = virkur && tol === "teikna";
+
+  const btn = "flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-stone-100 transition-colors";
+  const virkt = "bg-[#FE653F] text-white";
+  const ovirkt = "bg-white/5 hover:bg-white/10";
+  const teikna = (t: VeggTegund) => {
+    if (t === "ei60" || t === "ei30") teiknaEldvegg(t);
+    else {
+      r.kveikja("teikna");
+      useVeggjaRitill.getState().setTegund(t);
+    }
+  };
+  const eyda = () => {
+    const ids = valdirVeggir().map((o) => o.id);
+    if (!ids.length) return toast.message("Veldu vegg fyrst: „Velja“ og smelltu á vegginn", { duration: 1800 });
+    const n = eydaVeggjum(ids);
+    if (n) toast.message(`${n} ${n === 1 ? "veggur eyddur" : "veggjum eytt"} · ⌘Z afturkallar`, { duration: 1500 });
+  };
+  const thykkt = (cm: number) => {
+    r.setThykkt(cm);
+    const ids = valdirVeggir().map((o) => o.id);
+    if (!ids.length) return;
+    const b = useBoardStore.getState();
+    setjaThykkt(ids, cmIDila(cm, ritillDilarAMetra(b.objects, b.pixelsPerMeter)));
+    toast.message(`${ids.length} ${ids.length === 1 ? "veggur" : "veggir"} → ${cm} cm · ⌘Z afturkallar`, { duration: 1500 });
+  };
+  const finna = () => {
+    const id = teikningTilGreiningar();
+    if (!id) return;
+    if (!useVeggjaRitill.getState().virkur) r.kveikja("velja");
+    r.opnaGreiningu(id, true);
+  };
+  const tolTakki = (t: RitilTol, texti: string, takn: ReactNode, titill: string) => (
+    <button
+      type="button"
+      data-veggir-tol={t}
+      aria-pressed={virkur && tol === t}
+      title={titill}
+      onClick={() => r.kveikja(t)}
+      className={`${btn} ${virkur && tol === t ? virkt : ovirkt}`}
+    >
+      {takn}
+      {texti}
+    </button>
+  );
+  const teiknaTakki = (t: VeggTegund, texti: string, takn: ReactNode, titill: string) => (
+    <button
+      type="button"
+      data-veggir-teikna={t}
+      aria-pressed={teiknar && tegund === t}
+      title={titill}
+      onClick={() => teikna(t)}
+      className={`${btn} ${teiknar && tegund === t ? virkt : ovirkt}`}
+    >
+      {takn}
+      {texti}
+    </button>
+  );
+  const litur = (t: VeggTegund) => <span className="inline-block size-2.5 rounded-sm" style={{ background: VEGG_LITIR[t] }} />;
+
+  return (
+    <div data-veggir-spjald className="border-b border-white/8 py-2.5 pr-6 pl-3 text-stone-100">
+      <div className="text-[11.5px] text-white/60" data-veggjatalning>
+        {talningTexti(talning)}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1" role="group" aria-label="Veggjatól">
+        {tolTakki("velja", "Velja", <MousePointer2 className="size-3.5" />, TOL_HEITI.velja.titill)}
+        {teiknaTakki("veggur", "Teikna vegg", <PencilLine className="size-3.5" />, "Haltu inni og dragðu — beinn veggur (0/45/90°, Shift víxlar); slepptu til að ljúka. ⌘Z afturkallar.")}
+        {teiknaTakki("hurd", "+ Hurð", litur("hurd"), "Haltu inni og dragðu línu á milli hurðarkarmanna — slepptu til að ljúka")}
+        {teiknaTakki("gler", "+ Gler", litur("gler"), "Haltu inni og dragðu línu yfir gluggann / glervegginn — slepptu til að ljúka")}
+        {teiknaTakki("ei60", "Eldveggur EI-60", <Flame className="size-3.5 text-[#d32f2f]" />, "Haltu inni og dragðu — eldveggur EI-60 (rauður). Núverandi vegg: veldu hann og ýttu á 4.")}
+        {teiknaTakki("ei30", "EI-30", <Flame className="size-3.5 text-[#ef5350]" />, "Haltu inni og dragðu — eldveggur EI-30 (ljósrauður). Núverandi vegg: veldu hann og ýttu á 5.")}
+        <button type="button" data-veggir-eyda title="Eyða völdum veggjum (Delete)" onClick={eyda} className={`${btn} ${ovirkt} ${valdir ? "" : "opacity-60"}`}>
+          <Trash2 className="size-3.5 text-[#FE653F]" />
+          {valdir > 1 ? `Eyða ${valdir}` : "Eyða"}
+        </button>
+        {tolTakki("eyda-kassi", "Eyða í kassa", <BoxSelect className="size-3.5" />, TOL_HEITI["eyda-kassi"].titill)}
+        <button
+          type="button"
+          data-veggir-afturkalla
+          title="Afturkalla síðustu aðgerð (⌘Z)"
+          disabled={!kannAfturkalla}
+          onClick={() => {
+            r.rjufaKedju();
+            useBoardStore.getState().undo();
+          }}
+          className={`${btn} ${ovirkt} disabled:opacity-40`}
+        >
+          <Undo2 className="size-3.5" />
+          Afturkalla
+        </button>
+      </div>
+
+      <div className="mt-2 text-[10px] font-semibold tracking-wide text-white/40 uppercase">Þykkt — nýir og valdir veggir</div>
+      <div className="mt-1 flex flex-wrap items-center gap-1" role="group" aria-label="Þykkt veggja">
+        {THYKKTIR_CM.map((cm) => (
+          <button
+            key={cm}
+            type="button"
+            data-veggir-thykkt={cm}
+            aria-pressed={thykktCm === cm}
+            title={valdir ? `${valdir} ${valdir === 1 ? "valinn veggur fær" : "valdir veggir fá"} ${cm} cm — og nýir veggir` : `Nýir veggir ${cm} cm`}
+            onClick={() => thykkt(cm)}
+            className={`${btn} min-w-9 justify-center ${thykktCm === cm ? virkt : ovirkt}`}
+          >
+            {cm}
+          </button>
+        ))}
+        <span className="text-[10.5px] text-white/45">cm</span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1">
+        <LitaVeggiTakki samthjappad />
+        <button
+          type="button"
+          title="Fela teikninguna og öll önnur lög — aðeins veggirnir sjást"
+          aria-pressed={!!adeinsVeggir}
+          onClick={() => r.setAdeinsVeggir(!adeinsVeggir)}
+          className={`${btn} ${adeinsVeggir ? virkt : ovirkt}`}
+        >
+          Sýna aðeins veggi
+        </button>
+      </div>
+
+      <div className="mt-2.5 text-[10px] font-semibold tracking-wide text-white/40 uppercase">Aðstoð</div>
+      <label
+        className="mt-1 flex cursor-pointer items-center gap-1.5 text-[11px] text-white/80"
+        title="Dreginn veggur festist á línur teikningarinnar undir; þykktin tekin úr bilinu milli tveggja samsíða lína ef það er 10–35 cm, annars valin þykkt"
+      >
+        <input type="checkbox" data-veggir-smella checked={smellaLinu} onChange={(e) => r.setSmellaLinu(e.target.checked)} />
+        <Magnet className="size-3.5 text-teal-300" />
+        Smella á línu teikningarinnar
+      </label>
+      <button
+        type="button"
+        data-veggir-finna
+        disabled={greinir}
+        onClick={finna}
+        title="Greina veggi teikningarinnar — birtast sem tillögur (punktalínur): smelltu til að samþykkja, Shift+smellur hafnar"
+        className={`${btn} mt-1.5 w-full justify-center bg-teal-700/60 ring-1 ring-teal-400/40 hover:bg-teal-700/80 disabled:opacity-50`}
+      >
+        <ScanSearch className="size-3.5" />
+        {greinir ? "Greini…" : "Finna veggi (tillögur)"}
+      </button>
+      {tillogur ? (
+        <div data-veggir-tillogur={tillogur} className="mt-1.5 rounded-md bg-teal-900/30 p-1.5 ring-1 ring-teal-400/25">
+          <div className="text-[11px] leading-snug text-teal-100/90">
+            <b>{tillogur}</b> {tillogur === 1 ? "tillaga" : "tillögur"} — smelltu á punktalínu til að samþykkja, Shift+smellur hafnar.
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <button
+              type="button"
+              data-veggir-samthykkja-allar
+              onClick={() => {
+                const t = useVeggjaRitill.getState().tillogur;
+                const n = t ? samthykkjaTillogur(t.veggir.map((_, i) => i)) : 0;
+                if (n) toast.success(`${n} veggir settir inn · ⌘Z afturkallar í einu skrefi`);
+              }}
+              className={`${btn} bg-teal-600 text-white hover:bg-teal-500`}
+            >
+              <CheckCheck className="size-3.5" />
+              Samþykkja allar
+            </button>
+            {tolTakki("samthykkja-kassi", "Samþykkja í kassa", <CheckCheck className="size-3.5" />, TOL_HEITI["samthykkja-kassi"].titill)}
+            {tolTakki("hafna-kassi", "Hafna í kassa", <XSquare className="size-3.5" />, TOL_HEITI["hafna-kassi"].titill)}
+            <button
+              type="button"
+              data-veggir-hafna-ollum
+              onClick={() => {
+                const t = useVeggjaRitill.getState().tillogur;
+                const n = t ? hafnaTillogum(t.veggir.map((_, i) => i)) : 0;
+                if (n) toast.message(`${n} tillögum hafnað`, { duration: 1500 });
+              }}
+              className={`${btn} ${ovirkt}`}
+            >
+              <X className="size-3.5" />
+              Hafna öllum
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
