@@ -29,6 +29,8 @@ import { replaceCrossingMarks } from "./crossings";
 import { eiUrTexta, lesaTextaTeikningar } from "./detect-firewalls";
 import { beitaEi, veggirTeikningar } from "./ei-beiting";
 import { finnaHurdir, type HurdKandidat } from "./hurdagreining";
+import { bogaProf, hurdirUrBogum, nyjarBogahurdir, skeraVeggiUndirHurdum, type Bogi } from "./hurdabogar";
+import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
 import { flokkaYfirlit, klemmaGreindaThykkt, pdfErSkonnun, ptIBord, skurdurIPt, strikValinna, veggirUrStrikumPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
@@ -565,8 +567,33 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         console.warn("[sjálfvirkt] myndsýni", err);
       }
     }
-    const d = finnaHurdir(veggirH, adrar, dpm, { vik: vik.hurd, bogi: syni?.bogi, linaIBili: syni?.linaIBili });
-    hurdir = d.hurdir;
+    // Hurðabogar teikningarinnar (Agnar 10.10.2026: „eitthvað sem nær að spotta hurðarnar automatically"): staðfesta
+    // boga við göt OG gefa hurðir þar sem veggurinn brúaði gatið (þá er ekkert bil að finna).
+    let bogar: Bogi[] = [];
+    if (kassi) {
+      try {
+        const sp = 2 * dpm;
+        bogar = (await bogarTeikningar(mynd()!, dpm, { x0: kassi.x0 - sp, y0: kassi.y0 - sp, x1: kassi.x1 + sp, y1: kassi.y1 + sp })).bogar;
+      } catch (err) {
+        console.warn("[sjálfvirkt] hurðabogar", err);
+      }
+    }
+    const bogiVid = bogaProf(bogar, dpm);
+    const d = finnaHurdir(veggirH, adrar, dpm, {
+      vik: vik.hurd,
+      bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
+      linaIBili: syni?.linaIBili,
+    });
+    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...d.gler, ...adrar], dpm).map(
+      (h) => ({ p: h.p, t: h.t, tegund: "hurd" as const })
+    );
+    if (urBogum.length) {
+      // veggur sem brúaði gatið er klipptur undir hurðinni
+      const veggirNyir = hreinar.filter(erVeggTeg), annad = hreinar.filter((l) => !erVeggTeg(l));
+      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, urBogum, dpm).veggir, ...annad];
+    }
+    hurdir = [...d.hurdir, ...urBogum];
+    talning.hurdabogar = { bogar: bogar.length, hurdir: urBogum.length };
     kandidatar = d.kandidatar;
     const nyttGler: HLina[] = d.gler;
     // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
@@ -582,6 +609,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
       "hurdir",
       `${hurdir.length} hurðir` +
         (d.talning.bilahurdir ? ` (${d.talning.bilahurdir} bílahurðir)` : "") +
+        (urBogum.length ? ` · ${urBogum.length} úr hurðabogum` : "") +
         (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
         (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
         ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +

@@ -2,9 +2,11 @@
 // EKKI sjálfkrafa veggir: þeir birtast sem punktalínur og aðeins samþykktir (smellur, kassi eða allar) fara á borðið —
 // hver samþykkt er ein ⌘Z-færsla, merkt greiningarlotu svo „Eyða síðustu greiningu" taki þær saman.
 
+import { skeraVeggiUndirHurdum } from "./hurdabogar";
 import { newId, useBoardStore } from "./store";
-import { inniKassa, nyrVeggur, strikSkerKassa, type Kassi, type P } from "./veggja-ritill";
-import { skiptaUt } from "./veggja-ritill-adgerdir";
+import type { LineObject } from "./types";
+import { afritMedPunktum, heimsPunktar, inniKassa, nyrVeggur, strikSkerKassa, type Kassi, type P } from "./veggja-ritill";
+import { ritillDilarAMetra, ritillVeggir, skiptaUt } from "./veggja-ritill-adgerdir";
 import { useVeggjaRitill, type Tillogur } from "./veggja-ritill-stada";
 
 export type TillagaVeggur = Tillogur["veggir"][number];
@@ -54,14 +56,37 @@ export function skiptaTillogum(veggir: readonly TillagaVeggur[], idx: readonly n
   return { valdar: veggir.filter((_, i) => s.has(i)), eftir: veggir.filter((_, i) => !s.has(i)) };
 }
 
-/** Samþykkja tillögur → veggir á teikningunni (ein ⌘Z-færsla). Skilar fjölda. */
+/** Veggir borðsins sem samþykktar hurðir liggja ofan á: klipptir í gatinu (hurð liggur í gati, aldrei ofan á vegg).
+ * Skilar auðkennum sem fara og bútunum sem koma í staðinn. */
+export function veggirUndirHurdum(hurdir: readonly { p: number[]; t: number }[], veggir: readonly LineObject[], dpm: number): { eyda: string[]; baeta: LineObject[] } {
+  const eyda: string[] = [];
+  const baeta: LineObject[] = [];
+  if (!hurdir.length) return { eyda, baeta };
+  for (const o of veggir) {
+    const p = heimsPunktar(o);
+    if (p.length !== 4) continue;
+    const tg = o.veggTegund ?? "veggur";
+    if (tg !== "veggur" && tg !== "ei60" && tg !== "ei30") continue;
+    const r = skeraVeggiUndirHurdum([{ p, t: o.strokeWidth }], hurdir, dpm);
+    if (!r.skornir) continue;
+    eyda.push(o.id);
+    for (const b of r.veggir) baeta.push(afritMedPunktum(o, b.p, newId()));
+  }
+  return { eyda, baeta };
+}
+
+/** Samþykkja tillögur → veggir á teikningunni (ein ⌘Z-færsla). Hurðir klippa veggina sem þær liggja ofan á. Skilar fjölda. */
 export function samthykkjaTillogur(idx: readonly number[]): number {
   const t = useVeggjaRitill.getState().tillogur;
   if (!t || !idx.length) return 0;
   const { valdar, eftir } = skiptaTillogum(t.veggir, idx);
-  const plan = useBoardStore.getState().objects.some((o) => o.id === t.planId) ? t.planId : undefined;
+  const b = useBoardStore.getState();
+  const plan = b.objects.some((o) => o.id === t.planId) ? t.planId : undefined;
   const nyir = valdar.map((v) => nyrVeggur(v.p, { id: newId(), thykkt: v.t, tegund: v.tegund ?? "veggur", parentId: plan, greining: t.lota }));
-  if (nyir.length) skiptaUt([], nyir, []);
+  const hurdir = valdar.filter((v) => v.tegund === "hurd");
+  const dpm = ritillDilarAMetra(b.objects, b.pixelsPerMeter) ?? 100;
+  const undir = veggirUndirHurdum(hurdir, ritillVeggir(), dpm);
+  if (nyir.length) skiptaUt(undir.eyda, [...undir.baeta, ...nyir], []);
   useVeggjaRitill.getState().setTillogur(eftir.length ? { ...t, veggir: eftir } : null);
   return nyir.length;
 }
