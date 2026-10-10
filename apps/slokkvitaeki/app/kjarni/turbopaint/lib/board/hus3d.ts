@@ -468,8 +468,29 @@ export function festaAVegg(veggir: Veggbutur[], x: number, y: number, seiling: n
 
 /* ── Raunhæð veggja: dílar á metra ─────────────────────────────────────────────────────────────────────────────── */
 
-/** Lofthæð hæðar í metrum (383: 3,0 m). */
+/** Sjálfgefin lofthæð í metrum (383: 3,0 m) — iðnaður, verslun, skrifstofur og óflokkað. */
 export const VEGGHAED_M = 3.0;
+/** Lofthæð íbúðarhúsa og gistingar í metrum. */
+export const LOFTHAED_IBUD_M = 2.5;
+/** Tegundir staðar (v_stadur_flokkun.tegund) sem eru íbúðarhús, gisting eða búseta. */
+const IBUDARTEGUNDIR = new Set([
+  "fjolbyli_lagt",
+  "fjolbyli_hatt",
+  "einbyli",
+  "ibudagisting",
+  "herbergjaleiga",
+  "hotel",
+  "heimagisting_10",
+  "heimagisting_yfir10",
+  "ibudir_aldradra",
+  "hjukrunarheimili",
+  "fristundahus",
+]);
+
+/** Lofthæð eftir tegund staðar (Agnar 10.10.2026: „2m 50cm í íbúðarhúsum. 3m í iðnaðarhúsnæðum") — sama regla og 383. */
+export function lofthaedTegundar(tegund: string | null | undefined): number {
+  return tegund && IBUDARTEGUNDIR.has(tegund) ? LOFTHAED_IBUD_M : VEGGHAED_M;
+}
 /** 1 pt á blaði í kvarða 1:100 = 0,03528 m í raun. */
 const PT_I_METRUM = (0.0254 / 72) * 100;
 

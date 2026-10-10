@@ -21,6 +21,7 @@ import {
   haedarNumer,
   husLengd,
   husUrBordi,
+  lofthaedTegundar,
   pdfDilarAMetra,
   VEGGHAED_M,
   veljaDilarAMetra,
@@ -32,6 +33,7 @@ import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-
 import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
+import { getSupabase } from "../../lib/board/supabase";
 import { saekjaBladstaerd } from "../../lib/board/teikn-thjonusta";
 import type { BoardObject } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
@@ -137,6 +139,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const [villa, setVilla] = useState<string | null>(null);
   const [hledst, setHledst] = useState(true);
   const [kvardar, setKvardar] = useState<Kvardi[] | null>(null);
+  const [lofth, setLofth] = useState<number | null>(null);
   const handfang = useRef<Handfang | null>(null);
   const gegnRef = useRef(gegn);
   gegnRef.current = gegn;
@@ -144,6 +147,41 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   kynningRef.current = kynning;
   const loka = useRef(onClose);
   loka.current = onClose;
+
+  // ── Lofthæð eftir tegund staðarins (v_stadur_flokkun): 2,5 m í íbúðarhúsum og gistingu, annars 3,0 m. Staður
+  // borðsins = fyrsta mynd tengd úttekt/blaðhluta, annars úttektargögnin. Náist tegundin ekki gilda 3,0 m.
+  const stadurId = useMemo(() => {
+    for (const o of objects) {
+      if (o.type !== "image") continue;
+      const c = o.uttekt?.companyId ?? o.bladhluti?.companyId;
+      if (c) return c;
+    }
+    return gogn?.companyId ?? null;
+  }, [objects, gogn]);
+  useEffect(() => {
+    let lifir = true;
+    const sb = getSupabase();
+    if (!stadurId || !sb) {
+      setLofth(VEGGHAED_M);
+      return;
+    }
+    setLofth(null);
+    const fresta = setTimeout(() => lifir && setLofth((l) => l ?? VEGGHAED_M), 4000);
+    void sb
+      .from("v_stadur_flokkun")
+      .select("tegund")
+      .eq("fyrirtaeki_id", stadurId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (lifir) setLofth(lofthaedTegundar((data as { tegund?: string } | null)?.tegund));
+      }, () => {
+        if (lifir) setLofth(VEGGHAED_M);
+      });
+    return () => {
+      lifir = false;
+      clearTimeout(fresta);
+    };
+  }, [stadurId]);
 
   // ── Kvarði hverrar hæðar: K → PDF-síðan → blaðstærð (teikn-blad) → A1-ágiskun, með trúverðugleikamörkum 383 ──
   useEffect(() => {
@@ -187,7 +225,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   // ── Sviðið ──
   useEffect(() => {
     const el = gamur.current;
-    if (!el || !haedir.length || !kvardar) return;
+    if (!el || !haedir.length || !kvardar || lofth == null) return;
     let lifir = true;
     let hreinsa = () => {};
     setGanga(false);
@@ -316,9 +354,9 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           const hd = valdar[nr];
           const kv = kvValdra[nr];
           const lengd = husLengd(hd);
-          // RAUNHÆÐ (383 vegghaed): 3,0 m í kvarða teikningarinnar; án trúverðugs kvarða gamla hlutfallið.
-          const veggH = kv ? VEGGHAED_M * kv.dilar : Math.max(hd.breidd, hd.haed) * 0.03;
-          const metri = veggH / VEGGHAED_M;
+          // RAUNHÆÐ (383): lofthæð staðarins í kvarða teikningarinnar; án trúverðugs kvarða gamla hlutfallið (3 m ≈ 3 %).
+          const metri = kv ? kv.dilar : Math.max(hd.breidd, hd.haed) * 0.01;
+          const veggH = lofth * metri;
           const hopur = new T.Group();
           hopur.position.y = haedY;
           svid.add(hopur);
@@ -407,8 +445,9 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             losa.push(glE);
           }
           if (hurdir.length) {
-            // Hurðargöt: veggurinn heldur áfram OFAN við hurðina (dyrakarmur, efsti fjórðungur vegghæðar) — gengt undir.
-            const karmH = veggH * 0.26;
+            // Hurðargöt: veggurinn heldur áfram OFAN við hurðina (dyrakarmur) — gengt undir. Opið er 2,22 m óháð lofthæð
+            // (karmur 78 cm við 3 m, 28 cm við 2,5 m), karmurinn aldrei undir 25 cm.
+            const karmH = Math.max(0.25 * metri, veggH - 2.22 * metri);
             const karmar = new T.InstancedMesh(kG, kEfni, hurdir.length);
             const rE = new T.MeshBasicMaterial({ color: 0xffffff });
             const rendur = new T.InstancedMesh(kG, rE, hurdir.length);
@@ -416,7 +455,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
               karmar.setMatrixAt(i, kassi(v, veggH - karmH / 2, karmH, 0));
               karmar.setColorAt(i, lit.setHex(v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : VEGGLITUR_3D));
               // Lituð rönd ofan á karminum: hurðirnar sjást líka beint ofan frá og þegar veggir eru gegnsæir.
-              rendur.setMatrixAt(i, kassi(v, veggH + veggH * 0.012, veggH * 0.024, 0, 1.25));
+              rendur.setMatrixAt(i, kassi(v, veggH + metri * 0.036, metri * 0.072, 0, 1.25));
               rendur.setColorAt(i, lit.setHex(v.eld ? ELDHURD_3D : HURDALITUR_3D));
               if (v.eld) fjoldi.brunahurdir++;
             });
@@ -436,7 +475,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             const fest = festaAVegg(hd.veggir, t.x, t.y, 1.6 * metri);
             const litur = new T.Color(t.litur || "#c93c1d");
             if (t.gerd) {
-              const lk = taekjalikan(t.gerd, veggH, litur);
+              const lk = taekjalikan(t.gerd, VEGGHAED_M * metri, litur); // tækin í raunstærð óháð lofthæð
               lk.position.set(fest.x, 0, fest.y);
               lk.rotation.y = Math.atan2(fest.nx, fest.ny);
               hopur.add(lk);
@@ -444,7 +483,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             }
             let grannar = 0;
             for (let j = 0; j < nrT; j++) if (Math.hypot(hd.taeki[j].x - t.x, hd.taeki[j].y - t.y) < naerri) grannar++;
-            const toppur = veggH * (1.55 + grannar * 0.85);
+            const toppur = VEGGHAED_M * metri * (1.55 + grannar * 0.85);
             const sG = new T.CylinderGeometry(rad * 0.1, rad * 0.1, toppur, 8), sE = new T.MeshLambertMaterial({ color: litur });
             const stong = new T.Mesh(sG, sE);
             stong.position.set(fest.x, toppur / 2, fest.y);
@@ -862,7 +901,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar]);
+  }, [haedir, syna, teikningAGolfi, kvardar, lofth]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -990,7 +1029,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         <span className="ml-auto text-[11.5px] text-stone-400">
           {ganga
             ? "Ganga: draga = líta í kring · hjól / W S / ↑ ↓ = áfram og aftur · A D / ← → = til hliðar · shift = hraðar · tvísmella á gólf = fara þangað · Esc = hætta"
-            : `${veggjaFjoldi} veggbútar · ${taekjaFjoldi} tæki · lofthæð ${VEGGHAED_M.toFixed(1).replace(".", ",")} m (${kvTexti}) · draga = snúa · hægri-draga = færa · hjól = nær/fjær`}
+            : `${veggjaFjoldi} veggbútar · ${taekjaFjoldi} tæki · lofthæð ${(lofth ?? VEGGHAED_M).toFixed(1).replace(".", ",")} m (${kvTexti}) · draga = snúa · hægri-draga = færa · hjól = nær/fjær`}
         </span>
         <button
           type="button"
