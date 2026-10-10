@@ -9,7 +9,6 @@ import "./heimilisfang-leit.css";
 import { ARTCRAFT_INTERFACES } from "./artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "./data";
 import { RagnarokView } from "./ragnarok/RagnarokView";
-import { HvadBanner } from "./HvadGetEgGert";
 
 type Order = { id: number; buid_til: string; nafn: string; samtals: number };
 type Inq = { id: number; buid_til: string; nafn: string; skilabod: string };
@@ -210,9 +209,6 @@ export default function MasterClient() {
   const classic = (
     <StationShell showNav>
       <section id="ms-yfirlit" className="ms-section">
-        <div style={{ marginBottom: 18 }}>
-          <HvadBanner />
-        </div>
         <div className="ms-card" style={{ marginBottom: 18, padding: 14, background: "#1a1d2e", color: "#f5f5f4" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
             <div>

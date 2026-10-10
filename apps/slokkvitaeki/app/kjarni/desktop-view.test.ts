@@ -45,7 +45,6 @@ test("stored zoom falls back when missing", () => {
 test("station paths lock desktop except TurboPaint and ArtCraft", () => {
   assert.equal(isStationDesktopPath("/kerfi"), true);
   assert.equal(isStationDesktopPath("/kjarni"), true);
-  assert.equal(isStationDesktopPath("/kjarni/hvad"), true);
   assert.equal(isStationDesktopPath("/kjarni/turbopaint"), false);
   assert.equal(isStationDesktopPath("/kjarni/artcraft"), false);
   assert.equal(isStationDesktopPath("/kjarni/artcraft/photocraft"), false);
