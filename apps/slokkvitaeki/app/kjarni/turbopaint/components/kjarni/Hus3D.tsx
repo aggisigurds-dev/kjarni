@@ -63,7 +63,10 @@ function saekjaThree(): Promise<Three> {
 
 // Litir 383: ljósir veggir með dökkri efri brún (grunnmyndin lesist ofan frá), EI-60 rauður, EI-30 ljósrauður; hurðir
 // sjást ofan frá á litaðri rönd — brunahurð appelsínugul, önnur brún.
-const BAKGRUNNUR_3D = 0xdcd9d2;
+const BAKGRUNNUR_3D = 0xe8e6e1;
+/** Yfirlit eins og í Teikning: ofan frá, húsið lesist. Ekki ¾-horn sem sýnir aðeins efri brúnir veggja. */
+const YFIRLIT_PHI = 0.34;
+const YFIRLIT_THETA = -0.22;
 const VEGGLITUR_3D = 0xf2eee6;
 const TOPPLITUR_3D = 0x5c574f;
 const ELDLITIR_3D: Record<number, number> = { 60: 0xd32f2f, 30: 0xe57373 };
@@ -350,10 +353,11 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           veggEfni.push(kE, kTopp);
           const veggLitur = (v: Haed3D["veggir"][number]) =>
             v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
-          const sjalfg = lengd * 0.004;
+          const sjalfg = Math.max(metri * 0.12, lengd * 0.004);
           const kassi = (v: Haed3D["veggir"][number], y: number, hH: number, lengdAuki: number, thykktK = 1) => {
             q.setFromAxisAngle(ofan, -Math.atan2(v.by - v.ay, v.bx - v.ax));
-            const th = Math.max(0.8, v.thykkt || sjalfg) * thykktK;
+            // Skönnun gefur stundum 50–70 cm „vegg" (húsgögn / tvöfalt strik). Í yfirliti eru veggir 12–20 cm.
+            const th = Math.min(metri * 0.2, Math.max(metri * 0.12, v.thykkt || sjalfg)) * thykktK;
             m4.compose(st3.set((v.ax + v.bx) / 2, y, (v.ay + v.by) / 2), q, kv3.set(Math.hypot(v.bx - v.ax, v.by - v.ay) + (lengdAuki ? th : 0), hH, th));
             return m4;
           };
@@ -541,7 +545,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const mid = new T.Vector3(u0 ? (u0.x0 + u0.x1) / 2 : 0, midjaY, u0 ? (u0.y0 + u0.y1) / 2 : 0);
         const upphafsFjarl = () =>
           Math.max(husStaerst * 1.25, efstaY * 2.3) * (b < h * 1.5 ? Math.min(2.6, (1.5 * h) / Math.max(1, b)) : 1);
-        let theta = -0.6, phi = 0.95, fjarl = upphafsFjarl();
+        let theta = YFIRLIT_THETA, phi = YFIRLIT_PHI, fjarl = upphafsFjarl();
         const stillaVel = () => {
           phi = Math.min(1.5, Math.max(0.12, phi));
           fjarl = Math.min(bladStaerst * 6 + efstaY * 2, Math.max(husStaerst * 0.06, fjarl));
@@ -779,6 +783,12 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           skraut.forEach((o) => {
             o.visible = !a;
           });
+          if (a && !gongu) {
+            theta = YFIRLIT_THETA;
+            phi = YFIRLIT_PHI;
+            fjarl = upphafsFjarl();
+            stillaVel();
+          }
         };
         synaKynningu(kynningRef.current);
         handfang.current = {
