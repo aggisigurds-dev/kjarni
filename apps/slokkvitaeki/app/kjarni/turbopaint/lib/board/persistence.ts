@@ -2,7 +2,7 @@ import { del, get, set } from "idb-keyval";
 import { festaIGeymslu, getAssetBlob, hydrateAssets, putAsset } from "./assets";
 import { createDemoBoard } from "./demo-board";
 import { newId } from "./ids";
-import { erSkodun, useSkodun } from "./skodun";
+import { erSkodun, useSkodun, type ThjalfunMerki } from "./skodun";
 import { isDuplicateStorageError } from "./storage-errors";
 import { assetPublicUrl, getSupabase } from "./supabase";
 import { useBoardStore } from "./store";
@@ -584,7 +584,7 @@ export async function clearBoard() {
 
 /** Opnar tómt skoðunarborð í minni. Síðasta borðið, borðalistinn og samstillingin eru ósnert. */
 export function opnaSkodun(titill: string, slod: string) {
-  useSkodun.setState({ virk: true, titill, slod, grunnur: null, vistar: false });
+  useSkodun.setState({ virk: true, titill, slod, grunnur: null, vistar: false, drog: null });
   if (typeof window !== "undefined") window.clearTimeout(pushTimer);
   currentBoardId = null;
   lastContentJson = "";
@@ -605,7 +605,7 @@ export function opnaSkodun(titill: string, slod: string) {
 /** Skoðun lýkur (vistuð, eða skipt yfir á annað borð) — venjuleg vistun tekur við. */
 function haettaSkodun() {
   if (!erSkodun()) return;
-  useSkodun.setState({ virk: false, grunnur: null, vistar: false });
+  useSkodun.setState({ virk: false, grunnur: null, vistar: false, drog: null });
   installSyncListeners();
 }
 
@@ -623,6 +623,13 @@ export async function vistaSkodunSemBord(): Promise<{ id: string; sky: "synced" 
       ...myndir.map((o) => o.assetId),
       ...myndir.map((o) => o.frumAssetId).filter((x): x is string => !!x),
     ]);
+    // Opnað með drögum (#drog=): teikningin fær merkið `thjalfun` — yfirfarin drög = þjálfunargögn veggjavélarinnar
+    // (raun_saekja.js les það). Án draga er ekkert merkt.
+    const drog = useSkodun.getState().drog;
+    if (drog && myndir.some((o) => o.id === drog.planId)) {
+      const merki: ThjalfunMerki = { drog: drog.fingur, yfirfarid: true, kl: new Date().toISOString() };
+      useBoardStore.getState().patchObject(drog.planId, { thjalfun: merki } as Partial<BoardObject>, false);
+    }
     haettaSkodun();
     const id = newId();
     currentBoardId = id;
