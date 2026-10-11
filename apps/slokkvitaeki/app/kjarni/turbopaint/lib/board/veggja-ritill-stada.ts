@@ -36,6 +36,11 @@ export interface Tillogur {
 
 const LYKILL = "tp_veggjaritill";
 
+/** Lykill forskoðunarveggs (hnit á 0,1 nákvæmni) — sami veggur fær sama lykil í síuninni og á yfirlaginu. */
+export function forskodunLykill(v: { p: number[] }) {
+  return v.p.map((n) => Math.round(n * 10) / 10).join(",");
+}
+
 export interface Forskodun {
   linur: number[][];
   veggir: { p: number[]; t: number; tegund?: VeggTegund }[];
@@ -83,6 +88,16 @@ interface RitilStada extends Vistad {
   adeinsVeggir: Record<string, boolean> | null;
   /** Forskoðun greiningar á borðinu (heimshnit): línur valinna PDF-flokka og veggirnir sem yrðu til. */
   forskodun: Forskodun | null;
+  /** Veggir sem notandinn fjarlægði úr forskoðuninni áður en hún er samþykkt (Agnar 11.10.2026: „leyfa mér að eyða þarna
+   * óæskilegum veggjum í staðinn fyrir að þurfa að samþykkja og eyða síðan") — lyklar (forskodunLykill), í lotum svo
+   * „Afturkalla" taki síðustu. */
+  forskodunBurt: string[][];
+  /** Smellur á forskoðunarvegg eyðir honum úr tillögunni, dráttur eyðir öllum í kassanum (meðan viðvörunin er opin). */
+  forskodunEyding: boolean;
+  setForskodunEyding: (a: boolean) => void;
+  burtUrForskodun: (lyklar: string[]) => void;
+  afturkallaBurt: () => void;
+  hreinsaBurt: () => void;
   /** Þéttur hamur (Agnar 09.10.2026: „Sýna bara… velja. Teikna. Eyða. Undo."): aðeins lítil ræma í stað gluggans.
    * Sjálfgefinn í síma í hvert sinn sem ritillinn opnast, fullur gluggi í tölvu; „Meira" / „Minna" víxla. */
   thett: boolean;
@@ -136,6 +151,14 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
   adeinsVeggir: null,
   forskodun: null,
   setForskodun: (forskodun) => set({ forskodun }),
+  forskodunBurt: [],
+  forskodunEyding: false,
+  setForskodunEyding: (forskodunEyding) => set({ forskodunEyding }),
+  burtUrForskodun: (lyklar) => {
+    if (lyklar.length) set({ forskodunBurt: [...get().forskodunBurt, lyklar] });
+  },
+  afturkallaBurt: () => set({ forskodunBurt: get().forskodunBurt.slice(0, -1) }),
+  hreinsaBurt: () => set({ forskodunBurt: [] }),
   thett: false,
   setThett: (thett) => set({ thett, hjalp: false }),
   kedjuRof: 0,
@@ -196,7 +219,7 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
   },
   setHjalp: (hjalp) => set({ hjalp }),
   opnaGreiningu: (planId, tillogur) => set({ greining: { planId, tillogur: !!tillogur } }),
-  lokaGreiningu: () => set({ greining: null, forskodun: null }),
+  lokaGreiningu: () => set({ greining: null, forskodun: null, forskodunBurt: [], forskodunEyding: false }),
   laesaTeikningu: (laest) => {
     const t = useBoardStore.getState().layers.find((l) => l.id === LAYER_TEIKNING);
     if (t && t.locked !== laest) useBoardStore.getState().toggleLayerLocked(LAYER_TEIKNING);
