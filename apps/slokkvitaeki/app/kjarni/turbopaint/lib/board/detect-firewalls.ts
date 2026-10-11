@@ -5,13 +5,14 @@ import { collectFirewallHits, ratingColor, type FirewallHit, type FirewallRating
 import { makeSymbol } from "./markup-kit";
 import { getStampSize } from "./symbol-settings";
 import type { BoardObject, ImageObject, RectObject, TextObject } from "./types";
+import { anda } from "./anda";
 
 export const FIREWALL_MARK_NAMES = ["Eldveggur", "Eldhurð", "Eldveggir"] as const;
 
 const OCR_MAX = 5200;
 const OCR_MIN = 3600;
 
-const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const yieldToUi = anda;
 
 /** Svart blek á hvítu fyrir OCR: rauð/bleik ský og lituð yfirstrikun sem
  * liggja yfir EI-merkingum á skönnuðum teikningum drekkja textanum annars.

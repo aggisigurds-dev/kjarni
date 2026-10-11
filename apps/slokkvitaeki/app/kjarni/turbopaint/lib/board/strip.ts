@@ -7,6 +7,7 @@ import { PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
 import { finnaVeggi, sjalfgefnarVeggjaStillingar, type VeggjaNidurstada } from "./veggir";
 import { siaRgba, sjalfgefinVeggthykkt, teljaFlokka, type SiaFlokkur, type SiaUrGlugga } from "./siur";
 import type { ImageObject } from "./types";
+import { anda } from "./anda";
 
 // „Strip": hreinsar skannaða teikningu niður í svart blek á hvítum grunni.
 // Reglan per pixil: haldið ef hann er nógu dökkur OG nálægt gráskala —
@@ -22,7 +23,7 @@ export interface StripResult {
 const CHUNK_ROWS = 400;
 
 /** Hleypir viðmótinu að (framvindustika) — setTimeout, ekki rAF: rAF stöðvast í földum flipa og síunin hengi. */
-const andaUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const andaUI = anda;
 
 function nextFrame() {
   return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

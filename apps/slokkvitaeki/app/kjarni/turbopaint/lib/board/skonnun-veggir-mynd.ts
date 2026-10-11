@@ -12,6 +12,7 @@ import {
 } from "./skonnun-veggir";
 import type { VeggTegund } from "./teikning-veggir";
 import type { ImageObject } from "./types";
+import { anda } from "./anda";
 
 export interface VeggirSkonnunar {
   /** Veggir og gler í borðhnitum (miðlína + þykkt + tegund). */
@@ -20,7 +21,7 @@ export interface VeggirSkonnunar {
   ms: number;
 }
 
-const andaUI = () => new Promise<void>((r) => setTimeout(r, 0));
+const andaUI = anda;
 
 /** Grátónamynd svæðisins: minnkað í helmingsþrepum (stór minnkun í einu skrefi tekur fáa díla — sbr. skonnun.ts). */
 async function vinnumynd(bmp: ImageBitmap, g: ReturnType<typeof greiningarSvaedi>): Promise<Uint8Array> {

@@ -11,6 +11,7 @@ import { PDFJS_WORKER_SRC, classifyFile, pdfJsDocumentOptions } from "./pdfjs-se
 import { downsampleTiffData } from "./tiff-raster";
 import type { ImageObject, ImportQuality } from "./types";
 import { IMPORT_MAX_PX } from "./types";
+import { anda } from "./anda";
 
 export { classifyFile, PDFJS_WASM_URL, PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
 
@@ -35,7 +36,7 @@ function idFyrirSkra(skraHash: string | null, gaedi: ImportQuality): IdFyrir {
   return async (sida) => (await eignarIdUrLykli(skjamyndarLykill(skraHash, gaedi, sida))) ?? newId();
 }
 
-const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const yieldUi = anda;
 
 /** Skannað PDF (stærra en vigur-uppdráttur) og TIF eru ljósmyndir af blaði: sem PNG varð ein síða 63 MB á
  * borðinu og í skýinu. JPEG í 0,9 heldur línunum skörpum á broti af stærðinni. Vigur-PDF helst PNG. */
