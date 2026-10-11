@@ -47,6 +47,7 @@ import { useUttektGogn } from "./uttekt-gogn";
 import { husKassi, husUtlina, hreinsaVeggi, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
 import { heimsPunktar, nyGreiningarLota, nyrVeggur, sameinaVidVeggi } from "./veggja-ritill";
 import { ritillDilarAMetra } from "./veggja-ritill-adgerdir";
+import { neikvaedarVisar, saekjaNeikvaett } from "./veggja-neikvaett";
 import {
   beidniGogn,
   lesaNidurstodu,
@@ -516,6 +517,19 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
     villa("veggir", err, "engir nýir veggir");
   }
   if (stodvad()) return stoppa();
+  // Þjálfunarminni (Agnar 11.10.2026): línur sem Agnar hefur tekið út á þessari hæð koma ekki aftur (veggja-neikvaett.ts).
+  if (hrar.length) {
+    try {
+      const neikv = await saekjaNeikvaett(p0);
+      const burt = new Set(neikvaedarVisar(hrar, neikv, 0.15 * dpm));
+      if (burt.size) {
+        hrar = hrar.filter((_, i) => !burt.has(i));
+        talning.neikvaett = burt.size;
+      }
+    } catch (err) {
+      console.warn("[sjálfvirkt] þjálfunarminni", err);
+    }
+  }
   // Tvítekningar ofan á föstum línum (veggjum Agnars) falla — aðeins óþakið bætist við.
   if (fastarH.length && hrar.length) {
     const s = sameinaVidVeggi(fastarH, hrar, { vik: 0.1 * dpm, lagmark: 0.25 * dpm });

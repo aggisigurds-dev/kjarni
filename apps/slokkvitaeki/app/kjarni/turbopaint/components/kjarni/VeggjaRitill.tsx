@@ -255,6 +255,20 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
 
   const cam = () => useBoardStore.getState().camera;
   const vik = () => 10 / cam().scale;
+  /** Forskoðun greiningar opin: taka línur úr tillögunni við punkt (smellur) eða í kassa. Skilar fjöldanum. */
+  const burtUrForskodunVid = (X: P | null, kassi: { x: number; y: number; width: number; height: number } | null, ham: "inni" | "snerta" = "snerta") => {
+    const r = useVeggjaRitill.getState();
+    if (!r.forskodun || !r.forskodunEyding) return 0;
+    const burt = new Set(r.forskodunBurt.flat());
+    const synd = r.forskodun.veggir.filter((v) => !burt.has(forskodunLykill(v)));
+    let idx: number[] = [];
+    if (X) {
+      const i = tillagaVid(X, synd, vik());
+      if (i >= 0) idx = [i];
+    } else if (kassi) idx = tillogurIKassa(synd, kassi, ham);
+    r.burtUrForskodun(idx.map((i) => forskodunLykill(synd[i])));
+    return idx.length;
+  };
   const lasVirkur = () => useVeggjaRitill.getState().hornalas !== shift.current;
 
   const tilHeims = useCallback((cx: number, cy: number): P => {
@@ -1014,16 +1028,8 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       const litill = Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4;
       const tl = useVeggjaRitill.getState().tillogur;
       if (d.tillaga === "forsk") {
-        const r = useVeggjaRitill.getState();
-        const burt = new Set(r.forskodunBurt.flat());
-        const synd = (r.forskodun?.veggir ?? []).filter((v) => !burt.has(forskodunLykill(v)));
-        let idx: number[];
-        if (litill) {
-          const i = tillagaVid(d.A, synd, vik());
-          idx = i >= 0 ? [i] : [];
-        } else idx = tillogurIKassa(synd, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta");
-        r.burtUrForskodun(idx.map((i) => forskodunLykill(synd[i])));
-        if (!idx.length) toast.message(litill ? "Enginn veggur hér — smelltu á græna línu" : "Enginn veggur í kassanum", { duration: 1200 });
+        const n = litill ? burtUrForskodunVid(d.A, null) : burtUrForskodunVid(null, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta");
+        if (!n) toast.message(litill ? "Enginn veggur hér — smelltu á græna línu" : "Enginn veggur í kassanum", { duration: 1200 });
       } else if (d.tillaga) {
         const idx = !litill && tl ? tillogurIKassa(tl.veggir, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta") : [];
         const n = d.tillaga === "samthykkja" ? samthykkjaTillogur(idx) : hafnaTillogum(idx);
@@ -1036,12 +1042,20 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
           { duration: 1500 }
         );
       } else if (litill) {
-        if (!d.eyda && !d.baeta) b.setSelected([]);
+        // „Eyða í kassa" smellt á græna forskoðunarlínu: hún fer úr tillögunni (Agnar 11.10.2026)
+        if (d.eyda) burtUrForskodunVid(d.A, null);
+        else if (!d.baeta) b.setSelected([]);
       } else {
         const ids = veggirIKassa(ritillVeggir(), kassi, d.B[0] >= d.A[0] ? "inni" : "snerta");
         if (d.eyda) {
           const n = eydaVeggjum(ids);
-          toast.message(n ? `${n} ${n === 1 ? "veggur eyddur" : "veggjum eytt"} · ⌘Z afturkallar` : "Enginn veggur í kassanum", { duration: 1500 });
+          const nf = burtUrForskodunVid(null, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta");
+          toast.message(
+            n || nf
+              ? [n ? `${n} ${n === 1 ? "veggur eyddur" : "veggjum eytt"} · ⌘Z afturkallar` : "", nf ? `${nf} ${nf === 1 ? "lína tekin" : "línur teknar"} úr tillögu` : ""].filter(Boolean).join(" · ")
+              : "Enginn veggur í kassanum",
+            { duration: 1500 }
+          );
         } else {
           b.setSelected(d.baeta ? [...new Set([...b.selectedIds, ...ids])] : ids);
         }

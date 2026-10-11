@@ -36,6 +36,7 @@ import { erVeggur } from "../../lib/board/veggja-leidretting";
 import { nyGreiningarLota, nyrVeggur, sameinaVidVeggi, semButur, talningTexti, veggjaTalning, type Butur } from "../../lib/board/veggja-ritill";
 import { ritillDilarAMetra, skiptaUt } from "../../lib/board/veggja-ritill-adgerdir";
 import { forskodunLykill, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
+import { neikvaedarVisar, saekjaNeikvaett, skraNeikvaett, type NLina } from "../../lib/board/veggja-neikvaett";
 import { maelaThekju } from "../../lib/board/veggja-thekja";
 import { bladMyndar } from "../../lib/board/margar-haedir";
 import { getSupabase, supabaseUrl } from "../../lib/board/supabase";
@@ -110,7 +111,45 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
   const [nu, setNu] = useState(() => Date.now());
   const beidni = useRef<{ id: number; byrjad: number; hafnadFra: number | null; lykill: string } | null>(null);
   const velTimi = useRef<number | null>(null);
-  const loka = () => useVeggjaRitill.getState().lokaGreiningu();
+  const loka = () => {
+    skraTekidUt();
+    useVeggjaRitill.getState().lokaGreiningu();
+  };
+  // ÞJÁLFUNARMINNI (Agnar 11.10.2026: „þegar kerfið merkir eitthvað skrítið sem vegg og ég ýti fjarlægja, að kerfið muni að
+  // gera það ekki aftur á svona akkúrat stað"): línur sem áður voru teknar út á þessari hæð eru faldar úr nýrri greiningu,
+  // og það sem tekið er út núna skráist (veggja-neikvaett.ts) þegar glugganum er lokað eða veggirnir settir inn.
+  const [neikv, setNeikv] = useState<NLina[] | null>(null);
+  const [munad, setMunad] = useState(0);
+  const munadRef = useRef<Set<string>>(new Set());
+  const skradRef = useRef<Set<string>>(new Set());
+  const nidRef = useRef<Nidurstada | null>(null);
+  function skraTekidUt() {
+    const n = nidRef.current;
+    const p = useBoardStore.getState().objects.find((o): o is ImageObject => o.id === planId && o.type === "image");
+    if (!n || !p) return;
+    const b = new Set(useVeggjaRitill.getState().forskodunBurt.flat());
+    const nyjar = n.veggir.filter((v) => {
+      const k = forskodunLykill(v);
+      return b.has(k) && !munadRef.current.has(k) && !skradRef.current.has(k);
+    });
+    if (!nyjar.length) return;
+    nyjar.forEach((v) => skradRef.current.add(forskodunLykill(v)));
+    void skraNeikvaett(p, nyjar.map((v) => ({ p: v.p, t: v.t, tegund: v.tegund })), "forskodun").then((k) => {
+      if (k) toast.message(`${k} ${k === 1 ? "lína skráð" : "línur skráðar"} í þjálfunarminni — kemur ekki aftur á þessum stað`, { duration: 2500 });
+    });
+  }
+  useEffect(() => {
+    let lifir = true;
+    const p = useBoardStore.getState().objects.find((o): o is ImageObject => o.id === planId && o.type === "image");
+    if (!p) return;
+    saekjaNeikvaett(p).then(
+      (n) => lifir && setNeikv(n),
+      () => lifir && setNeikv([])
+    );
+    return () => {
+      lifir = false;
+    };
+  }, [planId]);
   /** Kvarði borðsins núna (dílar á metra) — fyrir þykktarþakið. */
   const kvardiNu = () => {
     const s = useBoardStore.getState();
@@ -238,15 +277,28 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hamur, sida, valdir, innanHuss, gler, stakar, plan?.id, plan?.x, plan?.y, plan?.width, plan?.height]);
 
-  // Ný niðurstaða (annað val) = spurt upp á nýtt.
+  // Ný niðurstaða (annað val) = spurt upp á nýtt; línur úr þjálfunarminni hæðarinnar faldar strax.
   useEffect(() => {
+    nidRef.current = nid;
     setStadfesta(null);
-    useVeggjaRitill.getState().hreinsaBurt();
-  }, [nid]);
-  // Meðan viðvörunin er opin má eyða úr forskoðuninni beint á borðinu (Agnar 11.10.2026).
+    const R = useVeggjaRitill.getState();
+    R.hreinsaBurt();
+    munadRef.current = new Set();
+    skradRef.current = new Set();
+    if (nid && neikv && neikv.length) {
+      const st = useBoardStore.getState();
+      const m = ritillDilarAMetra(st.objects, st.pixelsPerMeter);
+      const idx = neikvaedarVisar(nid.veggir, neikv, m && m > 0 ? 0.15 * m : 8);
+      const lyklar = idx.map((i) => forskodunLykill(nid.veggir[i]));
+      munadRef.current = new Set(lyklar);
+      if (lyklar.length) R.burtUrForskodun(lyklar);
+      setMunad(lyklar.length);
+    } else setMunad(0);
+  }, [nid, neikv]);
+  // Meðan niðurstaðan sést má taka línur úr henni beint á borðinu: smellur / kassi (Agnar 11.10.2026).
   useEffect(() => {
-    useVeggjaRitill.getState().setForskodunEyding(!!stadfesta);
-  }, [stadfesta]);
+    useVeggjaRitill.getState().setForskodunEyding(!!nid && !tillogur && hamur !== "les");
+  }, [nid, tillogur, hamur]);
 
   // myndgreining / veggjavél: forskoðun veggjanna
   useEffect(() => {
@@ -745,6 +797,16 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       ) : null}
       {!tillogur && nid && samruni && hamur !== "les" && !stadfesta ? (
         <div className="mt-2 border-t border-white/10 pt-2">
+          <div data-forsk-eyding className="mb-2 rounded bg-white/5 px-2 py-1 text-[11.5px] leading-snug text-white/75">
+            <b>Taka úr:</b> smelltu á græna línu eða dragðu kassa á teikningunni (líka „Eyða í kassa" í ritlinum). Það sem þú
+            tekur út skráist í þjálfunarminni og kemur ekki aftur á sama stað.
+            {munad ? ` ${munad} ${munad === 1 ? "lína sem þú hefur áður tekið út er falin" : "línur sem þú hefur áður tekið út eru faldar"}.` : ""}
+            {burt.length ? (
+              <button type="button" onClick={() => useVeggjaRitill.getState().afturkallaBurt()} className="ml-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[11px] hover:bg-white/15">
+                Afturkalla
+              </button>
+            ) : null}
+          </div>
           {fyrir.length ? (
             <>
               <div className="text-[11.5px] text-white/70">
@@ -795,11 +857,11 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
               <button
                 type="button"
                 autoFocus
-                disabled={reiknar || !nid.veggir.length}
+                disabled={reiknar || !nidV.length}
                 onClick={() => beita("baeta")}
                 className={`${btn} bg-[#FE653F] text-white hover:bg-[#ff7a58] disabled:opacity-50`}
               >
-                Setja inn {nid.veggir.length} veggi
+                Setja inn {nidV.length} veggi
               </button>
               <button type="button" onClick={loka} className={`${btn} bg-white/5 hover:bg-white/10`}>
                 Hætta við
