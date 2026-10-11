@@ -1233,10 +1233,13 @@ export function WhiteboardApp() {
     // `&sjalfvirkt=1` („Sjálfvirkt" í Teikning-glugganum, Agnar 08.10.2026): sjálfvirka verkferlið keyrir eftir opnun —
     // hæstu gæði, skurður að húsinu, veggir, hreinsun, hurðir, EI, SLT/BRSL og vistun (lib/board/sjalfvirkt.ts).
     const sjalfvirkt = q.get("sjalfvirkt") === "1";
+    // `&rod=<hæð>,<hæð>` (Agnar 11.10.2026 — „Veggjavél" í 3D Teikningar: sömu vél og vinnuaðferð og TurboPaint): næstu
+    // hæðir sem fá verkferlið. Að lokinni vistun opnast sú næsta sjálfkrafa.
+    const rod = sjalfvirkt ? (q.get("rod") || "").split(",").map((x) => x.trim()).filter(Boolean) : [];
     useHamur.getState().setHamur(HAMIR.some((x) => x.id === hamQ) ? (hamQ as HamurId) : sjalfvirkt ? "teikning" : "slokkvitaeki");
     if (sjalfvirkt) useBoardStore.getState().setImportQuality("print");
     const hrein = new URL(window.location.href);
-    ["uttekt", "haed", "b", "h", "plan", "ham", "sjalfvirkt"].forEach((k) => hrein.searchParams.delete(k));
+    ["uttekt", "haed", "b", "h", "plan", "ham", "sjalfvirkt", "rod"].forEach((k) => hrein.searchParams.delete(k));
     window.history.replaceState({}, "", hrein.pathname + hrein.search);
     const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
     void (async () => {
@@ -1328,6 +1331,18 @@ export function WhiteboardApp() {
               if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
             },
           });
+          const st = useSjalfvirkt.getState();
+          if (rod.length && !st.stodva && st.vistun === "vistad") {
+            const n = new URL(window.location.href);
+            n.searchParams.set("uttekt", String(cid));
+            n.searchParams.set("haed", rod[0]);
+            n.searchParams.set("ham", "teikning");
+            n.searchParams.set("sjalfvirkt", "1");
+            if (rod.length > 1) n.searchParams.set("rod", rod.slice(1).join(","));
+            toast.message(`Næsta hæð eftir 3 s — ${rod.length} ${rod.length === 1 ? "hæð eftir" : "hæðir eftir"}`, { duration: 3000 });
+            await new Promise((r) => setTimeout(r, 3000));
+            if (!useSjalfvirkt.getState().stodva) window.location.assign(n.toString());
+          }
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
