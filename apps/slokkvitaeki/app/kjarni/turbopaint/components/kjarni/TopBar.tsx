@@ -417,7 +417,7 @@ export function TopBar({
             Merkja eldveggi (EI-30 / EI-60)
           </DropdownMenuItem>
           <DropdownMenuItem className="max-lg:hidden" onClick={() => onHamAdgerd?.("slt-brsl")}>
-            SLT / BRSL af teikningu (slökkvitæki, slöngur, skilti)
+            SLT / HSL / BRSL af teikningu (slökkvitæki, slöngur, skilti)
           </DropdownMenuItem>
           <DropdownMenuItem
             className="max-lg:hidden"

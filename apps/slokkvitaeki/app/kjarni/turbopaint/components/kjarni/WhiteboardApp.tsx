@@ -419,9 +419,9 @@ export function WhiteboardApp() {
         const plan = images[i];
         const framvinda = (message: string, percent: number) =>
           useBoardStore.getState().setImportProgress({ fileName: plan.name, percent, message });
-        framvinda(`Les SLT / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
-        // SLT/BRSL eru láréttir: aðeins láréttur lestur (⅓ tímans — Álfaborg: ~115 s í stað ~300 s)
-        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: false, onProgress: framvinda });
+        framvinda(`Les SLT / HSL / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
+        // Lóðréttur lestur líka (Agnar 11.10.2026, DRA ehf: „HSL" upp á rönd við veggi) — tekur um þrisvar lengri tíma
+        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: true, onProgress: framvinda });
         const { teikning, log } = await sltBrslUrTexta(plan, r, framvinda);
         console.info("[SLT] " + JSON.stringify(log));
         teikningar.push(teikning);

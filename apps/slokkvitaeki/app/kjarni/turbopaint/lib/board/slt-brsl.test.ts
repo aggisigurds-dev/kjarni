@@ -234,3 +234,15 @@ test("beitaSltBrsl: eldri 165.BR1-merki fara (líka utan blaðsins), tækin koma
   // án tækjalista: allt ótengt („ótengt" undir)
   assert.ok(draegi.objects.filter((o): o is SymbolObject => o.type === "symbol" && !o.name.startsWith("165.BR1")).every((t) => t.label === "ótengt" && t.uttektUnitId == null));
 });
+
+test("HSL = handslökkvitæki (DRA ehf 11.10.2026), líka lóðrétt skrifað upp á rönd við vegginn", () => {
+  assert.deepEqual(ordTegundir("HSL"), [{ tegund: "slt", sterkt: true }]);
+  assert.deepEqual(ordTegundir("H5L"), [{ tegund: "slt", sterkt: false }]);
+  assert.deepEqual(ordTegundir("HSI"), []);
+  const mynd = { b: 7000, h: 5000 };
+  const lodrett = { ...ord("HSL", 1000, 2000, 85, 20, 64), vertical: true };
+  const o = sltBrslOrd([lodrett], mynd);
+  assert.equal(o.length, 1);
+  assert.equal(o[0].tegund, "slt");
+  assert.equal(Math.round(o[0].h), 20); // stafahæð = breidd lóðrétts kassa
+});
