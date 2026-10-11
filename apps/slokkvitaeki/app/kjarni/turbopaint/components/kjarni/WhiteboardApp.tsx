@@ -35,6 +35,7 @@ import { getStampSize } from "../../lib/board/symbol-settings";
 import * as symbolSettingsApi from "../../lib/board/symbol-settings";
 import * as symbolsApi from "../../lib/board/symbols";
 import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
+import { iMyndardila, merkiUrBru } from "../../lib/board/merki-ocr";
 import { DRAEGI_LYKILL, sltBrslOrd, sltBrslStadir } from "../../lib/board/slt-brsl";
 import { sltBrslUrTexta } from "../../lib/board/slt-brsl-lestur";
 import { beitaSltBrsl, type SltBrslTeikning } from "../../lib/board/slt-brsl-bord";
@@ -420,8 +421,18 @@ export function WhiteboardApp() {
         const framvinda = (message: string, percent: number) =>
           useBoardStore.getState().setImportProgress({ fileName: plan.name, percent, message });
         framvinda(`Les SLT / HSL / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
-        // Lóðréttur lestur líka (Agnar 11.10.2026, DRA ehf: „HSL" upp á rönd við veggi) — tekur um þrisvar lengri tíma
-        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: true, onProgress: framvinda });
+        // Skrifstofutölvan (RapidOCR, luna-bridge merki-ocr) les SAMHLIÐA — líka lóðrétt og í ramma (Agnar 11.10.2026, DRA
+        // ehf: „HSL" upp á rönd við veggi, sem tesseract les ekki). Vafrinn les aðeins lárétt (⅓ tímans); náist ekki í
+        // brúna stendur lestur vafrans einn.
+        let bruStada = "";
+        const bruP = merkiUrBru(plan.assetId, (t) => {
+          bruStada = t;
+        }).catch(() => null);
+        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: false, onProgress: framvinda });
+        framvinda(bruStada ? "Skrifstofutölvan: " + bruStada : "Bíð eftir skrifstofutölvunni (RapidOCR)…", 92);
+        const bru = await bruP;
+        if (bru && bru.ord.length) r.words = r.words.concat(iMyndardila(bru, r.srcW, r.srcH));
+        if (!bru) toast.message("Skrifstofutölvan svaraði ekki — aðeins lestur vafrans (lóðrétt merki geta vantað)");
         const { teikning, log } = await sltBrslUrTexta(plan, r, framvinda);
         console.info("[SLT] " + JSON.stringify(log));
         teikningar.push(teikning);
