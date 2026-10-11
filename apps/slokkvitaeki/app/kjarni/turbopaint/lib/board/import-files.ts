@@ -191,7 +191,10 @@ async function rasterizePdfPage(
       const viewport = page.getViewport({ scale: plan.scale });
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      // intent "print": pdf.js teiknar þá án requestAnimationFrame. Með sjálfgefnu („display") bíður hver bútur eftir
+      // skjáramma — í földum flipa koma engir og innflutningurinn stöðvast (Dalshraun 1, 11.10.2026: biðröð
+      // „Veggjavél · N" stóð í 25 mín á „PDF tilbúið" þar til flipinn var sýndur).
+      await page.render({ canvasContext: ctx, viewport, canvas, intent: "print" }).promise;
       boostSheetCanvas(canvas);
       return { canvas, warnings: [...new Set(warnings)] };
     } catch (err) {
