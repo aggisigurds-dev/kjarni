@@ -80,7 +80,7 @@ import {
   skiptaUt,
   valdirVeggir,
 } from "../../lib/board/veggja-ritill-adgerdir";
-import { teiknaEldvegg, TILLOGU_TOL, TOL_HEITI, useVeggjaRitill, type RitilTol } from "../../lib/board/veggja-ritill-stada";
+import { forskodunLykill, teiknaEldvegg, TILLOGU_TOL, TOL_HEITI, useVeggjaRitill, type RitilTol } from "../../lib/board/veggja-ritill-stada";
 import { forhladaTeikningar, smellaVeggAMynd } from "../../lib/board/mynd-smellur";
 import { hafnaTillogum, samthykkjaTillogur, tillagaVid, tillogurIKassa } from "../../lib/board/veggja-tillogur";
 import { LITA_VEGGI_FLYTILYKILL, SKAERIR_VEGGLITIR, useVeggjaSyn } from "../../lib/board/veggja-syn";
@@ -228,7 +228,7 @@ export function VeggjaRitill() {
 
 type Drag =
   | { kind: "pan"; sx: number; sy: number; cx: number; cy: number }
-  | { kind: "kassi"; A: P; B: P; eyda: boolean; baeta: boolean; sx: number; sy: number; tillaga?: "samthykkja" | "hafna" }
+  | { kind: "kassi"; A: P; B: P; eyda: boolean; baeta: boolean; sx: number; sy: number; tillaga?: "samthykkja" | "hafna" | "forsk" }
   | { kind: "rettur"; A: P; B: P }
   // Agnar 07.10.2026: „hún dregst þegar ég held inni vinstri músartakkanum og stoppar þegar ég sleppi" — einn veggur á drátt
   | { kind: "teikna-drag"; sx: number; sy: number }
@@ -239,6 +239,7 @@ type Drag =
 const APPELSINA = "#FE653F";
 
 function RitilYfirlag({ virkur }: { virkur: boolean }) {
+  const eyding = useVeggjaRitill((s) => !!s.forskodun && s.forskodunEyding);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bendill = useRef<P | null>(null);
@@ -285,7 +286,9 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
 
     // forskoðun greiningar: veggirnir sem yrðu til (grænir / gler blátt) og línur valinna flokka (appelsínugular)
     if (r.forskodun) {
+      const burt = r.forskodunBurt.length ? new Set(r.forskodunBurt.flat()) : null;
       for (const v of r.forskodun.veggir) {
+        if (burt && burt.has(forskodunLykill(v))) continue;   // fjarlægt úr tillögunni
         ctx.beginPath();
         slod(v.p);
         ctx.strokeStyle = v.tegund === "gler" ? "rgba(37,99,235,0.55)" : v.tegund === "hurd" ? "rgba(180,83,9,0.55)" : "rgba(22,163,74,0.5)";
@@ -421,7 +424,7 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       const inni = d.B[0] >= d.A[0];
       const x = sx(Math.min(d.A[0], d.B[0])), y = sy(Math.min(d.A[1], d.B[1]));
       const w = Math.abs(d.B[0] - d.A[0]) * k.scale, h = Math.abs(d.B[1] - d.A[1]) * k.scale;
-      const lit = d.tillaga === "samthykkja" ? "13,148,136" : d.eyda || d.tillaga === "hafna" ? "220,38,38" : inni ? "37,99,235" : "22,163,74";
+      const lit = d.tillaga === "samthykkja" ? "13,148,136" : d.eyda || d.tillaga === "hafna" || d.tillaga === "forsk" ? "220,38,38" : inni ? "37,99,235" : "22,163,74";
       ctx.fillStyle = `rgba(${lit},0.08)`;
       ctx.fillRect(x, y, w, h);
       ctx.strokeStyle = `rgba(${lit},0.9)`;
@@ -430,7 +433,9 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
       merki(
-        d.tillaga
+        d.tillaga === "forsk"
+          ? "Eyða úr tillögu: " + (inni ? "allur veggurinn inni" : "snertir")
+          : d.tillaga
           ? (d.tillaga === "samthykkja" ? "Samþykkja: " : "Hafna: ") + (inni ? "öll tillagan inni" : "snertir")
           : (d.eyda ? "Eyða: " : "") + (inni ? "allur veggurinn inni" : "snertir"),
         x + w + 8,
@@ -506,10 +511,10 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     };
   }, [teiknaNu]);
 
-  // hjól = zoom (ekki óvirkt: preventDefault)
+  // hjól = zoom (ekki óvirkt: preventDefault) — líka meðan eytt er úr forskoðun greiningar
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || !virkur) return;
+    if (!el || !(virkur || eyding)) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const r = el.getBoundingClientRect();
@@ -522,7 +527,7 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [virkur]);
+  }, [virkur, eyding]);
 
   // ── keðja ────────────────────────────────────────────────────────────────────────────────────────────
   const ljukaKedju = useCallback(() => {
@@ -715,7 +720,24 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
 
   // ── mús ──────────────────────────────────────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!virkur) return;
+    if (!virkur) {
+      // FORSKOÐUN GREININGAR (viðvörunin opin): smellur á grænan vegg eyðir honum úr tillögunni, dráttur eyðir öllum í
+      // kassanum; hægri/miðju-dráttur færir borðið eins og áður.
+      const r0 = useVeggjaRitill.getState();
+      if (!r0.forskodunEyding || !r0.forskodun) return;
+      e.preventDefault();
+      wrapRef.current?.setPointerCapture(e.pointerId);
+      const b0 = useBoardStore.getState();
+      if (e.button === 1 || e.button === 2 || b0.spacePan) {
+        drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, cx: b0.camera.x, cy: b0.camera.y };
+        return;
+      }
+      if (e.button !== 0) return;
+      const X0 = tilHeims(e.clientX, e.clientY);
+      drag.current = { kind: "kassi", A: X0, B: X0, eyda: false, baeta: false, sx: e.clientX, sy: e.clientY, tillaga: "forsk" };
+      teiknaNu();
+      return;
+    }
     e.preventDefault();
     wrapRef.current?.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -857,7 +879,15 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!virkur) return;
+    if (!virkur) {
+      const d0 = drag.current;
+      if (d0?.kind === "pan") useBoardStore.getState().setCamera({ scale: cam().scale, x: d0.cx + e.clientX - d0.sx, y: d0.cy + e.clientY - d0.sy });
+      else if (d0?.kind === "kassi" && d0.tillaga === "forsk") {
+        d0.B = tilHeims(e.clientX, e.clientY);
+        teiknaNu();
+      }
+      return;
+    }
     if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const d = drag.current;
     if (d?.kind === "pinch") {
@@ -983,7 +1013,18 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       };
       const litill = Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4;
       const tl = useVeggjaRitill.getState().tillogur;
-      if (d.tillaga) {
+      if (d.tillaga === "forsk") {
+        const r = useVeggjaRitill.getState();
+        const burt = new Set(r.forskodunBurt.flat());
+        const synd = (r.forskodun?.veggir ?? []).filter((v) => !burt.has(forskodunLykill(v)));
+        let idx: number[];
+        if (litill) {
+          const i = tillagaVid(d.A, synd, vik());
+          idx = i >= 0 ? [i] : [];
+        } else idx = tillogurIKassa(synd, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta");
+        r.burtUrForskodun(idx.map((i) => forskodunLykill(synd[i])));
+        if (!idx.length) toast.message(litill ? "Enginn veggur hér — smelltu á græna línu" : "Enginn veggur í kassanum", { duration: 1200 });
+      } else if (d.tillaga) {
         const idx = !litill && tl ? tillogurIKassa(tl.veggir, kassi, d.B[0] >= d.A[0] ? "inni" : "snerta") : [];
         const n = d.tillaga === "samthykkja" ? samthykkjaTillogur(idx) : hafnaTillogum(idx);
         toast.message(
@@ -1033,7 +1074,7 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       ref={wrapRef}
       data-veggjaritill={virkur ? "virkur" : "forskodun"}
       className="absolute inset-0"
-      style={{ pointerEvents: virkur ? "auto" : "none", touchAction: "none", cursor: virkur ? "default" : undefined }}
+      style={{ pointerEvents: virkur || eyding ? "auto" : "none", touchAction: "none", cursor: virkur ? "default" : eyding ? "crosshair" : undefined }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
