@@ -37,6 +37,7 @@ import { nyGreiningarLota, nyrVeggur, sameinaVidVeggi, semButur, talningTexti, v
 import { ritillDilarAMetra, skiptaUt } from "../../lib/board/veggja-ritill-adgerdir";
 import { forskodunLykill, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { neikvaedarVisar, saekjaNeikvaett, skraNeikvaett, type NLina } from "../../lib/board/veggja-neikvaett";
+import { vinnaLinur, virkVikmork } from "../../lib/board/sjalfvirkt";
 import { maelaThekju } from "../../lib/board/veggja-thekja";
 import { bladMyndar } from "../../lib/board/margar-haedir";
 import { getSupabase, supabaseUrl } from "../../lib/board/supabase";
@@ -119,10 +120,31 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
   // gera það ekki aftur á svona akkúrat stað"): línur sem áður voru teknar út á þessari hæð eru faldar úr nýrri greiningu,
   // og það sem tekið er út núna skráist (veggja-neikvaett.ts) þegar glugganum er lokað eða veggirnir settir inn.
   const [neikv, setNeikv] = useState<NLina[] | null>(null);
+  const [autoVel, setAutoVel] = useState(false);
   const [munad, setMunad] = useState(0);
   const munadRef = useRef<Set<string>>(new Set());
   const skradRef = useRef<Set<string>>(new Set());
   const nidRef = useRef<Nidurstada | null>(null);
+  /** Sama vinnuaðferð og sjálfvirka ferlið á niðurstöðuna (Agnar 11.10.2026: „hurðirnar þurfa kannski bara að vera með
+   * inni í veggjaleitarvélinni" · „hurðamerkingar hafi forgangsrétt"): hreinsun (stakir bútar, smella, rétta), hurðir úr
+   * hurðabogum sem skera vegginn undir sér, gluggar → gler, og nýtt utan útlínu hússins fer. Bregðist það: óbreytt. */
+  async function vinnuadferd(p: ImageObject, veggir: Butur[]): Promise<Butur[]> {
+    if (!veggir.length) return veggir;
+    try {
+      const st = useBoardStore.getState();
+      const m = ritillDilarAMetra(st.objects, st.pixelsPerMeter) ?? 71.4 * (p.width / Math.max(1, p.uttekt?.myndSkurdur?.w || p.uttekt?.frumB || p.width));
+      const fastar = veggirTeikningar(st.objects, p).map(semButur);
+      const mynd = () => useBoardStore.getState().objects.find((o): o is ImageObject => o.id === p.id && o.type === "image") ?? null;
+      st.setImportProgress({ fileName: p.name, percent: 92, message: "Hreinsa og finn hurðir (sama og Sjálfvirkt)…" });
+      const v = await vinnaLinur(mynd, veggir, fastar, m, false, virkVikmork(), {});
+      return v.lokaNy;
+    } catch (err) {
+      console.warn("[veggir] vinnuaðferð sjálfvirka ferlisins brást — óunnin niðurstaða", err);
+      return veggir;
+    } finally {
+      useBoardStore.getState().setImportProgress(null);
+    }
+  }
   function skraTekidUt() {
     const n = nidRef.current;
     const p = useBoardStore.getState().objects.find((o): o is ImageObject => o.id === planId && o.type === "image");
@@ -208,8 +230,13 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
         }
         useBoardStore.getState().setImportProgress(null);
         if (haett) return;
-        setNid({ veggir: klemmaGreindaThykkt(veggir, kvardiNu()), linur: 0, thekja: null, aths });
+        const unnid = await vinnuadferd(p, klemmaGreindaThykkt(veggir, kvardiNu()));
+        if (haett) return;
+        setNid({ veggir: unnid, linur: 0, thekja: null, aths });
         setHamur("mynd");
+        // Skönnun: Veggjavélin (skrifstofutölvan) tekur við sjálfkrafa — myndgreining vafrans setti veggi á texta,
+        // húsgögn og tröppur (Agnar 11.10.2026, DRA). Greining vafrans stendur sem varaleið svari vélin ekki.
+        if (!("astaeda" in beidniGogn(p))) setAutoVel(true);
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         if (haett) return;
@@ -295,6 +322,13 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       setMunad(lyklar.length);
     } else setMunad(0);
   }, [nid, neikv]);
+  // Skönnun: Veggjavélin ræst sjálfkrafa þegar greining vafrans er komin (hún verður varaleiðin).
+  useEffect(() => {
+    if (!autoVel || hamur !== "mynd" || !nid || vel) return;
+    setAutoVel(false);
+    void byrjaVel(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoVel, hamur, nid, vel]);
   // Meðan niðurstaðan sést má taka línur úr henni beint á borðinu: smellur / kassi (Agnar 11.10.2026).
   useEffect(() => {
     useVeggjaRitill.getState().setForskodunEyding(!!nid && !tillogur && hamur !== "les");
@@ -323,12 +357,12 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
   }, [vel]);
 
   /** Niðurstaða vélarinnar (dílar frummyndar) → veggir á borðinu, í sama flæði og greining vafrans. */
-  const synaVel = (m: VelMinni, fyrri: boolean) => {
+  const synaVel = async (m: VelMinni, fyrri: boolean) => {
     const p = useBoardStore.getState().objects.find((o): o is ImageObject => o.id === planId && o.type === "image");
     if (!p) return;
     const blad = bladMyndar(p);
     const veggir = klemmaGreindaThykkt(velLinurIBord(m.linur, p, blad.frum, blad.svaedi), kvardiNu());
-    setNid({ veggir, linur: 0, thekja: null });
+    setNid({ veggir: await vinnuadferd(p, veggir), linur: 0, thekja: null });
     setVel({ s: "lokid", kl: m.kl, veggir: m.veggir, gler: m.gler, sek: m.sek, fyrri });
   };
 
@@ -341,7 +375,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
     const m: VelMinni = { id, kl, linur, veggir: n.veggir, gler: n.gler, sek: n.sek };
     velMinni.setja(lykill, m);
     if (beidni.current && beidni.current.id !== id) return;
-    synaVel(m, fyrri);
+    await synaVel(m, fyrri);
   };
 
   const kannaVel = async () => {
@@ -416,7 +450,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       if (!nytt) {
         const m = velMinni.fa(lykill);
         if (m) {
-          synaVel(m, true);
+          await synaVel(m, true);
           return;
         }
         const r = await sb

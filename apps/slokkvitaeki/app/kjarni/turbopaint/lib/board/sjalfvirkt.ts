@@ -313,6 +313,122 @@ async function keyraVeggjavel(planId: string, imageUrlHaedar: string | null, upp
 // ── verkferlið ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Keyrir sjálfvirka verkferlið á teikninguna `planId` (tengda úttektarhæð). */
+/** Vinnuaðferð sjálfvirka verkferlisins á greindar línur (borðhnit): d) hreinsun og e) hurðir — hurðabogar teikningarinnar
+ * gefa hurðir sem SKERA vegginn undir sér (hurð hefur forgang), finnaHurdir í bilum, gluggar → gler — og allt nýtt utan
+ * útlínu hússins fer. Notað af sjálfvirka ferlinu (með framvindu) og „Greina veggi" (Agnar 11.10.2026: „hurðirnar þurfa
+ * kannski bara að vera með inni í veggjaleitarvélinni" · „hurðamerkingar hafi forgangsrétt — hurðir yfirskrifi veggi"). */
+export async function vinnaLinur(
+  plan: () => ImageObject | null,
+  hrar: HLina[],
+  fastarH: HLina[],
+  dpm: number,
+  vigur: boolean,
+  vik: Vikmork,
+  talning: Record<string, unknown>,
+  k: {
+    hefja?: (id: SkrefId, texti?: string) => void;
+    ljuka?: (id: SkrefId, texti: string, stada?: "lokid" | "sleppt" | "villa") => void;
+    villa?: (id: SkrefId, err: unknown, eftir?: string) => void;
+    stodvad?: () => boolean;
+  } = {}
+): Promise<{ hreinar: HLina[]; hurdir: HLina[]; kandidatar: HurdKandidat[]; lokaNy: HLina[] }> {
+  // ── d) hreinsun ──
+  k.hefja?.("hreinsun");
+  let hreinar: HLina[] = hrar;
+  try {
+    // Skönnun: stakir bútar < stakurSkonnunM fara (húsgögn, texti sem varð að vegg); vigur-PDF heldur stakurM.
+    const h = hreinsaVeggi(hrar, fastarH, dpm, vigur ? vik : { ...vik, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
+    hreinar = h.linur;
+    Object.assign(talning, { hreinsun: h.talning });
+    const tl = h.talning;
+    k.ljuka?.(
+      "hreinsun",
+      `${tl.sameinadir} sameinaðir · ${tl.smellt} smellt · ${tl.lengdir} lengdir · ${tl.rettir} réttir · ${tl.stakir} stakir fjarlægðir` +
+        (tl.strikPunkt ? ` · ${tl.strikPunkt} strik-punkt` : "") +
+        ` (${hrar.length} → ${hreinar.length})`
+    );
+  } catch (err) {
+    k.villa?.("hreinsun", err, "óhreinsaðir veggir notaðir");
+  }
+  if (k.stodvad?.()) return { hreinar, hurdir: [], kandidatar: [], lokaNy: hreinar };
+
+  // ── e) hurðir (+ utan húss) ──
+  k.hefja?.("hurdir");
+  let hurdir: HLina[] = [];
+  let kandidatar: HurdKandidat[] = [];
+  let lokaNy: HLina[] = hreinar;
+  try {
+    const veggirH = [...hreinar.filter(erVeggTeg), ...fastarH.filter(erVeggTeg)];
+    const adrar = [...hreinar.filter((l) => !erVeggTeg(l)), ...fastarH.filter((l) => !erVeggTeg(l))];
+    let kassi: Rammi | null = null;
+    for (const l of [...veggirH, ...adrar])
+      for (let i = 0; i + 1 < l.p.length; i += 2)
+        kassi = kassi
+          ? { x0: Math.min(kassi.x0, l.p[i]), y0: Math.min(kassi.y0, l.p[i + 1]), x1: Math.max(kassi.x1, l.p[i]), y1: Math.max(kassi.y1, l.p[i + 1]) }
+          : { x0: l.p[i], y0: l.p[i + 1], x1: l.p[i], y1: l.p[i + 1] };
+    let syni: Awaited<ReturnType<typeof myndSyni>> = null;
+    if (kassi) {
+      const sp = 2 * dpm;
+      try {
+        syni = await myndSyni(plan()!, { x0: kassi.x0 - sp, y0: kassi.y0 - sp, x1: kassi.x1 + sp, y1: kassi.y1 + sp });
+      } catch (err) {
+        console.warn("[sjálfvirkt] myndsýni", err);
+      }
+    }
+    // Hurðabogar teikningarinnar (Agnar 10.10.2026: „eitthvað sem nær að spotta hurðarnar automatically"): staðfesta
+    // boga við göt OG gefa hurðir þar sem veggurinn brúaði gatið (þá er ekkert bil að finna).
+    let bogar: Bogi[] = [];
+    if (kassi) {
+      try {
+        const sp = 2 * dpm;
+        bogar = (await bogarTeikningar(plan()!, dpm, { x0: kassi.x0 - sp, y0: kassi.y0 - sp, x1: kassi.x1 + sp, y1: kassi.y1 + sp })).bogar;
+      } catch (err) {
+        console.warn("[sjálfvirkt] hurðabogar", err);
+      }
+    }
+    const bogiVid = bogaProf(bogar, dpm);
+    const d = finnaHurdir(veggirH, adrar, dpm, {
+      vik: vik.hurd,
+      bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
+      linaIBili: syni?.linaIBili,
+    });
+    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...d.gler, ...adrar], dpm).map(
+      (h) => ({ p: h.p, t: h.t, tegund: "hurd" as const })
+    );
+    if (urBogum.length) {
+      // veggur sem brúaði gatið er klipptur undir hurðinni
+      const veggirNyir = hreinar.filter(erVeggTeg), annad = hreinar.filter((l) => !erVeggTeg(l));
+      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, urBogum, dpm).veggir, ...annad];
+    }
+    hurdir = [...d.hurdir, ...urBogum];
+    talning.hurdabogar = { bogar: bogar.length, hurdir: urBogum.length };
+    kandidatar = d.kandidatar;
+    const nyttGler: HLina[] = d.gler;
+    // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
+    const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
+    const u = husUtlina(allar, dpm, vik.lokunM);
+    const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
+    hreinar = hreinar.filter((_, i) => !burtV.has(i));
+    hurdir = hurdir.filter((_, i) => !burtH.has(i));
+    lokaNy = [...hreinar, ...nyttGler.filter((_, i) => !burtG.has(i)), ...hurdir];
+    talning.hurdir = d.talning;
+    talning.utan = { veggir: burtV.size, hurdir: burtH.size, gler: burtG.size, lokud: u.lokud };
+    k.ljuka?.(
+      "hurdir",
+      `${hurdir.length} hurðir` +
+        (d.talning.bilahurdir ? ` (${d.talning.bilahurdir} bílahurðir)` : "") +
+        (urBogum.length ? ` · ${urBogum.length} úr hurðabogum` : "") +
+        (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
+        (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
+        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
+        (d.talning.hafnad.kross || d.talning.hafnad.skavegg ? ` · hafnað: ${d.talning.hafnad.kross} í krossi` : "")
+    );
+  } catch (err) {
+    k.villa?.("hurdir", err, "engar hurðir");
+  }
+  return { hreinar, hurdir, kandidatar, lokaNy };
+}
+
 export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Promise<void> {
   const S = useSjalfvirkt.getState;
   if (S().keyrir) return;
@@ -538,100 +654,9 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   }
   talning.leid = leid;
 
-  // ── d) hreinsun ──
-  hefja("hreinsun");
-  let hreinar: HLina[] = hrar;
-  try {
-    // Skönnun: stakir bútar < stakurSkonnunM fara (húsgögn, texti sem varð að vegg); vigur-PDF heldur stakurM.
-    const h = hreinsaVeggi(hrar, fastarH, dpm, leid === "vigur" ? vik : { ...vik, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
-    hreinar = h.linur;
-    Object.assign(talning, { hreinsun: h.talning });
-    const tl = h.talning;
-    ljuka(
-      "hreinsun",
-      `${tl.sameinadir} sameinaðir · ${tl.smellt} smellt · ${tl.lengdir} lengdir · ${tl.rettir} réttir · ${tl.stakir} stakir fjarlægðir` +
-        (tl.strikPunkt ? ` · ${tl.strikPunkt} strik-punkt` : "") +
-        ` (${hrar.length} → ${hreinar.length})`
-    );
-  } catch (err) {
-    villa("hreinsun", err, "óhreinsaðir veggir notaðir");
-  }
-  if (stodvad()) return stoppa();
-
-  // ── e) hurðir (+ utan húss) ──
-  hefja("hurdir");
-  let hurdir: HLina[] = [];
-  let kandidatar: HurdKandidat[] = [];
-  let lokaNy: HLina[] = hreinar;
-  try {
-    const veggirH = [...hreinar.filter(erVeggTeg), ...fastarH.filter(erVeggTeg)];
-    const adrar = [...hreinar.filter((l) => !erVeggTeg(l)), ...fastarH.filter((l) => !erVeggTeg(l))];
-    let kassi: Rammi | null = null;
-    for (const l of [...veggirH, ...adrar])
-      for (let i = 0; i + 1 < l.p.length; i += 2)
-        kassi = kassi
-          ? { x0: Math.min(kassi.x0, l.p[i]), y0: Math.min(kassi.y0, l.p[i + 1]), x1: Math.max(kassi.x1, l.p[i]), y1: Math.max(kassi.y1, l.p[i + 1]) }
-          : { x0: l.p[i], y0: l.p[i + 1], x1: l.p[i], y1: l.p[i + 1] };
-    let syni: Awaited<ReturnType<typeof myndSyni>> = null;
-    if (kassi) {
-      const sp = 2 * dpm;
-      try {
-        syni = await myndSyni(mynd()!, { x0: kassi.x0 - sp, y0: kassi.y0 - sp, x1: kassi.x1 + sp, y1: kassi.y1 + sp });
-      } catch (err) {
-        console.warn("[sjálfvirkt] myndsýni", err);
-      }
-    }
-    // Hurðabogar teikningarinnar (Agnar 10.10.2026: „eitthvað sem nær að spotta hurðarnar automatically"): staðfesta
-    // boga við göt OG gefa hurðir þar sem veggurinn brúaði gatið (þá er ekkert bil að finna).
-    let bogar: Bogi[] = [];
-    if (kassi) {
-      try {
-        const sp = 2 * dpm;
-        bogar = (await bogarTeikningar(mynd()!, dpm, { x0: kassi.x0 - sp, y0: kassi.y0 - sp, x1: kassi.x1 + sp, y1: kassi.y1 + sp })).bogar;
-      } catch (err) {
-        console.warn("[sjálfvirkt] hurðabogar", err);
-      }
-    }
-    const bogiVid = bogaProf(bogar, dpm);
-    const d = finnaHurdir(veggirH, adrar, dpm, {
-      vik: vik.hurd,
-      bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
-      linaIBili: syni?.linaIBili,
-    });
-    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...d.gler, ...adrar], dpm).map(
-      (h) => ({ p: h.p, t: h.t, tegund: "hurd" as const })
-    );
-    if (urBogum.length) {
-      // veggur sem brúaði gatið er klipptur undir hurðinni
-      const veggirNyir = hreinar.filter(erVeggTeg), annad = hreinar.filter((l) => !erVeggTeg(l));
-      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, urBogum, dpm).veggir, ...annad];
-    }
-    hurdir = [...d.hurdir, ...urBogum];
-    talning.hurdabogar = { bogar: bogar.length, hurdir: urBogum.length };
-    kandidatar = d.kandidatar;
-    const nyttGler: HLina[] = d.gler;
-    // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
-    const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
-    const u = husUtlina(allar, dpm, vik.lokunM);
-    const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
-    hreinar = hreinar.filter((_, i) => !burtV.has(i));
-    hurdir = hurdir.filter((_, i) => !burtH.has(i));
-    lokaNy = [...hreinar, ...nyttGler.filter((_, i) => !burtG.has(i)), ...hurdir];
-    talning.hurdir = d.talning;
-    talning.utan = { veggir: burtV.size, hurdir: burtH.size, gler: burtG.size, lokud: u.lokud };
-    ljuka(
-      "hurdir",
-      `${hurdir.length} hurðir` +
-        (d.talning.bilahurdir ? ` (${d.talning.bilahurdir} bílahurðir)` : "") +
-        (urBogum.length ? ` · ${urBogum.length} úr hurðabogum` : "") +
-        (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
-        (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
-        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
-        (d.talning.hafnad.kross || d.talning.hafnad.skavegg ? ` · hafnað: ${d.talning.hafnad.kross} í krossi` : "")
-    );
-  } catch (err) {
-    villa("hurdir", err, "engar hurðir");
-  }
+  // d) hreinsun + e) hurðir (hurðabogar skera veggi) + utan húss — sami kóði og „Greina veggi" (vinnaLinur)
+  const vu = await vinnaLinur(mynd, hrar, fastarH, dpm, leid === "vigur", vik, talning, { hefja, ljuka, villa, stodvad });
+  const { hreinar, hurdir, kandidatar, lokaNy } = vu;
   if (stodvad()) return stoppa();
 
   // Á borðið (ein færsla — sögufærslan var tekin í upphafi): veggir sem skipt er út fara, nýjar línur koma.
