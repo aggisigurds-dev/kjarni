@@ -2417,7 +2417,8 @@ function ExportDialog({
   initialTarget?: "board" | "viewport" | "selection";
 }) {
   const [target, setTarget] = useState<"board" | "viewport" | "selection">("board");
-  const [scale, setScale] = useState<ExportScale>(3);
+  // Sjálfgefið 4× hámark og valið (Agnar 11.10.2026: „hafa default valinn hlut og full gæði")
+  const [scale, setScale] = useState<ExportScale>(4);
   const [busy, setBusy] = useState(false);
   // A4-flísar: hve mörg blöð og hvernig þau snúa. Sjálfgefið 2 lárétt hlið við
   // hlið — það sem hentar löngu hústeikningunum sem Agnar prentar mest.
@@ -2427,7 +2428,9 @@ function ExportDialog({
   const area = tiledAreaMm(tiles);
 
   useEffect(() => {
-    if (open) setTarget(initialTarget === "selection" && !hasSelection ? "board" : initialTarget);
+    if (!open) return;
+    setTarget(hasSelection ? "selection" : initialTarget === "selection" ? "board" : initialTarget);
+    setScale(4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTarget]);
 
@@ -2483,15 +2486,15 @@ function ExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      {/* Þéttur (Agnar 11.10.2026: „þarf að zooma út í desktop til að geta ýtt á neðstu takkana"): aldrei hærri en
+          skjárinn, svæði og upplausn hlið við hlið, A4-skiptingin felld saman. */}
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] gap-3 overflow-y-auto p-4 sm:max-w-md">
+        <DialogHeader className="gap-1">
           <DialogTitle>Flytja út í háum gæðum</DialogTitle>
-          <DialogDescription>
-            PNG og PDF eru teiknuð af öllu borðinu eða því sem þú sérð. JSON vistar borðið með
-            innfelldum gólfplönum.
-          </DialogDescription>
+          <DialogDescription className="text-xs">PNG / PDF af völdu, sýnilegu svæði eða öllu borðinu · JSON vistar borðið.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 text-sm">
+        <div className="grid gap-2.5 text-sm">
+          <div className="grid grid-cols-2 gap-2">
           <label className="grid gap-1">
             <span className="text-muted-foreground">Svæði</span>
             <select
@@ -2519,17 +2522,18 @@ function ExportDialog({
               <option value={4}>4× hámark</option>
             </select>
           </label>
+          </div>
 
-          <div className="mt-1 grid gap-2 rounded-lg border p-3">
-            <div className="flex items-center justify-between">
+          <details className="group rounded-lg border px-3 py-2">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
               <span className="font-medium">Skipta á A4-blöð</span>
               <span className="text-xs text-muted-foreground">
                 {tiles.cols * tiles.rows} blöð · {Math.round(area.w)} × {Math.round(area.h)} mm
               </span>
-            </div>
+            </summary>
+            <div className="mt-2 grid gap-2">
             <p className="text-xs text-muted-foreground">
-              Fyrir stór kort: hvert blað prentast sér með skurðarmerkjum og yfirlitsreit, svo þú
-              plastar og límir saman.
+              Hvert blað prentast sér með skurðarmerkjum og yfirlitsreit — plastar og límir saman.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {(
@@ -2597,7 +2601,8 @@ function ExportDialog({
             <Button variant="secondary" disabled={busy} onClick={() => void run("tiles")}>
               Prenta á {tiles.cols * tiles.rows} A4-blöð (PDF)
             </Button>
-          </div>
+            </div>
+          </details>
         </div>
         <DialogFooter className="sm:justify-between">
           <Button variant="outline" disabled={busy} onClick={() => void run("json")}>
