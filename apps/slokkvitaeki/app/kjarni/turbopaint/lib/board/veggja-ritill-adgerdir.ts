@@ -8,6 +8,7 @@ import { newId, useBoardStore } from "./store";
 import type { VeggTegund } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject } from "./types";
 import { bordDilarAMetra, erVeggur, stillaVeggTegund } from "./veggja-leidretting";
+import { skraNeikvaett, type NLina } from "./veggja-neikvaett";
 import {
   bilMilli,
   kljufaVegg,
@@ -92,10 +93,36 @@ export function nyirVeggir(heims: number[][], tegund: VeggTegund, thykkt: number
 }
 
 export function eydaVeggjum(ids: string[]): number {
-  const v = new Set(ritillVeggir().map((o) => o.id));
+  const V = ritillVeggir();
+  const v = new Set(V.map((o) => o.id));
   const burt = ids.filter((id) => v.has(id));
-  if (burt.length) useBoardStore.getState().deleteIds(burt);
+  if (burt.length) {
+    skraEyddaGreiningu(V.filter((o) => burt.includes(o.id)));
+    useBoardStore.getState().deleteIds(burt);
+  }
   return burt.length;
+}
+
+/** Þjálfunarminni (Agnar 11.10.2026): veggur úr greiningu (`greining`) sem Agnar eyðir = „þetta er ekki veggur". Aðeins
+ * stakar eyðingar (≤ 40 í einu) — „Eyða síðustu greiningu" eða stór kassi er ekki dómur um hverja línu. */
+function skraEyddaGreiningu(V: LineObject[]) {
+  const ur = V.filter((o) => o.greining);
+  if (!ur.length || ur.length > 40) return;
+  const objs = useBoardStore.getState().objects;
+  const eftirPlan = new Map<string, NLina[]>();
+  for (const o of ur) {
+    const pid = o.parentId;
+    if (!pid) continue;
+    const l: NLina = { p: o.points.map((n, i) => (i % 2 === 0 ? o.x + n : o.y + n)), t: o.strokeWidth };
+    if (o.veggTegund) l.tegund = o.veggTegund;
+    const listi = eftirPlan.get(pid) ?? [];
+    listi.push(l);
+    eftirPlan.set(pid, listi);
+  }
+  for (const [pid, linur] of eftirPlan) {
+    const plan = objs.find((x): x is ImageObject => x.id === pid && x.type === "image");
+    if (plan) void skraNeikvaett(plan, linur, "eytt-eftir-greiningu");
+  }
 }
 
 export function kljufa(id: string, X: P): boolean {
