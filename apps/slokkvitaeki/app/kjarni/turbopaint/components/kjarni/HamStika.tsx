@@ -53,7 +53,7 @@ export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: 
   },
   thrividd: { texti: "3D", titill: "Hús í 3D — veggir og tæki á öllum hæðum", takn: <Box className="size-3.5" /> },
   "slt-brsl": {
-    texti: "SLT / BRSL af teikningu",
+    texti: "SLT / HSL / BRSL af teikningu",
     titill:
       "Lesa SLT og BRSL af teikningunni: slanga á tákni slöngukeflisins, slökkvitæki við hliðina — tengt við óstaðsett tæki staðarins (annars „ótengt“ → Nýtt við vistun), og skilti. Eldveggir ekki (EI-30 / EI-60). ⌘Z afturkallar.",
     takn: <ScanSearch className="size-3.5" />,

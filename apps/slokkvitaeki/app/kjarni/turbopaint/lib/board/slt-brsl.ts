@@ -30,8 +30,9 @@ function hreint(t: string) {
   return t.toUpperCase().replace(/[ÚÜ]/g, "U").replace(/[^A-Z0-9$]/g, "");
 }
 
-/** Hvað orðið segir: BRSL og/eða SLT. `sterkt` = nákvæmlega rétt stafsett (BRSL / SLT); annars algengar OCR-villur
- * (8RSL, BR5L, BRS, SL1, 5LT, SLI …) sem þurfa meiri vissu. „BRSL | SLT" / „BRSL/SLT" / „BRSLSLT" gefa bæði. */
+/** Hvað orðið segir: BRSL og/eða SLT. `sterkt` = nákvæmlega rétt stafsett (BRSL / SLT / HSL); annars algengar OCR-villur
+ * (8RSL, BR5L, BRS, SL1, 5LT, SLI, H5L …) sem þurfa meiri vissu. „BRSL | SLT" / „BRSL/SLT" / „BRSLSLT" gefa bæði.
+ * HSL = handslökkvitæki (Agnar 11.10.2026, DRA ehf: „HSL þýðir handslökkvitæki") — telst slökkvitæki eins og SLT. */
 export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean }[] {
   const ut: { tegund: SbTegund; sterkt: boolean }[] = [];
   const baeta = (tegund: SbTegund, sterkt: boolean) => {
@@ -44,11 +45,13 @@ export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean 
     if (!c) continue;
     if (/^BRSL\d{0,2}$/.test(c)) baeta("brsl", true);
     else if (/^SLT\d{0,2}$/.test(c)) baeta("slt", true);
+    else if (/^HSL\d{0,2}$/.test(c)) baeta("slt", true);
     else if (/^BRSLSLT$/.test(c)) {
       baeta("brsl", true);
       baeta("slt", true);
     } else if (/^[B8]R[S5$]([L1I]|LL)?$/.test(c)) baeta("brsl", false);
     else if (/^[S5$][L1I][T7I1]$/.test(c)) baeta("slt", false);
+    else if (/^H[S5$][L1]$/.test(c)) baeta("slt", false);
     else if (/^[B8]R[S5$][L1I]?[S5$][L1I][T7I1]$/.test(c)) {
       baeta("brsl", false);
       baeta("slt", false);
@@ -76,12 +79,13 @@ export interface SbOrd {
 export type Svaedi = { x0: number; y0: number; x1: number; y1: number };
 
 /** BRSL/SLT-orð teikningarinnar, innan `svaedi` (hússins á blaðinu, myndardílar) ef það er gefið, annars utan
- * titilreitsins (neðst til hægri á blaðinu). Tvítekin orð (sami staður, sama tegund) talin einu sinni. */
+ * titilreitsins (neðst til hægri á blaðinu). Tvítekin orð (sami staður, sama tegund) talin einu sinni. Lóðrétt skrifuð
+ * orð gilda líka (DRA ehf 11.10.2026: „HSL" stendur upp á rönd við vegginn) — kassi þeirra er hár og mjór. */
 export function sltBrslOrd(words: OcrWord[], mynd: { b: number; h: number }, svaedi?: Svaedi | null): SbOrd[] {
   const ut: SbOrd[] = [];
   for (const w of words) {
-    if (w.vertical) continue;
     const x = w.x + w.width / 2, y = w.y + w.height / 2;
+    const lengd = w.vertical ? w.height : w.width, thykkt = w.vertical ? w.width : w.height;   // eftir línu textans / þvert á hana
     if (svaedi) {
       if (x < svaedi.x0 || y < svaedi.y0 || x > svaedi.x1 || y > svaedi.y1) continue;
     } else if (x > mynd.b * 0.84 && y > mynd.h * 0.42) continue;
@@ -89,10 +93,12 @@ export function sltBrslOrd(words: OcrWord[], mynd: { b: number; h: number }, sva
       if (w.confidence < (sterkt ? VISSA_STERKT : VISSA_VEIKT)) continue;
       // „BRSL SLT" í einu orði: hvor hluti fær sinn helming svo staðirnir verði réttir
       const tvi = ordTegundir(w.text).length === 2;
-      const hx = tvi ? (tegund === "brsl" ? w.x + w.width * 0.3 : w.x + w.width * 0.8) : x;
+      const hlutfall = tegund === "brsl" ? 0.3 : 0.8;
+      const hx = tvi && !w.vertical ? w.x + w.width * hlutfall : x;
+      const hy = tvi && w.vertical ? w.y + w.height * hlutfall : y;
       // stafahæð: OCR-kassi orðs með litla vissu er oft of hár (Álfaborg: „BRSL" 29 % = 63 × 45) — breiddin ræður þá
       const stafir = Math.max(2, hreint(w.text).length);
-      ut.push({ tegund, x: hx, y, h: Math.max(4, Math.min(w.height, w.width / (0.8 * stafir))), vissa: w.confidence, texti: w.text });
+      ut.push({ tegund, x: hx, y: hy, h: Math.max(4, Math.min(thykkt, lengd / (0.8 * stafir))), vissa: w.confidence, texti: w.text });
     }
   }
   const rodud = ut.sort((a, b) => b.vissa - a.vissa);
