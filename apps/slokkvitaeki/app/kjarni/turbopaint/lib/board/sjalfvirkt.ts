@@ -47,6 +47,8 @@ import { useUttektGogn } from "./uttekt-gogn";
 import { husKassi, husUtlina, hreinsaVeggi, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
 import { heimsPunktar, nyGreiningarLota, nyrVeggur, sameinaVidVeggi } from "./veggja-ritill";
 import { ritillDilarAMetra } from "./veggja-ritill-adgerdir";
+import { bladDilarAMetra, bladSlod, pdfDilarAMetra } from "./hus3d";
+import { saekjaBladstaerd } from "./teikn-thjonusta";
 import { neikvaedarVisar, saekjaNeikvaett } from "./veggja-neikvaett";
 import {
   beidniGogn,
@@ -429,6 +431,25 @@ export async function vinnaLinur(
   return { hreinar, hurdir, kandidatar, lokaNy };
 }
 
+/** Borðdílar á metra fyrir teikninguna — sama röð og 3D-ið (Hus3D): kvarðinn (K) → PDF-síðan → blaðstærð (teikn-blad,
+ * 1:100) → A1-ágiskun. Áður fór úttektarmynd beint í A1-ágiskunina (71,4 dílar/m á 6006 díla blaði); blöð Hafnarfjarðar
+ * eru 1169 mm á breidd (51,3 dílar/m) svo 0,85 m hurð mældist 0,61 m og féll undir 0,7 m lágmark hurðagreiningar —
+ * Dalshraun 1 (12.10.2026): 1–8 hurðir á hæð. */
+export async function kvardiTeikningar(p: ImageObject, haedir: { id: string; image_url?: string | null }[] = []): Promise<number> {
+  const st = useBoardStore.getState();
+  if (st.pixelsPerMeter && st.pixelsPerMeter > 0) return st.pixelsPerMeter;
+  const pdf = pdfDilarAMetra(p);
+  if (pdf) return pdf;
+  try {
+    const bs = bladSlod(p, haedir);
+    const blad = bs ? bladDilarAMetra(await saekjaBladstaerd(bs.slod), bs) : null;
+    if (blad && blad > 0) return blad;
+  } catch {
+    /* blaðstærðin náðist ekki — A1-ágiskun */
+  }
+  return ritillDilarAMetra(st.objects, st.pixelsPerMeter) ?? 71.4 * (p.width / Math.max(1, p.uttekt?.myndSkurdur?.w || p.uttekt?.frumB || p.width));
+}
+
 export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Promise<void> {
   const S = useSjalfvirkt.getState;
   if (S().keyrir) return;
@@ -468,7 +489,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   const gogn = useUttektGogn.getState().gogn;
   const haed: UttektHaed | null = (gogn && gogn.companyId === cid ? gogn.haedir.find((h) => h.id === t.haedId) : null) ?? null;
   const frum = { b: t.frumB, h: t.frumH };
-  const dpm = ritillDilarAMetra(bord().objects, bord().pixelsPerMeter) ?? 71.4 * (p0.width / Math.max(1, t.myndSkurdur?.w || t.frumB));
+  const dpm = await kvardiTeikningar(p0, haed ? [haed] : []);
   // Hver á veggina sem fyrir eru?
   const vl = Array.isArray(haed?.veggjaLinur) && (haed?.veggjaLinur?.length ?? 0) > 0;
   const af = haed?.leidrett?.af;

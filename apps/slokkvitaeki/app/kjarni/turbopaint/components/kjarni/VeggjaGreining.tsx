@@ -35,9 +35,10 @@ import type { BoardObject, ImageObject, LineObject } from "../../lib/board/types
 import { erVeggur } from "../../lib/board/veggja-leidretting";
 import { nyGreiningarLota, nyrVeggur, sameinaVidVeggi, semButur, talningTexti, veggjaTalning, type Butur } from "../../lib/board/veggja-ritill";
 import { ritillDilarAMetra, skiptaUt } from "../../lib/board/veggja-ritill-adgerdir";
+import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 import { forskodunLykill, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { neikvaedarVisar, saekjaNeikvaett, skraNeikvaett, type NLina } from "../../lib/board/veggja-neikvaett";
-import { vinnaLinur, virkVikmork } from "../../lib/board/sjalfvirkt";
+import { kvardiTeikningar, vinnaLinur, virkVikmork } from "../../lib/board/sjalfvirkt";
 import { maelaThekju } from "../../lib/board/veggja-thekja";
 import { bladMyndar } from "../../lib/board/margar-haedir";
 import { getSupabase, supabaseUrl } from "../../lib/board/supabase";
@@ -132,7 +133,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
     if (!veggir.length) return veggir;
     try {
       const st = useBoardStore.getState();
-      const m = ritillDilarAMetra(st.objects, st.pixelsPerMeter) ?? 71.4 * (p.width / Math.max(1, p.uttekt?.myndSkurdur?.w || p.uttekt?.frumB || p.width));
+      const m = await kvardiTeikningar(p, useUttektGogn.getState().gogn?.haedir ?? []);
       const fastar = veggirTeikningar(st.objects, p).map(semButur);
       const mynd = () => useBoardStore.getState().objects.find((o): o is ImageObject => o.id === p.id && o.type === "image") ?? null;
       st.setImportProgress({ fileName: p.name, percent: 92, message: "Hreinsa og finn hurðir (sama og Sjálfvirkt)…" });
