@@ -7,7 +7,7 @@
 // Allt í punktum síðunnar (pt) þar til varpað er á borðið.
 
 import { VEGGUR_HAMARK_CM } from "./veggja-linur";
-import { veljaVeggjaflokk, type Strik } from "./pdf-veggir";
+import { finnaVeggiUrPdfFlokkum, veljaVeggjaflokk, type Strik } from "./pdf-veggir";
 import { veggirUrPdfStrikum, type FrumVeggur, type PdfVeggjaStillingar } from "./teikning-veggir";
 
 /** 1 pt á blaði í 1:100 = 0,03528 m. */
@@ -174,4 +174,68 @@ export function skurdurIPt(
   const kx = bladB / frum.b, ky = bladH / frum.h;
   const m = Math.max(sk.w * kx, sk.h * ky) * svigrumHlutfall;
   return { x0: sk.x * kx - m, y0: sk.y * ky - m, x1: (sk.x + sk.w) * kx + m, y1: (sk.y + sk.h) * ky + m };
+}
+
+/**
+ * Automatic vector extraction used by TurboPaint's building workflow.
+ * Preserve the primary class parser for doors and glass, adding only credible
+ * *paired* walls from secondary stroke-width classes.
+ */
+export function sjalfvirkirPdfVeggirPt(
+  flokkar: Record<string, Strik[]>,
+  bladB: number,
+  bladH: number,
+  st: { svaedi?: SvaediPt | null; burt?: { x: number; y: number; w: number; h: number }[]; adalFlokkur?: string | null } = {}
+): { veggir: FrumVeggur[]; flokkar: string[]; vidbotar: number } {
+  const yfirlit = flokkaYfirlit(flokkar, bladB, bladH);
+  const adal = st.adalFlokkur ?? yfirlit.find((f) => f.tillaga)?.breidd;
+  if (!adal) return { veggir: [], flokkar: [], vidbotar: 0 };
+  const val = (key: string) => strikValinna(flokkar, [key], { svaedi: st.svaedi, burt: st.burt, bladB, bladH });
+  const primary = veggirUrStrikumPt(val(adal), bladB, bladH, { gler: true, stakar: true });
+  const secondary: Record<string, Strik[]> = {};
+  for (const group of yfirlit) {
+    if (group.breidd === adal || group.ekkiVeggir || !Number.isFinite(+group.breidd) || +group.breidd < 0.3 || group.strik > 5000) continue;
+    const strokes = val(group.breidd);
+    if (strokes.length) secondary[group.breidd] = strokes;
+  }
+  const paired = finnaVeggiUrPdfFlokkum(secondary, bladB, bladH);
+  const solids = primary.filter((w) => w.p.length === 4 && w.tegund !== "gler");
+  const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  for (const wall of solids) {
+    for (let i = 0; i < 4; i += 2) {
+      b.x0 = Math.min(b.x0, wall.p[i]); b.y0 = Math.min(b.y0, wall.p[i + 1]);
+      b.x1 = Math.max(b.x1, wall.p[i]); b.y1 = Math.max(b.y1, wall.p[i + 1]);
+    }
+  }
+  const margin = Math.max(8, Math.min(bladB, bladH) * 0.015);
+  const inside = (p: number[]) => !solids.length || [0, 2].every((i) =>
+    p[i] >= b.x0 - margin && p[i] <= b.x1 + margin &&
+    p[i + 1] >= b.y0 - margin && p[i + 1] <= b.y1 + margin);
+  const overlaps = (p: number[], q: number[]) => {
+    if (p.length !== 4 || q.length !== 4) return false;
+    const dx = p[2] - p[0], dy = p[3] - p[1], L = Math.hypot(dx, dy);
+    const ex = q[2] - q[0], ey = q[3] - q[1], M = Math.hypot(ex, ey);
+    if (L < 1 || M < 1 || Math.abs(dx * ey - dy * ex) / (L * M) > 0.02) return false;
+    const ux = dx / L, uy = dy / L;
+    const distance = (x: number, y: number) => Math.abs((x - p[0]) * uy - (y - p[1]) * ux);
+    if (Math.max(distance(q[0], q[1]), distance(q[2], q[3])) > 1.5) return false;
+    const a = (q[0] - p[0]) * ux + (q[1] - p[1]) * uy;
+    const c = (q[2] - p[0]) * ux + (q[3] - p[1]) * uy;
+    const overlap = Math.max(0, Math.min(L, Math.max(a, c)) - Math.max(0, Math.min(a, c)));
+    return overlap >= Math.min(L, M) * 0.75;
+  };
+  const veggir = primary.slice();
+  let vidbotar = 0;
+  for (const wall of paired.veggir) {
+    const p = [wall.a[0], wall.a[1], wall.b[0], wall.b[1]];
+    if (!inside(p) || veggir.some((v) => overlaps(v.p, p))) continue;
+    veggir.push({ p, t: wall.thykkt });
+    vidbotar++;
+  }
+  return { veggir, flokkar: [adal, ...paired.flokkar], vidbotar };
+}
+
+/** Only treat a PDF as vector wall geometry if it has a plausible wall stroke class. */
+export function erNotanlegtVigurPdf(flokkar: Record<string, Strik[]>, bladB: number, bladH: number): boolean {
+  return !pdfErSkonnun(flokkar) && flokkaYfirlit(flokkar, bladB, bladH).some((f) => f.tillaga && !f.ekkiVeggir);
 }
