@@ -32,7 +32,7 @@ import { finnaHurdir, type HurdKandidat } from "./hurdagreining";
 import { bogaProf, hurdirUrBogum, nyjarBogahurdir, skeraVeggiUndirHurdum, type Bogi } from "./hurdabogar";
 import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
-import { flokkaYfirlit, klemmaGreindaThykkt, pdfErSkonnun, ptIBord, skurdurIPt, strikValinna, veggirUrStrikumPt } from "./pdf-veggjaflokkar";
+import { flokkaYfirlit, klemmaGreindaThykkt, erNotanlegtVigurPdf, ptIBord, skurdurIPt, sjalfvirkirPdfVeggirPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
 import { greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
 import { beitaSltBrsl } from "./slt-brsl-bord";
@@ -525,7 +525,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   } catch (err) {
     console.warn("[sjálfvirkt] PDF-lestur", err);
   }
-  const vigur = !!sida && !pdfErSkonnun(sida.flokkar);
+  const vigur = !!sida && erNotanlegtVigurPdf(sida.flokkar, sida.breidd, sida.haed);
   // Upplausn myndarinnar sem greiningin vinnur á (eignin á borðinu).
   let upplausn = "";
   try {
@@ -572,8 +572,8 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         const tl = flokkaYfirlit(sida.flokkar, sida.breidd, sida.haed).find((f) => f.tillaga);
         if (tl) {
           tillaga = tl.breidd;
-          const strik = strikValinna(sida.flokkar, [tl.breidd], { svaedi: null, burt: p0.hvittad, bladB: sida.breidd, bladH: sida.haed });
-          veggir = ptIBord(veggirUrStrikumPt(strik, sida.breidd, sida.haed, { gler: true, stakar: true }), p0, sida.breidd, sida.haed);
+          const pdf = sjalfvirkirPdfVeggirPt(sida.flokkar, sida.breidd, sida.haed, { burt: p0.hvittad, adalFlokkur: tl.breidd });
+          veggir = ptIBord(pdf.veggir, p0, sida.breidd, sida.haed);
         }
       } else {
         S().setja("skurdur", { texti: "Greini veggi alls blaðsins til að finna húsið…" });
@@ -612,11 +612,11 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
       const tl = tillaga ? { breidd: tillaga } : flokkaYfirlit(sida.flokkar, sida.breidd, sida.haed).find((f) => f.tillaga);
       if (!tl) throw new Error("enginn línuflokkur í PDF-inu líkist veggjum");
       const sv = skurdurIPt(tt.skurdur, frum, sida.breidd, sida.haed);
-      const strik = strikValinna(sida.flokkar, [tl.breidd], { svaedi: sv, burt: p.hvittad, bladB: sida.breidd, bladH: sida.haed });
-      hrar = klemmaGreindaThykkt(ptIBord(veggirUrStrikumPt(strik, sida.breidd, sida.haed, { gler: true, stakar: true }), p, sida.breidd, sida.haed), dpm);
+      const pdf = sjalfvirkirPdfVeggirPt(sida.flokkar, sida.breidd, sida.haed, { svaedi: sv, burt: p.hvittad, adalFlokkur: tl.breidd });
+      hrar = klemmaGreindaThykkt(ptIBord(pdf.veggir, p, sida.breidd, sida.haed), dpm);
       leid = "vigur";
       const gl = hrar.filter((v) => v.tegund === "gler").length;
-      ljuka("veggir", `Vigur-PDF, línuflokkur ${tl.breidd.replace(".", ",")} pt: ${fjoldi(strik.length)} línur → ${hrar.length - gl} veggir · ${gl} gler`);
+      ljuka("veggir", `Vigur-PDF, ${pdf.flokkar.length} línuflokkar (${pdf.flokkar.join(", ")} pt): ${hrar.length - gl} veggir · ${gl} gler · ${pdf.vidbotar} viðbótarveggir`);
     } else {
       // Skönnun: Veggjavél á skrifstofutölvunni; myndgreining vafrans keyrir samhliða sem varaleið.
       const skB = skurdurIBord(tt.skurdur, p, frum, gilturSkurdur(tt.myndSkurdur));
