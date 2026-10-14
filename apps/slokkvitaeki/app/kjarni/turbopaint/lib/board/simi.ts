@@ -23,13 +23,17 @@ export function useErSimi(): boolean {
   return useSyncExternalStore(hlusta, erSimi, () => false);
 }
 
-/** Verkfærasúlan: vistað val vafrans ræður („1" samanbrotin, „0" opin); annars samanbrotin í síma, opin í tölvu. */
+/** Verkfærasúlan: vistað val vafrans ræður („1" samanbrotin, „0" opin); annars OPIN — líka í síma.
+ *  14.10.2026 (Agnar, TurboPaint í Öpp: „vantar alla hliðartakkana"): sjálfgefið samanbrot í síma faldi
+ *  verkfærin á bak við lítið handfang sem enginn fann. Súlan skrunar sjálf ef hún kemst ekki fyrir; sá sem
+ *  vill hana burt fellir hana saman og valið er munað. */
 export const SULA_LYKILL = "tp_verkfaerasula_samanbrotin";
 
 export function sulaSamanbrotin(vistad: string | null | undefined, simi: boolean): boolean {
   if (vistad === "1") return true;
   if (vistad === "0") return false;
-  return simi;
+  void simi;
+  return false;
 }
 
 export function lesaSulu(): boolean {
