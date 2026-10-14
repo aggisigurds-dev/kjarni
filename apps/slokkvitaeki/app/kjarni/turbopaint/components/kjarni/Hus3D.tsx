@@ -30,6 +30,7 @@ import {
 } from "../../lib/board/hus3d";
 import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
 import { gluggaHaedir } from "../../lib/board/hus3d-gluggar";
+import { smatengingar3D } from "../../lib/board/hus3d-smasamkeyti";
 import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
@@ -141,6 +142,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
   const [glerSemGluggar, setGlerSemGluggar] = useState(true);
   const [synaHurdarblod, setSynaHurdarblod] = useState(true);
+  const [tengjaSmaBil, setTengjaSmaBil] = useState(true);
   const [gegn, setGegn] = useState(false);
   const [ganga, setGanga] = useState(false);
   const [kynning, setKynning] = useState(false);
@@ -329,6 +331,8 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           // RAUNHÆÐ (383 vegghaed): 3,0 m í kvarða teikningarinnar; án trúverðugs kvarða gamla hlutfallið.
           const veggH = kv ? VEGGHAED_M * kv.dilar : Math.max(hd.breidd, hd.haed) * 0.03;
           const metri = veggH / VEGGHAED_M;
+          // Fyllum aðeins smábil (≤10 cm) í sýninni, aldrei í vistuðum gögnum.
+          const synilegirVeggbutar = tengjaSmaBil ? [...hd.veggir, ...smatengingar3D(hd.veggir, metri)] : hd.veggir;
           const hopur = new T.Group();
           hopur.position.y = haedY;
           svid.add(hopur);
@@ -372,10 +376,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             return m4;
           };
 
-          const veggir = hd.veggir.filter((v) => v.tegund === "veggur");
-          const gler = hd.veggir.filter((v) => v.tegund === "gler");
-          const hurdir = hd.veggir.filter((v) => v.tegund === "hurd");
-          const svalir = hd.veggir.filter((v) => v.tegund === "svalir");
+          const veggir = synilegirVeggbutar.filter((v) => v.tegund === "veggur");
+          const gler = synilegirVeggbutar.filter((v) => v.tegund === "gler");
+          const hurdir = synilegirVeggbutar.filter((v) => v.tegund === "hurd");
+          const svalir = synilegirVeggbutar.filter((v) => v.tegund === "svalir");
           fjoldi.veggir += veggir.length;
           fjoldi.gler += gler.length;
           fjoldi.hurdir += hurdir.length;
@@ -953,7 +957,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar, synaHurdarblod]);
+  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -1025,6 +1029,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         <label className="ml-2 flex items-center gap-1.5 text-[12px] font-semibold" title="Sýna alla vistaða veggbúta, einnig stutta baðherbergisveggi og skilrúm. Slökktu til að nota eldri hreinsaða yfirlitið. Breytir ekki vistuðum teikningum.">
           <input type="checkbox" checked={synaStuttaVeggi} onChange={(e) => setSynaStuttaVeggi(e.target.checked)} />
           Allir veggir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Brúar aðeins örsmá samlínu bil milli heilla veggja (mest 10 cm). Hurðir og gler eru aldrei brúuð. Aðeins 3D-birting, ekki vistuð gögn.">
+          <input type="checkbox" checked={tengjaSmaBil} onChange={(e) => setTengjaSmaBil(e.target.checked)} />
+          Tengja smábil
         </label>
         <label className="flex items-center gap-1.5 text-[12px]">
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
