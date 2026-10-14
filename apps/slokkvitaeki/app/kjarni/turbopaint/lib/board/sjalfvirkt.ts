@@ -29,6 +29,7 @@ import { replaceCrossingMarks } from "./crossings";
 import { eiUrTexta, lesaTextaTeikningar } from "./detect-firewalls";
 import { beitaEi, veggirTeikningar } from "./ei-beiting";
 import { finnaHurdir, type HurdKandidat } from "./hurdagreining";
+import { finnaSnunarHurdir } from "./hurdagreining-snuning";
 import { bogaProf, hurdirUrBogum, nyjarBogahurdir, skeraVeggiUndirHurdum, type Bogi } from "./hurdabogar";
 import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
@@ -394,17 +395,25 @@ export async function vinnaLinur(
       bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
       linaIBili: syni?.linaIBili,
     });
-    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...d.gler, ...adrar], dpm).map(
+    // Aukaleit þegar teikning er lítillega snúin (t.d. Dalshraun ~4,6°).
+    // EKKI búa til hurðir úr götunum einum: viðbótarhurð þarf staðfestan hurðarboga.
+    const snunid = finnaSnunarHurdir(veggirH, [...adrar, ...d.hurdir], dpm, {
+      vik: vik.hurd,
+      bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
+      linaIBili: syni?.linaIBili,
+    });
+    const snunarHurdir: HLina[] = snunid.doors.map((h) => ({ p: h.p, t: h.t, tegund: "hurd" as const }));
+    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...snunarHurdir, ...d.gler, ...adrar], dpm).map(
       (h) => ({ p: h.p, t: h.t, tegund: "hurd" as const })
     );
-    if (urBogum.length) {
-      // veggur sem brúaði gatið er klipptur undir hurðinni
+    if (urBogum.length || snunarHurdir.length) {
+      // Klippum veggi undir hurðum sem fengu staðfestingu af boga.
       const veggirNyir = hreinar.filter(erVeggTeg), annad = hreinar.filter((l) => !erVeggTeg(l));
-      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, urBogum, dpm).veggir, ...annad];
+      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, [...urBogum, ...snunarHurdir], dpm).veggir, ...annad];
     }
-    hurdir = [...d.hurdir, ...urBogum];
+    hurdir = [...d.hurdir, ...snunarHurdir, ...urBogum];
     talning.hurdabogar = { bogar: bogar.length, hurdir: urBogum.length };
-    kandidatar = d.kandidatar;
+    kandidatar = [...d.kandidatar, ...snunid.candidates];
     const nyttGler: HLina[] = d.gler;
     // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
     const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
@@ -420,6 +429,7 @@ export async function vinnaLinur(
       `${hurdir.length} hurðir` +
         (d.talning.bilahurdir ? ` (${d.talning.bilahurdir} bílahurðir)` : "") +
         (urBogum.length ? ` · ${urBogum.length} úr hurðabogum` : "") +
+        (snunarHurdir.length ? ` · ${snunarHurdir.length} úr snúnum veggjum (staðfestur bogi)` : "") +
         (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
         (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
         ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
