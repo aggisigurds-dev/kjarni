@@ -244,3 +244,9 @@ select null, atridi, hopur, rod from (values
   ('Annað / Other','annad',300)
 ) as v(atridi,hopur,rod)
 where not exists (select 1 from public.skr_gatlisti g where g.verk_id is null and g.atridi = v.atridi);
+
+-- ---------------------------------------------------------------- sameinuð sýn + yfirlit per verk
+-- (sjá migration skr_yfirlit_view_og_rpc 14.10.2026) — skr_yfirlit = Ajour-innflutningur ∪ eigin skráningar í sömu
+-- dálkum (uppruni 'ajour'|'skraning', lykill 'a:id'|'s:id', stada samræmd, myndir/mynd_path úr skr_myndir);
+-- skr_verk_yfirlit() = talningar per verk (alls/done/created/í dag/vika/mánuður/fyrri mánuður done/síðast/sótt/teikn/menn)
+-- svo yfirlitið sæki EINA röð per verk í stað 25 þús. raða. Skilgreiningarnar eru í migration-skránni.
