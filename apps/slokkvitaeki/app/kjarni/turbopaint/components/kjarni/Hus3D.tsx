@@ -130,7 +130,13 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const gogn = useUttektGogn((s) => s.gogn);
   const bordNafn = useBoardStore((s) => s.name);
   const skodunTitill = useSkodun((s) => (s.virk ? s.titill : ""));
-  const haedir = useMemo(() => husUrBordi(objects, gogn?.taeki ?? []), [objects, gogn]);
+  // Sjálfgefið sýnum við alla vistaða veggi. Eldri yfirlitssía fjarlægði veggi styttri en
+  // 7% af húslengd; í Dalshrauni 1 hurfu þannig flest baðherbergi og skilrúm.
+  const [synaStuttaVeggi, setSynaStuttaVeggi] = useState(true);
+  const haedir = useMemo(
+    () => husUrBordi(objects, gogn?.taeki ?? [], { synaStuttaVeggi }),
+    [objects, gogn, synaStuttaVeggi]
+  );
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
   const [glerSemGluggar, setGlerSemGluggar] = useState(true);
@@ -988,7 +994,11 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             {i + 1}
           </button>
         ))}
-        <label className="ml-2 flex items-center gap-1.5 text-[12px]">
+        <label className="ml-2 flex items-center gap-1.5 text-[12px] font-semibold" title="Sýna alla vistaða veggbúta, einnig stutta baðherbergisveggi og skilrúm. Slökktu til að nota eldri hreinsaða yfirlitið. Breytir ekki vistuðum teikningum.">
+          <input type="checkbox" checked={synaStuttaVeggi} onChange={(e) => setSynaStuttaVeggi(e.target.checked)} />
+          Allir veggir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]">
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
           Teikning á gólfi
         </label>
