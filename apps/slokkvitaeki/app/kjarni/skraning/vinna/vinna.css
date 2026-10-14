@@ -1,0 +1,72 @@
+/* Vinnuútgáfa Skráningar — sími fyrst, sama litaþema og Ajour-skjárinn. */
+.aj-vinna { display: flex; flex-direction: column; min-height: 100vh; }
+.vn { padding: 10px 12px 80px; max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.vn h1 { margin: 0; font-size: 18px; font-weight: 700; }
+.vn-haus { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.vn-undir { color: #4a4a4a; }
+.vn-starfsm { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #1e1e1e; }
+.vn-starfsm input { width: 70px; border: 1px solid #b9bec3; border-radius: 3px; padding: 6px 8px; font: inherit; font-size: 15px; }
+.vn-til-baka { background: #fff; border: 1px solid #555; border-radius: 3px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.vn-listi { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.vn-kort { text-align: left; background: #fff; border: 1px solid #d9dcdf; border-radius: 6px; padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font: inherit; min-height: 84px; }
+.vn-kort:hover { border-color: #1a9bb1; box-shadow: 0 0 0 2px rgba(26, 155, 177, 0.2); }
+.vn-kort strong { font-size: 16px; }
+.vn-kort span { color: #4a4a4a; font-size: 12px; }
+.vn-kort small { color: #1e1e1e; font-size: 12px; margin-top: 4px; }
+.vn-kort small b.g { color: #2e8b1a; } .vn-kort small b.y { color: #b07d00; }
+.vn-haed img { width: 100%; height: 110px; object-fit: cover; border: 1px solid #e3e5e7; border-radius: 3px; background: #fff; }
+.vn-tomt { color: #4a4a4a; }
+
+/* kortið */
+.vn-kortsida { padding: 0; max-width: none; }
+.vn-stika { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; background: #fff; border-bottom: 1px solid #d9dcdf; }
+.vn-titill { display: flex; flex-direction: column; line-height: 1.1; }
+.vn-titill span { color: #4a4a4a; font-size: 12px; }
+.vn-stodur { display: flex; gap: 6px; }
+.vn-stodur .aj-badge { font-size: 12px; gap: 6px; }
+.vn-stodur .aj-badge b { min-width: 36px; padding: 3px 6px; }
+.vn-zoom { display: inline-flex; gap: 4px; margin-left: auto; }
+.vn-zoom button { width: 34px; height: 34px; border: 1px solid #555; background: #fff; border-radius: 3px; font-size: 16px; cursor: pointer; }
+.vn-baeta { background: #1a9bb1; color: #fff; border: 0; border-radius: 3px; padding: 9px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+.vn-baeta.on { background: #f5b400; color: #1e1e1e; }
+.vn-box { overflow: auto; background: #cfd3d7; height: calc(100vh - 110px); -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y pinch-zoom; }
+.vn-box.baeta { cursor: crosshair; }
+.vn-flotur { position: relative; margin: 0 auto; background: #fff; }
+.vn-flotur img { display: block; user-select: none; }
+.vn-pinni { position: absolute; transform: translate(-50%, -50%); min-width: 26px; height: 26px; padding: 0 5px; border-radius: 13px; border: 2px solid #fff; color: #fff; font-weight: 700; font-size: 12px; line-height: 22px; text-align: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); cursor: pointer; font-family: inherit; }
+.vn-pinni.created { background: #f5b400; color: #1e1e1e; }
+.vn-pinni.done { background: #5fc33b; }
+.vn-pinni.on { outline: 3px solid #1a9bb1; }
+.vn-pinni.nyr { background: #1a9bb1; font-size: 18px; line-height: 22px; animation: vn-blik 0.9s infinite alternate; }
+@keyframes vn-blik { from { transform: translate(-50%, -50%) scale(1); } to { transform: translate(-50%, -50%) scale(1.25); } }
+
+/* bottom sheet */
+.vn-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #fff; border-top: 2px solid #1a9bb1; box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.25); padding: 10px 14px 16px; max-height: 78vh; overflow: auto; max-width: 720px; margin: 0 auto; border-radius: 10px 10px 0 0; }
+.vn-sheet-haus { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.vn-sheet-haus span { color: #4a4a4a; font-size: 12px; }
+.vn-sheet-haus .aj-serial { display: inline-block; min-width: 44px; padding: 3px 8px; }
+.vn-loka { margin-left: auto; background: #fff; border: 1px solid #555; border-radius: 3px; width: 34px; height: 34px; font-size: 14px; cursor: pointer; }
+.vn-reitur { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; font-size: 12px; font-weight: 700; color: #1e1e1e; }
+.vn-reitur select, .vn-reitur input[type="text"] { border: 1px solid #b9bec3; border-radius: 3px; padding: 9px 10px; font: inherit; font-size: 15px; font-weight: 400; }
+.vn-hakar { display: flex; flex-wrap: wrap; gap: 6px; }
+.vn-hakar label { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; border: 1px solid #b9bec3; border-radius: 16px; font-weight: 400; font-size: 13px; cursor: pointer; background: #fff; }
+.vn-hakar label.on { background: #1a9bb1; color: #fff; border-color: #1a9bb1; }
+.vn-hakar input { display: none; }
+.vn-mynd input[type="file"] { display: none; }
+.vn-myndatakki { display: block; text-align: center; padding: 12px; background: #1e1e1e; color: #fff; border-radius: 4px; cursor: pointer; font-size: 15px; }
+.vn-sheet-takkar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.vn-sheet-takkar button { border: 1px solid #555; background: #fff; border-radius: 3px; padding: 10px 16px; font: inherit; font-size: 14px; cursor: pointer; }
+.vn-sheet-takkar .aj-primary { font-weight: 700; }
+.vn-lokid { background: #5fc33b !important; color: #fff !important; border-color: #5fc33b !important; font-weight: 700; }
+.vn-eyda { color: #d9534f; border-color: #d9534f !important; margin-right: auto; }
+.vn-efni { margin: 0 0 6px; font-size: 13px; }
+.vn-lysing { margin: 0 0 6px; color: #4a4a4a; font-style: italic; }
+.vn-myndir { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.vn-myndir > div > span { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.vn-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.vn-thumbs img { width: 76px; height: 76px; object-fit: cover; border-radius: 4px; border: 1px solid #d9dcdf; cursor: zoom-in; }
+.vn-thumb-add { width: 76px; height: 76px; border: 2px dashed #1a9bb1; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; color: #1a9bb1; }
+.vn-thumb-add input { display: none; }
+.vn-stor { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 30; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.vn-stor img { max-width: 96vw; max-height: 96vh; }
+@media (max-width: 640px) { .vn-myndir { grid-template-columns: 1fr; } .vn-stodur { order: 5; width: 100%; } }
