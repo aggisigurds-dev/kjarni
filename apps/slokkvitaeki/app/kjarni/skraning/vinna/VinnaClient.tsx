@@ -102,6 +102,13 @@ export default function VinnaClient() {
     setMyndir((m.data || []) as Mynd[]); setSvor((sv.data || []) as Svar[]);
   }, []);
   useEffect(() => { if (verkId) hladaSkraningar(verkId); else { setSkr([]); setMyndir([]); setSvor([]); } }, [verkId, hladaSkraningar]);
+  useEffect(() => {
+    if (!verkId) return;
+    const t = setInterval(() => { if (document.visibilityState === "visible" && navigator.onLine) hladaSkraningar(verkId); }, 60000);
+    const vakna = () => { if (document.visibilityState === "visible") hladaSkraningar(verkId); };
+    document.addEventListener("visibilitychange", vakna);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", vakna); };
+  }, [verkId, hladaSkraningar]);
 
   const veljaVerk = (id: number | null) => { setVerkId(id); setTeikId(null); setQs({ verk: id ? String(id) : undefined, teikning: undefined }); };
   const veljaTeikningu = (id: number | null) => { setTeikId(id); setQs({ teikning: id ? String(id) : undefined }); };
