@@ -275,3 +275,18 @@ test("siaVeggiFyrirYfirlit: fáir veggir (handteiknað) eru ekki síaðir", () =
   const stuttur = butur(0, 0, 4, 0);
   assert.deepEqual(siaVeggiFyrirYfirlit([stuttur], 200), [stuttur]);
 });
+
+test("3D: vistaðir stuttir veggir mega ekki hverfa úr ítarlegri sýn", () => {
+  const objs: BoardObject[] = [
+    mynd("h", "1. hæð", 0),
+    veggur("h", [100, 100, 900, 100], 12),
+    ...Array.from({ length: 9 }, (_, i) =>
+      veggur("h", [140 + i * 65, 200, 140 + i * 65, 225], 10)
+    ),
+  ];
+  const [gamal] = husUrBordi(objs);
+  const [itarleg] = husUrBordi(objs, [], { synaStuttaVeggi: true });
+  assert.equal(gamal.veggir.length, 1, "eldra yfirlit felur stutta búta");
+  assert.equal(itarleg.veggir.length, 10, "ítarlegt 3D heldur öllum vistuðum veggjum");
+  assert.equal(itarleg.veggir.filter((v) => v.tegund === "veggur").length, 10);
+});
