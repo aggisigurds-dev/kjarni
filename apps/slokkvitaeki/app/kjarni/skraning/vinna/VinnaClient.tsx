@@ -397,10 +397,15 @@ async function starfsmId(numer: string): Promise<number | null> {
 async function vistaNyjanPunkt(p: { verk_id: number; teikning_id: number; x_px: number; y_px: number; flokkur_id: number; efni: number[]; lysing: string | null; starfsm: string; myndir: File[]; radnr: number }) {
   const s = sb();
   const af = await starfsmId(p.starfsm);
-  const ins = await s.from("skr_skraningar").insert({
-    verk_id: p.verk_id, radnr: p.radnr, teikning_id: p.teikning_id, x_px: p.x_px, y_px: p.y_px, flokkur_id: p.flokkur_id, starfsmadur_id: af, stofnad_af: af,
+  const setja = (radnr: number) => s.from("skr_skraningar").insert({
+    verk_id: p.verk_id, radnr, teikning_id: p.teikning_id, x_px: p.x_px, y_px: p.y_px, flokkur_id: p.flokkur_id, starfsmadur_id: af, stofnad_af: af,
     stada: "created", lysing: p.lysing, framkvaemt_fra: isoDay(), abyrgd_id: 1,
   }).select("id").single();
+  let ins = await setja(p.radnr);
+  for (let reynt = 0; ins.error && /duplicate|23505|unique/i.test(ins.error.message) && reynt < 3; reynt++) {
+    // annar starfsmaður tók númerið á sömu stundu — næsta laust úr grunni
+    ins = await setja(await naestaRadnrUrGrunni(p.verk_id));
+  }
   if (ins.error) throw new Error(ins.error.message);
   const id = ins.data.id as number;
   if (p.efni.length) {
