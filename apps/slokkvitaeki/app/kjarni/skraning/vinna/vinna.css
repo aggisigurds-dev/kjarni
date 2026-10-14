@@ -113,3 +113,16 @@
 .vn-log li span { color: #1e1e1e; }
 .vn-log li.tomt { grid-template-columns: 1fr; color: #4a4a4a; }
 .vn-prenta { border: 1px solid #555; border-radius: 3px; padding: 7px 10px; color: #1e1e1e; font-size: 13px; text-decoration: none; background: #fff; }
+
+.vn-hopsia { border: 1px solid #b9bec3; border-radius: 3px; padding: 7px 8px; font: inherit; font-size: 13px; max-width: 200px; }
+.vn-listitakki { border: 1px solid #555; border-radius: 3px; padding: 7px 10px; font: inherit; font-size: 13px; background: #fff; cursor: pointer; }
+.vn-listitakki.on { background: #1e1e1e; color: #fff; }
+.vn-bordi { position: sticky; top: 52px; z-index: 4; background: #f5b942; color: #1e1e1e; padding: 8px 12px; font-weight: 600; display: flex; gap: 12px; align-items: center; }
+.vn-bordi button { margin-left: auto; border: 1px solid #1e1e1e; background: #fff; border-radius: 3px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.vn-listi-radir { list-style: none; margin: 0; padding: 0; }
+.vn-listi-radir li { display: grid; grid-template-columns: 52px 1fr auto; gap: 2px 10px; align-items: center; padding: 8px 4px; border-bottom: 1px solid #eceeef; cursor: pointer; }
+.vn-listi-radir li .aj-serial { grid-row: 1 / span 2; padding: 4px 0; }
+.vn-listi-radir li b { font-size: 14px; }
+.vn-listi-radir li small { grid-column: 2; color: #4a4a4a; }
+.vn-listi-radir li i { grid-row: 1 / span 2; font-style: normal; }
+.vn-listi-radir li.tomt { grid-template-columns: 1fr; color: #4a4a4a; cursor: default; }
