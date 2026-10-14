@@ -62,6 +62,7 @@ export default function VinnaClient() {
   const [villa, setVilla] = useState<string | null>(null);
   const [starfsm, setStarfsm] = useState<string>("");
   const [ready, setReady] = useState(false);
+  const [hladid, setHladid] = useState(false);
 
   /* --- grunngögn --- */
   useEffect(() => {
@@ -81,7 +82,7 @@ export default function VinnaClient() {
       ]);
       const err = v.error || t.error || f.error || a.error || m.error;
       if (err) { setVilla(err.message); return; }
-      setVerk(v.data as Verk[]); setTeikningar(t.data as Teikning[]); setFlokkar(f.data as Flokkur[]); setAtridi(a.data as Atridi[]); setMenn(m.data as Starfsm[]);
+      setVerk(v.data as Verk[]); setTeikningar(t.data as Teikning[]); setFlokkar(f.data as Flokkur[]); setAtridi(a.data as Atridi[]); setMenn(m.data as Starfsm[]); setHladid(true);
     })();
   }, []);
 
@@ -136,7 +137,7 @@ export default function VinnaClient() {
               </button>
             );
           })}
-          {!verk.length && <p className="vn-tomt">Engin bygging skráð enn.</p>}
+          {!verk.length && <p className="vn-tomt">{hladid ? "Engin bygging skráð enn." : "Sæki byggingar…"}</p>}
           <a className="vn-kort vn-ny" href="/kjarni/skraning/verk"><strong>+ Ný bygging / teikningar</strong><span>Stofna byggingu og hlaða upp grunnmynd</span></a>
         </div>
       </div>
@@ -220,6 +221,13 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, men
   }, [W]);
   const scale = fit * zoom;
 
+  // klípu-zoom: tveir pointerar á kassanum → hlutfall fjarlægða breytir zoom (vafra-zoom á síðunni er látið í friði)
+  const fingur = useRef(new Map<number, { x: number; y: number }>());
+  const klipa = useRef<{ d: number; zoom: number } | null>(null);
+  const pDown = (e: React.PointerEvent) => { if (e.pointerType !== "touch") return; fingur.current.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (fingur.current.size === 2) { const [a, b] = [...fingur.current.values()]; klipa.current = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom }; } };
+  const pMove = (e: React.PointerEvent) => { if (!fingur.current.has(e.pointerId)) return; fingur.current.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (fingur.current.size === 2 && klipa.current) { const [a, b] = [...fingur.current.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (d > 10) setZoom(Math.min(12, Math.max(0.5, klipa.current.zoom * (d / klipa.current.d)))); } };
+  const pUp = (e: React.PointerEvent) => { fingur.current.delete(e.pointerId); if (fingur.current.size < 2) klipa.current = null; };
+
   const smella = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!baeta && !faera) return;
     const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
@@ -265,7 +273,7 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, men
 
       {bid > 0 && <div className="vn-bordi vn-bordi-bid">📵 {bid} punkt{bid === 1 ? "ur bíður" : "ar bíða"} sendingar (sambandslaust þegar skráð var) <button type="button" onClick={senda} disabled={sendi}>{sendi ? "Sendi…" : "Senda núna"}</button></div>}
       {faera && <div className="vn-bordi">Smelltu þar sem punktur #{skr.find((x) => x.id === faera)?.radnr} á að vera <button type="button" onClick={() => setFaera(null)}>Hætta við</button></div>}
-      <div className={`vn-box ${baeta || faera ? "baeta" : ""}`} ref={boxRef}>
+      <div className={`vn-box ${baeta || faera ? "baeta" : ""}`} ref={boxRef} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp}>
         <div className="vn-flotur" style={{ width: W * scale, height: H * scale }} onClick={smella}>
           {teikning.mynd_path && <img src={publicUrl(teikning.mynd_path)} alt={teikning.heiti} width={FW * scale} height={FH * scale} draggable={false}
             style={{ position: "absolute", left: -CX * scale, top: -CY * scale, maxWidth: "none" }} />}

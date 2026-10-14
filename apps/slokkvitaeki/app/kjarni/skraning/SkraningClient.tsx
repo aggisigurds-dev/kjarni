@@ -164,6 +164,14 @@ export default function SkraningClient() {
   }, [sidad]);
   const maxDag = Math.max(1, ...eftirDegi.map((x) => x.n));
 
+  // mánaðaruppgjör: Done-skráningar eftir lokadegi (hakað/lokið, annars framkvæmt) × flokkur, síðustu 6 mánuðir
+  const manudir = useMemo(() => { const out: string[] = []; for (let i = 5; i >= 0; i--) out.push(isoDay(new Date(Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth() - i, 1))).slice(0, 7)); return out; }, [nu]);
+  const uppgjor = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const r of sidad) { if (!isDone(r)) continue; const man = lokid(r).slice(0, 7); if (!manudir.includes(man)) continue; const k = r.category_group || "—"; if (!m.has(k)) m.set(k, new Map()); const row = m.get(k)!; row.set(man, (row.get(man) || 0) + 1); }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "is"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidad, manudir]);
   const rodud = useMemo(() => [...sidad].sort((a, b) => (Number(b.serial_number) || 0) - (Number(a.serial_number) || 0) || a.lykill.localeCompare(b.lykill)), [sidad]);
   const sidur = Math.max(1, Math.ceil(rodud.length / SIDA));
   const sidaNr = Math.min(sidur, Math.max(1, Number(f.sida) || 1));
@@ -281,6 +289,15 @@ export default function SkraningClient() {
                 <div><h4>Eftir starfsmanni</h4><Listi items={menn} alls={sidad.length} valid={f.starfsm} onPick={(k) => set({ starfsm: f.starfsm === k ? "" : k })} /></div>
                 <div><h4>Eftir teikningu</h4><Listi items={teiknSiad} alls={sidad.length} valid={f.teikning} onPick={(k) => set({ teikning: f.teikning === k ? "" : k })} /></div>
               </div>
+              <h4>Mánaðaruppgjör <small>— Done eftir lokadegi × flokkur (= verðskrárlína), síðustu 6 mánuðir</small></h4>
+              <table className="skr-tafla aj-uppgjor">
+                <thead><tr><th>Flokkur</th>{manudir.map((m) => <th key={m} className="t">{MANUDIR[Number(m.slice(5)) - 1].slice(0, 3)} {m.slice(2, 4)}</th>)}<th className="t">Alls</th></tr></thead>
+                <tbody>
+                  {uppgjor.map(([k, row]) => <tr key={k}><td>{k}</td>{manudir.map((m) => <td key={m} className="t">{row.get(m) || ""}</td>)}<td className="t"><b>{[...row.values()].reduce((a, b) => a + b, 0)}</b></td></tr>)}
+                  {uppgjor.length > 0 && <tr className="aj-uppgjor-sum"><td>Alls</td>{manudir.map((m) => <td key={m} className="t">{uppgjor.reduce((a, [, row]) => a + (row.get(m) || 0), 0) || ""}</td>)}<td className="t"><b>{uppgjor.reduce((a, [, row]) => a + [...row.values()].reduce((x, y) => x + y, 0), 0)}</b></td></tr>}
+                  {!uppgjor.length && <tr><td colSpan={manudir.length + 2}>Engar Done-skráningar í tímabilinu</td></tr>}
+                </tbody>
+              </table>
               <h4>Síðustu 30 dagar <small>(framkvæmt)</small></h4>
               <div className="skr-sulur">
                 {eftirDegi.map((x) => (

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Skráning", statusBarStyle: "black" },
   icons: { icon: "/skraning/icon-192.png", apple: "/skraning/icon-192.png" },
 };
-export const viewport = { themeColor: "#1e1e1e", width: "device-width", initialScale: 1, maximumScale: 1 };
+export const viewport = { themeColor: "#1e1e1e", width: "device-width", initialScale: 1 };
 
 export default function VinnaPage() {
   return (
