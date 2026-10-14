@@ -55,3 +55,16 @@ Large PDFs and TIFFs:
 - This 3D change uses saved polylines, so it does **not** download or reprocess large documents. Separate streaming/tiling processing is still needed for giant source scans.
 
 **The building remains incomplete; the change restores hidden saved walls rather than claiming to have found every missing wall.**
+
+## Rotated drawing door detection (14 October)
+
+Read-only inspection of Dalshraun 1 / first-floor saved geometry:
+- Wall angles include visible groups near **4.6°**, **94.6°** and other small rotations.
+- Earlier `finnaHurdir` uses `asStefna(...,1.5)`, rejecting most of these as non-axis-aligned and leaving many possible door openings unexamined.
+- Added `hurdagreining-snuning.ts`: estimate candidate rotations near ±2–15°, rotate coordinates temporarily, run the established door-gap detector with image callbacks in original coordinates, then rotate accepted geometries back.
+- **Conservative by design**: supplemental rotated candidates become actual door objects only with a positive door-arc verification callback. No arc ⇒ diagnostics only, not a saved door.
+- Added synthetic regression cases for a 4.6° rotated plan with and without arc evidence and for axis-aligned plan compatibility.
+- Connected to the automatic workflow on the preview branch; no changes to existing company data.
+- This is not yet a measured Dalshraun door-detection recall improvement, because the source PDF could not be retrieved for a controlled image-level comparison.
+
+Large source documents must be processed separately; rotated-gap checks operate on compact extracted segments, not the original 130 MB image.
