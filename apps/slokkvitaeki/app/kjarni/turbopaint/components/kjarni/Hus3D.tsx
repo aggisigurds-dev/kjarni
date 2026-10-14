@@ -140,6 +140,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
   const [glerSemGluggar, setGlerSemGluggar] = useState(true);
+  const [synaHurdarblod, setSynaHurdarblod] = useState(true);
   const [gegn, setGegn] = useState(false);
   const [ganga, setGanga] = useState(false);
   const [kynning, setKynning] = useState(false);
@@ -489,6 +490,33 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             if (rendur.instanceColor) rendur.instanceColor.needsUpdate = true;
             hopur.add(karmar, rendur);
             losa.push(rE);
+            if (synaHurdarblod) {
+              // Aðeins hurðir sem eru þegar merktar sem "hurd" í veggjalíkaninu.
+              // Sýnum hálfopið hurðarblað svo dyr sjáist ofan frá. Opnunarátt er ÁÆTLUÐ.
+              const venjulegar = hurdir.filter((v) => {
+                const l = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                return l >= metri * 0.45 && l <= metri * 2.4;
+              });
+              if (venjulegar.length) {
+                const bladE = new T.MeshLambertMaterial({ color: 0xc4a17a, side: T.DoubleSide });
+                const blod = new T.InstancedMesh(kG, bladE, venjulegar.length);
+                const bladH = veggH * 0.73;
+                const opn = Math.PI / 3.5;
+                venjulegar.forEach((v, i) => {
+                  const l = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                  const uX = (v.bx - v.ax) / l, uY = (v.by - v.ay) / l;
+                  const dyrBreidd = Math.min(l * 0.92, metri * 1.15);
+                  const xx = (uX * Math.cos(opn) - uY * Math.sin(opn)) * dyrBreidd;
+                  const yy = (uX * Math.sin(opn) + uY * Math.cos(opn)) * dyrBreidd;
+                  blod.setMatrixAt(i, kassi({
+                    ...v, bx: v.ax + xx, by: v.ay + yy,
+                  }, bladH / 2 + veggH * 0.008, bladH, 0, 0.30));
+                });
+                blod.instanceMatrix.needsUpdate = true;
+                hopur.add(blod);
+                losa.push(bladE);
+              }
+            }
           }
 
           // Tæki: líkan á næsta vegg (snýr út frá honum) + stöng, kúla og miði. Miðinn heldur stærð sinni á skjánum og
@@ -925,7 +953,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar]);
+  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar, synaHurdarblod]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -1005,6 +1033,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         <label className="flex items-center gap-1.5 text-[12px]" title="Áætluð gluggahæð (brjóstveggur og karmar) úr glermerktum veggjum. Slökktu til að sýna fullháa glerveggi. Breytir ekki vistuðum teikningum.">
           <input type="checkbox" checked={glerSemGluggar} onChange={(e) => setGlerSemGluggar(e.target.checked)} />
           Gluggar (áætlað)
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Sýnir hálfopin hurðarblöð aðeins þar sem hurð er þegar merkt í gögnunum. Opnunarátt er áætluð, og engum vistaðri hurð er breytt.">
+          <input type="checkbox" checked={synaHurdarblod} onChange={(e) => setSynaHurdarblod(e.target.checked)} />
+          Hurðarblöð (áætlað)
         </label>
         <button
           type="button"
