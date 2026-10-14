@@ -68,3 +68,13 @@ Read-only inspection of Dalshraun 1 / first-floor saved geometry:
 - This is not yet a measured Dalshraun door-detection recall improvement, because the source PDF could not be retrieved for a controlled image-level comparison.
 
 Large source documents must be processed separately; rotated-gap checks operate on compact extracted segments, not the original 130 MB image.
+
+## Visualization-only repair of tiny gaps (14 October, night batch)
+
+- Added `hus3d-smasamkeyti.ts`: connects only facing, nearly collinear **solid** wall endpoints with gaps of no more than **10 cm** in the current 3D scale.
+- Does not join glass, door objects, EI classes that differ, isolated short noise, or segments where the gap midpoint overlaps tagged glazing/doors.
+- Uses an endpoint spatial grid, a one-endpoint-to-one-endpoint assignment and produces **new temporary 3D fragments only**. Source polylines in Supabase/Teikningar are never rewritten.
+- New **Tengja smábil** on/off switch in the TurboPaint 3D viewer, enabled by default and reversible.
+- Tested with a tilted 4.6° collinear wall pair, door gap, window gap, perpendicular non-match, >10 cm gap, and immutable input.
+- Locally executed combined TypeScript-on-the-fly test set for `hus3d.test.ts`, `hus3d-smasamkeyti.test.ts`, `hurdagreining-snuning.test.ts`, and `hurdagreining.test.ts`: **34 passed, 0 failed**.
+- The Vercel preview build succeeded for renderer commit `5a8d546f81ef057554daf7bb2eb9dd82b3f090a1`. A build does not establish that missing real wall geometry was recovered; larger gaps still require analysis/manual review.
