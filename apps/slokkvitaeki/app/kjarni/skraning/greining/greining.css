@@ -1,0 +1,49 @@
+.gr { padding: 10px 14px 60px; max-width: 1900px; margin: 0 auto; color: #1e1e1e; font-size: 13px; }
+.gr-sneid { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; background: #fff; border: 1px solid #d9dcdf; padding: 8px 12px; margin-bottom: 10px; }
+.gr-hopur { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.gr-hopur > span { font-size: 11px; text-transform: uppercase; font-weight: 700; color: #4a4a4a; margin-right: 4px; }
+.gr-hopur button, .gr-tafla-val button, .gr-hreinsa { border: 1px solid #555; background: #fff; border-radius: 3px; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.gr-hopur button.on, .gr-tafla-val button.on { background: #1e1e1e; color: #fff; border-color: #1e1e1e; }
+.gr-hopur input[type="date"] { border: 1px solid #b9bec3; border-radius: 3px; padding: 4px 6px; font: inherit; font-size: 12px; }
+.gr-hreinsa { margin-left: auto; border-color: #d9534f; color: #d9534f; }
+.gr-hreinsa:disabled { opacity: 0.4; cursor: default; }
+.gr-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.gr-kpi div { background: #fff; border: 1px solid #d9dcdf; border-top: 3px solid #1a9bb1; padding: 8px 12px; display: flex; flex-direction: column; }
+.gr-kpi span { font-size: 11px; text-transform: uppercase; font-weight: 700; color: #4a4a4a; }
+.gr-kpi strong { font-size: 22px; }
+.gr-kpi small { color: #4a4a4a; }
+.gr-rit { background: #fff; border: 1px solid #d9dcdf; margin-bottom: 10px; min-width: 0; }
+.gr-rit > h2 { margin: 0; padding: 8px 12px; background: #f4f5f6; border-bottom: 1px solid #d9dcdf; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gr-rit > h2 small { color: #4a4a4a; font-weight: 400; }
+.gr-ath { color: #b07d00 !important; }
+.gr-brauð { border: 0; background: transparent; color: #1a9bb1; font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+.gr-brauð-nu { font-weight: 700; margin-right: 4px; }
+.gr-sulur { display: grid; gap: 3px; height: 230px; align-items: end; padding: 26px 12px 26px; }
+.gr-sula { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.gr-sula.bora { cursor: zoom-in; }
+.gr-sula:hover .gr-stafli { filter: brightness(1.1); outline: 1px solid #1e1e1e; }
+.gr-stafli { display: flex; flex-direction: column-reverse; width: 100%; min-height: 1px; border-radius: 2px 2px 0 0; overflow: hidden; }
+.gr-stafli i { display: block; width: 100%; min-height: 1px; }
+.gr-sula b { position: absolute; left: 0; right: 0; height: 3px; background: #1a9bb1; box-shadow: 0 0 0 1px #fff; }
+.gr-sula em { position: absolute; bottom: 100%; left: 0; right: 0; text-align: center; font-size: 10px; font-style: normal; color: #1e1e1e; font-weight: 600; transform: translateY(-2px); white-space: nowrap; overflow: hidden; }
+.gr-sula span { position: absolute; top: 100%; left: 0; right: 0; text-align: center; font-size: 10px; color: #4a4a4a; margin-top: 4px; white-space: nowrap; overflow: hidden; }
+.gr-timalina .gr-sulur[style*="repeat(3"] .gr-sula em, .gr-sulur .gr-sula:nth-child(n+40) em { font-size: 0; }
+.gr-skyring { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 12px 10px; font-size: 12px; }
+.gr-skyring i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -2px; }
+.gr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+.gr-rit.litil { min-width: 0; }
+.gr-lar { list-style: none; margin: 0; padding: 6px 12px; }
+.gr-lar li { display: grid; grid-template-columns: minmax(90px, 40%) 1fr 56px; gap: 8px; align-items: center; padding: 3px 4px; cursor: pointer; border-radius: 3px; }
+.gr-lar li:hover { background: #eaf6f8; }
+.gr-lar li.on { background: #d9eff3; box-shadow: inset 3px 0 0 #1a9bb1; }
+.gr-lar li.dauf { opacity: 0.45; }
+.gr-lar li span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-lar li b { text-align: right; font-variant-numeric: tabular-nums; }
+.gr-la { height: 14px; background: #eceeef; border-radius: 2px; overflow: hidden; }
+.gr-la i { display: block; height: 100%; background: #1a9bb1; }
+.gr-lar li.tomt { grid-template-columns: 1fr; color: #4a4a4a; cursor: default; }
+.gr-meira { margin: 0 12px 10px; border: 1px solid #ccc; background: #fff; border-radius: 3px; padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+.gr-tafla-val { margin-left: auto; display: flex; gap: 4px; }
+.gr-tafla td, .gr-tafla th { padding: 4px 8px; }
+.gr-sum td { border-top: 2px solid #1e1e1e; font-weight: 700; }
+@media (max-width: 760px) { .gr { padding: 8px 8px 60px; } .gr-sulur { padding: 22px 4px 22px; height: 190px; } .gr-sula em { font-size: 0; } }

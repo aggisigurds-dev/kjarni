@@ -17,6 +17,7 @@ export default function FlokkarPage() {
         <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Skráning"><span>⌂</span></a>
         <nav className="aj-nav" aria-label="Skráning">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
+          <a href="/kjarni/skraning/greining">Greining</a>
           <a href="/kjarni/skraning">Yfirlit</a>
           <a href="/kjarni/skraning/vinna">Vinna</a>
           <a href="/kjarni/skraning/verk">Byggingar &amp; teikningar</a>

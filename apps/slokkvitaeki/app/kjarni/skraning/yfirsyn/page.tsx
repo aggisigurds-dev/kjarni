@@ -15,6 +15,7 @@ export default function YfirsynPage() {
         <a className="aj-logo" href="/kjarni" title="Kjarni" aria-label="Kjarni"><span>⌂</span></a>
         <nav className="aj-nav" aria-label="Skráning">
           <a className="on" href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
+          <a href="/kjarni/skraning/greining">Greining</a>
           <a href="/kjarni/skraning">Skráning &amp; QA</a>
           <a href="/kjarni/skraning/vinna">Vinna</a>
           <a href="/kjarni/skraning/verk">Byggingar</a>
