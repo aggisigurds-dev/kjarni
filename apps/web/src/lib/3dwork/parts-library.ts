@@ -154,13 +154,78 @@ export interface BoardItem {
 /** Room left between parts laid out on a new board, mm. */
 export const BOARD_GAP_MM = 20;
 
+/**
+ * Height of the parts' centres on a new board, mm. The user (14.10.2026): the
+ * picks should appear in the middle of the board at about 20 cm and be laid out
+ * around it — before, they stood on the table in one row that ran almost 2 m
+ * out past the edge of the 1.6 m plate.
+ */
+export const BOARD_HEIGHT_MM = 200;
+
+/**
+ * The picks once each: the same part ticked in two tabs (in "Allir partar" and
+ * again in the collection it was saved to) would otherwise land on the board
+ * twice. The first tick wins.
+ */
+export function dropRepeats<T>(items: readonly T[], identity: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = identity(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Footprints laid out in rows around the centre of the table: each row is
+ * centred along X, the rows are stacked along Z and the whole block is
+ * centred on the origin, so it comes out roughly square. Rows are a little
+ * wider than the square root of the area, never narrower than the widest part.
+ * Returns the centre of each footprint, in the order given.
+ */
+export function layoutAroundCentre(
+  footprints: readonly { width: number; depth: number }[],
+  gap = BOARD_GAP_MM
+): { x: number; z: number }[] {
+  if (footprints.length === 0) return [];
+  const area = footprints.reduce((sum, entry) => sum + (entry.width + gap) * (entry.depth + gap), 0);
+  const rowLimit = Math.max(...footprints.map((entry) => entry.width), Math.sqrt(area) * 1.15);
+  const rows: { members: number[]; width: number; depth: number }[] = [];
+  let row = { members: [] as number[], width: 0, depth: 0 };
+  footprints.forEach((entry, index) => {
+    const extra = (row.members.length > 0 ? gap : 0) + entry.width;
+    if (row.members.length > 0 && row.width + extra > rowLimit) {
+      rows.push(row);
+      row = { members: [], width: 0, depth: 0 };
+    }
+    row.width += (row.members.length > 0 ? gap : 0) + entry.width;
+    row.depth = Math.max(row.depth, entry.depth);
+    row.members.push(index);
+  });
+  rows.push(row);
+  const depth = rows.reduce((sum, entry) => sum + entry.depth, 0) + gap * (rows.length - 1);
+  const centres = Array.from({ length: footprints.length }, () => ({ x: 0, z: 0 }));
+  let z = -depth / 2;
+  for (const line of rows) {
+    let x = -line.width / 2;
+    for (const index of line.members) {
+      const entry = footprints[index];
+      centres[index] = { x: x + entry.width / 2, z: z + line.depth / 2 };
+      x += entry.width + gap;
+    }
+    z += line.depth + gap;
+  }
+  return centres;
+}
+
 const freshId = (prefix: string, salt: number) =>
   `${prefix}_${Date.now().toString(36)}_${salt.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /**
  * A new board holding the picks: each a part of its own with a fresh id and
- * one version, laid out in a row along X with a gap between them, standing on
- * the table and centred across it. Plain bench, no blaster slots.
+ * one version, laid out around the middle of the table (layoutAroundCentre)
+ * with their centres at BOARD_HEIGHT_MM. Plain bench, no blaster slots.
  */
 export function buildBoard(
   name: string,
@@ -173,9 +238,10 @@ export function buildBoard(
     updatedAt: now,
   };
   const geometries = new Map<string, Float32Array>();
-  let cursor = 0;
+  const allBounds = items.map((item) => computeBounds(item.soup));
+  const centres = layoutAroundCentre(allBounds.map((bounds) => ({ width: bounds.size[0], depth: bounds.size[2] })));
   items.forEach((item, index) => {
-    const bounds = computeBounds(item.soup);
+    const bounds = allBounds[index];
     const triangles = Math.floor(item.soup.length / 9);
     const versionId = freshId('ver', index);
     geometries.set(versionId, item.soup);
@@ -195,13 +261,12 @@ export function buildBoard(
       activeVersionId: versionId,
       thumbnail: item.thumbnail,
       freePos: {
-        x: cursor - bounds.min[0],
-        y: 0 - bounds.min[1],
-        z: 0 - bounds.center[2],
+        x: centres[index].x - bounds.center[0],
+        y: BOARD_HEIGHT_MM - bounds.center[1],
+        z: centres[index].z - bounds.center[2],
       },
       addedAt: now + index,
     });
-    cursor += bounds.size[0] + BOARD_GAP_MM;
   });
   return { project, geometries };
 }

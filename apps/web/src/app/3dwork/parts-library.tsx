@@ -75,7 +75,7 @@ import {
 } from '@/lib/3dwork/favorites';
 import { lookFor } from '@/lib/3dwork/finish';
 import { formatCount } from '@/lib/3dwork/format';
-import { buildBoard, failureNote, partsOfBuilds, type BoardItem, type BuildPart } from '@/lib/3dwork/parts-library';
+import { buildBoard, dropRepeats, failureNote, partsOfBuilds, type BoardItem, type BuildPart } from '@/lib/3dwork/parts-library';
 import type { Project } from '@/lib/3dwork/project';
 import { listProjects, loadGeometry, loadThumbnail, saveThumbnail } from '@/lib/3dwork/storage';
 import { listCloudBuildParts, loadCloudGeometry } from '@/lib/3dwork/supabase-sync';
@@ -464,9 +464,15 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
     [searched, categoryFilter, markOf]
   );
 
-  // Every ticked card, from every tab, in the order they were ticked.
+  // Every ticked card, from every tab, in the order they were ticked — each part once: the same part
+  // ticked in "Allir partar" and again in its collection put two copies on the board (14.10.2026).
   const tickedEntries = useMemo(
-    () => [...ticked].map((key) => entryByKey.get(key)).filter((entry): entry is Entry => Boolean(entry)),
+    () =>
+      dropRepeats(
+        [...ticked].map((key) => entryByKey.get(key)).filter((entry): entry is Entry => Boolean(entry)),
+        (entry) =>
+          identityOf(nameOf(entry), entry.kind === 'library' ? entry.favorite.triangles : entry.part.triangles)
+      ),
     [ticked, entryByKey]
   );
 
@@ -1364,7 +1370,7 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
 
         <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--wb-panel-border)] pt-3">
           <span className="text-[0.75rem] font-bold text-[var(--wb-ink)]">
-            {say(ticked.size, 'valinn', 'valdir')}
+            {say(tickedEntries.length, 'valinn', 'valdir')}
           </span>
           {ticked.size > 0 && (
             <button type="button" className="text-[0.7rem] text-[var(--wb-ink-mute)] underline" onClick={() => setTicked(new Set())}>
