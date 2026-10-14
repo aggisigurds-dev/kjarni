@@ -100,3 +100,6 @@
 .vn-kortid-texti small { color: #4a4a4a; }
 .vn-kortid-flokkur { font-weight: 600; }
 .vn-kortid-ath { color: #1e1e1e; }
+
+.vn-flotur { overflow: hidden; }
+.vn-haed-mynd { width: 100%; height: 110px; border: 1px solid #e3e5e7; border-radius: 3px; background-color: #fff; }

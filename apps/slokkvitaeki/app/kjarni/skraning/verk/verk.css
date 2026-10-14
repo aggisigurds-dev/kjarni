@@ -34,3 +34,19 @@
 .vk-velja { font-size: 12px; display: flex; gap: 6px; align-items: center; }
 .vk-velja small { color: #4a4a4a; }
 .vk-vista { grid-column: 1 / -1; justify-self: start; border: 1px solid #1a9bb1; border-radius: 3px; padding: 9px 16px; font: inherit; cursor: pointer; }
+
+.vk-smamynd { width: 120px; height: 80px; border: 1px solid #e3e5e7; background-color: #fff; }
+.vk-takkar { display: flex; flex-direction: column; gap: 6px; }
+.vk-skera { border: 1px solid #1a9bb1; color: #1a9bb1; background: #fff; border-radius: 3px; padding: 5px 8px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.sk-bak { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 40; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.sk-modal { background: #fff; border-radius: 8px; width: min(96vw, 1400px); max-height: 94vh; display: flex; flex-direction: column; overflow: hidden; }
+.sk-haus { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #d9dcdf; }
+.sk-haus span { color: #4a4a4a; font-size: 12px; }
+.sk-box { padding: 8px; background: #cfd3d7; overflow: auto; }
+.sk-flotur { position: relative; margin: 0 auto; background: #fff; cursor: crosshair; touch-action: none; user-select: none; }
+.sk-flotur img { display: block; pointer-events: none; }
+.sk-skuggi { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); pointer-events: none; }
+.sk-rammi { position: absolute; border: 2px solid #1a9bb1; box-shadow: 0 0 0 1px #fff inset; pointer-events: none; }
+.sk-takkar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid #d9dcdf; }
+.sk-takkar button { border: 1px solid #555; background: #fff; border-radius: 3px; padding: 8px 14px; font: inherit; cursor: pointer; }
+.sk-tolur { margin-right: auto; color: #1e1e1e; font-size: 13px; }

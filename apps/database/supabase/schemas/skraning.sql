@@ -37,6 +37,7 @@ create table if not exists public.skr_teikningar (
   breidd_px       integer,                    -- stærð renderingarinnar — pinnar eru í þessum hnitum
   haed_px         integer,
   dpi             integer,
+  skurdur         jsonb,                      -- fastur skurður {x,y,w,h} í px renderingarinnar; pinnar eru í hnitum allrar myndar
   rod             integer not null default 0,
   ajour_file_id   uuid unique,
   eytt            boolean not null default false,

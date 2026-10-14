@@ -11,9 +11,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sb, publicUrl, minnkaMynd, hladaUpp } from "../lib/sb";
+import { lesaSkurd, skurdarBakgrunnur } from "../lib/skurdur";
 
 type Verk = { id: number; heiti: string; heimilisfang: string | null; virkt: boolean };
-type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number };
+type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number; skurdur: unknown };
 type Flokkur = { id: number; verk_id: number | null; heiti: string; tegund: string; rod: number };
 type Atridi = { id: number; verk_id: number | null; atridi: string; hopur: string | null; rod: number };
 type Skraning = { id: number; verk_id: number; radnr: number; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stada: string; lysing: string | null; framkvaemt_fra: string | null; lokid_at: string | null; created_at: string; eytt: boolean };
@@ -59,7 +60,7 @@ export default function VinnaClient() {
       const s = sb();
       const [v, t, f, a] = await Promise.all([
         s.from("skr_verk").select("id,heiti,heimilisfang,virkt").eq("eytt", false).eq("virkt", true).order("heiti"),
-        s.from("skr_teikningar").select("id,verk_id,heiti,haed,mynd_path,breidd_px,haed_px,rod").eq("eytt", false).order("rod"),
+        s.from("skr_teikningar").select("id,verk_id,heiti,haed,mynd_path,breidd_px,haed_px,rod,skurdur").eq("eytt", false).order("rod"),
         s.from("skr_flokkar").select("id,verk_id,heiti,tegund,rod").eq("virkt", true).order("rod"),
         s.from("skr_gatlisti").select("id,verk_id,atridi,hopur,rod").eq("virkt", true).order("rod"),
       ]);
@@ -134,7 +135,7 @@ export default function VinnaClient() {
             const done = a.filter((s) => s.stada === "done").length;
             return (
               <button type="button" key={t.id} className="vn-kort vn-haed" onClick={() => veljaTeikningu(t.id)}>
-                {t.mynd_path && <img src={publicUrl(t.mynd_path)} alt="" loading="lazy" />}
+                {t.mynd_path && <div className="vn-haed-mynd" style={skurdarBakgrunnur(publicUrl(t.mynd_path), t.breidd_px || 1, t.haed_px || 1, lesaSkurd(t.skurdur, t.breidd_px || 1, t.haed_px || 1), 260, 110)} />}
                 <strong>{t.haed || t.heiti}</strong>
                 <span>{t.haed ? t.heiti : ""}</span>
                 <small><b className="g">{done}</b> lokið · <b className="y">{a.length - done}</b> opið</small>
@@ -162,7 +163,9 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, onB
   verk: Verk; teikning: Teikning; skr: Skraning[]; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string;
   onBack: () => void; onChanged: () => void; allar: Skraning[];
 }) {
-  const W = teikning.breidd_px || 1000, H = teikning.haed_px || 700;
+  const FW = teikning.breidd_px || 1000, FH = teikning.haed_px || 700;            // öll myndin
+  const sk = lesaSkurd(teikning.skurdur, FW, FH);                                   // fastur skurður (sýn)
+  const CX = sk ? sk.x : 0, CY = sk ? sk.y : 0, W = sk ? sk.w : FW, H = sk ? sk.h : FH;
   const boxRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(0.3);
   const [zoom, setZoom] = useState(1);
@@ -181,7 +184,7 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, onB
   const smella = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!baeta) return;
     const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-    const x = (e.clientX - r.left) / scale, y = (e.clientY - r.top) / scale;
+    const x = CX + (e.clientX - r.left) / scale, y = CY + (e.clientY - r.top) / scale;   // hnit í allri myndinni
     setNyr({ x: Math.round(x), y: Math.round(y) }); setBaeta(false); setOpid(null);
   };
 
@@ -209,15 +212,16 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, onB
 
       <div className={`vn-box ${baeta ? "baeta" : ""}`} ref={boxRef}>
         <div className="vn-flotur" style={{ width: W * scale, height: H * scale }} onClick={smella}>
-          {teikning.mynd_path && <img src={publicUrl(teikning.mynd_path)} alt={teikning.heiti} width={W * scale} height={H * scale} draggable={false} />}
+          {teikning.mynd_path && <img src={publicUrl(teikning.mynd_path)} alt={teikning.heiti} width={FW * scale} height={FH * scale} draggable={false}
+            style={{ position: "absolute", left: -CX * scale, top: -CY * scale, maxWidth: "none" }} />}
           {synd.map((s) => (
             <button type="button" key={s.id} className={`vn-pinni ${s.stada === "done" ? "done" : "created"} ${opid === s.id ? "on" : ""}`}
-              style={{ left: (s.x_px || 0) * scale, top: (s.y_px || 0) * scale }}
+              style={{ left: ((s.x_px || 0) - CX) * scale, top: ((s.y_px || 0) - CY) * scale }}
               onClick={(e) => { e.stopPropagation(); if (!baeta) { setOpid(s.id); setNyr(null); } }} title={`#${s.radnr}`}>
               <i>#{s.radnr}</i>
             </button>
           ))}
-          {nyr && <span className="vn-pinni nyr" style={{ left: nyr.x * scale, top: nyr.y * scale }} />}
+          {nyr && <span className="vn-pinni nyr" style={{ left: (nyr.x - CX) * scale, top: (nyr.y - CY) * scale }} />}
         </div>
       </div>
       {/* appelsínuguli plúsinn eins og í Ajour-appinu */}

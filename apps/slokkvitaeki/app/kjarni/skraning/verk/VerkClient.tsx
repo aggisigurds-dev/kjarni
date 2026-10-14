@@ -7,9 +7,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sb, publicUrl, hladaUpp } from "../lib/sb";
 import { PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "../../turbopaint/lib/board/pdfjs-setup";
+import { SkurdurModal } from "./SkurdurModal";
+import { lesaSkurd, skurdarBakgrunnur, type Skurdur } from "../lib/skurdur";
 
 type Verk = { id: number; heiti: string; heimilisfang: string | null; verkkaupi: string | null; virkt: boolean; created_at: string };
-type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; pdf_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number };
+type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; pdf_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number; skurdur: unknown };
 type Sida = { n: number; heiti: string; haed: string; blob: Blob; w: number; h: number; url: string; velja: boolean };
 
 const MAX_PX = 4000; // lengri kantur renderingarinnar — nóg til að lesa teikningu í síma með zoomi
@@ -56,12 +58,13 @@ export default function VerkClient() {
   const [sidur, setSidur] = useState<Sida[]>([]);
   const [skra, setSkra] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [skera, setSkera] = useState<Teikning | null>(null);
 
   const hlada = async () => {
     const s = sb();
     const [v, t] = await Promise.all([
       s.from("skr_verk").select("id,heiti,heimilisfang,verkkaupi,virkt,created_at").eq("eytt", false).order("heiti"),
-      s.from("skr_teikningar").select("id,verk_id,heiti,haed,mynd_path,pdf_path,breidd_px,haed_px,rod").eq("eytt", false).order("rod"),
+      s.from("skr_teikningar").select("id,verk_id,heiti,haed,mynd_path,pdf_path,breidd_px,haed_px,rod,skurdur").eq("eytt", false).order("rod"),
     ]);
     if (v.error || t.error) { setVilla((v.error || t.error)!.message); return; }
     setVerk(v.data as Verk[]); setTeikn(t.data as Teikning[]);
@@ -136,6 +139,11 @@ export default function VerkClient() {
     await sb().from("skr_teikningar").update({ eytt: true }).eq("id", t.id);
     await hlada();
   };
+  const vistaSkurd = async (t: Teikning, sk: Skurdur | null) => {
+    const r = await sb().from("skr_teikningar").update({ skurdur: sk }).eq("id", t.id);
+    if (r.error) throw new Error(r.error.message);
+    setTeikn((all) => all.map((x) => (x.id === t.id ? { ...x, skurdur: sk } : x)));
+  };
   const breytaVerk = async (v: Verk, patch: Partial<Verk>) => {
     await sb().from("skr_verk").update(patch).eq("id", v.id);
     await hlada();
@@ -182,12 +190,15 @@ export default function VerkClient() {
               <ul className="vk-teikn">
                 {teiknVerks.map((t) => (
                   <li key={t.id}>
-                    {t.mynd_path && <a href={publicUrl(t.mynd_path)} target="_blank" rel="noreferrer"><img src={publicUrl(t.mynd_path)} alt="" loading="lazy" /></a>}
+                    {t.mynd_path && <a href={publicUrl(t.mynd_path)} target="_blank" rel="noreferrer"><div className="vk-smamynd" style={skurdarBakgrunnur(publicUrl(t.mynd_path), t.breidd_px || 1, t.haed_px || 1, lesaSkurd(t.skurdur, t.breidd_px || 1, t.haed_px || 1), 120, 80)} /></a>}
                     <div>
                       <input type="text" className="vk-haed" placeholder="Hæð / heiti sem starfsmenn sjá (t.d. 2. hæð)" defaultValue={t.haed || ""} onBlur={(e) => e.target.value !== (t.haed || "") && breytaHaed(t, e.target.value)} />
-                      <small>{t.heiti} · {t.breidd_px}×{t.haed_px} px{t.pdf_path && <> · <a href={publicUrl(t.pdf_path)} target="_blank" rel="noreferrer">PDF</a></>}</small>
+                      <small>{t.heiti} · {t.breidd_px}×{t.haed_px} px{t.pdf_path && <> · <a href={publicUrl(t.pdf_path)} target="_blank" rel="noreferrer">PDF</a></>}{lesaSkurd(t.skurdur, t.breidd_px || 1, t.haed_px || 1) ? " · ✂ skorin" : ""}</small>
                     </div>
-                    <button type="button" className="vk-fela" onClick={() => felaTeikningu(t)} title="Fela teikningu">✕</button>
+                    <div className="vk-takkar">
+                      <button type="button" className="vk-skera" onClick={() => setSkera(t)} title="Skera utan um gólfplanið">✂ Skera</button>
+                      <button type="button" className="vk-fela" onClick={() => felaTeikningu(t)} title="Fela teikningu">✕</button>
+                    </div>
                   </li>
                 ))}
                 {!teiknVerks.length && <li className="vk-tomt">Engin teikning enn — hlaða upp hér fyrir neðan.</li>}
@@ -214,6 +225,10 @@ export default function VerkClient() {
           )}
         </section>
       </div>
+      {skera && skera.mynd_path && (
+        <SkurdurModal url={publicUrl(skera.mynd_path)} breidd={skera.breidd_px || 1} haed={skera.haed_px || 1} heiti={skera.haed || skera.heiti}
+          nuverandi={lesaSkurd(skera.skurdur, skera.breidd_px || 1, skera.haed_px || 1)} onSave={(sk) => vistaSkurd(skera, sk)} onClose={() => setSkera(null)} />
+      )}
     </div>
   );
 }
