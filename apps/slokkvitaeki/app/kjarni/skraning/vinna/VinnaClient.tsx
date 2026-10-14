@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sb, publicUrl, minnkaMynd, hladaUpp } from "../lib/sb";
 import { lesaSkurd, skurdarBakgrunnur } from "../lib/skurdur";
+import { bidrod, erNetvilla, type BidPunktur } from "../lib/bidrod";
 
 type Verk = { id: number; heiti: string; heimilisfang: string | null; virkt: boolean };
 type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number; skurdur: unknown };
@@ -197,6 +198,20 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, men
   const [faera, setFaera] = useState<number | null>(null);      // punktur sem verið er að færa
   const [listi, setListi] = useState(false);                     // listasýn (Ajour: List)
   const [breyta, setBreyta] = useState<Skraning | null>(null);   // Edit registration
+  const [bid, setBid] = useState(0);                             // punktar í biðröð (sambandslaust)
+  const [sendi, setSendi] = useState(false);
+  const telja = async () => setBid(await bidrod.fjoldi());
+  const senda = async () => {
+    if (sendi) return; setSendi(true);
+    try { const r = await sendaBidrod(naestaRadnrUrGrunni); if (r.sent) onChanged(); setBid(r.eftir); } finally { setSendi(false); }
+  };
+  useEffect(() => {
+    telja(); if (navigator.onLine) senda();
+    const a = () => { telja(); senda(); }; const b = () => telja();
+    window.addEventListener("online", a); window.addEventListener("skr-bidrod", b);
+    return () => { window.removeEventListener("online", a); window.removeEventListener("skr-bidrod", b); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const el = boxRef.current; if (!el) return;
@@ -248,6 +263,7 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, men
         <button type="button" className={`vn-baeta ${baeta ? "on" : ""}`} onClick={() => { setBaeta((b) => !b); setNyr(null); setOpid(null); }}>{baeta ? "Smelltu á teikninguna…" : "+ Nýr punktur"}</button>
       </div>
 
+      {bid > 0 && <div className="vn-bordi vn-bordi-bid">📵 {bid} punkt{bid === 1 ? "ur bíður" : "ar bíða"} sendingar (sambandslaust þegar skráð var) <button type="button" onClick={senda} disabled={sendi}>{sendi ? "Sendi…" : "Senda núna"}</button></div>}
       {faera && <div className="vn-bordi">Smelltu þar sem punktur #{skr.find((x) => x.id === faera)?.radnr} á að vera <button type="button" onClick={() => setFaera(null)}>Hætta við</button></div>}
       <div className={`vn-box ${baeta || faera ? "baeta" : ""}`} ref={boxRef}>
         <div className="vn-flotur" style={{ width: W * scale, height: H * scale }} onClick={smella}>
@@ -310,6 +326,49 @@ async function starfsmId(numer: string): Promise<number | null> {
   return ins.data ? (ins.data.id as number) : null;
 }
 
+/** Vistar nýjan punkt (skráning + gátlisti + myndir + logg). Kastar við villu — kallandi ákveður hvort hann fer í biðröð. */
+async function vistaNyjanPunkt(p: { verk_id: number; teikning_id: number; x_px: number; y_px: number; flokkur_id: number; efni: number[]; lysing: string | null; starfsm: string; myndir: File[]; radnr: number }) {
+  const s = sb();
+  const af = await starfsmId(p.starfsm);
+  const ins = await s.from("skr_skraningar").insert({
+    verk_id: p.verk_id, radnr: p.radnr, teikning_id: p.teikning_id, x_px: p.x_px, y_px: p.y_px, flokkur_id: p.flokkur_id, starfsmadur_id: af, stofnad_af: af,
+    stada: "created", lysing: p.lysing, framkvaemt_fra: isoDay(), abyrgd_id: 1,
+  }).select("id").single();
+  if (ins.error) throw new Error(ins.error.message);
+  const id = ins.data.id as number;
+  if (p.efni.length) {
+    const r = await s.from("skr_gatlisti_svor").insert(p.efni.map((atridi_id) => ({ skraning_id: id, atridi_id, hakad: true, hakad_af: af, hakad_at: new Date().toISOString() })));
+    if (r.error) throw new Error(r.error.message);
+  }
+  await vistaMyndir(p.verk_id, id, p.myndir, "fyrir", af);
+  await s.from("skr_atburdir").insert({ skraning_id: id, hvad: "stofnad", hver: af, gogn: { flokkur: p.flokkur_id, efni: p.efni, myndir: p.myndir.length } });
+  return id;
+}
+
+/** Sendir biðröðina (punkta sem urðu til án nets). Raðnúmer er úthlutað við sendingu. Skilar fjölda sem tókst. */
+export async function sendaBidrod(naestaRadnr: (verkId: number) => Promise<number>): Promise<{ sent: number; eftir: number }> {
+  const oll = await bidrod.oll();
+  let sent = 0;
+  for (const b of oll) {
+    try {
+      const radnr = await naestaRadnr(b.verk_id);
+      await vistaNyjanPunkt({ verk_id: b.verk_id, teikning_id: b.teikning_id, x_px: b.x_px, y_px: b.y_px, flokkur_id: b.flokkur_id, efni: b.efni, lysing: b.lysing, starfsm: b.starfsm,
+        myndir: b.myndir.map((m) => new File([m.blob], m.name, { type: m.blob.type || "image/jpeg", lastModified: m.lastModified })), radnr });
+      await bidrod.eyda(b.id); sent++;
+    } catch (e) {
+      if (!erNetvilla(e)) { await bidrod.setja({ ...b, villa: String((e as Error).message || e) }); }
+      else break; // enn sambandslaust — reyna seinna
+    }
+  }
+  return { sent, eftir: await bidrod.fjoldi() };
+}
+
+async function naestaRadnrUrGrunni(verkId: number): Promise<number> {
+  const r = await sb().from("skr_skraningar").select("radnr").eq("verk_id", verkId).order("radnr", { ascending: false }).limit(1);
+  if (r.error) throw new Error(r.error.message);
+  return ((r.data?.[0]?.radnr as number) || 0) + 1;
+}
+
 async function vistaMyndir(verkId: number, skraningId: number, files: File[], stig: "fyrir" | "eftir", af: number | null) {
   const s = sb();
   let rod = 0;
@@ -341,8 +400,8 @@ function NyrPunktur({ verk, teikning, x, y, flokkar, atridi, starfsm, allar, upp
     setBusy(true); setVilla(null);
     try {
       const s = sb();
-      const af = await starfsmId(starfsm);
       if (upphaf) {
+        const af = await starfsmId(starfsm);
         // Edit registration: flokkur, athugasemd, gátlisti (upsert — engin DELETE-heimild, óhakað = hakad:false)
         const u = await s.from("skr_skraningar").update({ flokkur_id: flokkur, lysing: lysing || null }).eq("id", upphaf.id);
         if (u.error) throw new Error(u.error.message);
@@ -356,18 +415,18 @@ function NyrPunktur({ verk, teikning, x, y, flokkar, atridi, starfsm, allar, upp
         onSaved(); return;
       }
       const radnr = allar.reduce((m, r) => Math.max(m, r.radnr), 0) + 1;
-      const ins = await s.from("skr_skraningar").insert({
-        verk_id: verk.id, radnr, teikning_id: teikning.id, x_px: x, y_px: y, flokkur_id: flokkur, starfsmadur_id: af, stofnad_af: af,
-        stada: "created", lysing: lysing || null, framkvaemt_fra: isoDay(), abyrgd_id: 1,
-      }).select("id").single();
-      if (ins.error) throw new Error(ins.error.message);
-      const id = ins.data.id as number;
-      if (efni.size) {
-        const r = await s.from("skr_gatlisti_svor").insert([...efni].map((atridi_id) => ({ skraning_id: id, atridi_id, hakad: true, hakad_af: af, hakad_at: new Date().toISOString() })));
-        if (r.error) throw new Error(r.error.message);
+      const nyr = { verk_id: verk.id, teikning_id: teikning.id, x_px: x, y_px: y, flokkur_id: flokkur as number, efni: [...efni], lysing: lysing || null, starfsm, myndir: files, radnr };
+      try {
+        await vistaNyjanPunkt(nyr);
+      } catch (e) {
+        if (!erNetvilla(e) || !bidrod.studd()) throw e;
+        // sambandslaust: geyma í símanum og senda þegar netið kemur
+        const b: BidPunktur = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, verk_id: verk.id, teikning_id: teikning.id, x_px: x, y_px: y, flokkur_id: flokkur as number,
+          efni: [...efni], lysing: lysing || null, starfsm, myndir: files.map((f) => ({ blob: f, name: f.name, lastModified: f.lastModified })), stofnad: new Date().toISOString() };
+        await bidrod.setja(b);
+        window.dispatchEvent(new Event("skr-bidrod"));
+        onSaved(); return;
       }
-      await vistaMyndir(verk.id, id, files, "fyrir", af);
-      await s.from("skr_atburdir").insert({ skraning_id: id, hvad: "stofnad", hver: af, gogn: { flokkur, efni: [...efni], myndir: files.length } });
       onSaved();
     } catch (e) { setVilla(String((e as Error).message || e)); } finally { setBusy(false); }
   };

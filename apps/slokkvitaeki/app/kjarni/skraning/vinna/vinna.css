@@ -126,3 +126,6 @@
 .vn-listi-radir li small { grid-column: 2; color: #4a4a4a; }
 .vn-listi-radir li i { grid-row: 1 / span 2; font-style: normal; }
 .vn-listi-radir li.tomt { grid-template-columns: 1fr; color: #4a4a4a; cursor: default; }
+
+.vn-bordi-bid { background: #1e1e1e; color: #fff; }
+.vn-bordi-bid button { border-color: #fff; }
