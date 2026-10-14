@@ -200,6 +200,7 @@ export default function SkraningClient() {
           <span>✓</span> QA <b>{f.verk ? (verkid ? fmt(verkid.alls) : "…") : yfirlit ? fmt(heild) : "…"}</b>
         </button>
         <div className="aj-tool-r">
+          <a className="aj-vinnuhlekkur aj-yfirsyn" href="/kjarni/skraning/yfirsyn">📊 Yfirsýn</a>
           <a className="aj-vinnuhlekkur" href={vinnuSlod}>📍 Vinna — punktar á teikningu</a>
           <a className="aj-vinnuhlekkur grar" href={verkid?.verk_id ? `/kjarni/skraning/verk?verk=${verkid.verk_id}` : "/kjarni/skraning/verk"}>🏢 Byggingar &amp; teikningar</a>
           <button type="button" onClick={() => window.print()}>Print</button>

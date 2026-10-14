@@ -19,6 +19,7 @@ export default function SkraningPage() {
           <span>⌂</span>
         </a>
         <nav className="aj-nav" aria-label="Skráning">
+          <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni">Home</a>
           <a className="on" href="/kjarni/skraning">Skráning &amp; QA</a>
           <a href="/kjarni/turbopaint">TurboPaint</a>

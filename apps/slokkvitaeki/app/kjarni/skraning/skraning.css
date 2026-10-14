@@ -211,3 +211,6 @@
   .aj-nav a { padding: 0 10px; font-size: 13px; }
   .aj-felag { display: none; }
 }
+
+.aj-vinnuhlekkur.aj-yfirsyn { background: #1e1e1e; }
+.aj-vinnuhlekkur.aj-yfirsyn:hover { background: #000; }
