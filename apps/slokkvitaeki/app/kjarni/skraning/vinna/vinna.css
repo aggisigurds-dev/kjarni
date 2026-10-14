@@ -147,3 +147,7 @@
 }
 
 .vn-anteikn { border-style: dashed !important; }
+
+.vn-ath { display: flex; gap: 6px; margin-bottom: 8px; }
+.vn-ath input { flex: 1; border: 1px solid #b9bec3; border-radius: 3px; padding: 8px 10px; font: inherit; font-size: 14px; }
+.vn-ath button { border: 1px solid #1a9bb1; color: #1a9bb1; background: #fff; border-radius: 3px; padding: 6px 12px; font: inherit; cursor: pointer; }
