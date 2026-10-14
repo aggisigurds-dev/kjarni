@@ -102,6 +102,7 @@ export const QUICK_GROUPS: { title: string; items: { icon: string; label: string
       { icon: "✂️", label: "Bakgrunnur", href: "/kjarni/artcraft/bakgrunnur" },
       { icon: "🔓", label: "Einkastúdíó", href: "/kjarni/artcraft/studio" },
       { icon: "📍", label: "Skráning", href: "/kjarni/skraning" },
+      { icon: "📊", label: "Yfirsýn þéttinga", href: "/kjarni/skraning/yfirsyn" },
     ],
   },
   {
