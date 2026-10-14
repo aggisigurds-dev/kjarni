@@ -37,3 +37,21 @@ Vercel preview deploys for `kjarni-3dwork` and `slokkvitaeki` reported success f
 - Validate a full company-profile → TurboPaint → Teikningar round trip against a test record without touching live data.
 
 The goal is one authoritative wall geometry model produced by TurboPaint, with Teikningar as the company-profile gateway.
+
+## Dalshraun 1 — missing 3D walls (14 October)
+
+From the existing *saved* TurboPaint board for `Reitir - Dalshraun 1 — 1. hæð` (read-only):
+- 227 wall polylines: 180 plain, 46 glass-tagged, 1 door-tagged.
+- The old `siaVeggiFyrirYfirlit` removes unclassified/non-fire short wall pieces whose length is below **7% of the building's longest dimension**. On this actual board 170 of the 180 plain wall polylines are shorter than the threshold (~171 board units).
+- Thus the incomplete 3D model is **not only** a detection problem: most *already-saved* room partitions were being hidden at rendering time.
+- In the 3D viewer, **Allir veggir** is now enabled by default. Turn it off to compare to the older simplified view. `husUrBordi` retains the original filtered default outside this opt-in 3D viewer mode.
+- Regression test: old mode removes short fragments; detailed mode preserves all 10 test fragments. Local focused `hus3d.test.ts`: 21 passed.
+
+Doors:
+- The saved board has **one** door-tagged segment; missing doors cannot be reconstructed merely by improving the 3D renderer. Existing door segments now receive a reversible *illustrative* open door-leaf view, which does not modify saved geometry.
+- Additional doors require better wall-gap / arc detection and visual verification on the original PDF. Do not invent doors in safety plans.
+
+Large PDFs and TIFFs:
+- This 3D change uses saved polylines, so it does **not** download or reprocess large documents. Separate streaming/tiling processing is still needed for giant source scans.
+
+**The building remains incomplete; the change restores hidden saved walls rather than claiming to have found every missing wall.**
