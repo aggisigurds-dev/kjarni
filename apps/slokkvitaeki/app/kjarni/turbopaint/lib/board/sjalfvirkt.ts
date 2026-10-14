@@ -27,6 +27,7 @@
 import { getAssetBlob } from "./assets";
 import { replaceCrossingMarks } from "./crossings";
 import { eiUrTexta, lesaTextaTeikningar } from "./detect-firewalls";
+import { finnaRymisMerkingar } from "./rymis-lestur";
 import { beitaEi, veggirTeikningar } from "./ei-beiting";
 import { finnaHurdir, type HurdKandidat } from "./hurdagreining";
 import { finnaSnunarHurdir } from "./hurdagreining-snuning";
@@ -713,6 +714,10 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
     // Textalesturinn (Tesseract) getur hangið (minnisleysi drap vinnuþráðinn — mælt 08.10.2026): tímaþak, og Stöðva virkar.
     texti = await medThaki(lesaTextaTeikningar(mynd()!, { medBlek: true, lodrett: true, onProgress: (msg, pr) => S().setja("ei", { texti: msg, pros: pr }) }), OCR_THAK_MS, stodvad, "textalesturinn");
     if (stodvad()) return stoppa();
+    // Multilayer-rýmisvísbendingar úr sömu OCR-umferð: aðeins greining/talning.
+    // Aldrei búa til veggi, hurðir eða vista niðurstöðu án rúmfræðilegrar staðfestingar.
+    const rymisMerki = finnaRymisMerkingar(texti.words);
+    talning.rymi = { fjoldi: rymisMerki.length, merkingar: rymisMerki };
     const ei = await eiUrTexta(mynd()!, texti);
     const midar = ei.midar.filter((x) => !x.reyk);
     if (!midar.length) ljuka("ei", ei.hits.length ? `${ei.hits.length} EI-merki, öll reykþéttar hurðir (EI-CS) — engir eldveggir` : "Engin EI-30 / EI-60 merki á teikningunni");
