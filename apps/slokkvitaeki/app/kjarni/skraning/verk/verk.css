@@ -1,0 +1,36 @@
+/* Byggingar & teikningar */
+.vk { max-width: 1400px; }
+.vk-grid { display: grid; grid-template-columns: 340px 1fr; gap: 12px; }
+@media (max-width: 900px) { .vk-grid { grid-template-columns: 1fr; } }
+.vk .aj-panel > h3 small { color: #4a4a4a; font-weight: 400; }
+.vk-opna { margin-left: auto; font-size: 12px; font-weight: 600; }
+.vk-verk { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.vk-verk li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 8px 12px; border-bottom: 1px solid #eceeef; cursor: pointer; }
+.vk-verk li:hover { background: #eaf6f8; }
+.vk-verk li.on { background: #d9eff3; box-shadow: inset 3px 0 0 #1a9bb1; }
+.vk-verk li strong { font-size: 14px; }
+.vk-verk li span { grid-column: 1; color: #4a4a4a; font-size: 12px; }
+.vk-verk li b { grid-row: 1 / span 2; align-self: center; font-size: 12px; color: #1e1e1e; font-weight: 600; }
+.vk-verk li em { grid-column: 1; font-size: 11px; color: #d9534f; font-style: normal; }
+.vk-nytt { padding: 10px 12px 12px; border-top: 2px solid #d9dcdf; display: grid; gap: 6px; }
+.vk-nytt h4, .vk-upp h4 { margin: 0 0 4px; font-size: 13px; }
+.vk-nytt input, .vk-verkupp input[type="text"], .vk-haed, .vk-sida input[type="text"] { border: 1px solid #b9bec3; border-radius: 3px; padding: 7px 9px; font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; }
+.vk-nytt button { justify-self: start; border: 1px solid #1a9bb1; border-radius: 3px; padding: 8px 14px; font: inherit; cursor: pointer; }
+.vk-tomt { color: #4a4a4a; padding: 12px; margin: 0; }
+.vk-verkupp { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; align-items: end; margin-bottom: 12px; }
+.vk-verkupp label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #1e1e1e; }
+.vk-virkt { flex-direction: row !important; align-items: center; text-transform: none !important; font-size: 13px !important; gap: 6px !important; }
+.vk-teikn { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.vk-teikn li { display: grid; grid-template-columns: 120px 1fr auto; gap: 10px; align-items: center; border: 1px solid #d9dcdf; border-radius: 4px; padding: 6px; }
+.vk-teikn img { width: 120px; height: 80px; object-fit: cover; border: 1px solid #e3e5e7; background: #fff; }
+.vk-teikn small { display: block; margin-top: 4px; color: #4a4a4a; }
+.vk-fela { border: 1px solid #d9534f; color: #d9534f; background: #fff; border-radius: 3px; width: 32px; height: 32px; cursor: pointer; }
+.vk-upp { border-top: 2px solid #d9dcdf; padding-top: 10px; }
+.vk-busy { color: #1e1e1e; font-weight: 600; }
+.vk-sidur { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+.vk-sida { border: 1px solid #d9dcdf; border-radius: 4px; padding: 6px; display: grid; gap: 6px; background: #fff; }
+.vk-sida.af { opacity: 0.45; }
+.vk-sida img { width: 100%; height: 140px; object-fit: contain; background: #f4f5f6; }
+.vk-velja { font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.vk-velja small { color: #4a4a4a; }
+.vk-vista { grid-column: 1 / -1; justify-self: start; border: 1px solid #1a9bb1; border-radius: 3px; padding: 9px 16px; font: inherit; cursor: pointer; }

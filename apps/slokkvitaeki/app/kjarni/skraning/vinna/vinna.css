@@ -70,3 +70,33 @@
 .vn-stor { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 30; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
 .vn-stor img { max-width: 96vw; max-height: 96vh; }
 @media (max-width: 640px) { .vn-myndir { grid-template-columns: 1fr; } .vn-stodur { order: 5; width: 100%; } }
+.vn-ny { border: 2px dashed #1a9bb1 !important; color: #1a9bb1; text-decoration: none; justify-content: center; }
+.vn-ny span { color: #1a9bb1; }
+
+/* --- útlit eins og EG Ajour-appið: #merki yfir punkti, appelsínugulur plús, gult QA-spjald --- */
+.vn-pinni { width: 30px; height: 30px; min-width: 0; padding: 0; border-radius: 50%; border: 2px solid #fff; font-size: 0; }
+.vn-pinni i { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 1px; font-style: normal; font-size: 13px; font-weight: 800; color: #111; white-space: nowrap; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; pointer-events: none; }
+.vn-pinni.created { background: #f5b942; }
+.vn-pinni.done { background: #5fc33b; }
+.vn-pinni.nyr { background: #1a9bb1; width: 34px; height: 34px; }
+.vn-fab { position: fixed; right: 18px; bottom: 22px; z-index: 15; width: 64px; height: 64px; border-radius: 50%; border: 0; background: #f5b942; color: #fff; font-size: 38px; line-height: 64px; text-align: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); cursor: pointer; }
+.vn-fab.on { background: #1e1e1e; }
+.vn-sheet-punktur { padding-top: 0; }
+.vn-qa-haus { display: flex; align-items: center; gap: 10px; margin: 0 -14px 10px; padding: 10px 14px; background: #f5b942; color: #1e1e1e; font-size: 18px; }
+.vn-qa-haus.done { background: #5fc33b; color: #fff; }
+.vn-qa-haus strong { font-weight: 700; }
+.vn-stodu { position: relative; margin-left: auto; }
+.vn-stodu-takki { background: #2f5d6e; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font: inherit; font-size: 15px; cursor: pointer; }
+.vn-stodu-val { position: absolute; right: 0; top: 100%; margin-top: 4px; background: #fff; border: 1px solid #d9dcdf; border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2); display: grid; min-width: 160px; overflow: hidden; z-index: 2; }
+.vn-stodu-val button { background: #fff; border: 0; border-bottom: 1px solid #eceeef; padding: 10px 14px; text-align: left; font: inherit; font-size: 14px; cursor: pointer; color: #1e1e1e; }
+.vn-stodu-val button.on { font-weight: 700; background: #eaf6f8; }
+.vn-loka-gul { background: transparent; border-color: rgba(0, 0, 0, 0.3); }
+.vn-kortid { display: grid; grid-template-columns: 96px 1fr; gap: 10px; margin-bottom: 10px; }
+.vn-kortid-mynd { position: relative; width: 96px; height: 96px; border-radius: 6px; overflow: hidden; background: #e9ecef; display: flex; align-items: center; justify-content: center; font-size: 28px; cursor: zoom-in; }
+.vn-kortid-mynd img { width: 100%; height: 100%; object-fit: cover; }
+.vn-kortid-mynd b { position: absolute; right: 4px; bottom: 4px; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 12px; padding: 1px 6px; border-radius: 10px; }
+.vn-kortid-texti { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.vn-kortid-texti strong { font-size: 14px; }
+.vn-kortid-texti small { color: #4a4a4a; }
+.vn-kortid-flokkur { font-weight: 600; }
+.vn-kortid-ath { color: #1e1e1e; }

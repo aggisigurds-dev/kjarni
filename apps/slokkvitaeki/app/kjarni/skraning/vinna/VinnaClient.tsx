@@ -115,7 +115,8 @@ export default function VinnaClient() {
               </button>
             );
           })}
-          {!verk.length && <p className="vn-tomt">Engin bygging skráð enn. Stofna byggingu og hlaða upp teikningu í yfirlitinu.</p>}
+          {!verk.length && <p className="vn-tomt">Engin bygging skráð enn.</p>}
+          <a className="vn-kort vn-ny" href="/kjarni/skraning/verk"><strong>+ Ný bygging / teikningar</strong><span>Stofna byggingu og hlaða upp grunnmynd</span></a>
         </div>
       </div>
     );
@@ -212,11 +213,15 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, onB
           {synd.map((s) => (
             <button type="button" key={s.id} className={`vn-pinni ${s.stada === "done" ? "done" : "created"} ${opid === s.id ? "on" : ""}`}
               style={{ left: (s.x_px || 0) * scale, top: (s.y_px || 0) * scale }}
-              onClick={(e) => { e.stopPropagation(); if (!baeta) { setOpid(s.id); setNyr(null); } }} title={`#${s.radnr}`}>{s.radnr}</button>
+              onClick={(e) => { e.stopPropagation(); if (!baeta) { setOpid(s.id); setNyr(null); } }} title={`#${s.radnr}`}>
+              <i>#{s.radnr}</i>
+            </button>
           ))}
-          {nyr && <span className="vn-pinni nyr" style={{ left: nyr.x * scale, top: nyr.y * scale }}>+</span>}
+          {nyr && <span className="vn-pinni nyr" style={{ left: nyr.x * scale, top: nyr.y * scale }} />}
         </div>
       </div>
+      {/* appelsínuguli plúsinn eins og í Ajour-appinu */}
+      <button type="button" className={`vn-fab ${baeta ? "on" : ""}`} onClick={() => { setBaeta((b) => !b); setNyr(null); setOpid(null); }} title="Nýr punktur">{baeta ? "✕" : "+"}</button>
 
       {nyr && (
         <NyrPunktur verk={verk} teikning={teikning} x={nyr.x} y={nyr.y} flokkar={flokkar} atridi={atridi} starfsm={starfsm} allar={allar}
@@ -345,16 +350,37 @@ function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, onClose, onChanged
     finally { setBusy(false); }
   };
 
+  const [stodu, setStodu] = useState(false);
+  const fyrsta = myndir[0];
   return (
-    <div className="vn-sheet" role="dialog" aria-label={`Punktur ${s.radnr}`}>
-      <div className="vn-sheet-haus">
-        <span className={`aj-serial ${s.stada === "done" ? "done" : "created"}`}>{s.radnr}</span>
-        <strong>{fl?.heiti || "—"}</strong>
-        <span>{s.framkvaemt_fra} {s.starfsmadur_id ? "" : ""}</span>
-        <button type="button" className="vn-loka" onClick={onClose}>✕</button>
+    <div className="vn-sheet vn-sheet-punktur" role="dialog" aria-label={`Punktur ${s.radnr}`}>
+      {/* guli hausinn eins og í Ajour-appinu: „QA #6478 · Change status" */}
+      <div className={`vn-qa-haus ${s.stada === "done" ? "done" : ""}`}>
+        <strong>QA #{s.radnr}</strong>
+        <div className="vn-stodu">
+          <button type="button" className="vn-stodu-takki" onClick={() => setStodu((v) => !v)} disabled={busy}>Change status {stodu ? "⌄" : "⌃"}</button>
+          {stodu && (
+            <div className="vn-stodu-val">
+              <button type="button" className={s.stada === "created" ? "on" : ""} onClick={() => { setStodu(false); merkja("created"); }}>Created</button>
+              <button type="button" className={s.stada === "done" ? "on" : ""} onClick={() => { setStodu(false); merkja("done"); }}>Done</button>
+            </div>
+          )}
+        </div>
+        <button type="button" className="vn-loka vn-loka-gul" onClick={onClose}>✕</button>
       </div>
-      {efni.length > 0 && <p className="vn-efni">{efni.join(" · ")}</p>}
-      {s.lysing && <p className="vn-lysing">{s.lysing}</p>}
+      <div className="vn-kortid">
+        <div className="vn-kortid-mynd" onClick={() => fyrsta && setStor(publicUrl(fyrsta.path))}>
+          {fyrsta ? <img src={publicUrl(fyrsta.path)} alt="" /> : <span>📷</span>}
+          {myndir.length > 1 && <b>+{myndir.length - 1}</b>}
+        </div>
+        <div className="vn-kortid-texti">
+          <strong>Created by Brunahólf ehf{s.starfsmadur_id ? `, Starfsmaður` : ""}</strong>
+          <span><b>Receiver:</b> Brunahólf ehf</span>
+          <span className="vn-kortid-flokkur">▦ {fl?.heiti || "—"}{efni.length > 0 ? ` · ${efni.join(", ")}` : ""}</span>
+          {s.lysing && <span className="vn-kortid-ath">▭ {s.lysing}</span>}
+          <small>{s.framkvaemt_fra}{s.lokid_at ? ` · lokið ${s.lokid_at.slice(0, 10)}` : ""}</small>
+        </div>
+      </div>
       <div className="vn-myndir">
         <div><span>Fyrir þéttingu</span><div className="vn-thumbs">{fyrir.map((m) => <img key={m.id} src={publicUrl(m.path)} alt="" onClick={() => setStor(publicUrl(m.path))} />)}
           <label className="vn-thumb-add"><input type="file" accept="image/*" capture="environment" multiple onChange={(e) => baetaMynd([...(e.target.files || [])], "fyrir")} />📷</label></div></div>

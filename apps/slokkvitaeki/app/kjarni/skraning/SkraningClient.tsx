@@ -183,6 +183,7 @@ export default function SkraningClient() {
         </button>
         <div className="aj-tool-r">
           <a className="aj-vinnuhlekkur" href="/kjarni/skraning/vinna">📍 Vinna — punktar á teikningu</a>
+          <a className="aj-vinnuhlekkur grar" href="/kjarni/skraning/verk">🏢 Byggingar &amp; teikningar</a>
           <button type="button" onClick={() => window.print()} disabled={!rows}>Print</button>
           <button type="button" disabled title="Flokkar og gátlistar — kemur með áfanga 2 (skr_flokkar / skr_gatlisti)">Categories/schema</button>
           <button type="button" className={f.skyrsla ? "on" : ""} onClick={() => set({ skyrsla: f.skyrsla ? "" : "1" })} disabled={!rows}>Report generator</button>

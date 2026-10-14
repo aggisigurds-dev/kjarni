@@ -180,3 +180,5 @@
 .aj-done.off { background: #8a8f95; }
 .aj-vinnuhlekkur { display: inline-flex; align-items: center; padding: 6px 12px; background: #1a9bb1; color: #fff !important; border-radius: 3px; font-weight: 700; font-size: 13px; }
 .aj-vinnuhlekkur:hover { background: #13849a; }
+.aj-vinnuhlekkur.grar { background: #3a3f45; }
+.aj-vinnuhlekkur.grar:hover { background: #1e1e1e; }
