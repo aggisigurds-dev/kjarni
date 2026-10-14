@@ -145,3 +145,5 @@
   .vn-box { height: calc(100vh - 150px); }
   .vn-sheet { max-height: 85vh; }
 }
+
+.vn-anteikn { border-style: dashed !important; }

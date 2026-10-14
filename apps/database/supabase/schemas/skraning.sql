@@ -250,3 +250,5 @@ where not exists (select 1 from public.skr_gatlisti g where g.verk_id is null an
 -- dálkum (uppruni 'ajour'|'skraning', lykill 'a:id'|'s:id', stada samræmd, myndir/mynd_path úr skr_myndir);
 -- skr_verk_yfirlit() = talningar per verk (alls/done/created/í dag/vika/mánuður/fyrri mánuður done/síðast/sótt/teikn/menn)
 -- svo yfirlitið sæki EINA röð per verk í stað 25 þús. raða. Skilgreiningarnar eru í migration-skránni.
+-- 14.10 02:50: skr_yfirlit sleppir Ajour-röðum fyrir verk sem eiga innfluttar skráningar (skr_verk.ajour_nafn = project_name
+-- og skr_skraningar.ajour_registration_id ekki null) — migration skr_yfirlit_an_tvitekningar.

@@ -63,6 +63,7 @@ export default function VinnaClient() {
   const [starfsm, setStarfsm] = useState<string>("");
   const [ready, setReady] = useState(false);
   const [hladid, setHladid] = useState(false);
+  const [anTeikn, setAnTeikn] = useState(false);
 
   /* --- grunngögn --- */
   useEffect(() => {
@@ -164,7 +165,17 @@ export default function VinnaClient() {
             );
           })}
           {!tv.length && <p className="vn-tomt">Engin teikning á þessari byggingu enn.</p>}
+          {skr.some((x) => !x.teikning_id) && (
+            <button type="button" className="vn-kort vn-anteikn" onClick={() => setAnTeikn(true)}>
+              <strong>☰ Skráningar án teikningar (listi)</strong>
+              <small><b>{skr.filter((x) => !x.teikning_id).length}</b> skráningar án pinna</small>
+            </button>
+          )}
         </div>
+        {anTeikn && (
+          <AnTeikningar skr={skr.filter((x) => !x.teikning_id)} myndir={myndir} svor={svor} flokkar={flokkarVerks} atridi={atridiVerks} starfsm={starfsm} menn={menn}
+            onClose={() => setAnTeikn(false)} onChanged={() => hladaSkraningar(verkid.id)} />
+        )}
       </div>
     );
   }
@@ -176,6 +187,39 @@ export default function VinnaClient() {
       flokkar={flokkarVerks} atridi={atridiVerks} starfsm={starfsm} menn={menn}
       onBack={() => veljaTeikningu(null)} onChanged={() => hladaSkraningar(verkid.id)} allar={skr}
     />
+  );
+}
+
+/* ===================== skráningar án teikningar ===================== */
+function AnTeikningar({ skr, myndir, svor, flokkar, atridi, starfsm, menn, onClose, onChanged }: {
+  skr: Skraning[]; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string; menn: Starfsm[]; onClose: () => void; onChanged: () => void;
+}) {
+  const [opid, setOpid] = useState<number | null>(null);
+  const nafn = (id: number | null) => { const m = menn.find((x) => x.id === id); return m ? (m.nafn || `Starfsmaður ${m.numer}`) : null; };
+  const opin = skr.find((x) => x.id === opid) || null;
+  return (
+    <>
+      {!opin && (
+        <div className="vn-sheet vn-listasyn" role="dialog" aria-label="Skráningar án teikningar">
+          <div className="vn-sheet-haus"><strong>Skráningar án teikningar</strong><span>{skr.length}</span><button type="button" className="vn-loka" onClick={onClose}>✕</button></div>
+          <ul className="vn-listi-radir">
+            {[...skr].sort((a, b) => b.radnr - a.radnr).map((x) => (
+              <li key={x.id} onClick={() => setOpid(x.id)}>
+                <span className={`aj-serial ${x.stada === "done" ? "done" : "created"}`}>{x.radnr}</span>
+                <b>{flokkar.find((f) => f.id === x.flokkur_id)?.heiti || "—"}</b>
+                <small>{x.framkvaemt_fra}{nafn(x.starfsmadur_id) ? ` · ${nafn(x.starfsmadur_id)}` : ""}{x.lysing ? ` · ${x.lysing}` : ""}</small>
+                <i>{myndir.filter((m) => m.skraning_id === x.id).length ? "📷" : ""}</i>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {opin && (
+        <Punktur s={opin} myndir={myndir.filter((m) => m.skraning_id === opin.id)} svor={svor.filter((x) => x.skraning_id === opin.id && x.hakad)}
+          flokkar={flokkar} atridi={atridi} starfsm={starfsm} nafn={nafn} onClose={() => setOpid(null)} onChanged={onChanged}
+ />
+      )}
+    </>
   );
 }
 
@@ -464,7 +508,7 @@ function NyrPunktur({ verk, teikning, x, y, flokkar, atridi, starfsm, allar, upp
 
 /* ===================== punktur sem er til ===================== */
 function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, nafn, onClose, onChanged, onBreyta, onFaera }: {
-  s: Skraning; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string; nafn: (id: number | null) => string | null; onClose: () => void; onChanged: () => void; onBreyta: () => void; onFaera: () => void;
+  s: Skraning; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string; nafn: (id: number | null) => string | null; onClose: () => void; onChanged: () => void; onBreyta?: () => void; onFaera?: () => void;
 }) {
   // skráningalog (= Ajour „Show registration log")
   const [log, setLog] = useState<Atburdur[] | null>(null);
@@ -554,8 +598,8 @@ function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, nafn, onClose, onC
       )}
       <div className="vn-sheet-takkar">
         <button type="button" onClick={eyda} disabled={busy} className="vn-eyda">Fela</button>
-        <button type="button" onClick={onBreyta} disabled={busy}>✎ Breyta</button>
-        <button type="button" onClick={onFaera} disabled={busy}>✥ Færa</button>
+        {onBreyta && <button type="button" onClick={onBreyta} disabled={busy}>✎ Breyta</button>}
+        {onFaera && <button type="button" onClick={onFaera} disabled={busy}>✥ Færa</button>}
         {s.stada === "done"
           ? <button type="button" onClick={() => merkja("created")} disabled={busy}>Opna aftur</button>
           : <button type="button" className="vn-lokid" onClick={() => merkja("done")} disabled={busy}>{busy ? "…" : "✓ Merkja lokið"}</button>}
