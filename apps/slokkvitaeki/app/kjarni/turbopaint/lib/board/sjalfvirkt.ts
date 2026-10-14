@@ -29,10 +29,11 @@ import { replaceCrossingMarks } from "./crossings";
 import { eiUrTexta, lesaTextaTeikningar } from "./detect-firewalls";
 import { beitaEi, veggirTeikningar } from "./ei-beiting";
 import { finnaHurdir, type HurdKandidat } from "./hurdagreining";
+import { finnaSnunarHurdir } from "./hurdagreining-snuning";
 import { bogaProf, hurdirUrBogum, nyjarBogahurdir, skeraVeggiUndirHurdum, type Bogi } from "./hurdabogar";
 import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
-import { flokkaYfirlit, klemmaGreindaThykkt, pdfErSkonnun, ptIBord, skurdurIPt, strikValinna, veggirUrStrikumPt } from "./pdf-veggjaflokkar";
+import { flokkaYfirlit, klemmaGreindaThykkt, erNotanlegtVigurPdf, ptIBord, skurdurIPt, sjalfvirkirPdfVeggirPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
 import { greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
 import { beitaSltBrsl } from "./slt-brsl-bord";
@@ -394,17 +395,25 @@ export async function vinnaLinur(
       bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
       linaIBili: syni?.linaIBili,
     });
-    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...d.gler, ...adrar], dpm).map(
+    // Aukaleit þegar teikning er lítillega snúin (t.d. Dalshraun ~4,6°).
+    // EKKI búa til hurðir úr götunum einum: viðbótarhurð þarf staðfestan hurðarboga.
+    const snunid = finnaSnunarHurdir(veggirH, [...adrar, ...d.hurdir], dpm, {
+      vik: vik.hurd,
+      bogi: (A, B, t) => bogiVid(A, B, t) || !!syni?.bogi(A, B, t),
+      linaIBili: syni?.linaIBili,
+    });
+    const snunarHurdir: HLina[] = snunid.doors.map((h) => ({ p: h.p, t: h.t, tegund: "hurd" as const }));
+    const urBogum: HLina[] = nyjarBogahurdir(hurdirUrBogum(bogar, veggirH, dpm, { krefjastVeggjar: true }), [...d.hurdir, ...snunarHurdir, ...d.gler, ...adrar], dpm).map(
       (h) => ({ p: h.p, t: h.t, tegund: "hurd" as const })
     );
-    if (urBogum.length) {
-      // veggur sem brúaði gatið er klipptur undir hurðinni
+    if (urBogum.length || snunarHurdir.length) {
+      // Klippum veggi undir hurðum sem fengu staðfestingu af boga.
       const veggirNyir = hreinar.filter(erVeggTeg), annad = hreinar.filter((l) => !erVeggTeg(l));
-      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, urBogum, dpm).veggir, ...annad];
+      hreinar = [...skeraVeggiUndirHurdum(veggirNyir, [...urBogum, ...snunarHurdir], dpm).veggir, ...annad];
     }
-    hurdir = [...d.hurdir, ...urBogum];
+    hurdir = [...d.hurdir, ...snunarHurdir, ...urBogum];
     talning.hurdabogar = { bogar: bogar.length, hurdir: urBogum.length };
-    kandidatar = d.kandidatar;
+    kandidatar = [...d.kandidatar, ...snunid.candidates];
     const nyttGler: HLina[] = d.gler;
     // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
     const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
@@ -420,6 +429,7 @@ export async function vinnaLinur(
       `${hurdir.length} hurðir` +
         (d.talning.bilahurdir ? ` (${d.talning.bilahurdir} bílahurðir)` : "") +
         (urBogum.length ? ` · ${urBogum.length} úr hurðabogum` : "") +
+        (snunarHurdir.length ? ` · ${snunarHurdir.length} úr snúnum veggjum (staðfestur bogi)` : "") +
         (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
         (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
         ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
@@ -525,7 +535,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   } catch (err) {
     console.warn("[sjálfvirkt] PDF-lestur", err);
   }
-  const vigur = !!sida && !pdfErSkonnun(sida.flokkar);
+  const vigur = !!sida && erNotanlegtVigurPdf(sida.flokkar, sida.breidd, sida.haed);
   // Upplausn myndarinnar sem greiningin vinnur á (eignin á borðinu).
   let upplausn = "";
   try {
@@ -572,8 +582,8 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         const tl = flokkaYfirlit(sida.flokkar, sida.breidd, sida.haed).find((f) => f.tillaga);
         if (tl) {
           tillaga = tl.breidd;
-          const strik = strikValinna(sida.flokkar, [tl.breidd], { svaedi: null, burt: p0.hvittad, bladB: sida.breidd, bladH: sida.haed });
-          veggir = ptIBord(veggirUrStrikumPt(strik, sida.breidd, sida.haed, { gler: true, stakar: true }), p0, sida.breidd, sida.haed);
+          const pdf = sjalfvirkirPdfVeggirPt(sida.flokkar, sida.breidd, sida.haed, { burt: p0.hvittad, adalFlokkur: tl.breidd });
+          veggir = ptIBord(pdf.veggir, p0, sida.breidd, sida.haed);
         }
       } else {
         S().setja("skurdur", { texti: "Greini veggi alls blaðsins til að finna húsið…" });
@@ -612,11 +622,11 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
       const tl = tillaga ? { breidd: tillaga } : flokkaYfirlit(sida.flokkar, sida.breidd, sida.haed).find((f) => f.tillaga);
       if (!tl) throw new Error("enginn línuflokkur í PDF-inu líkist veggjum");
       const sv = skurdurIPt(tt.skurdur, frum, sida.breidd, sida.haed);
-      const strik = strikValinna(sida.flokkar, [tl.breidd], { svaedi: sv, burt: p.hvittad, bladB: sida.breidd, bladH: sida.haed });
-      hrar = klemmaGreindaThykkt(ptIBord(veggirUrStrikumPt(strik, sida.breidd, sida.haed, { gler: true, stakar: true }), p, sida.breidd, sida.haed), dpm);
+      const pdf = sjalfvirkirPdfVeggirPt(sida.flokkar, sida.breidd, sida.haed, { svaedi: sv, burt: p.hvittad, adalFlokkur: tl.breidd });
+      hrar = klemmaGreindaThykkt(ptIBord(pdf.veggir, p, sida.breidd, sida.haed), dpm);
       leid = "vigur";
       const gl = hrar.filter((v) => v.tegund === "gler").length;
-      ljuka("veggir", `Vigur-PDF, línuflokkur ${tl.breidd.replace(".", ",")} pt: ${fjoldi(strik.length)} línur → ${hrar.length - gl} veggir · ${gl} gler`);
+      ljuka("veggir", `Vigur-PDF, ${pdf.flokkar.length} línuflokkar (${pdf.flokkar.join(", ")} pt): ${hrar.length - gl} veggir · ${gl} gler · ${pdf.vidbotar} viðbótarveggir`);
     } else {
       // Skönnun: Veggjavél á skrifstofutölvunni; myndgreining vafrans keyrir samhliða sem varaleið.
       const skB = skurdurIBord(tt.skurdur, p, frum, gilturSkurdur(tt.myndSkurdur));

@@ -29,6 +29,8 @@ import {
   type TaekjaGerd,
 } from "../../lib/board/hus3d";
 import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
+import { gluggaHaedir } from "../../lib/board/hus3d-gluggar";
+import { smatengingar3D } from "../../lib/board/hus3d-smasamkeyti";
 import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
@@ -129,9 +131,18 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const gogn = useUttektGogn((s) => s.gogn);
   const bordNafn = useBoardStore((s) => s.name);
   const skodunTitill = useSkodun((s) => (s.virk ? s.titill : ""));
-  const haedir = useMemo(() => husUrBordi(objects, gogn?.taeki ?? []), [objects, gogn]);
+  // Sjálfgefið sýnum við alla vistaða veggi. Eldri yfirlitssía fjarlægði veggi styttri en
+  // 7% af húslengd; í Dalshrauni 1 hurfu þannig flest baðherbergi og skilrúm.
+  const [synaStuttaVeggi, setSynaStuttaVeggi] = useState(true);
+  const haedir = useMemo(
+    () => husUrBordi(objects, gogn?.taeki ?? [], { synaStuttaVeggi }),
+    [objects, gogn, synaStuttaVeggi]
+  );
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
+  const [glerSemGluggar, setGlerSemGluggar] = useState(true);
+  const [synaHurdarblod, setSynaHurdarblod] = useState(true);
+  const [tengjaSmaBil, setTengjaSmaBil] = useState(true);
   const [gegn, setGegn] = useState(false);
   const [ganga, setGanga] = useState(false);
   const [kynning, setKynning] = useState(false);
@@ -320,6 +331,8 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           // RAUNHÆÐ (383 vegghaed): 3,0 m í kvarða teikningarinnar; án trúverðugs kvarða gamla hlutfallið.
           const veggH = kv ? VEGGHAED_M * kv.dilar : Math.max(hd.breidd, hd.haed) * 0.03;
           const metri = veggH / VEGGHAED_M;
+          // Fyllum aðeins smábil (≤10 cm) í sýninni, aldrei í vistuðum gögnum.
+          const synilegirVeggbutar = tengjaSmaBil ? [...hd.veggir, ...smatengingar3D(hd.veggir, metri)] : hd.veggir;
           const hopur = new T.Group();
           hopur.position.y = haedY;
           svid.add(hopur);
@@ -363,10 +376,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             return m4;
           };
 
-          const veggir = hd.veggir.filter((v) => v.tegund === "veggur");
-          const gler = hd.veggir.filter((v) => v.tegund === "gler");
-          const hurdir = hd.veggir.filter((v) => v.tegund === "hurd");
-          const svalir = hd.veggir.filter((v) => v.tegund === "svalir");
+          const veggir = synilegirVeggbutar.filter((v) => v.tegund === "veggur");
+          const gler = synilegirVeggbutar.filter((v) => v.tegund === "gler");
+          const hurdir = synilegirVeggbutar.filter((v) => v.tegund === "hurd");
+          const svalir = synilegirVeggbutar.filter((v) => v.tegund === "svalir");
           fjoldi.veggir += veggir.length;
           fjoldi.gler += gler.length;
           fjoldi.hurdir += hurdir.length;
@@ -399,10 +412,51 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             sporM.push(spor);
           }
           if (gler.length) {
-            // Gler (gluggar, glerveggir): hálfgagnsæir bláleitir fletir — húsið lokast en sést í gegn.
-            const glE = new T.MeshLambertMaterial({ color: GLERLITUR_3D, transparent: true, opacity: 0.42, depthWrite: false });
+            // Gler er merkt á borðinu, en teikningin segir ekki hvort um sé að ræða glugga með brjóstvegg
+            // eða glervegg. Gefum notanda afturkræfa 3D-sýnastillingu; vistuðum veggjum er ALDREI breytt.
+            const glE = new T.MeshLambertMaterial({ color: GLERLITUR_3D, transparent: true, opacity: 0.35, depthWrite: false, side: T.DoubleSide });
             const glM = new T.InstancedMesh(kG, glE, gler.length);
-            gler.forEach((v, i) => glM.setMatrixAt(i, kassi(v, veggH / 2, veggH, 0, 0.45)));
+            if (glerSemGluggar) {
+              // Glugga-hamur: staðlaður (áætlaður) brjóstveggur + efri hluti + blátt gler + dökkir karmar.
+              // Ekki áætla gluggahæðina út frá línu á grunnmynd: hún er stilling í SÝN, ekki staðreynd í gögnunum.
+              const gH = gluggaHaedir(veggH);
+              const under = new T.InstancedMesh(kG, kEfni, gler.length);
+              const over = new T.InstancedMesh(kG, kEfni, gler.length);
+              const frameE = new T.MeshLambertMaterial({ color: 0x66727a });
+              const rimTop = new T.InstancedMesh(kG, frameE, gler.length);
+              const rimBottom = new T.InstancedMesh(kG, frameE, gler.length);
+              const uprights = new T.InstancedMesh(kG, frameE, gler.length * 2);
+              gler.forEach((v, i) => {
+                const length = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                const frameW = Math.min(gH.rammi, length * 0.25);
+                // Veggur fyrir neðan/ofan gluggann er samfelldur á sömu miðlínu og glerið.
+                under.setMatrixAt(i, kassi(v, gH.brjost / 2, gH.brjost, 0));
+                over.setMatrixAt(i, kassi(v, veggH - gH.efri / 2, gH.efri, 0));
+                under.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+                over.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+                glM.setMatrixAt(i, kassi(v, gH.glerMidja, gH.gler, 0, 0.28));
+                rimTop.setMatrixAt(i, kassi(v, gH.brjost + gH.gler - gH.rammi / 2, gH.rammi, 0, 0.6));
+                rimBottom.setMatrixAt(i, kassi(v, gH.brjost + gH.rammi / 2, gH.rammi, 0, 0.6));
+                const ux = (v.bx - v.ax) / length, uy = (v.by - v.ay) / length;
+                // Notum sömu snúningu og veggurinn svo karmarnir fylgi jafnvel skásettum gluggum.
+                const lodrett = (x: number, y: number) => kassi({
+                  ...v, ax: x - ux * frameW / 2, ay: y - uy * frameW / 2,
+                  bx: x + ux * frameW / 2, by: y + uy * frameW / 2,
+                }, gH.glerMidja, gH.gler, 0, 0.6);
+                uprights.setMatrixAt(2 * i, lodrett(v.ax, v.ay));
+                uprights.setMatrixAt(2 * i + 1, lodrett(v.bx, v.by));
+              });
+              for (const mesh of [under, over]) {
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+              }
+              for (const mesh of [rimTop, rimBottom, uprights]) mesh.instanceMatrix.needsUpdate = true;
+              hopur.add(under, over, rimTop, rimBottom, uprights);
+              losa.push(frameE);
+            } else {
+              // Upprunalegi hátturinn: glerveggur frá gólfi til lofts.
+              gler.forEach((v, i) => glM.setMatrixAt(i, kassi(v, veggH / 2, veggH, 0, 0.45)));
+            }
             glM.instanceMatrix.needsUpdate = true;
             glM.renderOrder = 2;
             hopur.add(glM);
@@ -440,6 +494,33 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             if (rendur.instanceColor) rendur.instanceColor.needsUpdate = true;
             hopur.add(karmar, rendur);
             losa.push(rE);
+            if (synaHurdarblod) {
+              // Aðeins hurðir sem eru þegar merktar sem "hurd" í veggjalíkaninu.
+              // Sýnum hálfopið hurðarblað svo dyr sjáist ofan frá. Opnunarátt er ÁÆTLUÐ.
+              const venjulegar = hurdir.filter((v) => {
+                const l = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                return l >= metri * 0.45 && l <= metri * 2.4;
+              });
+              if (venjulegar.length) {
+                const bladE = new T.MeshLambertMaterial({ color: 0xc4a17a, side: T.DoubleSide });
+                const blod = new T.InstancedMesh(kG, bladE, venjulegar.length);
+                const bladH = veggH * 0.73;
+                const opn = Math.PI / 3.5;
+                venjulegar.forEach((v, i) => {
+                  const l = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                  const uX = (v.bx - v.ax) / l, uY = (v.by - v.ay) / l;
+                  const dyrBreidd = Math.min(l * 0.92, metri * 1.15);
+                  const xx = (uX * Math.cos(opn) - uY * Math.sin(opn)) * dyrBreidd;
+                  const yy = (uX * Math.sin(opn) + uY * Math.cos(opn)) * dyrBreidd;
+                  blod.setMatrixAt(i, kassi({
+                    ...v, bx: v.ax + xx, by: v.ay + yy,
+                  }, bladH / 2 + veggH * 0.008, bladH, 0, 0.30));
+                });
+                blod.instanceMatrix.needsUpdate = true;
+                hopur.add(blod);
+                losa.push(bladE);
+              }
+            }
           }
 
           // Tæki: líkan á næsta vegg (snýr út frá honum) + stöng, kúla og miði. Miðinn heldur stærð sinni á skjánum og
@@ -876,7 +957,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar]);
+  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -945,9 +1026,25 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             {i + 1}
           </button>
         ))}
-        <label className="ml-2 flex items-center gap-1.5 text-[12px]">
+        <label className="ml-2 flex items-center gap-1.5 text-[12px] font-semibold" title="Sýna alla vistaða veggbúta, einnig stutta baðherbergisveggi og skilrúm. Slökktu til að nota eldri hreinsaða yfirlitið. Breytir ekki vistuðum teikningum.">
+          <input type="checkbox" checked={synaStuttaVeggi} onChange={(e) => setSynaStuttaVeggi(e.target.checked)} />
+          Allir veggir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Brúar aðeins örsmá samlínu bil milli heilla veggja (mest 10 cm). Hurðir og gler eru aldrei brúuð. Aðeins 3D-birting, ekki vistuð gögn.">
+          <input type="checkbox" checked={tengjaSmaBil} onChange={(e) => setTengjaSmaBil(e.target.checked)} />
+          Tengja smábil
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]">
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
           Teikning á gólfi
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Áætluð gluggahæð (brjóstveggur og karmar) úr glermerktum veggjum. Slökktu til að sýna fullháa glerveggi. Breytir ekki vistuðum teikningum.">
+          <input type="checkbox" checked={glerSemGluggar} onChange={(e) => setGlerSemGluggar(e.target.checked)} />
+          Gluggar (áætlað)
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Sýnir hálfopin hurðarblöð aðeins þar sem hurð er þegar merkt í gögnunum. Opnunarátt er áætluð, og engum vistaðri hurð er breytt.">
+          <input type="checkbox" checked={synaHurdarblod} onChange={(e) => setSynaHurdarblod(e.target.checked)} />
+          Hurðarblöð (áætlað)
         </label>
         <button
           type="button"

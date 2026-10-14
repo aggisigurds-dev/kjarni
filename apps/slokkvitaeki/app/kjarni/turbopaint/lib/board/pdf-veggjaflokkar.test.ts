@@ -11,6 +11,7 @@ import {
   skurdurIPt,
   strikValinna,
   veggirUrStrikumPt,
+  sjalfvirkirPdfVeggirPt,
 } from "./pdf-veggjaflokkar";
 import { dilarAPunkt, veggirHaedar, veggirUrPdfStrikum } from "./teikning-veggir";
 import { maelaThekju, veggjaFletir } from "./veggja-thekja";
@@ -142,4 +143,16 @@ test("vörn 07.10 / 10.10: þykkt greindra veggja klemmd við 35 cm (kvarði þe
   // óþekktur kvarði: miðgildi 12 → hámark 36
   assert.deepEqual(klemmaGreindaThykkt(v, null).map((x) => x.t), [5, 12, 36]);
   assert.deepEqual(klemmaGreindaThykkt([], 50), []);
+});
+
+test("automatic PDF processing adds interior wall class and preserves Fiskislod baseline", () => {
+  const normal = veggirUrStrikumPt(veggjalinur, B, H, { gler: true, stakar: true });
+  const baseline = sjalfvirkirPdfVeggirPt(flokkar, B, H, { adalFlokkur: "0.48" });
+  assert.equal(baseline.vidbotar, 0);
+  assert.equal(baseline.veggir.length, normal.length);
+  const outer: Strik[] = [[100,100,400,100],[100,104,400,104],[100,300,400,300],[100,304,400,304],[100,100,100,304],[104,100,104,304],[400,100,400,304],[404,100,404,304]];
+  const bathroom: Strik[] = [[150,150,240,150],[150,153,240,153],[240,150,240,220],[243,150,243,220]];
+  const extra = sjalfvirkirPdfVeggirPt({ "0.48": outer, "0.35": bathroom }, 1000, 800, { adalFlokkur: "0.48" });
+  assert.ok(extra.vidbotar >= 2, "Expected both bathroom partitions");
+  assert.ok(extra.flokkar.includes("0.35"));
 });
