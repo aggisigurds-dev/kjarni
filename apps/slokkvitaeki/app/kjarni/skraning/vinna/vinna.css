@@ -129,3 +129,19 @@
 
 .vn-bordi-bid { background: #1e1e1e; color: #fff; }
 .vn-bordi-bid button { border-color: #fff; }
+
+/* sími: þéttari stika (plúsinn er FAB), tvær raðir í stað fjögurra */
+@media (max-width: 640px) {
+  .vn-stika { gap: 6px; padding: 6px 8px; }
+  .vn-baeta { display: none; }
+  .vn-titill strong { font-size: 14px; }
+  .vn-stodur { order: 0; width: auto; }
+  .vn-stodur .aj-badge { gap: 4px; font-size: 11px; }
+  .vn-stodur .aj-badge b { min-width: 28px; padding: 2px 5px; font-size: 11px; }
+  .vn-hopsia { max-width: 150px; padding: 5px 6px; font-size: 12px; }
+  .vn-listitakki, .vn-prenta { padding: 5px 8px; font-size: 12px; }
+  .vn-zoom { margin-left: 0; }
+  .vn-zoom button { width: 30px; height: 30px; font-size: 14px; }
+  .vn-box { height: calc(100vh - 150px); }
+  .vn-sheet { max-height: 85vh; }
+}

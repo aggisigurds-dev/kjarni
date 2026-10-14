@@ -195,3 +195,19 @@
 .aj-uppgjor { margin: 6px 0 12px; }
 .aj-uppgjor td, .aj-uppgjor th { padding: 4px 8px; }
 .aj-uppgjor-sum td { border-top: 2px solid #1e1e1e; font-weight: 700; }
+
+/* sími: spjöldin og töflurnar mega ekki sprengja breiddina */
+.aj-panel, .aj-list, .aj-report { min-width: 0; }
+.aj-list, .aj-report .skr-grid3 { overflow-x: auto; }
+@media (max-width: 760px) {
+  .skr { padding: 8px 8px 60px; }
+  .aj-tool { flex-wrap: wrap; gap: 6px; }
+  .aj-tool-r { flex-wrap: wrap; }
+  .aj-status-b { grid-template-columns: 1fr; }
+  .aj-badges { min-width: 0; }
+  .aj-dist-l { font-size: 16px; }
+  .aj-listbar { gap: 8px; }
+  .aj-pager { margin-left: 0; }
+  .aj-nav a { padding: 0 10px; font-size: 13px; }
+  .aj-felag { display: none; }
+}
