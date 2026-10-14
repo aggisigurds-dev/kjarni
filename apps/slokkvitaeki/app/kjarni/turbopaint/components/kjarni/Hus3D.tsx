@@ -29,6 +29,7 @@ import {
   type TaekjaGerd,
 } from "../../lib/board/hus3d";
 import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
+import { gluggaHaedir } from "../../lib/board/hus3d-gluggar";
 import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
@@ -132,6 +133,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const haedir = useMemo(() => husUrBordi(objects, gogn?.taeki ?? []), [objects, gogn]);
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
+  const [glerSemGluggar, setGlerSemGluggar] = useState(true);
   const [gegn, setGegn] = useState(false);
   const [ganga, setGanga] = useState(false);
   const [kynning, setKynning] = useState(false);
@@ -399,10 +401,51 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             sporM.push(spor);
           }
           if (gler.length) {
-            // Gler (gluggar, glerveggir): hálfgagnsæir bláleitir fletir — húsið lokast en sést í gegn.
-            const glE = new T.MeshLambertMaterial({ color: GLERLITUR_3D, transparent: true, opacity: 0.42, depthWrite: false });
+            // Gler er merkt á borðinu, en teikningin segir ekki hvort um sé að ræða glugga með brjóstvegg
+            // eða glervegg. Gefum notanda afturkræfa 3D-sýnastillingu; vistuðum veggjum er ALDREI breytt.
+            const glE = new T.MeshLambertMaterial({ color: GLERLITUR_3D, transparent: true, opacity: 0.35, depthWrite: false, side: T.DoubleSide });
             const glM = new T.InstancedMesh(kG, glE, gler.length);
-            gler.forEach((v, i) => glM.setMatrixAt(i, kassi(v, veggH / 2, veggH, 0, 0.45)));
+            if (glerSemGluggar) {
+              // Glugga-hamur: staðlaður (áætlaður) brjóstveggur + efri hluti + blátt gler + dökkir karmar.
+              // Ekki áætla gluggahæðina út frá línu á grunnmynd: hún er stilling í SÝN, ekki staðreynd í gögnunum.
+              const gH = gluggaHaedir(veggH);
+              const under = new T.InstancedMesh(kG, kEfni, gler.length);
+              const over = new T.InstancedMesh(kG, kEfni, gler.length);
+              const frameE = new T.MeshLambertMaterial({ color: 0x66727a });
+              const rimTop = new T.InstancedMesh(kG, frameE, gler.length);
+              const rimBottom = new T.InstancedMesh(kG, frameE, gler.length);
+              const uprights = new T.InstancedMesh(kG, frameE, gler.length * 2);
+              gler.forEach((v, i) => {
+                const length = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                const frameW = Math.min(gH.rammi, length * 0.25);
+                // Veggur fyrir neðan/ofan gluggann er samfelldur á sömu miðlínu og glerið.
+                under.setMatrixAt(i, kassi(v, gH.brjost / 2, gH.brjost, 0));
+                over.setMatrixAt(i, kassi(v, veggH - gH.efri / 2, gH.efri, 0));
+                under.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+                over.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+                glM.setMatrixAt(i, kassi(v, gH.glerMidja, gH.gler, 0, 0.28));
+                rimTop.setMatrixAt(i, kassi(v, gH.brjost + gH.gler - gH.rammi / 2, gH.rammi, 0, 0.6));
+                rimBottom.setMatrixAt(i, kassi(v, gH.brjost + gH.rammi / 2, gH.rammi, 0, 0.6));
+                const ux = (v.bx - v.ax) / length, uy = (v.by - v.ay) / length;
+                // Notum sömu snúningu og veggurinn svo karmarnir fylgi jafnvel skásettum gluggum.
+                const lodrett = (x: number, y: number) => kassi({
+                  ...v, ax: x - ux * frameW / 2, ay: y - uy * frameW / 2,
+                  bx: x + ux * frameW / 2, by: y + uy * frameW / 2,
+                }, gH.glerMidja, gH.gler, 0, 0.6);
+                uprights.setMatrixAt(2 * i, lodrett(v.ax, v.ay));
+                uprights.setMatrixAt(2 * i + 1, lodrett(v.bx, v.by));
+              });
+              for (const mesh of [under, over]) {
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+              }
+              for (const mesh of [rimTop, rimBottom, uprights]) mesh.instanceMatrix.needsUpdate = true;
+              hopur.add(under, over, rimTop, rimBottom, uprights);
+              losa.push(frameE);
+            } else {
+              // Upprunalegi hátturinn: glerveggur frá gólfi til lofts.
+              gler.forEach((v, i) => glM.setMatrixAt(i, kassi(v, veggH / 2, veggH, 0, 0.45)));
+            }
             glM.instanceMatrix.needsUpdate = true;
             glM.renderOrder = 2;
             hopur.add(glM);
@@ -876,7 +919,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar]);
+  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -948,6 +991,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         <label className="ml-2 flex items-center gap-1.5 text-[12px]">
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
           Teikning á gólfi
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Áætluð gluggahæð (brjóstveggur og karmar) úr glermerktum veggjum. Slökktu til að sýna fullháa glerveggi. Breytir ekki vistuðum teikningum.">
+          <input type="checkbox" checked={glerSemGluggar} onChange={(e) => setGlerSemGluggar(e.target.checked)} />
+          Gluggar (áætlað)
         </label>
         <button
           type="button"
