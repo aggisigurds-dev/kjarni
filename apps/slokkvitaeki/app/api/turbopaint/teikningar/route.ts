@@ -141,6 +141,19 @@ async function heimilisfong(q: string) {
       };
     });
 
+  // 14.10.2026 (Agnar: „sýnir fullt af random efst á lista en aðal alveg neðst"): Landeignaskrá skilar í sinni röð
+  // (sveitarfélag, ekki mikilvægi). Það sem passar við ALLT sem slegið var inn fer fremst, svo gatan með númeri, svo
+  // götuheitið eitt, loks stafrófsröð — „Skútuvogur 4" er þá efst, ekki á eftir Skál, Skarð og Skeið.
+  const qn = norm(q);
+  const stig = (label: string) => {
+    const ln = norm(label.split("(")[0]);
+    if (ln === qn) return 0;
+    if (ln.startsWith(qn + " ") || ln.startsWith(qn + "-")) return 1;
+    if (ln.startsWith(qn)) return 2;
+    return 3;
+  };
+  results.sort((a, b) => stig(a.label) - stig(b.label) || a.label.localeCompare(b.label, "is", { numeric: true }));
+
   // Húsnúmer í leitinni → AÐEINS það númer (sjá ../husnumer.ts). `gataFjoldi` segir kallaranum hve margar eignir
   // voru á götunni áður en síað var, svo hann geti sagt „ekkert skráð á þetta númer" í stað „ekkert fannst".
   const siad = siaHusnumer(results, q);

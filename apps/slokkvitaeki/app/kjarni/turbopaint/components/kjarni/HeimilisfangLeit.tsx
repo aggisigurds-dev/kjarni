@@ -374,6 +374,9 @@ export function HeimilisfangLeit({
         </div>
       )}
       <div>
+          {/* 14.10.2026: „Leita…" og villur fara EFST — áður stóð gamli listinn efst meðan beðið var eftir nýju
+              svari og skýringin leyndist fyrir neðan hann (Agnar: „random efst á lista en aðal alveg neðst"). */}
+          {msg && busy && <div className="px-2 py-1.5 text-[12px] text-stone-500">{msg}</div>}
           {!valin &&
             eignir.map((e) => (
               <button
@@ -404,7 +407,7 @@ export function HeimilisfangLeit({
             </div>
           )}
 
-          {msg && <div className="px-2 py-1.5 text-[12px] text-stone-500">{busy ? msg : msg}</div>}
+          {msg && !busy && <div className="px-2 py-1.5 text-[12px] text-stone-500">{msg}</div>}
 
           {/* Utan teikningasafnanna: hnitatengill á kortasjá sveitarfélagsins. */}
           {valin?.ytriSlod && teikningar.length === 0 && !busy && (
