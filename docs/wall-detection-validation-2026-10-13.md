@@ -78,3 +78,27 @@ Large source documents must be processed separately; rotated-gap checks operate 
 - Tested with a tilted 4.6° collinear wall pair, door gap, window gap, perpendicular non-match, >10 cm gap, and immutable input.
 - Locally executed combined TypeScript-on-the-fly test set for `hus3d.test.ts`, `hus3d-smasamkeyti.test.ts`, `hurdagreining-snuning.test.ts`, and `hurdagreining.test.ts`: **34 passed, 0 failed**.
 - The Vercel preview build succeeded for renderer commit `5a8d546f81ef057554daf7bb2eb9dd82b3f090a1`. A build does not establish that missing real wall geometry was recovered; larger gaps still require analysis/manual review.
+
+
+## Norðurhella 17 — uploaded A-102 screenshot-PDF, 14 October
+
+**Source:** user-uploaded `nordurhella-17 (1).pdf` (1 page, 2432 × 1315 px). It has exactly one embedded raster image, **zero vector draw operations**, and no extracted text. It is *not* the requested Dalshraun 1 original PDF. Do not add this user-supplied document to the public repository.
+
+**Reproducible read-only experiment:** raster source was cropped to building review area at `x=140..1940, y=125..880` (1800 × 755 grayscale pixels), and sent directly to the current `skonnunarVeggir` pipeline with `kvardi=1`, `fb=1800`, `fh=755`. Local code bytes for both `skonnun-veggir.ts` and `veggja-linur.ts` were verified identical to the development branch at test time.
+
+| Image scan configuration | Wall line candidates | Door gap candidates | Glass candidates |
+|---|---:|---:|---:|
+| Current filtering (default) | 48 | 10 | 0 |
+| Disable final wall verification (`anSiu:true`) | 203 | 40 | 0 |
+| `fylla:true` | 29 | 8 | 0 |
+| `thykkt:2` without fill | 0 | 0 | 0 |
+
+**Findings:** permissive extraction expands coverage but visibly hallucinates long lines outside/around the curved building, including non-wall site geometry. Conservative extraction misses clearly visible exterior and interior segments. Door candidates are not verified door symbols, and no glass candidates were detected. The root problem is precision/recall tradeoff on a low-resolution raster map, compounded by unreliable building-area segmentation. Do **not** turn off the quality filter automatically, turn all candidates into saved walls, or claim that improving 3D extrusion repairs absent 2D geometry.
+
+**Recommended follow-up:**
+1. Select/confirm actual building extent before interpreting scanned lines; exclude site/parking dimensions.
+2. Introduce a review-only candidate layer (strong walls vs possible walls vs possible door openings), never auto-save weak candidates.
+3. Validate potential doors against arcs and openings visible in source; preserve gaps where doors are proven.
+4. Obtain the original *Dalshraun 1* PDF (Hfj_0801115.pdf, first floor) for specific Dalshraun improvements. This Norðurhella A-102 scan cannot validate them.
+
+Screenshots produced locally (not committed to public repo) to avoid publishing user-supplied drawing. No writes to production database.
