@@ -112,3 +112,4 @@
 .vn-log li small { grid-column: 2; color: #4a4a4a; }
 .vn-log li span { color: #1e1e1e; }
 .vn-log li.tomt { grid-template-columns: 1fr; color: #4a4a4a; }
+.vn-prenta { border: 1px solid #555; border-radius: 3px; padding: 7px 10px; color: #1e1e1e; font-size: 13px; text-decoration: none; background: #fff; }

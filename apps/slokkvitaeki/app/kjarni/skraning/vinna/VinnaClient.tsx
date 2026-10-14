@@ -222,6 +222,7 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, men
           <button type="button" className={`aj-badge created ${sia === "created" ? "on" : ""}`} onClick={() => setSia(sia === "created" ? "" : "created")}><b>{skr.length - done}</b> Created</button>
           <button type="button" className={`aj-badge done ${sia === "done" ? "on" : ""}`} onClick={() => setSia(sia === "done" ? "" : "done")}><b>{done}</b> Done</button>
         </div>
+        <a className="vn-prenta" href={`/kjarni/skraning/prenta?verk=${verk.id}&teikning=${teikning.id}`} title="Hæðarskýrsla: teikning með pinnum + tafla (prenta / PDF)">🖨 Print</a>
         <div className="vn-zoom">
           <button type="button" onClick={() => setZoom((z) => Math.max(0.5, z / 1.4))}>−</button>
           <button type="button" onClick={() => setZoom(1)} title="Passa í glugga">⤢</button>

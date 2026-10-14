@@ -6,7 +6,12 @@ import "./vinna.css";
 export const metadata: Metadata = {
   title: "Skráning — vinna",
   description: "Vinnuútgáfa Skráningar: veldu byggingu og hæð, settu punkt á teikninguna, mynd, stærð og efni; mynd eftir þéttingu og merkja lokið.",
+  // „Bæta á heimaskjá" í síma — opnast sem app án vafrastiku
+  manifest: "/skraning/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Skráning", statusBarStyle: "black" },
+  icons: { icon: "/skraning/icon-192.png", apple: "/skraning/icon-192.png" },
 };
+export const viewport = { themeColor: "#1e1e1e", width: "device-width", initialScale: 1, maximumScale: 1 };
 
 export default function VinnaPage() {
   return (
