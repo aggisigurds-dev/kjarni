@@ -17,11 +17,23 @@ type Verk = { id: number; heiti: string; heimilisfang: string | null; virkt: boo
 type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number; skurdur: unknown };
 type Flokkur = { id: number; verk_id: number | null; heiti: string; tegund: string; rod: number };
 type Atridi = { id: number; verk_id: number | null; atridi: string; hopur: string | null; rod: number };
-type Skraning = { id: number; verk_id: number; radnr: number; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stada: string; lysing: string | null; framkvaemt_fra: string | null; lokid_at: string | null; created_at: string; eytt: boolean };
+type Skraning = { id: number; verk_id: number; radnr: number; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stofnad_af: number | null; stada: string; lysing: string | null; framkvaemt_fra: string | null; lokid_at: string | null; created_at: string; eytt: boolean };
 type Mynd = { id: number; skraning_id: number; path: string; stig: string; rod: number; created_at: string };
 type Svar = { skraning_id: number; atridi_id: number; hakad: boolean };
+type Starfsm = { id: number; numer: number | null; nafn: string | null; virkur: boolean };
+type Atburdur = { id: number; hvad: string; gogn: Record<string, unknown> | null; hver: number | null; hvenaer: string };
 
 const LS_STARFSM = "skr_starfsmadur";
+const LOG_HEITI: Record<string, string> = { stofnad: "Stofnað", stada: "Staða breytt", mynd: "Mynd bætt við", eytt: "Falið", flokkur: "Flokkur breyttur", teikning: "Fært", texti: "Texti breyttur" };
+function lysaGogn(g: Record<string, unknown>): string {
+  const b: string[] = [];
+  if (typeof g.stada === "string") b.push(g.stada === "done" ? "→ Done" : "→ Created");
+  if (typeof g.stig === "string") b.push(g.stig === "eftir" ? "eftir þéttingu" : "fyrir þéttingu");
+  if (typeof g.n === "number") b.push(`${g.n} mynd${g.n === 1 ? "" : "ir"}`);
+  if (typeof g.myndir === "number" && g.myndir) b.push(`${g.myndir} mynd${g.myndir === 1 ? "" : "ir"}`);
+  if (Array.isArray(g.efni) && g.efni.length) b.push(`${g.efni.length} gátlistaatriði`);
+  return b.join(" · ");
+}
 const isoDay = () => new Date().toISOString().slice(0, 10);
 
 function qs(): Record<string, string> {
@@ -43,6 +55,7 @@ export default function VinnaClient() {
   const [skr, setSkr] = useState<Skraning[]>([]);
   const [myndir, setMyndir] = useState<Mynd[]>([]);
   const [svor, setSvor] = useState<Svar[]>([]);
+  const [menn, setMenn] = useState<Starfsm[]>([]);
   const [verkId, setVerkId] = useState<number | null>(null);
   const [teikId, setTeikId] = useState<number | null>(null);
   const [villa, setVilla] = useState<string | null>(null);
@@ -58,21 +71,22 @@ export default function VinnaClient() {
     setReady(true);
     (async () => {
       const s = sb();
-      const [v, t, f, a] = await Promise.all([
+      const [v, t, f, a, m] = await Promise.all([
         s.from("skr_verk").select("id,heiti,heimilisfang,virkt").eq("eytt", false).eq("virkt", true).order("heiti"),
         s.from("skr_teikningar").select("id,verk_id,heiti,haed,mynd_path,breidd_px,haed_px,rod,skurdur").eq("eytt", false).order("rod"),
         s.from("skr_flokkar").select("id,verk_id,heiti,tegund,rod").eq("virkt", true).order("rod"),
         s.from("skr_gatlisti").select("id,verk_id,atridi,hopur,rod").eq("virkt", true).order("rod"),
+        s.from("skr_starfsmenn").select("id,numer,nafn,virkur").eq("virkur", true).order("numer"),
       ]);
-      const err = v.error || t.error || f.error || a.error;
+      const err = v.error || t.error || f.error || a.error || m.error;
       if (err) { setVilla(err.message); return; }
-      setVerk(v.data as Verk[]); setTeikningar(t.data as Teikning[]); setFlokkar(f.data as Flokkur[]); setAtridi(a.data as Atridi[]);
+      setVerk(v.data as Verk[]); setTeikningar(t.data as Teikning[]); setFlokkar(f.data as Flokkur[]); setAtridi(a.data as Atridi[]); setMenn(m.data as Starfsm[]);
     })();
   }, []);
 
   const hladaSkraningar = useCallback(async (vid: number) => {
     const s = sb();
-    const r = await s.from("skr_skraningar").select("id,verk_id,radnr,teikning_id,x_px,y_px,flokkur_id,starfsmadur_id,stada,lysing,framkvaemt_fra,lokid_at,created_at,eytt").eq("verk_id", vid).eq("eytt", false).order("radnr");
+    const r = await s.from("skr_skraningar").select("id,verk_id,radnr,teikning_id,x_px,y_px,flokkur_id,starfsmadur_id,stofnad_af,stada,lysing,framkvaemt_fra,lokid_at,created_at,eytt").eq("verk_id", vid).eq("eytt", false).order("radnr");
     if (r.error) { setVilla(r.error.message); return; }
     const rows = r.data as Skraning[];
     setSkr(rows);
@@ -103,7 +117,12 @@ export default function VinnaClient() {
     return (
       <div className="vn">
         <div className="vn-haus"><h1>Veldu byggingu</h1>
-          <label className="vn-starfsm">Starfsmaður nr. <input type="number" inputMode="numeric" value={starfsm} onChange={(e) => vistaStarfsm(e.target.value)} placeholder="t.d. 29" /></label>
+          <label className="vn-starfsm">Ég er
+            <select value={starfsm} onChange={(e) => vistaStarfsm(e.target.value)}>
+              <option value="">— veldu þig —</option>
+              {menn.map((m) => <option key={m.id} value={String(m.numer ?? "")}>{m.numer}. {m.nafn || `Starfsmaður ${m.numer}`}</option>)}
+            </select>
+          </label>
         </div>
         <div className="vn-listi">
           {verk.map((v) => {
@@ -152,17 +171,18 @@ export default function VinnaClient() {
   return (
     <Kort
       verk={verkid} teikning={teikning} skr={skr.filter((s) => s.teikning_id === teikning.id)} myndir={myndir} svor={svor}
-      flokkar={flokkarVerks} atridi={atridiVerks} starfsm={starfsm}
+      flokkar={flokkarVerks} atridi={atridiVerks} starfsm={starfsm} menn={menn}
       onBack={() => veljaTeikningu(null)} onChanged={() => hladaSkraningar(verkid.id)} allar={skr}
     />
   );
 }
 
 /* ===================== teikningin ===================== */
-function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, onBack, onChanged, allar }: {
-  verk: Verk; teikning: Teikning; skr: Skraning[]; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string;
+function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, menn, onBack, onChanged, allar }: {
+  verk: Verk; teikning: Teikning; skr: Skraning[]; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string; menn: Starfsm[];
   onBack: () => void; onChanged: () => void; allar: Skraning[];
 }) {
+  const nafn = (id: number | null) => { const m = menn.find((x) => x.id === id); return m ? (m.nafn || `Starfsmaður ${m.numer}`) : null; };
   const FW = teikning.breidd_px || 1000, FH = teikning.haed_px || 700;            // öll myndin
   const sk = lesaSkurd(teikning.skurdur, FW, FH);                                   // fastur skurður (sýn)
   const CX = sk ? sk.x : 0, CY = sk ? sk.y : 0, W = sk ? sk.w : FW, H = sk ? sk.h : FH;
@@ -233,7 +253,7 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, onB
       )}
       {opin && (
         <Punktur s={opin} myndir={myndir.filter((m) => m.skraning_id === opin.id)} svor={svor.filter((x) => x.skraning_id === opin.id && x.hakad)}
-          flokkar={flokkar} atridi={atridi} starfsm={starfsm} onClose={() => setOpid(null)} onChanged={onChanged} />
+          flokkar={flokkar} atridi={atridi} starfsm={starfsm} nafn={nafn} onClose={() => setOpid(null)} onChanged={onChanged} />
       )}
     </div>
   );
@@ -321,9 +341,17 @@ function NyrPunktur({ verk, teikning, x, y, flokkar, atridi, starfsm, allar, onC
 }
 
 /* ===================== punktur sem er til ===================== */
-function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, onClose, onChanged }: {
-  s: Skraning; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string; onClose: () => void; onChanged: () => void;
+function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, nafn, onClose, onChanged }: {
+  s: Skraning; myndir: Mynd[]; svor: Svar[]; flokkar: Flokkur[]; atridi: Atridi[]; starfsm: string; nafn: (id: number | null) => string | null; onClose: () => void; onChanged: () => void;
 }) {
+  // skráningalog (= Ajour „Show registration log")
+  const [log, setLog] = useState<Atburdur[] | null>(null);
+  const [synaLog, setSynaLog] = useState(false);
+  useEffect(() => {
+    if (!synaLog) return;
+    sb().from("skr_atburdir").select("id,hvad,gogn,hver,hvenaer").eq("skraning_id", s.id).order("hvenaer", { ascending: false })
+      .then((r) => setLog((r.data || []) as Atburdur[]));
+  }, [synaLog, s.id, myndir.length, s.stada]);
   const [busy, setBusy] = useState(false);
   const [villa, setVilla] = useState<string | null>(null);
   const [stor, setStor] = useState<string | null>(null);
@@ -378,7 +406,7 @@ function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, onClose, onChanged
           {myndir.length > 1 && <b>+{myndir.length - 1}</b>}
         </div>
         <div className="vn-kortid-texti">
-          <strong>Created by Brunahólf ehf{s.starfsmadur_id ? `, Starfsmaður` : ""}</strong>
+          <strong>Created by Brunahólf ehf{nafn(s.stofnad_af ?? s.starfsmadur_id) ? `, ${nafn(s.stofnad_af ?? s.starfsmadur_id)}` : ""}</strong>
           <span><b>Receiver:</b> Brunahólf ehf</span>
           <span className="vn-kortid-flokkur">▦ {fl?.heiti || "—"}{efni.length > 0 ? ` · ${efni.join(", ")}` : ""}</span>
           {s.lysing && <span className="vn-kortid-ath">▭ {s.lysing}</span>}
@@ -392,6 +420,16 @@ function Punktur({ s, myndir, svor, flokkar, atridi, starfsm, onClose, onChanged
           <label className="vn-thumb-add"><input type="file" accept="image/*" capture="environment" multiple onChange={(e) => baetaMynd([...(e.target.files || [])], "eftir")} />📷</label></div></div>
       </div>
       {villa && <p className="skr-villa">{villa}</p>}
+      <button type="button" className="vn-log-takki" onClick={() => setSynaLog((v) => !v)}>{synaLog ? "Fela skráningalog" : "Show registration log"}</button>
+      {synaLog && (
+        <ul className="vn-log">
+          {(log || []).map((a) => (
+            <li key={a.id}><time>{a.hvenaer.slice(0, 16).replace("T", " ")}</time><b>{LOG_HEITI[a.hvad] || a.hvad}</b>{a.gogn && Object.keys(a.gogn).length ? <small>{lysaGogn(a.gogn)}</small> : null}<span>{nafn(a.hver) || ""}</span></li>
+          ))}
+          {log && !log.length && <li className="tomt">Ekkert skráð enn</li>}
+          {!log && <li className="tomt">Sæki…</li>}
+        </ul>
+      )}
       <div className="vn-sheet-takkar">
         <button type="button" onClick={eyda} disabled={busy} className="vn-eyda">Fela</button>
         {s.stada === "done"

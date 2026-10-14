@@ -195,7 +195,7 @@ export default function SkraningClient() {
           <a className="aj-vinnuhlekkur" href={vinnuSlod}>📍 Vinna — punktar á teikningu</a>
           <a className="aj-vinnuhlekkur grar" href={verkid?.verk_id ? `/kjarni/skraning/verk?verk=${verkid.verk_id}` : "/kjarni/skraning/verk"}>🏢 Byggingar &amp; teikningar</a>
           <button type="button" onClick={() => window.print()}>Print</button>
-          <button type="button" disabled title="Flokkar og gátlistar — kemur (skr_flokkar / skr_gatlisti)">Categories/schema</button>
+          <a className="aj-takkahlekkur" href="/kjarni/skraning/flokkar">Categories/schema</a>
           <button type="button" className={f.skyrsla ? "on" : ""} onClick={() => set({ skyrsla: f.skyrsla ? "" : "1" })}>Report generator</button>
         </div>
       </div>
