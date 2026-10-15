@@ -4,11 +4,10 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbRpc, sbSelect } from "../lib/supabase";
 import { StationChrome, useStationSkin } from "./StationChrome";
 import { SKINS } from "./skins";
-import { HeimilisfangLeit } from "./turbopaint/components/kjarni/HeimilisfangLeit";
 import "./heimilisfang-leit.css";
-import { ARTCRAFT_INTERFACES } from "./artcraft/apps";
-import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "./data";
-import { RagnarokView } from "./ragnarok/RagnarokView";
+import { GALLERY, kr } from "./data";
+import { RagnarokView, type RagnarokData } from "./ragnarok/RagnarokView";
+import { StodView } from "./thema/StodView";
 
 type Order = { id: number; buid_til: string; nafn: string; samtals: number };
 type Inq = { id: number; buid_til: string; nafn: string; skilabod: string };
@@ -67,11 +66,11 @@ function StationShell({
   );
 }
 
-/* Ragnarök er sitt eigið útlit (eigin uppröðun eftir hönnunarkerfinu); hin sex
- * útlitin deila klassísku uppröðuninni og skipta aðeins um liti. */
-function SkinSwitch({ ragnarok, classic }: { ragnarok: ReactNode; classic: ReactNode }) {
+/* Ragnarök er sitt eigið útlit; hin fjögur (Miðakerfi, Brunastál, Big Boss, Brunahólf — 15.10.2026) fá sömu
+ * uppröðun í þemasýninni (thema/StodView), hvert með hlutum síns hönnunarkerfis. Sömu gögn í báðum. */
+function SkinSwitch({ data }: { data: RagnarokData }) {
   const { skin } = useStationSkin();
-  return <>{skin === "ragnarok" ? ragnarok : classic}</>;
+  return skin === "ragnarok" ? <RagnarokView {...data} /> : <StodView {...data} />;
 }
 
 export default function MasterClient() {
@@ -87,13 +86,6 @@ export default function MasterClient() {
   const [einingar, setEiningar] = useState<string[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [galFilter, setGalFilter] = useState<"allt" | "Kerfi" | "Vefur" | "Tól" | "Verkfæri">("allt");
-  const [galOpen, setGalOpen] = useState<Record<string, boolean>>({
-    "Kerfi-einingar": true,
-    "Vef-blokkir": false,
-    "Tól & tengingar": true,
-    ArtCraft: true,
-  });
   const [saving, setSaving] = useState(false);
 
   async function loadSites() {
@@ -206,270 +198,29 @@ export default function MasterClient() {
   ].sort((a, b) => (b.when || "").localeCompare(a.when || "")).slice(0, 6);
   const userSites = sites.filter((s) => s.slug !== "slokkvitaeki" && s.slug !== "kerfi");
 
-  const classic = (
-    <StationShell showNav>
-      <section id="ms-yfirlit" className="ms-section">
-        <div className="ms-card" style={{ marginBottom: 18, padding: 14, background: "#1a1d2e", color: "#f5f5f4" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <h2 className="ms-h2" style={{ color: "#fff", margin: 0 }}>Teikningar — heimilisfang</h2>
-              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#a8a29e" }}>
-                Leitaðu hér og smelltu á teikningu — hún opnast á TurboPaint-borðinu.
-              </p>
-            </div>
-            <a href="/kjarni/turbopaint" style={{ color: "#fdba74", fontWeight: 700, fontSize: 13 }}>
-              Opna borðið →
-            </a>
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <HeimilisfangLeit
-              onVelja={(infoUrl) => {
-                window.location.href = `/kjarni/turbopaint?plan=${encodeURIComponent(infoUrl)}`;
-              }}
-            />
-          </div>
-        </div>
-        <div className="ms-card" style={{ marginBottom: 18, padding: 14 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <h2 className="ms-h2" style={{ margin: 0 }}>ArtCraft — viðmót</h2>
-              <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--m-soft, #5a6b80)" }}>
-                Smelltu á viðmót — það opnast á Kjarnasíðunni.
-              </p>
-            </div>
-            <a href="/kjarni/artcraft" style={{ fontWeight: 700, fontSize: 13 }}>
-              Opna yfirlit →
-            </a>
-          </div>
-          <div className="ms-launch ac-launch" style={{ marginTop: 12 }}>
-            {ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub").map((item) => (
-              <a key={item.id} href={item.href}>
-                <span aria-hidden="true">{item.icon}</span> {item.name}
-              </a>
-            ))}
-          </div>
-        </div>
-        <div className="ms-kpis">
-          <div className="ms-kpi"><span>Vefir &amp; kerfi</span><b>{sites.length}</b></div>
-          <div className="ms-kpi"><span>Einingar tilbúnar</span><b>{readyCount}<small>/{totalCount}</small></b></div>
-          <div className="ms-kpi"><span>Pantanir</span><b>{orders.length}</b></div>
-          <div className="ms-kpi"><span>Kerfi-viðskiptavinir</span><b>{kKunnar}</b></div>
-        </div>
-
-        <div className="ms-overview">
-          <div>
-            <h2 className="ms-h2">Allt á einum stað</h2>
-            {QUICK_GROUPS.map((group) => (
-              <div className="ms-launch-group" key={group.title}>
-                <h3 className="ms-h3">{group.title}</h3>
-                <div className="ms-launch">
-                  {group.items.map((q) => (
-                    <a key={q.label} href={q.href} {...(q.ext ? { target: "_blank", rel: "noreferrer" } : {})}>
-                      <span aria-hidden="true">{q.icon}</span> {q.label}{q.ext ? " ↗" : ""}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div>
-            <h2 className="ms-h2" id="ms-virkni">Nýjasta virknin</h2>
-            <div className="ms-card">
-              {activity.length === 0 ? <p className="ms-empty">Engin virkni enn.</p> : (
-                <div className="ms-act">
-                  {activity.map((a, i) => (
-                    <div className="ms-actrow" key={i}>
-                      <span className={`ms-chip ${a.t === "pöntun" ? "ord" : "inq"}`}>{a.t}</span>
-                      <span className="ms-act-nafn">{a.nafn || "—"}</span>
-                      <span className="ms-act-sub">{a.sub}</span>
-                      <span className="ms-act-when">{a.when ? new Date(a.when).toLocaleDateString("is-IS") : ""}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="ms-vefir" className="ms-section">
-      <div className="ms-h2row"><h2 className="ms-h2">Vefir &amp; kerfi</h2><button className="ms-add-btn" onClick={() => setAddOpen(true)}>+ Nýr vefur</button></div>
-      <div className="ms-props">
-        <div className="ms-prop">
-          <div className="ms-prop-h">
-            <span className="ms-prop-ico" style={{ background: "#e8551f" }}>🧯</span>
-            <div><b>Slökkvitæki vefur</b><small>Vefverslun + kynningarsíða</small></div>
-            <span className="ms-live">● Í loftinu</span>
-          </div>
-          <div className="ms-stats"><span><b>{sidur.length}</b> síður</span><span><b>{orders.length}</b> pantanir</span><span><b>{inq.length}</b> fyrirspurnir</span></div>
-          <div className="ms-links">
-            <a href="/" target="_blank" rel="noreferrer">Forsíða ↗</a>
-            <a href="/verslun" target="_blank" rel="noreferrer">Verslun ↗</a>
-            <a className="ms-primary" href="/stjorn">Stjórnborð →</a>
-          </div>
-        </div>
-
-        <div className="ms-prop">
-          <div className="ms-prop-h">
-            <span className="ms-prop-ico" style={{ background: "#0f1626" }}>🧩</span>
-            <div><b>Kerfi — þjónustukerfi</b><small>Viðskiptavinir · búnaður · sala · verkstæði</small></div>
-            <span className="ms-live">● Í loftinu</span>
-          </div>
-          <div className="ms-stats"><span><b>{kKunnar}</b> viðskiptavinir</span><span><b>{einingar.length}</b>/{MOD_COUNT} einingar</span><span><b>{kSolur.length}</b> sölur · {kr(salesTotal)}</span></div>
-          <div className="ms-links"><a className="ms-primary" href="/kerfi">Opna kerfi →</a><a href="/kerfi" target="_blank" rel="noreferrer">Nýr gluggi ↗</a></div>
-        </div>
-
-        {userSites.map((s) => (
-          <div className="ms-prop" key={s.id}>
-            <div className="ms-prop-h">
-              <span className="ms-prop-ico" style={{ background: s.tegund === "kerfi" ? "#0f1626" : "#2fa56b" }}>{s.tegund === "kerfi" ? "🧩" : "🌐"}</span>
-              <div><b>{s.nafn}</b><small>{s.tegund === "kerfi" ? "Þjónustukerfi" : "Vefur"} · /s/{s.slug}</small></div>
-              <span className="ms-live">● Nýr</span>
-            </div>
-            <div className="ms-stats"><span>Tilbúinn til að byggja</span></div>
-            <div className="ms-links">
-              <a className="ms-primary" href={`/s/${s.slug}`} target="_blank" rel="noreferrer">Opna →</a>
-              <button className="ms-del" onClick={() => delSite(s.id)}>Eyða</button>
-            </div>
-          </div>
-        ))}
-
-        <button className="ms-prop ms-add" onClick={() => setAddOpen(true)}>
-          <span className="ms-add-plus">+</span>
-          <b>Nýr vefur eða kerfi</b>
-          <small>Settu upp næsta þjónustufyrirtæki eða vef á sama grunni.</small>
-        </button>
-      </div>
-      </section>
-
-      <section id="ms-einingar" className="ms-section">
-      <h2 className="ms-h2">Einingar &amp; tól sem þú getur notað</h2>
-      <p className="ms-galsub">{readyCount} tilbúnar einingar og tól — kveiktu á þeim eftir þörf á hverjum vef eða kerfi.</p>
-      <div className="ms-filters" role="tablist" aria-label="Sía einingar">
-        {(["allt", "Kerfi", "Vefur", "Tól", "Verkfæri"] as const).map((tag) => (
-          <button
-            key={tag}
-            type="button"
-            role="tab"
-            aria-selected={galFilter === tag}
-            className={galFilter === tag ? "on" : ""}
-            onClick={() => setGalFilter(tag)}
-          >
-            {tag === "allt" ? "Allt" : tag}
-          </button>
-        ))}
-      </div>
-      {GALLERY.map((g) => {
-        const items = g.items.filter((it) => galFilter === "allt" || it.tag === galFilter);
-        if (items.length === 0) return null;
-        return (
-        <div className={`ms-gal ${galOpen[g.group] ? "is-open" : ""}`} key={g.group}>
-          <button
-            type="button"
-            className="ms-gal-h"
-            aria-expanded={galOpen[g.group] !== false}
-            onClick={() => setGalOpen((current) => ({ ...current, [g.group]: !current[g.group] }))}
-          >
-            <h3>{g.group}</h3>
-            <span>{g.sub}</span>
-            <span className="ms-gal-count">{items.length}</span>
-          </button>
-          <div className="ms-gal-grid">
-            {items.map((it) => {
-              const inner = (
-                <>
-                <span className="ms-gitem-ico">{it.icon}</span>
-                <div className="ms-gitem-b">
-                  <b>{it.nafn}</b>
-                  {it.desc && <span>{it.desc}</span>}
-                </div>
-                <div className="ms-gitem-r">
-                  <span className="ms-gtag">{it.tag}</span>
-                  <span className={`ms-gstatus ${it.ready ? "on" : ""}`}>{it.ready ? "Tilbúið" : "Í vinnslu"}</span>
-                </div>
-                </>
-              );
-              return it.href && it.ready ? (
-                <a className="ms-gitem" href={it.href} key={it.nafn}>
-                  {inner}
-                </a>
-              ) : (
-                <div className={`ms-gitem ${it.ready ? "" : "soon"}`} key={it.nafn}>
-                  {inner}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        );
-      })}
-      </section>
-
-      <section id="ms-adstod" className="ms-section">
-      <h2 className="ms-h2">Aðstoðarborð</h2>
-      <div className="ms-help2">
-        <div className="ms-conns">
-          {CONNS.map((c) => (
-            <div className="ms-conn" key={c.nafn}>
-              <div className="ms-conn-h">
-                <span className="ms-conn-ico">{c.icon}</span>
-                <b>{c.nafn}</b>
-                <span className={`ms-cstat ${c.on ? "on" : ""}`}>{c.status}</span>
-              </div>
-              <p>{c.how}</p>
-              <a href={c.href} {...(c.href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}>{c.cta} →</a>
-            </div>
-          ))}
-        </div>
-      </div>
-      </section>
-
-      {addOpen && (
-        <div className="ms-modal-wrap" onClick={() => setAddOpen(false)}>
-          <div className="ms-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ms-modal-h"><h2>Nýr vefur eða kerfi</h2><button className="ms-x" onClick={() => setAddOpen(false)} aria-label="Loka">✕</button></div>
-            <form onSubmit={addSite} className="ms-form">
-              <label>Nafn<input name="nafn" required placeholder="t.d. Rafverk ehf" autoFocus /></label>
-              <label>Tegund
-                <select name="tegund" defaultValue="vefur">
-                  <option value="vefur">Vefur (kynningarsíða / verslun)</option>
-                  <option value="kerfi">Kerfi (þjónustufyrirtæki)</option>
-                </select>
-              </label>
-              <button className="ms-btn" type="submit" disabled={saving}>{saving ? "Stofna…" : "Stofna vef"}</button>
-            </form>
-          </div>
-        </div>
-      )}
-    </StationShell>
-  );
+  const data: RagnarokData = {
+    sites,
+    userSites,
+    sidurCount: sidur.length,
+    ordersCount: orders.length,
+    inqCount: inq.length,
+    kKunnar,
+    solurCount: kSolur.length,
+    salesTotal,
+    einingarCount: einingar.length,
+    readyCount,
+    totalCount,
+    activity,
+    onAddSite: addSite,
+    onDelSite: delSite,
+    addOpen,
+    setAddOpen,
+    saving,
+  };
 
   return (
     <StationChrome tool="kjarni">
-      <SkinSwitch
-        classic={classic}
-        ragnarok={
-          <RagnarokView
-            sites={sites}
-            userSites={userSites}
-            sidurCount={sidur.length}
-            ordersCount={orders.length}
-            inqCount={inq.length}
-            kKunnar={kKunnar}
-            solurCount={kSolur.length}
-            salesTotal={salesTotal}
-            einingarCount={einingar.length}
-            readyCount={readyCount}
-            totalCount={totalCount}
-            activity={activity}
-            onAddSite={addSite}
-            onDelSite={delSite}
-            addOpen={addOpen}
-            setAddOpen={setAddOpen}
-            saving={saving}
-          />
-        }
-      />
+      <SkinSwitch data={data} />
     </StationChrome>
   );
 }
