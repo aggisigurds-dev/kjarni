@@ -7,6 +7,7 @@ import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SKINS, type SkinId } from "../skins";
 import { useStationSkin } from "../StationChrome";
 import { RagnarokRing } from "./Ring";
+import { SYSTEMS, FILTERS, ext, dags, type Filter } from "../stod-gogn";
 
 /* Stjórnstöðin í Ragnarök-útliti (bráðið gull á svörtu stáli).
  * Fyrirmynd: „Kjarni Ragnarok" í hönnunarkerfinu — röðin er sú sama:
@@ -41,17 +42,6 @@ const EMBER = "#ff9a3a";
 const GOLD = "#ffcf6a";
 const DIM = "#bf9a5d";
 
-const SYSTEMS: { name: string; kind: string; desc: string; href: string; state: "VIRKT" | "DRÖG" | "YTRA" }[] = [
-  { name: "TurboPaint", kind: "TÓL", desc: "Gólfplön — leitaðu eftir heimilisfangi og settu teikninguna á borðið.", href: "/kjarni/turbopaint", state: "VIRKT" },
-  { name: "ArtCraft", kind: "TÓL", desc: "Sjö sköpunarviðmót, sjálfvirk tól og einkastúdíó — opnaðu þau beint hér úr Kjarnanum.", href: "/kjarni/artcraft", state: "VIRKT" },
-  { name: "Borð", kind: "TÓL", desc: "Sérsniðið stjórnborð — draganleg spjöld með lifandi gögnum, tenglum og klukku.", href: "/bord", state: "VIRKT" },
-  { name: "Stjórnborð", kind: "VEFUR", desc: "Stjórnborð vefsins — síður, pantanir, mælingar og tengingar.", href: "/stjorn", state: "VIRKT" },
-  { name: "Kerfi", kind: "EINING", desc: "Þjónustukerfið — viðskiptavinir, búnaður, skoðanir, sala og verkstæði.", href: "/kerfi", state: "VIRKT" },
-  { name: "Skjalarinn", kind: "TÓL", desc: "Skjöl, pdf og skrár á einum stað.", href: "/skjalarinn", state: "VIRKT" },
-  { name: "Prufusvæði", kind: "DRÖG", desc: "Blokkir, þemu og skikt — tilraunir, ekkert hér er lokaútgáfa.", href: "/draft", state: "DRÖG" },
-  { name: "3dwork", kind: "YTRA", desc: "STL/mesh vinnustöð — opnast í nýjum glugga.", href: "/3dwork", state: "YTRA" },
-  { name: "Marks", kind: "YTRA", desc: "Whiteboard, möppur og covers — opnast í nýjum glugga.", href: "/marks", state: "YTRA" },
-];
 const stateColor = (s: string) => (s === "VIRKT" ? EMBER : s === "DRÖG" ? GOLD : DIM);
 
 const SECTIONS = [
@@ -61,16 +51,7 @@ const SECTIONS = [
   { id: "rg-adstod", label: "Aðstoð" },
 ] as const;
 
-const FILTERS = ["allt", "Kerfi", "Vefur", "Tól", "Verkfæri"] as const;
-type Filter = (typeof FILTERS)[number];
 
-const ext = (href: string) => (href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {});
-const dags = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
-};
 
 function Panel({ children, className = "", variant = "" }: { children: React.ReactNode; className?: string; variant?: "" | "thin" | "dim" | "hot" }) {
   return (
