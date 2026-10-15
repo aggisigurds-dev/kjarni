@@ -326,7 +326,7 @@
 .kst[data-thema="brunastal"] .kst-in { padding-top:0; }
 .kst[data-thema="brunastal"] .kst-hetja { padding:44px 0 46px; color:#eef1f4; }
 .kst[data-thema="brunastal"] .kst-hetja::before {
-  content:""; position:absolute; z-index:-1; top:0; bottom:0; left:calc(50% - 50vw); width:100vw;
+  content:""; position:absolute; z-index:-1; top:0; bottom:0; left:-100vmax; right:-100vmax; /* .kst klippir (overflow-x:clip) — 100vw brást í tölvuútliti símans (1440 px minnkað) */
   background:var(--hnod) 14px 14px/8px 8px no-repeat,var(--hnod) calc(100% - 14px) 14px/8px 8px no-repeat,var(--hnod) 14px calc(100% - 14px)/8px 8px no-repeat,var(--hnod) calc(100% - 14px) calc(100% - 14px)/8px 8px no-repeat,var(--metal);
   border-bottom:1px solid #000; box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 14px 30px -18px rgba(0,0,0,.6);
 }
@@ -572,7 +572,7 @@
 /* hetjan: navy í fullri breidd, eins og á vefnum */
 .kst[data-thema="brunaholf"] .kst-hetja { padding:64px 0 70px; color:#fff; }
 .kst[data-thema="brunaholf"] .kst-hetja::before {
-  content:""; position:absolute; z-index:-1; top:0; bottom:0; left:calc(50% - 50vw); width:100vw;
+  content:""; position:absolute; z-index:-1; top:0; bottom:0; left:-100vmax; right:-100vmax; /* .kst klippir (overflow-x:clip) — 100vw brást í tölvuútliti símans (1440 px minnkað) */
   background:radial-gradient(ellipse 50% 90% at 82% 50%,rgba(255,64,1,.16),transparent 62%),linear-gradient(90deg,#222f47 0%,#222f47 55%,#1d2840 100%);
 }
 .kst[data-thema="brunaholf"] .kst-yfir { font:600 13px/1.2 var(--k-font); letter-spacing:.08em; text-transform:uppercase; color:var(--a-navy); }
