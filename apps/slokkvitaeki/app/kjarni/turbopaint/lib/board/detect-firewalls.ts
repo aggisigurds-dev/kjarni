@@ -530,3 +530,63 @@ export function eiYfirlitsmidi(
     parentId: plan.id,
   };
 }
+
+/** Stakur stafur í hverjum ramma (bunadur-lestur.ts finnaRammaMerki): reiturinn `stafur` (myndardílar) úr blekgrímunni,
+ * svart á hvítu með 25 % spássíu, 3× stækkaður, lesinn með PSM 10 (eitt tákn). OCR á fullri síðu les ekki stakan staf
+ * í ramma (0 af 9 á Trönuhraun 10) — einn og sér les hann. Skilar null fyrir ramma sem gaf ekkert. */
+export async function lesaStafi(
+  blek: BlekGrima,
+  rammar: { x0: number; y0: number; x1: number; y1: number }[]
+): Promise<({ text: string; confidence: number } | null)[]> {
+  if (!rammar.length) return [];
+  const worker = await getWorker();
+  await worker.setParameters({ tessedit_pageseg_mode: "10", user_defined_dpi: "220" });
+  const S = 3;
+  const k = blek.kvardi;
+  const ut: ({ text: string; confidence: number } | null)[] = [];
+  try {
+    for (const r of rammar) {
+      const bx0 = Math.max(0, Math.floor(r.x0 * k)), by0 = Math.max(0, Math.floor(r.y0 * k));
+      const bx1 = Math.min(blek.w, Math.ceil(r.x1 * k)), by1 = Math.min(blek.h, Math.ceil(r.y1 * k));
+      const w = bx1 - bx0, h = by1 - by0;
+      if (w < 4 || h < 4) {
+        ut.push(null);
+        continue;
+      }
+      const sp = Math.round(Math.max(w, h) * 0.25);
+      const cw = (w + 2 * sp) * S, ch = (h + 2 * sp) * S;
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        ut.push(null);
+        continue;
+      }
+      const img = ctx.createImageData(cw, ch);
+      const d = img.data;
+      for (let y = 0; y < ch; y++) {
+        const sy = by0 - sp + ((y / S) | 0);
+        for (let x = 0; x < cw; x++) {
+          const sx = bx0 - sp + ((x / S) | 0);
+          const inni = sx >= bx0 && sx < bx1 && sy >= by0 && sy < by1;
+          const v = inni && blek.data[sy * blek.w + sx] ? 0 : 255;
+          const i = (y * cw + x) * 4;
+          d[i] = d[i + 1] = d[i + 2] = v;
+          d[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      const res = await worker.recognize(canvas, {}, { blocks: true, text: true });
+      canvas.width = 0;
+      canvas.height = 0;
+      const ord = wordsFromResult(res.data, false).filter((o) => o.text.trim());
+      const best = ord.sort((a, b) => b.confidence - a.confidence)[0];
+      ut.push(best ? { text: best.text.trim(), confidence: best.confidence } : null);
+      await yieldToUi();
+    }
+  } finally {
+    await worker.setParameters({ tessedit_pageseg_mode: "11", user_defined_dpi: "220" });
+  }
+  return ut;
+}

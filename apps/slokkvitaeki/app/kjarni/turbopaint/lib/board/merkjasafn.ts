@@ -25,7 +25,8 @@ export type Glyff =
   | "pin"
   | "alarm"
   | "detector"
-  | "magnet";
+  | "magnet"
+  | "window";
 
 /** 434 GLYFF */
 export const GLYFF: Glyff[] = [
@@ -40,6 +41,7 @@ export const GLYFF: Glyff[] = [
   "alarm",
   "detector",
   "magnet",
+  "window",
 ];
 
 /** 434 GLYFF_NOFN */
@@ -55,6 +57,7 @@ export const GLYFF_NOFN: Record<Glyff, string> = {
   alarm: "Hnappur",
   detector: "Skynjari",
   magnet: "Segull",
+  window: "Björgunarop",
 };
 
 export interface Stimpill {
@@ -77,6 +80,8 @@ export const STIMPLAR: Stimpill[] = [
   { id: "hitaskynjari", nafn: "Hitaskynjari", stutt: "HS", litur: "#c93c1d", glyff: "detector" },
   { id: "bjalla", nafn: "Viðvörunarbjalla", stutt: "BJ", litur: "#c93c1d", glyff: "alarm" },
   { id: "segull", nafn: "Segulloki", stutt: "SG", litur: "#c93c1d", glyff: "magnet" },
+  // 15.10.2026 (Agnar, skýringar Trönuhrauns 10): BO = björgunarop — opnanlegur gluggi sem flóttaleið.
+  { id: "bjorgunarop", nafn: "Björgunarop", stutt: "BO", litur: "#15803d", glyff: "window" },
 ];
 
 /** 433 TAEKI_TAKN — tækjategundirnar. */
@@ -103,6 +108,7 @@ export const SJALF: Record<string, Glyff> = {
   hitaskynjari: "detector",
   bjalla: "alarm",
   segull: "magnet",
+  bjorgunarop: "window",
 };
 
 export interface Litur {
@@ -131,6 +137,7 @@ export const LITIR: Record<string, Litur> = {
   bjalla: { bg: "#e11d2e", fg: "#fff" },
   segull: { bg: "#e11d2e", fg: "#fff" },
   hitaskynjari: { bg: "#e11d2e", fg: "#fff" },
+  bjorgunarop: { bg: "#15803d", fg: "#fff" },
   annad: { bg: "#e11d2e", fg: "#fff" },
 };
 
@@ -146,12 +153,17 @@ export const STIMPIL_LYKILL: Record<string, string> = {
   hitaskynjari: "hitaskynjari",
   bjalla: "bjalla",
   segull: "segull",
+  bjorgunarop: "bjorgunarop",
 };
 
-export type TaekjaLykill = "lettvatn" | "duft" | "co2" | "slanga" | "annad";
+/** Tegundir TÆKJA (uttaeki.type → lykill). 15.10.2026 (Agnar: „búnaður … síðan getur maður tengt það við tækin sjálf"):
+ * brunakerfisbúnaður — reykskynjari, hitaskynjari, bjalla, segulloki — er líka tæki (uttaeki geymir 92 reykskynjara), svo
+ * Nýtt-merki af þeim tegundum tengjast skráðum tækjum eins og slökkvitæki. Stimplarnir með sömu lyklum (MERKI) standa
+ * áfram sem skilti — `uttektSign` skilur þá frá búnaði. */
+export type TaekjaLykill = "lettvatn" | "duft" | "co2" | "slanga" | "reykskynjari" | "hitaskynjari" | "bjalla" | "segull" | "annad";
 
 /** 434 fjold — tegund tækis (uttaeki.type) → lykill. Nákvæmlega sama regla og Teikning-glugginn. NFKD (06.10.2026):
- * lækkað ₂ verður 2 svo „CO₂" er co2, og „slong" grípur Slönguskáp (ö → o). */
+ * lækkað ₂ verður 2 svo „CO₂" er co2, og „slong" grípur Slönguskáp (ö → o). 15.10.2026: brunakerfisbúnaður. */
 export function fjold(tegund: string | null | undefined): TaekjaLykill {
   const t = String(tegund || "")
     .toLowerCase()
@@ -161,6 +173,10 @@ export function fjold(tegund: string | null | undefined): TaekjaLykill {
   if (/duft|abc|pfc/.test(t)) return "duft";
   if (/slang|slong/.test(t)) return "slanga";
   if (/lettvatn|vatn|abf|frod/.test(t)) return "lettvatn";
+  if (/reyksk/.test(t)) return "reykskynjari";
+  if (/hitask/.test(t)) return "hitaskynjari";
+  if (/bjall|siren/.test(t)) return "bjalla";
+  if (/segul/.test(t)) return "segull";
   return "annad";
 }
 
@@ -350,6 +366,13 @@ export function teiknaGlyff(ctx: CanvasRenderingContext2D, id: Glyff, fg: string
     case "detector":
       ctx.beginPath(); ctx.arc(12, 12, 7, 0, 7); strok();
       ctx.beginPath(); ctx.arc(12, 12, 2.4, 0, 7); fyll();
+      break;
+    case "window":
+      // Björgunarop: gluggi (rammi með krosspósti) og ör út um hann
+      box(4, 5, 11, 13, 0); ctx.strokeStyle = fg; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9.5, 5); ctx.lineTo(9.5, 18); ctx.moveTo(4, 11.5); ctx.lineTo(15, 11.5); strok();
+      ctx.beginPath(); ctx.moveTo(13, 15); ctx.lineTo(20, 15); strok();
+      ctx.beginPath(); ctx.moveTo(17, 12); ctx.lineTo(20, 15); ctx.lineTo(17, 18); strok();
       break;
     default: {
       // Slökkvitæki: kútur með ávölum öxlum, borði í lit tegundar, háls, handfang, þrýstimælir og slanga (CO₂: trekt).

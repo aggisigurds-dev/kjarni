@@ -440,7 +440,7 @@ export function merkiFraTakni(s: TaknMedTaeki, p: { x: number; y: number }, vidm
 /** Tegund úr Nýtt-lykli `n:<lykill>:<id>` (annað = „annad"). */
 function nyttTegundUrLykli(unitId: unknown): TaekjaTegund {
   const l = String(unitId ?? "").split(":")[1] || "";
-  return (["lettvatn", "duft", "co2", "slanga"] as string[]).includes(l) ? (l as TaekjaTegund) : "annad";
+  return (["lettvatn", "duft", "co2", "slanga", "reykskynjari", "hitaskynjari", "bjalla", "segull"] as string[]).includes(l) ? (l as TaekjaTegund) : "annad";
 }
 
 /** Færir staðsetningar táknanna inn í hæðina. Tæki sem fær stöðu hér er tekið af ÖÐRUM hæðum (tæki er aðeins á einni

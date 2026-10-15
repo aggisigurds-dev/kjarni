@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { OcrWord } from "./firewall-rating";
-import { aetlaSltBrsl, finnaHring, ordTegundir, sltBrslOrd, sltBrslStadir, type Blek } from "./slt-brsl";
+import { aetlaSltBrsl, finnaHring, hnitABord, ordTegundir, skiltiUrOrdum, sltBrslOrd, sltBrslStadir, type Blek } from "./slt-brsl";
 import { TaekjaSjodur } from "./sjalftenging";
 import type { BoardObject, SymbolObject } from "./types";
 
@@ -29,9 +29,15 @@ test("ordTegundir: BRSL og SLT, líka með OCR-villum (8RSL, BR5L, SL1, 5LT) og 
   assert.deepEqual(ordTegundir("BRSL/SLT").map((x) => x.tegund), ["brsl", "slt"]);
   assert.deepEqual(ordTegundir("BRSLSLT").map((x) => x.tegund), ["brsl", "slt"]);
   // ekki SLT/BRSL
-  for (const t of ["EI-60", "SLÖKKVITÆKI", "SALT", "ÚT", "R60", "SLOT", "BRUSA", "BR", "S", "sfaslitovars!"]) {
+  for (const t of ["EI-60", "SLÖKKVITÆKI", "SALT", "R60", "SLOT", "BRUSA", "BR", "S", "sfaslitovars!", "300M", "3M", "BOX", "UTAN"]) {
     assert.deepEqual(ordTegundir(t), [], t);
   }
+  // 15.10.2026 (Trönuhraun 10): slöngulengd við keflið, björgunarop, flóttaleið
+  assert.deepEqual(ordTegundir("30m"), [{ tegund: "brsl", sterkt: false, metri: true }]);
+  assert.deepEqual(ordTegundir("25 m"), [{ tegund: "brsl", sterkt: false, metri: true }]);
+  assert.deepEqual(ordTegundir("BO"), [{ tegund: "bo", sterkt: true }]);
+  assert.deepEqual(ordTegundir("ÚT"), [{ tegund: "ut", sterkt: true }]);
+  assert.deepEqual(ordTegundir("UT"), [{ tegund: "ut", sterkt: true }]);
 });
 
 test("sltBrslOrd: vissa — rétt stafsett orð frá 20 %, OCR-villur frá 50 %; utan hússins / titilreits sleppt; tvítekning", () => {
@@ -245,4 +251,35 @@ test("HSL = handslökkvitæki (DRA ehf 11.10.2026), líka lóðrétt skrifað up
   assert.equal(o.length, 1);
   assert.equal(o[0].tegund, "slt");
   assert.equal(Math.round(o[0].h), 20); // stafahæð = breidd lóðrétts kassa
+});
+
+/* ── 15.10.2026: „30 m“ við kefli, BO og ÚT ──────────────────────────────────────────────────── */
+
+test("sltBrslOrd: BO / ÚT þurfa 35 % vissu, „30 m“ 50 %; skiltiUrOrdum gefur bjorgunarop og ut þar sem textinn er", () => {
+  const mynd = { b: 7000, h: 5000 };
+  const w = [
+    ord("BO", 1000, 1000, 96, 40, 25),
+    ord("BO", 2000, 1000, 30, 40, 25), // of lág vissa
+    ord("ÚT", 1000, 2000, 60, 40, 25),
+    ord("30m", 3000, 3000, 90, 44, 20),
+    ord("30m", 4000, 3000, 45, 44, 20), // of lág vissa
+  ];
+  const o = sltBrslOrd(w, mynd);
+  assert.deepEqual(o.map((x) => `${x.tegund}@${Math.round(x.x)}${x.metri ? "m" : ""}`).sort(), ["bo@1020", "brsl@3022m", "ut@1020"]);
+  const s = skiltiUrOrdum(o);
+  assert.deepEqual(s.map((x) => [x.sign, Math.round(x.x), Math.round(x.y)]), [["bjorgunarop", 1020, 1013], ["ut", 1020, 2013]]);
+});
+
+test("sltBrslStadir: „30 m“ án spírals (málsetning) gefur engan stað; með blekgrímu og kefli yrði það BRSL", () => {
+  const o = sltBrslOrd([ord("30m", 1000, 1000, 90, 44, 20), ord("BRSL", 3000, 3000, 90)], { b: 7000, h: 5000 });
+  assert.equal(o.length, 2);
+  // engin blekgríma → ekkert tákn finnst → „30 m“ sleppt, BRSL-textinn stendur
+  const s = sltBrslStadir(o, null);
+  assert.equal(s.length, 1);
+  assert.equal(Math.round(s[0].x), 3032);
+});
+
+test("hnitABord: myndardílar → borðhnit með sömu vörpun og stadirABord", () => {
+  const p = hnitABord({ x: 700, y: 500, sign: "ut" as const }, { x: 100, y: 200, width: 350, height: 250 }, { b: 7000, h: 5000 });
+  assert.deepEqual([p.x, p.y, p.sign], [135, 225, "ut"]);
 });

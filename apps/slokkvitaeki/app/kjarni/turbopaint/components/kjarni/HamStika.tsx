@@ -53,9 +53,9 @@ export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: 
   },
   thrividd: { texti: "3D", titill: "Hús í 3D — veggir og tæki á öllum hæðum", takn: <Box className="size-3.5" /> },
   "slt-brsl": {
-    texti: "SLT / HSL / BRSL af teikningu",
+    texti: "Búnaður af teikningu",
     titill:
-      "Lesa SLT og BRSL af teikningunni: slanga á tákni slöngukeflisins, slökkvitæki við hliðina — tengt við óstaðsett tæki staðarins (annars „ótengt“ → Nýtt við vistun), og skilti. Eldveggir ekki (EI-30 / EI-60). ⌘Z afturkallar.",
+      "Lesa búnaðinn af teikningunni: SLT / HSL / BRSL (slanga á tákni slöngukeflisins, slökkvitæki við hliðina), R í kassa = reykskynjari, S í hring = segulloki, H = hitaskynjari, B = bjalla, „30 m“ við spíral = slanga, BO = björgunarop, ÚT = flóttaleið. Tengt við óstaðsett tæki staðarins (annars Nýtt við vistun). Eldveggir ekki (EI-30 / EI-60). ⌘Z afturkallar.",
     takn: <ScanSearch className="size-3.5" />,
   },
   ei: { texti: "EI-30 / EI-60", titill: "Lesa EI-merkingar og merkja eldveggina", takn: <Flame className="size-3.5 text-[#FE653F]" /> },

@@ -17,7 +17,8 @@ import type { OcrWord } from "./firewall-rating";
 import { erTengtTaekiTakn, SLT_TEGUNDIR, tegundABordi, TaekjaSjodur, type TaekjaTegund } from "./sjalftenging";
 import type { BoardObject, SymbolObject } from "./types";
 
-export type SbTegund = "brsl" | "slt";
+/** brsl / slt = tæki; bo = björgunarop (skilti), ut = flóttaleið „ÚT" (skilti) — 15.10.2026, skýringar Trönuhrauns 10. */
+export type SbTegund = "brsl" | "slt" | "bo" | "ut";
 
 /** Blekgríma OCR-myndarinnar (sjá detect-firewalls.ts lesaTextaTeikningar): 1 = blek. kvardi = OCR-dílar á myndardíl. */
 export type Blek = { w: number; h: number; kvardi: number; data: Uint8Array };
@@ -33,12 +34,12 @@ function hreint(t: string) {
 /** Hvað orðið segir: BRSL og/eða SLT. `sterkt` = nákvæmlega rétt stafsett (BRSL / SLT / HSL); annars algengar OCR-villur
  * (8RSL, BR5L, BRS, SL1, 5LT, SLI, H5L …) sem þurfa meiri vissu. „BRSL | SLT" / „BRSL/SLT" / „BRSLSLT" gefa bæði.
  * HSL = handslökkvitæki (Agnar 11.10.2026, DRA ehf: „HSL þýðir handslökkvitæki") — telst slökkvitæki eins og SLT. */
-export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean }[] {
-  const ut: { tegund: SbTegund; sterkt: boolean }[] = [];
-  const baeta = (tegund: SbTegund, sterkt: boolean) => {
+export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean; metri?: boolean }[] {
+  const ut: { tegund: SbTegund; sterkt: boolean; metri?: boolean }[] = [];
+  const baeta = (tegund: SbTegund, sterkt: boolean, metri?: boolean) => {
     const f = ut.find((x) => x.tegund === tegund);
     if (f) f.sterkt = f.sterkt || sterkt;
-    else ut.push({ tegund, sterkt });
+    else ut.push({ tegund, sterkt, ...(metri ? { metri } : {}) });
   };
   for (const hluti of String(texti || "").split(SKIL)) {
     const c = hreint(hluti);
@@ -46,6 +47,12 @@ export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean 
     if (/^BRSL\d{0,2}$/.test(c)) baeta("brsl", true);
     else if (/^SLT\d{0,2}$/.test(c)) baeta("slt", true);
     else if (/^HSL\d{0,2}$/.test(c)) baeta("slt", true);
+    // 15.10.2026 (Trönuhraun 10): slöngukeflið er merkt með lengd slöngunnar („30 m", EN 671-1 ≤ 30 m), ekki BRSL —
+    // gildir AÐEINS með spíral keflisins við orðið (metri: sltBrslStadir sleppir orðinu án tákns). BO = björgunarop,
+    // ÚT = flóttaleiðarör — skilti, ekki tæki.
+    else if (/^[123]\dM$/.test(c)) baeta("brsl", false, true);
+    else if (/^BO$/.test(c)) baeta("bo", true);
+    else if (/^UT$/.test(c)) baeta("ut", true);
     else if (/^BRSLSLT$/.test(c)) {
       baeta("brsl", true);
       baeta("slt", true);
@@ -64,9 +71,13 @@ export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean 
  * villur þurfa ≥ 50 % eins og áður. */
 export const VISSA_STERKT = 20;
 export const VISSA_VEIKT = 50;
+/** Skilti (BO / ÚT): tveggja stafa orð eru oftar tilviljun en BRSL — meiri vissa (Trönuhraun 10: BO 96 % og 88 %). */
+export const VISSA_SKILTI = 35;
 
 export interface SbOrd {
   tegund: SbTegund;
+  /** Slöngulengd („30 m") í stað BRSL — telst aðeins með spíral keflisins við orðið. */
+  metri?: boolean;
   /** Miðja orðsins (myndardílar). */
   x: number;
   y: number;
@@ -89,8 +100,9 @@ export function sltBrslOrd(words: OcrWord[], mynd: { b: number; h: number }, sva
     if (svaedi) {
       if (x < svaedi.x0 || y < svaedi.y0 || x > svaedi.x1 || y > svaedi.y1) continue;
     } else if (x > mynd.b * 0.84 && y > mynd.h * 0.42) continue;
-    for (const { tegund, sterkt } of ordTegundir(w.text)) {
-      if (w.confidence < (sterkt ? VISSA_STERKT : VISSA_VEIKT)) continue;
+    for (const { tegund, sterkt, metri } of ordTegundir(w.text)) {
+      const lagmark = tegund === "bo" || tegund === "ut" ? VISSA_SKILTI : sterkt ? VISSA_STERKT : VISSA_VEIKT;
+      if (w.confidence < lagmark) continue;
       // „BRSL SLT" í einu orði: hvor hluti fær sinn helming svo staðirnir verði réttir
       const tvi = ordTegundir(w.text).length === 2;
       const hlutfall = tegund === "brsl" ? 0.3 : 0.8;
@@ -98,7 +110,7 @@ export function sltBrslOrd(words: OcrWord[], mynd: { b: number; h: number }, sva
       const hy = tvi && w.vertical ? w.y + w.height * hlutfall : y;
       // stafahæð: OCR-kassi orðs með litla vissu er oft of hár (Álfaborg: „BRSL" 29 % = 63 × 45) — breiddin ræður þá
       const stafir = Math.max(2, hreint(w.text).length);
-      ut.push({ tegund, x: hx, y: hy, h: Math.max(4, Math.min(thykkt, lengd / (0.8 * stafir))), vissa: w.confidence, texti: w.text });
+      ut.push({ tegund, x: hx, y: hy, h: Math.max(4, Math.min(thykkt, lengd / (0.8 * stafir))), vissa: w.confidence, texti: w.text, ...(metri ? { metri } : {}) });
     }
   }
   const rodud = ut.sort((a, b) => b.vissa - a.vissa);
@@ -311,6 +323,11 @@ export function sltBrslStadir(ord: SbOrd[], blek: Blek | null, skra?: (lina: str
   for (const o of ord.filter((x) => x.tegund === "brsl")) {
     skra?.(`BRSL ${Math.round(o.x)},${Math.round(o.y)} h${Math.round(o.h)}`);
     const takn = blek ? finnaHring(blek, o.x, o.y, o.h, skra) : null;
+    // „30 m" án spírals er málsetning eða lagnalengd, ekki slöngukefli
+    if (o.metri && !takn) {
+      skra?.(`  ${o.texti.trim()} án kefils — sleppt`);
+      continue;
+    }
     // sama kefli lesið tvisvar (t.d. „BRSL" + „BRSL|SLT")
     const sami = takn && stadir.find((s) => s.takn && Math.hypot(s.takn.x - takn.x, s.takn.y - takn.y) < Math.max(s.takn.r, takn.r));
     if (sami) {
@@ -361,14 +378,14 @@ export interface SbTaekiABord {
   y: number;
   /** Tengt tæki, eða null = ótengt. */
   taeki: Tki | null;
-  hvad: SbTegund;
+  hvad: "brsl" | "slt";
   stadur: number;
 }
 
 export interface SbAetlun {
   taeki: SbTaekiABord[];
   /** Staðir þar sem tæki af réttri tegund var þegar á borðinu (innan seilingar) — ekkert nýtt sett. */
-  fyrir: { hvad: SbTegund; stadur: number }[];
+  fyrir: { hvad: "brsl" | "slt"; stadur: number }[];
 }
 
 /** SLT-tegundir í röð (býr í sjalftenging.ts — forgangsröð úthlutunar notar hana líka). */
@@ -479,3 +496,26 @@ export const DRAEGI_SLONGU_M = 25;
 /** localStorage: „Sýna drægi slangna (165.BR1)" í Slökkvitæki-hamnum — sjálfgefið AF (Agnar 07.10.2026: „og taka þennan
  * rauða hring"). Útlitsval vafrans, ekki gögn. */
 export const DRAEGI_LYKILL = "tp_draegi_slangna";
+
+/* ── Skilti úr orðum: BO (björgunarop) og ÚT (flóttaleið) — 15.10.2026 ─────────────────────────────── */
+
+export interface SkiltiStadur {
+  /** Miðja orðsins (myndardílar) — skiltið fer þar sem textinn stendur. */
+  x: number;
+  y: number;
+  sign: "bjorgunarop" | "ut";
+  ord: string[];
+}
+
+/** BO- og ÚT-orð → skilti (433 stimplar bjorgunarop / ut). Tvítekin orð eru þegar felld í sltBrslOrd. */
+export function skiltiUrOrdum(ord: SbOrd[]): SkiltiStadur[] {
+  return ord
+    .filter((o) => o.tegund === "bo" || o.tegund === "ut")
+    .map((o) => ({ x: o.x, y: o.y, sign: o.tegund === "bo" ? ("bjorgunarop" as const) : ("ut" as const), ord: [`${o.texti.trim()} (${Math.round(o.vissa)} %)`] }))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/** Punktur í myndardílum → borðhnit (sama vörpun og stadirABord). */
+export function hnitABord<T extends { x: number; y: number }>(p: T, plan: { x: number; y: number; width: number; height: number }, src: { b: number; h: number }): T {
+  return { ...p, x: plan.x + (p.x * plan.width) / src.b, y: plan.y + (p.y * plan.height) / src.h };
+}
