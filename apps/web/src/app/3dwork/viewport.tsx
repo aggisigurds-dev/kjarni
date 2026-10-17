@@ -1784,10 +1784,10 @@ export function Viewport({
   useEffect(() => {
     if (frameToken === 0) return;
     // Wait a frame: on the first import the meshes have only just been added,
-    // and the canvas may not have its final size yet.
-    const handle = requestAnimationFrame(() => frameAll());
+    // and the canvas may not have its final size yet. Centre mode stays front-on.
+    const handle = requestAnimationFrame(() => (handlers.current.lockFront ? frontView() : frameAll()));
     return () => cancelAnimationFrame(handle);
-  }, [frameToken, frameAll]);
+  }, [frameToken, frameAll, frontView]);
 
   // Centre mode pins the camera front-on and stops the orbit turning; leaving
   // it lets you rotate freely again. Parts stay where they were flattened.

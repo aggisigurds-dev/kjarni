@@ -64,6 +64,7 @@ import {
   SquareDashed,
   Grid2x2,
   AlignCenterVertical,
+  Crosshair,
   Target,
   House,
   SquarePen,
@@ -2261,6 +2262,33 @@ export function Workbench({
     });
     if (mode !== 'free') setMode('free');
   }, [drawnIds, mode, sizes, patchProject]);
+
+  // Centre mode: put every drawn part on the middle of the base — its centre
+  // on the base's centre line (x = 0) and on the wall through the middle of the
+  // base (z = 0) — each keeping its height, so the stack only needs sliding up
+  // and down to line up. Hidden parts stay put; one undo step.
+  const centreOnBase = useCallback(() => {
+    const boxById = new Map(snapNeighbors.map((entry) => [entry.id, entry.box]));
+    const drawn = new Set(drawnIds);
+    patchProject((current) => ({
+      ...current,
+      parts: current.parts.map((part) => {
+        const box = drawn.has(part.id) ? boxById.get(part.id) : undefined;
+        if (!box) return part;
+        const fp = part.freePos ?? partWorldPos(part);
+        return {
+          ...part,
+          freePos: {
+            x: fp.x - (box.min[0] + box.max[0]) / 2,
+            y: fp.y,
+            z: fp.z - (box.min[2] + box.max[2]) / 2,
+          },
+        };
+      }),
+    }));
+    if (mode !== 'free') setMode('free');
+    setFrameToken((token) => token + 1);
+  }, [snapNeighbors, drawnIds, partWorldPos, mode, patchProject]);
 
   const toggleCenterMode = useCallback(() => {
     if (centerMode) {
@@ -5835,6 +5863,15 @@ export function Workbench({
               on: centerMode,
               onClick: toggleCenterMode,
               title: 'Centre mode — lay parts on one wall to line them up front-on, then turn it off to move in 3D',
+            },
+            {
+              icon: Crosshair,
+              label: 'Allt á miðju',
+              disabled: !centerMode,
+              onClick: centreOnBase,
+              title: centerMode
+                ? 'Setur alla parta á miðju grunnsins — hver heldur hæðinni sinni, svo þarf bara að renna þeim upp eða niður'
+                : 'Kveiktu á Center fyrst',
             },
           ],
         },
