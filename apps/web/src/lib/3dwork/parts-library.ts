@@ -149,7 +149,31 @@ export interface BoardItem {
   materialId: string;
   thumbnail?: string;
   soup: Float32Array;
+  /** Its category in the Partasafn: the AR-15 slot it takes on the board, if any. */
+  category?: string;
 }
+
+/**
+ * The AR-15 slots on a board, in the order a build is checked: each category
+ * has a place relative to the main body (front = -X, as in his builds). The
+ * user, 17.10.2026: the main body in the middle with its lowest point at 20 cm,
+ * the grip receiver at the rear and the mag receiver in front under it, each
+ * with its highest point at 20 cm — every sorted part roughly in its place, so
+ * he sees what is still missing.
+ */
+export const AR_SLOTS: { category: string; label: string }[] = [
+  { category: 'body', label: 'Main body' },
+  { category: 'triggerbody', label: 'Grip receiver' },
+  { category: 'magazine', label: 'Mag receiver' },
+  { category: 'grip', label: 'Grip' },
+  { category: 'handguard', label: 'Handguard' },
+  { category: 'stalror', label: 'Hlaup / rör' },
+  { category: 'stocksystem', label: 'Stock' },
+  { category: 'accessories', label: 'Sigti / aukahlutir' },
+];
+
+/** Room between the assembled parts and the tray of loose parts in front of them, mm. */
+export const TRAY_GAP_MM = 80;
 
 /** Room left between parts laid out on a new board, mm. */
 export const BOARD_GAP_MM = 20;
@@ -219,6 +243,124 @@ export function layoutAroundCentre(
   return centres;
 }
 
+type Box = { min: readonly number[]; max: readonly number[]; size: readonly number[]; center: readonly number[] };
+
+/**
+ * Where each pick goes on a board laid out as an AR-15 (front = -X): the main
+ * body in the middle with its lowest point at BOARD_HEIGHT_MM; the grip
+ * receiver under it at the rear and the mag receiver in front of that, both
+ * topping out there; the grip under the grip receiver; handguard (1) and then
+ * barrel / tubes (2) out in front; sights and accessories on top (3); stock
+ * pieces behind, the smallest first (4, 5); further magazines under the mag
+ * receiver. Everything else — internals, fittings, a second body, unsorted
+ * parts — goes in a tidy tray on the table in front. Returns, per item, the
+ * point to put the middle of its box at.
+ */
+export function assemblyLayout(
+  items: readonly { bounds: Box; category?: string; name?: string }[]
+): { x: number; y: number; z: number }[] {
+  const out = items.map(() => ({ x: 0, y: 0, z: 0 }));
+  const placed = new Set<number>();
+  const of = (category: string) => items.map((item, index) => ({ item, index })).filter((entry) => entry.item.category === category);
+  const put = (index: number, x: number, y: number, z = 0) => {
+    out[index] = { x, y, z };
+    placed.add(index);
+  };
+  const size = (index: number) => items[index].bounds.size;
+
+  // The main body (the largest one marked so), or a stand-in of about its size so the rest still has a frame.
+  const bodies = of('body').sort((a, b) => size(b.index)[0] - size(a.index)[0]);
+  const bodyIndex = bodies[0]?.index;
+  const body = bodyIndex === undefined ? [250, 60, 40] : size(bodyIndex);
+  const floor = BOARD_HEIGHT_MM; // the body's lowest point, and the receivers' highest
+  const front = -body[0] / 2;
+  const rear = body[0] / 2;
+  const top = floor + body[1];
+  if (bodyIndex !== undefined) put(bodyIndex, 0, floor + body[1] / 2);
+
+  const gripIndex = of('triggerbody')[0]?.index;
+  const grip = gripIndex === undefined ? null : size(gripIndex);
+  if (gripIndex !== undefined && grip) put(gripIndex, rear - grip[0] / 2, floor - grip[1] / 2);
+  const gripFront = grip ? rear - grip[0] : 0;
+
+  // The mag receiver: the magazine part named an adapter / receiver, else the first; further magazines hang under it.
+  const mags = of('magazine');
+  const receiver = mags.find((entry) => /adapter|receiver|magwell|mag well/i.test(entry.item.name ?? '')) ?? mags[0];
+  let magBottom = floor;
+  let magX = gripFront - 60;
+  if (receiver) {
+    const m = size(receiver.index);
+    magX = gripFront - m[0] / 2;
+    put(receiver.index, magX, floor - m[1] / 2);
+    magBottom = floor - m[1];
+  }
+  for (const entry of mags) {
+    if (entry === receiver) continue;
+    const m = size(entry.index);
+    // Only as long as it stays above the table; a magazine that would reach through it goes to the tray.
+    if (magBottom - m[1] < 0) continue;
+    put(entry.index, magX, magBottom - m[1] / 2);
+    magBottom -= m[1];
+  }
+
+  const handle = of('grip')[0];
+  if (handle) {
+    // Into the grip receiver's pocket at the rear, hanging below it.
+    const h = size(handle.index);
+    const handleTop = grip ? floor - grip[1] * 0.55 : floor - 30;
+    put(handle.index, grip ? rear - grip[0] * 0.3 : rear - h[0] / 2, handleTop - h[1] / 2);
+  }
+
+  // Out in front: the handguard against the body (1), then barrels / tubes beyond it (2).
+  let reach = front;
+  const guard = of('handguard')[0];
+  if (guard) {
+    const g = size(guard.index);
+    put(guard.index, reach - g[0] / 2, floor + body[1] * 0.5);
+    reach -= g[0];
+  }
+  for (const entry of of('stalror')) {
+    const t = size(entry.index);
+    put(entry.index, reach - t[0] / 2, floor + body[1] * 0.5);
+    reach -= t[0];
+  }
+
+  // Sights and accessories on top (3), a little behind the middle, side by side if there are several.
+  let along = body[0] * 0.1;
+  for (const entry of of('accessories')) {
+    const a = size(entry.index);
+    put(entry.index, along, top + a[1] / 2);
+    along -= a[0] + BOARD_GAP_MM;
+  }
+
+  // Stock pieces behind, the smallest against the body (4), the rest further back (5).
+  let back = rear;
+  for (const entry of of('stocksystem').sort((a, b) => size(a.index)[0] - size(b.index)[0])) {
+    const k = size(entry.index);
+    put(entry.index, back + k[0] / 2, floor + body[1] * 0.5);
+    back += k[0];
+  }
+
+  // The rest on the table, in front of the assembled parts.
+  const loose = items.map((_, index) => index).filter((index) => !placed.has(index));
+  if (loose.length > 0) {
+    let deepest = body[2] / 2;
+    for (const index of placed) deepest = Math.max(deepest, out[index].z + size(index)[2] / 2);
+    const centres = layoutAroundCentre(loose.map((index) => ({ width: size(index)[0], depth: size(index)[2] })));
+    const nearest = Math.min(...loose.map((index, k) => centres[k].z - size(index)[2] / 2));
+    const shift = deepest + TRAY_GAP_MM - nearest;
+    loose.forEach((index, k) => {
+      out[index] = { x: centres[k].x, y: size(index)[1] / 2, z: centres[k].z + shift };
+    });
+  }
+  return out;
+}
+
+/** The AR-15 slots a set of categories fills, and the ones still missing. */
+export function slotCheck(categories: readonly (string | undefined)[]): { category: string; label: string; count: number }[] {
+  return AR_SLOTS.map((slot) => ({ ...slot, count: categories.filter((category) => category === slot.category).length }));
+}
+
 const freshId = (prefix: string, salt: number) =>
   `${prefix}_${Date.now().toString(36)}_${salt.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -239,7 +381,15 @@ export function buildBoard(
   };
   const geometries = new Map<string, Float32Array>();
   const allBounds = items.map((item) => computeBounds(item.soup));
-  const centres = layoutAroundCentre(allBounds.map((bounds) => ({ width: bounds.size[0], depth: bounds.size[2] })));
+  // Parts sorted into AR-15 categories go to their slots; otherwise a block around the middle at BOARD_HEIGHT_MM.
+  const assembled = items.some((item) => AR_SLOTS.some((slot) => slot.category === item.category));
+  const places = assembled
+    ? assemblyLayout(items.map((item, index) => ({ bounds: allBounds[index], category: item.category, name: item.name })))
+    : layoutAroundCentre(allBounds.map((bounds) => ({ width: bounds.size[0], depth: bounds.size[2] }))).map((centre) => ({
+        x: centre.x,
+        y: BOARD_HEIGHT_MM,
+        z: centre.z,
+      }));
   items.forEach((item, index) => {
     const bounds = allBounds[index];
     const triangles = Math.floor(item.soup.length / 9);
@@ -261,9 +411,9 @@ export function buildBoard(
       activeVersionId: versionId,
       thumbnail: item.thumbnail,
       freePos: {
-        x: centres[index].x - bounds.center[0],
-        y: BOARD_HEIGHT_MM - bounds.center[1],
-        z: centres[index].z - bounds.center[2],
+        x: places[index].x - bounds.center[0],
+        y: places[index].y - bounds.center[1],
+        z: places[index].z - bounds.center[2],
       },
       addedAt: now + index,
     });

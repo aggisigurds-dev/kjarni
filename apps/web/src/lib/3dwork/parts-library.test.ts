@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { cubeSoup } from './fixtures';
 import {
   BOARD_GAP_MM,
+  assemblyLayout,
+  slotCheck,
   BOARD_HEIGHT_MM,
   bumpVersionName,
   buildBoard,
@@ -232,5 +234,101 @@ describe('copyBuild', () => {
     // The original keeps its ids.
     expect(original.parts[0].activeVersionId).toBe('ver_g1b');
     expect(original.id).toBe('prj_orig');
+  });
+});
+
+describe('assemblyLayout (AR-15 slots)', () => {
+  const box = (w: number, h: number, d: number) => ({ min: [-w / 2, -h / 2, -d / 2], max: [w / 2, h / 2, d / 2], size: [w, h, d], center: [0, 0, 0] });
+  const items = [
+    { bounds: box(170, 75, 38), category: 'triggerbody' },
+    { bounds: box(280, 60, 40), category: 'body' },
+    { bounds: box(120, 77, 44), category: 'magazine' },
+    { bounds: box(72, 99, 31), category: 'grip' },
+    { bounds: box(46, 64, 6.5), category: 'innvols' },
+    { bounds: box(46, 64, 6.5), category: 'innvols' },
+    { bounds: box(30, 30, 30), category: 'body' },
+  ];
+  const at = assemblyLayout(items);
+  const top = (i: number) => at[i].y + items[i].bounds.size[1] / 2;
+  const bottom = (i: number) => at[i].y - items[i].bounds.size[1] / 2;
+  const maxX = (i: number) => at[i].x + items[i].bounds.size[0] / 2;
+  const minX = (i: number) => at[i].x - items[i].bounds.size[0] / 2;
+
+  it('puts the main body in the middle with its lowest point at 20 cm', () => {
+    expect(at[1].x).toBe(0);
+    expect(bottom(1)).toBeCloseTo(BOARD_HEIGHT_MM);
+  });
+
+  it('hangs the grip receiver at the rear and the mag receiver in front of it, both topping out at 20 cm', () => {
+    expect(top(0)).toBeCloseTo(BOARD_HEIGHT_MM);
+    expect(maxX(0)).toBeCloseTo(maxX(1)); // rear edges in line
+    expect(top(2)).toBeCloseTo(BOARD_HEIGHT_MM);
+    expect(maxX(2)).toBeCloseTo(minX(0)); // right in front of the grip receiver
+  });
+
+  it('hangs the grip below the grip receiver, towards the rear', () => {
+    expect(top(3)).toBeLessThan(top(0));
+    expect(bottom(3)).toBeLessThan(bottom(0));
+    expect(at[3].x).toBeGreaterThan(at[0].x);
+  });
+
+  it('puts internals and a second body on the table in front, not in the slots', () => {
+    for (const i of [4, 5, 6]) {
+      expect(bottom(i)).toBeCloseTo(0);
+      expect(at[i].z - items[i].bounds.size[2] / 2).toBeGreaterThan(20);
+    }
+  });
+
+  it('tells which slots a set of parts fills and which are missing', () => {
+    const check = slotCheck(['body', 'triggerbody', 'magazine', 'grip', 'innvols', undefined]);
+    expect(check.find((slot) => slot.category === 'body')?.count).toBe(1);
+    expect(check.filter((slot) => slot.count === 0).map((slot) => slot.label)).toEqual([
+      'Handguard',
+      'Hlaup / rör',
+      'Stock',
+      'Sigti / aukahlutir',
+    ]);
+  });
+
+  it('chains the front, top and rear: handguard then barrel forward, sight on top, stock pieces back smallest first', () => {
+    const parts = [
+      { bounds: box(280, 60, 40), category: 'body' },
+      { bounds: box(180, 58, 55), category: 'handguard' },
+      { bounds: box(117, 68, 31), category: 'stalror' },
+      { bounds: box(104, 50, 35), category: 'accessories' },
+      { bounds: box(148, 181, 48), category: 'stocksystem' },
+      { bounds: box(43, 58, 25), category: 'stocksystem' },
+      { bounds: box(120, 77, 44), category: 'magazine', name: 'Mag adapter' },
+      { bounds: box(71, 100, 90), category: 'magazine', name: 'TiPX hulstur' },
+      { bounds: box(56, 205, 60), category: 'magazine', name: 'TiPX 10' },
+    ];
+    const p = assemblyLayout(parts);
+    const lo = (i: number, k: number) => p[i][k === 0 ? 'x' : 'y'] - parts[i].bounds.size[k] / 2;
+    const hi = (i: number, k: number) => p[i][k === 0 ? 'x' : 'y'] + parts[i].bounds.size[k] / 2;
+    expect(hi(1, 0)).toBeCloseTo(lo(0, 0)); // handguard against the body's front (1)
+    expect(hi(2, 0)).toBeCloseTo(lo(1, 0)); // barrel beyond the handguard (2)
+    expect(lo(3, 1)).toBeCloseTo(hi(0, 1)); // sight on top of the body (3)
+    expect(lo(5, 0)).toBeCloseTo(hi(0, 0)); // the small stock piece against the body (4)
+    expect(lo(4, 0)).toBeCloseTo(hi(5, 0)); // the stock behind it (5)
+    expect(hi(6, 1)).toBeCloseTo(BOARD_HEIGHT_MM); // the adapter is the mag receiver
+    expect(hi(7, 1)).toBeCloseTo(lo(6, 1)); // the TiPX housing hangs under it
+    expect(lo(8, 1)).toBeCloseTo(0); // one that would reach through the table lies on it instead
+  });
+});
+
+describe('buildBoard with AR-15 categories', () => {
+  it('lays sorted parts out as an assembly and leaves unsorted boards as a block', () => {
+    const body = cubeSoup(100);
+    const grip = cubeSoup(40);
+    const sorted = buildBoard('AR', [
+      { name: 'Body', color: '#111', materialId: 'abs', soup: body, category: 'body' },
+      { name: 'Lower', color: '#222', materialId: 'abs', soup: grip, category: 'triggerbody' },
+    ]);
+    const [b, l] = sorted.project.parts;
+    // cubeSoup(n) spans 0..n, so a part's lowest point is freePos.y.
+    expect(b.freePos?.y).toBeCloseTo(BOARD_HEIGHT_MM);
+    expect((l.freePos?.y ?? 0) + 40).toBeCloseTo(BOARD_HEIGHT_MM);
+    const plain = buildBoard('Plain', [{ name: 'A', color: '#111', materialId: 'pla', soup: cubeSoup(10) }]);
+    expect((plain.project.parts[0].freePos?.y ?? 0) + 5).toBeCloseTo(BOARD_HEIGHT_MM);
   });
 });
