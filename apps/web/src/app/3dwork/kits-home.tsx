@@ -8,13 +8,16 @@
  * the bench. STL / 3MF dropped on the Partasafn go straight into the library,
  * no board needed; a saved part opens on the bench to be changed and saved back.
  *
+ * Söfn shows one collection as a showcase — the parts assembled at the top,
+ * the parts by layer below — and a part opened from there comes back there.
+ *
  * The 3D bench (Three.js / WebGL) is a separate chunk, so this page stays light
  * until the bench is asked for.
  */
 
 import dynamic from 'next/dynamic';
 import { useRef, useState } from 'react';
-import { Boxes, ChevronDown, Cloud, Library, Plus, Upload } from 'lucide-react';
+import { Boxes, ChevronDown, Cloud, LayoutGrid, Library, Plus, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Favorite } from '@/lib/3dwork/favorites';
 import { isPartFile, PART_FILE_ACCEPT } from '@/lib/3dwork/import-part';
@@ -35,6 +38,12 @@ const DriveBrowser = dynamic(
 const PartsLibrary = dynamic(
   () => import('./parts-library').then((mod) => ({ default: mod.PartsLibrary })),
   { ssr: false, loading: () => <div className={`${PANEL} h-full p-4 text-sm text-slate-500`}>Opna Partasafnið…</div> }
+);
+
+// The assembled picture is drawn with three.js too.
+const CollectionsView = dynamic(
+  () => import('./collections-view').then((mod) => ({ default: mod.CollectionsView })),
+  { ssr: false, loading: () => <div className={`${PANEL} p-4 text-sm text-slate-500`}>Opna Söfn…</div> }
 );
 
 const Workbench = dynamic(() => import('./workbench').then((mod) => ({ default: mod.Workbench })), {
@@ -65,6 +74,8 @@ export function KitsHome() {
   const [showDrive, setShowDrive] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [showKits, setShowKits] = useState(false);
+  // The start page itself, or Söfn; kept while the bench is open, so a part opened from Söfn comes back there.
+  const [view, setView] = useState<'home' | 'sofn'>('home');
   // Bumped on the way back from the bench, so the projects and the library are read again.
   const [visit, setVisit] = useState(0);
   const importInput = useRef<HTMLInputElement | null>(null);
@@ -132,6 +143,16 @@ export function KitsHome() {
         libraryEdit={libraryEdit}
         onExit={goHome}
       />
+    );
+  }
+
+  if (view === 'sofn') {
+    return (
+      <div className="wb-theme h-dvh overflow-y-auto bg-[var(--wb-ground)] text-[var(--wb-ink)]">
+        <div className="min-h-full p-2">
+          <CollectionsView key={`sofn-${visit}`} onBack={() => setView('home')} onEditPart={editPart} />
+        </div>
+      </div>
     );
   }
 
@@ -204,6 +225,15 @@ export function KitsHome() {
             >
               <Library className="h-3.5 w-3.5" />
               Partasafn
+            </button>
+            <button
+              type="button"
+              className={`${TOP_BUTTON} border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100`}
+              onClick={() => setView('sofn')}
+              title="Eitt safn í einu: partarnir samsettir efst og hver partur fyrir neðan — opna einn, breyta, vista og loka"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Söfn
             </button>
           </div>
         </div>

@@ -58,6 +58,9 @@ import {
 import {
   addFavorite,
   buildCategoryLookup,
+  buildPartIdentity,
+  hideBuildParts,
+  snapshotWithBuildPartsHidden,
   createCollection,
   createSection,
   DEFAULT_COLLECTION_ID,
@@ -361,12 +364,14 @@ export function PartsLibrary({
   const [collectionEdit, setCollectionEdit] = useState<CollectionEdit | null>(null);
   const [saveSheet, setSaveSheet] = useState<SaveSheet | null>(null);
   const [autoRun, setAutoRun] = useState<AutoRun | null>(null);
+  // „Allir partar": the parts taken off the list, shown instead of the rest so they can be put back.
+  const [showHidden, setShowHidden] = useState(false);
 
   const reloadLibrary = useCallback(async () => {
     try {
       setLibrary(await loadLibrary());
     } catch (error) {
-      setLibrary({ favorites: [], collections: [], buildCategories: {}, boards: {} });
+      setLibrary({ favorites: [], collections: [], buildCategories: {}, boards: {}, hiddenBuildParts: [] });
       toast.error(failureNote(error, 'Náði ekki í Partasafnið.'));
     }
   }, []);
@@ -453,6 +458,13 @@ export function PartsLibrary({
     () => (buildParts ?? []).map((part) => ({ kind: 'build', key: `build:${part.key}`, part })),
     [buildParts]
   );
+  // Build parts taken off „Allir partar" — by name and size, so the same part in another build is off too.
+  const hiddenIdentities = useMemo(
+    () => new Set((library?.hiddenBuildParts ?? []).map(buildPartIdentity)),
+    [library]
+  );
+  const isHidden = useCallback((part: BuildPart) => hiddenIdentities.has(buildPartIdentity(part)), [hiddenIdentities]);
+  const hiddenCount = useMemo(() => (buildParts ?? []).filter(isHidden).length, [buildParts, isHidden]);
   const entryByKey = useMemo(
     () => new Map<string, Entry>([...libraryEntries, ...buildEntries].map((entry) => [entry.key, entry])),
     [libraryEntries, buildEntries]
@@ -485,7 +497,9 @@ export function PartsLibrary({
   );
 
   const tabEntries = useMemo<Entry[]>(() => {
-    if (tab === 'builds') return buildEntries;
+    if (tab === 'builds') {
+      return buildEntries.filter((entry) => entry.kind === 'build' && isHidden(entry.part) === showHidden);
+    }
     if (tab === 'starred') return libraryEntries.filter((entry) => entry.kind === 'library' && entry.favorite.starred);
     if (activeCollection === 'all') return libraryEntries;
     return libraryEntries.filter(
@@ -494,7 +508,7 @@ export function PartsLibrary({
         entry.favorite.collectionId === activeCollection &&
         !hiddenLayers.has(entry.favorite.sectionId ?? UNSORTED_LAYER(activeCollection))
     );
-  }, [tab, buildEntries, libraryEntries, activeCollection, hiddenLayers]);
+  }, [tab, buildEntries, libraryEntries, activeCollection, hiddenLayers, isHidden, showHidden]);
 
   const searched = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -1075,6 +1089,32 @@ export function PartsLibrary({
     }
   }, [setFavorites]);
 
+  /** Take a build part off „Allir partar", or put it back. Its build keeps it either way. */
+  const hidePart = useCallback(
+    async (part: BuildPart, hidden: boolean) => {
+      setDeleting(null);
+      const item = [{ name: part.name, triangles: part.triangles }];
+      setLibrary((current) => (current ? snapshotWithBuildPartsHidden(current, item, hidden) : current));
+      setTicked((current) => {
+        const next = new Set(current);
+        next.delete(`build:${part.key}`);
+        return next;
+      });
+      try {
+        await hideBuildParts(item, hidden);
+        toast.success(
+          hidden
+            ? `„${part.name}“ tekinn úr listanum. Verkefnið „${part.projectName}“ er óbreytt.`
+            : `„${part.name}“ aftur í listanum.`
+        );
+      } catch (error) {
+        void reloadLibrary();
+        toast.error(failureNote(error, hidden ? 'Náði ekki að taka partinn úr listanum.' : 'Náði ekki að setja partinn aftur í listann.'));
+      }
+    },
+    [reloadLibrary]
+  );
+
   const remove = useCallback(async (favorite: Favorite) => {
     setDeleting(null);
     try {
@@ -1097,7 +1137,7 @@ export function PartsLibrary({
   const counts: Record<LibraryTab, number> = {
     starred: favorites.filter((favorite) => favorite.starred).length,
     library: favorites.length,
-    builds: (buildParts ?? []).length,
+    builds: (buildParts ?? []).length - hiddenCount,
   };
   const countIn = (id: string) => favorites.filter((favorite) => favorite.collectionId === id).length;
   const showCollectionOnCards = collections.length > 1 && (tab === 'starred' || activeCollection === 'all');
@@ -1456,6 +1496,22 @@ export function PartsLibrary({
         {tab === 'builds' && cloudFailed && (
           <p className="mb-1 text-[0.65rem] text-amber-700">Supabase svaraði ekki — aðeins partar á þessari tölvu.</p>
         )}
+        {tab === 'builds' && (hiddenCount > 0 || showHidden) && (
+          <div className="mb-1.5 flex items-center gap-2 text-[0.7rem] text-[var(--wb-ink-mute)]">
+            {showHidden && <span className="min-w-0 flex-1">Partar sem þú tókst úr listanum — verkefnin þeirra eru óbreytt.</span>}
+            <button
+              type="button"
+              className={`${showHidden ? '' : 'ml-auto'} min-h-8 rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-2.5 font-bold text-[var(--wb-tool-ink)]`}
+              onClick={() => {
+                setShowHidden((value) => !value);
+                setDeleting(null);
+              }}
+              aria-pressed={showHidden}
+            >
+              {showHidden ? 'Til baka í listann' : `Eyddir partar (${hiddenCount})`}
+            </button>
+          </div>
+        )}
 
           {autoRun && (
             <section
@@ -1568,7 +1624,9 @@ export function PartsLibrary({
             </div>
           ) : entries.length === 0 ? (
             <p className="py-8 text-sm text-[var(--wb-ink-mute)]">
-              {search
+              {tab === 'builds' && showHidden
+                ? 'Engir eyddir partar.'
+                : search
                 ? 'Ekkert passar við leitina.'
                 : categoryFilter !== 'all'
                   ? `Enginn partur í flokknum ${categoryLabel(categoryFilter)} hér.`
@@ -1616,6 +1674,17 @@ export function PartsLibrary({
                     >
                       {isTicked && <Check className="h-3.5 w-3.5" />}
                     </span>
+                    {entry.kind === 'build' && !showHidden && (
+                      <button
+                        type="button"
+                        className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-500 hover:bg-white hover:text-rose-600"
+                        onClick={() => setDeleting(entry.key)}
+                        aria-label={`Eyða ${entry.part.name} úr listanum`}
+                        title="Eyða úr listanum — verkefnið sem hann er í breytist ekki"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                     {entry.kind === 'library' && (
                       <button
                         type="button"
@@ -1804,6 +1873,32 @@ export function PartsLibrary({
                             </button>
                           </>
                         )
+                      ) : deleting === entry.key ? (
+                        <>
+                          <button
+                            type="button"
+                            className="flex min-h-9 flex-1 items-center justify-center rounded bg-rose-600 px-2 text-[0.68rem] font-bold text-white hover:bg-rose-500"
+                            onClick={() => void hidePart(entry.part, true)}
+                          >
+                            Eyða úr listanum?
+                          </button>
+                          <button
+                            type="button"
+                            className="flex min-h-9 items-center justify-center rounded border border-slate-300 px-2 text-[0.68rem] text-slate-600"
+                            onClick={() => setDeleting(null)}
+                          >
+                            Nei
+                          </button>
+                        </>
+                      ) : showHidden ? (
+                        <button
+                          type="button"
+                          className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded border border-slate-400 px-2 text-[0.68rem] font-bold text-slate-700 hover:bg-slate-50"
+                          onClick={() => void hidePart(entry.part, false)}
+                        >
+                          <Undo2 className="h-3 w-3" />
+                          Setja aftur í listann
+                        </button>
                       ) : (
                         <button
                           type="button"

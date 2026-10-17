@@ -67,6 +67,7 @@ import {
   Target,
   House,
   SquarePen,
+  BookmarkPlus,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -4190,9 +4191,15 @@ export function Workbench({
 
   /** Ask what to call the selected part in the Partasafn — then `storeInLibrary` saves it. */
   const saveFavorite = useCallback(() => {
-    const part = selectedPart;
+    // With nothing selected, the one part on the bench is the part meant (17.10.2026: on the phone
+    // nothing looked selected and "Vista í Partasafn" did nothing he could see).
+    const part = selectedPart ?? (project.parts.length === 1 ? project.parts[0] : null);
     if (!part) {
-      toast.error('Select a part first.');
+      toast.error(
+        project.parts.length === 0
+          ? 'Enginn partur á bekknum til að vista.'
+          : 'Veldu partinn fyrst — pikkaðu á hann á bekknum — og ýttu svo aftur á „Vista í safn“.'
+      );
       return;
     }
     setSaveAsStarred(false);
@@ -4208,7 +4215,7 @@ export function Workbench({
       category: readMark(part.category, part.categoryAuto) ?? (guess ? { category: guess, auto: true } : undefined),
     });
     setSaveAsPart({ partId: part.id, name: suggestLibraryName(part) });
-  }, [selectedPart, project.name]);
+  }, [selectedPart, project.parts, project.name]);
 
   /** Put a part into the Partasafn under a name, as it is turned and scaled here. */
   /** The part changed on the bench goes back to the Partasafn as a new version of itself; then home. */
@@ -5924,16 +5931,17 @@ export function Workbench({
 
       <div className={`${PANEL} bench-chrome relative z-40 flex flex-col gap-1 px-2 py-1.5`}>
         {libraryEdit && (
-          <div className="flex flex-wrap items-center gap-2 rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[0.72rem] text-emerald-900">
+          <div
+            className="flex items-center gap-1.5 rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[0.72rem] text-emerald-900"
+            title="Breytir parti úr Partasafni — lagaðu hann og vistaðu svo aftur í safnið."
+          >
             <SquarePen className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              Breytir <b>„{libraryEdit.name}“</b> úr Partasafni — lagaðu hann og vistaðu svo aftur í safnið.
-            </span>
-            <button type="button" className={ACTION_PRIMARY} onClick={() => void saveLibraryEdit()} disabled={Boolean(busy)}>
-              Vista í safn og loka
+            <b className="min-w-0 flex-1 truncate">{libraryEdit.name}</b>
+            <button type="button" className={`${ACTION_PRIMARY} shrink-0`} onClick={() => void saveLibraryEdit()} disabled={Boolean(busy)}>
+              Vista og loka
             </button>
-            <button type="button" className={ACTION_GHOST} onClick={() => void leaveLibraryEdit()} disabled={Boolean(busy)}>
-              Loka án þess að vista
+            <button type="button" className={`${ACTION_GHOST} shrink-0`} onClick={() => void leaveLibraryEdit()} disabled={Boolean(busy)}>
+              Loka
             </button>
           </div>
         )}
@@ -5993,6 +6001,18 @@ export function Workbench({
             <Star className="h-3 w-3" />
             <span className="hidden sm:inline">Favorites</span>
           </button>
+          {!libraryEdit && (
+            <button
+              type="button"
+              onClick={() => saveFavorite()}
+              disabled={Boolean(busy) || project.parts.length === 0}
+              title="Vista valda partinn í Partasafnið — undir nafni, á öllum tölvum"
+              className="flex shrink-0 items-center gap-1 rounded border border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-emerald-800 hover:bg-emerald-100 disabled:opacity-40"
+            >
+              <BookmarkPlus className="h-3 w-3" />
+              Vista í safn
+            </button>
+          )}
         </div>
 
         <MenuBar>
