@@ -1,12 +1,13 @@
 'use client';
 
 /**
- * First paint of 3dwork — the start page: your projects first, then the
- * Partasafn with room to sort it (collections, layers you switch on and off,
- * planning boards for pictures of fittings, categories, printed / made /
- * bought), and buttons to start a build, bring part files into one, or open
- * the bench. STL / 3MF dropped on the Partasafn go straight into the library,
- * no board needed; a saved part opens on the bench to be changed and saved back.
+ * First paint of 3dwork — the start page: one collection as a showcase first
+ * (Söfn: the parts assembled as an AR-15, the parts by layer underneath — open
+ * one, change it, save and close), then the Partasafn with room to sort it
+ * (collections, layers you switch on and off, planning boards for pictures of
+ * fittings, categories, printed / made / bought), and recent work small at the
+ * bottom (17.10.2026: "not that important"). STL / 3MF dropped on the page go
+ * straight into the library, no board needed.
  *
  * The 3D bench (Three.js / WebGL) is a separate chunk, so this page stays light
  * until the bench is asked for.
@@ -35,6 +36,12 @@ const DriveBrowser = dynamic(
 const PartsLibrary = dynamic(
   () => import('./parts-library').then((mod) => ({ default: mod.PartsLibrary })),
   { ssr: false, loading: () => <div className={`${PANEL} h-full p-4 text-sm text-slate-500`}>Opna Partasafnið…</div> }
+);
+
+// The assembled picture is drawn with three.js too.
+const CollectionsView = dynamic(
+  () => import('./collections-view').then((mod) => ({ default: mod.CollectionsView })),
+  { ssr: false, loading: () => <div className={`${PANEL} p-4 text-sm text-slate-500`}>Opna Söfn…</div> }
 );
 
 const Workbench = dynamic(() => import('./workbench').then((mod) => ({ default: mod.Workbench })), {
@@ -208,22 +215,7 @@ export function KitsHome() {
           </div>
         </div>
 
-        <div className={`${PANEL} p-3`}>
-          <RecentBuilds
-            key={`builds-${visit}`}
-            onOpen={(entry) => {
-              // A build this computer has opens from its own copy, and the bench
-              // still checks Supabase for a newer one; one made elsewhere comes
-              // straight from Supabase.
-              if (entry.local) {
-                rememberOpenProject(entry.id);
-              } else {
-                setPendingCloudId(entry.id);
-              }
-              setEngine('bench');
-            }}
-          />
-        </div>
+        <CollectionsView key={`sofn-${visit}`} onEditPart={editPart} />
 
         <div ref={libraryRef} className="scroll-mt-2 md:h-[calc(100dvh-1rem)] md:min-h-[560px]">
           <PartsLibrary
@@ -258,6 +250,24 @@ export function KitsHome() {
               />
             </div>
           )}
+        </div>
+
+        <div className={`${PANEL} p-2`}>
+          <RecentBuilds
+            key={`builds-${visit}`}
+            compact
+            onOpen={(entry) => {
+              // A build this computer has opens from its own copy, and the bench
+              // still checks Supabase for a newer one; one made elsewhere comes
+              // straight from Supabase.
+              if (entry.local) {
+                rememberOpenProject(entry.id);
+              } else {
+                setPendingCloudId(entry.id);
+              }
+              setEngine('bench');
+            }}
+          />
         </div>
       </div>
 

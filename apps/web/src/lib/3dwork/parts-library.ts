@@ -249,8 +249,9 @@ type Box = { min: readonly number[]; max: readonly number[]; size: readonly numb
  * Where each pick goes on a board laid out as an AR-15 (front = -X): the main
  * body in the middle with its lowest point at BOARD_HEIGHT_MM; the grip
  * receiver under it at the rear and the mag receiver in front of that, both
- * topping out there; the grip under the grip receiver; handguard (1) and then
- * barrel / tubes (2) out in front; sights and accessories on top (3); stock
+ * topping out there; the grip under the grip receiver; the long steel tube
+ * through the body; handguard (1) and then shorter barrels / tubes (2) out in
+ * front; sights and accessories on top (3); stock
  * pieces behind, the smallest first (4, 5); further magazines under the mag
  * receiver. Everything else — internals, fittings, a second body, unsorted
  * parts — goes in a tidy tray on the table in front. Returns, per item, the
@@ -311,7 +312,13 @@ export function assemblyLayout(
     put(handle.index, grip ? rear - grip[0] * 0.3 : rear - h[0] / 2, handleTop - h[1] / 2);
   }
 
-  // Out in front: the handguard against the body (1), then barrels / tubes beyond it (2).
+  // The steel tube that runs through the body (⌀28 on the Iron wolf, 17.10.2026): the longest tube
+  // at least most of the body's length, on the body's axis. The internals ride inside it, in the tray.
+  const tubes = of('stalror').sort((a, b) => size(b.index)[0] - size(a.index)[0]);
+  const through = tubes[0] && size(tubes[0].index)[0] >= body[0] * 0.8 ? tubes[0] : undefined;
+  if (through) put(through.index, 0, floor + body[1] / 2);
+
+  // Out in front: the handguard against the body (1), then shorter barrels / tubes beyond it (2).
   let reach = front;
   const guard = of('handguard')[0];
   if (guard) {
@@ -320,6 +327,7 @@ export function assemblyLayout(
     reach -= g[0];
   }
   for (const entry of of('stalror')) {
+    if (entry.index === through?.index) continue;
     const t = size(entry.index);
     put(entry.index, reach - t[0] / 2, floor + body[1] * 0.5);
     reach -= t[0];

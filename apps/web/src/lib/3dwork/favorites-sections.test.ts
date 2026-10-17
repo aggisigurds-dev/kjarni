@@ -14,6 +14,7 @@ import {
   withSectionAdded,
   withSectionDeleted,
   withSectionRenamed,
+  withBuildPartsHidden,
   type BoardPin,
   type Shelf,
 } from './favorites';
@@ -148,5 +149,38 @@ describe('part status', () => {
     const favorites = librarySnapshot(marked).favorites;
     expect(favorites.find((entry) => entry.id === a)?.status).toBe('printed');
     expect(favorites.find((entry) => entry.id === b)?.status).toBeUndefined();
+  });
+});
+
+describe('build parts taken off „Allir partar"', () => {
+  const box = { name: 'Box 30 mm', triangles: 12 };
+  const test = { name: 'grip-test', triangles: 4 };
+
+  it('lists them by name and size, once each, and the snapshot shows them', () => {
+    let shelf = withBuildPartsHidden(normalizeShelf(emptyShelf()), [box, box], true, 5);
+    shelf = withBuildPartsHidden(shelf, [test], true, 6);
+    expect(shelf.hiddenBuildParts).toEqual([
+      { name: 'Box 30 mm', triangles: 12, hiddenAt: 5 },
+      { name: 'grip-test', triangles: 4, hiddenAt: 6 },
+    ]);
+    expect(librarySnapshot(shelf).hiddenBuildParts.map((entry) => entry.name)).toEqual(['Box 30 mm', 'grip-test']);
+  });
+
+  it('puts one back, and drops the list when it is empty', () => {
+    const shelf = withBuildPartsHidden(normalizeShelf(emptyShelf()), [box, test], true, 5);
+    const back = withBuildPartsHidden(shelf, [box], false);
+    expect(back.hiddenBuildParts?.map((entry) => entry.name)).toEqual(['grip-test']);
+    const none = withBuildPartsHidden(back, [test], false);
+    expect('hiddenBuildParts' in none).toBe(false);
+    expect(librarySnapshot(none).hiddenBuildParts).toEqual([]);
+  });
+
+  it('keeps the saved parts and collections as they were, and drops malformed entries', () => {
+    const { shelf, a, b } = ironWolf();
+    const hidden = withBuildPartsHidden(shelf, [box], true, 5);
+    expect(hidden.parts.map((part) => part.id)).toEqual([a, b]);
+    expect(hidden.collections).toEqual(normalizeShelf(shelf).collections);
+    const messy = normalizeShelf({ ...shelf, hiddenBuildParts: [null, { name: 3 }, { name: 'x', triangles: 'y' }] as never });
+    expect('hiddenBuildParts' in messy).toBe(false);
   });
 });
