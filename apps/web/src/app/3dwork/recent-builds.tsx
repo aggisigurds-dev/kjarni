@@ -63,14 +63,16 @@ function BuildCard({
   onOpen,
   onRename,
   onSaveAs,
+  compact = false,
 }: {
   entry: ProjectListEntry;
   onOpen: () => void;
   onRename: () => void;
   onSaveAs: () => void;
+  compact?: boolean;
 }) {
   const names = (entry.partNames ?? []).map(cleanPartName);
-  const pictures = (entry.thumbnails ?? []).slice(0, 3);
+  const pictures = (entry.thumbnails ?? []).slice(0, compact ? 2 : 3);
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm transition hover:border-emerald-500 hover:shadow-md">
       <button
@@ -79,7 +81,7 @@ function BuildCard({
         title={names.join('\n')}
         className="flex min-w-0 flex-1 flex-col text-left"
       >
-        <span className="flex h-28 items-stretch gap-px bg-slate-100">
+        <span className={`flex ${compact ? 'h-14' : 'h-28'} items-stretch gap-px bg-slate-100`}>
           {pictures.length > 0 ? (
             pictures.map((picture, index) => (
               <span
@@ -89,19 +91,25 @@ function BuildCard({
               />
             ))
           ) : (
-            <Boxes className="m-auto h-8 w-8 text-slate-300" />
+            <Boxes className={`m-auto ${compact ? 'h-5 w-5' : 'h-8 w-8'} text-slate-300`} />
           )}
         </span>
-        <span className="flex flex-1 flex-col gap-1 p-3">
+        <span className={`flex flex-1 flex-col gap-1 ${compact ? 'p-2' : 'p-3'}`}>
           <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 text-sm font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]">
+            <span
+              className={`min-w-0 flex-1 font-bold leading-snug text-slate-900 ${
+                compact ? 'truncate text-[0.72rem]' : 'text-sm [overflow-wrap:anywhere]'
+              }`}
+            >
               {buildLabel(entry.name, entry.partNames)}
             </span>
             <span className="shrink-0 font-mono text-[0.65rem] text-slate-400">
               {sinceLabel(entry.updatedAt)}
             </span>
           </span>
-          <span className="line-clamp-3 text-[0.7rem] leading-snug text-slate-500 [overflow-wrap:anywhere]">
+          <span
+            className={`${compact ? 'line-clamp-1 text-[0.62rem]' : 'line-clamp-3 text-[0.7rem]'} leading-snug text-slate-500 [overflow-wrap:anywhere]`}
+          >
             {entry.parts} part{entry.parts === 1 ? '' : 's'}
             {names.length > 0 ? `: ${names.join(' · ')}` : ''}
           </span>
@@ -110,11 +118,11 @@ function BuildCard({
           )}
         </span>
       </button>
-      <span className="flex border-t border-slate-200 text-[0.68rem] font-bold text-slate-500">
+      <span className={`flex border-t border-slate-200 ${compact ? 'text-[0.62rem]' : 'text-[0.68rem]'} font-bold text-slate-500`}>
         <button
           type="button"
           onClick={onRename}
-          className="flex min-h-9 flex-1 items-center justify-center gap-1 hover:bg-slate-50 hover:text-slate-900"
+          className={`flex ${compact ? 'min-h-7' : 'min-h-9'} flex-1 items-center justify-center gap-1 hover:bg-slate-50 hover:text-slate-900`}
           aria-label={`Endurnefna ${buildLabel(entry.name, entry.partNames)}`}
         >
           <Pencil className="h-3 w-3" />
@@ -123,7 +131,7 @@ function BuildCard({
         <button
           type="button"
           onClick={onSaveAs}
-          className="flex min-h-9 flex-1 items-center justify-center gap-1 border-l border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+          className={`flex ${compact ? 'min-h-7' : 'min-h-9'} flex-1 items-center justify-center gap-1 border-l border-slate-200 hover:bg-slate-50 hover:text-slate-900`}
           aria-label={`Vista ${buildLabel(entry.name, entry.partNames)} sem afrit`}
         >
           <Copy className="h-3 w-3" />
@@ -134,7 +142,14 @@ function BuildCard({
   );
 }
 
-export function RecentBuilds({ onOpen }: { onOpen: (entry: ProjectListEntry) => void }) {
+export function RecentBuilds({
+  onOpen,
+  compact = false,
+}: {
+  onOpen: (entry: ProjectListEntry) => void;
+  /** Small cards: the start page keeps recent work at the bottom, out of the way. */
+  compact?: boolean;
+}) {
   const [entries, setEntries] = useState<ProjectListEntry[] | null>(null);
   const [cloudFailed, setCloudFailed] = useState(false);
   // Bumped after a rename or a copy, so the list is read again.
@@ -235,10 +250,13 @@ export function RecentBuilds({ onOpen }: { onOpen: (entry: ProjectListEntry) => 
           Nothing yet. Open the 3D bench and drop an STL or 3MF on it, or pick parts from Drive below.
         </p>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
+        <div
+          className={`grid ${compact ? 'grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2' : 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3'}`}
+        >
           {entries.slice(0, SHOWN).map((entry) => (
             <BuildCard
               key={entry.id}
+              compact={compact}
               entry={entry}
               onOpen={() => onOpen(entry)}
               onRename={() => setNaming({ mode: 'rename', entry })}

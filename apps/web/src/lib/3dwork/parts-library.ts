@@ -249,8 +249,9 @@ type Box = { min: readonly number[]; max: readonly number[]; size: readonly numb
  * Where each pick goes on a board laid out as an AR-15 (front = -X): the main
  * body in the middle with its lowest point at BOARD_HEIGHT_MM; the grip
  * receiver under it at the rear and the mag receiver in front of that, both
- * topping out there; the grip under the grip receiver; handguard (1) and then
- * barrel / tubes (2) out in front; sights and accessories on top (3); stock
+ * topping out there; the grip under the grip receiver; the long steel tube
+ * through the body; handguard (1) and then shorter barrels / tubes (2) out in
+ * front; sights and accessories on top (3); stock
  * pieces behind, the smallest first (4, 5); further magazines under the mag
  * receiver. Everything else — internals, fittings, a second body, unsorted
  * parts — goes in a tidy tray on the table in front. Returns, per item, the
@@ -311,7 +312,13 @@ export function assemblyLayout(
     put(handle.index, grip ? rear - grip[0] * 0.3 : rear - h[0] / 2, handleTop - h[1] / 2);
   }
 
-  // Out in front: the handguard against the body (1), then barrels / tubes beyond it (2).
+  // The steel tube that runs through the body (⌀28 on the Iron wolf, 17.10.2026): the longest tube
+  // at least most of the body's length, on the body's axis. The internals ride inside it, in the tray.
+  const tubes = of('stalror').sort((a, b) => size(b.index)[0] - size(a.index)[0]);
+  const through = tubes[0] && size(tubes[0].index)[0] >= body[0] * 0.8 ? tubes[0] : undefined;
+  if (through) put(through.index, 0, floor + body[1] / 2);
+
+  // Out in front: the handguard against the body (1), then shorter barrels / tubes beyond it (2).
   let reach = front;
   const guard = of('handguard')[0];
   if (guard) {
@@ -320,6 +327,7 @@ export function assemblyLayout(
     reach -= g[0];
   }
   for (const entry of of('stalror')) {
+    if (entry.index === through?.index) continue;
     const t = size(entry.index);
     put(entry.index, reach - t[0] / 2, floor + body[1] * 0.5);
     reach -= t[0];
@@ -352,6 +360,53 @@ export function assemblyLayout(
     loose.forEach((index, k) => {
       out[index] = { x: centres[k].x, y: size(index)[1] / 2, z: centres[k].z + shift };
     });
+  }
+  return out;
+}
+
+/** A part of a collection as its picture lays it out: its box, its slot, and where the user put it, if anywhere. */
+type Placed = { bounds: Box; category?: string; name?: string; place?: { x: number; y: number } };
+
+/**
+ * Where each part of a collection stands in its picture: where the user put it
+ * when arranging (centred in depth), else its AR-15 slot or the tray.
+ */
+export function collectionLayout(items: readonly Placed[]): { x: number; y: number; z: number }[] {
+  const auto = assemblyLayout(items);
+  return items.map((item, index) => (item.place ? { x: item.place.x, y: item.place.y, z: 0 } : auto[index]));
+}
+
+/** How tall a column of loose parts grows in the side view before the next one starts, mm. */
+const SIDE_COLUMN_MM = BOARD_HEIGHT_MM + 100;
+
+/**
+ * The side view to arrange a collection in, every part centred in depth: a
+ * part put somewhere keeps its place, one in an AR-15 slot starts there, and
+ * the loose ones — the tray, in 3D, which would all land on one spot seen from
+ * the side — stand on the table to the right of the rest, in columns.
+ */
+export function sideLayout(items: readonly Placed[]): { x: number; y: number }[] {
+  const auto = assemblyLayout(items);
+  const out = items.map((item, index) => (item.place ? { ...item.place } : { x: auto[index].x, y: auto[index].y }));
+  const loose = items.map((_, index) => index).filter((index) => !items[index].place && auto[index].z > 1);
+  if (loose.length === 0) return out;
+  let right = -Infinity;
+  items.forEach((item, index) => {
+    if (!loose.includes(index)) right = Math.max(right, out[index].x + item.bounds.size[0] / 2);
+  });
+  let x = (Number.isFinite(right) ? right : 0) + TRAY_GAP_MM;
+  let y = 0;
+  let column = 0;
+  for (const index of loose) {
+    const [w, h] = items[index].bounds.size;
+    if (y > 0 && y + h > SIDE_COLUMN_MM) {
+      x += column + BOARD_GAP_MM;
+      y = 0;
+      column = 0;
+    }
+    out[index] = { x: x + w / 2, y: y + h / 2 };
+    y += h + BOARD_GAP_MM;
+    column = Math.max(column, w);
   }
   return out;
 }

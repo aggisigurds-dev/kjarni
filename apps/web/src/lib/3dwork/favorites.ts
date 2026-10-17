@@ -100,6 +100,19 @@ export interface BuildCategoryRecord extends CategoryMark {
   triangles: number;
 }
 
+/**
+ * A part of a build taken off „Allir partar": found again by name and size, so
+ * the same part in another build stays off too. The build itself keeps it.
+ */
+export interface HiddenBuildPart {
+  name: string;
+  triangles: number;
+  hiddenAt: number;
+}
+
+/** How a hidden build part is matched: name and triangle count. */
+export const buildPartIdentity = (part: { name: string; triangles: number }) => `${part.triangles}:${part.name}`;
+
 /** The library's document: a project whose parts are the saved parts, plus the collections and build categories. */
 export interface Shelf extends Project {
   collections?: LibraryCollection[];
@@ -107,6 +120,8 @@ export interface Shelf extends Project {
   boards?: Record<string, BoardPin[]>;
   /** By `projectId/partId`. */
   buildCategories?: Record<string, BuildCategoryRecord>;
+  /** Build parts taken off „Allir partar"; kept only when there are any. */
+  hiddenBuildParts?: HiddenBuildPart[];
 }
 
 /** A shelf card: what the gallery shows, and enough to put the part on a bench. */
@@ -126,6 +141,8 @@ export interface Favorite {
   sectionId?: string;
   status?: PartStatus;
   category?: CategoryMark;
+  /** Where it was put when its collection was arranged; none for the automatic layout. */
+  place?: { x: number; y: number };
   addedAt: number;
 }
 
@@ -136,6 +153,7 @@ export interface LibrarySnapshot {
   /** Visible pins by board section id. */
   boards: Record<string, BoardPin[]>;
   buildCategories: Record<string, BuildCategoryRecord>;
+  hiddenBuildParts: HiddenBuildPart[];
 }
 
 /** What a part brings to the shelf, besides its mesh. */
@@ -220,8 +238,17 @@ export function normalizeShelf(shelf: Shelf): Shelf {
   // A part's sub-category belongs to its collection; one that is not there any more is dropped.
   const sectionsOf = new Map(collections.map((entry) => [entry.id, new Set((entry.sections ?? []).map((s) => s.id))]));
 
+  const hidden: HiddenBuildPart[] = [];
+  for (const entry of Array.isArray(shelf.hiddenBuildParts) ? shelf.hiddenBuildParts : []) {
+    if (!entry || typeof entry.name !== 'string' || !Number.isFinite(Number(entry.triangles))) continue;
+    const kept = { name: entry.name, triangles: Number(entry.triangles), hiddenAt: Number(entry.hiddenAt) || 0 };
+    if (!hidden.some((other) => buildPartIdentity(other) === buildPartIdentity(kept))) hidden.push(kept);
+  }
+  const { hiddenBuildParts: _hidden, ...rest } = shelf;
+
   return {
-    ...shelf,
+    ...rest,
+    ...(hidden.length ? { hiddenBuildParts: hidden } : {}),
     collections,
     buildCategories,
     boards,
@@ -281,6 +308,10 @@ export function favoritesOf(shelf: Shelf): Favorite[] {
       sectionId: part.sectionId,
       status: isPartStatus(part.status) ? part.status : undefined,
       category: readMark(part.category, part.categoryAuto),
+      place:
+        part.place && Number.isFinite(part.place.x) && Number.isFinite(part.place.y)
+          ? { x: part.place.x, y: part.place.y }
+          : undefined,
       addedAt: part.addedAt,
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
@@ -292,6 +323,7 @@ export function librarySnapshot(shelf: Shelf): LibrarySnapshot {
     favorites: favoritesOf(normal),
     collections: normal.collections ?? [],
     buildCategories: normal.buildCategories ?? {},
+    hiddenBuildParts: normal.hiddenBuildParts ?? [],
     boards: Object.fromEntries(
       Object.entries(normal.boards ?? {}).map(([key, pins]) => [key, pins.filter((pin) => !pin.hidden)])
     ),
@@ -357,7 +389,9 @@ export function withFavoriteMoved(shelf: Shelf, partId: string, collectionId: st
     // Sub-categories are the collection's own, so a move leaves the old one behind.
     parts: normal.parts.map((part) =>
       part.id === partId
-        ? { ...part, collectionId, sectionId: part.collectionId === collectionId ? part.sectionId : undefined }
+        ? part.collectionId === collectionId
+          ? { ...part, collectionId }
+          : { ...part, collectionId, sectionId: undefined, place: undefined }
         : part
     ),
   };
@@ -444,6 +478,83 @@ export function withPinChanged(shelf: Shelf, sectionId: string, pinId: string, c
       ),
     },
   };
+}
+
+/** One part's change from arranging a collection: where it stands (null: back to the automatic layout), its colour. */
+export interface ArrangeChange {
+  id: string;
+  place?: { x: number; y: number } | null;
+  color?: string;
+}
+
+/**
+ * The parts as arranged: places kept to a tenth of a millimetre, a painted
+ * part's colour taken as its own (its finish, which would override it, dropped).
+ */
+export function withArrangement(shelf: Shelf, changes: readonly ArrangeChange[]): Shelf {
+  const normal = normalizeShelf(shelf);
+  const byId = new Map(changes.map((change) => [change.id, change]));
+  const tenth = (value: number) => Math.round(value * 10) / 10;
+  return {
+    ...normal,
+    parts: normal.parts.map((part) => {
+      const change = byId.get(part.id);
+      if (!change) return part;
+      let next: Part = part;
+      if (change.place === null) next = { ...next, place: undefined };
+      else if (change.place && Number.isFinite(change.place.x) && Number.isFinite(change.place.y)) {
+        next = { ...next, place: { x: tenth(change.place.x), y: tenth(change.place.y) } };
+      }
+      if (change.color && /^#[0-9a-f]{6}$/i.test(change.color) && change.color.toLowerCase() !== part.color.toLowerCase()) {
+        next = { ...next, color: change.color.toLowerCase(), finishId: undefined };
+      }
+      return next;
+    }),
+  };
+}
+
+/** The list of hidden build parts with these taken off (`hidden` false) or put on it. */
+function hiddenWith(
+  current: readonly HiddenBuildPart[],
+  parts: readonly { name: string; triangles: number }[],
+  hidden: boolean,
+  now: number
+): HiddenBuildPart[] {
+  const touched = new Set(parts.map(buildPartIdentity));
+  const kept = current.filter((entry) => !touched.has(buildPartIdentity(entry)));
+  if (!hidden) return kept;
+  const added: HiddenBuildPart[] = [];
+  for (const part of parts) {
+    if (added.some((entry) => buildPartIdentity(entry) === buildPartIdentity(part))) continue;
+    added.push({ name: part.name, triangles: part.triangles, hiddenAt: now });
+  }
+  return [...kept, ...added];
+}
+
+/**
+ * Take build parts off „Allir partar" (or put them back). Only the list
+ * changes: the builds the parts are in keep them, meshes and all.
+ */
+export function withBuildPartsHidden(
+  shelf: Shelf,
+  parts: readonly { name: string; triangles: number }[],
+  hidden: boolean,
+  now = Date.now()
+): Shelf {
+  const normal = normalizeShelf(shelf);
+  const next = hiddenWith(normal.hiddenBuildParts ?? [], parts, hidden, now);
+  const { hiddenBuildParts: _hidden, ...rest } = normal;
+  return next.length ? { ...rest, hiddenBuildParts: next } : rest;
+}
+
+/** The same change on what the window holds, so it shows at once while the write goes out. */
+export function snapshotWithBuildPartsHidden(
+  snapshot: LibrarySnapshot,
+  parts: readonly { name: string; triangles: number }[],
+  hidden: boolean,
+  now = Date.now()
+): LibrarySnapshot {
+  return { ...snapshot, hiddenBuildParts: hiddenWith(snapshot.hiddenBuildParts, parts, hidden, now) };
 }
 
 /** One category to set: on a saved part, or on a part in a build. No mark clears it. */
@@ -678,6 +789,18 @@ export async function deleteCollection(id: string, moveTo: string | null): Promi
 
 export async function moveFavorite(id: string, collectionId: string): Promise<void> {
   await changeShelf((shelf) => withFavoriteMoved(shelf, id, collectionId));
+}
+
+/** Store a collection as arranged — places and colours — in one write. */
+export async function arrangeFavorites(changes: readonly ArrangeChange[]): Promise<void> {
+  if (changes.length === 0) return;
+  await changeShelf((shelf) => withArrangement(shelf, changes));
+}
+
+/** Take build parts off „Allir partar", or put them back — in one write. */
+export async function hideBuildParts(parts: readonly { name: string; triangles: number }[], hidden: boolean): Promise<void> {
+  if (parts.length === 0) return;
+  await changeShelf((shelf) => withBuildPartsHidden(shelf, parts, hidden));
 }
 
 /** Set categories — one part or a whole run of the auto-sorter — in one write. */

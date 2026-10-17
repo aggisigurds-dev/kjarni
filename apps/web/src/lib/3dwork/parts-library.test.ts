@@ -3,6 +3,8 @@ import { cubeSoup } from './fixtures';
 import {
   BOARD_GAP_MM,
   assemblyLayout,
+  collectionLayout,
+  sideLayout,
   slotCheck,
   BOARD_HEIGHT_MM,
   bumpVersionName,
@@ -314,6 +316,20 @@ describe('assemblyLayout (AR-15 slots)', () => {
     expect(hi(7, 1)).toBeCloseTo(lo(6, 1)); // the TiPX housing hangs under it
     expect(lo(8, 1)).toBeCloseTo(0); // one that would reach through the table lies on it instead
   });
+
+  it('runs the long steel tube through the body, and keeps a short barrel out in front', () => {
+    const parts = [
+      { bounds: box(283, 63, 43), category: 'body' },
+      { bounds: box(180, 58, 55), category: 'handguard' },
+      { bounds: box(301, 28, 28), category: 'stalror', name: '28mm stál body rör' },
+      { bounds: box(117, 31, 31), category: 'stalror', name: 'Hlaup' },
+    ];
+    const p = assemblyLayout(parts);
+    expect(p[2].x).toBeCloseTo(p[0].x); // through the body, on its axis
+    expect(p[2].y).toBeCloseTo(p[0].y);
+    expect(p[2].z).toBeCloseTo(p[0].z);
+    expect(p[3].x + 117 / 2).toBeCloseTo(p[1].x - 180 / 2); // the short one beyond the handguard
+  });
 });
 
 describe('buildBoard with AR-15 categories', () => {
@@ -330,5 +346,36 @@ describe('buildBoard with AR-15 categories', () => {
     expect((l.freePos?.y ?? 0) + 40).toBeCloseTo(BOARD_HEIGHT_MM);
     const plain = buildBoard('Plain', [{ name: 'A', color: '#111', materialId: 'pla', soup: cubeSoup(10) }]);
     expect((plain.project.parts[0].freePos?.y ?? 0) + 5).toBeCloseTo(BOARD_HEIGHT_MM);
+  });
+});
+
+describe('arranged collections', () => {
+  const box = (w: number, h: number, d: number) => ({ min: [-w / 2, -h / 2, -d / 2], max: [w / 2, h / 2, d / 2], size: [w, h, d], center: [0, 0, 0] });
+  const items = [
+    { bounds: box(280, 60, 40), category: 'body' },
+    { bounds: box(170, 75, 38), category: 'triggerbody' },
+    { bounds: box(46, 64, 6.5), category: 'innvols' },
+    { bounds: box(60, 250, 10), category: 'innvols' },
+    { bounds: box(40, 20, 20) },
+  ];
+
+  it('puts a part where the user put it, centred in depth, and the rest as the AR-15 layout does', () => {
+    const auto = assemblyLayout(items);
+    const at = collectionLayout(items.map((item, index) => (index === 1 ? { ...item, place: { x: 10, y: 20 } } : item)));
+    expect(at[1]).toEqual({ x: 10, y: 20, z: 0 });
+    expect(at[0]).toEqual(auto[0]);
+    expect(at[2]).toEqual(auto[2]);
+  });
+
+  it('starts the side view from the slots, with the loose parts in columns on the table to the right', () => {
+    const side = sideLayout(items);
+    const auto = assemblyLayout(items);
+    expect(side[0]).toEqual({ x: auto[0].x, y: auto[0].y });
+    const right = Math.max(side[0].x + 140, side[1].x + 85);
+    for (const index of [2, 3, 4]) expect(side[index].x - items[index].bounds.size[0] / 2).toBeGreaterThan(right);
+    expect(side[2].y - 32).toBeCloseTo(0); // the first stands on the table
+    expect(side[3].x).toBeGreaterThan(side[2].x); // too tall to stack on it: the next column
+    const placed = sideLayout(items.map((item, index) => (index === 2 ? { ...item, place: { x: -5, y: 7 } } : item)));
+    expect(placed[2]).toEqual({ x: -5, y: 7 });
   });
 });
