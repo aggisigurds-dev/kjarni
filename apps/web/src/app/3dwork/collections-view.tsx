@@ -53,7 +53,8 @@ export function CollectionsView({
   onBack,
   onEditPart,
 }: {
-  onBack: () => void;
+  /** A way back, when Söfn is a page of its own; on the start page there is none. */
+  onBack?: () => void;
   /** Open one saved part on the bench by itself; saving there brings it back to the library. */
   onEditPart: (favorite: Favorite, soup: Float32Array) => void | Promise<void>;
 }) {
@@ -176,15 +177,17 @@ export function CollectionsView({
     <div className="flex min-h-full flex-col gap-2">
       <div className={`${PANEL} flex flex-col gap-2 px-2 py-2`}>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex min-h-9 items-center gap-1 rounded px-1.5 text-[0.75rem] font-bold text-[var(--wb-ink-mute)] hover:bg-[var(--wb-tool-hover)]"
-            onClick={onBack}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            3dwork
-          </button>
-          <span className="text-sm font-bold text-[var(--wb-ink)]">Söfn</span>
+          {onBack && (
+            <button
+              type="button"
+              className="inline-flex min-h-9 items-center gap-1 rounded px-1.5 text-[0.75rem] font-bold text-[var(--wb-ink-mute)] hover:bg-[var(--wb-tool-hover)]"
+              onClick={onBack}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              3dwork
+            </button>
+          )}
+          <span className={`text-sm font-bold text-[var(--wb-ink)] ${onBack ? '' : 'px-1'}`}>Söfn</span>
           {busy && (
             <span className="ml-auto flex min-w-0 items-center gap-1 truncate text-[0.7rem] text-[var(--wb-ink-mute)]">
               <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />

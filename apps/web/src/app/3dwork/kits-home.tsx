@@ -1,15 +1,13 @@
 'use client';
 
 /**
- * First paint of 3dwork — the start page: your projects first, then the
- * Partasafn with room to sort it (collections, layers you switch on and off,
- * planning boards for pictures of fittings, categories, printed / made /
- * bought), and buttons to start a build, bring part files into one, or open
- * the bench. STL / 3MF dropped on the Partasafn go straight into the library,
- * no board needed; a saved part opens on the bench to be changed and saved back.
- *
- * Söfn shows one collection as a showcase — the parts assembled at the top,
- * the parts by layer below — and a part opened from there comes back there.
+ * First paint of 3dwork — the start page: one collection as a showcase first
+ * (Söfn: the parts assembled as an AR-15, the parts by layer underneath — open
+ * one, change it, save and close), then the Partasafn with room to sort it
+ * (collections, layers you switch on and off, planning boards for pictures of
+ * fittings, categories, printed / made / bought), and recent work small at the
+ * bottom (17.10.2026: "not that important"). STL / 3MF dropped on the page go
+ * straight into the library, no board needed.
  *
  * The 3D bench (Three.js / WebGL) is a separate chunk, so this page stays light
  * until the bench is asked for.
@@ -17,7 +15,7 @@
 
 import dynamic from 'next/dynamic';
 import { useRef, useState } from 'react';
-import { Boxes, ChevronDown, Cloud, LayoutGrid, Library, Plus, Upload } from 'lucide-react';
+import { Boxes, ChevronDown, Cloud, Library, Plus, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Favorite } from '@/lib/3dwork/favorites';
 import { isPartFile, PART_FILE_ACCEPT } from '@/lib/3dwork/import-part';
@@ -74,8 +72,6 @@ export function KitsHome() {
   const [showDrive, setShowDrive] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [showKits, setShowKits] = useState(false);
-  // The start page itself, or Söfn; kept while the bench is open, so a part opened from Söfn comes back there.
-  const [view, setView] = useState<'home' | 'sofn'>('home');
   // Bumped on the way back from the bench, so the projects and the library are read again.
   const [visit, setVisit] = useState(0);
   const importInput = useRef<HTMLInputElement | null>(null);
@@ -143,16 +139,6 @@ export function KitsHome() {
         libraryEdit={libraryEdit}
         onExit={goHome}
       />
-    );
-  }
-
-  if (view === 'sofn') {
-    return (
-      <div className="wb-theme h-dvh overflow-y-auto bg-[var(--wb-ground)] text-[var(--wb-ink)]">
-        <div className="min-h-full p-2">
-          <CollectionsView key={`sofn-${visit}`} onBack={() => setView('home')} onEditPart={editPart} />
-        </div>
-      </div>
     );
   }
 
@@ -226,34 +212,10 @@ export function KitsHome() {
               <Library className="h-3.5 w-3.5" />
               Partasafn
             </button>
-            <button
-              type="button"
-              className={`${TOP_BUTTON} border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100`}
-              onClick={() => setView('sofn')}
-              title="Eitt safn í einu: partarnir samsettir efst og hver partur fyrir neðan — opna einn, breyta, vista og loka"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Söfn
-            </button>
           </div>
         </div>
 
-        <div className={`${PANEL} p-3`}>
-          <RecentBuilds
-            key={`builds-${visit}`}
-            onOpen={(entry) => {
-              // A build this computer has opens from its own copy, and the bench
-              // still checks Supabase for a newer one; one made elsewhere comes
-              // straight from Supabase.
-              if (entry.local) {
-                rememberOpenProject(entry.id);
-              } else {
-                setPendingCloudId(entry.id);
-              }
-              setEngine('bench');
-            }}
-          />
-        </div>
+        <CollectionsView key={`sofn-${visit}`} onEditPart={editPart} />
 
         <div ref={libraryRef} className="scroll-mt-2 md:h-[calc(100dvh-1rem)] md:min-h-[560px]">
           <PartsLibrary
@@ -288,6 +250,24 @@ export function KitsHome() {
               />
             </div>
           )}
+        </div>
+
+        <div className={`${PANEL} p-2`}>
+          <RecentBuilds
+            key={`builds-${visit}`}
+            compact
+            onOpen={(entry) => {
+              // A build this computer has opens from its own copy, and the bench
+              // still checks Supabase for a newer one; one made elsewhere comes
+              // straight from Supabase.
+              if (entry.local) {
+                rememberOpenProject(entry.id);
+              } else {
+                setPendingCloudId(entry.id);
+              }
+              setEngine('bench');
+            }}
+          />
         </div>
       </div>
 
