@@ -5,13 +5,14 @@
  * óstaðsett tæki staðarins eða „ótengt" (verða Nýtt við „Vista í úttekt"); skilti við hvern stað. Tæki sem þegar stendur
  * við staðinn (handvirkt eða úr fyrri lestri) þjónar honum, svo endurkeyrsla tvítekur ekkert. */
 
+import { teljaBunad, type BunadurStadur } from "./bunadur-lestur";
 import { newId } from "./ids";
 import { LAYER_ALMENNT } from "./layers";
 import { makeSymbol } from "./markup-kit";
-import { symbolIdLykils } from "./merkjasafn";
+import { lykillTakns, STIMPIL_LYKILL, stimpillSigns, symbolIdLykils } from "./merkjasafn";
 import { isMvsMark } from "./mvs165";
 import { stadsettirLyklar, TaekjaSjodur, takaFraFyrirTegund, TEGUND_HEITI, type TaekjaTegund } from "./sjalftenging";
-import { aetlaSltBrsl, DRAEGI_SLONGU_M, type SbStadur, type SbTaekiABord } from "./slt-brsl";
+import { aetlaSltBrsl, DRAEGI_SLONGU_M, type SbStadur, type SbTaekiABord, type SkiltiStadur } from "./slt-brsl";
 import type { BoardObject, EllipseObject, ImageObject, StickyObject, SymbolObject } from "./types";
 import { OTENGT_MIDI, stuttNumer, symbolFyrirTegund, type UttektHaed, type UttektTaeki } from "./uttekt";
 
@@ -19,6 +20,10 @@ export interface SltBrslTeikning {
   plan: ImageObject;
   /** Staðirnir í BORÐHNITUM (slt-brsl.ts stadirABord). */
   stadir: SbStadur[];
+  /** Búnaður í römmum (R / S / H / B) í BORÐHNITUM — 15.10.2026. */
+  bunadur?: BunadurStadur[];
+  /** Skilti úr orðum (BO, ÚT) í BORÐHNITUM — 15.10.2026. */
+  skilti?: SkiltiStadur[];
   /** Stærð tækjatákns á þessari teikningu (borðeiningar) og borðeiningar á metra. */
   staerd: number;
   metri: number;
@@ -33,6 +38,12 @@ export interface SltBrslSamantekt {
   fyrir: number;
   /** Tegundir ótengdra (verða Nýtt við vistun ef engin tæki bætast við). */
   otengdTegundir: Partial<Record<TaekjaTegund, number>>;
+  /** Búnaður úr römmum sem var settur (eftir tegund) og hve margir staðir áttu tákn fyrir. */
+  bunadur: Partial<Record<TaekjaTegund, number>>;
+  bunadurFyrir: number;
+  /** Skilti úr orðum sem voru sett (bjorgunarop / ut) og hve mörg áttu skilti fyrir. */
+  skilti: Partial<Record<"bjorgunarop" | "ut", number>>;
+  skiltiFyrir: number;
 }
 
 function draegiHringur(cx: number, cy: number, r: number, nafn: string, parentId: string): EllipseObject {
@@ -105,6 +116,8 @@ export function beitaSltBrsl(
     for (const t of aetlun.taeki) ny.push(taeknTakn(t, plan, s));
     // skilti (hönnunarmerki 165.BR1 — vistast ekki): yfir slöngunni / slökkvitækinu
     const sk = Math.max(8, Math.round(s * 0.62));
+    // stimplar úr orðum (BO / ÚT) eru í stærð tækjatákns — eins og stimpill sem er settur af slánni
+    const sk2 = s;
     stadir.forEach((stadur, i) => {
       const n = i + 1;
       if (stadur.brsl) {
@@ -123,6 +136,40 @@ export function beitaSltBrsl(
     const tengd = aetlun.taeki.flatMap((t) => (t.taeki ? [{ hvad: t.hvad, unitId: t.taeki.id, serial: t.taeki.serial, type: t.taeki.type }] : []));
     const otengdTegundir: Partial<Record<TaekjaTegund, number>> = {};
     for (const t of aetlun.taeki) if (!t.taeki) otengdTegundir[t.tegund] = (otengdTegundir[t.tegund] ?? 0) + 1;
+    // Búnaður í römmum (R / S / H / B): tákn AF TEGUND (ekki stimpill — engin uttektSign), svo „Vista í úttekt“ tengi það
+    // skráðu tæki sömu tegundar (reykskynjarar eru tæki í uttaeki) eða geri það Nýtt. Tákn með sama lykli innan seilingar
+    // (búnaður ÚR fyrri lestri, eða skilti sem Agnar setti) þjónar staðnum — endurkeyrsla tvítekur ekkert.
+    const seiling = 2 * metri;
+    const naerTakn = (p: { x: number; y: number }, lykill: string, sign?: string) =>
+      [...eftir, ...ny].some((o) => {
+        if (o.type !== "symbol" || o.hidden || !innan(o)) return false;
+        const sami = lykillTakns(o.symbolId) === lykill || (!!sign && o.uttektSign === sign);
+        return sami && Math.hypot(o.x + o.size / 2 - p.x, o.y + o.size / 2 - p.y) <= seiling;
+      });
+    const settBunadur: BunadurStadur[] = [];
+    let bunadurFyrir = 0;
+    for (const b of tk.bunadur ?? []) {
+      if (naerTakn(b, b.tegund)) {
+        bunadurFyrir++;
+        continue;
+      }
+      const o = makeSymbol(symbolIdLykils(b.tegund), b.x - s / 2, b.y - s / 2, OTENGT_MIDI, s);
+      ny.push({ ...o, parentId: plan.id, layerId: LAYER_ALMENNT, uttektPx: s });
+      settBunadur.push(b);
+    }
+    // Skilti úr orðum (BO, ÚT): stimplar Teikning-gluggans — vistast sem merki (kind: sign)
+    const skiltiTalning: Partial<Record<"bjorgunarop" | "ut", number>> = {};
+    let skiltiFyrir = 0;
+    for (const sk of tk.skilti ?? []) {
+      const lykill = STIMPIL_LYKILL[sk.sign] ?? sk.sign;
+      if (naerTakn(sk, lykill, sk.sign)) {
+        skiltiFyrir++;
+        continue;
+      }
+      const o = makeSymbol(symbolIdLykils(lykill), sk.x - sk2 / 2, sk.y - sk2 / 2, "", sk2);
+      ny.push({ ...o, parentId: plan.id, layerId: LAYER_ALMENNT, uttektKind: "sign", uttektSign: stimpillSigns(sk.sign)?.id ?? sk.sign, uttektPx: sk2 });
+      skiltiTalning[sk.sign] = (skiltiTalning[sk.sign] ?? 0) + 1;
+    }
     const sam: SltBrslSamantekt = {
       plan,
       brsl: stadir.filter((x) => x.brsl).length,
@@ -134,6 +181,10 @@ export function beitaSltBrsl(
       },
       fyrir: aetlun.fyrir.length,
       otengdTegundir,
+      bunadur: teljaBunad(settBunadur),
+      bunadurFyrir,
+      skilti: skiltiTalning,
+      skiltiFyrir,
     };
     samantekt.push(sam);
     ny.push(yfirlitsmidi(sam));
@@ -148,15 +199,21 @@ function yfirlitsmidi(s: SltBrslSamantekt): StickyObject {
   const otengdTexti = (Object.keys(s.otengdTegundir) as TaekjaTegund[])
     .map((k) => `${TEGUND_HEITI[k]} ${s.otengdTegundir[k]}`)
     .join(", ");
+  const bunTexti = (Object.keys(s.bunadur) as TaekjaTegund[]).map((k) => `${s.bunadur[k]} ${TEGUND_HEITI[k].toLowerCase()}`).join(", ");
+  const bunFj = Object.values(s.bunadur).reduce((a, n) => a + (n ?? 0), 0);
+  const skiltiFj = (s.skilti.bjorgunarop ?? 0) + (s.skilti.ut ?? 0);
   const lines = [
-    "SLT / BRSL af teikningu",
+    "Búnaður af teikningu",
     `${s.brsl} brunaslöngur (BRSL) · ${s.slt} slökkvitæki (SLT)`,
     `Tengd við tæki staðarins: ${tSlongur} slöngur, ${tSlt} slökkvitæki (bráðabirgða — tákn með tegund ganga fyrir við vistun)`,
     s.otengd.brsl + s.otengd.slt
       ? `Ótengt: ${s.otengd.brsl + s.otengd.slt} (${otengdTexti}) — verða „Nýtt" (í bið) við „Vista í úttekt" nema tæki bætist við`
       : "Öll tækin tengd skráðum tækjum.",
     s.fyrir ? `${s.fyrir} staðir áttu tæki fyrir — ekkert tvítekið.` : "",
-    "Skilti eru hönnunarmerki (165.BR1) og vistast ekki. ⌘Z afturkallar allt.",
+    bunFj ? `Búnaður í römmum: ${bunTexti} — tengist skráðum tækjum við vistun, annars Nýtt.` : "",
+    s.bunadurFyrir ? `${s.bunadurFyrir} rammar áttu tákn fyrir.` : "",
+    skiltiFj ? `Skilti: ${s.skilti.bjorgunarop ? `${s.skilti.bjorgunarop} björgunarop` : ""}${s.skilti.bjorgunarop && s.skilti.ut ? ", " : ""}${s.skilti.ut ? `${s.skilti.ut} ÚT` : ""}.` : "",
+    "SLT/BRSL-skilti eru hönnunarmerki (165.BR1) og vistast ekki. ⌘Z afturkallar allt.",
   ].filter(Boolean);
   return {
     id: newId(),

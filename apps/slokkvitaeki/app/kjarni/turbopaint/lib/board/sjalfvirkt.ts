@@ -38,6 +38,7 @@ import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
 import { greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
 import { beitaSltBrsl } from "./slt-brsl-bord";
 import { sltBrslUrTexta } from "./slt-brsl-lestur";
+import { TEGUND_HEITI } from "./sjalftenging";
 import { newId, useBoardStore } from "./store";
 import { lesaPdfSidu, type PdfSida } from "./strip";
 import { getSupabase, supabaseUrl } from "./supabase";
@@ -751,9 +752,22 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
     useBoardStore.setState({ objects: b.objects, selectedIds: [] });
     const brsl = b.samantekt.reduce((s, x) => s + x.brsl, 0), slt = b.samantekt.reduce((s, x) => s + x.slt, 0);
     const tengd = b.samantekt.reduce((s, x) => s + x.tengd.length, 0), fyrirT = b.samantekt.reduce((s, x) => s + x.fyrir, 0);
-    taekiFj = brsl + slt;
-    talning.taeki = { brsl, slt, tengd, fyrir: fyrirT };
-    ljuka("taeki", brsl || slt ? `${brsl} BRSL · ${slt} SLT á táknin · ${tengd} tengd við tæki staðarins` + (fyrirT ? ` · ${fyrirT} áttu tæki fyrir` : "") : "Engin SLT / BRSL á teikningunni");
+    // 15.10.2026: búnaður í römmum (R / S / H / B) og skilti (BO / ÚT) telja með
+    const bunadur: Record<string, number> = {};
+    for (const x of b.samantekt) for (const [k, n] of Object.entries(x.bunadur)) bunadur[k] = (bunadur[k] ?? 0) + (n ?? 0);
+    const bunFj = Object.values(bunadur).reduce((s, n) => s + n, 0);
+    const skilti = b.samantekt.reduce((s, x) => s + (x.skilti.bjorgunarop ?? 0) + (x.skilti.ut ?? 0), 0);
+    taekiFj = brsl + slt + bunFj;
+    talning.taeki = { brsl, slt, tengd, fyrir: fyrirT, bunadur, skilti };
+    const bunTexti = Object.entries(bunadur).map(([k, n]) => `${n} ${(TEGUND_HEITI as Record<string, string>)[k]?.toLowerCase() ?? k}`).join(", ");
+    ljuka(
+      "taeki",
+      brsl || slt || bunFj || skilti
+        ? [brsl || slt ? `${brsl} BRSL · ${slt} SLT á táknin · ${tengd} tengd við tæki staðarins` + (fyrirT ? ` · ${fyrirT} áttu tæki fyrir` : "") : "", bunFj ? `búnaður: ${bunTexti}` : "", skilti ? `${skilti} skilti (BO / ÚT)` : ""]
+            .filter(Boolean)
+            .join(" · ")
+        : "Engin SLT / BRSL, búnaður né skilti á teikningunni"
+    );
   } catch (err) {
     villa("taeki", err, "engin tæki sett");
   }

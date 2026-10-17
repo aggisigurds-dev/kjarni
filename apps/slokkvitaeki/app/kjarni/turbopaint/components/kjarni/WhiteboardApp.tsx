@@ -473,6 +473,15 @@ export function WhiteboardApp() {
         for (const [k, n] of Object.entries(x.otengdTegundir) as [TaekjaTegund, number][]) otengdT[k] = (otengdT[k] ?? 0) + n;
       }
       const otengd = Object.values(otengdT).reduce((s, n) => s + (n ?? 0), 0);
+      // 15.10.2026: búnaður í römmum (R / S / H / B) og skilti (BO / ÚT) — talið með (Agnar: „sjá hvað það eru margir
+      // reykskynjarar og búnaður í húsinu")
+      const bunadurT: Partial<Record<TaekjaTegund, number>> = {};
+      for (const x of b.samantekt) {
+        for (const [k, n] of Object.entries(x.bunadur) as [TaekjaTegund, number][]) bunadurT[k] = (bunadurT[k] ?? 0) + n;
+      }
+      const bunadur = Object.values(bunadurT).reduce((s, n) => s + (n ?? 0), 0);
+      const bunadurFyrir = b.samantekt.reduce((s, x) => s + x.bunadurFyrir, 0);
+      const skilti = b.samantekt.reduce((s, x) => s + (x.skilti.bjorgunarop ?? 0) + (x.skilti.ut ?? 0), 0);
       console.info(
         "[SLT] " +
           JSON.stringify({
@@ -482,11 +491,18 @@ export function WhiteboardApp() {
             tengd: b.samantekt.flatMap((x) => x.tengd.map((t) => [t.hvad, t.unitId, t.serial])),
             otengd: otengdT,
             fyrir,
+            bunadur: bunadurT,
+            bunadurFyrir,
+            skilti: b.samantekt.map((x) => x.skilti),
             fjarlaegd: b.fjarlaegd,
           })
       );
-      if (!brsl && !slt) {
-        toast.message("Fann engin SLT / BRSL á teikningunni" + (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : ""));
+      if (!brsl && !slt && !bunadur && !skilti) {
+        toast.message(
+          "Fann engin SLT / BRSL, búnað í römmum né skilti á teikningunni" +
+            (bunadurFyrir ? ` · ${bunadurFyrir} rammar áttu tákn fyrir` : "") +
+            (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : "")
+        );
         return;
       }
       toast.success(
@@ -496,9 +512,14 @@ export function WhiteboardApp() {
             ? ` · ${otengd} ótengd (${(Object.keys(otengdT) as TaekjaTegund[]).map((k) => `${TEGUND_HEITI[k]} ${otengdT[k]}`).join(", ")}) — verða „Nýtt“ við vistun`
             : "") +
           (fyrir ? ` · ${fyrir} áttu tæki fyrir` : "") +
+          (bunadur
+            ? ` · búnaður: ${(Object.keys(bunadurT) as TaekjaTegund[]).map((k) => `${bunadurT[k]} ${TEGUND_HEITI[k].toLowerCase()}`).join(", ")} (tengist tækjum við vistun, annars Nýtt)`
+            : "") +
+          (bunadurFyrir ? ` · ${bunadurFyrir} rammar áttu tákn fyrir` : "") +
+          (skilti ? ` · ${skilti} skilti (BO / ÚT)` : "") +
           (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : "") +
           " · ⌘Z afturkallar",
-        { duration: 8000 }
+        { duration: 9000 }
       );
     } catch (err) {
       useBoardStore.getState().setImportProgress(null);
