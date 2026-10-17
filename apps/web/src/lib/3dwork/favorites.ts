@@ -43,6 +43,55 @@ export interface LibraryCollection {
   id: string;
   name: string;
   createdAt: number;
+  /** Its own sub-categories, named by the user (e.g. Innvols, Bodyparts, Íhlutir). */
+  sections?: LibrarySection[];
+}
+
+/** Where a real part stands: printed, made (machined, cut, turned) or bought. */
+export type PartStatus = 'printed' | 'made' | 'bought';
+
+export const PART_STATUSES: { id: PartStatus; label: string }[] = [
+  { id: 'printed', label: 'Prentað' },
+  { id: 'made', label: 'Smíðað' },
+  { id: 'bought', label: 'Keypt' },
+];
+
+export function isPartStatus(value: unknown): value is PartStatus {
+  return value === 'printed' || value === 'made' || value === 'bought';
+}
+
+/**
+ * A sub-category inside a collection: parts sorted under it, or a board — a
+ * planning wall of pasted pictures (fittings to buy, references) and notes.
+ */
+export interface LibrarySection {
+  id: string;
+  name: string;
+  kind: 'parts' | 'board';
+  createdAt: number;
+}
+
+/** Something pinned on a board: a picture (its bytes in the bucket) or a note, where it was put. */
+export interface BoardPin {
+  id: string;
+  kind: 'image' | 'note';
+  /** Picture: the bucket file (`ver_…`, stored as octet-stream like the meshes), its type and size. */
+  image?: string;
+  mime?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  /** A picture's caption, or a note's text. */
+  text: string;
+  /** Top-left corner and width on the board, in board pixels. */
+  x: number;
+  y: number;
+  width: number;
+  color?: string;
+  /** For a fitting or part pictured: printed, made or bought. */
+  status?: PartStatus;
+  /** Taken off the board: kept, like a part taken off the shelf. */
+  hidden?: boolean;
+  createdAt: number;
 }
 
 /** The category of a part in a build, kept in the library; name and size find it again in another build. */
@@ -54,6 +103,8 @@ export interface BuildCategoryRecord extends CategoryMark {
 /** The library's document: a project whose parts are the saved parts, plus the collections and build categories. */
 export interface Shelf extends Project {
   collections?: LibraryCollection[];
+  /** Board pins by board section id. */
+  boards?: Record<string, BoardPin[]>;
   /** By `projectId/partId`. */
   buildCategories?: Record<string, BuildCategoryRecord>;
 }
@@ -71,6 +122,9 @@ export interface Favorite {
   /** Shown under Uppáhalds. */
   starred: boolean;
   collectionId: string;
+  /** Its sub-category in the collection, if sorted under one. */
+  sectionId?: string;
+  status?: PartStatus;
   category?: CategoryMark;
   addedAt: number;
 }
@@ -79,6 +133,8 @@ export interface Favorite {
 export interface LibrarySnapshot {
   favorites: Favorite[];
   collections: LibraryCollection[];
+  /** Visible pins by board section id. */
+  boards: Record<string, BoardPin[]>;
   buildCategories: Record<string, BuildCategoryRecord>;
 }
 
@@ -94,6 +150,8 @@ export interface FavoriteCard {
   collectionId?: string;
   /** Make a new collection under this name and save into it. */
   newCollectionName?: string;
+  /** Sort it under this sub-category of the collection. */
+  sectionId?: string;
   category?: CategoryMark;
 }
 
@@ -128,7 +186,18 @@ export function normalizeShelf(shelf: Shelf): Shelf {
   for (const entry of Array.isArray(shelf.collections) ? shelf.collections : []) {
     if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string') continue;
     if (collections.some((kept) => kept.id === entry.id)) continue;
-    collections.push({ id: entry.id, name: entry.name, createdAt: Number(entry.createdAt) || 0 });
+    const sections: LibrarySection[] = [];
+    for (const section of Array.isArray(entry.sections) ? entry.sections : []) {
+      if (!section || typeof section.id !== 'string' || typeof section.name !== 'string') continue;
+      if (sections.some((kept) => kept.id === section.id)) continue;
+      sections.push({
+        id: section.id,
+        name: section.name,
+        kind: section.kind === 'board' ? 'board' : 'parts',
+        createdAt: Number(section.createdAt) || 0,
+      });
+    }
+    collections.push({ id: entry.id, name: entry.name, createdAt: Number(entry.createdAt) || 0, ...(sections.length ? { sections } : {}) });
   }
   if (collections.length === 0) collections.push(defaultCollection());
   const ids = new Set(collections.map((entry) => entry.id));
@@ -141,13 +210,26 @@ export function normalizeShelf(shelf: Shelf): Shelf {
     buildCategories[key] = { ...mark, name: String(record.name ?? ''), triangles: Number(record.triangles) || 0 };
   }
 
+  const boards: Record<string, BoardPin[]> = {};
+  for (const [key, pins] of Object.entries(shelf.boards ?? {})) {
+    if (!Array.isArray(pins)) continue;
+    boards[key] = pins.filter(
+      (pin) => pin && typeof pin.id === 'string' && (pin.kind === 'image' || pin.kind === 'note') && Number.isFinite(pin.x)
+    );
+  }
+  // A part's sub-category belongs to its collection; one that is not there any more is dropped.
+  const sectionsOf = new Map(collections.map((entry) => [entry.id, new Set((entry.sections ?? []).map((s) => s.id))]));
+
   return {
     ...shelf,
     collections,
     buildCategories,
-    parts: shelf.parts.map((part) =>
-      part.collectionId && ids.has(part.collectionId) ? part : { ...part, collectionId: fallback }
-    ),
+    boards,
+    parts: shelf.parts.map((part) => {
+      const collectionId = part.collectionId && ids.has(part.collectionId) ? part.collectionId : fallback;
+      const sectionId = part.sectionId && sectionsOf.get(collectionId)?.has(part.sectionId) ? part.sectionId : undefined;
+      return { ...part, collectionId, sectionId };
+    }),
   };
 }
 
@@ -174,6 +256,7 @@ export function shelfPart(card: FavoriteCard, soup: Float32Array, now = Date.now
     thumbnail: card.thumbnail,
     starred: card.starred ?? false,
     collectionId: card.collectionId,
+    sectionId: card.sectionId,
     ...categoryFields(card.category),
     addedAt: now,
   };
@@ -195,6 +278,8 @@ export function favoritesOf(shelf: Shelf): Favorite[] {
       // Saved before the library had stars: those were all favourites.
       starred: part.starred ?? true,
       collectionId: part.collectionId ?? DEFAULT_COLLECTION_ID,
+      sectionId: part.sectionId,
+      status: isPartStatus(part.status) ? part.status : undefined,
       category: readMark(part.category, part.categoryAuto),
       addedAt: part.addedAt,
     }))
@@ -207,6 +292,9 @@ export function librarySnapshot(shelf: Shelf): LibrarySnapshot {
     favorites: favoritesOf(normal),
     collections: normal.collections ?? [],
     buildCategories: normal.buildCategories ?? {},
+    boards: Object.fromEntries(
+      Object.entries(normal.boards ?? {}).map(([key, pins]) => [key, pins.filter((pin) => !pin.hidden)])
+    ),
   };
 }
 
@@ -254,7 +342,7 @@ export function withCollectionDeleted(shelf: Shelf, id: string, moveTo: string |
     collections: collections.filter((entry) => entry.id !== id),
     parts: normal.parts.map((part) => {
       if (part.collectionId !== id) return part;
-      return moveTo === null ? { ...part, visible: false } : { ...part, collectionId: moveTo };
+      return moveTo === null ? { ...part, visible: false } : { ...part, collectionId: moveTo, sectionId: undefined };
     }),
   };
 }
@@ -266,7 +354,95 @@ export function withFavoriteMoved(shelf: Shelf, partId: string, collectionId: st
   }
   return {
     ...normal,
-    parts: normal.parts.map((part) => (part.id === partId ? { ...part, collectionId } : part)),
+    // Sub-categories are the collection's own, so a move leaves the old one behind.
+    parts: normal.parts.map((part) =>
+      part.id === partId
+        ? { ...part, collectionId, sectionId: part.collectionId === collectionId ? part.sectionId : undefined }
+        : part
+    ),
+  };
+}
+
+// ── Sub-categories (layers) and boards ──────────────────────────────────────
+
+function mapCollection(shelf: Shelf, collectionId: string, change: (entry: LibraryCollection) => LibraryCollection): Shelf {
+  const normal = normalizeShelf(shelf);
+  if (!(normal.collections ?? []).some((entry) => entry.id === collectionId)) throw new Error('Það safn er ekki til.');
+  return {
+    ...normal,
+    collections: (normal.collections ?? []).map((entry) => (entry.id === collectionId ? change(entry) : entry)),
+  };
+}
+
+/** A new sub-category in a collection: for parts, or a board for pictures and notes. */
+export function withSectionAdded(
+  shelf: Shelf,
+  collectionId: string,
+  name: string,
+  kind: LibrarySection['kind'],
+  id = shelfId('sec'),
+  now = Date.now()
+): { shelf: Shelf; section: LibrarySection } {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('Undirflokkur þarf nafn.');
+  const section: LibrarySection = { id, name: trimmed, kind, createdAt: now };
+  return {
+    shelf: mapCollection(shelf, collectionId, (entry) => ({ ...entry, sections: [...(entry.sections ?? []), section] })),
+    section,
+  };
+}
+
+export function withSectionRenamed(shelf: Shelf, collectionId: string, sectionId: string, name: string): Shelf {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('Undirflokkur þarf nafn.');
+  return mapCollection(shelf, collectionId, (entry) => ({
+    ...entry,
+    sections: (entry.sections ?? []).map((section) => (section.id === sectionId ? { ...section, name: trimmed } : section)),
+  }));
+}
+
+/** Remove a sub-category. Its parts stay in the collection, unsorted; a board's pins are kept in the document. */
+export function withSectionDeleted(shelf: Shelf, collectionId: string, sectionId: string): Shelf {
+  const next = mapCollection(shelf, collectionId, (entry) => ({
+    ...entry,
+    sections: (entry.sections ?? []).filter((section) => section.id !== sectionId),
+  }));
+  return { ...next, parts: next.parts.map((part) => (part.sectionId === sectionId ? { ...part, sectionId: undefined } : part)) };
+}
+
+/** Sort a saved part under a parts sub-category of its own collection, or take it out of one (null). */
+export function withFavoriteSection(shelf: Shelf, partId: string, sectionId: string | null): Shelf {
+  const normal = normalizeShelf(shelf);
+  const part = normal.parts.find((entry) => entry.id === partId);
+  if (!part) return normal;
+  if (sectionId !== null) {
+    const collection = (normal.collections ?? []).find((entry) => entry.id === part.collectionId);
+    const section = collection?.sections?.find((entry) => entry.id === sectionId);
+    if (!section || section.kind !== 'parts') throw new Error('Sá undirflokkur er ekki í safni partsins.');
+  }
+  return {
+    ...normal,
+    parts: normal.parts.map((entry) => (entry.id === partId ? { ...entry, sectionId: sectionId ?? undefined } : entry)),
+  };
+}
+
+export function withPinAdded(shelf: Shelf, sectionId: string, pin: BoardPin): Shelf {
+  const normal = normalizeShelf(shelf);
+  const boards = normal.boards ?? {};
+  return { ...normal, boards: { ...boards, [sectionId]: [...(boards[sectionId] ?? []), pin] } };
+}
+
+export function withPinChanged(shelf: Shelf, sectionId: string, pinId: string, change: Partial<BoardPin>): Shelf {
+  const normal = normalizeShelf(shelf);
+  const boards = normal.boards ?? {};
+  return {
+    ...normal,
+    boards: {
+      ...boards,
+      [sectionId]: (boards[sectionId] ?? []).map((pin) =>
+        pin.id === pinId ? { ...pin, ...change, id: pin.id, kind: pin.kind } : pin
+      ),
+    },
   };
 }
 
@@ -426,6 +602,34 @@ export async function addFavorite(card: FavoriteCard, soup: Float32Array): Promi
   return favoritesOf({ ...shelf, parts: [part] })[0];
 }
 
+/**
+ * A saved part changed on the bench: its new mesh becomes a new version (the
+ * old one stays in the bucket and in the part's version list), with a fresh picture.
+ */
+export async function updateFavoriteMesh(id: string, soup: Float32Array, thumbnail?: string): Promise<void> {
+  const { shelf, manifest } = await fetchShelf();
+  const part = shelf.parts.find((entry) => entry.id === id);
+  if (!part) throw new Error('Sá partur er ekki lengur í Partasafninu.');
+  const versionId = shelfId('ver');
+  const triangles = Math.floor(soup.length / 9);
+  const { error } = await client()
+    .storage.from(WORK3D_BUCKET)
+    .upload(`${FAVORITES_ID}/${versionId}.bin`, soup.slice().buffer, { contentType: 'application/octet-stream', upsert: true });
+  if (error) throw new Error(error.message);
+  const version = { id: versionId, label: `v${part.versions.length + 1} breytt`, note: 'Breytt á bekknum', triangles, createdAt: Date.now() };
+  await storeShelf(
+    {
+      ...shelf,
+      parts: shelf.parts.map((entry) =>
+        entry.id === id
+          ? { ...entry, versions: [...entry.versions, version], activeVersionId: versionId, triangles, thumbnail: thumbnail ?? entry.thumbnail }
+          : entry
+      ),
+    },
+    { ...manifest, ...buildManifest([[versionId, soup]]) }
+  );
+}
+
 /** Change one part on the shelf and store it back. */
 async function changeOnShelf(id: string, change: (part: Part) => Part): Promise<void> {
   await changeShelf((shelf) => ({ ...shelf, parts: shelf.parts.map((part) => (part.id === id ? change(part) : part)) }));
@@ -441,6 +645,11 @@ export function renameFavorite(id: string, name: string): Promise<void> {
   const trimmed = name.trim();
   if (!trimmed) return Promise.reject(new Error('A part needs a name.'));
   return changeOnShelf(id, (part) => ({ ...part, name: trimmed }));
+}
+
+/** Mark a saved part printed, made or bought — or clear it (null). */
+export function setFavoriteStatus(id: string, status: PartStatus | null): Promise<void> {
+  return changeOnShelf(id, (part) => ({ ...part, status: status ?? undefined }));
 }
 
 /** Put a part in the library under Uppáhalds, or take it out of there. */
@@ -475,6 +684,91 @@ export async function moveFavorite(id: string, collectionId: string): Promise<vo
 export async function setCategories(updates: CategoryUpdate[]): Promise<void> {
   if (updates.length === 0) return;
   await changeShelf((shelf) => withCategories(shelf, updates));
+}
+
+export async function createSection(
+  collectionId: string,
+  name: string,
+  kind: LibrarySection['kind']
+): Promise<LibrarySection> {
+  let made: LibrarySection | undefined;
+  await changeShelf((shelf) => {
+    const result = withSectionAdded(shelf, collectionId, name, kind);
+    made = result.section;
+    return result.shelf;
+  });
+  return made!;
+}
+
+export async function renameSection(collectionId: string, sectionId: string, name: string): Promise<void> {
+  await changeShelf((shelf) => withSectionRenamed(shelf, collectionId, sectionId, name));
+}
+
+export async function deleteSection(collectionId: string, sectionId: string): Promise<void> {
+  await changeShelf((shelf) => withSectionDeleted(shelf, collectionId, sectionId));
+}
+
+export async function moveFavoriteToSection(id: string, sectionId: string | null): Promise<void> {
+  await changeShelf((shelf) => withFavoriteSection(shelf, id, sectionId));
+}
+
+/** Pin a picture on a board: its bytes into the bucket (as octet-stream, like the meshes), the pin into the document. */
+export async function addBoardPicture(
+  sectionId: string,
+  picture: Blob,
+  size: { width: number; height: number },
+  place: { x: number; y: number; width: number },
+  text = ''
+): Promise<BoardPin> {
+  const image = shelfId('ver');
+  const { error } = await client()
+    .storage.from(WORK3D_BUCKET)
+    .upload(`${FAVORITES_ID}/${image}.bin`, await picture.arrayBuffer(), {
+      contentType: 'application/octet-stream',
+      upsert: true,
+    });
+  if (error) throw new Error(error.message);
+  const pin: BoardPin = {
+    id: shelfId('pin'),
+    kind: 'image',
+    image,
+    mime: picture.type || 'image/webp',
+    naturalWidth: size.width,
+    naturalHeight: size.height,
+    text,
+    ...place,
+    createdAt: Date.now(),
+  };
+  await changeShelf((shelf) => withPinAdded(shelf, sectionId, pin));
+  return pin;
+}
+
+export async function addBoardNote(
+  sectionId: string,
+  text: string,
+  place: { x: number; y: number; width: number },
+  color = '#fde68a'
+): Promise<BoardPin> {
+  const pin: BoardPin = { id: shelfId('pin'), kind: 'note', text, color, ...place, createdAt: Date.now() };
+  await changeShelf((shelf) => withPinAdded(shelf, sectionId, pin));
+  return pin;
+}
+
+export async function changeBoardPin(sectionId: string, pinId: string, change: Partial<BoardPin>): Promise<void> {
+  await changeShelf((shelf) => withPinChanged(shelf, sectionId, pinId, change));
+}
+
+/** Take a pin off the board: hidden, not erased. */
+export function removeBoardPin(sectionId: string, pinId: string): Promise<void> {
+  return changeBoardPin(sectionId, pinId, { hidden: true });
+}
+
+/** A board picture from the bucket, as a Blob of its own type. */
+export async function loadBoardPicture(pin: BoardPin): Promise<Blob | null> {
+  if (!pin.image) return null;
+  const { data, error } = await client().storage.from(WORK3D_BUCKET).download(`${FAVORITES_ID}/${pin.image}.bin`);
+  if (error || !data) return null;
+  return new Blob([await data.arrayBuffer()], { type: pin.mime || 'image/webp' });
 }
 
 /** The mesh of a favourite, from the bucket; null when the bucket has no such file. */

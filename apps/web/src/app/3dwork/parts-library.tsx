@@ -35,8 +35,10 @@ import {
   Plus,
   Search,
   Star,
+  SquarePen,
   Trash2,
   Undo2,
+  Upload,
   Wand2,
   X,
 } from 'lucide-react';
@@ -57,8 +59,17 @@ import {
   addFavorite,
   buildCategoryLookup,
   createCollection,
+  createSection,
   DEFAULT_COLLECTION_ID,
   deleteCollection,
+  deleteSection,
+  moveFavoriteToSection,
+  PART_STATUSES,
+  renameSection,
+  setFavoriteStatus,
+  type BoardPin,
+  type LibrarySection,
+  type PartStatus,
   loadFavoriteGeometry,
   loadLibrary,
   moveFavorite,
@@ -74,6 +85,7 @@ import {
   type LibrarySnapshot,
 } from '@/lib/3dwork/favorites';
 import { lookFor } from '@/lib/3dwork/finish';
+import { isPartFile, PART_FILE_ACCEPT, partFileName, readPartFile } from '@/lib/3dwork/import-part';
 import { formatCount } from '@/lib/3dwork/format';
 import { buildBoard, dropRepeats, failureNote, partsOfBuilds, type BoardItem, type BuildPart } from '@/lib/3dwork/parts-library';
 import type { Project } from '@/lib/3dwork/project';
@@ -87,6 +99,9 @@ import {
   saveTargetReady,
   type SaveTarget,
 } from './library-target';
+import { BoardView, STATUS_STYLE } from './board-view';
+import { LayerChips, LayerList, UNSORTED_LAYER } from './library-layers';
+import { NameDialog } from './name-dialog';
 import { renderThumbnail } from './thumbnail';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, PANEL } from './ui';
 
@@ -266,7 +281,15 @@ interface PartsLibraryProps {
   /** On the bench: put the ticked parts into the build that is open. */
   onAddToBench?: (items: BoardItem[]) => void | Promise<void>;
   initialTab?: LibraryTab;
+  /** 'page': part of the start page, with a side column to sort in; 'modal' (default): a window. */
+  layout?: 'modal' | 'page';
+  /** Gallery: open one saved part on the bench to change it, then save it back. */
+  onEditPart?: (favorite: Favorite, soup: Float32Array) => void | Promise<void>;
 }
+
+type SectionDialog =
+  | { mode: 'new'; collectionId: string; kind: LibrarySection['kind'] }
+  | { mode: 'edit'; collectionId: string; section: LibrarySection };
 
 const TABS: { tab: LibraryTab; label: string }[] = [
   { tab: 'starred', label: 'Uppáhalds' },
@@ -295,7 +318,22 @@ interface SaveSheet {
   target: SaveTarget;
 }
 
-export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initialTab = 'library' }: PartsLibraryProps) {
+export function PartsLibrary({
+  open,
+  onClose,
+  onOpenBoard,
+  onAddToBench,
+  initialTab = 'library',
+  layout = 'modal',
+  onEditPart,
+}: PartsLibraryProps) {
+  const isPage = layout === 'page';
+  // Layers switched off (section ids, or the collection's "Óflokkað"), the board shown instead of the cards, the status filter.
+  const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(() => new Set());
+  const [openBoardId, setOpenBoardId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<PartStatus | 'all'>('all');
+  const [sectionDialog, setSectionDialog] = useState<SectionDialog | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [library, setLibrary] = useState<LibrarySnapshot | null>(null);
   const [buildParts, setBuildParts] = useState<BuildPart[] | null>(null);
@@ -318,14 +356,14 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
     try {
       setLibrary(await loadLibrary());
     } catch (error) {
-      setLibrary({ favorites: [], collections: [], buildCategories: {} });
+      setLibrary({ favorites: [], collections: [], buildCategories: {}, boards: {} });
       toast.error(failureNote(error, 'Náði ekki í Partasafnið.'));
     }
   }, []);
 
   // Escape closes the window — unless it was meant for a name being typed, or a sheet on top.
   useEffect(() => {
-    if (!open) return;
+    if (!open || isPage) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) onClose();
     };
@@ -344,6 +382,8 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
     setCollectionEdit(null);
     setSaveSheet(null);
     setAutoRun(null);
+    setOpenBoardId(null);
+    setStatusFilter('all');
     setBuildsReady(false);
     void reloadLibrary();
     let cancelled = false;
@@ -438,8 +478,13 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
     if (tab === 'builds') return buildEntries;
     if (tab === 'starred') return libraryEntries.filter((entry) => entry.kind === 'library' && entry.favorite.starred);
     if (activeCollection === 'all') return libraryEntries;
-    return libraryEntries.filter((entry) => entry.kind === 'library' && entry.favorite.collectionId === activeCollection);
-  }, [tab, buildEntries, libraryEntries, activeCollection]);
+    return libraryEntries.filter(
+      (entry) =>
+        entry.kind === 'library' &&
+        entry.favorite.collectionId === activeCollection &&
+        !hiddenLayers.has(entry.favorite.sectionId ?? UNSORTED_LAYER(activeCollection))
+    );
+  }, [tab, buildEntries, libraryEntries, activeCollection, hiddenLayers]);
 
   const searched = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -458,11 +503,42 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
   );
   const entries = useMemo(
     () =>
-      categoryFilter === 'all'
-        ? searched
-        : searched.filter((entry) => filterCategory(markOf(entry)) === categoryFilter),
-    [searched, categoryFilter, markOf]
+      (categoryFilter === 'all' ? searched : searched.filter((entry) => filterCategory(markOf(entry)) === categoryFilter)).filter(
+        (entry) => statusFilter === 'all' || (entry.kind === 'library' && entry.favorite.status === statusFilter)
+      ),
+    [searched, categoryFilter, markOf, statusFilter]
   );
+  const statusCounts = useMemo(() => {
+    const counts: Record<PartStatus, number> = { printed: 0, made: 0, bought: 0 };
+    for (const entry of searched) if (entry.kind === 'library' && entry.favorite.status) counts[entry.favorite.status] += 1;
+    return counts;
+  }, [searched]);
+
+  // The active collection's sub-categories: parts layers and boards.
+  const activeSections = useMemo<LibrarySection[]>(
+    () => (activeCollection === 'all' ? [] : collections.find((entry) => entry.id === activeCollection)?.sections ?? []),
+    [collections, activeCollection]
+  );
+  const sectionsOf = useCallback(
+    (collectionId: string) => collections.find((entry) => entry.id === collectionId)?.sections ?? [],
+    [collections]
+  );
+  const boardSection = tab === 'library' ? activeSections.find((section) => section.id === openBoardId && section.kind === 'board') : undefined;
+  const layerCount = useCallback(
+    (id: string) =>
+      favorites.filter(
+        (favorite) => favorite.collectionId === activeCollection && (favorite.sectionId ?? UNSORTED_LAYER(activeCollection)) === id
+      ).length,
+    [favorites, activeCollection]
+  );
+  const boardPins = useCallback((id: string): BoardPin[] => library?.boards[id] ?? [], [library]);
+  const toggleLayer = (id: string) =>
+    setHiddenLayers((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Every ticked card, from every tab, in the order they were ticked — each part once: the same part
   // ticked in "Allir partar" and again in its collection put two copies on the board (14.10.2026).
@@ -788,6 +864,146 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
     []
   );
 
+  const saveSection = useCallback(
+    async (dialog: SectionDialog, name: string) => {
+      setBusy(dialog.mode === 'new' ? 'Bý til…' : 'Vista…');
+      try {
+        if (dialog.mode === 'new') {
+          const made = await createSection(dialog.collectionId, name, dialog.kind);
+          if (made.kind === 'board') setOpenBoardId(made.id);
+          toast.success(made.kind === 'board' ? `Borðið „${made.name}“ er tilbúið.` : `Lagið „${made.name}“ er tilbúið.`);
+        } else {
+          await renameSection(dialog.collectionId, dialog.section.id, name);
+        }
+        setSectionDialog(null);
+        await reloadLibrary();
+      } catch (error) {
+        toast.error(failureNote(error, 'Náði ekki að vista undirflokkinn.'));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [reloadLibrary]
+  );
+
+  const dropSection = useCallback(
+    async (collectionId: string, section: LibrarySection) => {
+      setBusy('Eyði…');
+      try {
+        await deleteSection(collectionId, section.id);
+        if (openBoardId === section.id) setOpenBoardId(null);
+        setSectionDialog(null);
+        await reloadLibrary();
+        toast.success(
+          section.kind === 'board'
+            ? `Borðið „${section.name}“ tekið burt.`
+            : `Lagið „${section.name}“ tekið burt — partarnir eru áfram í safninu.`
+        );
+      } catch (error) {
+        toast.error(failureNote(error, 'Náði ekki að eyða undirflokknum.'));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [openBoardId, reloadLibrary]
+  );
+
+  const moveToSection = useCallback(
+    async (favorite: Favorite, sectionId: string | null) => {
+      const before = favorite.sectionId;
+      setFavorites((list) => list.map((entry) => (entry.id === favorite.id ? { ...entry, sectionId: sectionId ?? undefined } : entry)));
+      try {
+        await moveFavoriteToSection(favorite.id, sectionId);
+      } catch (error) {
+        setFavorites((list) => list.map((entry) => (entry.id === favorite.id ? { ...entry, sectionId: before } : entry)));
+        toast.error(failureNote(error, 'Náði ekki að færa partinn.'));
+      }
+    },
+    [setFavorites]
+  );
+
+  const setStatus = useCallback(
+    async (favorite: Favorite, status: PartStatus | null) => {
+      const before = favorite.status;
+      setFavorites((list) => list.map((entry) => (entry.id === favorite.id ? { ...entry, status: status ?? undefined } : entry)));
+      try {
+        await setFavoriteStatus(favorite.id, status);
+      } catch (error) {
+        setFavorites((list) => list.map((entry) => (entry.id === favorite.id ? { ...entry, status: before } : entry)));
+        toast.error(failureNote(error, 'Náði ekki að breyta stöðunni.'));
+      }
+    },
+    [setFavorites]
+  );
+
+  /** STL / 3MF files straight into the library: into the collection shown, under the one layer left on, starred on Uppáhalds. */
+  const importFiles = useCallback(
+    async (files: File[]) => {
+      const parts = files.filter((file) => isPartFile(file.name));
+      if (parts.length === 0) {
+        toast.error('Veldu STL- eða 3MF-skrár.');
+        return;
+      }
+      const collectionId = tab === 'library' && activeCollection !== 'all' ? activeCollection : undefined;
+      const shownLayers = activeSections.filter((section) => section.kind === 'parts' && !hiddenLayers.has(section.id));
+      const sectionId =
+        collectionId && shownLayers.length === 1 && hiddenLayers.has(UNSORTED_LAYER(collectionId)) ? shownLayers[0].id : undefined;
+      let added = 0;
+      try {
+        for (const [index, file] of parts.entries()) {
+          setBusy(`Flyt inn ${file.name} (${index + 1}/${parts.length})…`);
+          const soup = await readPartFile(file);
+          if (!soup) {
+            toast.error(`${file.name}: ekkert að lesa.`);
+            continue;
+          }
+          const color = '#94a3b8';
+          const picture = renderThumbnail(soup, color);
+          await addFavorite(
+            {
+              name: partFileName(file.name),
+              color,
+              materialId: 'pla',
+              thumbnail: picture ? await compactPicture(picture) : undefined,
+              starred: tab === 'starred',
+              collectionId,
+              sectionId,
+            },
+            soup
+          );
+          added += 1;
+        }
+        await reloadLibrary();
+        if (added > 0) toast.success(`${say(added, 'partur fluttur', 'partar fluttir')} inn í Partasafnið.`);
+      } catch (error) {
+        toast.error(failureNote(error, 'Náði ekki að flytja inn.'));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [tab, activeCollection, activeSections, hiddenLayers, reloadLibrary]
+  );
+
+  const editPart = useCallback(
+    async (favorite: Favorite) => {
+      if (!onEditPart) return;
+      setBusy(`Sæki ${favorite.name}…`);
+      try {
+        const soup = await loadFavoriteGeometry(favorite.versionId);
+        if (!soup) {
+          toast.error(`Fann ekki möskvann í ${favorite.name}.`);
+          return;
+        }
+        await onEditPart(favorite, soup);
+      } catch (error) {
+        toast.error(failureNote(error, 'Náði ekki að opna partinn.'));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [onEditPart]
+  );
+
   const star = useCallback(async (favorite: Favorite) => {
     const starred = !favorite.starred;
     setFavorites((list) => list.map((entry) => (entry.id === favorite.id ? { ...entry, starred } : entry)));
@@ -835,8 +1051,29 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
     : [];
 
   return (
-    <div className="wb-theme fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className={`${PANEL} flex max-h-dvh w-full min-w-0 max-w-5xl flex-col p-3 shadow-2xl sm:max-h-[92dvh] sm:p-4`}>
+    <div
+      className={
+        isPage
+          ? 'wb-theme flex h-full min-h-0 flex-col'
+          : 'wb-theme fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/55 p-0 backdrop-blur-sm sm:items-center sm:p-4'
+      }
+    >
+      <div
+        className={
+          isPage
+            ? `${PANEL} flex min-h-0 w-full min-w-0 flex-1 flex-col p-3`
+            : `${PANEL} flex max-h-dvh w-full min-w-0 max-w-5xl flex-col p-3 shadow-2xl sm:max-h-[92dvh] sm:p-4`
+        }
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          // A board takes its own pictures; anything else dropped here is a part file for the library.
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          void importFiles(Array.from(event.dataTransfer.files));
+        }}
+      >
         <div className="mb-2 flex shrink-0 items-start gap-2">
           <Library className="mt-0.5 h-5 w-5 shrink-0 text-[var(--wb-label)]" />
           <div className="min-w-0 flex-1">
@@ -848,15 +1085,42 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
           </div>
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded text-[var(--wb-ink-mute)] hover:bg-[var(--wb-tool-hover)]"
-            onClick={onClose}
-            aria-label="Loka Partasafni"
+            className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded border border-[var(--wb-accent)] bg-[var(--wb-tool-bg)] px-2.5 text-[0.72rem] font-bold text-[var(--wb-label)] hover:bg-[var(--wb-tool-hover)] disabled:opacity-40"
+            onClick={() => fileInput.current?.click()}
+            disabled={!library || Boolean(busy)}
+            title="STL eða 3MF beint í safnið sem er opið (í Uppáhalds ef sá flipi er opinn)"
           >
-            <X className="h-4 w-4" />
+            <Upload className="h-3.5 w-3.5" />
+            Flytja inn
           </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={PART_FILE_ACCEPT}
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = '';
+              void importFiles(files);
+            }}
+          />
+          {!isPage && (
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded text-[var(--wb-ink-mute)] hover:bg-[var(--wb-tool-hover)]"
+              onClick={onClose}
+              aria-label="Loka Partasafni"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
-        <div className="mb-2 flex shrink-0 overflow-hidden rounded border border-[var(--wb-tool-border)] sm:self-start" role="tablist">
+        <div
+          className={`mb-2 flex shrink-0 overflow-hidden rounded border border-[var(--wb-tool-border)] sm:self-start ${isPage ? 'md:hidden' : ''}`}
+          role="tablist"
+        >
           {TABS.map((entry) => (
             <button
               key={entry.tab}
@@ -876,11 +1140,49 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
           ))}
         </div>
 
+        <div className={isPage ? 'flex min-h-0 flex-1 gap-3' : 'contents'}>
+        {isPage && (
+          <aside className="hidden w-60 shrink-0 overflow-y-auto border-r border-[var(--wb-panel-border)] pr-2 md:block">
+            <LayerList
+              tab={tab}
+              tabs={TABS.map((entry) => ({ ...entry, count: counts[entry.tab] }))}
+              onTab={(next) => {
+                setTab(next);
+                setOpenBoardId(null);
+              }}
+              collections={collections}
+              activeCollection={activeCollection}
+              countIn={countIn}
+              totalSaved={favorites.length}
+              onPickCollection={pickCollection}
+              onNewCollection={() => {
+                setTab('library');
+                setCollectionEdit({ mode: 'new', name: '' });
+              }}
+              sections={activeSections}
+              layerCount={layerCount}
+              boardCount={(id) => boardPins(id).length}
+              hidden={hiddenLayers}
+              onToggleLayer={toggleLayer}
+              openBoardId={boardSection?.id ?? null}
+              onOpenBoard={setOpenBoardId}
+              onNewSection={(kind) => activeCollection !== 'all' && setSectionDialog({ mode: 'new', collectionId: activeCollection, kind })}
+              onEditSection={(section) => setSectionDialog({ mode: 'edit', collectionId: activeCollection, section })}
+              categories={categoryCounts}
+              categoryFilter={categoryFilter}
+              allCategoriesCount={searched.length}
+              onCategory={(id) => setCategoryFilter(id as CategoryValue | 'all')}
+              statusCounts={statusCounts}
+              statusFilter={statusFilter}
+              onStatus={setStatusFilter}
+            />
+          </aside>
+        )}
         {/* Collections and search scroll away with the cards; the category row stays at the top. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'library' && library && (
           <div className="mb-2 space-y-1.5">
-            <div className={CHIP_ROW} role="tablist" aria-label="Söfn">
+            <div className={`${CHIP_ROW} ${isPage ? 'md:hidden' : ''}`} role="tablist" aria-label="Söfn">
               {collections.length > 1 && (
                 <Chip active={activeCollection === 'all'} label="Öll söfn" count={favorites.length} onClick={() => pickCollection('all')} />
               )}
@@ -902,6 +1204,22 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
                 Nýtt safn
               </button>
             </div>
+
+            {activeCollection !== 'all' && (
+              <LayerChips
+                className={isPage ? 'md:hidden' : ''}
+                collectionId={activeCollection}
+                sections={activeSections}
+                layerCount={layerCount}
+                boardCount={(id) => boardPins(id).length}
+                hidden={hiddenLayers}
+                onToggleLayer={toggleLayer}
+                openBoardId={boardSection?.id ?? null}
+                onOpenBoard={setOpenBoardId}
+                onNewSection={(kind) => setSectionDialog({ mode: 'new', collectionId: activeCollection, kind })}
+                onEditSection={(section) => setSectionDialog({ mode: 'edit', collectionId: activeCollection, section })}
+              />
+            )}
 
             {collectionEdit?.mode === 'new' || collectionEdit?.mode === 'rename' ? (
               <form
@@ -1012,6 +1330,19 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
           </div>
         )}
 
+        {boardSection ? (
+          <div className="h-[72dvh] min-h-[420px]">
+            <BoardView
+              sectionId={boardSection.id}
+              title={boardSection.name}
+              pins={boardPins(boardSection.id)}
+              onPinsChange={(pins) =>
+                setLibrary((current) => (current ? { ...current, boards: { ...current.boards, [boardSection.id]: pins } } : current))
+              }
+            />
+          </div>
+        ) : (
+        <>
         <div className="mb-2 flex items-center gap-1.5">
           <label className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--wb-ink-mute)]" />
@@ -1036,7 +1367,7 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
         </div>
 
         <div
-          className={`${CHIP_ROW} sticky top-0 z-10 mb-2 border-b border-[var(--wb-panel-border)] bg-[var(--wb-panel)] pt-1`}
+          className={`${CHIP_ROW} sticky top-0 z-10 mb-2 border-b border-[var(--wb-panel-border)] bg-[var(--wb-panel)] pt-1 ${isPage ? 'md:hidden' : ''}`}
           role="tablist"
           aria-label="Flokkar"
         >
@@ -1202,6 +1533,13 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
                     >
                       <Picture entry={entry} />
                     </button>
+                    {entry.kind === 'library' && entry.favorite.status && (
+                      <span
+                        className={`pointer-events-none absolute left-2 top-9 rounded px-1.5 py-0.5 text-[0.6rem] font-bold ${STATUS_STYLE[entry.favorite.status]}`}
+                      >
+                        {PART_STATUSES.find((status) => status.id === entry.favorite.status)?.label}
+                      </span>
+                    )}
                     <span
                       className={`pointer-events-none absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border ${
                         isTicked ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-400 bg-white/90'
@@ -1291,6 +1629,41 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
                       )}
                     </div>
 
+                    {entry.kind === 'library' && (
+                      <div className="flex items-center gap-1 px-1.5 pt-1">
+                        {sectionsOf(entry.favorite.collectionId).some((section) => section.kind === 'parts') && (
+                          <select
+                            className="min-h-9 w-full min-w-0 flex-1 truncate rounded border border-slate-300 bg-white py-1 pl-1.5 text-[0.68rem] font-bold text-slate-700"
+                            value={entry.favorite.sectionId ?? ''}
+                            onChange={(event) => void moveToSection(entry.favorite, event.target.value || null)}
+                            aria-label={`Lag: ${entry.favorite.name}`}
+                          >
+                            <option value="">Óflokkað</option>
+                            {sectionsOf(entry.favorite.collectionId)
+                              .filter((section) => section.kind === 'parts')
+                              .map((section) => (
+                                <option key={section.id} value={section.id}>
+                                  {section.name}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+                        <select
+                          className="min-h-9 w-full min-w-0 flex-1 truncate rounded border border-slate-300 bg-white py-1 pl-1.5 text-[0.68rem] font-bold text-slate-700"
+                          value={entry.favorite.status ?? ''}
+                          onChange={(event) => void setStatus(entry.favorite, (event.target.value || null) as PartStatus | null)}
+                          aria-label={`Staða: ${entry.favorite.name}`}
+                        >
+                          <option value="">Staða…</option>
+                          {PART_STATUSES.map((status) => (
+                            <option key={status.id} value={status.id}>
+                              {status.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-1 p-1.5">
                       {entry.kind === 'library' ? (
                         deleting === entry.favorite.id ? (
@@ -1312,6 +1685,18 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
                           </>
                         ) : (
                           <>
+                            {onEditPart && (
+                              <button
+                                type="button"
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-emerald-500 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
+                                onClick={() => void editPart(entry.favorite)}
+                                disabled={Boolean(busy)}
+                                aria-label={`Opna ${entry.favorite.name} og breyta`}
+                                title="Opna á bekknum, breyta og vista aftur í safnið"
+                              >
+                                <SquarePen className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded border border-slate-300 px-2 text-[0.68rem] font-bold text-slate-600 hover:bg-slate-50"
@@ -1366,6 +1751,9 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
               })}
             </ul>
           )}
+        </>
+        )}
+        </div>
         </div>
 
         <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--wb-panel-border)] pt-3">
@@ -1412,6 +1800,41 @@ export function PartsLibrary({ open, onClose, onOpenBoard, onAddToBench, initial
           </div>
         </div>
       </div>
+
+      <NameDialog
+        open={sectionDialog !== null}
+        title={
+          sectionDialog?.mode === 'new'
+            ? sectionDialog.kind === 'board'
+              ? 'Nýtt skipulagsborð'
+              : 'Nýtt lag (undirflokkur)'
+            : `Breyta „${sectionDialog?.section.name ?? ''}“`
+        }
+        hint={
+          sectionDialog?.mode === 'new'
+            ? sectionDialog.kind === 'board'
+              ? `Borð í „${collectionName(sectionDialog.collectionId)}“ fyrir myndir af íhlutum og miða.`
+              : `Lag í „${collectionName(sectionDialog.collectionId)}“ — t.d. Innvols eða Bodyparts. Kveikt/slökkt með auganu.`
+            : undefined
+        }
+        defaultName={sectionDialog?.mode === 'edit' ? sectionDialog.section.name : sectionDialog?.kind === 'board' ? 'Íhlutir' : ''}
+        confirmLabel={sectionDialog?.mode === 'new' ? 'Búa til' : 'Vista nafn'}
+        busy={Boolean(busy)}
+        onCancel={() => setSectionDialog(null)}
+        onConfirm={(name) => (sectionDialog ? saveSection(sectionDialog, name) : undefined)}
+      >
+        {sectionDialog?.mode === 'edit' && (
+          <button
+            type="button"
+            className="inline-flex min-h-9 items-center gap-1 rounded border border-rose-300 bg-rose-50 px-2.5 text-[0.72rem] font-bold text-rose-700 hover:bg-rose-100"
+            onClick={() => void dropSection(sectionDialog.collectionId, sectionDialog.section)}
+            disabled={Boolean(busy)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {sectionDialog.section.kind === 'board' ? 'Taka borðið burt' : 'Taka lagið burt (partarnir verða eftir)'}
+          </button>
+        )}
+      </NameDialog>
 
       {saveSheet && (
         <div

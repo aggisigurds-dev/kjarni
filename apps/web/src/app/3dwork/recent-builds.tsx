@@ -201,10 +201,11 @@ export function RecentBuilds({ onOpen }: { onOpen: (entry: ProjectListEntry) => 
             .filter((thumbnail): thumbnail is string => Boolean(thumbnail)),
         }));
       if (cancelled) return;
-      setEntries(mergeProjectLists(local, []));
+      // A build with no parts ("New build · 0 parts") is not work to pick up.
+      setEntries(mergeProjectLists(local, []).filter((entry) => entry.parts > 0));
       try {
         const cloud = await listCloudProjects();
-        if (!cancelled) setEntries(mergeProjectLists(local, cloud.filter((entry) => entry.parts > 0)));
+        if (!cancelled) setEntries(mergeProjectLists(local, cloud.filter((entry) => entry.parts > 0)).filter((entry) => entry.parts > 0));
       } catch {
         if (!cancelled) setCloudFailed(true);
       }

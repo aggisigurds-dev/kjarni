@@ -1,17 +1,24 @@
 'use client';
 
 /**
- * First paint of 3dwork: recent work first, then parts from Drive as pictures.
+ * First paint of 3dwork — the start page: your projects first, then the
+ * Partasafn with room to sort it (collections, layers you switch on and off,
+ * planning boards for pictures of fittings, categories, printed / made /
+ * bought), and buttons to start a build, bring part files into one, or open
+ * the bench. STL / 3MF dropped on the Partasafn go straight into the library,
+ * no board needed; a saved part opens on the bench to be changed and saved back.
  *
- * The 3D bench (Three.js / WebGL) is a separate chunk, so this page stays light:
- * it shows the builds worked on lately with pictures of their parts, and only a
- * click on one — or on 3D bench — pays for the table.
+ * The 3D bench (Three.js / WebGL) is a separate chunk, so this page stays light
+ * until the bench is asked for.
  */
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
-import { Boxes, ChevronDown, Cloud, Library } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Boxes, ChevronDown, Cloud, Library, Plus, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import type { Favorite } from '@/lib/3dwork/favorites';
+import { isPartFile, PART_FILE_ACCEPT } from '@/lib/3dwork/import-part';
+import { buildBoard } from '@/lib/3dwork/parts-library';
 import { classifyPart, type Project } from '@/lib/3dwork/project';
 import { rememberOpenProject, saveGeometry, saveProject } from '@/lib/3dwork/storage';
 import { CloudPicker } from './cloud-picker';
@@ -24,10 +31,10 @@ const DriveBrowser = dynamic(
   { ssr: false }
 );
 
-// Draws its pictures with three.js, so it loads only when opened.
+// Draws its pictures with three.js, so it loads on the client only.
 const PartsLibrary = dynamic(
   () => import('./parts-library').then((mod) => ({ default: mod.PartsLibrary })),
-  { ssr: false }
+  { ssr: false, loading: () => <div className={`${PANEL} h-full p-4 text-sm text-slate-500`}>Opna Partasafnið…</div> }
 );
 
 const Workbench = dynamic(() => import('./workbench').then((mod) => ({ default: mod.Workbench })), {
@@ -46,22 +53,71 @@ export type PendingImport = {
 
 type Engine = null | 'bench' | 'sketch';
 
+const TOP_BUTTON =
+  'inline-flex min-h-9 items-center gap-1 rounded border px-2.5 text-[0.7rem] font-extrabold uppercase tracking-[0.03em]';
+
 export function KitsHome() {
   const [engine, setEngine] = useState<Engine>(null);
   const [pending, setPending] = useState<PendingImport | null>(null);
   const [pendingCloudId, setPendingCloudId] = useState<string | null>(null);
+  const [startFresh, setStartFresh] = useState(false);
+  const [libraryEdit, setLibraryEdit] = useState<{ favoriteId: string; name: string; projectId: string } | null>(null);
   const [showDrive, setShowDrive] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [showKits, setShowKits] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
+  // Bumped on the way back from the bench, so the projects and the library are read again.
+  const [visit, setVisit] = useState(0);
+  const importInput = useRef<HTMLInputElement | null>(null);
+  const libraryRef = useRef<HTMLDivElement | null>(null);
+
+  const goHome = () => {
+    setEngine(null);
+    setPending(null);
+    setPendingCloudId(null);
+    setStartFresh(false);
+    setLibraryEdit(null);
+    setVisit((value) => value + 1);
+  };
 
   /** A board made in the Partasafn: kept on this computer, then opened on the bench, which saves it to Supabase. */
   const openBoard = async (board: { project: Project; geometries: Map<string, Float32Array> }) => {
     for (const [id, soup] of board.geometries) await saveGeometry(id, soup);
     await saveProject(board.project, board.project.updatedAt);
     rememberOpenProject(board.project.id);
-    setShowLibrary(false);
     toast.success(`Opna „${board.project.name}“ með ${board.project.parts.length} pörtum.`);
+    setEngine('bench');
+  };
+
+  /** Gallery: one saved part on a scratch board, to change on the bench and save back to the library. */
+  const editPart = async (favorite: Favorite, soup: Float32Array) => {
+    const board = buildBoard(favorite.name, [
+      {
+        name: favorite.name,
+        color: favorite.color,
+        finishId: favorite.finishId,
+        materialId: favorite.materialId,
+        thumbnail: favorite.thumbnail,
+        soup,
+      },
+    ]);
+    for (const [id, part] of board.geometries) await saveGeometry(id, part);
+    await saveProject(board.project, board.project.updatedAt);
+    rememberOpenProject(board.project.id);
+    setLibraryEdit({ favoriteId: favorite.id, name: favorite.name, projectId: board.project.id });
+    setEngine('bench');
+  };
+
+  /** Part files into a new build on the bench. */
+  const importToNewBuild = (files: File[]) => {
+    const parts = files.filter((file) => isPartFile(file.name));
+    if (parts.length === 0) {
+      toast.error('Veldu STL- eða 3MF-skrár.');
+      return;
+    }
+    const tags: PendingImport['tags'] = {};
+    for (const file of parts) tags[file.name] = classifyPart(file.name);
+    setPending({ files: parts, tags });
+    setStartFresh(true);
     setEngine('bench');
   };
 
@@ -72,55 +128,89 @@ export function KitsHome() {
         pendingImport={pending}
         pendingCloudId={pendingCloudId}
         onPendingConsumed={() => setPending(null)}
+        startFresh={startFresh}
+        libraryEdit={libraryEdit}
+        onExit={goHome}
       />
     );
   }
 
   return (
-    <div className="wb-theme flex h-dvh max-h-dvh flex-col gap-2 bg-[var(--wb-ground)] p-2 text-[var(--wb-ink)]">
-      <div className={`${PANEL} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
-        <div className="flex min-w-0 items-center gap-2">
-          <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
-          <span className="text-sm font-bold text-slate-900">3dwork</span>
-          <span className="text-[0.65rem] text-slate-500">Pick up recent work, or start from parts</span>
+    <div className="wb-theme h-dvh overflow-y-auto bg-[var(--wb-ground)] text-[var(--wb-ink)]">
+      <div className="flex min-h-full flex-col gap-2 p-2">
+        <div className={`${PANEL} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
+            <span className="text-sm font-bold text-slate-900">3dwork</span>
+            <span className="hidden text-[0.65rem] text-slate-500 sm:inline">Verkefni og Partasafn</span>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              className={`${TOP_BUTTON} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500`}
+              onClick={() => {
+                setStartFresh(true);
+                setEngine('bench');
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Nýtt verkefni
+            </button>
+            <button
+              type="button"
+              className={`${TOP_BUTTON} border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
+              onClick={() => importInput.current?.click()}
+              title="STL eða 3MF í nýtt verkefni á bekknum. Til að setja parta í Partasafnið: dragðu þá á það hér fyrir neðan."
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Flytja inn part
+            </button>
+            <input
+              ref={importInput}
+              type="file"
+              accept={PART_FILE_ACCEPT}
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = '';
+                importToNewBuild(files);
+              }}
+            />
+            <div className="flex overflow-hidden rounded border border-slate-300">
+              <button
+                type="button"
+                onClick={() => setEngine('bench')}
+                className="bg-white px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-700 hover:bg-slate-50"
+              >
+                3D bench
+              </button>
+              <button
+                type="button"
+                onClick={() => setEngine('sketch')}
+                className="border-l border-slate-300 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-500 hover:text-slate-900"
+              >
+                2D sketch
+              </button>
+            </div>
+            <button type="button" className={`${ACTION_GHOST} inline-flex items-center gap-1`} onClick={() => setShowCloud(true)}>
+              <Cloud className="h-3.5 w-3.5" />
+              Öll verkefni
+            </button>
+            <button
+              type="button"
+              className={`${ACTION_GHOST} inline-flex items-center gap-1`}
+              onClick={() => libraryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <Library className="h-3.5 w-3.5" />
+              Partasafn
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          className={`${ACTION_GHOST} inline-flex items-center gap-1`}
-          onClick={() => setShowCloud(true)}
-        >
-          <Cloud className="h-3.5 w-3.5" />
-          All saved builds
-        </button>
-        <div className="flex overflow-hidden rounded border border-slate-300">
-          <button
-            type="button"
-            onClick={() => setEngine('bench')}
-            className="bg-emerald-600 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-white hover:bg-emerald-500"
-          >
-            3D bench
-          </button>
-          <button
-            type="button"
-            onClick={() => setEngine('sketch')}
-            className="px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-500 hover:text-slate-900"
-          >
-            2D sketch
-          </button>
-        </div>
-        <button
-          type="button"
-          className={`${ACTION_GHOST} inline-flex items-center gap-1`}
-          onClick={() => setShowLibrary(true)}
-        >
-          <Library className="h-3.5 w-3.5" />
-          Partasafn
-        </button>
-      </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         <div className={`${PANEL} p-3`}>
           <RecentBuilds
+            key={`builds-${visit}`}
             onOpen={(entry) => {
               // A build this computer has opens from its own copy, and the bench
               // still checks Supabase for a newer one; one made elsewhere comes
@@ -132,6 +222,17 @@ export function KitsHome() {
               }
               setEngine('bench');
             }}
+          />
+        </div>
+
+        <div ref={libraryRef} className="scroll-mt-2 md:h-[calc(100dvh-1rem)] md:min-h-[560px]">
+          <PartsLibrary
+            key={`library-${visit}`}
+            open
+            layout="page"
+            onClose={() => undefined}
+            onOpenBoard={openBoard}
+            onEditPart={editPart}
           />
         </div>
 
@@ -169,10 +270,6 @@ export function KitsHome() {
           setEngine('bench');
         }}
       />
-
-      {showLibrary && (
-        <PartsLibrary open onClose={() => setShowLibrary(false)} onOpenBoard={openBoard} />
-      )}
 
       {showDrive && (
         <DriveBrowser
