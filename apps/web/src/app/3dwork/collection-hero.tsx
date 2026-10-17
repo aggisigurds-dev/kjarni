@@ -15,7 +15,7 @@ import { Loader2, LocateFixed } from 'lucide-react';
 import { loadFavoriteGeometry } from '@/lib/3dwork/favorites';
 import { lookFor } from '@/lib/3dwork/finish';
 import { computeBounds, type Bounds } from '@/lib/3dwork/mesh';
-import { AR_SLOTS, assemblyLayout, BOARD_HEIGHT_MM } from '@/lib/3dwork/parts-library';
+import { AR_SLOTS, BOARD_HEIGHT_MM, collectionLayout } from '@/lib/3dwork/parts-library';
 import { simplifySoup } from '@/lib/3dwork/preview-mesh';
 import { loadGeometry, saveGeometry } from '@/lib/3dwork/storage';
 
@@ -27,6 +27,8 @@ export interface HeroPart {
   finishId?: string;
   /** Its category: the AR-15 slot it takes, if any. */
   category?: string;
+  /** Where the user put it when arranging the collection; none for the automatic layout. */
+  place?: { x: number; y: number };
 }
 
 /** Triangles per part in the picture: enough to read the shape, light enough for a phone. */
@@ -34,7 +36,7 @@ const PREVIEW_TRIANGLES = 60_000;
 const previewKey = (versionId: string) => `preview:${versionId}`;
 
 /** A light copy of a saved part's mesh: kept on this computer, or fetched once and made. */
-async function previewOf(versionId: string): Promise<Float32Array | null> {
+export async function previewOf(versionId: string): Promise<Float32Array | null> {
   const kept = await loadGeometry(previewKey(versionId));
   if (kept) return kept;
   const full = await loadFavoriteGeometry(versionId);
@@ -60,7 +62,7 @@ interface Scene {
   controls: OrbitControls;
   plate: THREE.Mesh;
   line: THREE.Mesh;
-  meshes: Map<string, { mesh: THREE.Mesh; bounds: Bounds; name: string; category?: string }>;
+  meshes: Map<string, { mesh: THREE.Mesh; bounds: Bounds; name: string; category?: string; place?: { x: number; y: number } }>;
   draw: () => void;
   moved: boolean;
 }
@@ -197,7 +199,9 @@ export function CollectionHero({
   }, []);
 
   // The parts: each light mesh fetched or read from this computer, one at a time.
-  const signature = parts.map((part) => `${part.id}:${part.versionId}:${part.color}:${part.category ?? ''}`).join('|');
+  const signature = parts
+    .map((part) => `${part.id}:${part.versionId}:${part.color}:${part.finishId ?? ''}:${part.category ?? ''}:${part.place?.x ?? ''},${part.place?.y ?? ''}`)
+    .join('|');
   useEffect(() => {
     const state = three.current;
     if (!state) return;
@@ -206,7 +210,16 @@ export function CollectionHero({
     // Parts gone from the collection, or changed, leave the picture.
     for (const [id, entry] of state.meshes) {
       const part = wanted.get(id);
-      if (part && entry.mesh.userData.versionId === part.versionId && entry.category === part.category) continue;
+      if (part && entry.mesh.userData.versionId === part.versionId && entry.category === part.category) {
+        // The same mesh: only where it stands or its colour may have changed.
+        entry.place = part.place;
+        const look = lookFor(part);
+        const material = entry.mesh.material as THREE.MeshStandardMaterial;
+        material.color.set(look.color);
+        material.metalness = look.metalness;
+        material.roughness = look.roughness;
+        continue;
+      }
       state.scene.remove(entry.mesh);
       entry.mesh.geometry.dispose();
       (entry.mesh.material as THREE.Material).dispose();
@@ -244,7 +257,7 @@ export function CollectionHero({
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.versionId = part.versionId;
         state.scene.add(mesh);
-        state.meshes.set(part.id, { mesh, bounds: computeBounds(soup), name: part.name, category: part.category });
+        state.meshes.set(part.id, { mesh, bounds: computeBounds(soup), name: part.name, category: part.category, place: part.place });
         setVersion((value) => value + 1);
       }
       if (cancelled) return;
@@ -264,7 +277,9 @@ export function CollectionHero({
     if (!state) return;
     const shown = [...state.meshes.entries()].filter(([id]) => !hiddenIds.has(id));
     for (const [id, entry] of state.meshes) entry.mesh.visible = !hiddenIds.has(id);
-    const places = assemblyLayout(shown.map(([, entry]) => ({ bounds: entry.bounds, category: entry.category, name: entry.name })));
+    const places = collectionLayout(
+      shown.map(([, entry]) => ({ bounds: entry.bounds, category: entry.category, name: entry.name, place: entry.place }))
+    );
     const all = new THREE.Box3();
     shown.forEach(([id, entry], index) => {
       const place = places[index];

@@ -85,6 +85,12 @@ export interface Part {
   sectionId?: string;
   /** Library only: where the real part stands — printed, made (machined, cut) or bought. */
   status?: 'printed' | 'made' | 'bought';
+  /**
+   * Library only: where the user put the part when arranging its collection —
+   * the middle of its box in the side view, mm (front = -X, up = +Y), every
+   * part centred in depth. None: the automatic AR-15 layout places it.
+   */
+  place?: { x: number; y: number };
   /** In the Partasafn: Body, Innvols, … — `none` when the user chose Óflokkað. */
   category?: CategoryValue;
   /** The category is the auto-sorter's suggestion, not yet confirmed by the user. */

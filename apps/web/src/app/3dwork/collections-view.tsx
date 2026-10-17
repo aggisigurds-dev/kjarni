@@ -10,18 +10,21 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, Eye, EyeOff, Layers, Loader2, SquarePen } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Eye, EyeOff, Layers, Loader2, Move, SquarePen } from 'lucide-react';
 import { toast } from 'sonner';
 import { categoryLabel, filterCategory } from '@/lib/3dwork/categories';
 import {
+  arrangeFavorites,
   loadFavoriteGeometry,
   loadLibrary,
   PART_STATUSES,
+  type ArrangeChange,
   type Favorite,
   type LibrarySnapshot,
 } from '@/lib/3dwork/favorites';
 import { failureNote, slotCheck } from '@/lib/3dwork/parts-library';
 import { STATUS_STYLE } from './board-view';
+import { CollectionArranger } from './collection-arranger';
 import { CollectionHero, type HeroPart } from './collection-hero';
 import { ACTION_PRIMARY, PANEL } from './ui';
 
@@ -65,6 +68,7 @@ export function CollectionsView({
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [arranging, setArranging] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +125,7 @@ export function CollectionsView({
         color: favorite.color,
         finishId: favorite.finishId,
         category: categoryOf(favorite),
+        place: favorite.place,
       })),
     [parts]
   );
@@ -155,6 +160,13 @@ export function CollectionsView({
     if (next.has(id)) next.delete(id);
     else next.add(id);
     return next;
+  };
+
+  /** The collection as arranged by hand: stored, then read back so the picture stands that way. */
+  const saveArrangement = async (changes: ArrangeChange[]) => {
+    await arrangeFavorites(changes);
+    setLibrary(await loadLibrary());
+    toast.success(`Röðunin á „${active?.name ?? 'safninu'}“ er vistuð.`);
   };
 
   const openPart = async (favorite: Favorite) => {
@@ -216,6 +228,10 @@ export function CollectionsView({
         </div>
       </div>
 
+      {arranging && active && (
+        <CollectionArranger title={active.name} parts={heroParts} onSave={saveArrangement} onClose={() => setArranging(false)} />
+      )}
+
       {!library ? (
         <div className={`${PANEL} flex items-center gap-2 p-6 text-sm text-[var(--wb-ink-mute)]`}>
           {failed ? (
@@ -242,6 +258,15 @@ export function CollectionsView({
                 <b className="text-[var(--wb-ink)]">{active?.name}</b> · {parts.length} partar
               </span>
               {missing.length > 0 && missing.length < 8 && <span className="text-amber-700">vantar: {missing.join(', ')}</span>}
+              <button
+                type="button"
+                className="ml-auto inline-flex min-h-9 items-center gap-1 rounded border border-[var(--wb-accent)] bg-[var(--wb-tool-bg)] px-2.5 text-[0.7rem] font-bold text-[var(--wb-label)] hover:bg-[var(--wb-tool-hover)]"
+                onClick={() => setArranging(true)}
+                title="Opna stórt og raða pörtunum í 2D — draga til hliðar, upp og niður — og mála þá"
+              >
+                <Move className="h-3.5 w-3.5" />
+                Raða og mála
+              </button>
             </div>
             {selected && (
               <div className="mt-1.5 flex items-center gap-2 rounded border border-emerald-400 bg-emerald-50 px-2 py-1.5">

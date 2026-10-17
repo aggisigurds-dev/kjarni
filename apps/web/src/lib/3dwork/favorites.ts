@@ -141,6 +141,8 @@ export interface Favorite {
   sectionId?: string;
   status?: PartStatus;
   category?: CategoryMark;
+  /** Where it was put when its collection was arranged; none for the automatic layout. */
+  place?: { x: number; y: number };
   addedAt: number;
 }
 
@@ -306,6 +308,10 @@ export function favoritesOf(shelf: Shelf): Favorite[] {
       sectionId: part.sectionId,
       status: isPartStatus(part.status) ? part.status : undefined,
       category: readMark(part.category, part.categoryAuto),
+      place:
+        part.place && Number.isFinite(part.place.x) && Number.isFinite(part.place.y)
+          ? { x: part.place.x, y: part.place.y }
+          : undefined,
       addedAt: part.addedAt,
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
@@ -383,7 +389,9 @@ export function withFavoriteMoved(shelf: Shelf, partId: string, collectionId: st
     // Sub-categories are the collection's own, so a move leaves the old one behind.
     parts: normal.parts.map((part) =>
       part.id === partId
-        ? { ...part, collectionId, sectionId: part.collectionId === collectionId ? part.sectionId : undefined }
+        ? part.collectionId === collectionId
+          ? { ...part, collectionId }
+          : { ...part, collectionId, sectionId: undefined, place: undefined }
         : part
     ),
   };
@@ -469,6 +477,39 @@ export function withPinChanged(shelf: Shelf, sectionId: string, pinId: string, c
         pin.id === pinId ? { ...pin, ...change, id: pin.id, kind: pin.kind } : pin
       ),
     },
+  };
+}
+
+/** One part's change from arranging a collection: where it stands (null: back to the automatic layout), its colour. */
+export interface ArrangeChange {
+  id: string;
+  place?: { x: number; y: number } | null;
+  color?: string;
+}
+
+/**
+ * The parts as arranged: places kept to a tenth of a millimetre, a painted
+ * part's colour taken as its own (its finish, which would override it, dropped).
+ */
+export function withArrangement(shelf: Shelf, changes: readonly ArrangeChange[]): Shelf {
+  const normal = normalizeShelf(shelf);
+  const byId = new Map(changes.map((change) => [change.id, change]));
+  const tenth = (value: number) => Math.round(value * 10) / 10;
+  return {
+    ...normal,
+    parts: normal.parts.map((part) => {
+      const change = byId.get(part.id);
+      if (!change) return part;
+      let next: Part = part;
+      if (change.place === null) next = { ...next, place: undefined };
+      else if (change.place && Number.isFinite(change.place.x) && Number.isFinite(change.place.y)) {
+        next = { ...next, place: { x: tenth(change.place.x), y: tenth(change.place.y) } };
+      }
+      if (change.color && /^#[0-9a-f]{6}$/i.test(change.color) && change.color.toLowerCase() !== part.color.toLowerCase()) {
+        next = { ...next, color: change.color.toLowerCase(), finishId: undefined };
+      }
+      return next;
+    }),
   };
 }
 
@@ -748,6 +789,12 @@ export async function deleteCollection(id: string, moveTo: string | null): Promi
 
 export async function moveFavorite(id: string, collectionId: string): Promise<void> {
   await changeShelf((shelf) => withFavoriteMoved(shelf, id, collectionId));
+}
+
+/** Store a collection as arranged — places and colours — in one write. */
+export async function arrangeFavorites(changes: readonly ArrangeChange[]): Promise<void> {
+  if (changes.length === 0) return;
+  await changeShelf((shelf) => withArrangement(shelf, changes));
 }
 
 /** Take build parts off „Allir partar", or put them back — in one write. */

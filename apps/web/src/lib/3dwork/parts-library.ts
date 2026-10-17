@@ -364,6 +364,53 @@ export function assemblyLayout(
   return out;
 }
 
+/** A part of a collection as its picture lays it out: its box, its slot, and where the user put it, if anywhere. */
+type Placed = { bounds: Box; category?: string; name?: string; place?: { x: number; y: number } };
+
+/**
+ * Where each part of a collection stands in its picture: where the user put it
+ * when arranging (centred in depth), else its AR-15 slot or the tray.
+ */
+export function collectionLayout(items: readonly Placed[]): { x: number; y: number; z: number }[] {
+  const auto = assemblyLayout(items);
+  return items.map((item, index) => (item.place ? { x: item.place.x, y: item.place.y, z: 0 } : auto[index]));
+}
+
+/** How tall a column of loose parts grows in the side view before the next one starts, mm. */
+const SIDE_COLUMN_MM = BOARD_HEIGHT_MM + 100;
+
+/**
+ * The side view to arrange a collection in, every part centred in depth: a
+ * part put somewhere keeps its place, one in an AR-15 slot starts there, and
+ * the loose ones — the tray, in 3D, which would all land on one spot seen from
+ * the side — stand on the table to the right of the rest, in columns.
+ */
+export function sideLayout(items: readonly Placed[]): { x: number; y: number }[] {
+  const auto = assemblyLayout(items);
+  const out = items.map((item, index) => (item.place ? { ...item.place } : { x: auto[index].x, y: auto[index].y }));
+  const loose = items.map((_, index) => index).filter((index) => !items[index].place && auto[index].z > 1);
+  if (loose.length === 0) return out;
+  let right = -Infinity;
+  items.forEach((item, index) => {
+    if (!loose.includes(index)) right = Math.max(right, out[index].x + item.bounds.size[0] / 2);
+  });
+  let x = (Number.isFinite(right) ? right : 0) + TRAY_GAP_MM;
+  let y = 0;
+  let column = 0;
+  for (const index of loose) {
+    const [w, h] = items[index].bounds.size;
+    if (y > 0 && y + h > SIDE_COLUMN_MM) {
+      x += column + BOARD_GAP_MM;
+      y = 0;
+      column = 0;
+    }
+    out[index] = { x: x + w / 2, y: y + h / 2 };
+    y += h + BOARD_GAP_MM;
+    column = Math.max(column, w);
+  }
+  return out;
+}
+
 /** The AR-15 slots a set of categories fills, and the ones still missing. */
 export function slotCheck(categories: readonly (string | undefined)[]): { category: string; label: string; count: number }[] {
   return AR_SLOTS.map((slot) => ({ ...slot, count: categories.filter((category) => category === slot.category).length }));

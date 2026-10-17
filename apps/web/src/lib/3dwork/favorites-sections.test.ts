@@ -15,6 +15,7 @@ import {
   withSectionDeleted,
   withSectionRenamed,
   withBuildPartsHidden,
+  withArrangement,
   type BoardPin,
   type Shelf,
 } from './favorites';
@@ -182,5 +183,43 @@ describe('build parts taken off „Allir partar"', () => {
     expect(hidden.collections).toEqual(normalizeShelf(shelf).collections);
     const messy = normalizeShelf({ ...shelf, hiddenBuildParts: [null, { name: 3 }, { name: 'x', triangles: 'y' }] as never });
     expect('hiddenBuildParts' in messy).toBe(false);
+  });
+});
+
+describe('arranging a collection', () => {
+  it('keeps where each part was put and the colour it was painted, finish dropped', () => {
+    const { shelf, a, b } = ironWolf();
+    const withFinish = { ...shelf, parts: shelf.parts.map((part) => (part.id === b ? { ...part, finishId: 'steel' } : part)) };
+    const arranged = withArrangement(withFinish, [
+      { id: a, place: { x: -120.04, y: 231.26 } },
+      { id: b, place: { x: 60, y: 110 }, color: '#F97316' },
+    ]);
+    const favorites = librarySnapshot(arranged).favorites;
+    expect(favorites.find((entry) => entry.id === a)?.place).toEqual({ x: -120, y: 231.3 });
+    const grip = arranged.parts.find((part) => part.id === b);
+    expect(grip?.color).toBe('#f97316');
+    expect(grip?.finishId).toBeUndefined();
+    expect(favorites.find((entry) => entry.id === b)?.place).toEqual({ x: 60, y: 110 });
+  });
+
+  it('sends a part back to the automatic layout, ignores bad values, and leaves an unpainted part its finish', () => {
+    const { shelf, a, b } = ironWolf();
+    const placed = withArrangement(shelf, [{ id: a, place: { x: 1, y: 2 } }]);
+    const back = withArrangement(placed, [
+      { id: a, place: null },
+      { id: b, place: { x: Number.NaN, y: 3 }, color: 'red' },
+    ]);
+    expect(back.parts.find((part) => part.id === a)?.place).toBeUndefined();
+    expect(back.parts.find((part) => part.id === b)?.place).toBeUndefined();
+    expect(back.parts.find((part) => part.id === b)?.color).toBe('#0f0');
+  });
+
+  it('forgets the place when the part moves to another collection', () => {
+    const { shelf, a } = ironWolf();
+    const other = withNewCollection(withArrangement(shelf, [{ id: a, place: { x: 5, y: 5 } }]), 'Annað', 'col_other', 9).shelf;
+    const kept = withFavoriteMoved(other, a, 'col_iron');
+    expect(kept.parts.find((part) => part.id === a)?.place).toEqual({ x: 5, y: 5 });
+    const moved = withFavoriteMoved(other, a, 'col_other');
+    expect(moved.parts.find((part) => part.id === a)?.place).toBeUndefined();
   });
 });
