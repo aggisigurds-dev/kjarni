@@ -256,6 +256,7 @@ import { NameDialog } from './name-dialog';
 import { HammerDialog } from './hammer-dialog';
 import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
 import { addFavorite, updateFavoriteMesh } from '@/lib/3dwork/favorites';
+import { turnAboutWorld } from '@/lib/3dwork/turn';
 import { classifyPart, readMark } from '@/lib/3dwork/categories';
 import {
   bumpVersionName,
@@ -2042,24 +2043,19 @@ export function Workbench({
     [patchProject, mode, partWorldPos, centerMode]
   );
 
-  /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
+  /**
+   * Commit a turn of a part by degrees about the world axes (x, then y, then z)
+   * — a grab-to-rotate in the viewport, the ± buttons or the arrow keys. Turned
+   * as a quaternion, so X and Z stay two different axes whatever the part's
+   * turn already is (adding to the Euler numbers made them one at 90° about Y).
+   */
   const spinPart = useCallback(
     (id: string, delta: { x: number; y: number; z: number }) => {
       patchProject((current) => ({
         ...current,
         parts: current.parts.map((part) =>
           part.id === id
-            ? {
-                ...part,
-                transform: {
-                  ...part.transform,
-                  rotation: {
-                    x: part.transform.rotation.x + delta.x,
-                    y: part.transform.rotation.y + delta.y,
-                    z: part.transform.rotation.z + delta.z,
-                  },
-                },
-              }
+            ? { ...part, transform: { ...part.transform, rotation: turnAboutWorld(part.transform.rotation, delta) } }
             : part
         ),
       }));

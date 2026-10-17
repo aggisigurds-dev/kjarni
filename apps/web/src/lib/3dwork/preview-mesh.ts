@@ -33,16 +33,27 @@ export function simplifySoup(soup: Float32Array, maxTriangles: number): Float32A
   if (!(area > 0) || !Number.isFinite(area)) return soup;
 
   // A surface of area A on cells of side s fills about A / s² cells, and clustering leaves about two
-  // triangles per filled cell — so s ≈ √(2A / max). Coarser again if a mesh with much folded surface
-  // still comes out too heavy.
+  // triangles per filled cell — so s ≈ √(2A / max). A folded or scanned surface strays from that both
+  // ways, so the cell is searched for: coarser while the result is too heavy, finer while it is far
+  // under the budget (17.10.2026: the upper came out at 17 000 of 60 000 and looked crumpled).
   let cell = Math.sqrt((2 * area) / maxTriangles);
-  let out = soup;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    out = cluster(soup, count, cell, min, max);
-    if (out.length / 9 <= maxTriangles * 1.15) break;
-    cell *= 1.35;
+  let best: Float32Array | null = null;
+  let low = 0; // a cell known to give too many triangles
+  let high = Infinity; // a cell known to be within the budget
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    const out = cluster(soup, count, cell, min, max);
+    const triangles = out.length / 9;
+    if (triangles <= maxTriangles * 1.15) {
+      if (!best || triangles > best.length / 9) best = out;
+      if (triangles >= maxTriangles * 0.7) break;
+      high = cell;
+      cell = low > 0 ? (low + cell) / 2 : cell * 0.75;
+    } else {
+      low = cell;
+      cell = Number.isFinite(high) ? (cell + high) / 2 : cell * 1.35;
+    }
   }
-  return out;
+  return best ?? cluster(soup, count, cell * 2, min, max);
 }
 
 function cluster(soup: Float32Array, count: number, cell: number, min: number[], max: number[]): Float32Array {
