@@ -314,6 +314,20 @@ describe('assemblyLayout (AR-15 slots)', () => {
     expect(hi(7, 1)).toBeCloseTo(lo(6, 1)); // the TiPX housing hangs under it
     expect(lo(8, 1)).toBeCloseTo(0); // one that would reach through the table lies on it instead
   });
+
+  it('runs the long steel tube through the body, and keeps a short barrel out in front', () => {
+    const parts = [
+      { bounds: box(283, 63, 43), category: 'body' },
+      { bounds: box(180, 58, 55), category: 'handguard' },
+      { bounds: box(301, 28, 28), category: 'stalror', name: '28mm stál body rör' },
+      { bounds: box(117, 31, 31), category: 'stalror', name: 'Hlaup' },
+    ];
+    const p = assemblyLayout(parts);
+    expect(p[2].x).toBeCloseTo(p[0].x); // through the body, on its axis
+    expect(p[2].y).toBeCloseTo(p[0].y);
+    expect(p[2].z).toBeCloseTo(p[0].z);
+    expect(p[3].x + 117 / 2).toBeCloseTo(p[1].x - 180 / 2); // the short one beyond the handguard
+  });
 });
 
 describe('buildBoard with AR-15 categories', () => {
