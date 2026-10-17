@@ -289,6 +289,7 @@ export function BoardView({ sectionId, title, pins: initial, onPinsChange }: Boa
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
+          (event.nativeEvent as DragEvent & { libraryHandled?: boolean }).libraryHandled = true;
           void addPictures(Array.from(event.dataTransfer.files));
         }}
       >

@@ -87,7 +87,15 @@ import {
 import { lookFor } from '@/lib/3dwork/finish';
 import { isPartFile, PART_FILE_ACCEPT, partFileName, readPartFile } from '@/lib/3dwork/import-part';
 import { formatCount } from '@/lib/3dwork/format';
-import { buildBoard, dropRepeats, failureNote, partsOfBuilds, type BoardItem, type BuildPart } from '@/lib/3dwork/parts-library';
+import {
+  buildBoard,
+  dropRepeats,
+  failureNote,
+  partsOfBuilds,
+  slotCheck,
+  type BoardItem,
+  type BuildPart,
+} from '@/lib/3dwork/parts-library';
 import type { Project } from '@/lib/3dwork/project';
 import { listProjects, loadGeometry, loadThumbnail, saveThumbnail } from '@/lib/3dwork/storage';
 import { listCloudBuildParts, loadCloudGeometry } from '@/lib/3dwork/supabase-sync';
@@ -333,6 +341,8 @@ export function PartsLibrary({
   const [openBoardId, setOpenBoardId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<PartStatus | 'all'>('all');
   const [sectionDialog, setSectionDialog] = useState<SectionDialog | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [library, setLibrary] = useState<LibrarySnapshot | null>(null);
@@ -532,6 +542,22 @@ export function PartsLibrary({
     [favorites, activeCollection]
   );
   const boardPins = useCallback((id: string): BoardPin[] => library?.boards[id] ?? [], [library]);
+  // The AR-15 checklist for the collection shown: which slots its parts fill, which are missing.
+  const slots = useMemo(
+    () =>
+      tab === 'library' && activeCollection !== 'all'
+        ? slotCheck(
+            favorites
+              .filter((favorite) => favorite.collectionId === activeCollection)
+              .map((favorite) => {
+                const value = filterCategory(favorite.category);
+                return value === 'none' ? undefined : value;
+              })
+          )
+        : [],
+    [tab, activeCollection, favorites]
+  );
+  const missingSlots = slots.filter((slot) => slot.count === 0).map((slot) => slot.label);
   const toggleLayer = (id: string) =>
     setHiddenLayers((current) => {
       const next = new Set(current);
@@ -571,7 +597,9 @@ export function PartsLibrary({
         return null;
       }
       const source = entry.kind === 'library' ? entry.favorite : entry.part;
+      const category = filterCategory(markOf(entry));
       items.push({
+        category: category === 'none' ? undefined : category,
         name: nameOf(entry),
         color: source.color,
         finishId: source.finishId,
@@ -581,7 +609,7 @@ export function PartsLibrary({
       });
     }
     return items;
-  }, [tickedEntries]);
+  }, [tickedEntries, markOf]);
 
   const openBoard = useCallback(async () => {
     try {
@@ -984,6 +1012,38 @@ export function PartsLibrary({
     [tab, activeCollection, activeSections, hiddenLayers, reloadLibrary]
   );
 
+  // On the start page the whole page takes part files: a file dropped anywhere goes into the library
+  // instead of the browser opening it (17.10.2026: "get ekki dregið STL inn á safnið — opnast alltaf").
+  // A board's own picture drops and the panel's drop handler mark the event handled first.
+  const importRef = useRef(importFiles);
+  importRef.current = importFiles;
+  useEffect(() => {
+    if (!isPage) return;
+    const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+    const over = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      setDragging(true);
+      if (dragTimer.current) clearTimeout(dragTimer.current);
+      dragTimer.current = setTimeout(() => setDragging(false), 250);
+    };
+    const drop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      setDragging(false);
+      if ((event as DragEvent & { libraryHandled?: boolean }).libraryHandled) return;
+      void importRef.current(Array.from(event.dataTransfer?.files ?? []));
+    };
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', drop);
+      if (dragTimer.current) clearTimeout(dragTimer.current);
+    };
+  }, [isPage]);
+
   const editPart = useCallback(
     async (favorite: Favorite) => {
       if (!onEditPart) return;
@@ -1069,6 +1129,7 @@ export function PartsLibrary({
         }}
         onDrop={(event) => {
           // A board takes its own pictures; anything else dropped here is a part file for the library.
+          (event.nativeEvent as DragEvent & { libraryHandled?: boolean }).libraryHandled = true;
           if (event.defaultPrevented) return;
           event.preventDefault();
           void importFiles(Array.from(event.dataTransfer.files));
@@ -1175,6 +1236,8 @@ export function PartsLibrary({
               statusCounts={statusCounts}
               statusFilter={statusFilter}
               onStatus={setStatusFilter}
+              slots={slots}
+              onSlot={(category) => setCategoryFilter(categoryFilter === category ? 'all' : (category as CategoryValue))}
             />
           </aside>
         )}
@@ -1301,6 +1364,12 @@ export function PartsLibrary({
                 <span className="min-w-0 flex-1 truncate">
                   <b className="text-[var(--wb-ink)]">{collectionName(activeCollection)}</b> ·{' '}
                   {say(countIn(activeCollection), 'partur', 'partar')}
+                  {slots.some((slot) => slot.count > 0) && missingSlots.length > 0 && (
+                    <span className={`text-amber-700 ${isPage ? 'md:hidden' : ''}`} title="AR-15 hólf sem enginn partur í safninu fyllir enn">
+                      {' '}
+                      · vantar: {missingSlots.join(', ')}
+                    </span>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -1800,6 +1869,23 @@ export function PartsLibrary({
           </div>
         </div>
       </div>
+
+      {isPage && dragging && (
+        <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center bg-emerald-900/30 p-6">
+          <div className="rounded-xl border-2 border-dashed border-emerald-500 bg-white/95 px-6 py-5 text-center shadow-2xl">
+            <Upload className="mx-auto mb-2 h-8 w-8 text-emerald-600" />
+            <p className="text-sm font-bold text-slate-900">Slepptu STL / 3MF til að setja í Partasafnið</p>
+            <p className="text-[0.75rem] text-slate-600">
+              {tab === 'library' && activeCollection !== 'all'
+                ? `Fer í „${collectionName(activeCollection)}“`
+                : tab === 'starred'
+                  ? 'Fer í Uppáhalds'
+                  : 'Fer í Safnið mitt'}
+              {boardSection ? ' — myndir fara á borðið' : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       <NameDialog
         open={sectionDialog !== null}

@@ -7,7 +7,7 @@
  * show or hide its parts; a board layer opens its planning board.
  */
 
-import { Eye, EyeOff, FolderPlus, LayoutDashboard, Pencil, Plus, Star } from 'lucide-react';
+import { Check, Eye, EyeOff, FolderPlus, LayoutDashboard, Pencil, Plus, Star } from 'lucide-react';
 import { PART_STATUSES, type LibraryCollection, type LibrarySection, type PartStatus } from '@/lib/3dwork/favorites';
 
 /** The pseudo-layer of parts in a collection that are under no sub-category. */
@@ -48,6 +48,10 @@ export interface LayersProps {
   statusCounts: Record<PartStatus, number>;
   statusFilter: PartStatus | 'all';
   onStatus: (status: PartStatus | 'all') => void;
+  /** AR-15 checklist for the collection shown (empty when there is none). */
+  slots?: { category: string; label: string; count: number }[];
+  /** Show only the parts of one slot's category (again to show all). */
+  onSlot?: (category: string) => void;
 }
 
 const ROW = 'flex min-h-9 w-full items-center gap-2 rounded px-2 text-left text-[0.75rem]';
@@ -83,6 +87,8 @@ export function LayerList(props: LayersProps) {
     statusCounts,
     statusFilter,
     onStatus,
+    slots = [],
+    onSlot,
   } = props;
   const layers = sections.filter((section) => section.kind === 'parts');
   const boards = sections.filter((section) => section.kind === 'board');
@@ -213,6 +219,31 @@ export function LayerList(props: LayersProps) {
             <FolderPlus className="h-3.5 w-3.5" />
             Nýtt safn
           </button>
+        </div>
+      )}
+
+      {tab === 'library' && slots.length > 0 && (
+        <div>
+          <div className={HEAD}>Hólf (AR-15)</div>
+          {slots.map((slot) => (
+            <button
+              key={slot.category}
+              type="button"
+              className={`${ROW} ${ROW_OFF} ${categoryFilter === slot.category ? 'ring-1 ring-[var(--wb-accent)]' : ''}`}
+              onClick={() => onSlot?.(slot.category)}
+              title={slot.count > 0 ? `${slot.count} í safninu — smelltu til að sýna aðeins þá` : 'Enginn partur í þessu hólfi enn'}
+            >
+              {slot.count > 0 ? (
+                <Check className="h-3.5 w-3.5 text-emerald-600" />
+              ) : (
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-dashed border-amber-500 text-[0.6rem] font-bold text-amber-600">
+                  +
+                </span>
+              )}
+              <span className={`min-w-0 flex-1 truncate ${slot.count > 0 ? '' : 'text-amber-700'}`}>{slot.label}</span>
+              <span className="font-mono text-[0.65rem] opacity-70">{slot.count > 0 ? slot.count : 'vantar'}</span>
+            </button>
+          ))}
         </div>
       )}
 
