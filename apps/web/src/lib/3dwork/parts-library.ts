@@ -411,6 +411,23 @@ export function sideLayout(items: readonly Placed[]): { x: number; y: number }[]
   return out;
 }
 
+/** The depth layers the collection picture offers to switch on and off. */
+export const LAYER_COUNT = 4;
+
+/**
+ * The depth layer a part starts on, from its category: 1 the outside (body,
+ * receivers, grip, handguard, stock, sights, magazines), 2 what runs through
+ * it (steel tube, fittings), 3 what sits inside that (internals), 4 the rest.
+ * The user, 18.10.2026: turn off the body layer to see the internals, then
+ * layer 3 to see what is in them.
+ */
+export function defaultLayer(category: string | undefined): number {
+  if (!category || category === 'none') return 4;
+  if (category === 'stalror' || category === 'fittings') return 2;
+  if (category === 'innvols') return 3;
+  return 1;
+}
+
 /** The AR-15 slots a set of categories fills, and the ones still missing. */
 export function slotCheck(categories: readonly (string | undefined)[]): { category: string; label: string; count: number }[] {
   return AR_SLOTS.map((slot) => ({ ...slot, count: categories.filter((category) => category === slot.category).length }));

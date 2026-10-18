@@ -22,7 +22,7 @@ import {
   type Favorite,
   type LibrarySnapshot,
 } from '@/lib/3dwork/favorites';
-import { failureNote, slotCheck } from '@/lib/3dwork/parts-library';
+import { defaultLayer, failureNote, LAYER_COUNT, slotCheck } from '@/lib/3dwork/parts-library';
 import { STATUS_STYLE } from './board-view';
 import { CollectionArranger } from './collection-arranger';
 import { CollectionHero, type HeroPart } from './collection-hero';
@@ -69,6 +69,8 @@ export function CollectionsView({
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [arranging, setArranging] = useState(false);
+  // Depth layers switched off in the picture: 1 the outside, 2 what runs through it, 3 what sits in that.
+  const [hiddenDepth, setHiddenDepth] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +105,9 @@ export function CollectionsView({
   );
 
   // The layers of the collection, each with its parts; parts in no layer last, under „Óflokkað".
+  // The collection's sub-categories, each with its parts. A part in none goes with its category —
+  // into the sub-category of the same name if there is one — and only one with no category either
+  // is „Óflokkað" (18.10.2026: sorted parts showed as unsorted for want of a sub-category).
   const groups = useMemo(() => {
     const layers = (active?.sections ?? []).filter((section) => section.kind === 'parts');
     const out = layers.map((section) => ({
@@ -111,7 +116,19 @@ export function CollectionsView({
       parts: parts.filter((favorite) => favorite.sectionId === section.id),
     }));
     const loose = parts.filter((favorite) => !favorite.sectionId || !layers.some((section) => section.id === favorite.sectionId));
-    if (loose.length > 0 || out.length === 0) out.push({ id: UNSORTED, name: layers.length ? 'Óflokkað' : 'Partar', parts: loose });
+    const unsorted: Favorite[] = [];
+    for (const favorite of loose) {
+      const category = categoryOf(favorite);
+      if (!category) {
+        unsorted.push(favorite);
+        continue;
+      }
+      const label = categoryLabel(category);
+      const same = out.find((group) => group.name.trim().toLowerCase() === label.trim().toLowerCase());
+      if (same) same.parts.push(favorite);
+      else out.push({ id: `cat:${category}`, name: label, parts: [favorite] });
+    }
+    if (unsorted.length > 0 || out.length === 0) out.push({ id: UNSORTED, name: out.length ? 'Óflokkað' : 'Partar', parts: unsorted });
     return out;
   }, [active, parts]);
   const boards = (active?.sections ?? []).filter((section) => section.kind === 'board');
@@ -126,14 +143,17 @@ export function CollectionsView({
         finishId: favorite.finishId,
         category: categoryOf(favorite),
         place: favorite.place,
+        layer: favorite.layer,
       })),
     [parts]
   );
+  const depthOf = useCallback((favorite: Favorite) => favorite.layer ?? defaultLayer(categoryOf(favorite)), []);
   const hiddenIds = useMemo(() => {
     const ids = new Set<string>();
     for (const group of groups) if (hiddenGroups.has(group.id)) for (const favorite of group.parts) ids.add(favorite.id);
+    for (const favorite of parts) if (hiddenDepth.has(depthOf(favorite))) ids.add(favorite.id);
     return ids;
-  }, [groups, hiddenGroups]);
+  }, [groups, hiddenGroups, parts, hiddenDepth, depthOf]);
   const missing = slotCheck(parts.map(categoryOf))
     .filter((slot) => slot.count === 0)
     .map((slot) => slot.label);
@@ -258,6 +278,35 @@ export function CollectionsView({
                 <b className="text-[var(--wb-ink)]">{active?.name}</b> · {parts.length} partar
               </span>
               {missing.length > 0 && missing.length < 8 && <span className="text-amber-700">vantar: {missing.join(', ')}</span>}
+              <span className="flex flex-wrap items-center gap-1" role="group" aria-label="Lög á myndinni">
+                {Array.from({ length: LAYER_COUNT }, (_, index) => index + 1).map((layer) => {
+                  const off = hiddenDepth.has(layer);
+                  const count = parts.filter((favorite) => depthOf(favorite) === layer).length;
+                  return (
+                    <button
+                      key={layer}
+                      type="button"
+                      className={`inline-flex min-h-8 items-center gap-1 rounded border px-2 text-[0.66rem] font-bold ${
+                        off ? 'border-dashed border-slate-300 text-slate-400' : 'border-[var(--wb-accent)] text-[var(--wb-tool-ink)]'
+                      }`}
+                      onClick={() =>
+                        setHiddenDepth((current) => {
+                          const next = new Set(current);
+                          if (next.has(layer)) next.delete(layer);
+                          else next.add(layer);
+                          return next;
+                        })
+                      }
+                      aria-pressed={!off}
+                      title={`${off ? 'Kveikja á' : 'Slökkva á'} lagi ${layer}`}
+                    >
+                      {off ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      Lag {layer}
+                      <span className="font-mono text-[0.6rem] opacity-70">{count}</span>
+                    </button>
+                  );
+                })}
+              </span>
               <button
                 type="button"
                 className="ml-auto inline-flex min-h-9 items-center gap-1 rounded border border-[var(--wb-accent)] bg-[var(--wb-tool-bg)] px-2.5 text-[0.7rem] font-bold text-[var(--wb-label)] hover:bg-[var(--wb-tool-hover)]"

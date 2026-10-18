@@ -23,6 +23,7 @@
 
 import { readMark, type CategoryMark } from './categories';
 import { buildManifest, type CloudManifest } from './github-sync';
+import { finishById } from './finish';
 import { createProject, identityTransform, type Part, type Project } from './project';
 import {
   FAVORITES_ID,
@@ -143,6 +144,8 @@ export interface Favorite {
   category?: CategoryMark;
   /** Where it was put when its collection was arranged, and how it is turned; none for the automatic layout. */
   place?: Place;
+  /** Its depth layer in the collection's picture (1 outside, inwards from there); none: from its category. */
+  layer?: number;
   addedAt: number;
 }
 
@@ -161,6 +164,11 @@ export function tidyTurn(q: unknown): [number, number, number, number] | undefin
   const unit = q.map((value) => Math.round(((value * sign) / length) * 1e4) / 1e4 + 0) as [number, number, number, number];
   return Math.abs(unit[3] - 1) < 1e-4 ? undefined : unit;
 }
+
+/** The depth layers a part can be put on. */
+export const MAX_LAYER = 9;
+export const isLayer = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_LAYER;
 
 /** A stored place read back: numbers only, its turn tidied. */
 function readPlace(place: unknown): Place | undefined {
@@ -335,6 +343,7 @@ export function favoritesOf(shelf: Shelf): Favorite[] {
       status: isPartStatus(part.status) ? part.status : undefined,
       category: readMark(part.category, part.categoryAuto),
       place: readPlace(part.place),
+      layer: isLayer(part.layer) ? part.layer : undefined,
       addedAt: part.addedAt,
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
@@ -508,6 +517,10 @@ export interface ArrangeChange {
   id: string;
   place?: Place | null;
   color?: string;
+  /** A named metal finish (Gold, Chrome, …): its colour and look; wins over `color`. */
+  finishId?: string;
+  /** Its depth layer; null: back to the one its category gives. */
+  layer?: number | null;
 }
 
 /**
@@ -530,7 +543,12 @@ export function withArrangement(shelf: Shelf, changes: readonly ArrangeChange[])
         const q = tidyTurn(change.place.q);
         next = { ...next, place: { x: tenth(change.place.x), y: tenth(change.place.y), ...(q ? { q } : {}) } };
       }
-      if (change.color && /^#[0-9a-f]{6}$/i.test(change.color) && change.color.toLowerCase() !== part.color.toLowerCase()) {
+      if (change.layer === null) next = { ...next, layer: undefined };
+      else if (isLayer(change.layer)) next = { ...next, layer: change.layer };
+      const finish = finishById(change.finishId);
+      if (finish) {
+        next = { ...next, color: finish.color, finishId: finish.id };
+      } else if (change.color && /^#[0-9a-f]{6}$/i.test(change.color) && change.color.toLowerCase() !== part.color.toLowerCase()) {
         next = { ...next, color: change.color.toLowerCase(), finishId: undefined };
       }
       return next;

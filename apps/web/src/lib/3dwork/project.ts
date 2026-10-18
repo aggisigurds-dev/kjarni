@@ -93,6 +93,12 @@ export interface Part {
    * places it.
    */
   place?: { x: number; y: number; q?: [number, number, number, number] };
+  /**
+   * Library only: its depth layer in the collection's picture — 1 the outside
+   * (body, stock …), 2 what runs through it, 3 what sits inside that — so the
+   * outer ones can be switched off to see in. None: from its category.
+   */
+  layer?: number;
   /** In the Partasafn: Body, Innvols, … — `none` when the user chose Óflokkað. */
   category?: CategoryValue;
   /** The category is the auto-sorter's suggestion, not yet confirmed by the user. */

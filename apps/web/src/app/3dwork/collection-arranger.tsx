@@ -6,8 +6,10 @@
  * and the 20 cm line. Drag a part to move it left, right, up or down (to the
  * millimetre; the arrow keys nudge the picked one), turn it (90° or 5° steps,
  * „Snúa við" turns it end for end, „Velta" rolls it a quarter turn towards
- * you), drag the background to pan, wheel or pinch to zoom, and paint the
- * picked part. „Vista" stores the
+ * you), drag the background to pan, wheel or pinch to zoom, paint the picked
+ * part — a colour or a metal (chrome, brushed steel, gold, silver, bronze) —
+ * and switch depth layers off to see inside: 1 the outside, 2 what runs
+ * through it, 3 what sits in that, 4 the rest; a part can be put on another. „Vista" stores the
  * places and colours with the parts in the library, and the collection's
  * picture stands as arranged; „Sjálfvirkt" hands every part back to the
  * AR-15 layout. The user, 17.10.2026: "ekkert endilega í 3d, 2d yrði líka
@@ -17,17 +19,27 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Check, FlipHorizontal2, Loader2, Rotate3d, RotateCcw, RotateCw, X } from 'lucide-react';
+import { Check, Eye, EyeOff, FlipHorizontal2, Loader2, Rotate3d, RotateCcw, RotateCw, X } from 'lucide-react';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { toast } from 'sonner';
 import { tidyTurn, type ArrangeChange, type Place } from '@/lib/3dwork/favorites';
-import { lookFor } from '@/lib/3dwork/finish';
+import { FINISHES, lookFor, type Finish } from '@/lib/3dwork/finish';
 import { computeBounds, type Bounds } from '@/lib/3dwork/mesh';
-import { BOARD_HEIGHT_MM, failureNote, sideLayout } from '@/lib/3dwork/parts-library';
+import { BOARD_HEIGHT_MM, defaultLayer, failureNote, LAYER_COUNT, sideLayout } from '@/lib/3dwork/parts-library';
 import { previewOf, type HeroPart } from './collection-hero';
 import { ACTION_GHOST, ACTION_PRIMARY } from './ui';
 
 /** How far the picked part stands out in front, mm — so it is drawn over the others. */
 const LIFT_MM = 400;
+
+/** The metals' names here. */
+const FINISH_NAMES: Record<string, string> = {
+  chrome: 'Króm',
+  'brushed-steel': 'Burstað stál',
+  gold: 'Gull',
+  silver: 'Silfur',
+  bronze: 'Brons',
+};
 
 /** Colours to paint with: the bench's plastics and a few steels. */
 const PAINTS = [
@@ -57,7 +69,12 @@ export function CollectionArranger({
   const box = useRef<HTMLDivElement | null>(null);
   const items = useRef(new Map<string, Item>());
   const places = useRef(new Map<string, Place>());
-  const colours = useRef(new Map<string, string>());
+  // What each part was painted: a colour, or a metal finish with its colour.
+  const paints = useRef(new Map<string, { color: string; finishId?: string }>());
+  // Each part's depth layer, and the ones switched off.
+  const layers = useRef(new Map<string, number>(parts.map((part) => [part.id, part.layer ?? defaultLayer(part.category)])));
+  const [hiddenLayers, setHiddenLayers] = useState<Set<number>>(() => new Set());
+  const [layered, setLayered] = useState(false);
   const view = useRef<{
     renderer: THREE.WebGLRenderer;
     camera: THREE.OrthographicCamera;
@@ -102,7 +119,13 @@ export function CollectionArranger({
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x3b4252, 2.0));
+    // A room to reflect, so chrome, steel and gold read as metal and not as grey plastic.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    scene.environment = environment;
+    scene.environmentIntensity = 0.55;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x3b4252, 1.5));
     const key = new THREE.DirectionalLight(0xffffff, 1.9);
     key.position.set(-0.4, 0.8, 1);
     scene.add(key);
@@ -184,7 +207,7 @@ export function CollectionArranger({
         new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1),
         camera
       );
-      const meshes = [...items.current.entries()];
+      const meshes = [...items.current.entries()].filter(([, item]) => item.mesh.visible);
       const hits = ray.intersectObjects(meshes.map(([, item]) => item.mesh), false);
       const ids = hits.map((hit) => meshes.find(([, item]) => item.mesh === hit.object)?.[0]).filter((id): id is string => Boolean(id));
       // The picked part first, even where another covers it; else the one in front.
@@ -332,6 +355,7 @@ export function CollectionArranger({
         line.geometry.dispose();
         (line.material as THREE.Material).dispose();
       }
+      environment.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       view.current = null;
@@ -403,19 +427,55 @@ export function CollectionArranger({
   const turnRef = useRef(turn);
   turnRef.current = turn;
 
-  const paint = (colour: string) => {
+  /** Paint the picked part a colour, or give it a metal finish. */
+  const paint = (colour: string, finish?: Finish) => {
     if (!selectedId) return;
-    colours.current.set(selectedId, colour);
+    const choice = finish ? { color: finish.color, finishId: finish.id } : { color: colour };
+    paints.current.set(selectedId, choice);
     const item = items.current.get(selectedId);
     if (item) {
+      const look = lookFor(choice);
       const material = item.mesh.material as THREE.MeshStandardMaterial;
-      material.color.set(colour);
-      material.metalness = 0.05;
-      material.roughness = 0.55;
+      material.color.set(look.color);
+      material.metalness = look.metalness;
+      material.roughness = look.roughness;
     }
     setPainted(true);
     view.current?.draw();
   };
+
+  // Layers switched off hide their parts; a hidden part cannot stay picked.
+  useEffect(() => {
+    for (const [id, item] of items.current) item.mesh.visible = !hiddenLayers.has(layers.current.get(id) ?? 4);
+    if (selectedRef.current && hiddenLayers.has(layers.current.get(selectedRef.current) ?? 4)) {
+      setSelectedId(null);
+      setReadout(null);
+    }
+    view.current?.draw();
+  }, [hiddenLayers, progress]);
+
+  const toggleLayer = (layer: number) =>
+    setHiddenLayers((current) => {
+      const next = new Set(current);
+      if (next.has(layer)) next.delete(layer);
+      else next.add(layer);
+      return next;
+    });
+
+  /** Put the picked part on another depth layer. */
+  const moveToLayer = (layer: number) => {
+    if (!selectedId) return;
+    layers.current.set(selectedId, layer);
+    setLayered(true);
+    const item = items.current.get(selectedId);
+    if (item) item.mesh.visible = !hiddenLayers.has(layer);
+    if (hiddenLayers.has(layer)) {
+      setSelectedId(null);
+      setReadout(null);
+    }
+    view.current?.draw();
+  };
+  const layerCount = (layer: number) => parts.filter((part) => (layers.current.get(part.id) ?? 4) === layer).length;
 
   // Every part back where the AR-15 layout puts it.
   const toAuto = () => {
@@ -428,16 +488,22 @@ export function CollectionArranger({
     view.current?.fit();
   };
 
-  const dirty = moved || auto || painted;
+  const dirty = moved || auto || painted || layered;
   const save = async () => {
-    const changes: ArrangeChange[] = parts.map((part) => ({
-      id: part.id,
-      ...(auto ? { place: null } : moved ? { place: places.current.get(part.id) } : {}),
-      ...(colours.current.has(part.id) ? { color: colours.current.get(part.id) } : {}),
-    }));
+    const changes: ArrangeChange[] = parts.map((part) => {
+      const paint = paints.current.get(part.id);
+      const layer = layers.current.get(part.id);
+      const startLayer = part.layer ?? defaultLayer(part.category);
+      return {
+        id: part.id,
+        ...(auto ? { place: null } : moved ? { place: places.current.get(part.id) } : {}),
+        ...(paint ? { color: paint.color, ...(paint.finishId ? { finishId: paint.finishId } : {}) } : {}),
+        ...(layer !== undefined && layer !== startLayer ? { layer } : {}),
+      };
+    });
     setSaving(true);
     try {
-      await onSave(changes.filter((change) => 'place' in change || 'color' in change));
+      await onSave(changes.filter((change) => 'place' in change || 'color' in change || 'layer' in change));
       onClose();
     } catch (error) {
       toast.error(failureNote(error, 'Náði ekki að vista röðunina.'));
@@ -452,7 +518,34 @@ export function CollectionArranger({
   };
 
   const selected = parts.find((part) => part.id === selectedId);
-  const selectedColour = selectedId ? colours.current.get(selectedId) ?? (selected ? lookFor(selected).color : undefined) : undefined;
+  const selectedPaint = selectedId ? paints.current.get(selectedId) ?? (selected ? { color: selected.color, finishId: selected.finishId } : undefined) : undefined;
+  const selectedColour = selectedPaint?.finishId ? undefined : selectedPaint?.color;
+  const selectedLayer = selectedId ? layers.current.get(selectedId) : undefined;
+  const layerToggles = (
+    <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Lög">
+      {Array.from({ length: LAYER_COUNT }, (_, index) => index + 1).map((layer) => {
+        const off = hiddenLayers.has(layer);
+        return (
+          <button
+            key={layer}
+            type="button"
+            className={`inline-flex min-h-8 items-center gap-1 rounded border px-2 text-[0.68rem] font-bold ${
+              off
+                ? 'border-dashed border-slate-300 bg-transparent text-slate-400'
+                : 'border-[var(--wb-accent)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)]'
+            }`}
+            onClick={() => toggleLayer(layer)}
+            aria-pressed={!off}
+            title={`${off ? 'Kveikja á' : 'Slökkva á'} lagi ${layer} — ${['ytra byrðið', 'það sem fer í gegnum það', 'það sem er inni í því', 'annað'][layer - 1] ?? ''}`}
+          >
+            {off ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            Lag {layer}
+            <span className="font-mono text-[0.6rem] opacity-70">{layerCount(layer)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="wb-theme fixed inset-0 z-[80] flex flex-col bg-[var(--wb-ground)] text-[var(--wb-ink)]" role="dialog" aria-modal="true" aria-label={`Raða ${title}`}>
@@ -549,6 +642,45 @@ export function CollectionArranger({
                 Rétt
               </button>
             </div>
+            {layerToggles}
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Í lag">
+              <span className="text-[0.65rem] font-bold text-[var(--wb-ink-mute)]">Í lag</span>
+              {Array.from({ length: LAYER_COUNT }, (_, index) => index + 1).map((layer) => (
+                <button
+                  key={layer}
+                  type="button"
+                  className={`h-8 w-8 rounded border text-[0.7rem] font-bold ${
+                    selectedLayer === layer
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]'
+                  }`}
+                  onClick={() => moveToLayer(layer)}
+                  aria-pressed={selectedLayer === layer}
+                  title={`Setja ${selected.name} í lag ${layer}`}
+                >
+                  {layer}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Málmur">
+              {FINISHES.map((finish) => (
+                <button
+                  key={finish.id}
+                  type="button"
+                  className={`inline-flex min-h-8 items-center gap-1 rounded border px-1.5 text-[0.66rem] font-bold text-[var(--wb-tool-ink)] ${
+                    selectedPaint?.finishId === finish.id ? 'border-emerald-600 ring-1 ring-emerald-600' : 'border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)]'
+                  }`}
+                  onClick={() => paint(finish.color, finish)}
+                  title={finish.name}
+                >
+                  <span
+                    className="h-5 w-5 rounded-full border border-slate-300"
+                    style={{ background: `linear-gradient(135deg, ${finish.color} 0%, #ffffff 45%, ${finish.color} 100%)` }}
+                  />
+                  {FINISH_NAMES[finish.id] ?? finish.name}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Litur">
               {PAINTS.map((colour) => (
                 <button
@@ -573,7 +705,10 @@ export function CollectionArranger({
             </div>
           </>
         ) : (
-          <span className="text-[0.72rem] text-[var(--wb-ink-mute)]">Pikkaðu á part til að færa hann eða mála.</span>
+          <>
+            {layerToggles}
+            <span className="text-[0.72rem] text-[var(--wb-ink-mute)]">Pikkaðu á part til að færa hann, snúa eða mála.</span>
+          </>
         )}
       </div>
     </div>
