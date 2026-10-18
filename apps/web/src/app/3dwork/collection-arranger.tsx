@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Check, ChevronDown, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, X } from 'lucide-react';
+import { Check, ChevronDown, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, Scissors, X } from 'lucide-react';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { toast } from 'sonner';
 import { tidyTurn, type ArrangeChange, type Place } from '@/lib/3dwork/favorites';
@@ -60,11 +60,14 @@ export function CollectionArranger({
   parts,
   onSave,
   onClose,
+  onSplit,
 }: {
   title: string;
   parts: readonly HeroPart[];
   onSave: (changes: ArrangeChange[]) => Promise<void>;
   onClose: () => void;
+  /** Split a part into the separate things in its mesh; true when it was split (the arranger opens again with the pieces). */
+  onSplit?: (id: string, place: Place | undefined) => Promise<boolean>;
 }) {
   const box = useRef<HTMLDivElement | null>(null);
   const items = useRef(new Map<string, Item>());
@@ -491,7 +494,7 @@ export function CollectionArranger({
   };
 
   const dirty = moved || auto || painted || layered;
-  const save = async () => {
+  const collectChanges = (): ArrangeChange[] => {
     const changes: ArrangeChange[] = parts.map((part) => {
       const paint = paints.current.get(part.id);
       const layer = layers.current.get(part.id);
@@ -503,12 +506,36 @@ export function CollectionArranger({
         ...(layer !== undefined && layer !== startLayer ? { layer } : {}),
       };
     });
+    return changes.filter((change) => 'place' in change || 'color' in change || 'layer' in change);
+  };
+  const save = async () => {
     setSaving(true);
     try {
-      await onSave(changes.filter((change) => 'place' in change || 'color' in change || 'layer' in change));
+      await onSave(collectChanges());
       onClose();
     } catch (error) {
       toast.error(failureNote(error, 'Náði ekki að vista röðunina.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Split the picked part into its separate things; what is arranged is saved first, so nothing is lost. */
+  const split = async () => {
+    if (!selectedId || !onSplit) return;
+    setSaving(true);
+    try {
+      if (dirty) {
+        if (!window.confirm('Röðunin verður vistuð fyrst. Halda áfram?')) return;
+        await onSave(collectChanges());
+        setMoved(false);
+        setAuto(false);
+        setPainted(false);
+        setLayered(false);
+      }
+      await onSplit(selectedId, places.current.get(selectedId));
+    } catch (error) {
+      toast.error(failureNote(error, 'Náði ekki að skipta partinum upp.'));
     } finally {
       setSaving(false);
     }
@@ -692,6 +719,19 @@ export function CollectionArranger({
               >
                 Rétt
               </button>
+              {onSplit && (
+                <button
+                  type="button"
+                  className="inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-1.5 text-[0.66rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)] disabled:opacity-40"
+                  onClick={() => void split()}
+                  disabled={saving}
+                  title="Skipta upp — hver sér-hlutur í partinum verður sinn eigin partur"
+                  aria-label="Skipta partinum upp í sér-hluti"
+                >
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5" />}
+                  Skipta
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Litur og málmur">
               {FINISHES.map((finish) => (

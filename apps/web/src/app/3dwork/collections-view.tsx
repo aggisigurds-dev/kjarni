@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as THREE from 'three';
 import { ArrowLeft, ChevronDown, Eye, EyeOff, Layers, Loader2, Move, SquarePen } from 'lucide-react';
 import { toast } from 'sonner';
 import { categoryLabel, filterCategory } from '@/lib/3dwork/categories';
@@ -18,14 +19,21 @@ import {
   loadFavoriteGeometry,
   loadLibrary,
   PART_STATUSES,
+  splitFavorite,
   type ArrangeChange,
   type Favorite,
   type LibrarySnapshot,
+  type Place,
+  type SplitPiece,
 } from '@/lib/3dwork/favorites';
+import { lookFor } from '@/lib/3dwork/finish';
+import { computeBounds } from '@/lib/3dwork/mesh';
+import { splitIntoPieces } from '@/lib/3dwork/split-pieces';
 import { defaultLayer, failureNote, LAYER_COUNT, slotCheck } from '@/lib/3dwork/parts-library';
 import { STATUS_STYLE } from './board-view';
 import { CollectionArranger } from './collection-arranger';
 import { CollectionHero, type HeroPart } from './collection-hero';
+import { compactPicture, renderThumbnail } from './thumbnail';
 import { ACTION_PRIMARY, PANEL } from './ui';
 
 const LAST_KEY = 'kjarni3d_sofn_collection';
@@ -69,6 +77,8 @@ export function CollectionsView({
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [arranging, setArranging] = useState(false);
+  // Bumped after a split, so the arranger opens again with the pieces.
+  const [arrangeKey, setArrangeKey] = useState(0);
   // Depth layers switched off in the picture: 1 the outside, 2 what runs through it, 3 what sits in that.
   const [hiddenDepth, setHiddenDepth] = useState<Set<number>>(() => new Set());
 
@@ -189,6 +199,48 @@ export function CollectionsView({
     toast.success(`Röðunin á „${active?.name ?? 'safninu'}“ er vistuð.`);
   };
 
+  /**
+   * Split a saved part into the separate things in its mesh. Each piece keeps
+   * the part's sorting and look; in an arranged collection it stands where it
+   * stood inside the part. The part itself is hidden, not erased.
+   */
+  const splitPart = async (id: string, place: Place | undefined): Promise<boolean> => {
+    const favorite = (library?.favorites ?? []).find((entry) => entry.id === id);
+    if (!favorite) return false;
+    const full = await loadFavoriteGeometry(favorite.versionId);
+    if (!full) {
+      toast.error(`Fann ekki möskvann í ${favorite.name}.`);
+      return false;
+    }
+    const pieces = splitIntoPieces(full);
+    if (pieces.length < 2) {
+      toast.message(`„${favorite.name}“ er einn samfelldur hlutur — ekkert að skipta upp.`);
+      return false;
+    }
+    if (!window.confirm(`Skipta „${favorite.name}“ í ${pieces.length} parta? Upprunalegi parturinn er falinn, ekki eytt.`)) return false;
+    const centre = computeBounds(full).center;
+    const turn = new THREE.Quaternion().fromArray(place?.q ?? [0, 0, 0, 1]);
+    const look = lookFor(favorite);
+    const made: SplitPiece[] = [];
+    for (const [index, soup] of pieces.entries()) {
+      const c = computeBounds(soup).center;
+      const offset = new THREE.Vector3(c[0] - centre[0], c[1] - centre[1], c[2] - centre[2]).applyQuaternion(turn);
+      const picture = renderThumbnail(soup, look.color, look);
+      made.push({
+        name: `${favorite.name} — hluti ${index + 1}`,
+        soup,
+        thumbnail: picture ? await compactPicture(picture) : undefined,
+        place: place ? { x: place.x + offset.x, y: place.y + offset.y, ...(place.q ? { q: place.q } : {}) } : undefined,
+      });
+    }
+    await splitFavorite(favorite.id, made);
+    setLibrary(await loadLibrary());
+    setSelectedId(null);
+    setArrangeKey((value) => value + 1);
+    toast.success(`„${favorite.name}“ skipt í ${pieces.length} parta.`);
+    return true;
+  };
+
   const openPart = async (favorite: Favorite) => {
     setBusy(`Sæki ${favorite.name}…`);
     try {
@@ -249,7 +301,14 @@ export function CollectionsView({
       </div>
 
       {arranging && active && (
-        <CollectionArranger title={active.name} parts={heroParts} onSave={saveArrangement} onClose={() => setArranging(false)} />
+        <CollectionArranger
+          key={arrangeKey}
+          title={active.name}
+          parts={heroParts}
+          onSave={saveArrangement}
+          onClose={() => setArranging(false)}
+          onSplit={splitPart}
+        />
       )}
 
       {!library ? (

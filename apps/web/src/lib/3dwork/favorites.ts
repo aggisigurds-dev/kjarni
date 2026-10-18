@@ -556,6 +556,44 @@ export function withArrangement(shelf: Shelf, changes: readonly ArrangeChange[])
   };
 }
 
+/** One piece of a part being split: its mesh, its name, its picture, and where it stands if the collection is arranged. */
+export interface SplitPiece {
+  name: string;
+  soup: Float32Array;
+  thumbnail?: string;
+  place?: Place;
+}
+
+/** The pieces as parts of the shelf, sorted as the original was: collection, sub-category, category, status, layer, look. */
+export function piecesOf(original: Part, pieces: readonly SplitPiece[], now = Date.now()): Part[] {
+  return pieces.map((piece, index) => {
+    const part = shelfPart(
+      {
+        name: piece.name,
+        color: original.color,
+        materialId: original.materialId,
+        finishId: original.finishId,
+        thumbnail: piece.thumbnail,
+        // Saved before the library had stars, a part counts as starred.
+        starred: original.starred ?? true,
+        collectionId: original.collectionId,
+        sectionId: original.sectionId,
+        category: readMark(original.category, original.categoryAuto),
+      },
+      piece.soup,
+      now + index
+    );
+    return { ...part, status: original.status, layer: original.layer, place: piece.place };
+  });
+}
+
+/** The shelf with a part taken off — hidden, not erased — and its pieces put on in its stead. */
+export function withPartSplit(shelf: Shelf, id: string, pieces: readonly Part[]): Shelf {
+  const normal = normalizeShelf(shelf);
+  if (!normal.parts.some((part) => part.id === id && part.visible)) throw new Error('Sá partur er ekki lengur í Partasafninu.');
+  return { ...normal, parts: [...normal.parts.map((part) => (part.id === id ? { ...part, visible: false } : part)), ...pieces] };
+}
+
 /** The list of hidden build parts with these taken off (`hidden` false) or put on it. */
 function hiddenWith(
   current: readonly HiddenBuildPart[],
@@ -832,6 +870,31 @@ export async function deleteCollection(id: string, moveTo: string | null): Promi
 
 export async function moveFavorite(id: string, collectionId: string): Promise<void> {
   await changeShelf((shelf) => withFavoriteMoved(shelf, id, collectionId));
+}
+
+/**
+ * Split a saved part into pieces: each piece's mesh into the bucket, then one
+ * write that hides the part and puts the pieces on the shelf in its stead.
+ */
+export async function splitFavorite(id: string, pieces: readonly SplitPiece[]): Promise<Favorite[]> {
+  const { shelf, manifest } = await fetchShelf();
+  const original = shelf.parts.find((part) => part.id === id && part.visible);
+  if (!original) throw new Error('Sá partur er ekki lengur í Partasafninu.');
+  const made = piecesOf(original, pieces);
+  for (const [index, part] of made.entries()) {
+    const { error } = await client()
+      .storage.from(WORK3D_BUCKET)
+      .upload(`${FAVORITES_ID}/${part.activeVersionId}.bin`, pieces[index].soup.slice().buffer, {
+        contentType: 'application/octet-stream',
+        upsert: true,
+      });
+    if (error) throw new Error(error.message);
+  }
+  await storeShelf(withPartSplit(shelf, id, made), {
+    ...manifest,
+    ...buildManifest(made.map((part, index) => [part.activeVersionId, pieces[index].soup])),
+  });
+  return favoritesOf({ ...shelf, parts: made });
 }
 
 /** Store a collection as arranged — places and colours — in one write. */

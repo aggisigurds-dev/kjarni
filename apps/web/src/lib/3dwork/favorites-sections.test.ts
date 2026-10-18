@@ -16,6 +16,8 @@ import {
   withSectionRenamed,
   withBuildPartsHidden,
   withArrangement,
+  withPartSplit,
+  piecesOf,
   tidyTurn,
   type BoardPin,
   type Shelf,
@@ -266,5 +268,45 @@ describe('arranging a collection', () => {
     expect(kept.parts.find((part) => part.id === a)?.place).toEqual({ x: 5, y: 5 });
     const moved = withFavoriteMoved(other, a, 'col_other');
     expect(moved.parts.find((part) => part.id === a)?.place).toBeUndefined();
+  });
+});
+
+describe('splitting a part into pieces', () => {
+  it('puts the pieces in where the part was, sorted the same, and hides the part', () => {
+    const { shelf, a } = ironWolf();
+    const sorted = withArrangement(
+      { ...shelf, parts: shelf.parts.map((part) => (part.id === a ? { ...part, status: 'printed' as const, category: 'magazine' as const } : part)) },
+      [{ id: a, layer: 2 }]
+    );
+    const original = sorted.parts.find((part) => part.id === a)!;
+    const pieces = piecesOf(
+      original,
+      [
+        { name: 'Hamar — hluti 1', soup, place: { x: 10, y: 20 } },
+        { name: 'Hamar — hluti 2', soup },
+      ],
+      100
+    );
+    const split = withPartSplit(sorted, a, pieces);
+    const favorites = librarySnapshot(split).favorites;
+    expect(favorites.some((entry) => entry.id === a)).toBe(false);
+    expect(split.parts.find((part) => part.id === a)?.visible).toBe(false); // kept, only hidden
+    const made = favorites.filter((entry) => entry.name.startsWith('Hamar — hluti'));
+    expect(made).toHaveLength(2);
+    for (const entry of made) {
+      expect(entry.collectionId).toBe('col_iron');
+      expect(entry.sectionId).toBe('sec_innvols');
+      expect(entry.status).toBe('printed');
+      expect(entry.layer).toBe(2);
+      expect(entry.category?.category).toBe('magazine');
+      expect(entry.color).toBe('#f00');
+    }
+    expect(made.find((entry) => entry.name.endsWith('1'))?.place).toEqual({ x: 10, y: 20 });
+    expect(made.find((entry) => entry.name.endsWith('2'))?.place).toBeUndefined();
+  });
+
+  it('refuses a part that is no longer on the shelf', () => {
+    const { shelf } = ironWolf();
+    expect(() => withPartSplit(shelf, 'part_gone', [])).toThrow();
   });
 });

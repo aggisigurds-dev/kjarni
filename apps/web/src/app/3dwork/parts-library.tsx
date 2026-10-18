@@ -113,7 +113,7 @@ import {
 import { BoardView, STATUS_STYLE } from './board-view';
 import { LayerChips, LayerList, UNSORTED_LAYER } from './library-layers';
 import { NameDialog } from './name-dialog';
-import { renderThumbnail } from './thumbnail';
+import { compactPicture, renderThumbnail } from './thumbnail';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, PANEL } from './ui';
 
 export type LibraryTab = 'starred' | 'library' | 'builds';
@@ -150,23 +150,6 @@ function updateFor(entry: Entry, mark: CategoryMark | undefined): CategoryUpdate
   return entry.kind === 'library'
     ? { kind: 'library', id: entry.favorite.id, mark }
     : { kind: 'build', key: entry.part.key, name: entry.part.name, triangles: entry.part.triangles, mark };
-}
-
-/** A picture small enough to keep many of in the library's document: WebP where the browser can write it. */
-async function compactPicture(dataUrl: string): Promise<string> {
-  try {
-    const image = new Image();
-    image.src = dataUrl;
-    await image.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    canvas.getContext('2d')?.drawImage(image, 0, 0);
-    const webp = canvas.toDataURL('image/webp', 0.85);
-    return webp.startsWith('data:image/webp') && webp.length < dataUrl.length ? webp : dataUrl;
-  } catch {
-    return dataUrl;
-  }
 }
 
 /** Pictures still to draw, one at a time: a mesh can be tens of megabytes. */

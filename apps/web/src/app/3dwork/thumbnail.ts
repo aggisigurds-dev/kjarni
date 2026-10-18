@@ -27,6 +27,23 @@ function getRenderer(): THREE.WebGLRenderer | null {
   }
 }
 
+/** A picture small enough to keep many of in the library's document: WebP where the browser can write it. */
+export async function compactPicture(dataUrl: string): Promise<string> {
+  try {
+    const image = new Image();
+    image.src = dataUrl;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    canvas.getContext('2d')?.drawImage(image, 0, 0);
+    const webp = canvas.toDataURL('image/webp', 0.85);
+    return webp.startsWith('data:image/webp') && webp.length < dataUrl.length ? webp : dataUrl;
+  } catch {
+    return dataUrl;
+  }
+}
+
 export function renderThumbnail(
   soup: Float32Array,
   color: string,
