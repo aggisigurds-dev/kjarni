@@ -16,6 +16,8 @@ import { classifyPart, type Project } from '@/lib/3dwork/project';
 import { rememberOpenProject, saveGeometry, saveProject } from '@/lib/3dwork/storage';
 import { CloudPicker } from './cloud-picker';
 import { KitBoard } from './kit-board';
+import { rgFont } from './ragnarok/fonts';
+import './ragnarok/theme.css';
 import { RecentBuilds } from './recent-builds';
 import { ACTION_GHOST, LABEL, PANEL } from './ui';
 
@@ -78,11 +80,19 @@ export function KitsHome() {
 
   return (
     <div className="wb-theme flex h-dvh max-h-dvh flex-col gap-2 bg-[var(--wb-ground)] p-2 text-[var(--wb-ink)]">
-      <div className={`${PANEL} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
+      <div
+        className={`${PANEL} bench-chrome ${rgFont.variable} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}
+      >
         <div className="flex min-w-0 items-center gap-2">
-          <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
-          <span className="text-sm font-bold text-slate-900">3dwork</span>
-          <span className="text-[0.65rem] text-slate-500">Pick up recent work, or start from parts</span>
+          <span className="wb-mark" aria-hidden="true">
+            <i />
+            <i />
+          </span>
+          <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-label)]" />
+          <span className="text-sm font-bold tracking-[0.04em] text-[var(--wb-ink)]">3dwork</span>
+          <span className="text-[0.65rem] text-[var(--wb-ink-mute)]">
+            Pick up recent work, or start from parts
+          </span>
         </div>
         <button
           type="button"
@@ -92,18 +102,18 @@ export function KitsHome() {
           <Cloud className="h-3.5 w-3.5" />
           All saved builds
         </button>
-        <div className="flex overflow-hidden rounded border border-slate-300">
+        <div className="flex overflow-hidden rounded border border-[var(--wb-tool-border)]">
           <button
             type="button"
             onClick={() => setEngine('bench')}
-            className="bg-emerald-600 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-white hover:bg-emerald-500"
+            className="bg-[var(--wb-accent)] px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-[var(--wb-accent-ink)] hover:brightness-110"
           >
             3D bench
           </button>
           <button
             type="button"
             onClick={() => setEngine('sketch')}
-            className="px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-500 hover:text-slate-900"
+            className="px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-[var(--wb-ink-mute)] hover:text-[var(--wb-ink)]"
           >
             2D sketch
           </button>
