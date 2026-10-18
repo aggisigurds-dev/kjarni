@@ -1568,7 +1568,7 @@ export function BoardCanvas({
               "block w-full rounded-md px-2.5 py-1.5 text-left text-[12px] text-stone-200 hover:bg-white/10";
             return (
               <div
-                className="absolute z-30 w-52 rounded-xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl backdrop-blur-md"
+                className="absolute z-30 w-52 rounded-xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl"
                 style={{
                   left: Math.max(4, Math.min(menu.x, width - 216)),
                   top: Math.max(4, Math.min(menu.y, height - 280)),

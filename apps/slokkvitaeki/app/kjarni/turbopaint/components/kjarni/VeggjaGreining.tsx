@@ -41,6 +41,7 @@ import { neikvaedarVisar, saekjaNeikvaett, skraNeikvaett, type NLina } from "../
 import { kvardiTeikningar, vinnaLinur, virkVikmork } from "../../lib/board/sjalfvirkt";
 import { maelaThekju } from "../../lib/board/veggja-thekja";
 import { bladMyndar } from "../../lib/board/margar-haedir";
+import { useErSimi } from "../../lib/board/simi";
 import { getSupabase, supabaseUrl } from "../../lib/board/supabase";
 import {
   beidniGogn,
@@ -576,12 +577,17 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
   // Flokkur sem ekki eru veggir og er valinn sést alltaf (líka utan átta efstu) — svo viðvörunin vísi á eitthvað.
   const synd = fleiri ? flokkar : flokkar.filter((f, i) => i < 8 || valdir.includes(f.breidd));
   const btn = "rounded-md px-2.5 py-1.5 text-[12px] font-semibold";
+  // 14.10.2026 (Agnar, í síma: „stórkassi með óþarfa rugli"): í síma sýnir kassinn aðeins það sem þarf til að ákveða —
+  // fjölda og takkana. Skýringarnar, Veggjavélin og þekjan eru tölvuhlutir; þær standa áfram þar.
+  const simi = useErSimi();
 
   return (
     <div
       role="dialog"
       aria-label="Greina veggi"
-      className="pointer-events-auto absolute top-16 right-3 z-30 flex max-h-[calc(100%-5rem)] w-[344px] flex-col rounded-xl border border-white/10 bg-[#1a1d2e]/97 p-3 text-stone-100 shadow-2xl"
+      className={`pointer-events-auto absolute z-30 flex flex-col rounded-xl border border-white/10 bg-[#1a1d2e]/97 p-3 text-stone-100 shadow-2xl ${
+        simi ? "top-14 right-2 left-16 max-h-[calc(100%-9rem)] w-auto" : "top-16 right-3 max-h-[calc(100%-5rem)] w-[344px]"
+      }`}
     >
       <div className="flex items-center gap-1.5">
         <ScanSearch className="size-4 text-[#FE653F]" />
@@ -593,7 +599,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       <div className="mt-0.5 truncate text-[11px] text-white/50">{plan?.name}</div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
-        {hamur !== "les" && hamur !== "vel" ? (
+        {hamur !== "les" && hamur !== "vel" && !simi ? (
           <div data-veggjavel-val className="mb-2 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
             <button
               type="button"
@@ -677,7 +683,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
         ) : null}
         {hamur === "les" ? <div className="py-3 text-[12px] text-white/70">Les teikninguna…</div> : null}
         {hamur === "villa" ? <div className="py-3 text-[12px] text-red-300">{villa}</div> : null}
-        {hamur === "mynd" ? (
+        {hamur === "mynd" && !simi ? (
           <div className="text-[12px] text-white/75">
             Teikningin er mynd (skönnun / TIF / skönnuð PDF) — engar vigurlínur að lesa. Veggirnir eru greindir úr myndinni, eins og
             Teikning-glugginn gerir (grænt = veggir, blátt = gler).
@@ -685,7 +691,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
         ) : null}
         {hamur === "pdf" ? (
           <>
-            <div className="text-[11.5px] text-white/70">
+            <div className={`text-[11.5px] text-white/70 ${simi ? "hidden" : ""}`}>
               Línuflokkar í PDF-inu eftir þykkt. Veldu þá sem eru veggir — einn eða fleiri. Appelsínugular línur á teikningunni = valdar,
               grænt = veggirnir sem verða til (gler blátt).
             </div>
@@ -768,10 +774,10 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
                   <b>{fjoldiTegunda(nid.veggir)}</b>
                   {nid.linur ? <span className="text-white/60"> úr {fjoldi(nid.linur)} línum</span> : null}
                 </div>
-                {nid.thekja != null ? (
+                {nid.thekja != null && !simi ? (
                   <div className="text-white/60">Þekja: {(nid.thekja * 100).toFixed(1).replace(".", ",")} % valinna lína liggja í veggjum</div>
                 ) : null}
-                {nid.aths ? <div className="text-amber-300">{nid.aths}</div> : null}
+                {nid.aths && !simi ? <div className="text-amber-300">{nid.aths}</div> : null}
               </>
             )}
           </div>
@@ -832,10 +838,16 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       ) : null}
       {!tillogur && nid && samruni && hamur !== "les" && !stadfesta ? (
         <div className="mt-2 border-t border-white/10 pt-2">
-          <div data-forsk-eyding className="mb-2 rounded bg-white/5 px-2 py-1 text-[11.5px] leading-snug text-white/75">
-            <b>Taka úr:</b> smelltu á græna línu eða dragðu kassa á teikningunni (líka „Eyða í kassa" í ritlinum). Það sem þú
-            tekur út skráist í þjálfunarminni og kemur ekki aftur á sama stað.
-            {munad ? ` ${munad} ${munad === 1 ? "lína sem þú hefur áður tekið út er falin" : "línur sem þú hefur áður tekið út eru faldar"}.` : ""}
+          <div data-forsk-eyding className={`mb-2 rounded bg-white/5 px-2 py-1 text-[11.5px] leading-snug text-white/75 ${simi && !burt.length ? "hidden" : ""}`}>
+            {simi ? (
+              <span>{burt.reduce((s, l) => s + l.length, 0)} línur teknar úr.</span>
+            ) : (
+              <>
+                <b>Taka úr:</b> smelltu á græna línu eða dragðu kassa á teikningunni (líka „Eyða í kassa" í ritlinum). Það sem þú
+                tekur út skráist í þjálfunarminni og kemur ekki aftur á sama stað.
+                {munad ? ` ${munad} ${munad === 1 ? "lína sem þú hefur áður tekið út er falin" : "línur sem þú hefur áður tekið út eru faldar"}.` : ""}
+              </>
+            )}
             {burt.length ? (
               <button type="button" onClick={() => useVeggjaRitill.getState().afturkallaBurt()} className="ml-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[11px] hover:bg-white/15">
                 Afturkalla
@@ -845,8 +857,14 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
           {fyrir.length ? (
             <>
               <div className="text-[11.5px] text-white/70">
-                Á teikningunni eru þegar <b>{fyrir.length}</b> veggir. Bæta við sleppir tvíteknum — veggirnir sem fyrir eru (og leiðréttingar á þeim)
-                haldast.
+                {simi ? (
+                  <>Á teikningunni eru þegar <b>{fyrir.length}</b> veggir.</>
+                ) : (
+                  <>
+                    Á teikningunni eru þegar <b>{fyrir.length}</b> veggir. Bæta við sleppir tvíteknum — veggirnir sem fyrir eru (og
+                    leiðréttingar á þeim) haldast.
+                  </>
+                )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button

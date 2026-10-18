@@ -112,7 +112,7 @@ export function Toolbar() {
         aria-label="Opna verkfærasúluna"
         title={`Opna verkfærasúluna${virkt ? ` — núna: ${virkt.label}` : tool === "symbol" ? ` — núna: Tákn` : ""}`}
         onClick={() => breyta(false)}
-        className="tp-sula-opna pointer-events-auto relative flex size-10 shrink-0 items-center justify-center self-start rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-[#FE653F] shadow-2xl shadow-black/40 backdrop-blur-md active:translate-y-px"
+        className="tp-sula-opna pointer-events-auto relative flex size-10 shrink-0 items-center justify-center self-start rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-[#FE653F] shadow-2xl shadow-black/40 active:translate-y-px"
       >
         {virkt ? (
           virkt.icon
@@ -132,7 +132,7 @@ export function Toolbar() {
   }
 
   return (
-    <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
+    <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40">
       <button
         type="button"
         data-sula-loka

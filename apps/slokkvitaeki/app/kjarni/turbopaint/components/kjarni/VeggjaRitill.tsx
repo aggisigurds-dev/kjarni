@@ -1441,7 +1441,7 @@ export function RitilThettStika() {
       role="toolbar"
       aria-label="Veggjaritill — þéttur"
       data-ritill-thett
-      className="pointer-events-auto flex items-stretch gap-0.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-md"
+      className="pointer-events-auto flex items-stretch gap-0.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl shadow-black/40"
     >
       <button
         type="button"

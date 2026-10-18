@@ -64,7 +64,11 @@ import {
   SquareDashed,
   Grid2x2,
   AlignCenterVertical,
+  Crosshair,
   Target,
+  House,
+  SquarePen,
+  BookmarkPlus,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -95,6 +99,7 @@ import {
   type CutItem,
 } from '@/lib/3dwork/measure';
 import { exportBinaryStl, parseStl } from '@/lib/3dwork/stl';
+import { centreSoup } from '@/lib/3dwork/import-part';
 import { exportColored3mf, is3mf, parse3mf } from '@/lib/3dwork/threemf';
 import { lookFor } from '@/lib/3dwork/finish';
 import {
@@ -250,7 +255,8 @@ import { PartsLibrary, type LibraryTab } from './parts-library';
 import { NameDialog } from './name-dialog';
 import { HammerDialog } from './hammer-dialog';
 import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
-import { addFavorite } from '@/lib/3dwork/favorites';
+import { addFavorite, updateFavoriteMesh } from '@/lib/3dwork/favorites';
+import { turnAboutWorld } from '@/lib/3dwork/turn';
 import { classifyPart, readMark } from '@/lib/3dwork/categories';
 import {
   bumpVersionName,
@@ -322,12 +328,24 @@ export function Workbench({
   pendingImport,
   pendingCloudId,
   onPendingConsumed,
+  startFresh = false,
+  libraryEdit = null,
+  onExit,
 }: {
   initialWorkspace?: Workspace;
   pendingImport?: { files: File[]; tags: Record<string, { slotId: string; kitId: string }> } | null;
   pendingCloudId?: string | null;
   onPendingConsumed?: () => void;
+  /** Start on a new, empty build instead of the one left open. */
+  startFresh?: boolean;
+  /** Changing a saved part from the Partasafn: the board holds it; saving writes it back to the library. */
+  libraryEdit?: { favoriteId: string; name: string; projectId: string } | null;
+  /** Back to the start page. */
+  onExit?: () => void;
 } = {}) {
+  const startFreshRef = useRef(startFresh);
+  const libraryEditRef = useRef(libraryEdit);
+  libraryEditRef.current = libraryEdit;
   const [project, setProject] = useState<Project>(() => createProject());
   const [geometries, setGeometries] = useState<Map<string, Float32Array>>(() => new Map());
   const [layoutChoice, setMode] = useState<Mode>('scattered');
@@ -566,7 +584,10 @@ export function Workbench({
         .filter((thumbnail): thumbnail is string => Boolean(thumbnail))
         .slice(0, 3),
     }));
-    const merged = mergeProjectLists(local, cloud);
+    // An empty build that never reached Supabase ("New build · 0 parts") is not worth a row — unless it is the one open.
+    const merged = mergeProjectLists(local, cloud).filter(
+      (entry) => entry.parts > 0 || entry.cloud || entry.id === projectRef.current.id
+    );
     if (githubRef.current.connected) {
       try {
         const remote = await githubListProjects();
@@ -616,6 +637,8 @@ export function Workbench({
     async (reason: 'auto' | 'manual' = 'auto') => {
       if (!loadedRef.current || cloudBusyRef.current) return;
       if (reason === 'auto' && !cloudDirtyRef.current) return;
+      // A board opened to change one saved part is a scratch pad: it goes back to the library, not to Supabase as a build.
+      if (libraryEditRef.current?.projectId === projectRef.current.id) return;
       if (projectRef.current.parts.length === 0) {
         if (reason === 'manual') toast.error('Add a part before saving to Supabase.');
         return;
@@ -784,7 +807,7 @@ export function Workbench({
       if (cancelled) return;
 
       let current: Project;
-      if (saved.length === 0) {
+      if (saved.length === 0 || startFreshRef.current) {
         // Nothing to restore: give the blank draft a real id now that we are
         // on the client, so autosave has something stable to write against.
         const draft = { ...projectRef.current, id: newProjectId() };
@@ -830,7 +853,7 @@ export function Workbench({
         const takeId =
           remoteThis && cloudIsNewer(current.updatedAt, remoteThis.updatedAt)
             ? current.id
-            : current.parts.length === 0 && newest && !importing
+            : current.parts.length === 0 && newest && !importing && !startFreshRef.current
               ? newest.id
               : null;
         if (takeId) {
@@ -2020,24 +2043,19 @@ export function Workbench({
     [patchProject, mode, partWorldPos, centerMode]
   );
 
-  /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
+  /**
+   * Commit a turn of a part by degrees about the world axes (x, then y, then z)
+   * — a grab-to-rotate in the viewport, the ± buttons or the arrow keys. Turned
+   * as a quaternion, so X and Z stay two different axes whatever the part's
+   * turn already is (adding to the Euler numbers made them one at 90° about Y).
+   */
   const spinPart = useCallback(
     (id: string, delta: { x: number; y: number; z: number }) => {
       patchProject((current) => ({
         ...current,
         parts: current.parts.map((part) =>
           part.id === id
-            ? {
-                ...part,
-                transform: {
-                  ...part.transform,
-                  rotation: {
-                    x: part.transform.rotation.x + delta.x,
-                    y: part.transform.rotation.y + delta.y,
-                    z: part.transform.rotation.z + delta.z,
-                  },
-                },
-              }
+            ? { ...part, transform: { ...part.transform, rotation: turnAboutWorld(part.transform.rotation, delta) } }
             : part
         ),
       }));
@@ -2241,6 +2259,33 @@ export function Workbench({
     });
     if (mode !== 'free') setMode('free');
   }, [drawnIds, mode, sizes, patchProject]);
+
+  // Centre mode: put every drawn part on the middle of the base — its centre
+  // on the base's centre line (x = 0) and on the wall through the middle of the
+  // base (z = 0) — each keeping its height, so the stack only needs sliding up
+  // and down to line up. Hidden parts stay put; one undo step.
+  const centreOnBase = useCallback(() => {
+    const boxById = new Map(snapNeighbors.map((entry) => [entry.id, entry.box]));
+    const drawn = new Set(drawnIds);
+    patchProject((current) => ({
+      ...current,
+      parts: current.parts.map((part) => {
+        const box = drawn.has(part.id) ? boxById.get(part.id) : undefined;
+        if (!box) return part;
+        const fp = part.freePos ?? partWorldPos(part);
+        return {
+          ...part,
+          freePos: {
+            x: fp.x - (box.min[0] + box.max[0]) / 2,
+            y: fp.y,
+            z: fp.z - (box.min[2] + box.max[2]) / 2,
+          },
+        };
+      }),
+    }));
+    if (mode !== 'free') setMode('free');
+    setFrameToken((token) => token + 1);
+  }, [snapNeighbors, drawnIds, partWorldPos, mode, patchProject]);
 
   const toggleCenterMode = useCallback(() => {
     if (centerMode) {
@@ -4170,9 +4215,15 @@ export function Workbench({
 
   /** Ask what to call the selected part in the Partasafn — then `storeInLibrary` saves it. */
   const saveFavorite = useCallback(() => {
-    const part = selectedPart;
+    // With nothing selected, the one part on the bench is the part meant (17.10.2026: on the phone
+    // nothing looked selected and "Vista í Partasafn" did nothing he could see).
+    const part = selectedPart ?? (project.parts.length === 1 ? project.parts[0] : null);
     if (!part) {
-      toast.error('Select a part first.');
+      toast.error(
+        project.parts.length === 0
+          ? 'Enginn partur á bekknum til að vista.'
+          : 'Veldu partinn fyrst — pikkaðu á hann á bekknum — og ýttu svo aftur á „Vista í safn“.'
+      );
       return;
     }
     setSaveAsStarred(false);
@@ -4188,9 +4239,53 @@ export function Workbench({
       category: readMark(part.category, part.categoryAuto) ?? (guess ? { category: guess, auto: true } : undefined),
     });
     setSaveAsPart({ partId: part.id, name: suggestLibraryName(part) });
-  }, [selectedPart, project.name]);
+  }, [selectedPart, project.parts, project.name]);
 
   /** Put a part into the Partasafn under a name, as it is turned and scaled here. */
+  /** The part changed on the bench goes back to the Partasafn as a new version of itself; then home. */
+  const saveLibraryEdit = useCallback(async () => {
+    if (!libraryEdit) return;
+    const shown = project.parts.filter((part) => part.visible);
+    if (shown.length === 0) {
+      toast.error('Ekkert á bekknum til að vista.');
+      return;
+    }
+    setBusy(`Vista ${libraryEdit.name} í Partasafn…`);
+    try {
+      const pieces: Float32Array[] = [];
+      for (const part of shown) {
+        const soup = soupOfPart(part.id);
+        if (!soup) continue;
+        // One part: its own frame, turned and sized as shown. Several: where they stand relative to each other.
+        const position = shown.length === 1 ? { x: 0, y: 0, z: 0 } : partWorldPos(part);
+        pieces.push(bakeTransform(soup, { position, rotation: part.transform.rotation, scale: part.transform.scale }));
+      }
+      const total = pieces.reduce((sum, piece) => sum + piece.length, 0);
+      const joined = new Float32Array(total);
+      let at = 0;
+      for (const piece of pieces) {
+        joined.set(piece, at);
+        at += piece.length;
+      }
+      const mesh = centreSoup(joined);
+      const look = lookFor(shown[0]);
+      await updateFavoriteMesh(libraryEdit.favoriteId, mesh, renderThumbnail(mesh, look.color, look));
+      await deleteProject(libraryEdit.projectId);
+      toast.success(`„${libraryEdit.name}“ vistaður í Partasafnið.`);
+      onExit?.();
+    } catch (error) {
+      toast.error(failureNote(error, 'Náði ekki að vista í Partasafnið.'));
+    } finally {
+      setBusy(null);
+    }
+  }, [libraryEdit, project.parts, soupOfPart, partWorldPos, onExit]);
+
+  /** Leave a part's edit without saving: the scratch board is dropped from this computer. */
+  const leaveLibraryEdit = useCallback(async () => {
+    if (libraryEdit) await deleteProject(libraryEdit.projectId);
+    onExit?.();
+  }, [libraryEdit, onExit]);
+
   const storeInLibrary = useCallback(
     async (partId: string, name: string, starred: boolean, target: SaveTarget) => {
       const part = project.parts.find((candidate) => candidate.id === partId);
@@ -5772,6 +5867,15 @@ export function Workbench({
               onClick: toggleCenterMode,
               title: 'Centre mode — lay parts on one wall to line them up front-on, then turn it off to move in 3D',
             },
+            {
+              icon: Crosshair,
+              label: 'Allt á miðju',
+              disabled: !centerMode,
+              onClick: centreOnBase,
+              title: centerMode
+                ? 'Setur alla parta á miðju grunnsins — hver heldur hæðinni sinni, svo þarf bara að renna þeim upp eða niður'
+                : 'Kveiktu á Center fyrst',
+            },
           ],
         },
         {
@@ -5859,9 +5963,36 @@ export function Workbench({
       />
 
       <div className={`${PANEL} bench-chrome relative z-40 flex flex-col gap-1 px-2 py-1.5`}>
+        {libraryEdit && (
+          <div
+            className="flex items-center gap-1.5 rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[0.72rem] text-emerald-900"
+            title="Breytir parti úr Partasafni — lagaðu hann og vistaðu svo aftur í safnið."
+          >
+            <SquarePen className="h-4 w-4 shrink-0" />
+            <b className="min-w-0 flex-1 truncate">{libraryEdit.name}</b>
+            <button type="button" className={`${ACTION_PRIMARY} shrink-0`} onClick={() => void saveLibraryEdit()} disabled={Boolean(busy)}>
+              Vista og loka
+            </button>
+            <button type="button" className={`${ACTION_GHOST} shrink-0`} onClick={() => void leaveLibraryEdit()} disabled={Boolean(busy)}>
+              Loka
+            </button>
+          </div>
+        )}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-accent)]" />
+          {onExit ? (
+            <button
+              type="button"
+              onClick={() => (libraryEdit ? void leaveLibraryEdit() : onExit())}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--wb-accent)] hover:bg-[var(--wb-tool-hover)]"
+              title="Heim — upphafssíðan: verkefni og Partasafn"
+              aria-label="Heim"
+            >
+              <House className="h-5 w-5" />
+            </button>
+          ) : (
+            <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-accent)]" />
+          )}
           <input
             value={project.name}
             onChange={(event) =>
@@ -5903,6 +6034,18 @@ export function Workbench({
             <Star className="h-3 w-3" />
             <span className="hidden sm:inline">Favorites</span>
           </button>
+          {!libraryEdit && (
+            <button
+              type="button"
+              onClick={() => saveFavorite()}
+              disabled={Boolean(busy) || project.parts.length === 0}
+              title="Vista valda partinn í Partasafnið — undir nafni, á öllum tölvum"
+              className="flex shrink-0 items-center gap-1 rounded border border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-emerald-800 hover:bg-emerald-100 disabled:opacity-40"
+            >
+              <BookmarkPlus className="h-3 w-3" />
+              Vista í safn
+            </button>
+          )}
         </div>
 
         <MenuBar>

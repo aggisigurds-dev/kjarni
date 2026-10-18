@@ -20,12 +20,22 @@ html[data-kjarni-skin="ragnarok"] body { background:#020202; }
 }
 .rgk::after {
   content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
-  background:repeating-linear-gradient(0deg,rgba(255,200,90,.04) 0 1px,transparent 1px 4px);
+  background:repeating-linear-gradient(0deg,rgba(255,200,90,.015) 0 1px,transparent 1px 4px);
+}
+/* 15.10.2026 (Agnar: „minnkað styrkinn á línunum, finnst þær trufla smá"): áferðin á stöðinni sjálfri er daufari
+   — skannlínur .04 → .015 (hér að ofan), skástrik grunnsins .02 → .008, stálrákir spjaldanna .03 → .012 og
+   glóðarblettirnir (flatar sporbaugar sem lesast sem láréttar rákir) um 40 % daufari. Aðeins innan .rgk, svo
+   önnur tól í Ragnarök-útliti haldast óbreytt. */
+.rgk {
+  --rg-ground:radial-gradient(ellipse 30% 12% at 8% 62%,rgba(140,60,12,.2),transparent 70%),radial-gradient(ellipse 26% 10% at 92% 18%,rgba(160,70,15,.18),transparent 70%),radial-gradient(ellipse 40% 8% at 50% 88%,rgba(120,50,10,.18),transparent 70%),repeating-linear-gradient(45deg,rgba(255,255,255,.008) 0 2px,transparent 2px 14px),radial-gradient(ellipse 120% 40% at 50% 28%,#1a1408 0%,#080808 40%,#020202 100%);
+  --rg-steel:repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(180deg,#141414 0%,#030303 100%);
+  --rg-steel-deep:repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(180deg,#1c1c1c,#070707);
 }
 .rgk *, .rgk *::before, .rgk *::after { box-sizing:border-box; }
+/* 15.10.2026 (Agnar: „breikkað aðeins vinnusvæðið á kjarna"): 1280 → 1560 px — kortaraðirnar fara úr 4 í 5 dálka */
 .rgk-in {
   position:relative; z-index:1;
-  max-width:1280px; margin:0 auto; padding:28px 24px 0;
+  max-width:1560px; margin:0 auto; padding:28px 24px 0;
   display:flex; flex-direction:column; gap:26px;
 }
 .rgk-sec { display:flex; flex-direction:column; gap:22px; scroll-margin-top:90px; }

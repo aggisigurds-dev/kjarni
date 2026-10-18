@@ -38,6 +38,7 @@ import {
 } from '@/lib/3dwork/seam-brush';
 import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
+import { worldTurnQuaternion } from '@/lib/3dwork/turn';
 import type { SeamTool } from './seam-brush-bar';
 
 export interface ViewportPart {
@@ -158,8 +159,35 @@ interface ViewportProps {
   onEnterMoveMode: (id: string) => void;
   /** Commit a world-space move of parts (the same delta added to each offset). */
   onDragMove: (ids: string[], delta: { x: number; y: number; z: number }) => void;
-  /** Commit a rotation of a part (delta degrees added to its rotation). */
+  /** Commit a rotation of a part: degrees about the world axes, x then y then z. */
   onDragRotate: (id: string, delta: { x: number; y: number; z: number }) => void;
+}
+
+/** The colours of the three axes, shared with the move / rotate panel: X red, Y green, Z blue. */
+export const AXIS_COLORS = { x: '#ef4444', y: '#22c55e', z: '#3b82f6' } as const;
+
+/**
+ * Three rings around a part in rotate mode, one per world axis, each with an
+ * arrowhead showing which way „+" turns it. Unit radius; scaled to the part.
+ */
+function makeRotateGizmo(): THREE.Group {
+  const gizmo = new THREE.Group();
+  gizmo.renderOrder = 999;
+  for (const axis of ['x', 'y', 'z'] as const) {
+    const material = new THREE.MeshBasicMaterial({ color: AXIS_COLORS[axis], depthTest: false, transparent: true, opacity: 0.9 });
+    const ring = new THREE.Group();
+    // Three quarters of a circle about +Z, counter-clockwise seen from +Z — the way a positive turn goes.
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(1, 0.022, 8, 72, Math.PI * 1.5), material);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 16), material);
+    head.position.set(0, -1, 0);
+    head.rotation.z = -Math.PI / 2; // the arc ends at (0, -1, 0) heading +X
+    for (const piece of [arc, head]) piece.renderOrder = 999;
+    ring.add(arc, head);
+    if (axis === 'x') ring.rotation.y = Math.PI / 2; // its +Z becomes +X
+    if (axis === 'y') ring.rotation.x = -Math.PI / 2; // its +Z becomes +Y
+    gizmo.add(ring);
+  }
+  return gizmo;
 }
 
 const DEG = Math.PI / 180;
@@ -335,6 +363,9 @@ interface Grab {
   startPoint: THREE.Vector3;
   startPos: THREE.Vector3;
   startRot: THREE.Euler;
+  startQuat: THREE.Quaternion;
+  /** Rotate mode: the degrees turned so far, about the world axes. */
+  turn: { x: number; y: number; z: number };
   mode: 'move' | 'rotate';
   /** Axis lock: move mode's setting, or none for a drag in the builder view. */
   axis: 'xyz' | 'x' | 'y' | 'z';
@@ -1167,6 +1198,8 @@ export function Viewport({
         startPoint: hits[0].point.clone(),
         startPos: mesh.position.clone(),
         startRot: mesh.rotation.clone(),
+        startQuat: mesh.quaternion.clone(),
+        turn: { x: 0, y: 0, z: 0 },
         mode,
         axis: armed ? h.moveAxis : 'xyz',
         riders,
@@ -1212,20 +1245,21 @@ export function Viewport({
         const pitchPx = (event.clientY - grab.startClient.y) * ROT_PER_PX;
         const step = Math.max(0.1, h.rotateStep);
         const axis = h.rotateAxis;
-        const next = grab.startRot.clone();
+        const turn = { x: 0, y: 0, z: 0 };
         if (axis === 'x' || axis === 'y' || axis === 'z') {
           // Dominant screen axis drives a single world axis — the CAD way to
           // get a rotation to land where you meant it.
           const raw = Math.abs(yawPx) >= Math.abs(pitchPx) ? yawPx : -pitchPx;
-          const abs = grab.startRot[axis] / DEG + raw;
-          next[axis] = snapAngle(abs, step) * DEG;
+          turn[axis] = snapAngle(raw, step);
         } else if (event.shiftKey) {
-          next.z = snapAngle(grab.startRot.z / DEG + yawPx, step) * DEG;
+          turn.z = snapAngle(yawPx, step);
         } else {
-          next.x = snapAngle(grab.startRot.x / DEG + pitchPx, step) * DEG;
-          next.y = snapAngle(grab.startRot.y / DEG + yawPx, step) * DEG;
+          turn.x = snapAngle(pitchPx, step);
+          turn.y = snapAngle(yawPx, step);
         }
-        mesh.rotation.copy(next);
+        // About the world axes, the same way the commit turns it (spinPart).
+        grab.turn = turn;
+        mesh.quaternion.copy(worldTurnQuaternion(grab.startQuat, turn));
       } else {
         setPointer(event);
         raycaster.setFromCamera(pointer, camera);
@@ -1332,11 +1366,7 @@ export function Viewport({
         const mesh = state.meshes.get(grab.id);
         if (grab.moved && mesh) {
           if (grab.mode === 'rotate') {
-            h.onDragRotate(grab.id, {
-              x: (mesh.rotation.x - grab.startRot.x) / DEG,
-              y: (mesh.rotation.y - grab.startRot.y) / DEG,
-              z: (mesh.rotation.z - grab.startRot.z) / DEG,
-            });
+            h.onDragRotate(grab.id, grab.turn);
           } else {
             h.onDragMove([grab.id, ...grab.riders.keys()], {
               x: mesh.position.x - grab.startPos.x,
@@ -1583,6 +1613,40 @@ export function Viewport({
     }
   }, [parts, wireframe, xray, selectedId, builder, picked, brushMesh, brushPartId]);
 
+  // Rotate mode: rings with arrowheads around the part, one per world axis, showing which way „+" turns it.
+  useEffect(() => {
+    const state = refs.current;
+    if (!state || !moveModeId || manipMode !== 'rotate') return;
+    const gizmo = makeRotateGizmo();
+    state.scene.add(gizmo);
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
+    let raf = 0;
+    // Follows the part as it eases into place or turns.
+    const follow = () => {
+      raf = requestAnimationFrame(follow);
+      const mesh = state.meshes.get(moveModeId);
+      gizmo.visible = Boolean(mesh);
+      if (!mesh) return;
+      box.setFromObject(mesh);
+      if (box.isEmpty()) return;
+      box.getCenter(gizmo.position);
+      box.getSize(size);
+      gizmo.scale.setScalar(Math.max(size.x, size.y, size.z, 5) * 0.62);
+    };
+    follow();
+    return () => {
+      cancelAnimationFrame(raf);
+      state.scene.remove(gizmo);
+      gizmo.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          (object.material as THREE.Material).dispose();
+        }
+      });
+    };
+  }, [moveModeId, manipMode]);
+
   // The rings belong to the brush: put them away with it, and while drags turn the view.
   useEffect(() => {
     const state = refs.current;
@@ -1784,10 +1848,10 @@ export function Viewport({
   useEffect(() => {
     if (frameToken === 0) return;
     // Wait a frame: on the first import the meshes have only just been added,
-    // and the canvas may not have its final size yet.
-    const handle = requestAnimationFrame(() => frameAll());
+    // and the canvas may not have its final size yet. Centre mode stays front-on.
+    const handle = requestAnimationFrame(() => (handlers.current.lockFront ? frontView() : frameAll()));
     return () => cancelAnimationFrame(handle);
-  }, [frameToken, frameAll]);
+  }, [frameToken, frameAll, frontView]);
 
   // Centre mode pins the camera front-on and stops the orbit turning; leaving
   // it lets you rotate freely again. Parts stay where they were flattened.

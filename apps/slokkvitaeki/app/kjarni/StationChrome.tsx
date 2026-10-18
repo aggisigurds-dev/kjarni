@@ -5,9 +5,11 @@ import { ArtCraftDock } from "./artcraft/ArtCraftDock";
 import { DesktopView } from "./DesktopView";
 import { SKINS, TOOLS, SKIN_KEY, DEFAULT_SKIN, readSkin, type SkinId, type ToolId } from "./skins";
 import { rgFont, rgMono } from "./ragnarok/fonts";
+import { playfair, plexMono, plexSans, poppins } from "./skin-fonts";
 import "./ragnarok/ragnarok.css";
 import "./ragnarok/kjarni-ragnarok.css";
 import "./artcraft/artcraft.css";
+import "./skins.css";
 
 const SkinCtx = createContext<{ skin: SkinId; setSkin: (id: SkinId) => void }>({
   skin: DEFAULT_SKIN,
@@ -45,7 +47,7 @@ export function StationChrome({
   return (
     <SkinCtx.Provider value={{ skin, setSkin }}>
       <DesktopView enabled={tool !== "turbopaint" && tool !== "artcraft" && tool !== "bord"}>
-        <div className={`stn ${rgFont.variable} ${rgMono.variable}`} data-skin={skin} data-tool={tool}>
+        <div className={`stn ${rgFont.variable} ${rgMono.variable} ${plexSans.variable} ${plexMono.variable} ${playfair.variable} ${poppins.variable}`} data-skin={skin} data-tool={tool}>
           <header className="stn-bar">
             <a className="stn-home" href="/kjarni">
               <span className="stn-mark" aria-hidden="true"><i /><i /></span>

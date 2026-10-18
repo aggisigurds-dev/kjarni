@@ -81,6 +81,24 @@ export interface Part {
   starred?: boolean;
   /** In the Partasafn: which of the user's collections the part is saved in. */
   collectionId?: string;
+  /** Library only: the sub-category (undirflokkur) of its collection it is sorted under. */
+  sectionId?: string;
+  /** Library only: where the real part stands — printed, made (machined, cut) or bought. */
+  status?: 'printed' | 'made' | 'bought';
+  /**
+   * Library only: where the user put the part when arranging its collection —
+   * the middle of its box in the side view, mm (front = -X, up = +Y), every
+   * part centred in depth, and how it is turned about its own middle (a
+   * quaternion x, y, z, w; none: as saved). None: the automatic AR-15 layout
+   * places it.
+   */
+  place?: { x: number; y: number; q?: [number, number, number, number] };
+  /**
+   * Library only: its depth layer in the collection's picture — 1 the outside
+   * (body, stock …), 2 what runs through it, 3 what sits inside that — so the
+   * outer ones can be switched off to see in. None: from its category.
+   */
+  layer?: number;
   /** In the Partasafn: Body, Innvols, … — `none` when the user chose Óflokkað. */
   category?: CategoryValue;
   /** The category is the auto-sorter's suggestion, not yet confirmed by the user. */
@@ -354,34 +372,48 @@ export function scatterPlacement(project: Project, sizes: Map<string, PartSize>)
   if (loose.length > 0) lanes.push({ slotId: '', parts: loose });
 
   const fallback: PartSize = { width: 60, height: 60, depth: 60 };
+  const sizeOf = (part: Part) => sizes.get(part.id) ?? fallback;
   const placements: Placement[] = [];
 
+  // Each lane wraps into rows about as wide as the whole lane is deep, longest
+  // parts first — a tidy block like a parts layout, not one row that runs
+  // metres off the table (the user, 17.10.2026).
+  const rows: { slotId: string; parts: Part[]; width: number; depth: number }[] = [];
+  for (const lane of lanes) {
+    const ordered = [...lane.parts].sort((a, b) => sizeOf(b).width - sizeOf(a).width);
+    const area = ordered.reduce((sum, part) => sum + (sizeOf(part).width + GAP) * (sizeOf(part).depth + ROW_GAP), 0);
+    const limit = Math.max(sizeOf(ordered[0]).width, Math.sqrt(area) * 1.3);
+    let row = { slotId: lane.slotId, parts: [] as Part[], width: 0, depth: 0 };
+    for (const part of ordered) {
+      const extra = (row.parts.length > 0 ? GAP : 0) + sizeOf(part).width;
+      if (row.parts.length > 0 && row.width + extra > limit) {
+        rows.push(row);
+        row = { slotId: lane.slotId, parts: [], width: 0, depth: 0 };
+      }
+      row.width += (row.parts.length > 0 ? GAP : 0) + sizeOf(part).width;
+      row.depth = Math.max(row.depth, sizeOf(part).depth);
+      row.parts.push(part);
+    }
+    rows.push(row);
+  }
+
   // Centre the whole spread on the origin so the camera framing stays put.
-  const laneDepths = lanes.map((lane) =>
-    lane.parts.reduce((deepest, part) => Math.max(deepest, (sizes.get(part.id) ?? fallback).depth), 0)
-  );
-  const totalDepth =
-    laneDepths.reduce((sum, depth) => sum + depth, 0) + ROW_GAP * Math.max(0, lanes.length - 1);
-
+  const totalDepth = rows.reduce((sum, row) => sum + row.depth, 0) + ROW_GAP * Math.max(0, rows.length - 1);
   let z = -totalDepth / 2;
-  lanes.forEach((lane, laneIndex) => {
-    const laneDepth = laneDepths[laneIndex];
-    const widths = lane.parts.map((part) => (sizes.get(part.id) ?? fallback).width);
-    const laneWidth = widths.reduce((sum, w) => sum + w, 0) + GAP * Math.max(0, lane.parts.length - 1);
-
-    let x = -laneWidth / 2;
-    lane.parts.forEach((part, index) => {
-      const slot = project.slots.find((s) => s.id === lane.slotId);
+  for (const row of rows) {
+    const slot = project.slots.find((s) => s.id === row.slotId);
+    let x = -row.width / 2;
+    for (const part of row.parts) {
+      const width = sizeOf(part).width;
       placements.push({
         partId: part.id,
-        position: { x: x + widths[index] / 2, y: 0, z: z + laneDepth / 2 },
+        position: { x: x + width / 2, y: 0, z: z + row.depth / 2 },
         dimmed: Boolean(slot) && slot!.activePartId !== part.id,
       });
-      x += widths[index] + GAP;
-    });
-
-    z += laneDepth + ROW_GAP;
-  });
+      x += width + GAP;
+    }
+    z += row.depth + ROW_GAP;
+  }
 
   return placements;
 }
