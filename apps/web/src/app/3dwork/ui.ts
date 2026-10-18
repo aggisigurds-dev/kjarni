@@ -23,7 +23,7 @@ export const ACTION =
   'rounded px-2 py-2 text-[0.7rem] font-extrabold uppercase tracking-[0.025em] ' +
   'transition-colors disabled:cursor-not-allowed disabled:opacity-40';
 
-export const ACTION_PRIMARY = `${ACTION} bg-[var(--wb-accent)] text-[var(--wb-accent-ink)] hover:brightness-110`;
+export const ACTION_PRIMARY = `${ACTION} wb-bronze-btn`;
 
 export const ACTION_GHOST = `${ACTION} border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:border-[var(--wb-label)] hover:text-[var(--wb-ink)]`;
 
@@ -32,7 +32,7 @@ export const TOOL_BTN =
   'inline-flex h-10 shrink-0 items-center justify-center gap-1 rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)] disabled:cursor-not-allowed disabled:opacity-40';
 
 export const TOOL_BTN_PRIMARY =
-  'inline-flex h-10 shrink-0 items-center justify-center gap-1 rounded border border-[var(--wb-accent)] bg-[var(--wb-accent)] px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide text-[var(--wb-accent-ink)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40';
+  'wb-bronze-btn inline-flex h-10 shrink-0 items-center justify-center gap-1 px-2.5 text-[0.65rem] font-extrabold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-40';
 
 export const FIELD =
   'w-full rounded border border-[var(--wb-panel-border)] bg-[var(--wb-field-bg)] px-2 py-1.5 font-mono text-sm ' +

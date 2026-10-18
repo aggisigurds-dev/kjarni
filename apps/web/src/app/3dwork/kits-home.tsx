@@ -159,7 +159,7 @@ export function KitsHome() {
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              className={`${TOP_BUTTON} border-[var(--wb-accent)] bg-[var(--wb-accent)] text-[var(--wb-accent-ink)] hover:brightness-110`}
+              className="wb-bronze-btn inline-flex min-h-9 items-center gap-1 px-2.5 text-[0.7rem] font-extrabold uppercase tracking-[0.03em]"
               onClick={() => {
                 setStartFresh(true);
                 setEngine('bench');

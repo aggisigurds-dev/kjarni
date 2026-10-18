@@ -125,3 +125,37 @@
     animation: none;
   }
 }
+
+/* Real forged metal, not a flat fill — the primary-action buttons.
+   Structure copied exactly from brunaholf's own .boss-btn.gold recipe
+   (css/theme.css: --gold-face / --gold-bevel-*): a diagonal glare sweep,
+   a brushed horizontal grain, a bevelled border (light top / dark bottom
+   edge) and a two-layer inset+glow shadow. Only the hue changed — pulled
+   toward brown/bronze instead of gold, same structure, same stop
+   positions. One extra layer (a finer vertical micro-hatch, the same
+   technique as Ragnarök's --rg-steel brush) is added for a slightly
+   rougher, more forged texture than the smooth original. */
+.wb-bronze-btn {
+  border: 1px solid #4a3620;
+  border-top-color: #f3e2bf;
+  border-bottom-color: #2a1d0e;
+  border-radius: 5px;
+  color: #241a0c;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.45) 45%, rgba(255, 255, 255, 0) 52%),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0 1px, rgba(0, 0, 0, 0) 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #f0ddba 0%, #dcc294 14%, #a9825a 46%, #86643c 52%, #99764a 74%, #c0a070 92%, #e3cba0 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 3px rgba(42, 29, 14, 0.45),
+    0 3px 6px rgba(20, 16, 10, 0.35),
+    0 0 10px rgba(138, 106, 63, 0.3);
+}
+.wb-bronze-btn:hover {
+  filter: brightness(1.06);
+}
+.wb-bronze-btn:active {
+  filter: brightness(0.94);
+}
