@@ -24,7 +24,6 @@ import { classifyPart, type Project } from '@/lib/3dwork/project';
 import { rememberOpenProject, saveGeometry, saveProject } from '@/lib/3dwork/storage';
 import { CloudPicker } from './cloud-picker';
 import { KitBoard } from './kit-board';
-import { rgFont } from './ragnarok/fonts';
 import './ragnarok/theme.css';
 import { RecentBuilds } from './recent-builds';
 import { ACTION_GHOST, LABEL, PANEL } from './ui';
@@ -147,9 +146,7 @@ export function KitsHome() {
   return (
     <div className="wb-theme h-dvh overflow-y-auto bg-[var(--wb-ground)] text-[var(--wb-ink)]">
       <div className="flex min-h-full flex-col gap-2 p-2">
-        <div
-          className={`${PANEL} bench-chrome ${rgFont.variable} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}
-        >
+        <div className={`${PANEL} bench-chrome relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
           <div className="flex min-w-0 items-center gap-2">
             <span className="wb-mark" aria-hidden="true">
               <i />
