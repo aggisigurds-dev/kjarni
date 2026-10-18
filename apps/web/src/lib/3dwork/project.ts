@@ -88,9 +88,11 @@ export interface Part {
   /**
    * Library only: where the user put the part when arranging its collection —
    * the middle of its box in the side view, mm (front = -X, up = +Y), every
-   * part centred in depth. None: the automatic AR-15 layout places it.
+   * part centred in depth, and how it is turned about its own middle (a
+   * quaternion x, y, z, w; none: as saved). None: the automatic AR-15 layout
+   * places it.
    */
-  place?: { x: number; y: number };
+  place?: { x: number; y: number; q?: [number, number, number, number] };
   /** In the Partasafn: Body, Innvols, … — `none` when the user chose Óflokkað. */
   category?: CategoryValue;
   /** The category is the auto-sorter's suggestion, not yet confirmed by the user. */

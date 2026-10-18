@@ -37,7 +37,7 @@ describe('simplifySoup', () => {
     const box = finelyMeshedBox(100, 60); // 43 200 triangles
     const light = simplifySoup(box, 5000);
     expect(light.length / 9).toBeLessThanOrEqual(5000 * 1.15);
-    expect(light.length / 9).toBeGreaterThan(500);
+    expect(light.length / 9).toBeGreaterThan(5000 * 0.5); // uses the budget, not a tenth of it
     const before = computeBounds(box);
     const after = computeBounds(light);
     for (let axis = 0; axis < 3; axis += 1) {

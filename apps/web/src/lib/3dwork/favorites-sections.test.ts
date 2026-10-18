@@ -16,6 +16,7 @@ import {
   withSectionRenamed,
   withBuildPartsHidden,
   withArrangement,
+  tidyTurn,
   type BoardPin,
   type Shelf,
 } from './favorites';
@@ -212,6 +213,22 @@ describe('arranging a collection', () => {
     expect(back.parts.find((part) => part.id === a)?.place).toBeUndefined();
     expect(back.parts.find((part) => part.id === b)?.place).toBeUndefined();
     expect(back.parts.find((part) => part.id === b)?.color).toBe('#0f0');
+  });
+
+  it('keeps how a part is turned, tidied to a unit quaternion, and drops a turn that is none', () => {
+    const { shelf, a, b } = ironWolf();
+    const half = Math.SQRT1_2;
+    const arranged = withArrangement(shelf, [
+      { id: a, place: { x: 1, y: 2, q: [0, 2 * half, 0, 2 * half] } },
+      { id: b, place: { x: 3, y: 4, q: [0, 0, 0, -1] } },
+    ]);
+    const favorites = librarySnapshot(arranged).favorites;
+    expect(favorites.find((entry) => entry.id === a)?.place).toEqual({ x: 1, y: 2, q: [0, 0.7071, 0, 0.7071] });
+    expect(favorites.find((entry) => entry.id === b)?.place).toEqual({ x: 3, y: 4 });
+    expect(tidyTurn([0, 0, -1, 0])).toEqual([0, 0, -1, 0]); // 180° about z
+    expect(tidyTurn([0, 0, 0.5, -0.8660254])).toEqual([0, 0, -0.5, 0.866]);
+    expect(tidyTurn([Number.NaN, 0, 0, 1])).toBeUndefined();
+    expect(tidyTurn('no')).toBeUndefined();
   });
 
   it('forgets the place when the part moves to another collection', () => {

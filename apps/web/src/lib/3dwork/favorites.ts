@@ -141,9 +141,35 @@ export interface Favorite {
   sectionId?: string;
   status?: PartStatus;
   category?: CategoryMark;
-  /** Where it was put when its collection was arranged; none for the automatic layout. */
-  place?: { x: number; y: number };
+  /** Where it was put when its collection was arranged, and how it is turned; none for the automatic layout. */
+  place?: Place;
   addedAt: number;
+}
+
+/** Where a part stands in its arranged collection: the middle of its box, mm, and its turn as a quaternion. */
+export type Place = { x: number; y: number; q?: [number, number, number, number] };
+
+/**
+ * A turn kept tidy: four finite numbers made a unit quaternion and rounded to
+ * 1e-4 — or none when it is no turn at all, or not a quaternion.
+ */
+export function tidyTurn(q: unknown): [number, number, number, number] | undefined {
+  if (!Array.isArray(q) || q.length !== 4 || !q.every((value) => typeof value === 'number' && Number.isFinite(value))) return undefined;
+  const length = Math.hypot(q[0], q[1], q[2], q[3]);
+  if (length < 1e-9) return undefined;
+  const sign = q[3] < 0 ? -1 : 1; // q and -q are the same turn: keep w ≥ 0
+  const unit = q.map((value) => Math.round(((value * sign) / length) * 1e4) / 1e4 + 0) as [number, number, number, number];
+  return Math.abs(unit[3] - 1) < 1e-4 ? undefined : unit;
+}
+
+/** A stored place read back: numbers only, its turn tidied. */
+function readPlace(place: unknown): Place | undefined {
+  const value = place as { x?: unknown; y?: unknown; q?: unknown } | undefined;
+  if (!value || typeof value.x !== 'number' || typeof value.y !== 'number' || !Number.isFinite(value.x) || !Number.isFinite(value.y)) {
+    return undefined;
+  }
+  const q = tidyTurn(value.q);
+  return q ? { x: value.x, y: value.y, q } : { x: value.x, y: value.y };
 }
 
 /** Everything the Partasafn window shows from the library's document. */
@@ -308,10 +334,7 @@ export function favoritesOf(shelf: Shelf): Favorite[] {
       sectionId: part.sectionId,
       status: isPartStatus(part.status) ? part.status : undefined,
       category: readMark(part.category, part.categoryAuto),
-      place:
-        part.place && Number.isFinite(part.place.x) && Number.isFinite(part.place.y)
-          ? { x: part.place.x, y: part.place.y }
-          : undefined,
+      place: readPlace(part.place),
       addedAt: part.addedAt,
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
@@ -483,13 +506,14 @@ export function withPinChanged(shelf: Shelf, sectionId: string, pinId: string, c
 /** One part's change from arranging a collection: where it stands (null: back to the automatic layout), its colour. */
 export interface ArrangeChange {
   id: string;
-  place?: { x: number; y: number } | null;
+  place?: Place | null;
   color?: string;
 }
 
 /**
- * The parts as arranged: places kept to a tenth of a millimetre, a painted
- * part's colour taken as its own (its finish, which would override it, dropped).
+ * The parts as arranged: places kept to a tenth of a millimetre with their
+ * turns tidied, a painted part's colour taken as its own (its finish, which
+ * would override it, dropped).
  */
 export function withArrangement(shelf: Shelf, changes: readonly ArrangeChange[]): Shelf {
   const normal = normalizeShelf(shelf);
@@ -503,7 +527,8 @@ export function withArrangement(shelf: Shelf, changes: readonly ArrangeChange[])
       let next: Part = part;
       if (change.place === null) next = { ...next, place: undefined };
       else if (change.place && Number.isFinite(change.place.x) && Number.isFinite(change.place.y)) {
-        next = { ...next, place: { x: tenth(change.place.x), y: tenth(change.place.y) } };
+        const q = tidyTurn(change.place.q);
+        next = { ...next, place: { x: tenth(change.place.x), y: tenth(change.place.y), ...(q ? { q } : {}) } };
       }
       if (change.color && /^#[0-9a-f]{6}$/i.test(change.color) && change.color.toLowerCase() !== part.color.toLowerCase()) {
         next = { ...next, color: change.color.toLowerCase(), finishId: undefined };

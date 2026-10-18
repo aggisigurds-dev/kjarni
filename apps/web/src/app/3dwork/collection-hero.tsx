@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Loader2, LocateFixed } from 'lucide-react';
-import { loadFavoriteGeometry } from '@/lib/3dwork/favorites';
+import { loadFavoriteGeometry, type Place } from '@/lib/3dwork/favorites';
 import { lookFor } from '@/lib/3dwork/finish';
 import { computeBounds, type Bounds } from '@/lib/3dwork/mesh';
 import { AR_SLOTS, BOARD_HEIGHT_MM, collectionLayout } from '@/lib/3dwork/parts-library';
@@ -27,13 +27,14 @@ export interface HeroPart {
   finishId?: string;
   /** Its category: the AR-15 slot it takes, if any. */
   category?: string;
-  /** Where the user put it when arranging the collection; none for the automatic layout. */
-  place?: { x: number; y: number };
+  /** Where the user put it when arranging the collection, and how it is turned; none for the automatic layout. */
+  place?: Place;
 }
 
 /** Triangles per part in the picture: enough to read the shape, light enough for a phone. */
-const PREVIEW_TRIANGLES = 60_000;
-const previewKey = (versionId: string) => `preview:${versionId}`;
+const PREVIEW_TRIANGLES = 150_000;
+// v2: made with the budget-searching simplifier — the first copies were far too coarse.
+const previewKey = (versionId: string) => `preview2:${versionId}`;
 
 /** A light copy of a saved part's mesh: kept on this computer, or fetched once and made. */
 export async function previewOf(versionId: string): Promise<Float32Array | null> {
@@ -62,7 +63,7 @@ interface Scene {
   controls: OrbitControls;
   plate: THREE.Mesh;
   line: THREE.Mesh;
-  meshes: Map<string, { mesh: THREE.Mesh; bounds: Bounds; name: string; category?: string; place?: { x: number; y: number } }>;
+  meshes: Map<string, { mesh: THREE.Mesh; bounds: Bounds; name: string; category?: string; place?: Place }>;
   draw: () => void;
   moved: boolean;
 }
@@ -200,7 +201,7 @@ export function CollectionHero({
 
   // The parts: each light mesh fetched or read from this computer, one at a time.
   const signature = parts
-    .map((part) => `${part.id}:${part.versionId}:${part.color}:${part.finishId ?? ''}:${part.category ?? ''}:${part.place?.x ?? ''},${part.place?.y ?? ''}`)
+    .map((part) => `${part.id}:${part.versionId}:${part.color}:${part.finishId ?? ''}:${part.category ?? ''}:${part.place?.x ?? ''},${part.place?.y ?? ''},${part.place?.q?.join(',') ?? ''}`)
     .join('|');
   useEffect(() => {
     const state = three.current;
@@ -248,8 +249,11 @@ export function CollectionHero({
           missing.push(part.name);
           continue;
         }
+        // Centred on its own box, so it stands at its place and turns about its middle.
+        const bounds = computeBounds(soup);
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(soup, 3));
+        geometry.translate(-bounds.center[0], -bounds.center[1], -bounds.center[2]);
         geometry.computeVertexNormals();
         geometry.computeBoundingSphere();
         const look = lookFor(part);
@@ -257,7 +261,7 @@ export function CollectionHero({
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.versionId = part.versionId;
         state.scene.add(mesh);
-        state.meshes.set(part.id, { mesh, bounds: computeBounds(soup), name: part.name, category: part.category, place: part.place });
+        state.meshes.set(part.id, { mesh, bounds, name: part.name, category: part.category, place: part.place });
         setVersion((value) => value + 1);
       }
       if (cancelled) return;
@@ -283,8 +287,8 @@ export function CollectionHero({
     const all = new THREE.Box3();
     shown.forEach(([id, entry], index) => {
       const place = places[index];
-      const c = entry.bounds.center;
-      entry.mesh.position.set(place.x - c[0], place.y - c[1], place.z - c[2]);
+      entry.mesh.position.set(place.x, place.y, place.z);
+      entry.mesh.quaternion.fromArray(entry.place?.q ?? [0, 0, 0, 1]);
       entry.mesh.updateMatrixWorld();
       all.expandByObject(entry.mesh);
       const material = entry.mesh.material as THREE.MeshStandardMaterial;

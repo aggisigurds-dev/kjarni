@@ -4,8 +4,10 @@
  * Raða — a collection arranged by hand: its parts seen from the side, flat
  * (orthographic), every part centred in depth, on a 5 cm grid with the table
  * and the 20 cm line. Drag a part to move it left, right, up or down (to the
- * millimetre; the arrow keys nudge the picked one), drag the background to
- * pan, wheel or pinch to zoom, and paint the picked part. „Vista" stores the
+ * millimetre; the arrow keys nudge the picked one), turn it (90° or 5° steps,
+ * „Snúa við" turns it end for end, „Velta" rolls it a quarter turn towards
+ * you), drag the background to pan, wheel or pinch to zoom, and paint the
+ * picked part. „Vista" stores the
  * places and colours with the parts in the library, and the collection's
  * picture stands as arranged; „Sjálfvirkt" hands every part back to the
  * AR-15 layout. The user, 17.10.2026: "ekkert endilega í 3d, 2d yrði líka
@@ -15,9 +17,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Check, Loader2, RotateCcw, X } from 'lucide-react';
+import { Check, FlipHorizontal2, Loader2, Rotate3d, RotateCcw, RotateCw, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ArrangeChange } from '@/lib/3dwork/favorites';
+import { tidyTurn, type ArrangeChange, type Place } from '@/lib/3dwork/favorites';
 import { lookFor } from '@/lib/3dwork/finish';
 import { computeBounds, type Bounds } from '@/lib/3dwork/mesh';
 import { BOARD_HEIGHT_MM, failureNote, sideLayout } from '@/lib/3dwork/parts-library';
@@ -33,7 +35,8 @@ const PAINTS = [
   '#84cc16', '#22c55e', '#14b8a6', '#38bdf8', '#3b82f6', '#a855f7', '#ec4899', '#a16207',
 ];
 
-type Place = { x: number; y: number };
+/** The world axes a part turns about: z points at you, so a turn about it is a turn in the picture. */
+const AXES = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) } as const;
 
 interface Item {
   mesh: THREE.Mesh;
@@ -77,8 +80,8 @@ export function CollectionArranger({
     const item = items.current.get(id);
     places.current.set(id, place);
     if (!item) return;
-    const c = item.bounds.center;
-    item.mesh.position.set(place.x - c[0], place.y - c[1], -c[2] + (selectedRef.current === id ? LIFT_MM : 0));
+    item.mesh.position.set(place.x, place.y, selectedRef.current === id ? LIFT_MM : 0);
+    item.mesh.quaternion.fromArray(place.q ?? [0, 0, 0, 1]);
   }, []);
 
   // The scene, the parts and the gestures — made once.
@@ -225,7 +228,7 @@ export function CollectionArranger({
       }
       if (drag) {
         const at = worldAt(event.clientX, event.clientY);
-        const place = { x: Math.round(at.x + drag.dx), y: Math.round(at.y + drag.dy) };
+        const place = { ...places.current.get(drag.id), x: Math.round(at.x + drag.dx), y: Math.round(at.y + drag.dy) };
         put(drag.id, place);
         setReadout(place);
         setMoved(true);
@@ -286,8 +289,11 @@ export function CollectionArranger({
           missing.push(part.name);
           continue;
         }
+        // Centred on its own box: it stands at its place and turns about its middle.
+        const bounds = computeBounds(soup);
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(soup, 3));
+        geometry.translate(-bounds.center[0], -bounds.center[1], -bounds.center[2]);
         geometry.computeVertexNormals();
         const look = lookFor(part);
         const mesh = new THREE.Mesh(
@@ -295,7 +301,7 @@ export function CollectionArranger({
           new THREE.MeshStandardMaterial({ color: look.color, metalness: look.metalness, roughness: look.roughness })
         );
         scene.add(mesh);
-        items.current.set(part.id, { mesh, bounds: computeBounds(soup) });
+        items.current.set(part.id, { mesh, bounds });
       }
       if (cancelled) return;
       const ready = parts.filter((part) => items.current.has(part.id));
@@ -356,12 +362,20 @@ export function CollectionArranger({
         setReadout(null);
         return;
       }
+      const key = event.key.toLowerCase();
+      if (key === 'r' || key === 'q' || key === 'e' || key === 'f') {
+        event.preventDefault();
+        if (key === 'f') turnRef.current(id, 'y', 180);
+        else if (key === 'r') turnRef.current(id, 'z', event.shiftKey ? 90 : -90);
+        else turnRef.current(id, 'z', key === 'q' ? 5 : -5);
+        return;
+      }
       const step = event.shiftKey ? 10 : 1;
       const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[event.key];
       if (!delta) return;
       event.preventDefault();
       const place = places.current.get(id) ?? { x: 0, y: 0 };
-      const next = { x: place.x + delta[0], y: place.y + delta[1] };
+      const next = { ...place, x: place.x + delta[0], y: place.y + delta[1] };
       put(id, next);
       setReadout(next);
       setMoved(true);
@@ -371,6 +385,23 @@ export function CollectionArranger({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [put]);
+
+  /** Turn a part about one of the world axes, about its own middle; null degrees sets it straight. */
+  const turn = (id: string, axis: keyof typeof AXES, degrees: number | null) => {
+    const place = places.current.get(id) ?? { x: 0, y: 0 };
+    const now = new THREE.Quaternion().fromArray(place.q ?? [0, 0, 0, 1]);
+    const next =
+      degrees === null ? new THREE.Quaternion() : new THREE.Quaternion().setFromAxisAngle(AXES[axis], (degrees * Math.PI) / 180).multiply(now);
+    const q = tidyTurn(next.toArray());
+    const turned: Place = q ? { x: place.x, y: place.y, q } : { x: place.x, y: place.y };
+    put(id, turned);
+    setReadout(turned);
+    setMoved(true);
+    setAuto(false);
+    view.current?.draw();
+  };
+  const turnRef = useRef(turn);
+  turnRef.current = turn;
 
   const paint = (colour: string) => {
     if (!selectedId) return;
@@ -455,7 +486,7 @@ export function CollectionArranger({
           </div>
         )}
         <p className="pointer-events-none absolute bottom-2 left-2 right-2 text-center text-[0.65rem] text-slate-500">
-          Dragðu part til að færa hann · dragðu bakgrunninn til að hliðra · skrun eða klípa til að þysja · örvatakkar færa um 1 mm
+          Dragðu part til að færa hann · dragðu bakgrunninn til að hliðra · skrun eða klípa til að þysja · örvatakkar færa um 1 mm · R snýr 90°, Q/E 5°, F snýr við
         </p>
       </div>
 
@@ -485,6 +516,39 @@ export function CollectionArranger({
                 x {Math.round(readout.x)} · y {Math.round(readout.y)} mm
               </span>
             )}
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Snúa">
+              {(
+                [
+                  { label: '90°', title: 'Snúa 90° rangsælis (Shift+R)', icon: RotateCcw, axis: 'z', degrees: 90 },
+                  { label: '90°', title: 'Snúa 90° réttsælis (R)', icon: RotateCw, axis: 'z', degrees: -90 },
+                  { label: '5°', title: 'Snúa 5° rangsælis (Q)', icon: RotateCcw, axis: 'z', degrees: 5 },
+                  { label: '5°', title: 'Snúa 5° réttsælis (E)', icon: RotateCw, axis: 'z', degrees: -5 },
+                  { label: 'Snúa við', title: 'Snúa endanum við — spegla á hlið (F)', icon: FlipHorizontal2, axis: 'y', degrees: 180 },
+                  { label: 'Velta', title: 'Velta fjórðung að þér — sýnir aðra hlið', icon: Rotate3d, axis: 'x', degrees: 90 },
+                ] as const
+              ).map((button) => (
+                <button
+                  key={button.title}
+                  type="button"
+                  className="inline-flex min-h-8 items-center gap-1 rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-2 text-[0.68rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]"
+                  onClick={() => selectedId && turn(selectedId, button.axis, button.degrees)}
+                  title={button.title}
+                  aria-label={button.title}
+                >
+                  <button.icon className="h-3.5 w-3.5" />
+                  {button.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="inline-flex min-h-8 items-center rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-2 text-[0.68rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)] disabled:opacity-40"
+                onClick={() => selectedId && turn(selectedId, 'z', null)}
+                disabled={!readout?.q}
+                title="Rétta partinn — eins og hann var vistaður"
+              >
+                Rétt
+              </button>
+            </div>
             <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Litur">
               {PAINTS.map((colour) => (
                 <button
