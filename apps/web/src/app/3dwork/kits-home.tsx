@@ -24,6 +24,7 @@ import { classifyPart, type Project } from '@/lib/3dwork/project';
 import { rememberOpenProject, saveGeometry, saveProject } from '@/lib/3dwork/storage';
 import { CloudPicker } from './cloud-picker';
 import { KitBoard } from './kit-board';
+import './ragnarok/theme.css';
 import { RecentBuilds } from './recent-builds';
 import { ACTION_GHOST, LABEL, PANEL } from './ui';
 
@@ -145,16 +146,20 @@ export function KitsHome() {
   return (
     <div className="wb-theme h-dvh overflow-y-auto bg-[var(--wb-ground)] text-[var(--wb-ink)]">
       <div className="flex min-h-full flex-col gap-2 p-2">
-        <div className={`${PANEL} relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
+        <div className={`${PANEL} bench-chrome relative z-40 flex flex-wrap items-center gap-2 px-2 py-1.5`}>
           <div className="flex min-w-0 items-center gap-2">
-            <Boxes className="h-5 w-5 shrink-0 text-emerald-600" />
-            <span className="text-sm font-bold text-slate-900">3dwork</span>
-            <span className="hidden text-[0.65rem] text-slate-500 sm:inline">Verkefni og Partasafn</span>
+            <span className="wb-mark" aria-hidden="true">
+              <i />
+              <i />
+            </span>
+            <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-label)]" />
+            <span className="text-sm font-bold tracking-[0.04em] text-[var(--wb-ink)]">3dwork</span>
+            <span className="hidden text-[0.65rem] text-[var(--wb-ink-mute)] sm:inline">Verkefni og Partasafn</span>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              className={`${TOP_BUTTON} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500`}
+              className={`${TOP_BUTTON} border-[var(--wb-accent)] bg-[var(--wb-accent)] text-[var(--wb-accent-ink)] hover:brightness-110`}
               onClick={() => {
                 setStartFresh(true);
                 setEngine('bench');
@@ -165,7 +170,7 @@ export function KitsHome() {
             </button>
             <button
               type="button"
-              className={`${TOP_BUTTON} border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
+              className={`${TOP_BUTTON} border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]`}
               onClick={() => importInput.current?.click()}
               title="STL eða 3MF í nýtt verkefni á bekknum. Til að setja parta í Partasafnið: dragðu þá á það hér fyrir neðan."
             >
@@ -184,18 +189,18 @@ export function KitsHome() {
                 importToNewBuild(files);
               }}
             />
-            <div className="flex overflow-hidden rounded border border-slate-300">
+            <div className="flex overflow-hidden rounded border border-[var(--wb-tool-border)]">
               <button
                 type="button"
                 onClick={() => setEngine('bench')}
-                className="bg-white px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-700 hover:bg-slate-50"
+                className="bg-[var(--wb-tool-bg)] px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]"
               >
                 3D bench
               </button>
               <button
                 type="button"
                 onClick={() => setEngine('sketch')}
-                className="border-l border-slate-300 px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-slate-500 hover:text-slate-900"
+                className="border-l border-[var(--wb-tool-border)] px-3 py-1.5 text-[0.65rem] font-extrabold uppercase tracking-[0.03em] text-[var(--wb-ink-mute)] hover:text-[var(--wb-ink)]"
               >
                 2D sketch
               </button>

@@ -1,0 +1,127 @@
+/*
+ * 3dwork × Ragnarök — dark gold chrome over the existing light work area.
+ *
+ * Reuses the bench's existing CSS-variable theme (.wb-theme = light work area,
+ * .bench-chrome = dark top chrome; see ../ui.ts) and redefines both sets of
+ * --wb-* tokens with the REAL values measured from the two places this look
+ * already exists in production:
+ *   - apps/slokkvitaeki/app/kjarni/ragnarok/ragnarok.css (the Stjórnstöð's
+ *     "Ragnarök" skin — molten gold / black steel, Chakra Petch)
+ *   - brunaholf.netlify.app/jarvis.html ("Wasteland Protocol" panel) — same
+ *     brushed-gold frame gradient, confirmed via getComputedStyle
+ * Nothing here is invented; every hex below is copied from one of those two.
+ *
+ * Deliberately does NOT touch the light work area's font — only the dark
+ * chrome gets Chakra Petch. Dense, readable content (part names, numbers,
+ * the 3D preview) stays in the app's normal type, full brightness, on paper.
+ */
+
+.wb-theme {
+  /* "gullinn pappír" — the same light paper the Stjórnstöð's other (non-dark)
+     tools get under the Ragnarök skin, so 3dwork's work area matches its
+     sibling tools instead of inventing its own cream. */
+  --wb-ground: #f4ead4;
+  --wb-panel: #fff8e8;
+  --wb-panel-border: #d7c398;
+  --wb-ink: #1a1208;
+  --wb-ink-mute: #6b5a3c;
+  --wb-label: #9a6f22;
+  --wb-accent: #b8862b;
+  --wb-accent-ink: #2e2004;
+  --wb-tool-bg: #fff8e8;
+  --wb-tool-border: #d7c398;
+  --wb-tool-ink: #4a463f;
+  --wb-tool-hover: #f0e2c4;
+  --wb-field-bg: #ffffff;
+  --wb-focus: #b8862b;
+}
+
+.bench-chrome {
+  --wb-panel: #141414;
+  --wb-panel-border: rgba(201, 160, 74, 0.35);
+  --wb-ground: #020202;
+  --wb-ink: #f3e4bf;
+  --wb-ink-mute: #9c7a45;
+  --wb-label: #ffcf6a;
+  --wb-accent: #e6b04a;
+  --wb-accent-ink: #1a0d04;
+  --wb-tool-bg: #1c1c1c;
+  --wb-tool-border: rgba(201, 160, 74, 0.3);
+  --wb-tool-ink: #bf9a5d;
+  --wb-tool-hover: #23211e;
+  --wb-field-bg: #0c0c0c;
+  --wb-focus: #ff9a3a;
+  font-family: var(--font-rg), 'Chakra Petch', monospace;
+  position: relative;
+}
+
+/* The molten-gold glow strip along the chrome's lower edge — copied from the
+   Stjórnstöð's own .stn-bar::after. The one big "wow" move, used sparingly:
+   only on the dark chrome, never bleeding into the light work area. */
+.bench-chrome::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    #3e1a06,
+    #ff8c2a 20%,
+    #ffd98a 35%,
+    #7a3a0c 50%,
+    #ffb347 70%,
+    #d2691e 90%,
+    #3e1a06
+  );
+  box-shadow: 0 0 14px rgba(255, 120, 40, 0.45);
+}
+
+/* The spinning gold mark — identical construction to the Stjórnstöð header's
+   .stn-mark (apps/slokkvitaeki/.../kjarni-ragnarok.css): two circles, no
+   canvas, ~nothing on the CPU. Markup: <span class="wb-mark"><i /><i /></span> */
+.wb-mark {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+.wb-mark i {
+  position: absolute;
+  border-radius: 50%;
+}
+.wb-mark i:first-child {
+  inset: 0;
+  background: conic-gradient(
+    from 0deg,
+    #ffb347 0 40deg,
+    transparent 40deg 55deg,
+    #ff8c2a 55deg 130deg,
+    transparent 130deg 160deg,
+    #ffcf6a 160deg 250deg,
+    transparent 250deg 300deg,
+    #d2691e 300deg 330deg,
+    transparent 330deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 6px, #000 7px, #000 10px, transparent 11px);
+  mask: radial-gradient(circle, transparent 6px, #000 7px, #000 10px, transparent 11px);
+  animation: wb-ring-spin 40s linear infinite;
+}
+.wb-mark i:last-child {
+  inset: 8px;
+  background: #fff0c0;
+  box-shadow: 0 0 8px #ff9a3a;
+}
+@keyframes wb-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-mark i:first-child {
+    animation: none;
+  }
+}
