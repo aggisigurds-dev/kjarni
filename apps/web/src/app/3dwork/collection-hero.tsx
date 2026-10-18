@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Loader2, LocateFixed } from 'lucide-react';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadFavoriteGeometry, type Place } from '@/lib/3dwork/favorites';
 import { lookFor } from '@/lib/3dwork/finish';
 import { computeBounds, type Bounds } from '@/lib/3dwork/mesh';
@@ -29,6 +30,8 @@ export interface HeroPart {
   category?: string;
   /** Where the user put it when arranging the collection, and how it is turned; none for the automatic layout. */
   place?: Place;
+  /** Its depth layer, when put on one by hand; none: from its category. */
+  layer?: number;
 }
 
 /** Triangles per part in the picture: enough to read the shape, light enough for a phone. */
@@ -104,7 +107,13 @@ export function CollectionHero({
     renderer.domElement.style.display = 'block';
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x3b4252, 2.1));
+    // A room to reflect, so the metal finishes read as metal.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    scene.environment = environment;
+    scene.environmentIntensity = 0.55;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x3b4252, 1.6));
     const key = new THREE.DirectionalLight(0xffffff, 2.0);
     key.position.set(-0.6, 1.4, 1);
     scene.add(key);
@@ -193,6 +202,7 @@ export function CollectionHero({
       (plate.material as THREE.Material).dispose();
       line.geometry.dispose();
       (line.material as THREE.Material).dispose();
+      environment.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       three.current = null;

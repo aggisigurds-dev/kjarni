@@ -231,6 +231,34 @@ describe('arranging a collection', () => {
     expect(tidyTurn('no')).toBeUndefined();
   });
 
+  it('gives a part a metal finish — its colour and look — and ignores one that does not exist', () => {
+    const { shelf, a, b } = ironWolf();
+    const arranged = withArrangement(shelf, [
+      { id: a, finishId: 'chrome', color: '#123456' },
+      { id: b, finishId: 'unobtainium' },
+    ]);
+    const chrome = arranged.parts.find((part) => part.id === a);
+    expect(chrome?.finishId).toBe('chrome');
+    expect(chrome?.color).toBe('#dce4ec');
+    expect(arranged.parts.find((part) => part.id === b)?.finishId).toBeUndefined();
+    // Painted a plain colour afterwards, the finish goes.
+    const painted = withArrangement(arranged, [{ id: a, color: '#ff0000' }]);
+    expect(painted.parts.find((part) => part.id === a)?.finishId).toBeUndefined();
+  });
+
+  it('keeps the depth layer a part was put on, and only a sensible one', () => {
+    const { shelf, a, b } = ironWolf();
+    const layered = withArrangement(shelf, [
+      { id: a, layer: 3 },
+      { id: b, layer: 42 },
+    ]);
+    const favorites = librarySnapshot(layered).favorites;
+    expect(favorites.find((entry) => entry.id === a)?.layer).toBe(3);
+    expect(favorites.find((entry) => entry.id === b)?.layer).toBeUndefined();
+    const back = withArrangement(layered, [{ id: a, layer: null }]);
+    expect(back.parts.find((part) => part.id === a)?.layer).toBeUndefined();
+  });
+
   it('forgets the place when the part moves to another collection', () => {
     const { shelf, a } = ironWolf();
     const other = withNewCollection(withArrangement(shelf, [{ id: a, place: { x: 5, y: 5 } }]), 'Annað', 'col_other', 9).shelf;

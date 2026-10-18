@@ -4,6 +4,7 @@ import {
   BOARD_GAP_MM,
   assemblyLayout,
   collectionLayout,
+  defaultLayer,
   sideLayout,
   slotCheck,
   BOARD_HEIGHT_MM,
@@ -377,5 +378,16 @@ describe('arranged collections', () => {
     expect(side[3].x).toBeGreaterThan(side[2].x); // too tall to stack on it: the next column
     const placed = sideLayout(items.map((item, index) => (index === 2 ? { ...item, place: { x: -5, y: 7 } } : item)));
     expect(placed[2]).toEqual({ x: -5, y: 7 });
+  });
+});
+
+describe('defaultLayer', () => {
+  it('puts the outside on 1, what runs through it on 2, the internals on 3 and the rest on 4', () => {
+    expect(['body', 'triggerbody', 'grip', 'handguard', 'stocksystem', 'accessories', 'magazine'].map(defaultLayer)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(defaultLayer('stalror')).toBe(2);
+    expect(defaultLayer('fittings')).toBe(2);
+    expect(defaultLayer('innvols')).toBe(3);
+    expect(defaultLayer(undefined)).toBe(4);
+    expect(defaultLayer('none')).toBe(4);
   });
 });

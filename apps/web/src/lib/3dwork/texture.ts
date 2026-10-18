@@ -49,6 +49,7 @@ const MAX_SPLIT_DEPTH = 10;
 export function textureForFinish(finishId: string | undefined | null): PrintTextureSpec {
   if (finishId === 'gold') return { kind: 'stipple', spacingMm: 1.4, depthMm: 0.22 };
   if (finishId === 'brushed-steel') return { kind: 'brushed', spacingMm: 1.5, depthMm: 0.25 };
+  if (finishId === 'bronze') return { kind: 'stipple', spacingMm: 1.6, depthMm: 0.24 };
   return { ...DEFAULT_TEXTURE };
 }
 
