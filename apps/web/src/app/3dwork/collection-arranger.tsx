@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Check, Eye, EyeOff, FlipHorizontal2, Loader2, Rotate3d, RotateCcw, RotateCw, X } from 'lucide-react';
+import { Check, ChevronDown, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, X } from 'lucide-react';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { toast } from 'sonner';
 import { tidyTurn, type ArrangeChange, type Place } from '@/lib/3dwork/favorites';
@@ -75,6 +75,8 @@ export function CollectionArranger({
   const layers = useRef(new Map<string, number>(parts.map((part) => [part.id, part.layer ?? defaultLayer(part.category)])));
   const [hiddenLayers, setHiddenLayers] = useState<Set<number>>(() => new Set());
   const [layered, setLayered] = useState(false);
+  // The layer controls fold away, so the picture keeps the screen (18.10.2026, on the phone).
+  const [showLayers, setShowLayers] = useState(false);
   const view = useRef<{
     renderer: THREE.WebGLRenderer;
     camera: THREE.OrthographicCamera;
@@ -549,15 +551,21 @@ export function CollectionArranger({
 
   return (
     <div className="wb-theme fixed inset-0 z-[80] flex flex-col bg-[var(--wb-ground)] text-[var(--wb-ink)]" role="dialog" aria-modal="true" aria-label={`Raða ${title}`}>
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--wb-panel-border)] bg-[var(--wb-panel)] px-2 py-1.5">
+      <div className="flex items-center gap-1.5 border-b border-[var(--wb-panel-border)] bg-[var(--wb-panel)] px-2 py-1">
         <span className="min-w-0 flex-1 truncate text-sm font-bold">Raða — {title}</span>
-        <button type="button" className={`${ACTION_GHOST} inline-flex items-center gap-1`} onClick={toAuto} disabled={Boolean(progress) || saving}>
+        <button
+          type="button"
+          className={`${ACTION_GHOST} inline-flex items-center gap-1`}
+          onClick={toAuto}
+          disabled={Boolean(progress) || saving}
+          title="Sjálfvirkt — allt aftur í AR-15-uppröðunina"
+        >
           <RotateCcw className="h-3.5 w-3.5" />
-          Sjálfvirkt
+          <span className="hidden sm:inline">Sjálfvirkt</span>
         </button>
-        <button type="button" className={`${ACTION_GHOST} inline-flex items-center gap-1`} onClick={close} disabled={saving}>
+        <button type="button" className={`${ACTION_GHOST} inline-flex items-center gap-1`} onClick={close} disabled={saving} title="Hætta við">
           <X className="h-3.5 w-3.5" />
-          Hætta við
+          <span className="hidden sm:inline">Hætta við</span>
         </button>
         <button
           type="button"
@@ -578,38 +586,81 @@ export function CollectionArranger({
             Sæki {Math.min(progress.done + 1, progress.total)}/{progress.total}…
           </div>
         )}
-        <p className="pointer-events-none absolute bottom-2 left-2 right-2 text-center text-[0.65rem] text-slate-500">
+        <p className="pointer-events-none absolute bottom-2 left-2 right-2 hidden text-center text-[0.65rem] text-slate-500 md:block">
           Dragðu part til að færa hann · dragðu bakgrunninn til að hliðra · skrun eða klípa til að þysja · örvatakkar færa um 1 mm · R snýr 90°, Q/E 5°, F snýr við
         </p>
       </div>
 
-      <div className="flex min-h-14 flex-wrap items-center gap-2 border-t border-[var(--wb-panel-border)] bg-[var(--wb-panel)] px-2 py-1.5">
-        <select
-          className="min-h-8 min-w-0 max-w-[16rem] truncate rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-1.5 text-[0.72rem] font-bold text-[var(--wb-tool-ink)]"
-          value={selectedId ?? ''}
-          onChange={(event) => {
-            const id = event.target.value || null;
-            setSelectedId(id);
-            setReadout(id ? places.current.get(id) ?? null : null);
-          }}
-          aria-label="Velja part"
-          title="Velja part — líka einn sem er falinn inni í öðrum"
-        >
-          <option value="">Velja part…</option>
-          {parts.map((part) => (
-            <option key={part.id} value={part.id}>
-              {part.name}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-1 border-t border-[var(--wb-panel-border)] bg-[var(--wb-panel)] px-2 py-1">
+        <div className="flex items-center gap-1.5">
+          <select
+            className="min-h-8 min-w-0 flex-1 truncate rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-1.5 text-[0.72rem] font-bold text-[var(--wb-tool-ink)] sm:max-w-[18rem] sm:flex-none"
+            value={selectedId ?? ''}
+            onChange={(event) => {
+              const id = event.target.value || null;
+              setSelectedId(id);
+              setReadout(id ? places.current.get(id) ?? null : null);
+            }}
+            aria-label="Velja part"
+            title="Velja part — líka einn sem er falinn inni í öðrum"
+          >
+            <option value="">Velja part…</option>
+            {parts.map((part) => (
+              <option key={part.id} value={part.id}>
+                {part.name}
+              </option>
+            ))}
+          </select>
+          {selected && readout && (
+            <span className="shrink-0 font-mono text-[0.6rem] text-[var(--wb-ink-mute)]" title="x, y í mm">
+              {Math.round(readout.x)}, {Math.round(readout.y)}
+            </span>
+          )}
+          <button
+            type="button"
+            className={`ml-auto inline-flex min-h-8 shrink-0 items-center gap-1 rounded border bg-[var(--wb-tool-bg)] px-2 text-[0.68rem] font-bold ${
+              hiddenLayers.size > 0 ? 'border-amber-500 text-amber-800' : 'border-[var(--wb-tool-border)] text-[var(--wb-tool-ink)]'
+            }`}
+            onClick={() => setShowLayers((value) => !value)}
+            aria-expanded={showLayers}
+            title="Lög — slökkva á ytri lögum til að sjá inn, og setja part í lag"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Lög{hiddenLayers.size > 0 ? ` · ${hiddenLayers.size} af` : ''}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLayers ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        {showLayers && (
+          <div className="flex flex-wrap items-center gap-1">
+            {layerToggles}
+            {selected && (
+              <div className="flex items-center gap-1" role="group" aria-label="Í lag">
+                <span className="text-[0.62rem] font-bold text-[var(--wb-ink-mute)]">Í lag</span>
+                {Array.from({ length: LAYER_COUNT }, (_, index) => index + 1).map((layer) => (
+                  <button
+                    key={layer}
+                    type="button"
+                    className={`h-8 w-8 rounded border text-[0.7rem] font-bold ${
+                      selectedLayer === layer
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]'
+                    }`}
+                    onClick={() => moveToLayer(layer)}
+                    aria-pressed={selectedLayer === layer}
+                    title={`Setja ${selected.name} í lag ${layer}`}
+                  >
+                    {layer}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {selected ? (
           <>
-            {readout && (
-              <span className="font-mono text-[0.65rem] text-[var(--wb-ink-mute)]">
-                x {Math.round(readout.x)} · y {Math.round(readout.y)} mm
-              </span>
-            )}
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Snúa">
+            <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none]" role="group" aria-label="Snúa">
               {(
                 [
                   { label: '90°', title: 'Snúa 90° rangsælis (Shift+R)', icon: RotateCcw, axis: 'z', degrees: 90 },
@@ -623,18 +674,18 @@ export function CollectionArranger({
                 <button
                   key={button.title}
                   type="button"
-                  className="inline-flex min-h-8 items-center gap-1 rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-2 text-[0.68rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]"
+                  className="inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-1.5 text-[0.66rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]"
                   onClick={() => selectedId && turn(selectedId, button.axis, button.degrees)}
                   title={button.title}
                   aria-label={button.title}
                 >
                   <button.icon className="h-3.5 w-3.5" />
-                  {button.label}
+                  {button.label.endsWith('°') ? button.label : <span className="hidden sm:inline">{button.label}</span>}
                 </button>
               ))}
               <button
                 type="button"
-                className="inline-flex min-h-8 items-center rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-2 text-[0.68rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)] disabled:opacity-40"
+                className="inline-flex min-h-8 shrink-0 items-center rounded border border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] px-1.5 text-[0.66rem] font-bold text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)] disabled:opacity-40"
                 onClick={() => selectedId && turn(selectedId, 'z', null)}
                 disabled={!readout?.q}
                 title="Rétta partinn — eins og hann var vistaður"
@@ -642,46 +693,21 @@ export function CollectionArranger({
                 Rétt
               </button>
             </div>
-            {layerToggles}
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Í lag">
-              <span className="text-[0.65rem] font-bold text-[var(--wb-ink-mute)]">Í lag</span>
-              {Array.from({ length: LAYER_COUNT }, (_, index) => index + 1).map((layer) => (
-                <button
-                  key={layer}
-                  type="button"
-                  className={`h-8 w-8 rounded border text-[0.7rem] font-bold ${
-                    selectedLayer === layer
-                      ? 'border-emerald-600 bg-emerald-600 text-white'
-                      : 'border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]'
-                  }`}
-                  onClick={() => moveToLayer(layer)}
-                  aria-pressed={selectedLayer === layer}
-                  title={`Setja ${selected.name} í lag ${layer}`}
-                >
-                  {layer}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Málmur">
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Litur og málmur">
               {FINISHES.map((finish) => (
                 <button
                   key={finish.id}
                   type="button"
-                  className={`inline-flex min-h-8 items-center gap-1 rounded border px-1.5 text-[0.66rem] font-bold text-[var(--wb-tool-ink)] ${
-                    selectedPaint?.finishId === finish.id ? 'border-emerald-600 ring-1 ring-emerald-600' : 'border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)]'
+                  className={`h-7 w-7 rounded-full border ${
+                    selectedPaint?.finishId === finish.id ? 'ring-2 ring-emerald-500 ring-offset-1' : 'border-slate-400'
                   }`}
+                  style={{ background: `linear-gradient(135deg, ${finish.color} 0%, #ffffff 45%, ${finish.color} 100%)` }}
                   onClick={() => paint(finish.color, finish)}
-                  title={finish.name}
-                >
-                  <span
-                    className="h-5 w-5 rounded-full border border-slate-300"
-                    style={{ background: `linear-gradient(135deg, ${finish.color} 0%, #ffffff 45%, ${finish.color} 100%)` }}
-                  />
-                  {FINISH_NAMES[finish.id] ?? finish.name}
-                </button>
+                  title={FINISH_NAMES[finish.id] ?? finish.name}
+                  aria-label={`Málmur: ${FINISH_NAMES[finish.id] ?? finish.name}`}
+                />
               ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Litur">
+              <span className="mx-0.5 h-5 w-px bg-slate-300" />
               {PAINTS.map((colour) => (
                 <button
                   key={colour}
@@ -705,10 +731,7 @@ export function CollectionArranger({
             </div>
           </>
         ) : (
-          <>
-            {layerToggles}
-            <span className="text-[0.72rem] text-[var(--wb-ink-mute)]">Pikkaðu á part til að færa hann, snúa eða mála.</span>
-          </>
+          <span className="py-1 text-[0.7rem] text-[var(--wb-ink-mute)]">Pikkaðu á part til að færa hann, snúa eða mála.</span>
         )}
       </div>
     </div>
