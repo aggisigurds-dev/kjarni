@@ -133,7 +133,7 @@ async function installOne(app, tmp) {
 async function main() {
   if (!existsSync(APPS_PATH)) throw new Error(`missing ${APPS_PATH}`);
   const apps = parseApps(readFileSync(APPS_PATH, "utf8"));
-  if (apps.length !== 7) throw new Error(`expected 7 apps, got ${apps.length}`);
+  if (apps.length !== 13) throw new Error(`expected 13 apps, got ${apps.length}`);
   mkdirSync(DEST, { recursive: true });
   const tmp = path.join(os.tmpdir(), `kjarni-artcraft-${process.pid}`);
   mkdirSync(tmp, { recursive: true });
