@@ -12,7 +12,27 @@ import {
 import { SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar";
 import { signOutAction } from "@/data/auth/sign-out";
 import { User } from "@supabase/supabase-js";
-import { Boxes, ChevronUp, Home, Lock, LogOut, Settings } from "lucide-react";
+import {
+  Boxes,
+  ChevronUp,
+  Compass,
+  FileText,
+  Film,
+  Grid3x3,
+  Home,
+  Layers,
+  Lightbulb,
+  Lock,
+  LogOut,
+  Music,
+  Palette,
+  PenTool,
+  Presentation,
+  Settings,
+  Sparkles,
+  Image as ImageIcon,
+  Type,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTransition } from "react";
@@ -32,6 +52,24 @@ const navigationItems: { title: string; url: string; icon: React.ElementType }[]
     url: '/3dwork',
     icon: Boxes,
   },
+];
+
+// ArtCraft (getartcraft.com) crafting apps — launchers only, not hosted in kjarni.
+const craftApps: { title: string; url: string; icon: React.ElementType }[] = [
+  { title: 'All Craft Apps', url: 'https://getartcraft.com/apps', icon: Layers },
+  { title: 'PhotoCraft', url: 'https://getartcraft.com/apps/photocraft', icon: ImageIcon },
+  { title: 'VectorCraft', url: 'https://getartcraft.com/apps/vectorcraft', icon: PenTool },
+  { title: 'FilmCraft', url: 'https://getartcraft.com/apps/filmcraft', icon: Film },
+  { title: 'LightCraft', url: 'https://getartcraft.com/apps/lightcraft', icon: Lightbulb },
+  { title: 'PdfCraft', url: 'https://getartcraft.com/apps/pdfcraft', icon: FileText },
+  { title: 'EffectCraft', url: 'https://getartcraft.com/apps/effectcraft', icon: Sparkles },
+  { title: 'DesignCraft', url: 'https://getartcraft.com/apps/designcraft', icon: Palette },
+  { title: 'FigCraft', url: 'https://getartcraft.com/apps/figcraft', icon: Layers },
+  { title: 'WordCraft', url: 'https://getartcraft.com/apps/wordcraft', icon: Type },
+  { title: 'SoundCraft', url: 'https://getartcraft.com/apps/soundcraft', icon: Music },
+  { title: 'DeckCraft', url: 'https://getartcraft.com/apps/deckcraft', icon: Presentation },
+  { title: 'CADCraft', url: 'https://getartcraft.com/apps/cadcraft', icon: Compass },
+  { title: 'GridCraft', url: 'https://getartcraft.com/apps/gridcraft', icon: Grid3x3 },
 ];
 
 
@@ -69,6 +107,26 @@ export function AppSidebarContent({ user }: { user: User }) {
                     <Icon />
                     <span>{item.title}</span>
                   </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+    <SidebarGroup>
+      <SidebarGroupLabel>Craft Apps</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {craftApps.map((item) => {
+            const Icon = item.icon;
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer">
+                    <Icon />
+                    <span>{item.title}</span>
+                  </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
