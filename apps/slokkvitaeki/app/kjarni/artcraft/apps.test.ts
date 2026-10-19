@@ -15,8 +15,8 @@ import {
   isArtcraftAppId,
 } from "./apps.ts";
 
-test("all seven Crafting Apps are installed in Kjarni", () => {
-  assert.equal(ARTCRAFT_APPS.length, 7);
+test("all thirteen Crafting Apps are installed in Kjarni", () => {
+  assert.equal(ARTCRAFT_APPS.length, 13);
   assert.deepEqual(ARTCRAFT_APP_IDS, [
     "photocraft",
     "vectorcraft",
@@ -25,6 +25,12 @@ test("all seven Crafting Apps are installed in Kjarni", () => {
     "pdfcraft",
     "effectcraft",
     "designcraft",
+    "figcraft",
+    "wordcraft",
+    "soundcraft",
+    "deckcraft",
+    "cadcraft",
+    "gridcraft",
   ]);
 });
 

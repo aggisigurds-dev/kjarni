@@ -13,7 +13,7 @@ export type StodKerfi = {
 
 export const SYSTEMS: StodKerfi[] = [
   { name: "TurboPaint", kind: "TÓL", desc: "Gólfplön — leitaðu eftir heimilisfangi og settu teikninguna á borðið.", href: "/kjarni/turbopaint", state: "VIRKT", ico: "pensill" },
-  { name: "ArtCraft", kind: "TÓL", desc: "Sjö sköpunarviðmót, sjálfvirk tól og einkastúdíó — opnaðu þau beint hér úr Kjarnanum.", href: "/kjarni/artcraft", state: "VIRKT", ico: "litir" },
+  { name: "ArtCraft", kind: "TÓL", desc: "13 sköpunarviðmót, sjálfvirk tól og einkastúdíó — opnaðu þau beint hér úr Kjarnanum.", href: "/kjarni/artcraft", state: "VIRKT", ico: "litir" },
   { name: "Borð", kind: "TÓL", desc: "Sérsniðið stjórnborð — draganleg spjöld með lifandi gögnum, tenglum og klukku.", href: "/bord", state: "VIRKT", ico: "grind" },
   { name: "Stjórnborð", kind: "VEFUR", desc: "Stjórnborð vefsins — síður, pantanir, mælingar og tengingar.", href: "/stjorn", state: "VIRKT", ico: "maelabord" },
   { name: "Kerfi", kind: "EINING", desc: "Þjónustukerfið — viðskiptavinir, búnaður, skoðanir, sala og verkstæði.", href: "/kerfi", state: "VIRKT", ico: "lykill" },

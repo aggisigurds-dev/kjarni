@@ -3,8 +3,9 @@
 Slökkvitæki/Kjarni vefurinn — Stjórnstöðin (`/kjarni`), TurboPaint
 (`/kjarni/turbopaint`), ArtCraft (`/kjarni/artcraft`), Kerfi, Skjalarinn o.fl.
 
-ArtCraft-öppin sjö (PhotoCraft, VectorCraft, FilmCraft, LightCraft, PdfCraft,
-EffectCraft, DesignCraft) eru opin WASM-útgáfur frá
+ArtCraft-öppin þrettán (PhotoCraft, VectorCraft, FilmCraft, LightCraft, PdfCraft,
+EffectCraft, DesignCraft, FigCraft, WordCraft, SoundCraft, DeckCraft, CADCraft,
+GridCraft) eru opin WASM-útgáfur frá
 [getartcraft.com/apps](https://getartcraft.com/apps). Þau eru sótt við
 `pnpm artcraft:install` / `prebuild` og hýst undir `/artcraft/<app>/`.
 

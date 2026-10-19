@@ -10,11 +10,12 @@ export default function ArtCraftHub() {
       <div className="ac-hub">
         <div className="ac-hub-in">
           <p className="ac-kicker">ArtCraft · Crafting Apps</p>
-          <h1>Sjö öpp. Eitt handverk.</h1>
+          <h1>13 öpp. Eitt handverk.</h1>
           <p className="ac-lead">
             Opin uppspretta sköpunartól frá ArtCraft, hýst í Kjarnanum. Myndvinnsla,
-            vektorar, myndbönd, RAW, PDF, hreyfimyndir og síðuhönnun — allt í vafranum,
-            á þínum skrám.
+            vektorar, myndbönd, RAW, PDF, hreyfimyndir, síðuhönnun, viðmótshönnun,
+            ritvinnsla, hljóðvinnsla, kynningar, CAD-teikning og töflureiknir — allt í
+            vafranum, á þínum skrám.
           </p>
           <div className="ac-featured">
             <a className="ac-card ac-card-studio" href={artcraftToolsHref()}>
