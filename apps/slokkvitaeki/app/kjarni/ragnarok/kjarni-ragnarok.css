@@ -89,7 +89,7 @@ a.rgk-sys:hover { filter:brightness(1.15); }
 }
 .rgk-leit-reitur [data-hleit] input {
   width:100%; min-width:0; height:100%;
-  font:500 13px var(--rg-mono); letter-spacing:.04em; color:var(--rg-text);
+  font:500 16px var(--rg-mono); letter-spacing:.04em; color:var(--rg-text);
 }
 .rgk-leit-reitur [data-hleit] input::placeholder { color:var(--rg-text-faint); }
 .rgk-leit-reitur [data-hleit] svg { color:var(--rg-gold-500); }
