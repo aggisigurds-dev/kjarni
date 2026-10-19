@@ -26,6 +26,11 @@ export const TEGUND_HEITI: Record<TaekjaTegund, string> = {
   duft: "ABC Duft",
   co2: "CO2",
   slanga: "Brunaslanga",
+  // 15.10.2026: brunakerfisbúnaður er líka tæki (uttaeki.type „Reykskynjari" o.s.frv.) — sömu heiti og Teikning-glugginn
+  reykskynjari: "Reykskynjari",
+  hitaskynjari: "Hitaskynjari",
+  bjalla: "Viðvörunarbjalla",
+  segull: "Segulloki",
   annad: "Annað tæki",
 };
 
@@ -37,7 +42,7 @@ const ELDRI_TEGUND: Record<string, TaekjaTegund> = {
   hose: "slanga",
 };
 
-const TAEKJA_LYKLAR = new Set<string>(["lettvatn", "duft", "co2", "slanga", "annad"]);
+const TAEKJA_LYKLAR = new Set<string>(["lettvatn", "duft", "co2", "slanga", "reykskynjari", "hitaskynjari", "bjalla", "segull", "annad"]);
 
 /** Tegund tækjatákns út frá TÁKNINU (teikn:<lykill> eða eldra jafngilt), óháð tengingu. null = ekki tækjatákn. */
 export function tegundTakns(symbolId: string | null | undefined): TaekjaTegund | null {

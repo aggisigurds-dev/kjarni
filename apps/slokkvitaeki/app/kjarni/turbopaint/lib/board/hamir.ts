@@ -55,6 +55,7 @@ const TEIKNING_MERKI = [
   "teikn:hitaskynjari",
   "teikn:bjalla",
   "teikn:segull",
+  "teikn:bjorgunarop",
 ];
 
 export const HAMIR: Hamur[] = [
