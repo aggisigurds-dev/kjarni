@@ -130,7 +130,7 @@ export default function BorgarferdirClient() {
               </button>
             )}
             <p className="bf-note">
-              Verð á mann: easyJet £66 og Icelandair £161 til Manchester, Icelandair £222 til Glasgow (fram og til baka), töskugjald
+              Verð á mann: easyJet £66 og Icelandair £161 til Manchester, Icelandair £192 til Glasgow (fram og til baka), töskugjald
               £15 / £47 hvor leið. Hótelverð eru „frá“-verð af öðrum dagsetningum. Barn greiðir fullt fargjald. Hótel án verðs eru ekki
               í röðuninni.
             </p>

@@ -56,7 +56,7 @@ export const DESTS: Record<DestCode, Dest> = {
     code: "GLA",
     borg: "Glasgow",
     skyscanner: "gla",
-    airlines: [{ id: "ic", nafn: "Icelandair", fare: 222, bag: 47, athugasemd: "Beint. Eina flugfélagið sem fannst á leiðinni. Dagar óstaðfestir." }],
+    airlines: [{ id: "ic", nafn: "Icelandair", fare: 192, bag: 47, athugasemd: "Beint, um 2 klst. 25 mín., 6–7 flug á viku. Eina flugfélagið á leiðinni. Dagar óstaðfestir." }],
     hotels: [
       { nafn: "DoubleTree by Hilton Glasgow Central", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Innisundlaug og heitur pottur." },
       { nafn: "voco Grand Central Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Morgunverður í boði og veitingastaður." },
@@ -74,6 +74,8 @@ export const FERDASKRIFSTOFUR: { nafn: string; lysing: string; href: string }[] 
   { nafn: "Icelandair VITA — tilboð", lysing: "Tilboðsferðir. Glasgow og Manchester hafa verið á listanum fyrir ferðir 1. nóv.–17. des.", href: "https://vita.is/tilbod" },
   { nafn: "Úrval Útsýn — Glasgow", lysing: "Borgarferðir til Glasgow.", href: "https://uu.is/afangastadur/glasgow/" },
   { nafn: "Úrval Útsýn — borgarpakkar", lysing: "Allir borgarpakkar.", href: "https://www.uu.is/ferdir/borgir" },
+  { nafn: "Tango Travel — Glasgow", lysing: "Glasgow-pakkar með flugi og hóteli. Sást frá 78.100 kr. á mann í 3 nætur (2 fullorðnir, vetur 2026 — gamalt verð).", href: "https://www.tango.travel/afangastadir/bretland/glasgow/" },
+  { nafn: "Lastminute.com — Glasgow", lysing: "Pakkar með flugi frá Reykjavík. Sást frá um 121.000 kr. á mann í 5 nætur (citizenM). Erlend síða, verð óstaðfest.", href: "https://is.lastminute.com/flug-hotel/gb_bretland/glasgow-d19141800" },
   { nafn: "Visitor — borgarferðir", lysing: "Manchester sést frá 58.259 kr. (óvíst hvað er innifalið).", href: "https://www.visitor.is/borgarferdir/" },
   { nafn: "Tango Travel — borgarferðir", lysing: "Manchester sést frá 57.132 kr. (óvíst hvað er innifalið).", href: "https://www.tango.travel/borgarferdir/" },
 ];
@@ -92,6 +94,17 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
       { stada: "athuga", titill: "Icelandair VITA — tilboð", texti: "Tilboðsferðir Icelandair VITA. Ég sá ekki verð.", href: "https://vita.is/tilbod" },
       { stada: "lokid", titill: "easyJet HOLIDAYSALE", texti: "Allt að £400 af pökkum, en bókunartíminn rann út 29. sept. Skráðu þig á póstlista easyJet til að sjá næstu útsölu.", href: "https://www.easyjet.com/en/" },
       { stada: "rad", titill: "Black Friday", texti: "27. nóvember 2026 (Cyber Monday 30. nóv.). Engin útsala frá Icelandair eða easyJet var auglýst enn, og hún kemur líklega of seint fyrir nóvemberferð." },
+    ],
+  },
+  {
+    titill: "Glasgow",
+    atridi: [
+      { stada: "athuga", titill: "Flugið", texti: "Icelandair flýgur beint, um 2 klst. 25 mín., og FlightsFrom sýnir 7 flug á viku fram í lok nóvember (aðrar heimildir segja 6). Icelandair auglýsti flug fram og til baka í nóvember frá £192 (um 30.000 kr. á annarri síðu). Ég fékk ekki dag-fyrir-dag áætlun, svo staðfestu dagana.", href: "https://www.flightsfrom.com/KEF-GLA" },
+      { stada: "rad", titill: "Edinborg sem valkostur", texti: "Til Edinborgar fljúga bæði Icelandair og easyJet, daglega, og fargjöld sáust frá um €86 fram og til baka — oft ódýrara en til Glasgow, og miðborgirnar eru stutt á milli með lest. Berðu saman áður en þú bókar.", href: "https://www.skyscanner.ie/routes/kef/edi/reykjavik-keflavik-to-edinburgh.html" },
+      { stada: "athuga", titill: "Pakkar", texti: "Ég fann ekkert um Glasgow-pakka frá Icelandair, Vita eða Úrval Útsýn (síða Úrvals Útsýnar fannst ekki). Tango og Lastminute birta pakka — sjá tengla ofar." },
+      { stada: "rad", titill: "Hótelverð", texti: "Miðlungs miðborgarhótel með morgunverði eru sögð £80–120 á nótt, og ódýr £55 og upp. Premier Inn Buchanan Galleries sást frá um $42 (almennt herbergi, ekki fjölskylduherbergi). Ég fann ekkert verð fyrir herbergi fyrir 3 fullorðna + barn.", href: "https://www.glasgowtourism.org/best-hotels-glasgow-city-centre/" },
+      { stada: "rad", titill: "Jólamarkaðir", texti: "St Enoch Square er sagt opna 5.–6. nóv. og Glasgow Green 20. nóv. George Square er í endurbyggingu. Dagsetningar eru væntanlegar, ekki staðfestar.", href: "https://appsavvytraveller.com/glasgow-christmas-markets/" },
+      { stada: "rad", titill: "Fyrir 10 ára", texti: "Frítt: Riverside Museum, Kelvingrove og Burrell Collection. Glasgow Science Centre (stjörnuver, IMAX) hentar vel en kostar. Athugaðu opnunartíma.", href: "https://kidsareatrip.com/top-things-to-do-in-glasgow-with-children/" },
     ],
   },
   {
