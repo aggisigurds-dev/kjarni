@@ -22,6 +22,7 @@ export const TOOLS = [
   { id: "bord", label: "Borð", href: "/bord" },
   { id: "stjorn", label: "Stjórnborð", href: "/stjorn" },
   { id: "kerfi", label: "Kerfi", href: "/kerfi" },
+  { id: "borgarferdir", label: "Borgarferðir", href: "/borgarferdir" },
   { id: "skjalarinn", label: "Skjalarinn", href: "/skjalarinn" },
   { id: "draft", label: "Prufusvæði", href: "/draft" },
   { id: "3dwork", label: "3dwork", href: "/3dwork", ext: true },

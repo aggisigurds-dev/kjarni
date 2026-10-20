@@ -8,7 +8,7 @@ export type StodKerfi = {
   href: string;
   state: "VIRKT" | "DRÖG" | "YTRA";
   /** tákn þemasýnarinnar (stroke-SVG í StodView) */
-  ico: "pensill" | "litir" | "grind" | "maelabord" | "lykill" | "skjal" | "tilraun" | "teningur" | "merki";
+  ico: "pensill" | "litir" | "grind" | "maelabord" | "lykill" | "skjal" | "flug" | "tilraun" | "teningur" | "merki";
 };
 
 export const SYSTEMS: StodKerfi[] = [
@@ -17,6 +17,7 @@ export const SYSTEMS: StodKerfi[] = [
   { name: "Borð", kind: "TÓL", desc: "Sérsniðið stjórnborð — draganleg spjöld með lifandi gögnum, tenglum og klukku.", href: "/bord", state: "VIRKT", ico: "grind" },
   { name: "Stjórnborð", kind: "VEFUR", desc: "Stjórnborð vefsins — síður, pantanir, mælingar og tengingar.", href: "/stjorn", state: "VIRKT", ico: "maelabord" },
   { name: "Kerfi", kind: "EINING", desc: "Þjónustukerfið — viðskiptavinir, búnaður, skoðanir, sala og verkstæði.", href: "/kerfi", state: "VIRKT", ico: "lykill" },
+  { name: "Borgarferðir", kind: "TÓL", desc: "Flugleit og bestu pakkarnir í nóvember — Manchester og Glasgow, flug, töskur og hótel fyrir 4.", href: "/borgarferdir", state: "VIRKT", ico: "flug" },
   { name: "Skjalarinn", kind: "TÓL", desc: "Skjöl, pdf og skrár á einum stað.", href: "/skjalarinn", state: "VIRKT", ico: "skjal" },
   { name: "Prufusvæði", kind: "DRÖG", desc: "Blokkir, þemu og skikt — tilraunir, ekkert hér er lokaútgáfa.", href: "/draft", state: "DRÖG", ico: "tilraun" },
   { name: "3dwork", kind: "YTRA", desc: "STL/mesh vinnustöð — opnast í nýjum glugga.", href: "/3dwork", state: "YTRA", ico: "teningur" },

@@ -1,0 +1,160 @@
+/* Borgarferðir (Manchester · Glasgow) — gögn og reikningur. Verð eru ÚR LEITARVÉLUM (mynd frá okt. 2026), ekki tilboð;
+ * pakkarnir hér eru reiknaðir (flug + töskur + hótel), ekki tilbúnir pakkar ferðaskrifstofa. */
+
+export type DestCode = "MAN" | "GLA";
+export type AirlineId = "ez" | "ic";
+
+export type Airline = {
+  id: AirlineId;
+  nafn: string;
+  /** fargjald á mann, fram og til baka, £ */
+  fare: number;
+  /** taska, hvor leið, £ */
+  bag: number;
+  /** vikudagar (0 = sun) sem flogið var — óskilgreint = oftast daglega eða óvíst */
+  days?: number[];
+  athugasemd: string;
+};
+
+export type Hotel = { nafn: string; stjornur: string; hverfi: string; rate: number | null; hvers: string };
+
+export type Dest = {
+  code: DestCode;
+  borg: string;
+  skyscanner: string;
+  flugtimi?: string;
+  airlines: Airline[];
+  hotels: Hotel[];
+  flugLinks: { nafn: string; href: string }[];
+};
+
+export const DESTS: Record<DestCode, Dest> = {
+  MAN: {
+    code: "MAN",
+    borg: "Manchester",
+    skyscanner: "man",
+    flugtimi: "um 2 klst. 45 mín.",
+    airlines: [
+      { id: "ez", nafn: "easyJet", fare: 66, bag: 15, days: [4, 0], athugasemd: "Beint, fimmtudaga og sunnudaga. Taska bókuð á netinu." },
+      { id: "ic", nafn: "Icelandair", fare: 161, bag: 47, athugasemd: "Beint, nánast daglega. Economy Light." },
+    ],
+    hotels: [
+      { nafn: "The Midland", stjornur: "4★", hverfi: "0,6 km frá miðbæ", rate: 120, hvers: "Fjölskylduherbergi. Fínasti kosturinn." },
+      { nafn: "INNSiDE by Meliá Manchester", stjornur: "4★", hverfi: "Miðborg", rate: 80, hvers: "Fjölskylduherbergi og ódýrasta 4★ sem fannst." },
+      { nafn: "Manchester Portland by Sunday", stjornur: "3,5★", hverfi: "Miðborg", rate: 60, hvers: "Góð staðsetning og gott verð — sparnaðarkosturinn." },
+      { nafn: "Crowne Plaza Manchester City Centre", stjornur: "4★", hverfi: "Við Arndale", rate: null, hvers: "Foreldrar mæla með herbergi með tveimur stórum rúmum — biðja um það." },
+      { nafn: "DoubleTree by Hilton Manchester Piccadilly", stjornur: "4★", hverfi: "Piccadilly", rate: null, hvers: "Innisundlaug — gott fyrir 10 ára." },
+      { nafn: "Holiday Inn Manchester City Centre", stjornur: "3–4★", hverfi: "Miðborg", rate: null, hvers: "Oft nefnt sem fjölskylduhótel; fjölskylduherbergi sofa yfirleitt fjóra." },
+      { nafn: "Staycity Aparthotels Manchester", stjornur: "Íbúðahótel", hverfi: "Miðborg", rate: null, hvers: "Íbúð með aðskildu svefnrými hentar 3 fullorðnum + barni betur en eitt herbergi." },
+    ],
+    flugLinks: [
+      { nafn: "Icelandair", href: "https://www.icelandair.com/en-gb/flights/flights-from-manchester-to-reykjavik" },
+      { nafn: "easyJet", href: "https://www.easyjet.com/en/" },
+    ],
+  },
+  GLA: {
+    code: "GLA",
+    borg: "Glasgow",
+    skyscanner: "gla",
+    airlines: [{ id: "ic", nafn: "Icelandair", fare: 222, bag: 47, athugasemd: "Beint. Eina flugfélagið sem fannst á leiðinni. Dagar óstaðfestir." }],
+    hotels: [
+      { nafn: "DoubleTree by Hilton Glasgow Central", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Innisundlaug og heitur pottur." },
+      { nafn: "voco Grand Central Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Morgunverður í boði og veitingastaður." },
+      { nafn: "Hilton Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 85, hvers: "Innisundlaug — örugg fjölskylduleið." },
+      { nafn: "Apex City of Glasgow Hotel", stjornur: "4★", hverfi: "Bath Street", rate: 85, hvers: "Rúmgóð fjölskylduherbergi og þjónusta fyrir börn." },
+      { nafn: "Novotel Glasgow Centre", stjornur: "4★", hverfi: "Pitt Street", rate: null, hvers: "Fjölskylduvænt, með gufubaði og líkamsrækt." },
+    ],
+    flugLinks: [{ nafn: "Icelandair", href: "https://www.icelandair.com/en-gb/" }],
+  },
+};
+
+/** pakkar frá ferðaskrifstofum — aðeins tenglar; verð fundust ekki á lifandi síðum */
+export const FERDASKRIFSTOFUR: { nafn: string; lysing: string; href: string }[] = [
+  { nafn: "Icelandair — Manchester", lysing: "Flug báðar leiðir, hótel með morgunverði, handfarangur og taska. Frá 72.900 kr. á mann (miðað við 2 fullorðna).", href: "https://www.icelandair.com/is/pakkaferdir/manchester-borgarferdir/" },
+  { nafn: "Icelandair VITA — tilboð", lysing: "Tilboðsferðir. Glasgow og Manchester hafa verið á listanum fyrir ferðir 1. nóv.–17. des.", href: "https://vita.is/tilbod" },
+  { nafn: "Úrval Útsýn — Glasgow", lysing: "Borgarferðir til Glasgow.", href: "https://uu.is/afangastadur/glasgow/" },
+  { nafn: "Úrval Útsýn — borgarpakkar", lysing: "Allir borgarpakkar.", href: "https://www.uu.is/ferdir/borgir" },
+  { nafn: "Visitor — borgarferðir", lysing: "Manchester sést frá 58.259 kr. (óvíst hvað er innifalið).", href: "https://www.visitor.is/borgarferdir/" },
+  { nafn: "Tango Travel — borgarferðir", lysing: "Manchester sést frá 57.132 kr. (óvíst hvað er innifalið).", href: "https://www.tango.travel/borgarferdir/" },
+];
+
+export const TRAVELLERS = 4;
+export const WINDOWS = ["2026-11-05", "2026-11-12", "2026-11-19", "2026-11-26"] as const;
+
+const DAGAR = ["sun", "mán", "þri", "mið", "fim", "fös", "lau"];
+const MANUDIR = ["jan", "feb", "mar", "apr", "maí", "jún", "júl", "ágú", "sep", "okt", "nóv", "des"];
+
+const parse = (s: string) => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+};
+export const addDays = (s: string, n: number) => {
+  const d = parse(s);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+export const dagsetning = (s: string) => {
+  const d = parse(s);
+  return `${DAGAR[d.getUTCDay()]} ${d.getUTCDate()}. ${MANUDIR[d.getUTCMonth()]}`;
+};
+export const stutt = (s: string) => `${parse(s).getUTCDate()}. ${MANUDIR[parse(s).getUTCMonth()]}`;
+const compact = (s: string) => s.slice(2, 4) + s.slice(5, 7) + s.slice(8, 10);
+const dayOf = (s: string) => parse(s).getUTCDay();
+
+export const fitsDays = (a: Airline, out: string, nights: number) =>
+  !a.days || (a.days.includes(dayOf(out)) && a.days.includes(dayOf(addDays(out, nights))));
+
+export type Settings = { out: string; nights: number; bags: number; rooms: number; gengi: number };
+
+export type Package = {
+  id: string;
+  dest: Dest;
+  airline: Airline;
+  hotel: Hotel;
+  flights: number;
+  bags: number;
+  hotelCost: number;
+  total: number;
+  fits: boolean;
+};
+
+/** Allir reiknaðir pakkar (flug + töskur + hótel með þekktu verði), ódýrastur fyrst. */
+export function buildPackages(s: Settings): Package[] {
+  const out: Package[] = [];
+  for (const dest of Object.values(DESTS)) {
+    for (const airline of dest.airlines) {
+      for (const hotel of dest.hotels) {
+        if (hotel.rate === null) continue;
+        const flights = airline.fare * TRAVELLERS;
+        const bags = s.bags * airline.bag * 2;
+        const hotelCost = hotel.rate * s.rooms * s.nights;
+        out.push({
+          id: `${dest.code}-${airline.id}-${hotel.nafn}`,
+          dest, airline, hotel, flights, bags, hotelCost,
+          total: flights + bags + hotelCost,
+          fits: fitsDays(airline, s.out, s.nights),
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => Number(b.fits) - Number(a.fits) || a.total - b.total);
+}
+
+const punkta = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+/** £ → kr., rúnnað á þúsund */
+export const isk = (pund: number, gengi: number) => punkta(Math.round((pund * gengi) / 1000) * 1000) + " kr.";
+export const gbp = (n: number) => "£" + Math.round(n).toLocaleString("en-GB");
+
+export function bookingUrl(query: string, s: Settings) {
+  return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(query)}&checkin=${s.out}&checkout=${addDays(s.out, s.nights)}&group_adults=3&group_children=1&age=10&no_rooms=${s.rooms}`;
+}
+
+export function flugLeit(dest: Dest, s: Settings): { nafn: string; href: string }[] {
+  const ret = addDays(s.out, s.nights);
+  return [
+    { nafn: "Google Flights", href: `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from KEF to ${dest.code} on ${s.out} through ${ret} for 3 adults 1 child nonstop`)}` },
+    { nafn: "Skyscanner", href: `https://www.skyscanner.net/transport/flights/kef/${dest.skyscanner}/${compact(s.out)}/${compact(ret)}/?adultsv2=3&childrenv2=10&cabinclass=economy&preferdirects=true` },
+    { nafn: "Kayak", href: `https://www.kayak.co.uk/flights/KEF-${dest.code}/${s.out}/${ret}/3adults/children-10?sort=price_a&fs=stops=0` },
+    ...dest.flugLinks,
+  ];
+}
