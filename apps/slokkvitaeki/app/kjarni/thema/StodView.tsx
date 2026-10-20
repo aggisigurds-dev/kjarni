@@ -44,6 +44,7 @@ const TAKN: Record<string, ReactNode> = {
   maelabord: <><path d="M4 18a8 8 0 1 1 16 0" /><path d="m12 18 4-6" /><path d="M3 18h18" /></>,
   lykill: <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" />,
   skjal: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h6" /></>,
+  flug: <path d="M10.5 13.5 3 11l1-2 8 .5L16 5a1.8 1.8 0 0 1 3 2l-4 4 .5 8-2 1-2.5-7.5-3 3v3l-1.5.5-1-3-3-1 .5-1.5h3z" />,
   tilraun: <><path d="M9 3h6" /><path d="M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3" /><path d="M7 15h10" /></>,
   teningur: <><path d="M12 2 3 7v10l9 5 9-5V7z" /><path d="m3 7 9 5 9-5" /><path d="M12 12v10" /></>,
   merki: <path d="M6 3h12v18l-6-4-6 4z" />,
