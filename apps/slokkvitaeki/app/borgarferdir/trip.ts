@@ -78,6 +78,52 @@ export const FERDASKRIFSTOFUR: { nafn: string; lysing: string; href: string }[] 
   { nafn: "Tango Travel — borgarferðir", lysing: "Manchester sést frá 57.132 kr. (óvíst hvað er innifalið).", href: "https://www.tango.travel/borgarferdir/" },
 ];
 
+export type Stada = "athuga" | "lokid" | "ekki" | "rad";
+export type Atridi = { titill: string; texti: string; stada: Stada; href?: string };
+
+/** Tilboð, kóðar og ráð. „stada“: athuga = skoðaðu núna, lokid = rann út/líklega búið, ekki = gildir ekki fyrir Manchester/Glasgow, rad = almennt ráð. */
+export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
+  {
+    titill: "Tilboð og kóðar",
+    atridi: [
+      { stada: "athuga", titill: "Icelandair tilboðsferðir", texti: "Manchester og Glasgow eru á listanum fyrir ferðir 1. nóv.–17. des. Sölutímabilið sem síðan sýndi var 13.–16. okt., svo það er líklega búið — opnaðu og athugaðu hvort það stendur enn.", href: "https://www.icelandair.com/is-is/pakkaferdir/tilbodsferdir/" },
+      { stada: "athuga", titill: "Bankatilboð Icelandair (30%)", texti: "Íslandsbanki, Landsbankinn og Arion hafa fengið kóða með 30% afslætti. Íslandsbankasíðan sýndi ferðir 15. nóv.–16. jan.; Landsbankasíðan er frá 2024. Óvíst hvort þeir gilda til Manchester eða Glasgow — prófaðu kóðann í bókunarvélinni.", href: "https://www.icelandair.com/is-is/flug/kynning/tilbod_isb/" },
+      { stada: "ekki", titill: "OLIS-kóðinn (30%)", texti: "Fyrir ferðir 1. nóv.–15. des., Economy Standard og Saga Premium, en Manchester og Glasgow eru ekki á listanum, og bókunartíminn á síðunni var 20.–22. okt. 2025.", href: "https://www.olis.is/frettir/flugtilbod-icelandair-oktober" },
+      { stada: "athuga", titill: "Icelandair VITA — tilboð", texti: "Tilboðsferðir Icelandair VITA. Ég sá ekki verð.", href: "https://vita.is/tilbod" },
+      { stada: "lokid", titill: "easyJet HOLIDAYSALE", texti: "Allt að £400 af pökkum, en bókunartíminn rann út 29. sept. Skráðu þig á póstlista easyJet til að sjá næstu útsölu.", href: "https://www.easyjet.com/en/" },
+      { stada: "rad", titill: "Black Friday", texti: "27. nóvember 2026 (Cyber Monday 30. nóv.). Engin útsala frá Icelandair eða easyJet var auglýst enn, og hún kemur líklega of seint fyrir nóvemberferð." },
+    ],
+  },
+  {
+    titill: "Flug",
+    atridi: [
+      { stada: "rad", titill: "Verðvakt og sveigjanlegir dagar", texti: "Settu verðvakt á KEF–MAN og KEF–GLA í Google Flights, Skyscanner eða Kayak, og skoðaðu heilan mánuð í einu. Einn dagur til eða frá getur breytt verðinu mikið." },
+      { stada: "rad", titill: "Tveir stakir miðar", texti: "Stundum er ódýrara að fljúga út með einu félagi og heim með öðru (easyJet út, Icelandair heim) en að kaupa miða báðar leiðir. Þeir eru þá tvær aðskildar bókanir og engin vernd ef annar fellur niður." },
+      { stada: "rad", titill: "Töskur", texti: "Icelandair Economy Light hefur enga innritaða tösku, Standard hefur eina 23 kg. Barn með sæti fær sömu heimild og fullorðinn. Berðu saman Standard við Light plús tösku. Hjá easyJet er taska miklu ódýrari bókuð á netinu en á flugvellinum.", href: "https://www.icelandair.com/support/on-board/classes-of-service/" },
+      { stada: "rad", titill: "Bókaðu fljótt", texti: "Nóvember er eftir tæpan mánuð. Verð á stuttum fyrirvara lækka sjaldan. Ábendingin um að sunnudagar séu ódýrastir til að bóka byggir á bandarískum gögnum og er óviss." },
+      { stada: "rad", titill: "Play er hætt", texti: "Play varð gjaldþrota í sept. 2025, svo Icelandair og easyJet eru þeir kostir sem fundust á þessum leiðum." },
+    ],
+  },
+  {
+    titill: "Hótel",
+    atridi: [
+      { stada: "rad", titill: "Frí afbókun og endurbókun", texti: "Bókaðu herbergi með fríri afbókun, fylgstu með verði og bókaðu aftur ef það lækkar (bókaðu nýja verðið fyrst, afbókaðu svo það gamla). Athugaðu fresti hvers hótels." },
+      { stada: "rad", titill: "Booking.com Genius og appið", texti: "Genius er frítt: um 10% afsláttur á þrepi 1, allt að 15% á 2 og 20% á 3, á völdum hótelum. Appið er stundum ódýrara en vefurinn. Berðu alltaf saman lokaverð með sköttum og skoðaðu verðið líka beint hjá hótelinu." },
+      { stada: "rad", titill: "Afsláttarkóðar á Booking.com", texti: "Flestir kóðar á kóðasíðum eru útrunnir eða bundnir við reikninga — ekki treysta á þá." },
+      { stada: "rad", titill: "Jólamarkaðir í Manchester", texti: "Þeir opna 6. nóv. og standa til 22. des. Ég fann ekkert um hækkað hótelverð, en ferðin 5.–8. nóv. er fyrir opnun og 12.–15. nóv. er eftir hana.", href: "https://appsavvytraveller.com/manchester-christmas-markets/" },
+      { stada: "rad", titill: "Verð á leikdögum", texti: "Á leikhelgum á Old Trafford og Etihad hækkar hótelverð í Manchester. Athugaðu leikjadagskrána áður en þú velur dagsetningu." },
+    ],
+  },
+  {
+    titill: "Greiðsla og kort",
+    atridi: [
+      { stada: "athuga", titill: "Vildarpunktar á kortum", texti: "Icelandair-kort bankanna safna Vildarpunktum sem má nota upp í flug og hótel. Íslandsbanki Gold og Classic gefa 6 punkta á hverjar 1.000 kr. (10 hjá Icelandair), en heimildir ber ekki saman — staðfestu hjá bankanum.", href: "https://www.islandsbanki.is/en/product/cards/gold-icelandair-eng" },
+      { stada: "athuga", titill: "Aukakrónur", texti: "Landsbankakort safna Aukakrónum sem gilda hjá samstarfsaðilum, og Gold kortið hefur ferðatryggingu.", href: "https://www.landsbankinn.is/en/personal/cards-and-payments/aukakronur" },
+      { stada: "rad", titill: "Greiddu í pundum", texti: "Ef posi eða vefur býður að umreikna í krónur, veldu pund — krónugengið þar er oftast verra." },
+    ],
+  },
+];
+
 export const TRAVELLERS = 4;
 export const WINDOWS = ["2026-11-05", "2026-11-12", "2026-11-19", "2026-11-26"] as const;
 

@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { StationChrome } from "../kjarni/StationChrome";
 import {
-  DESTS, FERDASKRIFSTOFUR, TRAVELLERS, WINDOWS, addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, isk, stutt,
+  AFSLATTUR, DESTS, FERDASKRIFSTOFUR, TRAVELLERS, WINDOWS, addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, isk, stutt,
   type DestCode, type Settings,
 } from "./trip";
 import "./borgarferdir.css";
 
 const KEY = "kjarni_borgarferdir_v1";
 const DEFAULTS: Settings = { out: "2026-11-12", nights: 3, bags: 2, rooms: 1, gengi: 170 };
+const STADA = { athuga: "Athuga", lokid: "Líklega búið", ekki: "Gildir ekki hér", rad: "Ráð" } as const;
 const num = (v: string, min: number) => Math.max(min, Number(v) || 0);
 
 export default function BorgarferdirClient() {
@@ -144,6 +145,31 @@ export default function BorgarferdirClient() {
                   <strong>{f.nafn} ↗</strong>
                   <small>{f.lysing}</small>
                 </a>
+              ))}
+            </div>
+          </section>
+
+          <section className="bf-sec" aria-labelledby="bf-afs">
+            <h2 id="bf-afs">Afslættir, kóðar og ráð</h2>
+            <p className="bf-note">
+              Ég fann engan kóða sem er staðfestur fyrir Manchester eða Glasgow í nóvember. Merkin segja til um hvort þarf að skoða
+              núna, hvort tilboðið er líklega búið eða gildir ekki fyrir þessar borgir, eða hvort þetta er almennt ráð.
+            </p>
+            <div className="bf-tips">
+              {AFSLATTUR.map((g) => (
+                <div key={g.titill} className="bf-tipgroup">
+                  <h3>{g.titill}</h3>
+                  {g.atridi.map((a) => (
+                    <div key={a.titill} className="bf-tip">
+                      <div className="bf-tip-h">
+                        <strong>{a.titill}</strong>
+                        <span className={`bf-pill ${a.stada}`}>{STADA[a.stada]}</span>
+                      </div>
+                      <p>{a.texti}</p>
+                      {a.href && <a href={a.href} target="_blank" rel="noreferrer">Opna ↗</a>}
+                    </div>
+                  ))}
+                </div>
               ))}
             </div>
           </section>
