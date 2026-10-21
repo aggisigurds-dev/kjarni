@@ -15,32 +15,36 @@ const butur = (ax: number, ay: number, bx: number, by: number, tegund: Veggbutur
   laus: false,
 });
 
-test("stigar3D: stakur stigabútur býr til hækkandi þrep, hallandi stigakjarna, hliðarvanga og handrið", () => {
+test("stigar3D: stakur stigabútur býr til tannskorin þrep með þrepanefi, hallandi stigaplötu, glerhandrið og handrið", () => {
   const metri = 50;
   const veggH = 150;
   const stigi = butur(0, 0, 150, 0, "stigi", 8);
   const r = stigar3D([stigi], [stigi], veggH, metri);
 
-  assert.ok(r.threp.length >= 8 && r.threp.length <= 14, `þrepafjöldi: ${r.threp.length}`);
-  // Hvert þrep fær frambrún + 2 hallandi handrið á hliðum
-  assert.equal(r.brir.length, r.threp.length + 2);
-  // Hallandi burðarkjarni (1) + 2 hallandi hliðarvangar + 6 handriðspóstar
-  assert.equal(r.vangar.length, 9);
+  // Hvert þrep samanstendur af tannskornum þrepakubbi + 42 mm þrepanefi (2 færslur í threp á hvert þrep)
+  const fjoldiThrepa = r.threp.length / 2;
+  assert.ok(fjoldiThrepa >= 8 && fjoldiThrepa <= 14, `þrepafjöldi: ${fjoldiThrepa}`);
+  // Hvert þrep fær frambrún + 2 hallandi handrið + 8 handriðspósta (4 á hvorri hlið)
+  assert.equal(r.brir.length, fjoldiThrepa + 10);
+  // Hallandi burðarkjarni (1) + 2 hallandi hliðarvangar
+  assert.equal(r.vangar.length, 3);
+  // Extra-skýrt glerhandrið á báðum hliðum staks stiga
+  assert.equal(r.gler.length, 2);
   assert.ok(r.vangar.some((v) => (v.halli ?? 0) > 0.3), "hallandi burðarplata og vangar hafa hallahorn");
 
-  // Hvert þrep hækkar jafnt upp í fulla vegghæð og lýsist frá neðsta þrepi til efsta
-  for (let i = 1; i < r.threp.length; i++) {
-    const fyrra = r.threp[i - 1];
+  // Hvert þrep (sléttar tölur = þrepakubbar) hækkar jafnt upp í fulla vegghæð
+  for (let i = 2; i < r.threp.length; i += 2) {
+    const fyrra = r.threp[i - 2];
     const nu = r.threp[i];
     assert.ok(nu.y + nu.haed / 2 > fyrra.y + fyrra.haed / 2, "þrep hækkar");
     assert.ok(nu.x > fyrra.x, "þrep færist eftir stefnu stigans");
   }
-  const efsta = r.threp[r.threp.length - 1];
-  assert.ok(Math.abs(efsta.y + efsta.haed / 2 - veggH) < 1e-6);
-  assert.notEqual(r.threp[0].litur, efsta.litur, "hæðarlitbrigði á þrepum");
+  const efstiKubbur = r.threp[r.threp.length - 2];
+  assert.ok(Math.abs(efstiKubbur.y + efstiKubbur.haed / 2 - veggH) < 1e-6);
+  assert.notEqual(r.threp[0].litur, efstiKubbur.litur, "hæðarlitbrigði á þrepum");
 });
 
-test("stigar3D: parar tvo samsíða stigabúta í tvöfaldan U-stiga (Type E) með stigapalli í hálfri hæð og efri komupalli", () => {
+test("stigar3D: parar tvo samsíða stigabúta í tvöfaldan U-stiga (Type E) með stigapalli í hálfri hæð, efri komupalli og glerhandriði", () => {
   const metri = 70;
   const veggH = 210;
   // Neðri leggur (vinstri -> hægri) og efri leggur (hægri -> vinstri) í sama stigahúsi
@@ -50,8 +54,9 @@ test("stigar3D: parar tvo samsíða stigabúta í tvöfaldan U-stiga (Type E) me
 
   const r = stigar3D([nedri, efri], [nedri, efri, endiVeggur], veggH, metri);
 
-  // Tveir leggir (12 þrep hvor) + 1 millipallur (stigapallur í 0.5 * veggH) + 1 efri komupallur (í 1.0 * veggH)
-  assert.ok(r.threp.length >= 16, `þrep og pallar: ${r.threp.length}`);
+  // Tveir leggir + 1 millipallur (stigapallur í 0.5 * veggH) + 1 efri komupallur (í 1.0 * veggH)
+  assert.ok(r.threp.length >= 26, `þrep og pallar: ${r.threp.length}`);
+  assert.equal(r.gler.length, 2, "glerhandrið á innri brún hvors leggs við miðopið");
   const millipallur = r.threp[r.threp.length - 2];
   const komupallur = r.threp[r.threp.length - 1];
 

@@ -30,7 +30,7 @@ import {
 } from "../../lib/board/hus3d";
 import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
 import { gluggaHaedir } from "../../lib/board/hus3d-gluggar";
-import { STIGA_BRUN_LITUR_3D, STIGA_VANGI_LITUR_3D, stigar3D } from "../../lib/board/hus3d-stigar";
+import { STIGA_BRUN_LITUR_3D, STIGA_GLER_LITUR_3D, STIGA_VANGI_LITUR_3D, stigar3D } from "../../lib/board/hus3d-stigar";
 import { smatengingar3D } from "../../lib/board/hus3d-smasamkeyti";
 import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
@@ -509,6 +509,20 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
               hopur.add(threpM, brunM, vangiM);
               losa.push(threpE, brunE, vangiE);
               veggEfni.push(threpE);
+              if (stGogn.gler.length) {
+                const sGlerE = new T.MeshLambertMaterial({
+                  color: STIGA_GLER_LITUR_3D,
+                  transparent: true,
+                  opacity: 0.34,
+                  depthWrite: false,
+                  side: T.DoubleSide,
+                });
+                const sGlerM = new T.InstancedMesh(kG, sGlerE, stGogn.gler.length);
+                setKassa(sGlerM, stGogn.gler, false);
+                sGlerM.renderOrder = 2;
+                hopur.add(sGlerM);
+                losa.push(sGlerE);
+              }
             }
           }
           if (hurdir.length) {
