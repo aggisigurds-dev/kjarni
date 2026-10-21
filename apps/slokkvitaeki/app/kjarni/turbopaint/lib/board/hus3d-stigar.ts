@@ -12,6 +12,8 @@ export interface Kassi3D {
   z: number;
   /** Stefnuhorn í radíönum (snúningur um Y-ás í Three.js: -atan2(dz, dx)). */
   horn: number;
+  /** Hallahorn í radíönum (snúningur um staðbundinn Z-ás fyrir hallandi stigaplötu og handrið). */
+  halli?: number;
   /** Stærð kassans: lengd (eftir stefnu stigans), hæð (y), breidd (þvert á stiga). */
   lengd: number;
   haed: number;
@@ -26,11 +28,11 @@ export interface Stigar3D {
   vangar: Kassi3D[];
 }
 
-const THREPA_DJUP_M = 0.28;
-const VANGI_BREIDD_M = 0.055;
-const BRUN_DJUP_M = 0.036;
-const LITUR_NEDST = [0xd5, 0xd0, 0xc5] as const;
-const LITUR_EFST = [0xf2, 0xee, 0xe6] as const;
+const THREPA_DJUP_M = 0.25;
+const VANGI_BREIDD_M = 0.075;
+const BRUN_DJUP_M = 0.062;
+const LITUR_NEDST = [0xd8, 0xd3, 0xc8] as const;
+const LITUR_EFST = [0xf5, 0xf2, 0xeb] as const;
 export const STIGA_BRUN_LITUR_3D = 0x5c574f;
 export const STIGA_VANGI_LITUR_3D = 0x8a8378;
 
@@ -42,7 +44,7 @@ function blandaLit(hlutfall: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-/** Finnur breidd og hliðarhliðrun stiga út frá þykkt línunnar eða nærliggjandi samsíða stigahúsveggjum. */
+/** Finnur breidd og hliðarhliðrun staks stiga út frá þykkt línunnar eða nærliggjandi samsíða stigahúsveggjum. */
 export function stigaRummal(
   stigi: Veggbutur,
   veggir: readonly Veggbutur[],
@@ -51,11 +53,10 @@ export function stigaRummal(
   const dx = stigi.bx - stigi.ax;
   const dy = stigi.by - stigi.ay;
   const lengd = Math.hypot(dx, dy);
-  if (lengd < 1e-3 || metri <= 0) return { breidd: Math.max(1, metri * 1.1), hlidrun: 0 };
+  if (lengd < 1e-3 || metri <= 0) return { breidd: Math.max(1, metri * 1.05), hlidrun: 0 };
 
-  // Ef notandi hefur þegar stillt breiða línu (≥ 55 cm) ræður hún breiddinni beint.
   if (stigi.thykkt >= metri * 0.55) {
-    return { breidd: Math.min(metri * 2.8, stigi.thykkt), hlidrun: 0 };
+    return { breidd: Math.min(metri * 2.4, stigi.thykkt), hlidrun: 0 };
   }
 
   const ux = dx / lengd;
@@ -63,12 +64,11 @@ export function stigaRummal(
   const nx = -uy;
   const ny = ux;
 
-  // Leitum að samsíða veggjum sitthvorumegin við stigalínuna (innan 0,30 m .. 1,55 m) sem skarast við stigann.
   let vinstri: number | null = null;
   let haegri: number | null = null;
   const minSkorun = lengd * 0.35;
   const minBil = metri * 0.3;
-  const maxBil = metri * 1.55;
+  const maxBil = metri * 1.45;
 
   for (const v of veggir) {
     if (v.tegund !== "veggur") continue;
@@ -79,14 +79,12 @@ export function stigaRummal(
     const dot = Math.abs((vx * ux + vy * uy) / vl);
     if (dot < 0.94) continue;
 
-    // Ofanvarp endapunkta veggsins á ás stigans
     const sA = (v.ax - stigi.ax) * ux + (v.ay - stigi.ay) * uy;
     const sB = (v.bx - stigi.ax) * ux + (v.by - stigi.ay) * uy;
     const s0 = Math.max(0, Math.min(sA, sB));
     const s1 = Math.min(lengd, Math.max(sA, sB));
     if (s1 - s0 < minSkorun) continue;
 
-    // Þverfjarlægð frá miðlínu stigans að innri brún veggsins
     const midX = (v.ax + v.bx) / 2 - stigi.ax;
     const midY = (v.ay + v.by) / 2 - stigi.ay;
     const dMid = midX * nx + midY * ny;
@@ -103,102 +101,411 @@ export function stigaRummal(
 
   if (vinstri !== null && haegri !== null) {
     const heild = vinstri + haegri;
-    if (heild >= metri * 0.75 && heild <= metri * 2.6) {
+    if (heild >= metri * 0.75 && heild <= metri * 1.85) {
       return { breidd: heild, hlidrun: (vinstri - haegri) / 2 };
     }
   }
 
-  const sjalfgefin = Math.min(metri * 1.35, Math.max(metri * 0.95, lengd * 0.34));
+  const sjalfgefin = Math.min(metri * 1.15, Math.max(metri * 0.9, lengd * 0.36));
   return { breidd: sjalfgefin, hlidrun: 0 };
 }
 
-/** Reiknar þrep, þrepabrúnir og hliðarvanga fyrir alla stiga á hæðinni. */
+/** Kanna hvort þverveggur sé rétt fyrir framan enda stigans (til að ákvarða dýpt stigapalls). */
+function finnaPallBreidd(
+  endiX: number,
+  endiY: number,
+  ux: number,
+  uy: number,
+  minN: number,
+  maxN: number,
+  veggir: readonly Veggbutur[],
+  metri: number
+): number | null {
+  const nx = -uy;
+  const ny = ux;
+  let naest: number | null = null;
+  const minD = metri * 0.55;
+  const maxD = metri * 1.55;
+
+  for (const v of veggir) {
+    if (v.tegund !== "veggur") continue;
+    const vx = v.bx - v.ax;
+    const vy = v.by - v.ay;
+    const vl = Math.hypot(vx, vy);
+    if (vl < metri * 0.5) continue;
+    // Veggur þvert á stefnu stigans (samsíða n)
+    const dotN = Math.abs((vx * nx + vy * ny) / vl);
+    if (dotN < 0.92) continue;
+
+    const midX = (v.ax + v.bx) / 2 - endiX;
+    const midY = (v.ay + v.by) / 2 - endiY;
+    const dFram = midX * ux + midY * uy;
+    const veggTh = Math.min(metri * 0.2, Math.max(metri * 0.12, v.thykkt || metri * 0.15));
+    const dInnri = dFram - veggTh / 2;
+    if (dInnri < minD || dInnri > maxD) continue;
+
+    const nA = (v.ax - endiX) * nx + (v.ay - endiY) * ny;
+    const nB = (v.bx - endiX) * nx + (v.by - endiY) * ny;
+    const n0 = Math.max(minN, Math.min(nA, nB));
+    const n1 = Math.min(maxN, Math.max(nA, nB));
+    if (n1 - n0 < (maxN - minN) * 0.35) continue;
+
+    if (naest === null || dInnri < naest) naest = dInnri;
+  }
+  return naest;
+}
+
+/** Bætir við einum hallandi stigalegg (þrepum á hallandi stigakjarna, dökkum þrepabrúnum og handriði). */
+function baetaVidStigalegg(
+  ut: Stigar3D,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  breidd: number,
+  yBotn: number,
+  yTopp: number,
+  veggH: number,
+  metri: number,
+  handridHlid: -1 | 1 | 0
+): void {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengd = Math.hypot(dx, dy);
+  const dh = yTopp - yBotn;
+  if (lengd < metri * 0.35 || dh <= 0) return;
+
+  const ux = dx / lengd;
+  const uy = dy / lengd;
+  const nx = -uy;
+  const ny = ux;
+  const horn = -Math.atan2(dy, dx);
+  const halli = Math.atan2(dh, lengd);
+  const skaLengd = Math.hypot(lengd, dh);
+
+  const vangaB = Math.max(metri * VANGI_BREIDD_M, veggH * 0.022);
+  const brunDjup = Math.max(metri * BRUN_DJUP_M, veggH * 0.02);
+  const brunHaed = Math.max(metri * 0.028, veggH * 0.01);
+  const kjarniTh = Math.max(metri * 0.14, veggH * 0.048);
+
+  const fjoldi = Math.max(6, Math.min(14, Math.round(lengd / (THREPA_DJUP_M * metri))));
+  const threpLengd = lengd / fjoldi;
+  const stepH = dh / fjoldi;
+  const innriBreidd = Math.max(metri * 0.38, breidd - vangaB * 2);
+
+  // 1. Hallandi burðarplata (stigakjarni) undir þrepunum — opið rými undir stiganum eins og í 3D sniðmyndum (Type E).
+  const kjarniMidY = (yBotn + yTopp) / 2 - stepH * 0.35;
+  ut.vangar.push({
+    x: (ax + bx) / 2,
+    y: Math.max(kjarniTh * 0.45, kjarniMidY),
+    z: (ay + by) / 2,
+    horn,
+    halli,
+    lengd: skaLengd * 0.98,
+    haed: kjarniTh,
+    breidd: innriBreidd,
+    litur: STIGA_VANGI_LITUR_3D,
+  });
+
+  // 2. Hallandi hliðarvangar sitthvorumegin við stigalegginn.
+  for (const hlid of [-1, 1] as const) {
+    const hlidD = hlid * (breidd / 2 - vangaB / 2);
+    ut.vangar.push({
+      x: (ax + bx) / 2 + nx * hlidD,
+      y: Math.max(kjarniTh * 0.5, (yBotn + yTopp) / 2 - stepH * 0.1),
+      z: (ay + by) / 2 + ny * hlidD,
+      horn,
+      halli,
+      lengd: skaLengd,
+      haed: kjarniTh * 1.15,
+      breidd: vangaB,
+      litur: STIGA_VANGI_LITUR_3D,
+    });
+  }
+
+  // 3. Þrep og dökkar frambrúnir (riser/nosing) á hverju þrepi.
+  for (let i = 0; i < fjoldi; i++) {
+    const toppY = yBotn + (i + 1) * stepH;
+    const botnY = Math.max(0, yBotn + i * stepH - kjarniTh * 0.45);
+    const h = Math.max(brunHaed * 2, toppY - botnY);
+    const midS = (i + 0.5) * threpLengd;
+    const cx = ax + ux * midS;
+    const cz = ay + uy * midS;
+    const litHlutfall = Math.max(0, Math.min(1, (toppY - stepH * 0.5) / veggH));
+
+    ut.threp.push({
+      x: cx,
+      y: botnY + h / 2,
+      z: cz,
+      horn,
+      lengd: threpLengd * 1.03,
+      haed: h,
+      breidd: innriBreidd,
+      litur: blandaLit(litHlutfall),
+    });
+
+    const bDjup = Math.min(brunDjup, threpLengd * 0.34);
+    const brunS = i * threpLengd + bDjup / 2;
+    const riserH = Math.max(brunHaed, stepH * 0.55);
+    ut.brir.push({
+      x: ax + ux * brunS,
+      y: toppY - riserH / 2 + brunHaed * 0.45,
+      z: ay + uy * brunS,
+      horn,
+      lengd: bDjup,
+      haed: riserH,
+      breidd: breidd * 0.98,
+      litur: STIGA_BRUN_LITUR_3D,
+    });
+  }
+
+  // 4. Handrið og lóðréttir póstar á innri brún stigans (við miðopið í U-stiga eða á báðum hliðum í beinum stiga).
+  const hlidar = handridHlid === 0 ? ([-1, 1] as const) : ([handridHlid] as const);
+  const handridHaed = veggH * 0.28;
+  const handridTh = Math.max(metri * 0.048, veggH * 0.016);
+  for (const hlid of hlidar) {
+    const hlidD = hlid * (breidd / 2 - vangaB * 0.5);
+    // Hallandi handrið ofan á póstunum
+    ut.brir.push({
+      x: (ax + bx) / 2 + nx * hlidD,
+      y: (yBotn + yTopp) / 2 + handridHaed,
+      z: (ay + by) / 2 + ny * hlidD,
+      horn,
+      halli,
+      lengd: skaLengd * 1.01,
+      haed: handridTh,
+      breidd: handridTh,
+      litur: STIGA_BRUN_LITUR_3D,
+    });
+    // Lóðréttir handriðspóstar (neðst, í miðju og efst á leggnum)
+    for (const tPost of [0.06, 0.5, 0.94]) {
+      const pS = tPost * lengd;
+      const grunnY = yBotn + tPost * dh;
+      ut.vangar.push({
+        x: ax + ux * pS + nx * hlidD,
+        y: grunnY + handridHaed / 2,
+        z: ay + uy * pS + ny * hlidD,
+        horn,
+        lengd: handridTh * 0.85,
+        haed: handridHaed,
+        breidd: handridTh * 0.85,
+        litur: STIGA_VANGI_LITUR_3D,
+      });
+    }
+  }
+}
+
+/**
+ * Reiknar þrívíddarstiga fyrir hæðina.
+ * - Ef tveir samsíða stigabútar liggja hlið við hlið í stigahúsi eru þeir tengdir í tvöfaldan U-stiga (Type E)
+ *   með neðri legg (0 → 50% hæðar), flötum millipalli (stigapalli í hálfri hæð með opnu rými undir),
+ *   180° beygju, efri legg (50% → 100% hæðar), efri komupalli og handriðum.
+ * - Stakur stigabútur myndar beinan stigalegg frá gólfi upp í fulla hæð.
+ */
 export function stigar3D(
   stigar: readonly Veggbutur[],
   veggir: readonly Veggbutur[],
   veggH: number,
   metri: number
 ): Stigar3D {
-  const threp: Kassi3D[] = [];
-  const brir: Kassi3D[] = [];
-  const vangar: Kassi3D[] = [];
-  if (!stigar.length || veggH <= 0 || metri <= 0) return { threp, brir, vangar };
+  const ut: Stigar3D = { threp: [], brir: [], vangar: [] };
+  if (!stigar.length || veggH <= 0 || metri <= 0) return ut;
 
-  const vangaB = Math.max(metri * VANGI_BREIDD_M, veggH * 0.016);
-  const brunDjup = Math.max(metri * BRUN_DJUP_M, veggH * 0.012);
-  const brunHaed = Math.max(metri * 0.022, veggH * 0.008);
+  const notadir = new Set<number>();
 
-  for (const s of stigar) {
-    const dx = s.bx - s.ax;
-    const dy = s.by - s.ay;
-    const lengd = Math.hypot(dx, dy);
-    if (lengd < metri * 0.35) continue;
+  // 1. Pörum samsíða stigalínur í sama stigahúsi í tvöfaldan U-stiga með stigapalli (Type E).
+  for (let i = 0; i < stigar.length; i++) {
+    if (notadir.has(i)) continue;
+    const a = stigar[i];
+    const dxa = a.bx - a.ax;
+    const dya = a.by - a.ay;
+    const la = Math.hypot(dxa, dya);
+    if (la < metri * 0.35) continue;
+    const uxa = dxa / la;
+    const uya = dya / la;
+    const nxa = -uya;
+    const nya = uxa;
 
-    const ux = dx / lengd;
-    const uy = dy / lengd;
-    const nx = -uy;
-    const ny = ux;
-    const horn = -Math.atan2(dy, dx);
+    let bestJ = -1;
+    let bestThver = Infinity;
 
-    const { breidd, hlidrun } = stigaRummal(s, veggir, metri);
-    const rotX = s.ax + nx * hlidrun;
-    const rotY = s.ay + ny * hlidrun;
+    for (let j = i + 1; j < stigar.length; j++) {
+      if (notadir.has(j)) continue;
+      const b = stigar[j];
+      const dxb = b.bx - b.ax;
+      const dyb = b.by - b.ay;
+      const lb = Math.hypot(dxb, dyb);
+      if (lb < metri * 0.35) continue;
 
-    const fjoldi = Math.max(6, Math.min(18, Math.round(lengd / (THREPA_DJUP_M * metri))));
-    const threpLengd = lengd / fjoldi;
-    const innriBreidd = Math.max(metri * 0.4, breidd - vangaB * 2);
+      const dot = (dxa * dxb + dya * dyb) / (la * lb);
+      if (Math.abs(dot) < 0.9) continue;
 
-    for (let i = 0; i < fjoldi; i++) {
-      const hlutfall = (i + 1) / fjoldi;
-      const toppY = hlutfall * veggH;
-      // Stallurinn nær niður fyrir næsta þrep á undan svo stiginn sé samfelldur bæði ofan frá og frá hlið.
-      const botnY = Math.max(0, ((i - 1.2) / fjoldi) * veggH);
-      const h = Math.max(brunHaed * 2, toppY - botnY);
-      const midS = (i + 0.5) * threpLengd;
-      const cx = rotX + ux * midS;
-      const cz = rotY + uy * midS;
+      // Ofanvarp b á ás a
+      const sA = (b.ax - a.ax) * uxa + (b.ay - a.ay) * uya;
+      const sB = (b.bx - a.ax) * uxa + (b.by - a.ay) * uya;
+      const s0 = Math.max(0, Math.min(sA, sB));
+      const s1 = Math.min(la, Math.max(sA, sB));
+      if (s1 - s0 < Math.min(la, lb) * 0.55) continue;
 
-      threp.push({
-        x: cx,
-        y: botnY + h / 2,
-        z: cz,
+      const midBx = (b.ax + b.bx) / 2 - a.ax;
+      const midBy = (b.ay + b.by) / 2 - a.ay;
+      const dThver = Math.abs(midBx * nxa + midBy * nya);
+      if (dThver < metri * 0.55 || dThver > metri * 2.5) continue;
+
+      if (dThver < bestThver) {
+        bestThver = dThver;
+        bestJ = j;
+      }
+    }
+
+    if (bestJ !== -1) {
+      notadir.add(i);
+      notadir.add(bestJ);
+      const b = stigar[bestJ];
+
+      // Fyrri línan (a) er neðri leggur (0 → 50% hæðar) sem gengur upp að stigapallinum við a.b;
+      // seinni línan (b) er efri leggur (50% → 100% hæðar) sem gengur til baka frá stigapallinum.
+      const sBa = (b.ax - a.ax) * uxa + (b.ay - a.ay) * uya;
+      const sBb = (b.bx - a.ax) * uxa + (b.by - a.ay) * uya;
+      const sStart = Math.min(0, Math.min(sBa, sBb));
+      const sTurn = Math.max(la, Math.max(sBa, sBb));
+
+      const midBx = (b.ax + b.bx) / 2 - a.ax;
+      const midBy = (b.ay + b.by) / 2 - a.ay;
+      const dFlug = midBx * nxa + midBy * nya;
+      const stefnaEfri: -1 | 1 = dFlug >= 0 ? 1 : -1;
+      const bilMidja = Math.abs(dFlug);
+
+      // Breidd hvors leggs og miðop á milli þeirra
+      const midOp = Math.min(metri * 0.24, Math.max(metri * 0.14, bilMidja * 0.16));
+      const flugBreidd =
+        a.thykkt >= metri * 0.55
+          ? Math.min(bilMidja - midOp * 0.6, a.thykkt)
+          : Math.min(metri * 1.15, Math.max(metri * 0.68, bilMidja - midOp));
+      const heildarBreidd = bilMidja + flugBreidd;
+      const midN = dFlug / 2;
+
+      const horn = -Math.atan2(dya, dxa);
+      const pallY = veggH * 0.5;
+      const pallThykkt = Math.max(metri * 0.16, veggH * 0.055);
+      const brunDjup = Math.max(metri * BRUN_DJUP_M, veggH * 0.02);
+      const brunHaed = Math.max(metri * 0.028, veggH * 0.01);
+
+      // Neðri leggur (0 → 0.5 * veggH): frá sStart til sTurn á línu a
+      const nedriAx = a.ax + uxa * sStart;
+      const nedriAy = a.ay + uya * sStart;
+      const nedriBx = a.ax + uxa * sTurn;
+      const nedriBy = a.ay + uya * sTurn;
+      baetaVidStigalegg(ut, nedriAx, nedriAy, nedriBx, nedriBy, flugBreidd, 0, pallY, veggH, metri, stefnaEfri);
+
+      // Efri leggur (0.5 * veggH → 1.0 * veggH): frá sTurn til sStart á línu b
+      const efriAx = a.ax + uxa * sTurn + nxa * dFlug;
+      const efriAy = a.ay + uya * sTurn + nya * dFlug;
+      const efriBx = a.ax + uxa * sStart + nxa * dFlug;
+      const efriBy = a.ay + uya * sStart + nya * dFlug;
+      baetaVidStigalegg(ut, efriAx, efriAy, efriBx, efriBy, flugBreidd, pallY, veggH, veggH, metri, stefnaEfri);
+
+      // Millipallur (stigapallur í hálfri hæð, opið undir) við snúningsendann (sTurn .. sTurn + pallDjup)
+      const minN = Math.min(-flugBreidd / 2, dFlug - flugBreidd / 2);
+      const maxN = Math.max(flugBreidd / 2, dFlug + flugBreidd / 2);
+      const veggPallDjup = finnaPallBreidd(nedriBx, nedriBy, uxa, uya, minN, maxN, veggir, metri);
+      const pallDjup = veggPallDjup ?? Math.max(flugBreidd * 1.05, metri * 0.95);
+      const pallMidS = sTurn + pallDjup / 2;
+      const pallCx = a.ax + uxa * pallMidS + nxa * midN;
+      const pallCz = a.ay + uya * pallMidS + nya * midN;
+
+      // Efri flötur stigapalls
+      ut.threp.push({
+        x: pallCx,
+        y: pallY - pallThykkt * 0.22,
+        z: pallCz,
         horn,
-        lengd: threpLengd * 1.02,
-        haed: h,
-        breidd: innriBreidd,
-        litur: blandaLit(i / Math.max(1, fjoldi - 1)),
+        lengd: pallDjup,
+        haed: pallThykkt * 0.45,
+        breidd: heildarBreidd,
+        litur: blandaLit(0.5),
       });
-
-      // Dökk brún fremst á hverju þrepi svo þrepin lesist skýrt beint ofan frá.
-      const brunS = i * threpLengd + Math.min(brunDjup, threpLengd * 0.35) / 2;
-      brir.push({
-        x: rotX + ux * brunS,
-        y: toppY + brunHaed * 0.35,
-        z: rotY + uy * brunS,
+      // Burðarplata undir stigapalli (fljótandi plata í hálfri hæð, opið rými fyrir neðan)
+      ut.vangar.push({
+        x: pallCx,
+        y: pallY - pallThykkt * 0.65,
+        z: pallCz,
         horn,
-        lengd: Math.min(brunDjup, threpLengd * 0.35),
+        lengd: pallDjup * 1.01,
+        haed: pallThykkt * 0.7,
+        breidd: heildarBreidd * 1.01,
+        litur: STIGA_VANGI_LITUR_3D,
+      });
+      // Dökk frambrún á stigapalli þar sem gengið er upp á pallinn og út af honum
+      ut.brir.push({
+        x: a.ax + uxa * (sTurn + brunDjup * 0.45) + nxa * midN,
+        y: pallY + brunHaed * 0.35,
+        z: a.ay + uya * (sTurn + brunDjup * 0.45) + nya * midN,
+        horn,
+        lengd: brunDjup * 0.9,
+        haed: brunHaed * 1.2,
+        breidd: heildarBreidd,
+        litur: STIGA_BRUN_LITUR_3D,
+      });
+      // Dökk afturbrún á stigapalli svo hann lesist skýrt ofan frá
+      ut.brir.push({
+        x: a.ax + uxa * (sTurn + pallDjup - brunDjup * 0.35) + nxa * midN,
+        y: pallY + brunHaed * 0.35,
+        z: a.ay + uya * (sTurn + pallDjup - brunDjup * 0.35) + nya * midN,
+        horn,
+        lengd: brunDjup * 0.7,
         haed: brunHaed,
-        breidd: innriBreidd,
+        breidd: heildarBreidd,
         litur: STIGA_BRUN_LITUR_3D,
       });
 
-      // Hliðarvangar sitthvorumegin sem fylgja stöllunum upp.
-      const vangaH = h + brunHaed * 1.2;
-      for (const hlid of [-1, 1] as const) {
-        const hlidD = hlid * (breidd / 2 - vangaB / 2);
-        vangar.push({
-          x: cx + nx * hlidD,
-          y: botnY + vangaH / 2,
-          z: cz + ny * hlidD,
-          horn,
-          lengd: threpLengd * 1.04,
-          haed: vangaH,
-          breidd: vangaB,
-          litur: STIGA_VANGI_LITUR_3D,
-        });
-      }
+      // Efri komupallur (við enda efri leggs, í fullri hæð veggH)
+      const komuDjup = Math.max(metri * 0.36, flugBreidd * 0.42);
+      const komuS = sStart - komuDjup / 2;
+      const komuCx = a.ax + uxa * komuS + nxa * dFlug;
+      const komuCz = a.ay + uya * komuS + nya * dFlug;
+      ut.threp.push({
+        x: komuCx,
+        y: veggH - pallThykkt * 0.22,
+        z: komuCz,
+        horn,
+        lengd: komuDjup,
+        haed: pallThykkt * 0.45,
+        breidd: flugBreidd,
+        litur: blandaLit(1),
+      });
+      ut.vangar.push({
+        x: komuCx,
+        y: veggH - pallThykkt * 0.65,
+        z: komuCz,
+        horn,
+        lengd: komuDjup * 1.01,
+        haed: pallThykkt * 0.7,
+        breidd: flugBreidd * 1.01,
+        litur: STIGA_VANGI_LITUR_3D,
+      });
+      ut.brir.push({
+        x: efriBx - uxa * (brunDjup * 0.45),
+        y: veggH + brunHaed * 0.35,
+        z: efriBy - uya * (brunDjup * 0.45),
+        horn,
+        lengd: brunDjup * 0.9,
+        haed: brunHaed * 1.2,
+        breidd: flugBreidd,
+        litur: STIGA_BRUN_LITUR_3D,
+      });
+      continue;
     }
+
+    // 2. Stakur stigabútur: beinn stigi frá 0 upp í veggH.
+    notadir.add(i);
+    const { breidd, hlidrun } = stigaRummal(a, veggir, metri);
+    const rotAx = a.ax + nxa * hlidrun;
+    const rotAy = a.ay + nya * hlidrun;
+    const rotBx = a.bx + nxa * hlidrun;
+    const rotBy = a.by + nya * hlidrun;
+    baetaVidStigalegg(ut, rotAx, rotAy, rotBx, rotBy, breidd, 0, veggH, veggH, metri, 0);
   }
 
-  return { threp, brir, vangar };
+  return ut;
 }

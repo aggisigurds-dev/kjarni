@@ -488,9 +488,14 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
               const threpM = new T.InstancedMesh(kG, threpE, stGogn.threp.length);
               const brunM = new T.InstancedMesh(kG, brunE, stGogn.brir.length);
               const vangiM = new T.InstancedMesh(kG, vangiE, stGogn.vangar.length);
+              const qHalli = new T.Quaternion(), asZ = new T.Vector3(0, 0, 1);
               const setKassa = (mesh: Three, listi: typeof stGogn.threp, medLit: boolean) => {
                 listi.forEach((b, i) => {
                   q.setFromAxisAngle(ofan, b.horn);
+                  if (b.halli) {
+                    qHalli.setFromAxisAngle(asZ, b.halli);
+                    q.multiply(qHalli);
+                  }
                   m4.compose(st3.set(b.x, b.y, b.z), q, kv3.set(b.lengd, b.haed, b.breidd));
                   mesh.setMatrixAt(i, m4);
                   if (medLit) mesh.setColorAt(i, lit.setHex(b.litur));
