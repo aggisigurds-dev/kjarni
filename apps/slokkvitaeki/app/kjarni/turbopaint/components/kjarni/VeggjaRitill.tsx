@@ -104,6 +104,8 @@ const TEGUNDIR: { id: VeggTegund; texti: string; lykill: string }[] = [
   { id: "ei30", texti: "EI-30", lykill: "5" },
   // Svalir (Agnar 10.10.2026): svalaveggur/handrið — lágur veggur 1,1 m í 3D
   { id: "svalir", texti: "Svalir", lykill: "6" },
+  // Stigi: þrepastigi frá upphafspunkti upp á endapunkt í 3D
+  { id: "stigi", texti: "Stigi", lykill: "7" },
 ];
 
 /** Aðgerðir á völdum veggjum — sameiginlegar lyklaborðinu, spjaldinu og veggjastikunni. */
@@ -666,7 +668,8 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         case "3":
         case "4":
         case "5":
-        case "6": {
+        case "6":
+        case "7": {
           stoppa();
           const t = TEGUNDIR[Number(lykill) - 1].id;
           if (sel.length) setjaTegund(sel, t);
@@ -1780,6 +1783,7 @@ export function VeggjaHamSpjald() {
         {teiknaTakki("gler", "+ Gler", litur("gler"), "Haltu inni og dragðu línu yfir gluggann / glervegginn — slepptu til að ljúka")}
         {teiknaTakki("ei60", "Eldveggur EI-60", <Flame className="size-3.5 text-[#d32f2f]" />, "Haltu inni og dragðu — eldveggur EI-60 (rauður). Núverandi vegg: veldu hann og ýttu á 4.")}
         {teiknaTakki("ei30", "EI-30", <Flame className="size-3.5 text-[#ef5350]" />, "Haltu inni og dragðu — eldveggur EI-30 (ljósrauður). Núverandi vegg: veldu hann og ýttu á 5.")}
+        {teiknaTakki("stigi", "+ Stigi", litur("stigi"), "Haltu inni og dragðu eftir stiganum (frá neðsta þrepi upp á efsta) — birtist sem þrepastigi í 3D (7).")}
         <button type="button" data-veggir-eyda title="Eyða völdum veggjum (Delete)" onClick={eyda} className={`${btn} ${ovirkt} ${valdir ? "" : "opacity-60"}`}>
           <Trash2 className="size-3.5 text-[#FE653F]" />
           {valdir > 1 ? `Eyða ${valdir}` : "Eyða"}

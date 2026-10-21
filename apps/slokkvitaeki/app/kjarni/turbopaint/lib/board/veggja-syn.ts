@@ -17,6 +17,7 @@ export const SKAERIR_VEGGLITIR: Record<VeggTegund, string> = {
   ei60: "#ff1744",
   ei30: "#ff6e9c",
   svalir: "#00c9a7",
+  stigi: "#a855f7",
 };
 
 export const LITA_VEGGI_LYKILL = "tp_lita_veggi";

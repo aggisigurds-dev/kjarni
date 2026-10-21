@@ -593,11 +593,13 @@ export interface VeggjaTalning {
   eld: number;
   /** Svalaveggir (lágir, 1,1 m). */
   svalir: number;
+  /** Stigar (3D þrepastigar). */
+  stigi: number;
   alls: number;
 }
 
 export function veggjaTalning(objects: BoardObject[]): VeggjaTalning {
-  const t: VeggjaTalning = { veggur: 0, gler: 0, hurd: 0, eld: 0, svalir: 0, alls: 0 };
+  const t: VeggjaTalning = { veggur: 0, gler: 0, hurd: 0, eld: 0, svalir: 0, stigi: 0, alls: 0 };
   for (const o of objects) {
     if (!erVeggur(o) || o.hidden) continue;
     const tg = o.veggTegund ?? "veggur";
@@ -620,6 +622,7 @@ export function talningTexti(t: VeggjaTalning): string {
   if (t.hurd) hlutar.push(`${t.hurd} ${eintala(t.hurd) ? "hurð" : "hurðir"}`);
   if (t.eld) hlutar.push(`${t.eld} ${eintala(t.eld) ? "eldveggur" : "eldveggir"}`);
   if (t.svalir) hlutar.push(`${t.svalir} ${eintala(t.svalir) ? "svalaveggur" : "svalaveggir"}`);
+  if (t.stigi) hlutar.push(`${t.stigi} ${eintala(t.stigi) ? "stigi" : "stigar"}`);
   return hlutar.join(" · ");
 }
 
