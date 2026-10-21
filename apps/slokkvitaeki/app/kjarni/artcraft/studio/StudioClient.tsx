@@ -1,23 +1,57 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftAppHref, artcraftHubHref } from "../apps";
 import "../artcraft.css";
+import AdjustPanel from "./AdjustPanel";
+import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
+import LightPlanPanel from "./LightPlan";
+import {
+  DEFAULT_LIGHT_PLAN,
+  LIGHTS_KEY,
+  mergePrompt,
+  readStoredLights,
+  type LightPlan,
+} from "./lights";
+import { analyzeStudioImage, type StudioRegion } from "./analyzeImage";
 import { assertAdultPrompt } from "./guard";
 import {
+  DEFAULT_SETTINGS,
   DEFAULT_WEBUI_URL,
+  SAMPLERS,
+  SETTINGS_KEY,
+  SIZE_PRESETS,
   WEBUI_URL_KEY,
   canEmbedLocalWebui,
+  denoisingHint,
+  generateLocal,
   pingWebui,
+  readStoredSettings,
   readStoredWebuiUrl,
-  txt2img,
+  sizePresetId,
   type LocalModel,
+  type StudioSettings,
 } from "./webui";
 
 const GATE_KEY = "kjarni_private_studio_v1";
+const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/jpg";
+
+function readImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Veldu PNG, JPEG eða WebP."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Gat ekki lesið myndina"));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function StudioClient() {
+  const fileRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [webui, setWebui] = useState(DEFAULT_WEBUI_URL);
@@ -26,6 +60,22 @@ export default function StudioClient() {
   const [models, setModels] = useState<LocalModel[]>([]);
   const [prompt, setPrompt] = useState("");
   const [negative, setNegative] = useState("");
+  const [settings, setSettings] = useState<StudioSettings>(DEFAULT_SETTINGS);
+  const [source, setSource] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [working, setWorking] = useState("");
+  const [mask, setMask] = useState<string | null>(null);
+  const [maskBlur, setMaskBlur] = useState(4);
+  const [regions, setRegions] = useState<StudioRegion[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [presetMask, setPresetMask] = useState<string | null>(null);
+  const [presetMaskTick, setPresetMaskTick] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeText, setAnalyzeText] = useState("");
+  const [colorWant, setColorWant] = useState("red");
+  const [bgWant, setBgWant] = useState("soft daylight, quiet street");
+  const [lights, setLights] = useState<LightPlan>(DEFAULT_LIGHT_PLAN);
+  const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -33,12 +83,64 @@ export default function StudioClient() {
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
     setWebui(readStoredWebuiUrl());
+    setSettings(readStoredSettings());
+    setLights(readStoredLights());
     setReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [ready, settings]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
+  }, [ready, lights]);
 
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
     setAccepted(true);
+  }
+
+  function patchSettings(patch: Partial<StudioSettings>) {
+    setSettings((cur) => ({ ...cur, ...patch }));
+  }
+
+  function pickRegion(region: StudioRegion) {
+    setSelectedRegion(region.id);
+    setPresetMask(region.maskUrl);
+    setPresetMaskTick((n) => n + 1);
+  }
+
+  async function analyze() {
+    if (!source) return;
+    setError("");
+    setAnalyzing(true);
+    setAnalyzeText("Greini myndina…");
+    try {
+      const found = await analyzeStudioImage(source, setAnalyzeText);
+      setRegions(found);
+      const first = found.find((r) => r.kind === "person") || found[0];
+      if (first) pickRegion(first);
+      setAnalyzeText(`${found.length} svæði`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki greint myndina");
+      setAnalyzeText("");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  function applyAction(action: "remove" | "recolor" | "background") {
+    const region = regions.find((r) => r.id === selectedRegion);
+    const kind: RegionKind = region?.kind || (action === "background" ? "background" : "clothes");
+    if (action === "background" && region?.kind !== "background") {
+      const bg = regions.find((r) => r.kind === "background");
+      if (bg) pickRegion(bg);
+    }
+    setPrompt(actionPrompt(kind, action, action === "recolor" ? colorWant : bgWant));
+    patchSettings({ denoisingStrength: actionDenoising(action) });
   }
 
   async function checkServer(url = webui) {
@@ -61,6 +163,29 @@ export default function StudioClient() {
     }
   }
 
+  async function takeFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      const data = await readImageFile(file);
+      setSource(data);
+      setSourceName(file.name);
+      setWorking("");
+      setMask(null);
+      setRegions([]);
+      setSelectedRegion(null);
+      setPresetMask(null);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lesið myndina");
+    }
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    setDrag(false);
+    void takeFile(e.dataTransfer.files[0]);
+  }
+
   async function generate(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -70,15 +195,19 @@ export default function StudioClient() {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
       return;
     }
-    if (!prompt.trim()) {
-      setError("Skrifaðu prompt.");
+    if (!source && !prompt.trim()) {
+      setError("Skrifaðu prompt, eða settu inn mynd til að breyta.");
       return;
     }
     setBusy(true);
     try {
-      const out = await txt2img(webui, {
-        prompt: prompt.trim(),
+      const out = await generateLocal(webui, {
+        prompt: mergePrompt(prompt, lights),
         negativePrompt: negative.trim(),
+        initImage: working || source || undefined,
+        mask: mask || undefined,
+        maskBlur,
+        ...settings,
       });
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
@@ -111,6 +240,9 @@ export default function StudioClient() {
       </StationChrome>
     );
   }
+
+  const editing = Boolean(source);
+  const preset = sizePresetId(settings.width, settings.height);
 
   return (
     <StationChrome tool="artcraft">
@@ -169,7 +301,7 @@ export default function StudioClient() {
                   </a>
                 </div>
                 <p className={`ac-status ${status}`}>{statusText}</p>
-                {canEmbedLocalWebui() ? (
+                {canEmbedLocalWebui() && status === "up" ? (
                   <iframe
                     className="ac-webui"
                     src={webui}
@@ -191,14 +323,157 @@ export default function StudioClient() {
               </section>
 
               <form className="ac-panel" onSubmit={generate}>
-                <h2>Prompt</h2>
+                <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
+                <p className="ac-hint">
+                  {editing
+                    ? "Promptið segir hvað á að breytast. Denoising stýrir hversu mikið líkanið má fara frá upprunalegu myndinni."
+                    : "Án myndar verður til ný mynd. Settu inn ljósmynd til að breyta fötum, bakgrunni eða smáatriðum."}
+                </p>
+
+                <div
+                  className={`ac-drop compact ${drag ? "on" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDrag(true);
+                  }}
+                  onDragLeave={() => setDrag(false)}
+                  onDrop={onDrop}
+                >
+                  {source ? (
+                    <div className="ac-source">
+                      <img src={source} alt="Mynd til að breyta" />
+                      <div>
+                        <p>{sourceName || "Upprunamynd"}</p>
+                        <p className="ac-hint">img2img · denoising {settings.denoisingStrength.toFixed(2)}</p>
+                        <div className="ac-row">
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => fileRef.current?.click()}
+                          >
+                            Skipta um mynd
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn"
+                            onClick={() => void analyze()}
+                            disabled={analyzing}
+                          >
+                            {analyzing ? "Greini…" : "Greina"}
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => {
+                              setSource("");
+                              setSourceName("");
+                              setWorking("");
+                              setMask(null);
+                              setRegions([]);
+                              setSelectedRegion(null);
+                              setPresetMask(null);
+                            }}
+                          >
+                            Fjarlægja
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p>Slepptu mynd hér til að breyta henni, eða</p>
+                      <button
+                        type="button"
+                        className="ac-btn ghost"
+                        onClick={() => fileRef.current?.click()}
+                      >
+                        Velja mynd
+                      </button>
+                    </>
+                  )}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept={IMAGE_ACCEPT}
+                    hidden
+                    onChange={(e) => {
+                      void takeFile(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+
+                {source && (
+                  <>
+                    {(analyzeText || regions.length > 0) && (
+                      <div className="ac-analyze">
+                        {analyzeText && <p className="ac-hint">{analyzeText}</p>}
+                        {regions.length > 0 && (
+                          <>
+                            <p className="ac-hint">Veldu svæði, svo hvað á að gera við það.</p>
+                            <div className="ac-row ac-chips">
+                              {regions.map((region) => (
+                                <button
+                                  key={region.id}
+                                  type="button"
+                                  className={`ac-btn ghost ${selectedRegion === region.id ? "on" : ""}`}
+                                  onClick={() => pickRegion(region)}
+                                >
+                                  {region.label}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="ac-row">
+                              <button type="button" className="ac-btn ghost" onClick={() => applyAction("remove")}>
+                                Fjarlægja
+                              </button>
+                              <button type="button" className="ac-btn ghost" onClick={() => applyAction("recolor")}>
+                                Breyta lit
+                              </button>
+                              <button type="button" className="ac-btn ghost" onClick={() => applyAction("background")}>
+                                Nýr bakgrunnur
+                              </button>
+                            </div>
+                            <div className="ac-settings">
+                              <label>
+                                Nýr litur
+                                <input value={colorWant} onChange={(e) => setColorWant(e.target.value)} />
+                              </label>
+                              <label className="ac-range">
+                                Nýr bakgrunnur
+                                <input value={bgWant} onChange={(e) => setBgWant(e.target.value)} />
+                              </label>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <AdjustPanel
+                      key={`${sourceName}:${source.length}`}
+                      source={source}
+                      presetMask={presetMask}
+                      presetMaskTick={presetMaskTick}
+                      onWorkingChange={(next) => {
+                        setWorking(next.image);
+                        setMask(next.mask);
+                      }}
+                    />
+                  </>
+                )}
+
+                <LightPlanPanel plan={lights} onChange={setLights} />
+
                 <label>
                   Lýsing
                   <textarea
                     rows={5}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="nude adult woman, natural light, film still…"
+                    placeholder={
+                      editing
+                        ? "same adult woman, red dress, keep face and pose…"
+                        : "nude adult woman, natural light, film still…"
+                    }
                   />
                 </label>
                 <label>
@@ -210,9 +485,112 @@ export default function StudioClient() {
                     placeholder="low quality, blurry, deformed"
                   />
                 </label>
+
+                <div className="ac-settings">
+                  <label>
+                    Stærð
+                    <select
+                      value={preset}
+                      onChange={(e) => {
+                        const next = SIZE_PRESETS.find((p) => p.id === e.target.value);
+                        if (next) patchSettings({ width: next.width, height: next.height });
+                      }}
+                    >
+                      {SIZE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Skref
+                    <input
+                      type="number"
+                      min={1}
+                      max={80}
+                      value={settings.steps}
+                      onChange={(e) => patchSettings({ steps: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    CFG
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      value={settings.cfgScale}
+                      onChange={(e) => patchSettings({ cfgScale: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Seed (−1 = handahóf)
+                    <input
+                      type="number"
+                      value={settings.seed}
+                      onChange={(e) => patchSettings({ seed: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Sampler
+                    <select
+                      value={settings.samplerName}
+                      onChange={(e) => patchSettings({ samplerName: e.target.value })}
+                    >
+                      {SAMPLERS.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Fjöldi
+                    <input
+                      type="number"
+                      min={1}
+                      max={4}
+                      value={settings.batchSize}
+                      onChange={(e) => patchSettings({ batchSize: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label className={`ac-range ${editing ? "" : "dim"}`}>
+                    Denoising {settings.denoisingStrength.toFixed(2)}
+                    <input
+                      type="range"
+                      min={0.05}
+                      max={1}
+                      step={0.01}
+                      value={settings.denoisingStrength}
+                      disabled={!editing}
+                      onChange={(e) => patchSettings({ denoisingStrength: Number(e.target.value) })}
+                    />
+                    <span className="ac-hint">
+                      {mask
+                        ? "Hærra gildi fyllir málaða svæðið meira eftir promptinu"
+                        : editing
+                          ? denoisingHint(settings.denoisingStrength)
+                          : "Kemur í gagnið þegar mynd er sett inn"}
+                    </span>
+                  </label>
+                  {mask && (
+                    <label className="ac-range">
+                      Maskableyja {maskBlur}px
+                      <input
+                        type="range"
+                        min={0}
+                        max={32}
+                        value={maskBlur}
+                        onChange={(e) => setMaskBlur(Number(e.target.value))}
+                      />
+                    </label>
+                  )}
+                </div>
+
                 {error && <p className="ac-error">{error}</p>}
                 <button type="submit" className="ac-btn" disabled={busy}>
-                  {busy ? "Mynda…" : "Mynda staðbundið"}
+                  {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
                 </button>
               </form>
 
@@ -226,6 +604,21 @@ export default function StudioClient() {
                         <figcaption>
                           <button type="button" className="ac-btn ghost" onClick={() => download(src, i)}>
                             Sækja PNG
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => {
+                              setSource(src);
+                              setSourceName(`útkoma-${i + 1}.png`);
+                              setWorking("");
+                              setMask(null);
+                              setRegions([]);
+                              setSelectedRegion(null);
+                              setPresetMask(null);
+                            }}
+                          >
+                            Nota sem uppruna
                           </button>
                           <a className="ac-btn ghost" href={artcraftAppHref("photocraft")}>
                             Opna PhotoCraft
