@@ -80,6 +80,7 @@ import {
   skiptaUt,
   valdirVeggir,
 } from "../../lib/board/veggja-ritill-adgerdir";
+import { teikningTilGreiningar } from "../../lib/board/greining-teikning";
 import { forskodunLykill, teiknaEldvegg, TILLOGU_TOL, TOL_HEITI, useVeggjaRitill, type RitilTol } from "../../lib/board/veggja-ritill-stada";
 import { forhladaTeikningar, smellaVeggAMynd } from "../../lib/board/mynd-smellur";
 import { hafnaTillogum, samthykkjaTillogur, tillagaVid, tillogurIKassa } from "../../lib/board/veggja-tillogur";
@@ -1203,8 +1204,7 @@ function RitilSpjald() {
   const valid = "bg-[#FE653F] text-white hover:bg-[#ff7a58]";
   const greina = () => {
     const st = useBoardStore.getState();
-    const myndir = st.objects.filter((o) => o.type === "image" && !o.hidden);
-    const plan = myndir.find((o) => o.type === "image" && o.uttekt) ?? (myndir.length === 1 ? myndir[0] : null);
+    const plan = teikningTilGreiningar(st.objects, st.selectedIds);
     if (!plan) return toast.error("Engin teikning fannst — veldu teikninguna fyrst");
     if (plan.rotation) return toast.error("Teikningunni hefur verið snúið — veggjagreining styður aðeins óbreytta stefnu enn");
     r.opnaGreiningu(plan.id);
@@ -1617,10 +1617,9 @@ function RitilHjalp() {
 // ── Veggir-hamur: hægra spjaldið ─────────────────────────────────────────────────────────────────────────────
 
 /** Teikningin sem „Finna veggi" vinnur á (sama val og „Greina veggi…" í glugganum). */
-function teikningTilGreiningar(): string | null {
+function teikningIdTilGreiningar(): string | null {
   const st = useBoardStore.getState();
-  const myndir = st.objects.filter((o) => o.type === "image" && !o.hidden);
-  const plan = myndir.find((o) => o.type === "image" && o.uttekt) ?? (myndir.length === 1 ? myndir[0] : null);
+  const plan = teikningTilGreiningar(st.objects, st.selectedIds);
   if (!plan) {
     toast.error("Engin teikning fannst — veldu teikninguna fyrst");
     return null;
@@ -1682,14 +1681,14 @@ export function VeggjaHamSpjald() {
     toast.message(`${ids.length} ${ids.length === 1 ? "veggur" : "veggir"} → ${cm} cm · ⌘Z afturkallar`, { duration: 1500 });
   };
   const finna = () => {
-    const id = teikningTilGreiningar();
+    const id = teikningIdTilGreiningar();
     if (!id) return;
     if (!useVeggjaRitill.getState().virkur) r.kveikja("velja");
     r.opnaGreiningu(id, true);
   };
   const [leitarHurdir, setLeitarHurdir] = useState(false);
   const finnaHurdir = async () => {
-    const id = teikningTilGreiningar();
+    const id = teikningIdTilGreiningar();
     if (!id) return;
     const st = useBoardStore.getState();
     const plan = st.objects.find((o): o is ImageObject => o.id === id && o.type === "image");

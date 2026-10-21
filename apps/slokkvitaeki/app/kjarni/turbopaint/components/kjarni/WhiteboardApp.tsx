@@ -138,6 +138,7 @@ import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
 import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
 import { useSjalfvirkt } from "../../lib/board/sjalfvirkt-stada";
 import { teiknaEldvegg, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
+import { teikningTilGreiningar } from "../../lib/board/greining-teikning";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -731,7 +732,9 @@ export function WhiteboardApp() {
     setStripPlanId(plan.id);
   }, [resolvePlan]);
   const greinaVeggi = useCallback(() => {
-    const plan = resolvePlan();
+    // sama regla og „Greina veggi…" / „Finna veggi" í ritlinum (greining-teikning.ts)
+    const st = useBoardStore.getState();
+    const plan = teikningTilGreiningar(st.objects, st.selectedIds);
     if (!plan) {
       toast.error("Engin teikning fannst — veldu teikninguna fyrst");
       return;
@@ -741,7 +744,7 @@ export function WhiteboardApp() {
       return;
     }
     useVeggjaRitill.getState().opnaGreiningu(plan.id);
-  }, [resolvePlan]);
+  }, []);
   const hamAdgerd = useCallback(
     (a: HamAdgerd) => {
       const st = useBoardStore.getState();

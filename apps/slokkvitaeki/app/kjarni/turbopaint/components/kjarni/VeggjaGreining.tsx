@@ -28,6 +28,7 @@ import {
   veggirUrStrikumPt,
   type PdfFlokkur,
 } from "../../lib/board/pdf-veggjaflokkar";
+import { lesaOgFestaEi } from "../../lib/board/ei-lestur";
 import { greinaVeggiTeikningar, lesaPdfSidu, type PdfSida } from "../../lib/board/strip";
 import { greinaVeggiSkonnunar } from "../../lib/board/skonnun-veggir-mynd";
 import { newId, useBoardStore } from "../../lib/board/store";
@@ -103,6 +104,10 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
   const [gler, setGler] = useState(true);
   const [stakar, setStakar] = useState(true);
   const [fleiri, setFleiri] = useState(false);
+  // „Combo" (Agnar 21.10.2026: lesa EI-60/30 + hurðarop og tengja): vigur-PDF-línurnar fá sömu hreinsun og hurðaleit og skönnun/Veggjavél áður en
+  // þær eru settar inn, og EI-merkin eru lesin og fest á veggina eftir innsetningu (vegghjálp úr Búnaðargreiningu eða OCR) — eins og „Sjálfvirkt".
+  const [vinnaPdf, setVinnaPdf] = useState(true);
+  const [lesaEi, setLesaEi] = useState(true);
   const [nid, setNid] = useState<Nidurstada | null>(null);
   const [reiknar, setReiknar] = useState(false);
   // Staðfesting áður en mjög mörgum veggjum er beitt (Agnar 07.10.2026: 599 svartar klessur af 0,24 + 0,48 pt).
@@ -130,7 +135,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
   /** Sama vinnuaðferð og sjálfvirka ferlið á niðurstöðuna (Agnar 11.10.2026: „hurðirnar þurfa kannski bara að vera með
    * inni í veggjaleitarvélinni" · „hurðamerkingar hafi forgangsrétt"): hreinsun (stakir bútar, smella, rétta), hurðir úr
    * hurðabogum sem skera vegginn undir sér, gluggar → gler, og nýtt utan útlínu hússins fer. Bregðist það: óbreytt. */
-  async function vinnuadferd(p: ImageObject, veggir: Butur[]): Promise<Butur[]> {
+  async function vinnuadferd(p: ImageObject, veggir: Butur[], vigur = false): Promise<Butur[]> {
     if (!veggir.length) return veggir;
     try {
       const st = useBoardStore.getState();
@@ -138,7 +143,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       const fastar = veggirTeikningar(st.objects, p).map(semButur);
       const mynd = () => useBoardStore.getState().objects.find((o): o is ImageObject => o.id === p.id && o.type === "image") ?? null;
       st.setImportProgress({ fileName: p.name, percent: 92, message: "Hreinsa og finn hurðir (sama og Sjálfvirkt)…" });
-      const v = await vinnaLinur(mynd, veggir, fastar, m, false, virkVikmork(), {});
+      const v = await vinnaLinur(mynd, veggir, fastar, m, vigur, virkVikmork(), {});
       return v.lokaNy;
     } catch (err) {
       console.warn("[veggir] vinnuaðferð sjálfvirka ferlisins brást — óunnin niðurstaða", err);
@@ -525,9 +530,36 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
     });
   }, [fyrir, nid, nidV, dpm]);
 
-  const beita = (ham: "baeta" | "skipta", stadfest = false) => {
+  /** EI-merkin lesin og fest á veggina sem komu inn (aðrir veggir teikningarinnar læstir) — keyrir áfram eftir að glugginn lokast. */
+  const keyraEi = async (planId: string, lota: string) => {
+    const dpmNu = kvardiNu();
+    if (!dpmNu || dpmNu <= 0) {
+      toast.message("EI ekki lesið — kvarði teikningarinnar er óþekktur (settu hann með K)", { duration: 3500 });
+      return;
+    }
+    const id = toast.loading("Les EI-merki…");
+    try {
+      const r = await lesaOgFestaEi(planId, dpmNu, lota, (t) => toast.loading(t, { id }));
+      toast.success(r.texti, { id, duration: 4500 });
+    } catch (err) {
+      console.warn("[veggir] EI-lestur mistókst", err);
+      toast.error("EI-lestur mistókst — " + (err instanceof Error ? err.message : "óþekkt villa") + " (veggirnir eru komnir inn)", { id, duration: 5000 });
+    }
+  };
+
+  const beita = async (ham: "baeta" | "skipta", stadfest = false) => {
     if (!plan || !nid || !samruni) return;
-    const listi = ham === "baeta" ? samruni.baeta : nidV;
+    let listi = ham === "baeta" ? samruni.baeta : nidV;
+    if (hamur === "pdf" && vinnaPdf) {
+      // vigur-PDF: sama hreinsun (stakir bútar, smella, rétta) og hurðaleit (hurðabogar skera veggi) og skönnun/Veggjavél fá — áður settust hráu línurnar inn
+      const unnid = await vinnuadferd(plan, nidV, true);
+      if (unnid.length) {
+        const m = dpm && dpm > 0 ? dpm : null;
+        const tMed = unnid.map((v) => v.t).sort((a, b) => a - b)[unnid.length >> 1] ?? 4;
+        const sam = sameinaVidVeggi(fyrir.map(semButur), unnid, { vik: m ? 0.1 * m : tMed, lagmark: m ? 0.25 * m : tMed * 2 });
+        listi = ham === "baeta" ? sam.baeta : unnid;
+      }
+    }
     // Mörg hundruð veggir í einu (eða > 3× þeir sem fyrir eru) er nær alltaf skástrikun / húsgögn — skýrt já fyrst.
     if (!stadfest && greiningKrefstStadfestingar(listi.length, fyrir.length)) {
       setStadfesta({ ham, n: listi.length });
@@ -544,6 +576,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       return;
     }
     skiptaUt(eyda, nyir, []);
+    const planId = plan.id;
     const t = veggjaTalning(useBoardStore.getState().objects);
     toast.success(
       (ham === "baeta"
@@ -552,6 +585,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
         ` · alls ${talningTexti(t)} · ⌘Z afturkallar alla greininguna í einu skrefi`
     );
     loka();
+    if (lesaEi) void keyraEi(planId, lota);
   };
 
   /** Veggir-hamur: niðurstaðan verður TILLÖGUR (punktalínur) — aðeins samþykktar verða veggir. */
@@ -599,7 +633,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       <div className="mt-0.5 truncate text-[11px] text-white/50">{plan?.name}</div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
-        {hamur !== "les" && hamur !== "vel" && !simi ? (
+        {hamur !== "les" && hamur !== "vel" ? (
           <div data-veggjavel-val className="mb-2 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
             <button
               type="button"
@@ -616,7 +650,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
               <Cpu className="size-3.5" />
               Veggjavél (skrifstofutölvan)
             </button>
-            <span className="text-[10.5px] leading-tight text-white/50">
+            <span className={`text-[10.5px] leading-tight text-white/50 ${simi && !(velGogn && "astaeda" in velGogn) ? "hidden" : ""}`}>
               {velGogn && "astaeda" in velGogn ? velGogn.astaeda : "Eigið líkan Slökkvitækis · gler verður gler"}
             </span>
           </div>
@@ -760,6 +794,10 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
                 <input type="checkbox" checked={stakar} onChange={(e) => setStakar(e.target.checked)} />
                 Stakar línur (≥ 1,2 m) verða veggir
               </label>
+              <label className="flex items-center gap-1.5" title="Sama hreinsun og hurðaleit og „Sjálfvirkt“ og skannaðar teikningar fá: stakir bútar burt, hurðabogar skera veggi">
+                <input type="checkbox" checked={vinnaPdf} onChange={(e) => setVinnaPdf(e.target.checked)} />
+                Hreinsa og finna hurðir (sama og Sjálfvirkt)
+              </label>
             </div>
           </>
         ) : null}
@@ -811,7 +849,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
                 Afturkalla
               </button>
             ) : null}
-            <button type="button" onClick={() => beita(stadfesta.ham, true)} className={`${btn} bg-red-600/80 text-white hover:bg-red-600`}>
+            <button type="button" onClick={() => void beita(stadfesta.ham, true)} className={`${btn} bg-red-600/80 text-white hover:bg-red-600`}>
               {stadfesta.ham === "baeta" ? `Já, bæta við ${fjoldi(samruni.baeta.length)}` : `Já, skipta út`}
             </button>
           </div>
@@ -854,6 +892,14 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
               </button>
             ) : null}
           </div>
+          <label
+            data-lesa-ei
+            className="mb-1.5 flex items-center gap-1.5 text-[11.5px] text-white/75"
+            title="EI-30 / EI-60 merkin á teikningunni lesin og fest á veggina sem komu inn (úr textalagi PDF ef það er til, annars OCR). Þínir eigin veggir haldast óbreyttir. ⌘Z afturkallar."
+          >
+            <input type="checkbox" checked={lesaEi} onChange={(e) => setLesaEi(e.target.checked)} />
+            Lesa EI-60 / EI-30 og festa á veggina
+          </label>
           {fyrir.length ? (
             <>
               <div className="text-[11.5px] text-white/70">
@@ -871,7 +917,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
                   type="button"
                   autoFocus
                   disabled={reiknar}
-                  onClick={() => beita("baeta")}
+                  onClick={() => void beita("baeta")}
                   className={`${btn} bg-[#FE653F] text-white hover:bg-[#ff7a58] disabled:opacity-50`}
                   title={`${samruni.baeta.length} nýir bútar · ${samruni.tviteknir} tvíteknir slepptir · ${samruni.styttir} styttir`}
                 >
@@ -880,7 +926,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
                 <button
                   type="button"
                   disabled={reiknar}
-                  onClick={() => beita("skipta")}
+                  onClick={() => void beita("skipta")}
                   className={`${btn} bg-white/10 hover:bg-white/15 disabled:opacity-50`}
                   title={`Eyðir ${fyrir.length} veggjum teikningarinnar og setur ${nidV.length} í staðinn`}
                 >
@@ -911,7 +957,7 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
                 type="button"
                 autoFocus
                 disabled={reiknar || !nidV.length}
-                onClick={() => beita("baeta")}
+                onClick={() => void beita("baeta")}
                 className={`${btn} bg-[#FE653F] text-white hover:bg-[#ff7a58] disabled:opacity-50`}
               >
                 Setja inn {nidV.length} veggi
