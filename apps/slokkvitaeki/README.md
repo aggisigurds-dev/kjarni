@@ -10,9 +10,13 @@ GridCraft) eru opin WASM-útgáfur frá
 `pnpm artcraft:install` / `prebuild` og hýst undir `/artcraft/<app>/`.
 
 Einkastúdíó (`/kjarni/artcraft/studio`) myndar staðbundið gegnum Automatic1111 /
-Forge / SD.Next (`--api` + CORS). Fullorðinsmyndefni er leyfilegt; kynferðislegt
-myndefni af börnum er lokað. Keyrðu `scripts/private-studio-webui.sh` til að
-sjá ræsi-skipunina.
+Forge / SD.Next (`--api` + CORS). Hægt er að setja inn eigin mynd, stilla stærð /
+skref / CFG / seed / sampler / denoising, fínpússa líkamslínur (þenja, minnka,
+draga) og mála maska sem promptið fókusar á. Greina merkir manneskju, föt,
+bakgrunn og hluti; síðan má fjarlægja, breyta lit eða skipta um bakgrunn.
+Fullorðinsmyndefni er leyfilegt;
+kynferðislegt myndefni af börnum er lokað. Keyrðu
+`scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.
 
 ## Deploy
 

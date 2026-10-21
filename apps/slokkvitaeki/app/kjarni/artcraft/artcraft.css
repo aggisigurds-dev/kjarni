@@ -528,7 +528,8 @@
 }
 
 .ac-studio input,
-.ac-studio textarea {
+.ac-studio textarea,
+.ac-studio select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--m-line, #d5dee8);
@@ -536,6 +537,53 @@
   font: 15px/1.4 var(--font-sans, system-ui, sans-serif);
   background: #fff;
   color: inherit;
+}
+
+.ac-drop.compact {
+  min-height: 120px;
+  margin: 0 0 14px;
+  padding: 16px;
+}
+
+.ac-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  text-align: left;
+  width: 100%;
+}
+
+.ac-source img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.ac-source p {
+  margin: 0 0 6px;
+}
+
+.ac-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.ac-range {
+  grid-column: 1 / -1;
+}
+
+.ac-range.dim {
+  opacity: 0.55;
+}
+
+.ac-studio input[type="range"] {
+  padding: 0;
+  min-height: 28px;
+  accent-color: var(--m-navy, #102038);
 }
 
 .ac-btn {
@@ -557,6 +605,53 @@
   background: transparent;
   color: inherit;
   border: 1px solid var(--m-line, #d5dee8);
+}
+
+.ac-btn.ghost.on {
+  background: var(--m-navy, #102038);
+  border-color: var(--m-navy, #102038);
+  color: #fff;
+}
+
+.ac-analyze {
+  margin: 0 0 14px;
+}
+
+.ac-chips {
+  margin: 8px 0;
+}
+
+.ac-adjust {
+  margin: 0 0 16px;
+}
+
+.ac-tools {
+  margin-bottom: 8px;
+}
+
+.ac-adjust-stage {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 12px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111;
+}
+
+.ac-adjust-stage.wait {
+  min-height: 180px;
+}
+
+.ac-adjust-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(70vh, 520px);
+  object-fit: contain;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 .ac-btn:disabled { opacity: 0.55; cursor: wait; }
@@ -584,10 +679,15 @@
 }
 
 .stn[data-skin="ragnarok"] .ac-studio input,
-.stn[data-skin="ragnarok"] .ac-studio textarea {
+.stn[data-skin="ragnarok"] .ac-studio textarea,
+.stn[data-skin="ragnarok"] .ac-studio select {
   background: #0a0a0a;
   border-color: rgba(201, 152, 47, 0.35);
   color: var(--rg-text);
+}
+
+.stn[data-skin="ragnarok"] .ac-studio input[type="range"] {
+  accent-color: var(--rg-gold-fill, #c9982f);
 }
 
 .stn[data-skin="ragnarok"] .ac-btn {
@@ -598,4 +698,15 @@
 .stn[data-skin="ragnarok"] .ac-btn.ghost {
   background: transparent;
   color: var(--rg-text-gold);
+}
+
+.stn[data-skin="ragnarok"] .ac-btn.ghost.on {
+  background: var(--rg-gold-fill, #c9982f);
+  border-color: var(--rg-gold-fill, #c9982f);
+  color: #1a1004;
+}
+
+.stn[data-skin="ragnarok"] .ac-adjust-stage {
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
 }
