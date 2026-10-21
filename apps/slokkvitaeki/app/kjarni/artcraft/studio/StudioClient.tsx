@@ -6,6 +6,14 @@ import { artcraftAppHref, artcraftHubHref } from "../apps";
 import "../artcraft.css";
 import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
+import LightPlanPanel from "./LightPlan";
+import {
+  DEFAULT_LIGHT_PLAN,
+  LIGHTS_KEY,
+  mergePrompt,
+  readStoredLights,
+  type LightPlan,
+} from "./lights";
 import { analyzeStudioImage, type StudioRegion } from "./analyzeImage";
 import { assertAdultPrompt } from "./guard";
 import {
@@ -66,6 +74,7 @@ export default function StudioClient() {
   const [analyzeText, setAnalyzeText] = useState("");
   const [colorWant, setColorWant] = useState("red");
   const [bgWant, setBgWant] = useState("soft daylight, quiet street");
+  const [lights, setLights] = useState<LightPlan>(DEFAULT_LIGHT_PLAN);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -75,6 +84,7 @@ export default function StudioClient() {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
     setWebui(readStoredWebuiUrl());
     setSettings(readStoredSettings());
+    setLights(readStoredLights());
     setReady(true);
   }, []);
 
@@ -82,6 +92,11 @@ export default function StudioClient() {
     if (!ready) return;
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [ready, settings]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
+  }, [ready, lights]);
 
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
@@ -187,7 +202,7 @@ export default function StudioClient() {
     setBusy(true);
     try {
       const out = await generateLocal(webui, {
-        prompt: prompt.trim(),
+        prompt: mergePrompt(prompt, lights),
         negativePrompt: negative.trim(),
         initImage: working || source || undefined,
         mask: mask || undefined,
@@ -445,6 +460,8 @@ export default function StudioClient() {
                     />
                   </>
                 )}
+
+                <LightPlanPanel plan={lights} onChange={setLights} />
 
                 <label>
                   Lýsing

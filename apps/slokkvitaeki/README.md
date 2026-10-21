@@ -14,6 +14,8 @@ Forge / SD.Next (`--api` + CORS). Hægt er að setja inn eigin mynd, stilla stæ
 skref / CFG / seed / sampler / denoising, fínpússa líkamslínur (þenja, minnka,
 draga) og mála maska sem promptið fókusar á. Greina merkir manneskju, föt,
 bakgrunn og hluti; síðan má fjarlægja, breyta lit eða skipta um bakgrunn.
+Stúdíóljós (high-key / Rembrandt / Butterfly) stilla þrjú flass og bakgrunn og
+bætast við promptið.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

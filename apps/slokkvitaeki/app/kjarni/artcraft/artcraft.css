@@ -710,3 +710,165 @@
   border-color: rgba(201, 152, 47, 0.35);
   border-radius: 0;
 }
+
+.ac-lights {
+  margin: 0 0 16px;
+}
+
+.ac-lights-stage {
+  position: relative;
+  min-height: 400px;
+  margin: 12px 0;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 14px;
+  background: #141414;
+  overflow: hidden;
+}
+
+.ac-lights-stage.bg-pink {
+  background: radial-gradient(circle at 50% 30%, #f3b7c6 0 14%, #2a171c 48%, #111 100%);
+}
+.ac-lights-stage.bg-white {
+  background: radial-gradient(circle at 50% 30%, #fff 0 16%, #c8c8c8 50%, #222 100%);
+}
+.ac-lights-stage.bg-grey {
+  background: radial-gradient(circle at 50% 30%, #9aa3ad 0 16%, #3a4048 55%, #111 100%);
+}
+.ac-lights-stage.bg-black {
+  background: radial-gradient(circle at 50% 30%, #3a3a3a 0 12%, #111 55%);
+}
+.ac-lights-stage.bg-blue {
+  background: radial-gradient(circle at 50% 30%, #7eb0e8 0 14%, #1a2740 50%, #111 100%);
+}
+
+.ac-lights-bg {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ac-subject {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe08a, #e08a30);
+  box-shadow: 0 0 28px rgba(255, 196, 90, 0.7);
+  transform: translateX(-50%);
+}
+
+.ac-lamp {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 150px;
+  text-align: center;
+}
+
+.ac-lamp.left { top: 36px; left: 10px; }
+.ac-lamp.right { top: 36px; right: 10px; }
+.ac-lamp.key { bottom: 58px; left: 50%; transform: translateX(-50%); }
+.ac-lamp.off { opacity: 0.38; }
+
+.ac-lamp-name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ac-lamp-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ac-umb {
+  display: block;
+  width: 78px;
+  height: 34px;
+  border: 2px solid #d8d8d8;
+  border-bottom: 0;
+  border-radius: 78px 78px 6px 6px;
+  background: #0c0c0c;
+}
+
+.ac-lamp-icon.wide .ac-umb {
+  width: 118px;
+  height: 46px;
+  border-radius: 118px 118px 8px 8px;
+}
+
+.ac-head {
+  display: block;
+  width: 18px;
+  height: 22px;
+  margin-top: -2px;
+  background: #1a1a1a;
+  border: 1px solid #888;
+  border-radius: 3px;
+}
+
+.ac-pm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ac-pm .ac-btn {
+  min-width: 42px;
+  min-height: 40px;
+  padding: 0;
+}
+
+.ac-pm strong {
+  min-width: 1.4em;
+  color: #fff;
+}
+
+.ac-camera {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  transform: translateX(-50%);
+}
+
+.ac-camera span {
+  width: 18px;
+  height: 14px;
+  background: #111;
+  border: 2px solid #ddd;
+  border-radius: 3px;
+}
+
+.ac-lights-prompt {
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .ac-lights-stage { min-height: 520px; }
+  .ac-lamp.left, .ac-lamp.right { top: 48px; }
+}
+
+.stn[data-skin="ragnarok"] .ac-lights-stage {
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+}
