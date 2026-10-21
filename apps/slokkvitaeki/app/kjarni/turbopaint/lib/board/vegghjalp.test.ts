@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { teikningTilGreiningar } from "./greining-teikning";
 import type { BoardObject, ImageObject } from "./types";
-import { eiMidarUrVegghjalpi, lesaVegghjalpHaed } from "./vegghjalp";
+import { eiMidarUrVegghjalpi, hurdirBogarUrVegghjalpi, lesaVegghjalpHaed } from "./vegghjalp";
 
 function mynd(o: Partial<ImageObject> = {}): ImageObject {
   return {
@@ -75,4 +75,25 @@ test("ein teikningarregla: valin → foreldri valins hlutar → eina myndin → 
   // ein mynd → hún; falin mynd telst ekki með
   assert.equal(teikningTilGreiningar([b], [])?.id, "b");
   assert.equal(teikningTilGreiningar([mynd({ id: "h", hidden: true }), b], [])?.id, "b");
+});
+
+test("vegghjálp: hurðarop → hurðabogar: borðhnit, báðar stefnur, aðeins staðfest blað", () => {
+  const m = mynd();
+  const kx = 3003 / 6006, ky = 2149 / 4298;
+  const v = lesaVegghjalpHaed({
+    ei: [],
+    hurdir: [
+      { hjor: [1000, 400], a: [1064, 400], b: [1000, 464], breidd_m: 0.9, blad: true },     // 64 dílar frummyndar ≈ 0,9 m
+      { hjor: [2000, 800], a: [2064, 800], b: [2000, 864], breidd_m: 0.9, blad: false },    // blað fannst ekki → ekki hurð
+    ],
+  })!;
+  const bogar = hurdirBogarUrVegghjalpi(v, m);
+  assert.equal(bogar.length, 2, "ein hurð = tvær stefnur (hvor bogendinn er blaðið lokað er óþekkt)");
+  const [x, y] = [100 + 1000 * kx, 50 + 400 * ky];
+  assert.deepEqual(bogar[0].c, [x, y]);
+  assert.ok(Math.abs(bogar[0].r - 64 * kx) < 1e-6);
+  assert.deepEqual(bogar[0].u, [1, 0]);
+  assert.deepEqual(bogar[0].n, [0, 1]);
+  assert.deepEqual([bogar[1].u, bogar[1].n], [[0, 1], [1, 0]]);
+  assert.ok(bogar.every((b) => b.thekja === 1 && b.blad === 1 && b.veggur === 1));
 });

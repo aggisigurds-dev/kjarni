@@ -29,6 +29,8 @@ import {
   type PdfFlokkur,
 } from "../../lib/board/pdf-veggjaflokkar";
 import { lesaOgFestaEi } from "../../lib/board/ei-lestur";
+import type { Bogi } from "../../lib/board/hurdabogar";
+import { hurdirBogarUrVegghjalpi, saekjaVegghjalp } from "../../lib/board/vegghjalp";
 import { greinaVeggiTeikningar, lesaPdfSidu, type PdfSida } from "../../lib/board/strip";
 import { greinaVeggiSkonnunar } from "../../lib/board/skonnun-veggir-mynd";
 import { newId, useBoardStore } from "../../lib/board/store";
@@ -143,7 +145,15 @@ export function VeggjaGreining({ planId, tillogur = false }: { planId: string; t
       const fastar = veggirTeikningar(st.objects, p).map(semButur);
       const mynd = () => useBoardStore.getState().objects.find((o): o is ImageObject => o.id === p.id && o.type === "image") ?? null;
       st.setImportProgress({ fileName: p.name, percent: 92, message: "Hreinsa og finn hurðir (sama og Sjálfvirkt)…" });
-      const v = await vinnaLinur(mynd, veggir, fastar, m, vigur, virkVikmork(), {});
+      // hurðarop úr Búnaðargreiningu (vigur-PDF) bætast við hurðabogana sem lesnir eru af myndinni
+      let aukaBogar: Bogi[] = [];
+      try {
+        const vh = await saekjaVegghjalp(p);
+        if (vh) aukaBogar = hurdirBogarUrVegghjalpi(vh, p);
+      } catch (err) {
+        console.warn("[veggir] vegghjálp (hurðarop) náðist ekki", err);
+      }
+      const v = await vinnaLinur(mynd, veggir, fastar, m, vigur, virkVikmork(), {}, { aukaBogar });
       return v.lokaNy;
     } catch (err) {
       console.warn("[veggir] vinnuaðferð sjálfvirka ferlisins brást — óunnin niðurstaða", err);

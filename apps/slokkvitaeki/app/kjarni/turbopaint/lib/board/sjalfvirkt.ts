@@ -46,6 +46,7 @@ import { veggirUrHanddregnum, type VeggTegund } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject } from "./types";
 import { bladIBordi, gilturSkurdur, saekjaUttekt, skurdurIBord, veggirIBord, veggirIFrum, vorpunMyndar, type LeidrettAf, type UttektHaed } from "./uttekt";
 import { useUttektGogn } from "./uttekt-gogn";
+import { hurdirBogarUrVegghjalpi, saekjaVegghjalp } from "./vegghjalp";
 import { husKassi, husUtlina, hreinsaVeggi, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
 import { heimsPunktar, nyGreiningarLota, nyrVeggur, sameinaVidVeggi } from "./veggja-ritill";
 import { ritillDilarAMetra } from "./veggja-ritill-adgerdir";
@@ -334,6 +335,8 @@ export async function vinnaLinur(
     ljuka?: (id: SkrefId, texti: string, stada?: "lokid" | "sleppt" | "villa") => void;
     villa?: (id: SkrefId, err: unknown, eftir?: string) => void;
     stodvad?: () => boolean;
+    /** Hurðabogar sem koma annars staðar frá en úr myndinni (vegghjálp Búnaðargreiningar: vigur-PDF) — bætast við bogana sem lesnir eru af myndinni. */
+    aukaBogar?: Bogi[];
   } = {}
 ): Promise<{ hreinar: HLina[]; hurdir: HLina[]; kandidatar: HurdKandidat[]; lokaNy: HLina[] }> {
   // ── d) hreinsun ──
@@ -390,6 +393,7 @@ export async function vinnaLinur(
         console.warn("[sjálfvirkt] hurðabogar", err);
       }
     }
+    if (k.aukaBogar?.length) bogar = [...bogar, ...k.aukaBogar];
     const bogiVid = bogaProf(bogar, dpm);
     const d = finnaHurdir(veggirH, adrar, dpm, {
       vik: vik.hurd,
@@ -687,7 +691,15 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   talning.leid = leid;
 
   // d) hreinsun + e) hurðir (hurðabogar skera veggi) + utan húss — sami kóði og „Greina veggi" (vinnaLinur)
-  const vu = await vinnaLinur(mynd, hrar, fastarH, dpm, leid === "vigur", vik, talning, { hefja, ljuka, villa, stodvad });
+  // Hurðarop úr Búnaðargreiningu (vigur-PDF: hurðabogar með staðfestu blaði) bætast við bogana sem lesnir eru af myndinni
+  let aukaBogar: Bogi[] = [];
+  try {
+    const vh = await saekjaVegghjalp(mynd()!);
+    if (vh) aukaBogar = hurdirBogarUrVegghjalpi(vh, mynd()!);
+  } catch (err) {
+    console.warn("[sjálfvirkt] vegghjálp (hurðarop) náðist ekki", err);
+  }
+  const vu = await vinnaLinur(mynd, hrar, fastarH, dpm, leid === "vigur", vik, talning, { hefja, ljuka, villa, stodvad, aukaBogar });
   const { hreinar, hurdir, kandidatar, lokaNy } = vu;
   if (stodvad()) return stoppa();
 

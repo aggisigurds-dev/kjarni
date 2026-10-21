@@ -5,6 +5,7 @@
 // Hér: lestur + varpa á borðið. EI-merkin fara sömu leið og OCR-merkin (EiMidi → beitaEi), hurðaropin eru tilbúin fyrir hurðagreiningu.
 
 import type { EiMidi } from "./ei-festing";
+import type { Bogi } from "./hurdabogar";
 import { parseFirewallRating } from "./firewall-rating";
 import { bladMyndar } from "./margar-haedir";
 import { getSupabase } from "./supabase";
@@ -70,6 +71,34 @@ export function eiMidarUrVegghjalpi(vh: VegghjalpHaed, plan: ImageObject): EiMid
     if (!r) continue;
     if (m.svaedi && !innanSvaedis(e, m.svaedi)) continue;
     ut.push({ x: b.x + e.x * kx, y: b.y + e.y * ky, lodrett: e.ori === "v", minutur: r.minutes, reyk: r.smoke });
+  }
+  return ut;
+}
+
+/** Hurðarop → hurðabogar (borðhnit) fyrir vinnaLinur: hjörin = miðja, annar bogendinn er blaðið lokað (eftir veggnum, u), hinn blaðið opið (n).
+ * Vigur-lesturinn veit ekki hvor er hvor — báðar stefnur eru gefnar og hurðin verður aðeins þar sem veggur liggur að gatinu (krefjastVeggjar), svo
+ * röng stefna fellur sjálf. Aðeins staðfestir bogar (blaðið fannst) eru geymdir, svo öll stig eru 1. */
+export function hurdirBogarUrVegghjalpi(vh: VegghjalpHaed, plan: ImageObject): Bogi[] {
+  const m = bladMyndar(plan);
+  const b = bladIBordi(plan, m.frum, m.svaedi);
+  const kx = b.width / m.frum.b;
+  const ky = b.height / m.frum.h;
+  const hnit = (p: [number, number]): [number, number] => [b.x + p[0] * kx, b.y + p[1] * ky];
+  const ut: Bogi[] = [];
+  for (const h of vh.hurdir) {
+    if (!h.blad) continue;
+    if (m.svaedi && !innanSvaedis({ x: h.hjor[0], y: h.hjor[1] }, m.svaedi)) continue;
+    const c = hnit(h.hjor);
+    const A = hnit(h.a);
+    const B = hnit(h.b);
+    const ra = Math.hypot(A[0] - c[0], A[1] - c[1]);
+    const rb = Math.hypot(B[0] - c[0], B[1] - c[1]);
+    const r = (ra + rb) / 2;
+    if (!(r > 0)) continue;
+    const ea: [number, number] = [(A[0] - c[0]) / ra, (A[1] - c[1]) / ra];
+    const eb: [number, number] = [(B[0] - c[0]) / rb, (B[1] - c[1]) / rb];
+    const stig = { thekja: 1, blad: 1, veggur: 1, tom: 1, stig: 1 };
+    ut.push({ c, r, u: ea, n: eb, ...stig }, { c, r, u: eb, n: ea, ...stig });
   }
   return ut;
 }
