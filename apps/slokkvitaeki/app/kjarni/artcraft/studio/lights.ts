@@ -18,12 +18,19 @@ export const LIGHT_MODS = [
 ] as const;
 
 export const BACKGROUNDS = [
-  { id: "pink", label: "Bleikur", prompt: "pink seamless backdrop" },
-  { id: "white", label: "Hvítur", prompt: "white seamless high-key backdrop" },
-  { id: "grey", label: "Grár", prompt: "grey studio backdrop" },
-  { id: "black", label: "Svartur", prompt: "black low-key backdrop" },
-  { id: "blue", label: "Blár", prompt: "blue seamless backdrop" },
+  { id: "pink", label: "Bleikur", prompt: "pink seamless paper backdrop", swatch: "#f3b7c6" },
+  { id: "white", label: "Hvítur", prompt: "white seamless high-key backdrop", swatch: "#f4f4f4" },
+  { id: "beige", label: "Beige", prompt: "warm beige cream seamless backdrop", swatch: "#e6d3b8" },
+  { id: "grey", label: "Grár", prompt: "medium grey seamless studio backdrop", swatch: "#8a9199" },
+  { id: "blue", label: "Blár", prompt: "studio blue seamless backdrop", swatch: "#3d6aa3" },
+  { id: "green", label: "Grænn", prompt: "deep forest green seamless backdrop", swatch: "#2d5a3d" },
+  { id: "wine", label: "Vínrauður", prompt: "burgundy wine seamless backdrop", swatch: "#6b2436" },
+  { id: "canvas", label: "Strigi", prompt: "painted mottled brown canvas portrait backdrop", swatch: "#8a6a48" },
+  { id: "charcoal", label: "Kolagrár", prompt: "charcoal grey seamless studio backdrop", swatch: "#3a3d42" },
+  { id: "black", label: "Svartur", prompt: "black low-key velvet studio backdrop", swatch: "#141414" },
 ] as const;
+
+export const STUDIO_SHOOT_DENOISING = 0.56;
 
 export type LightColorId = (typeof LIGHT_COLORS)[number]["id"];
 export type LightModId = (typeof LIGHT_MODS)[number]["id"];
@@ -83,8 +90,18 @@ function modPrompt(id: LightModId): string {
   return LIGHT_MODS.find((m) => m.id === id)?.prompt || "softbox";
 }
 
+export function backgroundOf(id: string): (typeof BACKGROUNDS)[number] {
+  return BACKGROUNDS.find((b) => b.id === id) || BACKGROUNDS[0];
+}
+
 function bgPrompt(id: BackgroundId): string {
-  return BACKGROUNDS.find((b) => b.id === id)?.prompt || "studio backdrop";
+  return backgroundOf(id).prompt;
+}
+
+export function backdropShootPrompt(id: BackgroundId, who = ""): string {
+  const paper = backgroundOf(id);
+  const person = who.trim() ? `same adult person ${who.trim()}` : "the same adult person";
+  return `professional studio photoshoot of ${person}, keep face identity and pose, standing in front of a ${paper.prompt}, full studio photograph, fashion catalog, sharp focus`;
 }
 
 export function lightLine(slot: LightSlot, light: StudioLight): string | null {
