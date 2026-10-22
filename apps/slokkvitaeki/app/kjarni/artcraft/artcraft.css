@@ -782,6 +782,14 @@
   border-radius: 0;
 }
 
+.stn[data-skin="ragnarok"] .ac-studio label {
+  color: var(--rg-text-gold, #ffd98a);
+}
+
+.stn[data-skin="ragnarok"] .ac-studio .ac-hint {
+  color: var(--rg-text-dim, #c4b48a);
+}
+
 .stn[data-skin="ragnarok"] .ac-studio input,
 .stn[data-skin="ragnarok"] .ac-studio textarea,
 .stn[data-skin="ragnarok"] .ac-studio select {
