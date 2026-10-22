@@ -24,6 +24,8 @@ import {
   avatarPrompt,
   AVATAR_DENOISING,
   canBuildAvatar,
+  missingOrbitSlots,
+  orbitCount,
   hasIdentity,
   identityPrompt,
   identityRefs,
@@ -31,10 +33,38 @@ import {
   orbitImages,
   SHARPEN_DENOISING,
   type OrbitId,
+  type OrbitMap,
   type PersonProfile,
 } from "./profile";
 import { faceSheet } from "./profileImage";
 import AvatarTurn from "./AvatarTurn";
+import BasesPanel from "./BasesPanel";
+import MeshPanel from "./MeshPanel";
+import PartsPanel from "./PartsPanel";
+import { shouldStampPhoto, spinYaws, type CaptureYaws } from "./mesh";
+import { captureStandInYaws } from "./meshView";
+import {
+  IMPRINT_DENOISING,
+  bodyPart,
+  FULL_STAMP,
+  imprintPrompt,
+  isClipStamp,
+  pickKeyFrame,
+  type BodyPart,
+  type PartStamp,
+} from "./parts";
+import { imprintOnto, partMask } from "./partsImage";
+import {
+  BASE_DENOISING,
+  DEFAULT_LOOK,
+  LOOK_KEY,
+  adaptBasePrompt,
+  mannequinDataUrl,
+  readStoredLook,
+  studioBase,
+  type BodyLook,
+} from "./bases";
+import { rasterizeBase } from "./basesImage";
 import LooksPanel from "./LooksPanel";
 import {
   LOOKBOOK_DENOISING,
@@ -167,6 +197,11 @@ export default function StudioClient() {
   const [turnViews, setTurnViews] = useState<Partial<Record<OrbitId, string>>>({});
   const [versions, setVersions] = useState<AvatarVersion[]>([]);
   const [versionPresetId, setVersionPresetId] = useState("summer");
+  const [baseId, setBaseId] = useState("w-avg");
+  const [bodyLook, setBodyLook] = useState<BodyLook>(DEFAULT_LOOK);
+  const [customBase, setCustomBase] = useState("");
+  const [partStamps, setPartStamps] = useState<Partial<Record<string, PartStamp>>>({});
+  const meshCaptureRef = useRef<CaptureYaws | null>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -185,6 +220,7 @@ export default function StudioClient() {
     setWebui(readStoredWebuiUrl());
     setSettings(readStoredSettings());
     setLights(readStoredLights());
+    setBodyLook(readStoredLook());
     setClip(readStoredVideo());
     setCustomActions(readCustomActions());
     setReady(true);
@@ -199,6 +235,11 @@ export default function StudioClient() {
     if (!ready) return;
     window.localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
   }, [ready, lights]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(LOOK_KEY, JSON.stringify(bodyLook ?? DEFAULT_LOOK));
+  }, [ready, bodyLook]);
 
   useEffect(() => {
     if (!ready) return;
@@ -314,10 +355,10 @@ export default function StudioClient() {
     void takeFile(e.dataTransfer.files[0]);
   }
 
-  function extraControls(override?: { poseRef?: string }) {
+  function extraControls(override?: { poseRef?: string; styleRef?: string }) {
     return {
       poseRef: override?.poseRef || poseRef || undefined,
-      styleRef: styleRef || undefined,
+      styleRef: override?.styleRef || styleRef || undefined,
       poseAdapter,
       styleAdapter,
     };
@@ -340,6 +381,7 @@ export default function StudioClient() {
     denoisingStrength?: number;
     initImage?: string;
     poseRef?: string;
+    styleRef?: string;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
     const init = opts?.initImage || working || source || undefined;
@@ -371,7 +413,7 @@ export default function StudioClient() {
         restoreFaces: useId,
         faceRefs,
         faceAdapter: useId ? faceAdapter : null,
-        ...extraControls(opts?.poseRef ? { poseRef: opts.poseRef } : undefined),
+        ...extraControls({ poseRef: opts?.poseRef, styleRef: opts?.styleRef }),
         ...settings,
         denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
       });
@@ -466,19 +508,160 @@ export default function StudioClient() {
     });
   }
 
+  function selectedBaseImage(): string {
+    return customBase || mannequinDataUrl(studioBase(baseId), bodyLook);
+  }
+
   async function makeAvatar() {
     if (!canBuildAvatar(profile)) {
       setError("Settu inn að minnsta kosti 4 skýrar myndir (andlit + hringur) til að gera avatar.");
       return;
     }
-    const text = avatarPrompt(profile?.name || "");
+    const base = studioBase(baseId);
+    const raw = selectedBaseImage();
+    let init: string | undefined;
+    try {
+      init = await rasterizeBase(raw);
+    } catch {
+      init = undefined;
+    }
+    const text = init
+      ? adaptBasePrompt(profile?.name || "", base, bodyLook)
+      : avatarPrompt(profile?.name || "");
+    const denoise = init ? BASE_DENOISING : AVATAR_DENOISING;
     setPrompt(text);
     setUseProfile(true);
-    patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
-    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
+    patchSettings({ width: 768, height: 1024, denoisingStrength: denoise });
+    const out = await runGenerate({
+      prompt: text,
+      mask: null,
+      denoisingStrength: denoise,
+      initImage: init,
+    });
     if (out[0]) {
       setTurnViews({ front: out[0] });
       adoptStill(out[0], "avatar.png");
+    }
+  }
+
+  async function takePartFile(part: BodyPart, file: File) {
+    setError("");
+    try {
+      if (file.type.startsWith("video/")) {
+        const frames = await extractVideoFrames(file);
+        const image = pickKeyFrame(frames);
+        if (!image) throw new Error("Gat ekki lesið ramma úr videóinu");
+        await stampPart(part, { image, frames, name: file.name });
+        return;
+      }
+      const image = await readImageFile(file);
+      await stampPart(part, { image, name: file.name });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lesið skrána á partinn");
+    }
+  }
+
+  async function stampPart(part: BodyPart, stamp: PartStamp) {
+    setError("");
+    try {
+      let start = studioStill(working, images, source);
+      if (!start) start = await rasterizeBase(selectedBaseImage());
+      const next = await imprintOnto(start, stamp.image, part);
+      setPartStamps((cur) => ({ ...cur, [part.id]: stamp }));
+      adoptStill(next, `part-${part.id}.png`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki málað partinn");
+    }
+  }
+
+  async function bakePart(partId: string) {
+    const part = bodyPart(partId);
+    const stamp = partStamps[partId];
+    const start = studioStill(working, images, source);
+    if (!part || !stamp?.image || !start) {
+      setError("Málaðu partinn fyrst.");
+      return;
+    }
+    const text = imprintPrompt(part, profile?.name || "");
+    const maskUrl = await partMask(start, part);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: IMPRINT_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask: maskUrl,
+      initImage: start,
+      denoisingStrength: IMPRINT_DENOISING,
+      styleRef: stamp.image,
+    });
+    if (out[0]) {
+      adoptStill(out[0], `baka-${part.id}.png`);
+    }
+  }
+
+  async function playPart(partId: string) {
+    const part = bodyPart(partId);
+    const stamp = partStamps[partId];
+    const start = studioStill(working, images, source);
+    const frames = stamp?.frames || [];
+    if (!part || !isClipStamp(stamp) || !start) {
+      setError("Dragðu videóbrot á partinn fyrst.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      const out: string[] = [];
+      for (let i = 0; i < frames.length; i++) {
+        setClipText(`${part.label} ${i + 1}/${frames.length}`);
+        out.push(await imprintOnto(start, frames[i], part));
+      }
+      setClipText("Sauma partahreyfingu…");
+      const blob = await stitchWebm(out, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(out);
+      if (out[out.length - 1]) setWorking(out[out.length - 1]);
+      setClipText(`${out.length} rammar · ${part.label}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki hreyft partinn");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function spinMesh(capture: (deg: number) => Promise<string>) {
+    setError("");
+    setBusy(true);
+    try {
+      const yaws = spinYaws();
+      const frames: string[] = [];
+      for (let i = 0; i < yaws.length; i++) {
+        setClipText(`3D ${i + 1}/${yaws.length}`);
+        frames.push(await capture(yaws[i]));
+      }
+      setClipText("Sauma 3D-snúning…");
+      const blob = await stitchWebm(frames, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(frames);
+      if (frames[0]) adoptStill(frames[0], "mesh-spin.png");
+      setClipText(`${frames.length} rammar · 3D snúningur`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki snúið möskvanum");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bakeAllParts() {
+    for (const id of Object.keys(partStamps)) {
+      if (partStamps[id]) await bakePart(id);
     }
   }
 
@@ -815,6 +998,46 @@ export default function StudioClient() {
     }
   }
 
+  async function guessOrbit(): Promise<OrbitMap | null> {
+    if (!profile) {
+      setError("Búðu fyrst til prófíl.");
+      return null;
+    }
+    const missing = missingOrbitSlots(profile.orbit);
+    if (missing.length === 0) return profile.orbit;
+    const orbit: OrbitMap = { ...profile.orbit };
+    setError("");
+    setBusy(true);
+    try {
+      setClipText("Teikna 3D-grunn…");
+      const yaws = missing.map((slot) => slot.deg);
+      const shots = meshCaptureRef.current
+        ? await meshCaptureRef.current(yaws)
+        : await captureStandInYaws(bodyLook, studioBase(baseId), yaws);
+      for (let i = 0; i < missing.length; i++) {
+        const slot = missing[i];
+        setClipText(`Fylla ${slot.label} (${i + 1}/${missing.length})`);
+        let src = shots[slot.deg];
+        if (!src) continue;
+        const neighbor = nearestOrbitView(profile, slot.deg);
+        if (neighbor && shouldStampPhoto(slot.deg, neighbor.deg)) {
+          src = await imprintOnto(src, neighbor.src, FULL_STAMP);
+        }
+        orbit[slot.id] = src;
+        setTurnViews((cur) => ({ ...cur, [slot.id]: src }));
+      }
+      const first = orbit.front || orbit.frontRight || Object.values(orbit)[0];
+      if (first) adoptStill(first, "3d-grunnur.png");
+      setClipText(`${Object.keys(orbit).length} af 8 hornum · 3D-grunnur`);
+      return orbit;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki fyllt hornin með 3D-grunni.");
+      return Object.keys(orbit).length > orbitCount(profile) ? orbit : null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function fixPainted() {
     if (!mask) {
       setError("Málaðu gallann rauðan fyrst.");
@@ -1024,7 +1247,52 @@ export default function StudioClient() {
                         : "Prófaðu tengingu til að sjá hvort andlitsadapter er til"
                   }
                   onAvatar={() => void makeAvatar()}
+                  onGuessOrbit={() => guessOrbit()}
                   avatarBusy={busy || analyzing}
+                />
+                <BasesPanel
+                  baseId={baseId}
+                  look={bodyLook}
+                  customBase={customBase}
+                  onBase={(id) => {
+                    const next = studioBase(id);
+                    setBaseId(id);
+                    setBodyLook((cur) => ({ ...cur, build: next.build }));
+                    setCustomBase("");
+                    setPartStamps({});
+                  }}
+                  onLook={setBodyLook}
+                  onCustom={setCustomBase}
+                  onClearCustom={() => setCustomBase("")}
+                  onAdapt={() => void makeAvatar()}
+                  busy={busy || analyzing}
+                  canAdapt={canBuildAvatar(profile)}
+                />
+                <MeshPanel
+                  look={bodyLook}
+                  baseId={baseId}
+                  busy={busy}
+                  onStill={(src) => adoptStill(src, "mesh.png")}
+                  onSpin={(capture) => void spinMesh(capture)}
+                  onCapture={(capture) => {
+                    meshCaptureRef.current = capture;
+                  }}
+                />
+                <PartsPanel
+                  still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId), bodyLook)}
+                  stamps={partStamps}
+                  onFile={(part, file) => void takePartFile(part, file)}
+                  onBake={(id) => void bakePart(id)}
+                  onBakeAll={() => void bakeAllParts()}
+                  onPlay={(id) => void playPart(id)}
+                  onClear={(id) =>
+                    setPartStamps((cur) => {
+                      const next = { ...cur };
+                      delete next[id];
+                      return next;
+                    })
+                  }
+                  busy={busy}
                 />
                 <AvatarTurn
                   yaw={yaw}

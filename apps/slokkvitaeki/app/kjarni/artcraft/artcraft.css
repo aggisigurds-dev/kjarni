@@ -1160,8 +1160,217 @@
   margin-top: 6px;
 }
 
+.ac-parts {
+  margin: 16px 0 0;
+}
+
+.ac-parts-stage {
+  position: relative;
+  max-width: 320px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111;
+}
+
+.ac-parts-stage > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ac-part-zone {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px dashed rgba(201, 152, 47, 0.55);
+  background: rgba(0, 0, 0, 0.18);
+  color: #ffd98a;
+  font-size: 11px;
+  text-align: center;
+  cursor: copy;
+}
+
+.ac-part-zone.on {
+  border-style: solid;
+  background: rgba(201, 152, 47, 0.22);
+}
+
+.ac-part-zone.clip {
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.55);
+}
+
+.ac-bases,
 .ac-versions {
   margin: 16px 0 0;
+}
+
+.ac-base-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.ac-base-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #111;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ac-base-card.on {
+  border-color: var(--rg-gold-fill, #c9982f);
+  box-shadow: 0 0 0 2px var(--rg-gold-fill, #c9982f);
+}
+
+.ac-base-card img {
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  background: #141414;
+  border-radius: 6px;
+}
+
+.ac-base-card span {
+  font-size: 12px;
+  text-align: center;
+}
+
+.ac-mesh {
+  margin: 16px 0 0;
+}
+
+.ac-mesh-canvas {
+  display: block;
+  width: min(360px, 100%);
+  height: 480px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  background: #141414;
+}
+
+.ac-mesh-guide {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+}
+
+.ac-mesh-guide h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+
+.ac-mesh-card {
+  padding: 12px 14px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  background: var(--m-card, #fff);
+}
+
+.ac-mesh-card h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ac-mesh-card a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ac-mesh-card ol {
+  margin: 8px 0 0;
+  padding-left: 1.25em;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ac-mesh-card li + li {
+  margin-top: 4px;
+}
+
+.ac-mesh-later {
+  margin: 4px 0 0;
+}
+
+.ac-mesh-later summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ac-mesh-later .ac-mesh-card {
+  margin-top: 10px;
+}
+
+.stn[data-skin="ragnarok"] .ac-mesh-card {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+}
+
+.stn[data-skin="ragnarok"] .ac-mesh-card a {
+  color: var(--rg-text-gold, #ffd98a);
+}
+
+.ac-look {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.ac-look .ac-range {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.ac-look-label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ac-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ac-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ac-swatch.on {
+  box-shadow: 0 0 0 2px var(--rg-gold-fill, #c9982f);
+  border-color: #fff;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .ac-version-grid {
@@ -1207,5 +1416,9 @@
 
   .ac-version-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ac-base-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

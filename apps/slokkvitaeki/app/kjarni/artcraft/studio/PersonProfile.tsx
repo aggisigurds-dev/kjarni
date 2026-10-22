@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   canBuildAvatar,
+  canGuessOrbit,
   deleteProfile,
+  missingOrbitSlots,
   hasIdentity,
   listProfiles,
   MAX_FACES,
@@ -13,6 +15,7 @@ import {
   saveProfile,
   writeActiveProfileId,
   type OrbitId,
+  type OrbitMap,
   type PersonProfile,
 } from "./profile";
 import { shrinkFace } from "./profileImage";
@@ -25,6 +28,7 @@ type Props = {
   adapterHint?: string;
   onAvatar?: () => void;
   avatarBusy?: boolean;
+  onGuessOrbit?: () => Promise<OrbitMap | null>;
 };
 
 export default function PersonProfilePanel({
@@ -35,6 +39,7 @@ export default function PersonProfilePanel({
   adapterHint,
   onAvatar,
   avatarBusy,
+  onGuessOrbit,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const orbitRef = useRef<HTMLInputElement>(null);
@@ -155,6 +160,22 @@ export default function PersonProfilePanel({
     await reload(active.id);
   }
 
+  async function guessRest() {
+    if (!active || !onGuessOrbit) return;
+    setBusy(true);
+    setError("");
+    try {
+      const orbit = await onGuessOrbit();
+      if (!orbit) return;
+      await saveProfile({ ...active, orbit });
+      await reload(active.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki áætlað hornin");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeProfile() {
     if (!active) return;
     await deleteProfile(active.id);
@@ -167,8 +188,9 @@ export default function PersonProfilePanel({
     <div className="ac-profile">
       <h2>Persónuprófíll</h2>
       <p className="ac-hint">
-        6–10 skýrar andlitsmyndir og 8 sjónarhorn allan hringinn. Þá getur stúdíóið skerpt
-        óskýrt andlit og gert realistic avatar (samræmdan snúningsblað — ekki 3D-möskva).
+        6–10 skýrar andlitsmyndir og 8 sjónarhorn allan hringinn. Vantar horn fyllir
+        innbyggður 3D-líkami eða GLB sem þú setur inn; realistic avatar er samræmdur
+        2D-snúningsblað ofan á það.
       </p>
       <div className="ac-row">
         <label>
@@ -255,7 +277,8 @@ export default function PersonProfilePanel({
           <h3>Hringur — 8 sjónarhorn</h3>
           <p className="ac-hint">
             Fullorðin manneskja, sama fatnaður, skýrt ljós. Framan → hægri → aftan → vinstri.
-            Því fleiri hliðar, því trúverðugri avatar.
+            Vantar horn? Ýttu á Fylla vantar horn með 3D — ekkert extra forrit þarf.
+            Leiðbeiningar og hlekkir (Meshy, Tripo, Sketchfab) eru undir 3D möskvi.
           </p>
           <div className="ac-orbit">
             {ORBIT_SLOTS.map((slot) => {
@@ -296,16 +319,28 @@ export default function PersonProfilePanel({
               e.target.value = "";
             }}
           />
-          {onAvatar && (
+          {(onAvatar || onGuessOrbit) && (
             <div className="ac-row">
-              <button
-                type="button"
-                className="ac-btn"
-                disabled={avatarBusy || !canBuildAvatar(active)}
-                onClick={onAvatar}
-              >
-                Realistic avatar
-              </button>
+              {onGuessOrbit && (
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  disabled={avatarBusy || busy || !canGuessOrbit(active)}
+                  onClick={() => void guessRest()}
+                >
+                  {avatarBusy ? "Áætla…" : `Fylla vantar horn með 3D (${missingOrbitSlots(active.orbit).length})`}
+                </button>
+              )}
+              {onAvatar && (
+                <button
+                  type="button"
+                  className="ac-btn"
+                  disabled={avatarBusy || !canBuildAvatar(active)}
+                  onClick={onAvatar}
+                >
+                  Realistic avatar
+                </button>
+              )}
             </div>
           )}
         </div>

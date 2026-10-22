@@ -49,6 +49,14 @@ export function canBuildAvatar(profile: PersonProfile | null | undefined): boole
   return (profile?.faces.length || 0) + orbitCount(profile) >= 4;
 }
 
+export function missingOrbitSlots(orbit: OrbitMap | undefined): Array<(typeof ORBIT_SLOTS)[number]> {
+  return ORBIT_SLOTS.filter((slot) => !orbit?.[slot.id]);
+}
+
+export function canGuessOrbit(profile: PersonProfile | null | undefined): boolean {
+  return missingOrbitSlots(profile?.orbit).length > 0;
+}
+
 export function avatarPrompt(name: string): string {
   const who = name.trim() || "the same adult person";
   return `photorealistic adult avatar of ${who}, consistent identity from every angle, full-body character turnaround sheet, eight views around the person (front, three-quarter, left, right, back), same clothes and body, studio lighting, sharp focus, no extra people`;

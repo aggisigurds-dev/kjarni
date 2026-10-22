@@ -29,7 +29,17 @@ Stutt videó er lesið í ramma og avatarinn endurgerir hreyfinguna. Skjámynd a
 fatnaði eða skarti fer á manneskjuna (IP-Adapter án andlits, annars prompt).
 Hægt er að snúa avatarnum um horn, mála galla og biðja um lagfæringu
 á því svæði. Útgáfur (sumar, elegant, jólafatnaður, diskó, eða eigið nafn)
-vistast með prófílnum.
+vistast með prófílnum. Líkamsgrunnar (A-pose, rúmmál, liðamót) læsa
+hlutföllum; hæð, þyngd, slim/athletic, húðlitur, hárlitur og hárlengd
+stýra mannikin og aðlögun. Eigin grunnur má vera skjámynd
+af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir eða stutt
+videóbrot yfir andlit, bol, hendur og fætur — part fyrir part — baka saumana
+eða hreyfa aðeins þann part.
+Ófullkominn hringur: „Fylla vantar horn með 3D“ notar innbyggðan 3D-líkama
+(hæð, þyngd, húð, hár) og málar myndirnar þínar á nálæg sjónarhorn. Á
+3D-spjaldinu eru hlekkir og skref-fyrir-skref leiðbeiningar (Meshy, Tripo,
+Sketchfab, Modly): sækja GLB, Setja inn GLB, fylla hornin. Duix og SMPL-X
+eru merkt sem ekki fyrsta skref.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.
