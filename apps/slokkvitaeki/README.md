@@ -29,7 +29,9 @@ Stutt videó er lesið í ramma og avatarinn endurgerir hreyfinguna. Skjámynd a
 fatnaði eða skarti fer á manneskjuna (IP-Adapter án andlits, annars prompt).
 Hægt er að snúa avatarnum um horn, mála galla og biðja um lagfæringu
 á því svæði. Útgáfur (sumar, elegant, jólafatnaður, diskó, eða eigið nafn)
-vistast með prófílnum.
+vistast með prófílnum. Leirmannequin-grunnar (A-pose, liðamót) læsa
+hlutföllum; prófíllinn aðlagar andlit. Eigin grunnur má vera skjámynd
+af Ready Player Me, VRoid eða Mixamo.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

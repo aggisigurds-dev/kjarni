@@ -35,6 +35,14 @@ import {
 } from "./profile";
 import { faceSheet } from "./profileImage";
 import AvatarTurn from "./AvatarTurn";
+import BasesPanel from "./BasesPanel";
+import {
+  BASE_DENOISING,
+  adaptBasePrompt,
+  mannequinDataUrl,
+  studioBase,
+} from "./bases";
+import { rasterizeBase } from "./basesImage";
 import LooksPanel from "./LooksPanel";
 import {
   LOOKBOOK_DENOISING,
@@ -167,6 +175,8 @@ export default function StudioClient() {
   const [turnViews, setTurnViews] = useState<Partial<Record<OrbitId, string>>>({});
   const [versions, setVersions] = useState<AvatarVersion[]>([]);
   const [versionPresetId, setVersionPresetId] = useState("summer");
+  const [baseId, setBaseId] = useState("w-avg");
+  const [customBase, setCustomBase] = useState("");
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -466,16 +476,36 @@ export default function StudioClient() {
     });
   }
 
+  function selectedBaseImage(): string {
+    return customBase || mannequinDataUrl(studioBase(baseId));
+  }
+
   async function makeAvatar() {
     if (!canBuildAvatar(profile)) {
       setError("Settu inn að minnsta kosti 4 skýrar myndir (andlit + hringur) til að gera avatar.");
       return;
     }
-    const text = avatarPrompt(profile?.name || "");
+    const base = studioBase(baseId);
+    const raw = selectedBaseImage();
+    let init: string | undefined;
+    try {
+      init = await rasterizeBase(raw);
+    } catch {
+      init = undefined;
+    }
+    const text = init
+      ? adaptBasePrompt(profile?.name || "", base)
+      : avatarPrompt(profile?.name || "");
+    const denoise = init ? BASE_DENOISING : AVATAR_DENOISING;
     setPrompt(text);
     setUseProfile(true);
-    patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
-    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
+    patchSettings({ width: 768, height: 1024, denoisingStrength: denoise });
+    const out = await runGenerate({
+      prompt: text,
+      mask: null,
+      denoisingStrength: denoise,
+      initImage: init,
+    });
     if (out[0]) {
       setTurnViews({ front: out[0] });
       adoptStill(out[0], "avatar.png");
@@ -1025,6 +1055,19 @@ export default function StudioClient() {
                   }
                   onAvatar={() => void makeAvatar()}
                   avatarBusy={busy || analyzing}
+                />
+                <BasesPanel
+                  baseId={baseId}
+                  customBase={customBase}
+                  onBase={(id) => {
+                    setBaseId(id);
+                    setCustomBase("");
+                  }}
+                  onCustom={setCustomBase}
+                  onClearCustom={() => setCustomBase("")}
+                  onAdapt={() => void makeAvatar()}
+                  busy={busy || analyzing}
+                  canAdapt={canBuildAvatar(profile)}
                 />
                 <AvatarTurn
                   yaw={yaw}

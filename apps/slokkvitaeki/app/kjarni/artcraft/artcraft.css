@@ -1160,8 +1160,47 @@
   margin-top: 6px;
 }
 
+.ac-bases,
 .ac-versions {
   margin: 16px 0 0;
+}
+
+.ac-base-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.ac-base-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #111;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ac-base-card.on {
+  border-color: var(--rg-gold-fill, #c9982f);
+  box-shadow: 0 0 0 2px var(--rg-gold-fill, #c9982f);
+}
+
+.ac-base-card img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  background: #1a1a1a;
+  border-radius: 6px;
+}
+
+.ac-base-card span {
+  font-size: 12px;
+  text-align: center;
 }
 
 .ac-version-grid {
@@ -1207,5 +1246,9 @@
 
   .ac-version-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ac-base-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
