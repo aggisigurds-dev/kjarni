@@ -3,11 +3,13 @@
 import { useRef } from "react";
 import {
   BUILD_CHIPS,
+  DEFAULT_LOOK,
   HAIR_COLORS,
   HAIR_LENGTHS,
   SKIN_TONES,
   lookLine,
   mannequinDataUrl,
+  parseLook,
   STUDIO_BASES,
   studioBase,
   type BodyLook,
@@ -15,7 +17,7 @@ import {
 
 type Props = {
   baseId: string;
-  look: BodyLook;
+  look?: BodyLook;
   customBase: string;
   onBase: (id: string) => void;
   onLook: (next: BodyLook) => void;
@@ -42,6 +44,7 @@ export default function BasesPanel({
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const selected = studioBase(baseId);
+  const body = parseLook(look || DEFAULT_LOOK);
 
   function readFile(file: File | undefined) {
     if (!file || !file.type.startsWith("image/")) return;
@@ -51,7 +54,7 @@ export default function BasesPanel({
   }
 
   function patch(next: Partial<BodyLook>) {
-    onLook({ ...look, ...next });
+    onLook({ ...body, ...next });
   }
 
   return (
@@ -70,29 +73,29 @@ export default function BasesPanel({
             className={`ac-base-card ${!customBase && baseId === base.id ? "on" : ""}`}
             onClick={() => onBase(base.id)}
           >
-            <img src={mannequinDataUrl(base, { ...look, build: base.build })} alt={base.label} />
+            <img src={mannequinDataUrl(base, { ...body, build: base.build })} alt={base.label} />
             <span>{base.label}</span>
           </button>
         ))}
       </div>
       <div className="ac-look">
         <label className="ac-range">
-          Hæð {look.heightCm} cm
+          Hæð {body.heightCm} cm
           <input
             type="range"
             min={150}
             max={200}
-            value={look.heightCm}
+            value={body.heightCm}
             onChange={(e) => patch({ heightCm: Number(e.target.value) })}
           />
         </label>
         <label className="ac-range">
-          Þyngd {look.weightKg} kg
+          Þyngd {body.weightKg} kg
           <input
             type="range"
             min={45}
             max={130}
-            value={look.weightKg}
+            value={body.weightKg}
             onChange={(e) => patch({ weightKg: Number(e.target.value) })}
           />
         </label>
@@ -101,7 +104,7 @@ export default function BasesPanel({
             <button
               key={item.id}
               type="button"
-              className={`ac-btn ghost ${look.build === item.id ? "on" : ""}`}
+              className={`ac-btn ghost ${body.build === item.id ? "on" : ""}`}
               onClick={() => patch({ build: item.id })}
             >
               {item.label}
@@ -115,8 +118,8 @@ export default function BasesPanel({
               key={item.id}
               type="button"
               role="option"
-              aria-selected={look.skin === item.id}
-              className={`ac-swatch ${look.skin === item.id ? "on" : ""}`}
+              aria-selected={body.skin === item.id}
+              className={`ac-swatch ${body.skin === item.id ? "on" : ""}`}
               style={{ background: item.mid }}
               title={item.label}
               onClick={() => patch({ skin: item.id })}
@@ -132,8 +135,8 @@ export default function BasesPanel({
               key={item.id}
               type="button"
               role="option"
-              aria-selected={look.hair === item.id}
-              className={`ac-swatch ${look.hair === item.id ? "on" : ""}`}
+              aria-selected={body.hair === item.id}
+              className={`ac-swatch ${body.hair === item.id ? "on" : ""}`}
               style={{ background: item.hex }}
               title={item.label}
               onClick={() => patch({ hair: item.id })}
@@ -147,14 +150,14 @@ export default function BasesPanel({
             <button
               key={item.id}
               type="button"
-              className={`ac-btn ghost ${look.hairLength === item.id ? "on" : ""}`}
+              className={`ac-btn ghost ${body.hairLength === item.id ? "on" : ""}`}
               onClick={() => patch({ hairLength: item.id })}
             >
               {item.label}
             </button>
           ))}
         </div>
-        <p className="ac-hint">{lookLine(look)}</p>
+        <p className="ac-hint">{lookLine(body)}</p>
       </div>
       {customBase && (
         <figure className="ac-turn-view">

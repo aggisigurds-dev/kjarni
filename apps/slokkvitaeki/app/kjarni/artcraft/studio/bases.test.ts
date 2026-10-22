@@ -44,6 +44,8 @@ test("look sliders change height weight skin and hair", () => {
   const heavy = figureFor(studioBase("w-avg"), { ...DEFAULT_LOOK, heightCm: 160, weightKg: 110, build: "solid" });
   assert.ok(tall.inseam > heavy.inseam);
   assert.ok(heavy.waist > tall.waist);
+  assert.equal(parseLook(undefined).heightCm, 170);
+  assert.equal(parseLook(null).weightKg, 68);
   const parsed = parseLook({ heightCm: 12, weightKg: 900, skin: "nope", hair: "x", hairLength: "x", build: "nope" });
   assert.equal(parsed.heightCm, 150);
   assert.equal(parsed.weightKg, 130);

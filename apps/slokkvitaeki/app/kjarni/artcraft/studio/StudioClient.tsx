@@ -49,6 +49,7 @@ import {
 import { imprintOnto, partMask } from "./partsImage";
 import {
   BASE_DENOISING,
+  DEFAULT_LOOK,
   LOOK_KEY,
   adaptBasePrompt,
   mannequinDataUrl,
@@ -190,7 +191,7 @@ export default function StudioClient() {
   const [versions, setVersions] = useState<AvatarVersion[]>([]);
   const [versionPresetId, setVersionPresetId] = useState("summer");
   const [baseId, setBaseId] = useState("w-avg");
-  const [bodyLook, setBodyLook] = useState<BodyLook>(() => readStoredLook());
+  const [bodyLook, setBodyLook] = useState<BodyLook>(DEFAULT_LOOK);
   const [customBase, setCustomBase] = useState("");
   const [partStamps, setPartStamps] = useState<Partial<Record<string, PartStamp>>>({});
   const [drag, setDrag] = useState(false);
@@ -229,7 +230,7 @@ export default function StudioClient() {
 
   useEffect(() => {
     if (!ready) return;
-    window.localStorage.setItem(LOOK_KEY, JSON.stringify(bodyLook));
+    window.localStorage.setItem(LOOK_KEY, JSON.stringify(bodyLook ?? DEFAULT_LOOK));
   }, [ready, bodyLook]);
 
   useEffect(() => {
