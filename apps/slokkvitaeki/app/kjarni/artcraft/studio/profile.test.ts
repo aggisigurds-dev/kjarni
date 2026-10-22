@@ -8,7 +8,11 @@ import {
   identityPrompt,
   identityRefs,
   identityScripts,
+  identityStill,
+  lockFaceRefs,
   mergeIdentity,
+  mergeIdentityNegative,
+  clampIdentityDenoising,
   missingOrbitSlots,
   canGuessOrbit,
   orbitCount,
@@ -28,6 +32,30 @@ test("mergeIdentity appends once when the profile is on", () => {
   assert.match(once, /Sara/);
   assert.equal(mergeIdentity(once, "Sara", true), once);
   assert.equal(mergeIdentity("red dress", "Sara", false), "red dress");
+});
+
+test("identityStill prefers the current photo over the profile", () => {
+  const profile = { id: "p", name: "Sara", faces: ["face"], orbit: { front: "front" }, updatedAt: 1 };
+  assert.equal(identityStill({ init: "init", source: "src", profile }), "init");
+  assert.equal(identityStill({ source: "src", profile }), "src");
+  assert.equal(identityStill({ profile }), "face");
+  assert.equal(identityStill({ profile: { ...profile, faces: [] } }), "front");
+  assert.equal(identityStill({}), "");
+});
+
+test("lockFaceRefs puts the current photo first so Forge keeps that face", () => {
+  assert.deepEqual(lockFaceRefs("now", ["a", "b"], "sheet"), ["now", "sheet", "a", "b"]);
+  assert.deepEqual(lockFaceRefs("", ["a"], "sheet"), ["sheet", "a"]);
+  assert.deepEqual(lockFaceRefs("now", ["now", "a"]), ["now", "a"]);
+});
+
+test("identity lock keeps denoising below a face-swap band unless a mask protects the face", () => {
+  assert.equal(clampIdentityDenoising(0.8, true), 0.38);
+  assert.ok(clampIdentityDenoising(0.56, true, true) > 0.38);
+  assert.equal(clampIdentityDenoising(0.8, false), 0.8);
+  assert.match(mergeIdentityNegative(""), /different person/);
+  assert.match(mergeIdentityNegative("blurry"), /blurry.*different person/);
+  assert.equal(mergeIdentityNegative("x, different person"), "x, different person");
 });
 
 test("identityRefs puts the sheet first and caps at four units", () => {

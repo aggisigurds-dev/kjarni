@@ -335,10 +335,14 @@ export async function img2img(base: string, input: Img2ImgInput): Promise<string
   return mapImages((await res.json()) as { images?: string[] });
 }
 
+export function resolveInitImage(input: StudioGenInput): string {
+  return (input.initImage || input.faceRefs?.[0] || "").trim();
+}
+
 export async function generateLocal(base: string, input: StudioGenInput): Promise<string[]> {
-  if (input.initImage?.trim()) {
-    return img2img(base, { ...input, initImage: input.initImage });
+  const init = resolveInitImage(input);
+  if (init) {
+    return img2img(base, { ...input, initImage: init });
   }
-  if (!input.prompt.trim()) throw new Error("Skrifaðu prompt.");
-  return txt2img(base, input);
+  throw new Error("Settu inn ljósmynd. Án myndar teiknar líkanið nýtt andlit.");
 }

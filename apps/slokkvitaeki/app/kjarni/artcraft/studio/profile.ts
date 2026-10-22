@@ -5,6 +5,9 @@ export const MAX_FACES = 10;
 export const SHARPEN_DENOISING = 0.4;
 export const AVATAR_DENOISING = 0.48;
 export const MAX_FACE_UNITS = 4;
+export const IDENTITY_DENOISING_MAX = 0.38;
+export const IDENTITY_NEGATIVE =
+  "different person, different face, face swap, new identity, another woman, another man, changed facial features";
 
 export const ORBIT_SLOTS = [
   { id: "front", label: "Framan", deg: 0 },
@@ -80,6 +83,33 @@ export function mergeIdentity(user: string, name: string, useProfile: boolean): 
   return `${base}, ${id}`;
 }
 
+export function mergeIdentityNegative(user: string): string {
+  const base = user.trim();
+  if (!base) return IDENTITY_NEGATIVE;
+  if (base.includes("different person")) return base;
+  return `${base}, ${IDENTITY_NEGATIVE}`;
+}
+
+export function clampIdentityDenoising(value: number, locked: boolean, masked = false): number {
+  const n = Number.isFinite(value) ? value : 0.35;
+  if (!locked) return n;
+  const cap = masked ? 0.72 : IDENTITY_DENOISING_MAX;
+  return Math.min(cap, Math.max(0.05, Math.round(n * 100) / 100));
+}
+
+/** Photo that must stay the same person: explicit init, working still, source, then profile. */
+export function identityStill(opts: {
+  init?: string;
+  working?: string;
+  source?: string;
+  profile?: PersonProfile | null;
+}): string {
+  const direct = (opts.init || opts.working || opts.source || "").trim();
+  if (direct) return direct;
+  const face = opts.profile?.faces?.[0] || opts.profile?.orbit?.front || "";
+  return face.trim();
+}
+
 export function sheetLayout(count: number): { cols: number; rows: number } {
   const n = Math.min(MAX_FACES, Math.max(0, Math.round(count)));
   if (n <= 1) return { cols: 1, rows: 1 };
@@ -115,6 +145,16 @@ export function identityRefs(faces: string[], sheet?: string | null, orbitSheet?
   for (const face of faces) {
     if (!face || out.length >= MAX_FACE_UNITS) break;
     out.push(face);
+  }
+  return out;
+}
+
+/** Prefer the current photo, then the profile sheets, so Forge does not invent a face. */
+export function lockFaceRefs(still: string, faces: string[], sheet?: string | null, orbitSheet?: string | null): string[] {
+  const out = still.trim() ? [still.trim()] : [];
+  for (const src of identityRefs(faces, sheet, orbitSheet)) {
+    if (!src || out.includes(src) || out.length >= MAX_FACE_UNITS) continue;
+    out.push(src);
   }
   return out;
 }

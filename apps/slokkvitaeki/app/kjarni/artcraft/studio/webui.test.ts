@@ -10,6 +10,7 @@ import {
   findStudioAdapters,
   generateLocal,
   img2img,
+  resolveInitImage,
   normalizeSettings,
   normalizeWebuiUrl,
   pingWebui,
@@ -157,15 +158,39 @@ test("generateLocal uses img2img when a source image is present", async () => {
       initImage: "data:image/jpeg;base64,xx",
     });
     assert.match(path, /img2img/);
-    await generateLocal("http://127.0.0.1:7860", { prompt: "adult woman" });
-    assert.match(path, /txt2img/);
   } finally {
     globalThis.fetch = prev;
   }
 });
 
-test("generateLocal requires a prompt when there is no source image", async () => {
-  await assert.rejects(() => generateLocal("http://127.0.0.1:7860", { prompt: "  " }), /prompt/);
+test("generateLocal refuses prompt-only so Forge cannot invent a new face", async () => {
+  await assert.rejects(
+    () => generateLocal("http://127.0.0.1:7860", { prompt: "adult woman" }),
+    /ljósmynd/,
+  );
+});
+
+test("generateLocal uses a face ref as the start image when init is missing", async () => {
+  const prev = globalThis.fetch;
+  let sent: Record<string, unknown> = {};
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    sent = { url: String(input), ...(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>) };
+    return new Response(JSON.stringify({ images: ["bbb"] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    assert.equal(resolveInitImage({ prompt: "x", faceRefs: ["data:image/png;base64,FACE"] }), "data:image/png;base64,FACE");
+    await generateLocal("http://127.0.0.1:7860", {
+      prompt: "same clothes",
+      faceRefs: ["data:image/png;base64,FACE"],
+    });
+    assert.match(String(sent.url), /img2img/);
+    assert.deepEqual(sent.init_images, ["FACE"]);
+  } finally {
+    globalThis.fetch = prev;
+  }
 });
 
 test("txt2img sends restore_faces and ControlNet face refs", async () => {

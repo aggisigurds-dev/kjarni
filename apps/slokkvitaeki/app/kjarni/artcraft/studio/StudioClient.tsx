@@ -23,13 +23,17 @@ import PersonProfilePanel from "./PersonProfile";
 import {
   avatarPrompt,
   AVATAR_DENOISING,
+  IDENTITY_DENOISING_MAX,
   canBuildAvatar,
+  clampIdentityDenoising,
   missingOrbitSlots,
   orbitCount,
   hasIdentity,
   identityPrompt,
-  identityRefs,
+  identityStill,
+  lockFaceRefs,
   mergeIdentity,
+  mergeIdentityNegative,
   orbitImages,
   SHARPEN_DENOISING,
   type OrbitId,
@@ -384,7 +388,13 @@ export default function StudioClient() {
     styleRef?: string;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
-    const init = opts?.initImage || working || source || undefined;
+    const init = identityStill({
+      init: opts?.initImage,
+      working,
+      source,
+      profile,
+    });
+    const painted = Boolean((opts && "mask" in opts ? opts.mask : mask) || "");
     setError("");
     try {
       assertAdultPrompt(text, negative);
@@ -392,30 +402,29 @@ export default function StudioClient() {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
       return [];
     }
-    if (!init && !text.trim()) {
-      setError("Skrifaðu prompt, eða settu inn mynd til að breyta.");
+    if (!init) {
+      setError("Settu inn ljósmynd af manneskjunni. Án myndar teiknar líkanið nýtt andlit.");
       return [];
     }
     setBusy(true);
     try {
-      const useId = Boolean(useProfile && hasIdentity(profile));
-      let faceRefs: string[] | undefined;
-      if (useId && profile) {
-        const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
-        faceRefs = identityRefs(profile.faces, sheet, orbitSheet);
-      }
+      const { faceRefs } = await identityBundle(init);
       const out = await generateLocal(webui, {
-        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", useId),
-        negativePrompt: negative.trim(),
+        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
+        negativePrompt: mergeIdentityNegative(negative),
         initImage: init,
         mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
         maskBlur,
-        restoreFaces: useId,
+        restoreFaces: true,
         faceRefs,
-        faceAdapter: useId ? faceAdapter : null,
+        faceAdapter,
         ...extraControls({ poseRef: opts?.poseRef, styleRef: opts?.styleRef }),
         ...settings,
-        denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
+        denoisingStrength: clampIdentityDenoising(
+          opts?.denoisingStrength ?? settings.denoisingStrength,
+          true,
+          painted,
+        ),
       });
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
@@ -473,6 +482,10 @@ export default function StudioClient() {
   }
 
   async function studioShoot() {
+    if (!identityStill({ working, source, profile })) {
+      setError("Settu inn ljósmynd. Án myndar teiknar líkanið nýtt andlit á dúkinn.");
+      return;
+    }
     const paper = backgroundOf(lights.background);
     const text = backdropShootPrompt(lights.background, profile?.name || "");
     setPrompt(text);
@@ -518,17 +531,21 @@ export default function StudioClient() {
       return;
     }
     const base = studioBase(baseId);
+    const photo = identityStill({ working, source, profile });
     const raw = selectedBaseImage();
-    let init: string | undefined;
+    let mannequin = "";
     try {
-      init = await rasterizeBase(raw);
+      mannequin = await rasterizeBase(raw);
     } catch {
-      init = undefined;
+      mannequin = "";
     }
-    const text = init
-      ? adaptBasePrompt(profile?.name || "", base, bodyLook)
-      : avatarPrompt(profile?.name || "");
-    const denoise = init ? BASE_DENOISING : AVATAR_DENOISING;
+    const init = photo || mannequin || undefined;
+    const text = photo
+      ? mergeIdentity(adaptBasePrompt(profile?.name || "", base, bodyLook), profile?.name || "", true)
+      : mannequin
+        ? adaptBasePrompt(profile?.name || "", base, bodyLook)
+        : avatarPrompt(profile?.name || "");
+    const denoise = photo ? IDENTITY_DENOISING_MAX : mannequin ? BASE_DENOISING : AVATAR_DENOISING;
     setPrompt(text);
     setUseProfile(true);
     patchSettings({ width: 768, height: 1024, denoisingStrength: denoise });
@@ -665,11 +682,17 @@ export default function StudioClient() {
     }
   }
 
-  async function identityBundle() {
-    const useId = Boolean(useProfile && hasIdentity(profile));
-    if (!useId || !profile) return { useId: false, faceRefs: undefined as string[] | undefined };
-    const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
-    return { useId: true, faceRefs: identityRefs(profile.faces, sheet, orbitSheet) };
+  async function identityBundle(still?: string) {
+    const photo = identityStill({ init: still, working, source, profile });
+    const faces = profile?.faces || [];
+    if (!photo && faces.length === 0 && orbitCount(profile) === 0) {
+      return { useId: false, faceRefs: undefined as string[] | undefined };
+    }
+    const [sheet, orbitSheet] = await Promise.all([
+      faceSheet(faces),
+      faceSheet(orbitImages(profile)),
+    ]);
+    return { useId: true, faceRefs: lockFaceRefs(photo, faces, sheet, orbitSheet) };
   }
 
   async function makeVideo(still?: string) {
@@ -681,7 +704,7 @@ export default function StudioClient() {
     const text = mergeIdentity(
       mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", clip.kind, customActions), looks), lights),
       profile?.name || "",
-      Boolean(useProfile && hasIdentity(profile)),
+      true,
     );
     try {
       assertAdultPrompt(text, negative);
@@ -693,19 +716,19 @@ export default function StudioClient() {
     setBusy(true);
     setClipText(`Rami 1/${clip.frames}`);
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const frames = [start];
       let prev = start;
-      const denoise = videoDenoising(clip.motion);
+      const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
       for (let i = 1; i < clip.frames; i++) {
         setClipText(`Rami ${i + 1}/${clip.frames}`);
         const out = await generateLocal(webui, {
           prompt: text,
-          negativePrompt: negative.trim(),
+          negativePrompt: mergeIdentityNegative(negative),
           initImage: prev,
-          restoreFaces: useId,
+          restoreFaces: true,
           faceRefs,
-          faceAdapter: useId ? faceAdapter : null,
+          faceAdapter,
           ...extraControls(),
           ...settings,
           denoisingStrength: denoise,
@@ -747,26 +770,26 @@ export default function StudioClient() {
     setBusy(true);
     setClipText("Lookbook…");
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const out: string[] = [];
       for (const shot of LOOKBOOK_SHOTS) {
         setClipText(`Lookbook · ${shot.label}`);
         const text = mergeIdentity(
           mergePrompt(mergeLooks(lookbookPrompt(shot.id, profile?.name || ""), looks), lights),
           profile?.name || "",
-          useId,
+          true,
         );
         assertAdultPrompt(text, negative);
         const imgs = await generateLocal(webui, {
           prompt: text,
-          negativePrompt: negative.trim(),
+          negativePrompt: mergeIdentityNegative(negative),
           initImage: start,
-          restoreFaces: useId,
+          restoreFaces: true,
           faceRefs,
-          faceAdapter: useId ? faceAdapter : null,
+          faceAdapter,
           ...extraControls(),
           ...settings,
-          denoisingStrength: LOOKBOOK_DENOISING,
+          denoisingStrength: clampIdentityDenoising(LOOKBOOK_DENOISING, true),
         });
         out.push(imgs[0]);
       }
@@ -797,7 +820,7 @@ export default function StudioClient() {
     setError("");
     setBusy(true);
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const all: string[] = [];
       let prev = start;
       let step = 0;
@@ -806,20 +829,20 @@ export default function StudioClient() {
         const text = mergeIdentity(
           mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", kind, customActions), looks), lights),
           profile?.name || "",
-          useId,
+          true,
         );
         assertAdultPrompt(text, negative);
-        const denoise = videoDenoising(clip.motion);
+        const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
         for (let i = 0; i < per; i++) {
           step += 1;
           setClipText(`Röð ${step}/${total}`);
           const imgs = await generateLocal(webui, {
             prompt: text,
-            negativePrompt: negative.trim(),
+            negativePrompt: mergeIdentityNegative(negative),
             initImage: prev,
-            restoreFaces: useId,
+            restoreFaces: true,
             faceRefs,
-            faceAdapter: useId ? faceAdapter : null,
+            faceAdapter,
             ...extraControls(),
             ...settings,
             denoisingStrength: denoise,
@@ -913,7 +936,7 @@ export default function StudioClient() {
     const text = mergeIdentity(
       mergePrompt(mergeLooks(motionRecreatePrompt(profile?.name || ""), looks), lights),
       profile?.name || "",
-      Boolean(useProfile && hasIdentity(profile)),
+      true,
     );
     try {
       assertAdultPrompt(text, negative);
@@ -924,19 +947,19 @@ export default function StudioClient() {
     setError("");
     setBusy(true);
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const frames = [start];
       let prev = start;
-      const denoise = videoDenoising(Math.max(clip.motion, 6));
+      const denoise = clampIdentityDenoising(videoDenoising(Math.max(clip.motion, 6)), true);
       for (let i = 0; i < motionFrames.length; i++) {
         setClipText(`Hreyfing ${i + 1}/${motionFrames.length}`);
         const out = await generateLocal(webui, {
           prompt: text,
-          negativePrompt: negative.trim(),
+          negativePrompt: mergeIdentityNegative(negative),
           initImage: prev,
-          restoreFaces: useId,
+          restoreFaces: true,
           faceRefs,
-          faceAdapter: useId ? faceAdapter : null,
+          faceAdapter,
           ...extraControls({ poseRef: motionFrames[i] }),
           ...settings,
           denoisingStrength: denoise,
@@ -1148,6 +1171,7 @@ export default function StudioClient() {
   }
 
   const editing = Boolean(source);
+  const hasPerson = Boolean(identityStill({ working, source, profile }));
   const preset = sizePresetId(settings.width, settings.height);
   const hasStill = Boolean(studioStill(working, images, source));
 
@@ -1323,8 +1347,8 @@ export default function StudioClient() {
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
                   {editing
-                    ? "Promptið segir hvað á að breytast. Denoising stýrir hversu mikið líkanið má fara frá upprunalegu myndinni."
-                    : "Án myndar verður til ný mynd. Settu inn ljósmynd til að breyta fötum, bakgrunni eða smáatriðum."}
+                    ? "Promptið segir hvað á að breytast (föt, bakgrunnur). Andlitið kemur af myndinni — líkanið má ekki teikna nýjan einstakling."
+                    : "Settu inn ljósmynd af manneskjunni fyrst. Án myndar teiknar líkanið alltaf nýtt andlit."}
                 </p>
 
                 <div
@@ -1650,8 +1674,14 @@ export default function StudioClient() {
 
                 {error && <p className="ac-error">{error}</p>}
                 <div className="ac-row">
-                  <button type="submit" className="ac-btn" disabled={busy}>
-                    {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
+                  <button type="submit" className="ac-btn" disabled={busy || !hasPerson}>
+                    {busy
+                      ? "Mynda…"
+                      : mask
+                        ? "Breyta máluðu svæði"
+                        : hasPerson
+                          ? "Breyta mynd"
+                          : "Settu inn mynd fyrst"}
                   </button>
                   <button
                     type="button"
