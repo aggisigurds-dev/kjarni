@@ -29,7 +29,7 @@ const TOOLS: Array<{ id: StudioTool; label: string; hint: string }> = [
   { id: "expand", label: "Þenja", hint: "Ýtir líkamslínu út" },
   { id: "shrink", label: "Minnka", hint: "Dregur líkamslínu inn" },
   { id: "drag", label: "Draga", hint: "Færir línu með músinni" },
-  { id: "paint", label: "Mála", hint: "Promptið vinnur á rauða svæðinu" },
+  { id: "paint", label: "Mála", hint: "Prompt eða skjáskot vinnur á rauða svæðinu" },
   { id: "erase", label: "Stroka", hint: "Tekur málun af" },
 ];
 
@@ -298,7 +298,7 @@ export default function AdjustPanel({ source, presetMask, presetMaskTick = 0, on
       </div>
       <p className="ac-hint">
         {painting
-          ? "Málaðu yfir það sem á að breytast. Skrifaðu svo prompt og ýttu á Breyta máluðu svæði — rautt endurskrifast, restin helst."
+          ? "Málaðu yfir kjól eða haus. Skrifaðu bikini / sundfatnaður eða slepptu skjáskoti við promptið — rautt endurskrifast, restin helst."
           : "Strjúktu yfir líkamslínu til að þenja, minnka eða draga. Stilltu svo bringur, miðju og mjaðmir."}
       </p>
       <div className={`ac-adjust-stage ${ready ? "" : "wait"}`}>

@@ -765,6 +765,45 @@
   margin: 8px 0;
 }
 
+.ac-paint-ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(148px, 210px);
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 14px;
+}
+
+.ac-want-shot {
+  border: 2px dashed var(--m-line, #d5dee8);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--m-card, #fff);
+}
+
+.ac-want-shot.on {
+  border-color: var(--m-navy, #102038);
+  background: rgba(16, 32, 56, 0.04);
+}
+
+.ac-want-shot img {
+  display: block;
+  width: 100%;
+  max-height: 110px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 0 0 8px;
+}
+
+.ac-want-shot .ac-hint {
+  margin: 0 0 8px;
+}
+
+@media (max-width: 720px) {
+  .ac-paint-ask {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ac-adjust {
   margin: 0 0 16px;
 }
@@ -836,6 +875,16 @@
   background: #0a0a0a;
   border-color: rgba(201, 152, 47, 0.35);
   color: var(--rg-text);
+}
+
+.stn[data-skin="ragnarok"] .ac-want-shot {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+}
+
+.stn[data-skin="ragnarok"] .ac-want-shot.on {
+  border-color: var(--rg-gold-fill, #c9982f);
+  background: rgba(201, 152, 47, 0.08);
 }
 
 .stn[data-skin="ragnarok"] .ac-studio input[type="range"] {
