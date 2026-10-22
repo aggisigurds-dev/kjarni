@@ -277,7 +277,8 @@ export default function PersonProfilePanel({
           <h3>Hringur — 8 sjónarhorn</h3>
           <p className="ac-hint">
             Fullorðin manneskja, sama fatnaður, skýrt ljós. Framan → hægri → aftan → vinstri.
-            Vantar horn? 3D-grunnurinn fyllir þau; myndirnar þínar málast á nálæg sjónarhorn.
+            Vantar horn? Ýttu á Fylla vantar horn með 3D — ekkert extra forrit þarf.
+            Leiðbeiningar og hlekkir (Meshy, Tripo, Sketchfab) eru undir 3D möskvi.
           </p>
           <div className="ac-orbit">
             {ORBIT_SLOTS.map((slot) => {

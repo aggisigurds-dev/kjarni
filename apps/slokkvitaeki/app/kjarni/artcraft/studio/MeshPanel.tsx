@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MESH_ACCEPT, STANDIN_NAME, isMeshFile, meshHint, type CaptureYaws } from "./mesh";
+import {
+  MESH_ACCEPT,
+  STANDIN_NAME,
+  isMeshFile,
+  meshGuides,
+  meshHint,
+  type CaptureYaws,
+  type MeshGuide,
+} from "./mesh";
 import { captureYaws, mountMesh, mountStandIn, type MeshStage } from "./meshView";
 import { studioBase, type BodyLook } from "./bases";
 
@@ -89,7 +97,7 @@ export default function MeshPanel({ look, baseId, onStill, onSpin, onCapture, bu
 
   return (
     <div className="ac-mesh">
-      <h2>3D möskvi — mynd og videó</h2>
+      <h2 id="ac-mesh-guide">3D möskvi — mynd og videó</h2>
       <p className="ac-hint">{meshHint(Boolean(name), name)}</p>
       <canvas ref={canvasRef} className="ac-mesh-canvas" width={360} height={480} />
       {error && <p className="ac-error">{error}</p>}
@@ -147,6 +155,64 @@ export default function MeshPanel({ look, baseId, onStill, onSpin, onCapture, bu
           e.target.value = "";
         }}
       />
+      <MeshGuideList />
+    </div>
+  );
+}
+
+function GuideCard({ guide }: { guide: MeshGuide }) {
+  return (
+    <article className="ac-mesh-card">
+      <h4>
+        {guide.href ? (
+          <a href={guide.href} target="_blank" rel="noopener noreferrer">
+            {guide.label}
+          </a>
+        ) : (
+          guide.label
+        )}
+      </h4>
+      <p className="ac-hint">{guide.why}</p>
+      {guide.steps.length > 0 && (
+        <ol>
+          {guide.steps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      )}
+    </article>
+  );
+}
+
+function MeshGuideList() {
+  const later = meshGuides("later");
+  return (
+    <div className="ac-mesh-guide">
+      <h3>Hvernig á að fá 3D-líkama</h3>
+      <p className="ac-hint">
+        Byrjaðu á fyrsta spjaldinu. Ef þú vilt raunverulegri líkama, opnaðu hlekk, fylgdu
+        skrefunum, og settu GLB-skrána inn hér. GLB er 3D-skráin sem stúdíóið les.
+      </p>
+      {meshGuides("studio").map((guide) => (
+        <GuideCard key={guide.id} guide={guide} />
+      ))}
+      {meshGuides("web").map((guide) => (
+        <GuideCard key={guide.id} guide={guide} />
+      ))}
+      {meshGuides("download").map((guide) => (
+        <GuideCard key={guide.id} guide={guide} />
+      ))}
+      {meshGuides("desktop").map((guide) => (
+        <GuideCard key={guide.id} guide={guide} />
+      ))}
+      {later.length > 0 && (
+        <details className="ac-mesh-later">
+          <summary>Ekki byrja hér — rannsóknarforrit</summary>
+          {later.map((guide) => (
+            <GuideCard key={guide.id} guide={guide} />
+          ))}
+        </details>
+      )}
     </div>
   );
 }

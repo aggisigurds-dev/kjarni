@@ -3,7 +3,9 @@ import { test } from "node:test";
 import {
   isMeshFile,
   MESH_EXPORT_ONLY,
+  MESH_GUIDES,
   MESH_IMPORT,
+  meshGuides,
   meshHint,
   shouldStampPhoto,
   spinYaws,
@@ -25,14 +27,26 @@ test("isMeshFile accepts glb and gltf names", () => {
   assert.equal(isMeshFile(undefined), false);
 });
 
-test("meshHint mentions the built-in body and GLB pipelines", () => {
+test("meshHint mentions the built-in body and points to the guide", () => {
   assert.match(meshHint(false), /Innbyggður 3D-líkami/);
-  assert.match(meshHint(false), /Sketchfab/);
-  assert.match(meshHint(false), /Modly/);
-  assert.match(meshHint(false), /IDOL/);
+  assert.match(meshHint(false), /Leiðbeiningar/);
   assert.match(meshHint(true, "sara.glb"), /sara\.glb/);
   assert.ok(MESH_IMPORT.includes("Modly"));
   assert.ok(MESH_EXPORT_ONLY.includes("SMPL-X"));
+});
+
+test("mesh guides start in the studio and then link to web tools", () => {
+  assert.equal(MESH_GUIDES[0].id, "studio");
+  assert.equal(MESH_GUIDES[0].href, "");
+  const meshy = meshGuides("web").find((g) => g.id === "meshy");
+  assert.ok(meshy?.href.startsWith("https://www.meshy.ai"));
+  assert.ok(meshy?.steps.some((s) => /GLB/.test(s)));
+  const tripo = meshGuides("web").find((g) => g.id === "tripo");
+  assert.ok(tripo?.href.startsWith("https://www.tripo3d.ai"));
+  const sketchfab = meshGuides("download").find((g) => g.id === "sketchfab");
+  assert.ok(sketchfab?.href.startsWith("https://sketchfab.com"));
+  assert.ok(meshGuides("desktop").some((g) => g.id === "modly" && g.href.startsWith("https://modly3d.app")));
+  assert.ok(MESH_GUIDES.filter((g) => g.href).every((g) => g.href.startsWith("https://")));
 });
 
 test("nearby photos stamp onto the stand-in, far ones stay 3D", () => {

@@ -1258,6 +1258,71 @@
   background: #141414;
 }
 
+.ac-mesh-guide {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+}
+
+.ac-mesh-guide h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+
+.ac-mesh-card {
+  padding: 12px 14px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  background: var(--m-card, #fff);
+}
+
+.ac-mesh-card h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ac-mesh-card a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ac-mesh-card ol {
+  margin: 8px 0 0;
+  padding-left: 1.25em;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ac-mesh-card li + li {
+  margin-top: 4px;
+}
+
+.ac-mesh-later {
+  margin: 4px 0 0;
+}
+
+.ac-mesh-later summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ac-mesh-later .ac-mesh-card {
+  margin-top: 10px;
+}
+
+.stn[data-skin="ragnarok"] .ac-mesh-card {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+}
+
+.stn[data-skin="ragnarok"] .ac-mesh-card a {
+  color: var(--rg-text-gold, #ffd98a);
+}
+
 .ac-look {
   display: grid;
   gap: 10px;
