@@ -283,3 +283,46 @@ test("hnitABord: myndardílar → borðhnit með sömu vörpun og stadirABord", 
   const p = hnitABord({ x: 700, y: 500, sign: "ut" as const }, { x: 100, y: 200, width: 350, height: 250 }, { b: 7000, h: 5000 });
   assert.deepEqual([p.x, p.y, p.sign], [135, 225, "ut"]);
 });
+
+// 20.10.2026 (Lindaberg 1. hæð, Trönuhraun 10): slöngukeflið er teiknað með PUNKTALÍNU — stökum punktum sem 3×3 þensla tengir
+// ekki — og „30 m" stendur rétt fyrir ofan. Blekgríman er raunveruleg (600 × 600 bútar úr 16052012_004).
+test("finnaHring: punktalínu-spírall við „30 m“; herbergisflatarmál („2.5m²“, „39m²“) fá ekkert tákn", async () => {
+  const { inflateSync } = await import("node:zlib");
+  const f = JSON.parse(readFileSync(join(__dirname, "fixtures", "lindaberg-1haed-punktakefli.json"), "utf8")) as {
+    kvardi: number;
+    tilfelli: { nafn: string; x: number; y: number; h: number; kassi: number[]; skurdur: { x0: number; y0: number; b: number; h: number }; blek: string }[];
+  };
+  for (const t of f.tilfelli) {
+    const pakkad = inflateSync(Buffer.from(t.blek, "base64"));
+    const data = new Uint8Array(t.skurdur.b * t.skurdur.h);
+    for (let i = 0; i < data.length; i++) data[i] = (pakkad[i >> 3] >> (7 - (i & 7))) & 1;
+    const blek: Blek = { w: t.skurdur.b, h: t.skurdur.h, kvardi: f.kvardi, data };
+    // hnit orðsins í bútnum (myndardílar = OCR-dílar / kvarði)
+    const dx = t.skurdur.x0 / f.kvardi, dy = t.skurdur.y0 / f.kvardi;
+    const [bx, by, bb, bh] = t.kassi;
+    const kassi = { x0: bx - dx - 3, y0: by - dy - 3, x1: bx - dx + bb + 3, y1: by - dy + bh + 3 };
+    const r = finnaHring(blek, t.x - dx, t.y - dy, t.h, undefined, kassi);
+    if (t.nafn.includes("kefli finnst")) {
+      assert.ok(r, t.nafn);
+      // táknið stendur 1,5–2,5 stafahæðir undir orðinu, ekki á textanum og ekki langt frá
+      const fjarl = Math.hypot(r.x - (t.x - dx), r.y - (t.y - dy)) / t.h;
+      assert.ok(fjarl > 1.3 && fjarl < 3, `${t.nafn}: fjarlægð ${fjarl.toFixed(2)}h`);
+      assert.ok(r.y > t.y - dy, `${t.nafn}: keflið er undir orðinu`);
+    } else {
+      assert.equal(r, null, t.nafn);
+    }
+  }
+});
+
+test("sltBrslOrd: kassi sem OCR merkir „lóðréttan“ en er breiðari en hann er hár er láréttur (stafahæðin ekki 15)", () => {
+  const w: OcrWord = { text: "30 m", x: 3575, y: 2361, width: 68, height: 37, confidence: 77, vertical: true };
+  const o = sltBrslOrd([w], { b: 7507, h: 5328 }, null);
+  assert.equal(o.length, 1);
+  assert.ok(o[0].h > 25 && o[0].h < 32, `h = ${o[0].h}`);
+  assert.deepEqual(o[0].kassi, { x0: 3572, y0: 2358, x1: 3646, y1: 2401 });
+  // raunverulega lóðrétt orð (hár, mjór kassi) heldur sínu lagi
+  const l: OcrWord = { text: "HSL", x: 100, y: 100, width: 30, height: 90, confidence: 80, vertical: true };
+  const p = sltBrslOrd([l], { b: 7507, h: 5328 }, null);
+  assert.equal(p.length, 1);
+  assert.ok(p[0].h >= 25 && p[0].h <= 30, `h = ${p[0].h}`);
+});
