@@ -1,6 +1,6 @@
 /** Turn a person cutout into selectable regions: person, clothes, background, objects. */
 
-import { createRaster, type Raster } from "./adjust.ts";
+import { createRaster, type Raster } from "./adjust";
 
 export type RegionKind = "person" | "clothes" | "head" | "background" | "object";
 

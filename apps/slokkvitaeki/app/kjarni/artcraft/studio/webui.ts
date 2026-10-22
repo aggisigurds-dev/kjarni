@@ -1,5 +1,8 @@
 /** Automatic1111 / Forge / SD.Next compatible local API. Runs on the user's machine. */
 
+import { pickFaceModel, pickFaceModule } from "./profile";
+import { pickPoseModel, pickPoseModule, pickStyleModel, pickStyleModule, studioScripts } from "./refs";
+
 export const DEFAULT_WEBUI_URL = "http://127.0.0.1:7860";
 export const WEBUI_URL_KEY = "kjarni_private_studio_webui";
 export const SETTINGS_KEY = "kjarni_private_studio_settings";
@@ -153,9 +156,6 @@ export function denoisingHint(value: number): string {
   if (value < 0.55) return "Breyta fötum eða bakgrunni, manneskjan helst";
   return "Ný mynd — andlit og stelling geta tapast";
 }
-
-import { pickFaceModel, pickFaceModule } from "./profile.ts";
-import { pickPoseModel, pickPoseModule, pickStyleModel, pickStyleModule, studioScripts } from "./refs.ts";
 
 /** Strip a data URL prefix so the WebUI API gets raw base64. */
 export function toApiImage(src: string): string {

@@ -1,6 +1,6 @@
 /** Pose, style and motion references so the avatar can copy a still, a clip, or an item. */
 
-import { MAX_FACE_UNITS, ORBIT_SLOTS, controlNetFaceArgs, type OrbitId, type PersonProfile } from "./profile.ts";
+import { MAX_FACE_UNITS, ORBIT_SLOTS, controlNetFaceArgs, type OrbitId, type PersonProfile } from "./profile";
 
 export const POSE_DENOISING = 0.44;
 export const POSE_DENOISING_PROMPT = 0.52;
@@ -192,7 +192,7 @@ export function studioScripts(opts: {
 
 export function yawToSlot(deg: number): OrbitId {
   const n = ((deg % 360) + 360) % 360;
-  let best = ORBIT_SLOTS[0];
+  let best: (typeof ORBIT_SLOTS)[number] = ORBIT_SLOTS[0];
   let bestDist = 999;
   for (const slot of ORBIT_SLOTS) {
     const d = Math.min(Math.abs(slot.deg - n), 360 - Math.abs(slot.deg - n));
