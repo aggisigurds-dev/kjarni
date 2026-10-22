@@ -112,6 +112,31 @@ test("img2img posts a mask when the user painted a region", async () => {
   }
 });
 
+test("img2img uses latent-noise fill when the painted prompt must rewrite the hole", async () => {
+  const prev = globalThis.fetch;
+  let sent: Record<string, unknown> = {};
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ images: ["zzz"] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    await img2img("http://127.0.0.1:7860", {
+      prompt: "red silk dress",
+      initImage: "data:image/png;base64,SRC",
+      mask: "data:image/png;base64,MASK",
+      denoisingStrength: 0.62,
+      inpaintingFill: 2,
+    });
+    assert.equal(sent.inpainting_fill, 2);
+    assert.equal(sent.denoising_strength, 0.62);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
 test("img2img posts init_images and denoising_strength", async () => {
   const prev = globalThis.fetch;
   let sent: { url?: string; body?: Record<string, unknown> } = {};
