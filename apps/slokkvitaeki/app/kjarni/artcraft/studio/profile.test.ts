@@ -9,6 +9,8 @@ import {
   identityRefs,
   identityScripts,
   mergeIdentity,
+  missingOrbitSlots,
+  canGuessOrbit,
   orbitCount,
   pickFaceModel,
   pickFaceModule,
@@ -50,6 +52,13 @@ test("orbit + faces unlock a realistic avatar", () => {
   assert.match(avatarPrompt("Sara"), /Sara/);
   assert.match(avatarPrompt("Sara"), /turnaround/);
   assert.match(avatarPrompt("Sara"), /every angle/);
+  assert.equal(canGuessOrbit(empty), true);
+  assert.equal(canGuessOrbit(half), true);
+  assert.deepEqual(
+    missingOrbitSlots(half.orbit).map((s) => s.id),
+    ["frontRight", "backRight", "backLeft", "left", "frontLeft"],
+  );
+  assert.equal(canGuessOrbit({ ...empty, orbit: { front: "o1", frontRight: "o2", right: "o3", backRight: "o4", back: "o5", backLeft: "o6", left: "o7", frontLeft: "o8" } }), false);
 });
 
 test("sheetLayout fits ten faces", () => {

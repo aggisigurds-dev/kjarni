@@ -24,6 +24,8 @@ import {
   avatarPrompt,
   AVATAR_DENOISING,
   canBuildAvatar,
+  missingOrbitSlots,
+  orbitCount,
   hasIdentity,
   identityPrompt,
   identityRefs,
@@ -31,6 +33,7 @@ import {
   orbitImages,
   SHARPEN_DENOISING,
   type OrbitId,
+  type OrbitMap,
   type PersonProfile,
 } from "./profile";
 import { faceSheet } from "./profileImage";
@@ -38,10 +41,12 @@ import AvatarTurn from "./AvatarTurn";
 import BasesPanel from "./BasesPanel";
 import MeshPanel from "./MeshPanel";
 import PartsPanel from "./PartsPanel";
-import { spinYaws } from "./mesh";
+import { shouldStampPhoto, spinYaws, type CaptureYaws } from "./mesh";
+import { captureStandInYaws } from "./meshView";
 import {
   IMPRINT_DENOISING,
   bodyPart,
+  FULL_STAMP,
   imprintPrompt,
   isClipStamp,
   pickKeyFrame,
@@ -196,6 +201,7 @@ export default function StudioClient() {
   const [bodyLook, setBodyLook] = useState<BodyLook>(DEFAULT_LOOK);
   const [customBase, setCustomBase] = useState("");
   const [partStamps, setPartStamps] = useState<Partial<Record<string, PartStamp>>>({});
+  const meshCaptureRef = useRef<CaptureYaws | null>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -992,6 +998,46 @@ export default function StudioClient() {
     }
   }
 
+  async function guessOrbit(): Promise<OrbitMap | null> {
+    if (!profile) {
+      setError("Búðu fyrst til prófíl.");
+      return null;
+    }
+    const missing = missingOrbitSlots(profile.orbit);
+    if (missing.length === 0) return profile.orbit;
+    const orbit: OrbitMap = { ...profile.orbit };
+    setError("");
+    setBusy(true);
+    try {
+      setClipText("Teikna 3D-grunn…");
+      const yaws = missing.map((slot) => slot.deg);
+      const shots = meshCaptureRef.current
+        ? await meshCaptureRef.current(yaws)
+        : await captureStandInYaws(bodyLook, studioBase(baseId), yaws);
+      for (let i = 0; i < missing.length; i++) {
+        const slot = missing[i];
+        setClipText(`Fylla ${slot.label} (${i + 1}/${missing.length})`);
+        let src = shots[slot.deg];
+        if (!src) continue;
+        const neighbor = nearestOrbitView(profile, slot.deg);
+        if (neighbor && shouldStampPhoto(slot.deg, neighbor.deg)) {
+          src = await imprintOnto(src, neighbor.src, FULL_STAMP);
+        }
+        orbit[slot.id] = src;
+        setTurnViews((cur) => ({ ...cur, [slot.id]: src }));
+      }
+      const first = orbit.front || orbit.frontRight || Object.values(orbit)[0];
+      if (first) adoptStill(first, "3d-grunnur.png");
+      setClipText(`${Object.keys(orbit).length} af 8 hornum · 3D-grunnur`);
+      return orbit;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki fyllt hornin með 3D-grunni.");
+      return Object.keys(orbit).length > orbitCount(profile) ? orbit : null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function fixPainted() {
     if (!mask) {
       setError("Málaðu gallann rauðan fyrst.");
@@ -1201,6 +1247,7 @@ export default function StudioClient() {
                         : "Prófaðu tengingu til að sjá hvort andlitsadapter er til"
                   }
                   onAvatar={() => void makeAvatar()}
+                  onGuessOrbit={() => guessOrbit()}
                   avatarBusy={busy || analyzing}
                 />
                 <BasesPanel
@@ -1222,9 +1269,14 @@ export default function StudioClient() {
                   canAdapt={canBuildAvatar(profile)}
                 />
                 <MeshPanel
+                  look={bodyLook}
+                  baseId={baseId}
                   busy={busy}
                   onStill={(src) => adoptStill(src, "mesh.png")}
                   onSpin={(capture) => void spinMesh(capture)}
+                  onCapture={(capture) => {
+                    meshCaptureRef.current = capture;
+                  }}
                 />
                 <PartsPanel
                   still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId), bodyLook)}

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   BODY_PARTS,
   coverageLabel,
+  FULL_STAMP,
   hitPart,
   imprintPrompt,
   partBox,
@@ -15,6 +16,8 @@ import {
 test("six body parts cover a full-body A-pose", () => {
   assert.equal(BODY_PARTS.length, 6);
   assert.ok(BODY_PARTS.every((p) => p.w > 0 && p.h > 0 && p.x + p.w <= 1.01 && p.y + p.h <= 1.01));
+  assert.equal(FULL_STAMP.id, "full");
+  assert.ok(FULL_STAMP.w > 0.5 && FULL_STAMP.h > 0.8);
 });
 
 test("hitPart finds the head and misses the gap", () => {

@@ -21,6 +21,8 @@ export const BODY_PARTS: BodyPart[] = [
   { id: "legR", label: "Hægri fótleggur", x: 0.5, y: 0.42, w: 0.3, h: 0.54 },
 ];
 
+export const FULL_STAMP: BodyPart = { id: "full", label: "Allur", x: 0.16, y: 0.02, w: 0.68, h: 0.96 };
+
 export function bodyPart(id: string): BodyPart | undefined {
   return BODY_PARTS.find((p) => p.id === id);
 }

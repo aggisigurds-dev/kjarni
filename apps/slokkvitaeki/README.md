@@ -35,8 +35,11 @@ stýra mannikin og aðlögun. Eigin grunnur má vera skjámynd
 af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir eða stutt
 videóbrot yfir andlit, bol, hendur og fætur — part fyrir part — baka saumana
 eða hreyfa aðeins þann part.
-3D photoreal möskvi verður ekki til úr ljósmyndum hér; hægt er að setja
-inn GLB/GLTF (Meshy, Tripo, Ready Player Me) og taka still eða hringvideó.
+Ófullkominn hringur: „Fylla vantar horn með 3D“ notar innbyggðan 3D-líkama
+(hæð, þyngd, húð, hár) og málar myndirnar þínar á nálæg sjónarhorn. GLB frá
+Sketchfab, Blendkit, Meshy, Tripo, Ready Player Me eða Modly kemur í staðinn
+og fyllir þá hornin. IDOL, Duix, SimAvatar, StableGen og SMPL-X keyra ekki
+hér; þau búa til möskva sem þarf að flytja inn sem GLB.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.
