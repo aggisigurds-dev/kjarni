@@ -45,13 +45,14 @@ import {
 import RefsPanel from "./RefsPanel";
 import {
   FIX_DENOISING,
-  POSE_DENOISING,
   STYLE_DENOISING,
   fixPrompt,
   mergePose,
   mergeStyle,
   motionRecreatePrompt,
   nearestOrbitView,
+  poseDenoising,
+  studioStill,
   type StyleKind,
 } from "./refs";
 import { extractVideoFrames } from "./refsImage";
@@ -292,18 +293,24 @@ export default function StudioClient() {
     };
   }
 
-  async function runGenerate(opts?: { prompt?: string; mask?: string | null; denoisingStrength?: number }) {
+  async function runGenerate(opts?: {
+    prompt?: string;
+    mask?: string | null;
+    denoisingStrength?: number;
+    initImage?: string;
+  }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
+    const init = opts?.initImage || working || source || undefined;
     setError("");
     try {
       assertAdultPrompt(text, negative);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
-      return;
+      return [];
     }
-    if (!source && !text.trim()) {
+    if (!init && !text.trim()) {
       setError("Skrifaðu prompt, eða settu inn mynd til að breyta.");
-      return;
+      return [];
     }
     setBusy(true);
     try {
@@ -316,7 +323,7 @@ export default function StudioClient() {
       const out = await generateLocal(webui, {
         prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", useId),
         negativePrompt: negative.trim(),
-        initImage: working || source || undefined,
+        initImage: init,
         mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
         maskBlur,
         restoreFaces: useId,
@@ -329,6 +336,7 @@ export default function StudioClient() {
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
       setStatus("up");
+      return out;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
       setError(
@@ -336,6 +344,7 @@ export default function StudioClient() {
           ? "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api og CORS?"
           : raw || "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api og CORS?",
       );
+      return [];
     } finally {
       setBusy(false);
     }
@@ -424,7 +433,8 @@ export default function StudioClient() {
     setPrompt(text);
     setUseProfile(true);
     patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
-    await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
+    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
+    if (out[0]) setWorking(out[0]);
   }
 
   async function identityBundle() {
@@ -435,7 +445,7 @@ export default function StudioClient() {
   }
 
   async function makeVideo(still?: string) {
-    const start = still || working || source || images[0] || "";
+    const start = still || studioStill(working, images, source);
     if (!start) {
       setError("Gerðu avatar eða settu inn mynd fyrst — hreyfimyndin byrjar á þeim ramma.");
       return;
@@ -500,7 +510,7 @@ export default function StudioClient() {
   }
 
   async function makeLookbook() {
-    const start = working || source || images[0] || "";
+    const start = studioStill(working, images, source);
     if (!start) {
       setError("Gerðu avatar eða settu inn mynd fyrst — lookbookið byrjar á henni.");
       return;
@@ -546,7 +556,7 @@ export default function StudioClient() {
   }
 
   async function makeSequence() {
-    const start = working || source || images[0] || "";
+    const start = studioStill(working, images, source);
     if (!start) {
       setError("Gerðu avatar eða settu inn mynd fyrst.");
       return;
@@ -628,17 +638,29 @@ export default function StudioClient() {
   }
 
   async function matchPose() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst — pósuviðmiðið vinnur á honum.");
+      return;
+    }
     if (!poseRef) {
       setError("Veldu pósuviðmið fyrst.");
       return;
     }
     const text = mergePose(prompt, profile?.name || "");
+    const denoise = poseDenoising(Boolean(poseAdapter));
     setPrompt(text);
-    patchSettings({ denoisingStrength: POSE_DENOISING });
-    await runGenerate({ prompt: text, mask: null, denoisingStrength: POSE_DENOISING });
+    patchSettings({ denoisingStrength: denoise });
+    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: denoise, initImage: start });
+    if (out[0]) setWorking(out[0]);
   }
 
   async function applyStyle() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst.");
+      return;
+    }
     if (!styleRef) {
       setError("Veldu skjámynd af fötum eða skarti fyrst.");
       return;
@@ -646,11 +668,12 @@ export default function StudioClient() {
     const text = mergeStyle(prompt, styleKind);
     setPrompt(text);
     patchSettings({ denoisingStrength: STYLE_DENOISING });
-    await runGenerate({ prompt: text, mask: null, denoisingStrength: STYLE_DENOISING });
+    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: STYLE_DENOISING, initImage: start });
+    if (out[0]) setWorking(out[0]);
   }
 
   async function recreateMotion() {
-    const start = working || source || images[0] || "";
+    const start = studioStill(working, images, source);
     if (!start) {
       setError("Gerðu avatar eða settu inn mynd fyrst.");
       return;
@@ -701,6 +724,7 @@ export default function StudioClient() {
         return URL.createObjectURL(blob);
       });
       setImages(frames);
+      if (frames[frames.length - 1]) setWorking(frames[frames.length - 1]);
       setClipText(`${frames.length} rammar · hreyfistykki`);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
       setStatus("up");
@@ -760,7 +784,7 @@ export default function StudioClient() {
   const editing = Boolean(source);
   const preset = sizePresetId(settings.width, settings.height);
   const orbitView = nearestOrbitView(profile, yaw);
-  const hasStill = Boolean(working || source || images[0]);
+  const hasStill = Boolean(studioStill(working, images, source));
 
   return (
     <StationChrome tool="artcraft">

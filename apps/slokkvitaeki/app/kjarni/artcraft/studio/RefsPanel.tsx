@@ -64,8 +64,9 @@ export default function RefsPanel({
     <div className="ac-refs">
       <h2>Viðmið — pósa, hreyfing, skart</h2>
       <p className="ac-hint">
-        Markmiðsmynd læsir pósu avatarsins. Stutt videó verður að römmum sem hann
-        endurgerir. Skjámynd af fötum eða skarti fer á manneskjuna — andlitið helst.
+        Gerðu avatar fyrst. Markmiðsmynd læsir pósu hans (ekki upprunalegu
+        ljósmyndinni). Stutt videó verður að römmum sem hann endurgerir.
+        Skjámynd af fötum eða skarti fer á manneskjuna — andlitið helst.
       </p>
 
       <div className="ac-ref-grid">

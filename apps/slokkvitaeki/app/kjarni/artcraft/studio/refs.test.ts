@@ -12,8 +12,12 @@ import {
   pickPoseModule,
   pickStyleModel,
   pickStyleModule,
+  poseDenoising,
   posePrompt,
+  POSE_DENOISING,
+  POSE_DENOISING_PROMPT,
   studioScripts,
+  studioStill,
   yawToSlot,
 } from "./refs.ts";
 
@@ -102,6 +106,15 @@ test("yaw maps to the nearest orbit slot and filled neighbour", () => {
   assert.equal(view?.id, "right");
   assert.equal(view?.src, "R");
   assert.equal(nearestOrbitView({ ...profile, orbit: {} }, 0), null);
+});
+
+test("studioStill prefers the avatar result over the original upload", () => {
+  assert.equal(studioStill("work", ["avatar"], "upload"), "work");
+  assert.equal(studioStill("", ["avatar"], "upload"), "avatar");
+  assert.equal(studioStill("", [], "upload"), "upload");
+  assert.equal(studioStill("", [], ""), "");
+  assert.equal(poseDenoising(true), POSE_DENOISING);
+  assert.equal(poseDenoising(false), POSE_DENOISING_PROMPT);
 });
 
 test("motion frame count stays between 4 and 8", () => {

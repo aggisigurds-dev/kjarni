@@ -3,6 +3,7 @@
 import { MAX_FACE_UNITS, ORBIT_SLOTS, controlNetFaceArgs, type OrbitId, type PersonProfile } from "./profile.ts";
 
 export const POSE_DENOISING = 0.44;
+export const POSE_DENOISING_PROMPT = 0.52;
 export const STYLE_DENOISING = 0.38;
 export const FIX_DENOISING = 0.46;
 export const MAX_MOTION_FRAMES = 8;
@@ -67,6 +68,15 @@ export function fixPrompt(user: string): string {
 export function motionRecreatePrompt(name = ""): string {
   const who = name.trim() || "the same adult person";
   return `recreate the motion and pose of the reference clip on ${who}, same identity, same clothes, photorealistic`;
+}
+
+/** Latest avatar/result first so pose and motion do not rewrite the original upload. */
+export function studioStill(working: string, images: string[], source: string): string {
+  return (working || images[0] || source || "").trim();
+}
+
+export function poseDenoising(hasPoseAdapter: boolean): number {
+  return hasPoseAdapter ? POSE_DENOISING : POSE_DENOISING_PROMPT;
 }
 
 export function pickPoseModel(models: string[]): string | null {
