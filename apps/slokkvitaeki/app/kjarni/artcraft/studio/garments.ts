@@ -24,6 +24,7 @@ export const GARMENT_INPAINT_FILL = 1;
 export function garmentRunOptions(): {
   skipPaint: true;
   ignoreRefs: true;
+  restoreFaces: false;
   denoisingStrength: number;
   inpaintingFill: number;
   inpaintFullRes: false;
@@ -31,6 +32,7 @@ export function garmentRunOptions(): {
   return {
     skipPaint: true,
     ignoreRefs: true,
+    restoreFaces: false,
     denoisingStrength: GARMENT_DENOISING,
     inpaintingFill: GARMENT_INPAINT_FILL,
     inpaintFullRes: false,

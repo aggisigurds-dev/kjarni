@@ -286,7 +286,7 @@ export function regionsFromPerson(image: Raster, person: Raster): AnalyzedRegion
   const personCov = coverageOf(person);
   if (personCov > 0.01) {
     regions.push({ id: "person", kind: "person", label: "Manneskja", mask: person, coverage: personCov });
-    const head = bandMask(person, 0, 0.26);
+    const head = bandMask(person, 0, 0.34);
     const headCov = coverageOf(head);
     if (headCov > 0.004) {
       regions.push({ id: "head", kind: "head", label: "Andlit / hár", mask: head, coverage: headCov });

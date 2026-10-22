@@ -531,6 +531,7 @@ export default function StudioClient() {
     height?: number;
     skipPaint?: boolean;
     ignoreRefs?: boolean;
+    restoreFaces?: boolean;
     inpaintingFill?: number;
     inpaintFullRes?: boolean;
   }): Promise<string[]> {
@@ -588,7 +589,8 @@ export default function StudioClient() {
         maskBlur: userPaint ? paintEditMaskBlur(maskBlur) : maskBlur,
         inpaintingFill: opts?.inpaintingFill ?? (userPaint ? paintInpaintFill(useShot) : 1),
         inpaintFullRes: opts?.inpaintFullRes,
-        restoreFaces: userPaint ? paintEditRestoreFaces(paintShotKind, useShot) : true,
+        restoreFaces:
+          opts?.restoreFaces ?? (userPaint ? paintEditRestoreFaces(paintShotKind, useShot) : true),
         faceRefs,
         faceAdapter,
         ...extraControls(

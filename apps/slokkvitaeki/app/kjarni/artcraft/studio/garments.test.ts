@@ -60,6 +60,7 @@ test("slot maps chips; adds are delete-then-add not in-place rewrite", () => {
   const flags = garmentRunOptions();
   assert.equal(flags.skipPaint, true);
   assert.equal(flags.ignoreRefs, true);
+  assert.equal(flags.restoreFaces, false);
   assert.equal(flags.inpaintingFill, GARMENT_INPAINT_FILL);
   assert.equal(flags.inpaintingFill, 1);
   assert.equal(flags.inpaintFullRes, false);
