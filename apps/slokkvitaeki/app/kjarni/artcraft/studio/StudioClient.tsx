@@ -49,9 +49,12 @@ import {
 import { imprintOnto, partMask } from "./partsImage";
 import {
   BASE_DENOISING,
+  LOOK_KEY,
   adaptBasePrompt,
   mannequinDataUrl,
+  readStoredLook,
   studioBase,
+  type BodyLook,
 } from "./bases";
 import { rasterizeBase } from "./basesImage";
 import LooksPanel from "./LooksPanel";
@@ -187,6 +190,7 @@ export default function StudioClient() {
   const [versions, setVersions] = useState<AvatarVersion[]>([]);
   const [versionPresetId, setVersionPresetId] = useState("summer");
   const [baseId, setBaseId] = useState("w-avg");
+  const [bodyLook, setBodyLook] = useState<BodyLook>(() => readStoredLook());
   const [customBase, setCustomBase] = useState("");
   const [partStamps, setPartStamps] = useState<Partial<Record<string, PartStamp>>>({});
   const [drag, setDrag] = useState(false);
@@ -207,6 +211,7 @@ export default function StudioClient() {
     setWebui(readStoredWebuiUrl());
     setSettings(readStoredSettings());
     setLights(readStoredLights());
+    setBodyLook(readStoredLook());
     setClip(readStoredVideo());
     setCustomActions(readCustomActions());
     setReady(true);
@@ -221,6 +226,11 @@ export default function StudioClient() {
     if (!ready) return;
     window.localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
   }, [ready, lights]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(LOOK_KEY, JSON.stringify(bodyLook));
+  }, [ready, bodyLook]);
 
   useEffect(() => {
     if (!ready) return;
@@ -490,7 +500,7 @@ export default function StudioClient() {
   }
 
   function selectedBaseImage(): string {
-    return customBase || mannequinDataUrl(studioBase(baseId));
+    return customBase || mannequinDataUrl(studioBase(baseId), bodyLook);
   }
 
   async function makeAvatar() {
@@ -507,7 +517,7 @@ export default function StudioClient() {
       init = undefined;
     }
     const text = init
-      ? adaptBasePrompt(profile?.name || "", base)
+      ? adaptBasePrompt(profile?.name || "", base, bodyLook)
       : avatarPrompt(profile?.name || "");
     const denoise = init ? BASE_DENOISING : AVATAR_DENOISING;
     setPrompt(text);
@@ -1165,12 +1175,16 @@ export default function StudioClient() {
                 />
                 <BasesPanel
                   baseId={baseId}
+                  look={bodyLook}
                   customBase={customBase}
                   onBase={(id) => {
+                    const next = studioBase(id);
                     setBaseId(id);
+                    setBodyLook((cur) => ({ ...cur, build: next.build }));
                     setCustomBase("");
                     setPartStamps({});
                   }}
+                  onLook={setBodyLook}
                   onCustom={setCustomBase}
                   onClearCustom={() => setCustomBase("")}
                   onAdapt={() => void makeAvatar()}
@@ -1178,7 +1192,7 @@ export default function StudioClient() {
                   canAdapt={canBuildAvatar(profile)}
                 />
                 <PartsPanel
-                  still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId))}
+                  still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId), bodyLook)}
                   stamps={partStamps}
                   onFile={(part, file) => void takePartFile(part, file)}
                   onBake={(id) => void bakePart(id)}

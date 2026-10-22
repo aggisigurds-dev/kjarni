@@ -3,9 +3,12 @@ import { test } from "node:test";
 import {
   adaptBasePrompt,
   BASE_DENOISING,
+  DEFAULT_LOOK,
+  figureFor,
   figureOf,
   mannequinSvg,
   mergeBase,
+  parseLook,
   STUDIO_BASES,
   studioBase,
 } from "./bases.ts";
@@ -31,7 +34,31 @@ test("adaptBasePrompt keeps proportions and names the person", () => {
   assert.match(text, /proportions/);
   assert.match(text, /A-pose joints/);
   assert.match(text, /adult woman/);
+  assert.match(text, /170 cm/);
+  assert.match(text, /athletic muscular build|average build/);
   assert.equal(mergeBase(text, "Sara", studioBase("w-avg")), text);
+});
+
+test("look sliders change height weight skin and hair", () => {
+  const tall = figureFor(studioBase("w-avg"), { ...DEFAULT_LOOK, heightCm: 190, weightKg: 55, build: "slim" });
+  const heavy = figureFor(studioBase("w-avg"), { ...DEFAULT_LOOK, heightCm: 160, weightKg: 110, build: "solid" });
+  assert.ok(tall.inseam > heavy.inseam);
+  assert.ok(heavy.waist > tall.waist);
+  const parsed = parseLook({ heightCm: 12, weightKg: 900, skin: "nope", hair: "x", hairLength: "x", build: "nope" });
+  assert.equal(parsed.heightCm, 150);
+  assert.equal(parsed.weightKg, 130);
+  assert.equal(parsed.skin, "warm");
+  const long = mannequinSvg(studioBase("w-avg"), {
+    ...DEFAULT_LOOK,
+    skin: "deep",
+    hair: "blonde",
+    hairLength: "long",
+  });
+  assert.match(long, /#d4b06a/);
+  assert.match(long, /#4a2e20/);
+  assert.match(long, /ac-hair/);
+  const bald = mannequinSvg(studioBase("m-avg"), { ...DEFAULT_LOOK, hairLength: "bald" });
+  assert.doesNotMatch(bald, /ac-hair/);
 });
 
 test("mannequin svg draws a volumetric adult body, not stick lines", () => {

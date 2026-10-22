@@ -30,7 +30,8 @@ fatnaði eða skarti fer á manneskjuna (IP-Adapter án andlits, annars prompt).
 Hægt er að snúa avatarnum um horn, mála galla og biðja um lagfæringu
 á því svæði. Útgáfur (sumar, elegant, jólafatnaður, diskó, eða eigið nafn)
 vistast með prófílnum. Líkamsgrunnar (A-pose, rúmmál, liðamót) læsa
-hlutföllum; prófíllinn aðlagar andlit. Eigin grunnur má vera skjámynd
+hlutföllum; hæð, þyngd, slim/athletic, húðlitur, hárlitur og hárlengd
+stýra mannikin og aðlögun. Eigin grunnur má vera skjámynd
 af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir eða stutt
 videóbrot yfir andlit, bol, hendur og fætur — part fyrir part — baka saumana
 eða hreyfa aðeins þann part.

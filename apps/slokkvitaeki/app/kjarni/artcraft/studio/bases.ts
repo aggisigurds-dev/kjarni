@@ -25,6 +25,114 @@ export function studioBase(id: string): StudioBase {
   return STUDIO_BASES.find((b) => b.id === id) || STUDIO_BASES[1];
 }
 
+export const LOOK_KEY = "kjarni_private_studio_look";
+
+export type HairLength = "bald" | "short" | "medium" | "long";
+
+export const SKIN_TONES = [
+  { id: "fair", label: "Ljós", prompt: "fair light skin", mid: "#f3c9ad", light: "#fbe0cc", deep: "#c99678", joint: "#9a6a50" },
+  { id: "warm", label: "Beige", prompt: "warm beige skin", mid: "#e2b89a", light: "#f0d0b6", deep: "#b07a5c", joint: "#8a5c44" },
+  { id: "tan", label: "Brúnuð", prompt: "sun-tanned skin", mid: "#c99268", light: "#dcb088", deep: "#8d5c38", joint: "#6a4228" },
+  { id: "olive", label: "Ólífa", prompt: "olive skin", mid: "#b8885c", light: "#c9a078", deep: "#7a5234", joint: "#5a3a24" },
+  { id: "brown", label: "Brún", prompt: "brown skin", mid: "#8a5a38", light: "#a8744c", deep: "#5a3420", joint: "#3e2416" },
+  { id: "deep", label: "Dökk", prompt: "deep dark skin", mid: "#4a2e20", light: "#6a4430", deep: "#2a1810", joint: "#1a100c" },
+] as const;
+
+export const HAIR_COLORS = [
+  { id: "black", label: "Svart", prompt: "black hair", hex: "#1a1410" },
+  { id: "brown", label: "Brúnt", prompt: "brown hair", hex: "#4a2e18" },
+  { id: "blonde", label: "Blond", prompt: "blonde hair", hex: "#d4b06a" },
+  { id: "red", label: "Rautt", prompt: "red hair", hex: "#a04424" },
+  { id: "gray", label: "Grátt", prompt: "gray hair", hex: "#8a8680" },
+  { id: "white", label: "Hvítt", prompt: "white hair", hex: "#e8e4dc" },
+] as const;
+
+export const HAIR_LENGTHS: Array<{ id: HairLength; label: string; prompt: string }> = [
+  { id: "bald", label: "Sköllótt", prompt: "bald head" },
+  { id: "short", label: "Stutt", prompt: "short hair" },
+  { id: "medium", label: "Miðlungs", prompt: "medium-length hair" },
+  { id: "long", label: "Sítt", prompt: "long hair" },
+];
+
+export const BUILD_CHIPS: Array<{ id: BodyBuild; label: string; prompt: string }> = [
+  { id: "slim", label: "Slim", prompt: "slim lean build" },
+  { id: "average", label: "Meðal", prompt: "average build" },
+  { id: "athletic", label: "Athletic", prompt: "athletic muscular build" },
+  { id: "solid", label: "Þétt", prompt: "solid heavier build" },
+];
+
+export type SkinId = (typeof SKIN_TONES)[number]["id"];
+export type HairId = (typeof HAIR_COLORS)[number]["id"];
+
+export type BodyLook = {
+  heightCm: number;
+  weightKg: number;
+  build: BodyBuild;
+  skin: SkinId;
+  hair: HairId;
+  hairLength: HairLength;
+};
+
+export const DEFAULT_LOOK: BodyLook = {
+  heightCm: 170,
+  weightKg: 68,
+  build: "average",
+  skin: "warm",
+  hair: "brown",
+  hairLength: "medium",
+};
+
+export function clampHeight(cm: number): number {
+  return Math.round(Math.min(200, Math.max(150, cm)));
+}
+
+export function clampWeight(kg: number): number {
+  return Math.round(Math.min(130, Math.max(45, kg)));
+}
+
+export function skinOfId(id: string): (typeof SKIN_TONES)[number] {
+  return SKIN_TONES.find((s) => s.id === id) || SKIN_TONES[1];
+}
+
+export function hairOfId(id: string): (typeof HAIR_COLORS)[number] {
+  return HAIR_COLORS.find((h) => h.id === id) || HAIR_COLORS[1];
+}
+
+export function lengthOf(id: string): (typeof HAIR_LENGTHS)[number] {
+  return HAIR_LENGTHS.find((h) => h.id === id) || HAIR_LENGTHS[2];
+}
+
+export function parseLook(raw: unknown): BodyLook {
+  const row = raw && typeof raw === "object" ? (raw as Partial<BodyLook>) : {};
+  return {
+    heightCm: clampHeight(Number(row.heightCm) || DEFAULT_LOOK.heightCm),
+    weightKg: clampWeight(Number(row.weightKg) || DEFAULT_LOOK.weightKg),
+    build: BUILD_CHIPS.some((b) => b.id === row.build) ? (row.build as BodyBuild) : DEFAULT_LOOK.build,
+    skin: SKIN_TONES.some((s) => s.id === row.skin) ? (row.skin as SkinId) : DEFAULT_LOOK.skin,
+    hair: HAIR_COLORS.some((h) => h.id === row.hair) ? (row.hair as HairId) : DEFAULT_LOOK.hair,
+    hairLength: HAIR_LENGTHS.some((h) => h.id === row.hairLength)
+      ? (row.hairLength as HairLength)
+      : DEFAULT_LOOK.hairLength,
+  };
+}
+
+export function readStoredLook(): BodyLook {
+  if (typeof window === "undefined") return DEFAULT_LOOK;
+  try {
+    return parseLook(JSON.parse(window.localStorage.getItem(LOOK_KEY) || "null"));
+  } catch {
+    return DEFAULT_LOOK;
+  }
+}
+
+export function lookLine(look: BodyLook): string {
+  const skin = skinOfId(look.skin);
+  const hair = hairOfId(look.hair);
+  const length = lengthOf(look.hairLength);
+  const build = BUILD_CHIPS.find((b) => b.id === look.build) || BUILD_CHIPS[1];
+  return `${look.heightCm} cm, ${look.weightKg} kg, ${build.prompt}, ${skin.prompt}, ${length.prompt}, ${hair.prompt}`;
+}
+
 type Figure = {
   shoulder: number;
   chest: number;
@@ -62,15 +170,34 @@ export function figureOf(kind: BodyKind, build: BodyBuild): Figure {
   return fig;
 }
 
-export function adaptBasePrompt(name: string, base: StudioBase): string {
+export function figureFor(base: StudioBase, look: BodyLook = DEFAULT_LOOK): Figure {
+  const fig = figureOf(base.kind, look.build || base.build);
+  const height = clampHeight(look.heightCm);
+  const weight = clampWeight(look.weightKg);
+  const tall = height / 170;
+  const bmi = weight / ((height / 100) * (height / 100));
+  const mass = Math.min(1.42, Math.max(0.74, bmi / 22));
+  return {
+    shoulder: fig.shoulder * (0.94 + mass * 0.08),
+    chest: fig.chest * mass,
+    waist: fig.waist * mass,
+    hip: fig.hip * mass,
+    arm: fig.arm * mass,
+    thigh: fig.thigh * mass,
+    calf: fig.calf * mass,
+    inseam: fig.inseam * tall,
+  };
+}
+
+export function adaptBasePrompt(name: string, base: StudioBase, look: BodyLook = DEFAULT_LOOK): string {
   const who = name.trim() || "the same adult person";
   const sex =
     base.kind === "woman" ? "adult woman" : base.kind === "man" ? "adult man" : "adult person";
-  return `photorealistic ${sex} ${who} matching this realistic mannequin base, keep the same body volume, proportions, limb length and A-pose joints, same identity as the face references, studio lighting, sharp focus, single person, no extra limbs`;
+  return `photorealistic ${sex} ${who}, ${lookLine(look)}, matching this realistic mannequin base, keep the same body volume, proportions, limb length and A-pose joints, same identity as the face references, studio lighting, sharp focus, single person, no extra limbs`;
 }
 
-export function mergeBase(user: string, name: string, base: StudioBase): string {
-  const line = adaptBasePrompt(name, base);
+export function mergeBase(user: string, name: string, base: StudioBase, look: BodyLook = DEFAULT_LOOK): string {
+  const line = adaptBasePrompt(name, base, look);
   const text = user.trim();
   if (!text) return line;
   if (text.includes("matching this realistic mannequin base")) return text;
@@ -103,10 +230,17 @@ function joint(x: number, y: number, fill: string): string {
   return `<circle cx="${n(x)}" cy="${n(y)}" r="3.2" fill="${fill}" opacity="0.32" />`;
 }
 
-function skinOf(kind: BodyKind): { mid: string; light: string; deep: string; joint: string } {
-  if (kind === "woman") return { mid: "#e2b89a", light: "#f0d0b6", deep: "#b07a5c", joint: "#8a5c44" };
-  if (kind === "man") return { mid: "#c9a07c", light: "#ddb894", deep: "#8d6548", joint: "#6a4a34" };
-  return { mid: "#d2b48c", light: "#e4cba8", deep: "#9a7458", joint: "#74563c" };
+function hairLayer(look: BodyLook, cx: number, headY: number): string {
+  if (look.hairLength === "bald") return "";
+  const fill = hairOfId(look.hair).hex;
+  const top = `<ellipse class="ac-hair" cx="${cx}" cy="${n(headY - 24)}" rx="38" ry="24" fill="${fill}" />`;
+  if (look.hairLength === "short") {
+    return `${top}<path class="ac-hair" fill="${fill}" d="M ${n(cx - 38)} ${n(headY - 10)} Q ${n(cx - 44)} ${n(headY + 16)} ${n(cx - 22)} ${n(headY + 10)} L ${n(cx - 18)} ${n(headY - 8)} Z" /><path class="ac-hair" fill="${fill}" d="M ${n(cx + 38)} ${n(headY - 10)} Q ${n(cx + 44)} ${n(headY + 16)} ${n(cx + 22)} ${n(headY + 10)} L ${n(cx + 18)} ${n(headY - 8)} Z" />`;
+  }
+  if (look.hairLength === "medium") {
+    return `${top}<path class="ac-hair" fill="${fill}" d="M ${n(cx - 40)} ${n(headY - 8)} Q ${n(cx - 52)} ${n(headY + 36)} ${n(cx - 28)} ${n(headY + 52)} Q ${n(cx - 18)} ${n(headY + 20)} ${n(cx - 16)} ${n(headY - 4)} Z" /><path class="ac-hair" fill="${fill}" d="M ${n(cx + 40)} ${n(headY - 8)} Q ${n(cx + 52)} ${n(headY + 36)} ${n(cx + 28)} ${n(headY + 52)} Q ${n(cx + 18)} ${n(headY + 20)} ${n(cx + 16)} ${n(headY - 4)} Z" />`;
+  }
+  return `${top}<path class="ac-hair" fill="${fill}" d="M ${n(cx - 40)} ${n(headY - 6)} Q ${n(cx - 58)} ${n(headY + 70)} ${n(cx - 34)} ${n(headY + 128)} Q ${n(cx - 16)} ${n(headY + 40)} ${n(cx - 14)} ${n(headY - 2)} Z" /><path class="ac-hair" fill="${fill}" d="M ${n(cx + 40)} ${n(headY - 6)} Q ${n(cx + 58)} ${n(headY + 70)} ${n(cx + 34)} ${n(headY + 128)} Q ${n(cx + 16)} ${n(headY + 40)} ${n(cx + 14)} ${n(headY - 2)} Z" /><path class="ac-hair" fill="${fill}" d="M ${n(cx - 20)} ${n(headY + 20)} Q ${n(cx)} ${n(headY + 150)} ${n(cx + 20)} ${n(headY + 20)} Z" />`;
 }
 
 function torsoPath(
@@ -141,15 +275,16 @@ function torsoPath(
 }
 
 /** Adult store mannequin with body volume. SVG so tests and the UI share one drawing. */
-export function mannequinSvg(base: StudioBase): string {
-  const fig = figureOf(base.kind, base.build);
-  const skin = skinOf(base.kind);
-  const gid = `skin-${base.id}`;
+export function mannequinSvg(base: StudioBase, look: BodyLook = DEFAULT_LOOK): string {
+  const fig = figureFor(base, look);
+  const skin = skinOfId(look.skin);
+  const gid = `skin-${base.id}-${look.skin}`;
+  const tall = clampHeight(look.heightCm) / 170;
   const cx = 256;
   const headY = 86;
   const neckY = 136;
   const shoulderY = 172;
-  const hipY = 398;
+  const hipY = 398 + (tall - 1) * 36;
   const kneeY = hipY + fig.inseam * 0.48;
   const ankleY = hipY + fig.inseam;
   const lShoulderX = cx - fig.shoulder / 2;
@@ -195,6 +330,7 @@ export function mannequinSvg(base: StudioBase): string {
     `<ellipse cx="${n(cx - 14)}" cy="${n(headY - 2)}" rx="7" ry="4" fill="${skin.deep}" opacity="0.28" />`,
     `<ellipse cx="${n(cx + 14)}" cy="${n(headY - 2)}" rx="7" ry="4" fill="${skin.deep}" opacity="0.28" />`,
     `<ellipse cx="${cx}" cy="${n(headY + 14)}" rx="5" ry="8" fill="${skin.deep}" opacity="0.18" />`,
+    hairLayer(look, cx, headY),
     capsule(lShoulderX, shoulderY + 10, lElbowX, elbowY, fig.arm + 4, fig.arm, `url(#${gid})`),
     capsule(rShoulderX, shoulderY + 10, rElbowX, elbowY, fig.arm + 4, fig.arm, `url(#${gid})`),
     capsule(lElbowX, elbowY, lWristX, wristY, fig.arm * 0.92, fig.arm * 0.7, `url(#${gid})`),
@@ -235,8 +371,8 @@ function escapeXml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function mannequinDataUrl(base: StudioBase): string {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(mannequinSvg(base))}`;
+export function mannequinDataUrl(base: StudioBase, look: BodyLook = DEFAULT_LOOK): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(mannequinSvg(base, look))}`;
 }
 
 export function isAdultBase(base: StudioBase): boolean {

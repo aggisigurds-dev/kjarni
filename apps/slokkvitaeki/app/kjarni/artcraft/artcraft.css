@@ -1245,6 +1245,56 @@
   text-align: center;
 }
 
+.ac-look {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.ac-look .ac-range {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.ac-look-label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ac-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ac-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ac-swatch.on {
+  box-shadow: 0 0 0 2px var(--rg-gold-fill, #c9982f);
+  border-color: #fff;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .ac-version-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
