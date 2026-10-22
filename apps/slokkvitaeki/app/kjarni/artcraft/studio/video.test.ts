@@ -12,7 +12,11 @@ import {
   normalizeVideo,
   pingPong,
   saveCustomAction,
+  resolveClipSeed,
   videoDenoising,
+  videoFrameInit,
+  videoFrameSeed,
+  VIDEO_DENOISING_MAX,
 } from "./video.ts";
 
 test("built-in actions cover dance, poses, stand and spin", () => {
@@ -73,8 +77,15 @@ test("loopFrames ping-pongs subtle moves and keeps dance forward", () => {
 test("videoDenoising stays in a keep-identity band", () => {
   assert.ok(videoDenoising(1) >= 0.1);
   assert.ok(videoDenoising(1) < videoDenoising(10));
-  assert.ok(videoDenoising(10) <= 0.4);
+  assert.ok(videoDenoising(10) <= VIDEO_DENOISING_MAX);
   assert.equal(videoDenoising(99), videoDenoising(10));
+});
+
+test("clip seed is locked and frames start from the original still", () => {
+  assert.equal(resolveClipSeed(42), 42);
+  assert.ok(resolveClipSeed(-1, () => 0.5) >= 0);
+  assert.equal(videoFrameSeed(100, 3), 103);
+  assert.equal(videoFrameInit("orig", "other-woman"), "orig");
 });
 
 test("clip length and clamps", () => {

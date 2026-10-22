@@ -129,7 +129,10 @@ import {
   readStoredVideo,
   saveCustomAction,
   VIDEO_KEY,
+  resolveClipSeed,
   videoDenoising,
+  videoFrameInit,
+  videoFrameSeed,
   type ActionCommand,
   type VideoSettings,
 } from "./video";
@@ -737,24 +740,23 @@ export default function StudioClient() {
     try {
       const { faceRefs } = await identityBundle(start);
       const frames = [start];
-      let prev = start;
+      const clipSeed = resolveClipSeed(settings.seed);
       const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
       for (let i = 1; i < clip.frames; i++) {
         setClipText(`Rami ${i + 1}/${clip.frames}`);
         const out = await generateLocal(webui, {
           prompt: text,
           negativePrompt: mergeIdentityNegative(negative),
-          initImage: prev,
+          initImage: videoFrameInit(start),
           restoreFaces: true,
           faceRefs,
           faceAdapter,
           ...extraControls(),
           ...settings,
           denoisingStrength: denoise,
-          seed: settings.seed === -1 ? -1 : settings.seed + i,
+          seed: videoFrameSeed(clipSeed, i),
         });
         frames.push(out[0]);
-        prev = out[0];
       }
       setClipText("Sauma WebM…");
       const blob = await stitchWebm(loopFrames(frames, clip.kind, customActions), clip.fps);
@@ -841,9 +843,10 @@ export default function StudioClient() {
     try {
       const { faceRefs } = await identityBundle(start);
       const all: string[] = [];
-      let prev = start;
       let step = 0;
       const total = per * queue.length;
+      const clipSeed = resolveClipSeed(settings.seed);
+      const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
       for (const kind of queue) {
         const text = mergeIdentity(
           mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", kind, customActions), looks), lights),
@@ -851,24 +854,22 @@ export default function StudioClient() {
           true,
         );
         assertAdultPrompt(text, negative);
-        const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
         for (let i = 0; i < per; i++) {
           step += 1;
           setClipText(`Röð ${step}/${total}`);
           const imgs = await generateLocal(webui, {
             prompt: text,
             negativePrompt: mergeIdentityNegative(negative),
-            initImage: prev,
+            initImage: videoFrameInit(start),
             restoreFaces: true,
             faceRefs,
             faceAdapter,
             ...extraControls(),
             ...settings,
             denoisingStrength: denoise,
-            seed: settings.seed === -1 ? -1 : settings.seed + step,
+            seed: videoFrameSeed(clipSeed, step),
           });
           all.push(imgs[0]);
-          prev = imgs[0];
         }
       }
       setClipText("Sauma röð…");
@@ -968,24 +969,23 @@ export default function StudioClient() {
     try {
       const { faceRefs } = await identityBundle(start);
       const frames = [start];
-      let prev = start;
-      const denoise = clampIdentityDenoising(videoDenoising(Math.max(clip.motion, 6)), true);
+      const clipSeed = resolveClipSeed(settings.seed);
+      const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
       for (let i = 0; i < motionFrames.length; i++) {
         setClipText(`Hreyfing ${i + 1}/${motionFrames.length}`);
         const out = await generateLocal(webui, {
           prompt: text,
           negativePrompt: mergeIdentityNegative(negative),
-          initImage: prev,
+          initImage: videoFrameInit(start),
           restoreFaces: true,
           faceRefs,
           faceAdapter,
           ...extraControls({ poseRef: motionFrames[i] }),
           ...settings,
           denoisingStrength: denoise,
-          seed: settings.seed === -1 ? -1 : settings.seed + i + 1,
+          seed: videoFrameSeed(clipSeed, i + 1),
         });
         frames.push(out[0]);
-        prev = out[0];
       }
       setClipText("Sauma hreyfingu…");
       const blob = await stitchWebm(frames, clip.fps);

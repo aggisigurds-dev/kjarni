@@ -11,7 +11,7 @@ export const STUDIO_MODES = [
   {
     id: "video",
     label: "Videó",
-    hint: "Hreyfimynd og athafnir út frá síðustu mynd.",
+    hint: "Hreyfimynd og athafnir út frá sömu ljósmynd — ekki nýtt andlit í hverjum ramma.",
   },
   {
     id: "person",

@@ -53,8 +53,8 @@ export default function VideoPanel({
     <section className="ac-panel ac-video">
       <h2>Hreyfimynd</h2>
       <p className="ac-hint">
-        Veldu athöfn — dansa, pósur, standa upp, snúa í hring — eða vistaðu nýja skipun úr
-        promptinu. Prófíllinn heldur andlitinu. Útkoma er WebM.
+        Veldu athöfn — öndun, höfuð, dansa. Hver rammi byrjar á sömu ljósmynd, ekki á
+        síðustu útkomu, svo andlitið leki ekki yfir í aðra konu. Útkoma er WebM.
       </p>
       <div className="ac-row ac-chips">
         {actions.map((action) => (
