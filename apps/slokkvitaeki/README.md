@@ -35,6 +35,8 @@ stýra mannikin og aðlögun. Eigin grunnur má vera skjámynd
 af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir eða stutt
 videóbrot yfir andlit, bol, hendur og fætur — part fyrir part — baka saumana
 eða hreyfa aðeins þann part.
+3D photoreal möskvi verður ekki til úr ljósmyndum hér; hægt er að setja
+inn GLB/GLTF (Meshy, Tripo, Ready Player Me) og taka still eða hringvideó.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

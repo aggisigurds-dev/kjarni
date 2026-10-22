@@ -1245,6 +1245,19 @@
   text-align: center;
 }
 
+.ac-mesh {
+  margin: 16px 0 0;
+}
+
+.ac-mesh-canvas {
+  display: block;
+  width: min(360px, 100%);
+  height: 480px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  background: #141414;
+}
+
 .ac-look {
   display: grid;
   gap: 10px;

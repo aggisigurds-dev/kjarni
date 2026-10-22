@@ -36,7 +36,9 @@ import {
 import { faceSheet } from "./profileImage";
 import AvatarTurn from "./AvatarTurn";
 import BasesPanel from "./BasesPanel";
+import MeshPanel from "./MeshPanel";
 import PartsPanel from "./PartsPanel";
+import { spinYaws } from "./mesh";
 import {
   IMPRINT_DENOISING,
   bodyPart,
@@ -624,6 +626,33 @@ export default function StudioClient() {
     }
   }
 
+  async function spinMesh(capture: (deg: number) => Promise<string>) {
+    setError("");
+    setBusy(true);
+    try {
+      const yaws = spinYaws();
+      const frames: string[] = [];
+      for (let i = 0; i < yaws.length; i++) {
+        setClipText(`3D ${i + 1}/${yaws.length}`);
+        frames.push(await capture(yaws[i]));
+      }
+      setClipText("Sauma 3D-snúning…");
+      const blob = await stitchWebm(frames, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(frames);
+      if (frames[0]) adoptStill(frames[0], "mesh-spin.png");
+      setClipText(`${frames.length} rammar · 3D snúningur`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki snúið möskvanum");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function bakeAllParts() {
     for (const id of Object.keys(partStamps)) {
       if (partStamps[id]) await bakePart(id);
@@ -1191,6 +1220,11 @@ export default function StudioClient() {
                   onAdapt={() => void makeAvatar()}
                   busy={busy || analyzing}
                   canAdapt={canBuildAvatar(profile)}
+                />
+                <MeshPanel
+                  busy={busy}
+                  onStill={(src) => adoptStill(src, "mesh.png")}
+                  onSpin={(capture) => void spinMesh(capture)}
                 />
                 <PartsPanel
                   still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId), bodyLook)}
