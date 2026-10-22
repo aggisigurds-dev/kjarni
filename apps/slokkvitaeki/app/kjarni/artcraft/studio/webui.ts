@@ -45,6 +45,12 @@ export const DEFAULT_SETTINGS: StudioSettings = {
 
 export type FaceAdapter = { model: string; module: string };
 
+export type StudioAdapters = {
+  face: FaceAdapter | null;
+  pose: FaceAdapter | null;
+  style: FaceAdapter | null;
+};
+
 export type Txt2ImgInput = {
   prompt: string;
   negativePrompt?: string;
@@ -58,6 +64,10 @@ export type Txt2ImgInput = {
   restoreFaces?: boolean;
   faceRefs?: string[];
   faceAdapter?: FaceAdapter | null;
+  poseRef?: string;
+  styleRef?: string;
+  poseAdapter?: FaceAdapter | null;
+  styleAdapter?: FaceAdapter | null;
 };
 
 export type Img2ImgInput = Txt2ImgInput & {
@@ -144,7 +154,8 @@ export function denoisingHint(value: number): string {
   return "Ný mynd — andlit og stelling geta tapast";
 }
 
-import { identityScripts, pickFaceModel, pickFaceModule } from "./profile.ts";
+import { pickFaceModel, pickFaceModule } from "./profile.ts";
+import { pickPoseModel, pickPoseModule, pickStyleModel, pickStyleModule, studioScripts } from "./refs.ts";
 
 /** Strip a data URL prefix so the WebUI API gets raw base64. */
 export function toApiImage(src: string): string {
@@ -228,33 +239,50 @@ function mapImages(data: { images?: string[] }): string[] {
 }
 
 function withIdentity(input: Txt2ImgInput, body: Record<string, unknown>): Record<string, unknown> {
-  const refs = input.faceRefs || [];
-  if (!input.restoreFaces && refs.length === 0) return body;
-  return {
-    ...body,
-    ...identityScripts(refs, toApiImage, input.faceAdapter || null),
-    restore_faces: input.restoreFaces !== false && (input.restoreFaces || refs.length > 0),
-  };
+  const extras = studioScripts({
+    faceRefs: input.faceRefs,
+    faceAdapter: input.faceAdapter || null,
+    poseRef: input.poseRef,
+    poseAdapter: input.poseAdapter || null,
+    styleRef: input.styleRef,
+    styleAdapter: input.styleAdapter || null,
+    restoreFaces: input.restoreFaces,
+    toApi: toApiImage,
+  });
+  if (Object.keys(extras).length === 0) return body;
+  return { ...body, ...extras };
 }
 
-export async function findFaceAdapter(base: string): Promise<FaceAdapter | null> {
+export async function findStudioAdapters(base: string): Promise<StudioAdapters> {
+  const empty: StudioAdapters = { face: null, pose: null, style: null };
   try {
     const [modelsRes, modulesRes] = await Promise.all([
       webuiFetch(base, "/controlnet/model_list"),
       webuiFetch(base, "/controlnet/module_list"),
     ]);
-    if (!modelsRes.ok) return null;
+    if (!modelsRes.ok) return empty;
     const modelsJson = (await modelsRes.json()) as { model_list?: string[] };
-    const modulesJson = modulesRes.ok ? ((await modulesRes.json()) as { module_list?: string[] | Record<string, unknown> }) : {};
+    const modulesJson = modulesRes.ok
+      ? ((await modulesRes.json()) as { module_list?: string[] | Record<string, unknown> })
+      : {};
     const models = modelsJson.model_list || [];
     const raw = modulesJson.module_list;
     const modules = Array.isArray(raw) ? raw : raw ? Object.keys(raw) : [];
-    const model = pickFaceModel(models);
-    if (!model) return null;
-    return { model, module: pickFaceModule(modules) };
+    const faceModel = pickFaceModel(models);
+    const poseModel = pickPoseModel(models);
+    const styleModel = pickStyleModel(models);
+    return {
+      face: faceModel ? { model: faceModel, module: pickFaceModule(modules) } : null,
+      pose: poseModel ? { model: poseModel, module: pickPoseModule(modules) } : null,
+      style: styleModel ? { model: styleModel, module: pickStyleModule(modules) } : null,
+    };
   } catch {
-    return null;
+    return empty;
   }
+}
+
+export async function findFaceAdapter(base: string): Promise<FaceAdapter | null> {
+  return (await findStudioAdapters(base)).face;
 }
 
 export async function txt2img(base: string, input: Txt2ImgInput): Promise<string[]> {

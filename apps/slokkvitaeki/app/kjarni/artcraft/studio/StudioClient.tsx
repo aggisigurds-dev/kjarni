@@ -33,6 +33,7 @@ import {
   type PersonProfile,
 } from "./profile";
 import { faceSheet } from "./profileImage";
+import AvatarTurn from "./AvatarTurn";
 import LooksPanel from "./LooksPanel";
 import {
   LOOKBOOK_DENOISING,
@@ -41,6 +42,19 @@ import {
   mergeLooks,
   sequenceFrames,
 } from "./looks";
+import RefsPanel from "./RefsPanel";
+import {
+  FIX_DENOISING,
+  POSE_DENOISING,
+  STYLE_DENOISING,
+  fixPrompt,
+  mergePose,
+  mergeStyle,
+  motionRecreatePrompt,
+  nearestOrbitView,
+  type StyleKind,
+} from "./refs";
+import { extractVideoFrames } from "./refsImage";
 import VideoPanel from "./VideoPanel";
 import {
   commandFromPrompt,
@@ -66,7 +80,7 @@ import {
   WEBUI_URL_KEY,
   canEmbedLocalWebui,
   denoisingHint,
-  findFaceAdapter,
+  findStudioAdapters,
   generateLocal,
   pingWebui,
   readStoredSettings,
@@ -122,6 +136,14 @@ export default function StudioClient() {
   const [profile, setProfile] = useState<PersonProfile | null>(null);
   const [useProfile, setUseProfile] = useState(true);
   const [faceAdapter, setFaceAdapter] = useState<FaceAdapter | null>(null);
+  const [poseAdapter, setPoseAdapter] = useState<FaceAdapter | null>(null);
+  const [styleAdapter, setStyleAdapter] = useState<FaceAdapter | null>(null);
+  const [poseRef, setPoseRef] = useState("");
+  const [styleRef, setStyleRef] = useState("");
+  const [styleKind, setStyleKind] = useState<StyleKind>("clothes");
+  const [motionFrames, setMotionFrames] = useState<string[]>([]);
+  const [motionName, setMotionName] = useState("");
+  const [yaw, setYaw] = useState(0);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -218,8 +240,10 @@ export default function StudioClient() {
     if (result.ok) {
       setStatus("up");
       setModels(result.models);
-      const adapter = await findFaceAdapter(url);
-      setFaceAdapter(adapter);
+      const adapters = await findStudioAdapters(url);
+      setFaceAdapter(adapters.face);
+      setPoseAdapter(adapters.pose);
+      setStyleAdapter(adapters.style);
       setStatusText(
         result.models.length > 0
           ? `Tengt · ${result.models.length} líkön`
@@ -230,6 +254,8 @@ export default function StudioClient() {
       setStatus("down");
       setModels([]);
       setFaceAdapter(null);
+      setPoseAdapter(null);
+      setStyleAdapter(null);
       setStatusText(result.error);
     }
   }
@@ -255,6 +281,15 @@ export default function StudioClient() {
     e.preventDefault();
     setDrag(false);
     void takeFile(e.dataTransfer.files[0]);
+  }
+
+  function extraControls(override?: { poseRef?: string }) {
+    return {
+      poseRef: override?.poseRef || poseRef || undefined,
+      styleRef: styleRef || undefined,
+      poseAdapter,
+      styleAdapter,
+    };
   }
 
   async function runGenerate(opts?: { prompt?: string; mask?: string | null; denoisingStrength?: number }) {
@@ -287,6 +322,7 @@ export default function StudioClient() {
         restoreFaces: useId,
         faceRefs,
         faceAdapter: useId ? faceAdapter : null,
+        ...extraControls(),
         ...settings,
         denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
       });
@@ -432,6 +468,7 @@ export default function StudioClient() {
           restoreFaces: useId,
           faceRefs,
           faceAdapter: useId ? faceAdapter : null,
+          ...extraControls(),
           ...settings,
           denoisingStrength: denoise,
           seed: settings.seed === -1 ? -1 : settings.seed + i,
@@ -489,6 +526,7 @@ export default function StudioClient() {
           restoreFaces: useId,
           faceRefs,
           faceAdapter: useId ? faceAdapter : null,
+          ...extraControls(),
           ...settings,
           denoisingStrength: LOOKBOOK_DENOISING,
         });
@@ -544,6 +582,7 @@ export default function StudioClient() {
             restoreFaces: useId,
             faceRefs,
             faceAdapter: useId ? faceAdapter : null,
+            ...extraControls(),
             ...settings,
             denoisingStrength: denoise,
             seed: settings.seed === -1 ? -1 : settings.seed + step,
@@ -577,6 +616,130 @@ export default function StudioClient() {
     if (sheet) setSheetUrl(sheet);
   }
 
+  async function takeMotion(file: File) {
+    setError("");
+    try {
+      const frames = await extractVideoFrames(file);
+      setMotionFrames(frames);
+      setMotionName(`${file.name} · ${frames.length} rammar`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lesið videóið");
+    }
+  }
+
+  async function matchPose() {
+    if (!poseRef) {
+      setError("Veldu pósuviðmið fyrst.");
+      return;
+    }
+    const text = mergePose(prompt, profile?.name || "");
+    setPrompt(text);
+    patchSettings({ denoisingStrength: POSE_DENOISING });
+    await runGenerate({ prompt: text, mask: null, denoisingStrength: POSE_DENOISING });
+  }
+
+  async function applyStyle() {
+    if (!styleRef) {
+      setError("Veldu skjámynd af fötum eða skarti fyrst.");
+      return;
+    }
+    const text = mergeStyle(prompt, styleKind);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: STYLE_DENOISING });
+    await runGenerate({ prompt: text, mask: null, denoisingStrength: STYLE_DENOISING });
+  }
+
+  async function recreateMotion() {
+    const start = working || source || images[0] || "";
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst.");
+      return;
+    }
+    if (motionFrames.length === 0) {
+      setError("Veldu stutt videó fyrst.");
+      return;
+    }
+    const text = mergeIdentity(
+      mergePrompt(mergeLooks(motionRecreatePrompt(profile?.name || ""), looks), lights),
+      profile?.name || "",
+      Boolean(useProfile && hasIdentity(profile)),
+    );
+    try {
+      assertAdultPrompt(text, negative);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const frames = [start];
+      let prev = start;
+      const denoise = videoDenoising(Math.max(clip.motion, 6));
+      for (let i = 0; i < motionFrames.length; i++) {
+        setClipText(`Hreyfing ${i + 1}/${motionFrames.length}`);
+        const out = await generateLocal(webui, {
+          prompt: text,
+          negativePrompt: negative.trim(),
+          initImage: prev,
+          restoreFaces: useId,
+          faceRefs,
+          faceAdapter: useId ? faceAdapter : null,
+          ...extraControls({ poseRef: motionFrames[i] }),
+          ...settings,
+          denoisingStrength: denoise,
+          seed: settings.seed === -1 ? -1 : settings.seed + i + 1,
+        });
+        frames.push(out[0]);
+        prev = out[0];
+      }
+      setClipText("Sauma hreyfingu…");
+      const blob = await stitchWebm(frames, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(frames);
+      setClipText(`${frames.length} rammar · hreyfistykki`);
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(raw || "Gat ekki endurgert hreyfingu.");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openOrbitView() {
+    const view = nearestOrbitView(profile, yaw);
+    if (!view) {
+      setError("Settu inn hringmyndir í prófílinn fyrst.");
+      return;
+    }
+    setSource(view.src);
+    setSourceName(`sjónarhorn-${view.label}.png`);
+    setWorking("");
+    setMask(null);
+    setRegions([]);
+    setSelectedRegion(null);
+    setPresetMask(null);
+    setError("");
+  }
+
+  async function fixPainted() {
+    if (!mask) {
+      setError("Málaðu gallann rauðan fyrst.");
+      return;
+    }
+    const text = fixPrompt(prompt);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: FIX_DENOISING });
+    await runGenerate({ prompt: text, mask, denoisingStrength: FIX_DENOISING });
+  }
+
   function download(src: string, index: number) {
     const a = document.createElement("a");
     a.href = src;
@@ -596,6 +759,8 @@ export default function StudioClient() {
 
   const editing = Boolean(source);
   const preset = sizePresetId(settings.width, settings.height);
+  const orbitView = nearestOrbitView(profile, yaw);
+  const hasStill = Boolean(working || source || images[0]);
 
   return (
     <StationChrome tool="artcraft">
@@ -693,6 +858,15 @@ export default function StudioClient() {
                   }
                   onAvatar={() => void makeAvatar()}
                   avatarBusy={busy || analyzing}
+                />
+                <AvatarTurn
+                  yaw={yaw}
+                  onYaw={setYaw}
+                  view={orbitView}
+                  onOpen={openOrbitView}
+                  onFix={() => void fixPainted()}
+                  busy={busy}
+                  hasMask={Boolean(mask)}
                 />
               </section>
 
@@ -860,7 +1034,44 @@ export default function StudioClient() {
                   onChange={setLooks}
                   onLookbook={() => void makeLookbook()}
                   busy={busy}
-                  hasStill={Boolean(working || source || images[0])}
+                  hasStill={hasStill}
+                />
+
+                <RefsPanel
+                  poseRef={poseRef}
+                  styleRef={styleRef}
+                  styleKind={styleKind}
+                  motionFrames={motionFrames}
+                  motionName={motionName}
+                  onPose={setPoseRef}
+                  onStyle={setStyleRef}
+                  onStyleKind={setStyleKind}
+                  onMotionFile={(file) => void takeMotion(file)}
+                  onClearPose={() => setPoseRef("")}
+                  onClearStyle={() => setStyleRef("")}
+                  onClearMotion={() => {
+                    setMotionFrames([]);
+                    setMotionName("");
+                  }}
+                  onMatchPose={() => void matchPose()}
+                  onApplyStyle={() => void applyStyle()}
+                  onRecreateMotion={() => void recreateMotion()}
+                  busy={busy}
+                  hasStill={hasStill}
+                  poseHint={
+                    poseAdapter
+                      ? `OpenPose: ${poseAdapter.model}`
+                      : status === "up"
+                        ? "Engin OpenPose á vélinni — prófum með prompti"
+                        : "Prófaðu tengingu til að sjá hvort OpenPose er til"
+                  }
+                  styleHint={
+                    styleAdapter
+                      ? `Útlitsadapter: ${styleAdapter.model}`
+                      : status === "up"
+                        ? "Ekkert IP-Adapter (án andlits) — prófum með prompti"
+                        : "Prófaðu tengingu til að sjá hvort útlitsadapter er til"
+                  }
                 />
 
                 <label>
@@ -1029,7 +1240,7 @@ export default function StudioClient() {
                 busy={busy}
                 progress={clipText}
                 videoUrl={videoUrl}
-                hasStill={Boolean(working || source || images[0])}
+                hasStill={hasStill}
                 prompt={prompt}
                 custom={customActions}
                 onSaveAction={(label) => {

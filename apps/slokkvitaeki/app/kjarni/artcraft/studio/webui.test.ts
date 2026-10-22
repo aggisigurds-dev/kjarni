@@ -7,6 +7,7 @@ import {
   DEFAULT_WEBUI_URL,
   denoisingHint,
   findFaceAdapter,
+  findStudioAdapters,
   generateLocal,
   img2img,
   normalizeSettings,
@@ -213,24 +214,59 @@ test("txt2img without a profile keeps the payload clean", async () => {
   }
 });
 
-test("findFaceAdapter picks a plus-face ControlNet model", async () => {
+test("findStudioAdapters splits face, pose and style models", async () => {
   const prev = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith("/controlnet/model_list")) {
-      return new Response(JSON.stringify({ model_list: ["control_v11p_sd15_openpose", "ip-adapter-plus-face_sd15"] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          model_list: ["control_v11p_sd15_openpose", "ip-adapter-plus-face_sd15", "ip-adapter_sd15"],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
     }
-    return new Response(JSON.stringify({ module_list: ["canny", "ip-adapter-auto"] }), {
+    return new Response(JSON.stringify({ module_list: ["canny", "openpose", "ip-adapter-auto"] }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   }) as typeof fetch;
   try {
-    const adapter = await findFaceAdapter("http://127.0.0.1:7860");
-    assert.deepEqual(adapter, { model: "ip-adapter-plus-face_sd15", module: "ip-adapter-auto" });
+    const adapters = await findStudioAdapters("http://127.0.0.1:7860");
+    assert.equal(adapters.face?.model, "ip-adapter-plus-face_sd15");
+    assert.match(adapters.pose?.model || "", /openpose/);
+    assert.equal(adapters.style?.model, "ip-adapter_sd15");
+    assert.deepEqual(await findFaceAdapter("http://127.0.0.1:7860"), adapters.face);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test("txt2img sends pose and style ControlNet units ahead of face refs", async () => {
+  const prev = globalThis.fetch;
+  let sent: Record<string, unknown> = {};
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ images: ["aaa"] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    await txt2img("http://127.0.0.1:7860", {
+      prompt: "adult woman",
+      restoreFaces: true,
+      faceRefs: ["data:image/png;base64,FACE"],
+      faceAdapter: { model: "ip-adapter-plus-face_sd15", module: "ip-adapter-auto" },
+      poseRef: "data:image/png;base64,POSE",
+      poseAdapter: { model: "control_v11p_sd15_openpose", module: "openpose" },
+      styleRef: "data:image/png;base64,STYLE",
+      styleAdapter: { model: "ip-adapter_sd15", module: "ip-adapter" },
+    });
+    const args = (sent.alwayson_scripts as { controlnet: { args: Array<{ image: string }> } }).controlnet.args;
+    assert.equal(args[0].image, "POSE");
+    assert.equal(args[1].image, "STYLE");
+    assert.equal(args[2].image, "FACE");
   } finally {
     globalThis.fetch = prev;
   }

@@ -1106,3 +1106,62 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+.ac-refs,
+.ac-turn {
+  margin: 0 0 16px;
+}
+
+.ac-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ac-ref-slot,
+.ac-turn-view {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.ac-ref-slot img,
+.ac-turn-view img {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.ac-ref-strip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+.ac-ref-strip img {
+  width: 56px;
+  height: 72px;
+  max-height: 72px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.ac-turn-view {
+  margin: 0 0 12px;
+}
+
+.ac-turn-view figcaption {
+  margin-top: 6px;
+}
+
+@media (max-width: 860px) {
+  .ac-ref-grid {
+    grid-template-columns: 1fr;
+  }
+}
