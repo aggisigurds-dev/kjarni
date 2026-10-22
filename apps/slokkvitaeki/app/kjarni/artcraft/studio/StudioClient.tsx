@@ -36,6 +36,9 @@ import {
 import { faceSheet } from "./profileImage";
 import AvatarTurn from "./AvatarTurn";
 import BasesPanel from "./BasesPanel";
+import PartsPanel from "./PartsPanel";
+import { IMPRINT_DENOISING, bodyPart, imprintPrompt, type BodyPart } from "./parts";
+import { imprintOnto, partMask } from "./partsImage";
 import {
   BASE_DENOISING,
   adaptBasePrompt,
@@ -177,6 +180,7 @@ export default function StudioClient() {
   const [versionPresetId, setVersionPresetId] = useState("summer");
   const [baseId, setBaseId] = useState("w-avg");
   const [customBase, setCustomBase] = useState("");
+  const [partStamps, setPartStamps] = useState<Partial<Record<string, string>>>({});
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -324,10 +328,10 @@ export default function StudioClient() {
     void takeFile(e.dataTransfer.files[0]);
   }
 
-  function extraControls(override?: { poseRef?: string }) {
+  function extraControls(override?: { poseRef?: string; styleRef?: string }) {
     return {
       poseRef: override?.poseRef || poseRef || undefined,
-      styleRef: styleRef || undefined,
+      styleRef: override?.styleRef || styleRef || undefined,
       poseAdapter,
       styleAdapter,
     };
@@ -350,6 +354,7 @@ export default function StudioClient() {
     denoisingStrength?: number;
     initImage?: string;
     poseRef?: string;
+    styleRef?: string;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
     const init = opts?.initImage || working || source || undefined;
@@ -381,7 +386,7 @@ export default function StudioClient() {
         restoreFaces: useId,
         faceRefs,
         faceAdapter: useId ? faceAdapter : null,
-        ...extraControls(opts?.poseRef ? { poseRef: opts.poseRef } : undefined),
+        ...extraControls({ poseRef: opts?.poseRef, styleRef: opts?.styleRef }),
         ...settings,
         denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
       });
@@ -509,6 +514,49 @@ export default function StudioClient() {
     if (out[0]) {
       setTurnViews({ front: out[0] });
       adoptStill(out[0], "avatar.png");
+    }
+  }
+
+  async function stampPart(part: BodyPart, image: string) {
+    setError("");
+    try {
+      let start = studioStill(working, images, source);
+      if (!start) start = await rasterizeBase(selectedBaseImage());
+      const next = await imprintOnto(start, image, part);
+      setPartStamps((cur) => ({ ...cur, [part.id]: image }));
+      adoptStill(next, `part-${part.id}.png`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki málað partinn");
+    }
+  }
+
+  async function bakePart(partId: string) {
+    const part = bodyPart(partId);
+    const stamp = partStamps[partId];
+    const start = studioStill(working, images, source);
+    if (!part || !stamp || !start) {
+      setError("Málaðu partinn fyrst.");
+      return;
+    }
+    const text = imprintPrompt(part, profile?.name || "");
+    const maskUrl = await partMask(start, part);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: IMPRINT_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask: maskUrl,
+      initImage: start,
+      denoisingStrength: IMPRINT_DENOISING,
+      styleRef: stamp,
+    });
+    if (out[0]) {
+      adoptStill(out[0], `baka-${part.id}.png`);
+    }
+  }
+
+  async function bakeAllParts() {
+    for (const id of Object.keys(partStamps)) {
+      if (partStamps[id]) await bakePart(id);
     }
   }
 
@@ -1062,12 +1110,28 @@ export default function StudioClient() {
                   onBase={(id) => {
                     setBaseId(id);
                     setCustomBase("");
+                    setPartStamps({});
                   }}
                   onCustom={setCustomBase}
                   onClearCustom={() => setCustomBase("")}
                   onAdapt={() => void makeAvatar()}
                   busy={busy || analyzing}
                   canAdapt={canBuildAvatar(profile)}
+                />
+                <PartsPanel
+                  still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId))}
+                  stamps={partStamps}
+                  onStamp={(part, image) => void stampPart(part, image)}
+                  onBake={(id) => void bakePart(id)}
+                  onBakeAll={() => void bakeAllParts()}
+                  onClear={(id) =>
+                    setPartStamps((cur) => {
+                      const next = { ...cur };
+                      delete next[id];
+                      return next;
+                    })
+                  }
+                  busy={busy}
                 />
                 <AvatarTurn
                   yaw={yaw}

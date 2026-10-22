@@ -1160,6 +1160,44 @@
   margin-top: 6px;
 }
 
+.ac-parts {
+  margin: 16px 0 0;
+}
+
+.ac-parts-stage {
+  position: relative;
+  max-width: 320px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111;
+}
+
+.ac-parts-stage > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ac-part-zone {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px dashed rgba(201, 152, 47, 0.55);
+  background: rgba(0, 0, 0, 0.18);
+  color: #ffd98a;
+  font-size: 11px;
+  text-align: center;
+  cursor: copy;
+}
+
+.ac-part-zone.on {
+  border-style: solid;
+  background: rgba(201, 152, 47, 0.22);
+}
+
 .ac-bases,
 .ac-versions {
   margin: 16px 0 0;
