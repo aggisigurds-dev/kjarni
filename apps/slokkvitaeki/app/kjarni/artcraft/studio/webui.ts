@@ -43,6 +43,8 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   batchSize: 1,
 };
 
+export type FaceAdapter = { model: string; module: string };
+
 export type Txt2ImgInput = {
   prompt: string;
   negativePrompt?: string;
@@ -53,6 +55,9 @@ export type Txt2ImgInput = {
   seed?: number;
   samplerName?: string;
   batchSize?: number;
+  restoreFaces?: boolean;
+  faceRefs?: string[];
+  faceAdapter?: FaceAdapter | null;
 };
 
 export type Img2ImgInput = Txt2ImgInput & {
@@ -139,6 +144,8 @@ export function denoisingHint(value: number): string {
   return "Ný mynd — andlit og stelling geta tapast";
 }
 
+import { identityScripts, pickFaceModel, pickFaceModule } from "./profile.ts";
+
 /** Strip a data URL prefix so the WebUI API gets raw base64. */
 export function toApiImage(src: string): string {
   const trimmed = src.trim();
@@ -220,11 +227,41 @@ function mapImages(data: { images?: string[] }): string[] {
   return images.map((b64) => (b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`));
 }
 
+function withIdentity(input: Txt2ImgInput, body: Record<string, unknown>): Record<string, unknown> {
+  const refs = input.faceRefs || [];
+  if (!input.restoreFaces && refs.length === 0) return body;
+  return {
+    ...body,
+    ...identityScripts(refs, toApiImage, input.faceAdapter || null),
+    restore_faces: input.restoreFaces !== false && (input.restoreFaces || refs.length > 0),
+  };
+}
+
+export async function findFaceAdapter(base: string): Promise<FaceAdapter | null> {
+  try {
+    const [modelsRes, modulesRes] = await Promise.all([
+      webuiFetch(base, "/controlnet/model_list"),
+      webuiFetch(base, "/controlnet/module_list"),
+    ]);
+    if (!modelsRes.ok) return null;
+    const modelsJson = (await modelsRes.json()) as { model_list?: string[] };
+    const modulesJson = modulesRes.ok ? ((await modulesRes.json()) as { module_list?: string[] | Record<string, unknown> }) : {};
+    const models = modelsJson.model_list || [];
+    const raw = modulesJson.module_list;
+    const modules = Array.isArray(raw) ? raw : raw ? Object.keys(raw) : [];
+    const model = pickFaceModel(models);
+    if (!model) return null;
+    return { model, module: pickFaceModule(modules) };
+  } catch {
+    return null;
+  }
+}
+
 export async function txt2img(base: string, input: Txt2ImgInput): Promise<string[]> {
   const res = await webuiFetch(base, "/sdapi/v1/txt2img", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(studioPayload(input)),
+    body: JSON.stringify(withIdentity(input, studioPayload(input))),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -244,22 +281,24 @@ export async function img2img(base: string, input: Img2ImgInput): Promise<string
   const res = await webuiFetch(base, "/sdapi/v1/img2img", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...studioPayload(input),
-      init_images: [toApiImage(input.initImage)],
-      denoising_strength: clampDenoising(input.denoisingStrength ?? DEFAULT_SETTINGS.denoisingStrength),
-      resize_mode: 0,
-      ...(hasMask
-        ? {
-            mask: toApiImage(input.mask!),
-            mask_blur: clampMaskBlur(input.maskBlur ?? 4),
-            inpainting_fill: input.inpaintingFill ?? 1,
-            inpaint_full_res: true,
-            inpaint_full_res_padding: 32,
-            inpainting_mask_invert: 0,
-          }
-        : {}),
-    }),
+    body: JSON.stringify(
+      withIdentity(input, {
+        ...studioPayload(input),
+        init_images: [toApiImage(input.initImage)],
+        denoising_strength: clampDenoising(input.denoisingStrength ?? DEFAULT_SETTINGS.denoisingStrength),
+        resize_mode: 0,
+        ...(hasMask
+          ? {
+              mask: toApiImage(input.mask!),
+              mask_blur: clampMaskBlur(input.maskBlur ?? 4),
+              inpainting_fill: input.inpaintingFill ?? 1,
+              inpaint_full_res: true,
+              inpaint_full_res_padding: 32,
+              inpainting_mask_invert: 0,
+            }
+          : {}),
+      }),
+    ),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");

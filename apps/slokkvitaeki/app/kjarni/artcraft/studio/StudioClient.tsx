@@ -8,14 +8,31 @@ import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
 import LightPlanPanel from "./LightPlan";
 import {
+  backdropShootPrompt,
+  backgroundOf,
   DEFAULT_LIGHT_PLAN,
   LIGHTS_KEY,
   mergePrompt,
   readStoredLights,
+  STUDIO_SHOOT_DENOISING,
   type LightPlan,
 } from "./lights";
 import { analyzeStudioImage, type StudioRegion } from "./analyzeImage";
 import { assertAdultPrompt } from "./guard";
+import PersonProfilePanel from "./PersonProfile";
+import {
+  avatarPrompt,
+  AVATAR_DENOISING,
+  canBuildAvatar,
+  hasIdentity,
+  identityPrompt,
+  identityRefs,
+  mergeIdentity,
+  orbitImages,
+  SHARPEN_DENOISING,
+  type PersonProfile,
+} from "./profile";
+import { faceSheet } from "./profileImage";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_WEBUI_URL,
@@ -25,11 +42,13 @@ import {
   WEBUI_URL_KEY,
   canEmbedLocalWebui,
   denoisingHint,
+  findFaceAdapter,
   generateLocal,
   pingWebui,
   readStoredSettings,
   readStoredWebuiUrl,
   sizePresetId,
+  type FaceAdapter,
   type LocalModel,
   type StudioSettings,
 } from "./webui";
@@ -75,6 +94,10 @@ export default function StudioClient() {
   const [colorWant, setColorWant] = useState("red");
   const [bgWant, setBgWant] = useState("soft daylight, quiet street");
   const [lights, setLights] = useState<LightPlan>(DEFAULT_LIGHT_PLAN);
+  const [activeProfileId, setActiveProfileId] = useState("");
+  const [profile, setProfile] = useState<PersonProfile | null>(null);
+  const [useProfile, setUseProfile] = useState(true);
+  const [faceAdapter, setFaceAdapter] = useState<FaceAdapter | null>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -150,6 +173,8 @@ export default function StudioClient() {
     if (result.ok) {
       setStatus("up");
       setModels(result.models);
+      const adapter = await findFaceAdapter(url);
+      setFaceAdapter(adapter);
       setStatusText(
         result.models.length > 0
           ? `Tengt · ${result.models.length} líkön`
@@ -159,6 +184,7 @@ export default function StudioClient() {
     } else {
       setStatus("down");
       setModels([]);
+      setFaceAdapter(null);
       setStatusText(result.error);
     }
   }
@@ -186,28 +212,38 @@ export default function StudioClient() {
     void takeFile(e.dataTransfer.files[0]);
   }
 
-  async function generate(e: FormEvent) {
-    e.preventDefault();
+  async function runGenerate(opts?: { prompt?: string; mask?: string | null; denoisingStrength?: number }) {
+    const text = opts?.prompt ?? prompt;
     setError("");
     try {
-      assertAdultPrompt(prompt, negative);
+      assertAdultPrompt(text, negative);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
       return;
     }
-    if (!source && !prompt.trim()) {
+    if (!source && !text.trim()) {
       setError("Skrifaðu prompt, eða settu inn mynd til að breyta.");
       return;
     }
     setBusy(true);
     try {
+      const useId = Boolean(useProfile && hasIdentity(profile));
+      let faceRefs: string[] | undefined;
+      if (useId && profile) {
+        const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
+        faceRefs = identityRefs(profile.faces, sheet, orbitSheet);
+      }
       const out = await generateLocal(webui, {
-        prompt: mergePrompt(prompt, lights),
+        prompt: mergeIdentity(mergePrompt(text, lights), profile?.name || "", useId),
         negativePrompt: negative.trim(),
         initImage: working || source || undefined,
-        mask: mask || undefined,
+        mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
         maskBlur,
+        restoreFaces: useId,
+        faceRefs,
+        faceAdapter: useId ? faceAdapter : null,
         ...settings,
+        denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
       });
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
@@ -222,6 +258,92 @@ export default function StudioClient() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function generate(e: FormEvent) {
+    e.preventDefault();
+    await runGenerate();
+  }
+
+  async function sharpenFace() {
+    if (!source) {
+      setError("Settu inn mynd til að skerpa.");
+      return;
+    }
+    if (!profile?.faces.length) {
+      setError("Búðu til persónuprófíl með skýrum andlitsmyndum fyrst.");
+      return;
+    }
+    setError("");
+    let found = regions;
+    if (!found.some((r) => r.kind === "head" || r.kind === "person")) {
+      setAnalyzing(true);
+      setAnalyzeText("Greini andlit…");
+      try {
+        found = await analyzeStudioImage(source, setAnalyzeText);
+        setRegions(found);
+        setAnalyzeText(`${found.length} svæði`);
+      } catch {
+        setAnalyzeText("");
+      } finally {
+        setAnalyzing(false);
+      }
+    }
+    const head = found.find((r) => r.kind === "head") || found.find((r) => r.kind === "person");
+    if (head) pickRegion(head);
+    const text = identityPrompt(profile.name);
+    setPrompt(text);
+    setUseProfile(true);
+    patchSettings({ denoisingStrength: SHARPEN_DENOISING });
+    await runGenerate({ prompt: text, mask: head?.maskUrl || null, denoisingStrength: SHARPEN_DENOISING });
+  }
+
+  async function studioShoot() {
+    const paper = backgroundOf(lights.background);
+    const text = backdropShootPrompt(lights.background, profile?.name || "");
+    setPrompt(text);
+    setBgWant(paper.prompt);
+    patchSettings({ denoisingStrength: STUDIO_SHOOT_DENOISING });
+    setError("");
+    let bgMask: string | null | undefined;
+    if (source) {
+      let found = regions;
+      if (!found.some((r) => r.kind === "background")) {
+        setAnalyzing(true);
+        setAnalyzeText("Greini bakgrunn…");
+        try {
+          found = await analyzeStudioImage(source, setAnalyzeText);
+          setRegions(found);
+          setAnalyzeText(`${found.length} svæði`);
+        } catch {
+          setAnalyzeText("");
+        } finally {
+          setAnalyzing(false);
+        }
+      }
+      const bg = found.find((r) => r.kind === "background");
+      if (bg) {
+        pickRegion(bg);
+        bgMask = bg.maskUrl;
+      }
+    }
+    await runGenerate({
+      prompt: text,
+      mask: source ? bgMask || null : undefined,
+      denoisingStrength: STUDIO_SHOOT_DENOISING,
+    });
+  }
+
+  async function makeAvatar() {
+    if (!canBuildAvatar(profile)) {
+      setError("Settu inn að minnsta kosti 4 skýrar myndir (andlit + hringur) til að gera avatar.");
+      return;
+    }
+    const text = avatarPrompt(profile?.name || "");
+    setPrompt(text);
+    setUseProfile(true);
+    patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
+    await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
   }
 
   function download(src: string, index: number) {
@@ -322,6 +444,27 @@ export default function StudioClient() {
                 )}
               </section>
 
+              <section className="ac-panel">
+                <PersonProfilePanel
+                  activeId={activeProfileId}
+                  onActive={(id, next) => {
+                    setActiveProfileId(id);
+                    setProfile(next);
+                  }}
+                  useProfile={useProfile}
+                  onUseProfile={setUseProfile}
+                  adapterHint={
+                    faceAdapter
+                      ? `Andlitsadapter: ${faceAdapter.model}`
+                      : status === "up"
+                        ? "GFPGAN restore_faces — ControlNet IP-Adapter Face fannst ekki á vélinni"
+                        : "Prófaðu tengingu til að sjá hvort andlitsadapter er til"
+                  }
+                  onAvatar={() => void makeAvatar()}
+                  avatarBusy={busy || analyzing}
+                />
+              </section>
+
               <form className="ac-panel" onSubmit={generate}>
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
@@ -360,6 +503,14 @@ export default function StudioClient() {
                             disabled={analyzing}
                           >
                             {analyzing ? "Greini…" : "Greina"}
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => void sharpenFace()}
+                            disabled={busy || analyzing || !hasIdentity(profile)}
+                          >
+                            Skerpa andlit
                           </button>
                           <button
                             type="button"
@@ -461,7 +612,17 @@ export default function StudioClient() {
                   </>
                 )}
 
-                <LightPlanPanel plan={lights} onChange={setLights} />
+                <LightPlanPanel
+                  plan={lights}
+                  onChange={(next) => {
+                    if (next.background !== lights.background) {
+                      setBgWant(backgroundOf(next.background).prompt);
+                    }
+                    setLights(next);
+                  }}
+                  onStudioShoot={() => void studioShoot()}
+                  shootBusy={busy || analyzing}
+                />
 
                 <label>
                   Lýsing
@@ -589,9 +750,37 @@ export default function StudioClient() {
                 </div>
 
                 {error && <p className="ac-error">{error}</p>}
-                <button type="submit" className="ac-btn" disabled={busy}>
-                  {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
-                </button>
+                <div className="ac-row">
+                  <button type="submit" className="ac-btn" disabled={busy}>
+                    {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    onClick={() => void studioShoot()}
+                    disabled={busy || analyzing}
+                  >
+                    Stúdíómyndataka
+                  </button>
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    onClick={() => void makeAvatar()}
+                    disabled={busy || analyzing || !canBuildAvatar(profile)}
+                  >
+                    Realistic avatar
+                  </button>
+                  {editing && (
+                    <button
+                      type="button"
+                      className="ac-btn ghost"
+                      onClick={() => void sharpenFace()}
+                      disabled={busy || analyzing || !hasIdentity(profile)}
+                    >
+                      Skerpa andlit
+                    </button>
+                  )}
+                </div>
               </form>
 
               {images.length > 0 && (

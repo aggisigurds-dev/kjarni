@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   applyPreset,
+  backdropShootPrompt,
+  backgroundOf,
+  BACKGROUNDS,
   bumpPower,
   DEFAULT_LIGHT_PLAN,
   lightingPrompt,
@@ -38,6 +41,16 @@ test("bumpPower stays in 0-10", () => {
   assert.equal(bumpPower(10, 1), 10);
   assert.equal(bumpPower(0, -1), 0);
   assert.equal(bumpPower(7, 1), 8);
+});
+
+test("backdrop picker has studio papers and a shoot prompt", () => {
+  assert.ok(BACKGROUNDS.length >= 8);
+  assert.equal(backgroundOf("canvas").label, "Strigi");
+  const shoot = backdropShootPrompt("beige", "Sara");
+  assert.match(shoot, /studio photoshoot/);
+  assert.match(shoot, /Sara/);
+  assert.match(shoot, /warm beige cream/);
+  assert.match(shoot, /keep face identity and pose/);
 });
 
 test("rembrandt is key-left heavy", () => {
