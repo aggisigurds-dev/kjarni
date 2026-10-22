@@ -298,7 +298,7 @@ export default function AdjustPanel({ source, presetMask, presetMaskTick = 0, on
       </div>
       <p className="ac-hint">
         {painting
-          ? "Málaðu yfir svæði sem promptið á að fókusa á. Rautt breytist, restin helst."
+          ? "Málaðu yfir það sem á að breytast. Skrifaðu svo prompt og ýttu á Breyta máluðu svæði — rautt endurskrifast, restin helst."
           : "Strjúktu yfir líkamslínu til að þenja, minnka eða draga. Stilltu svo bringur, miðju og mjaðmir."}
       </p>
       <div className={`ac-adjust-stage ${ready ? "" : "wait"}`}>

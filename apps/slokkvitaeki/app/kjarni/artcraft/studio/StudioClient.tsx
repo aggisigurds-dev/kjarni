@@ -86,6 +86,14 @@ import {
 } from "./looks";
 import RefsPanel from "./RefsPanel";
 import {
+  isUserPaintEdit,
+  PAINT_INPAINT_FILL,
+  paintEditCfg,
+  paintEditDenoising,
+  paintEditMaskBlur,
+  paintEditPrompt,
+} from "./paintEdit";
+import {
   FIX_DENOISING,
   STYLE_DENOISING,
   TURN_DENOISING,
@@ -413,6 +421,7 @@ export default function StudioClient() {
       profile,
     });
     const painted = Boolean((opts && "mask" in opts ? opts.mask : mask) || "");
+    const userPaint = isUserPaintEdit(painted, opts?.denoisingStrength);
     setError("");
     try {
       assertAdultPrompt(text, negative);
@@ -427,23 +436,30 @@ export default function StudioClient() {
     if (!opts?.quiet) setBusy(true);
     try {
       const { faceRefs } = await identityBundle(init);
+      const denoise = userPaint
+        ? paintEditDenoising(settings.denoisingStrength)
+        : clampIdentityDenoising(
+            opts?.denoisingStrength ?? settings.denoisingStrength,
+            true,
+            painted,
+            Boolean(opts?.turn),
+          );
       const out = await generateLocal(webui, {
-        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
+        prompt: userPaint
+          ? paintEditPrompt(text)
+          : mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
         negativePrompt: mergeIdentityNegative(negative),
         initImage: init,
         mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
-        maskBlur,
+        maskBlur: userPaint ? paintEditMaskBlur(maskBlur) : maskBlur,
+        inpaintingFill: userPaint ? PAINT_INPAINT_FILL : undefined,
         restoreFaces: true,
         faceRefs,
         faceAdapter,
         ...extraControls({ poseRef: opts?.poseRef, styleRef: opts?.styleRef }),
         ...settings,
-        denoisingStrength: clampIdentityDenoising(
-          opts?.denoisingStrength ?? settings.denoisingStrength,
-          true,
-          painted,
-          Boolean(opts?.turn),
-        ),
+        cfgScale: userPaint ? paintEditCfg(settings.cfgScale) : settings.cfgScale,
+        denoisingStrength: denoise,
       });
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
@@ -464,6 +480,10 @@ export default function StudioClient() {
 
   async function generate(e: FormEvent) {
     e.preventDefault();
+    if (mask && !prompt.trim()) {
+      setError("Skrifaðu hvað á að koma í staðinn á rauða svæðinu.");
+      return;
+    }
     await runGenerate();
   }
 
@@ -1426,9 +1446,11 @@ export default function StudioClient() {
               >
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
-                  {editing
-                    ? "Promptið segir hvað á að breytast (föt, bakgrunnur). Andlitið kemur af myndinni — líkanið má ekki teikna nýjan einstakling."
-                    : "Settu inn ljósmynd af manneskjunni fyrst. Án myndar teiknar líkanið alltaf nýtt andlit."}
+                  {mask
+                    ? "Málaðu yfir það sem á að breytast, skrifaðu hvað á að koma (t.d. red dress). Aðeins rauða svæðið er endurskrifað."
+                    : editing
+                      ? "Promptið eitt og sér málar yfir alla myndina og skemmir hana. Málaðu fyrst svæðið sem á að breytast."
+                      : "Settu inn ljósmynd af manneskjunni fyrst. Án myndar teiknar líkanið alltaf nýtt andlit."}
                 </p>
 
                 <div
@@ -1732,7 +1754,7 @@ export default function StudioClient() {
                     />
                     <span className="ac-hint">
                       {mask
-                        ? "Hærra gildi fyllir málaða svæðið meira eftir promptinu"
+                        ? "Málað svæði er endurskrifað (minnst 0.62). Utan rauða helst."
                         : editing
                           ? denoisingHint(settings.denoisingStrength)
                           : "Kemur í gagnið þegar mynd er sett inn"}
