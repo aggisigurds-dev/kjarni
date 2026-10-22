@@ -7,6 +7,9 @@ import {
   imprintPrompt,
   partBox,
   partCoverage,
+  pickKeyFrame,
+  isClipStamp,
+  stampIds,
 } from "./parts.ts";
 
 test("six body parts cover a full-body A-pose", () => {
@@ -34,4 +37,18 @@ test("coverage counts unique stamped parts", () => {
   assert.match(coverageLabel(["head", "torso", "armL"]), /3 af 6/);
   assert.match(imprintPrompt(BODY_PARTS[0], "Sara"), /Sara/);
   assert.match(imprintPrompt(BODY_PARTS[0], "Sara"), /Andlit/);
+});
+
+test("video stamps keep a key frame and count clip frames", () => {
+  assert.equal(pickKeyFrame(["a", "b", "c", "d"]), "b");
+  assert.equal(pickKeyFrame(["only"]), "only");
+  assert.equal(pickKeyFrame([]), "");
+  assert.equal(isClipStamp({ image: "a", frames: ["a", "b", "c"] }), true);
+  assert.equal(isClipStamp({ image: "a", frames: ["a"] }), false);
+  assert.equal(isClipStamp({ image: "a" }), false);
+  assert.deepEqual(stampIds({ head: { image: "x", frames: ["x", "y"] }, torso: "" }), ["head"]);
+  assert.deepEqual(stampIds({ head: { image: "face" }, armL: { image: "hand", frames: ["1", "2"] } }), [
+    "head",
+    "armL",
+  ]);
 });

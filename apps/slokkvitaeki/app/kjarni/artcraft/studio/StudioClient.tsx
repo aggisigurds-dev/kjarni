@@ -37,7 +37,15 @@ import { faceSheet } from "./profileImage";
 import AvatarTurn from "./AvatarTurn";
 import BasesPanel from "./BasesPanel";
 import PartsPanel from "./PartsPanel";
-import { IMPRINT_DENOISING, bodyPart, imprintPrompt, type BodyPart } from "./parts";
+import {
+  IMPRINT_DENOISING,
+  bodyPart,
+  imprintPrompt,
+  isClipStamp,
+  pickKeyFrame,
+  type BodyPart,
+  type PartStamp,
+} from "./parts";
 import { imprintOnto, partMask } from "./partsImage";
 import {
   BASE_DENOISING,
@@ -180,7 +188,7 @@ export default function StudioClient() {
   const [versionPresetId, setVersionPresetId] = useState("summer");
   const [baseId, setBaseId] = useState("w-avg");
   const [customBase, setCustomBase] = useState("");
-  const [partStamps, setPartStamps] = useState<Partial<Record<string, string>>>({});
+  const [partStamps, setPartStamps] = useState<Partial<Record<string, PartStamp>>>({});
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -517,13 +525,30 @@ export default function StudioClient() {
     }
   }
 
-  async function stampPart(part: BodyPart, image: string) {
+  async function takePartFile(part: BodyPart, file: File) {
+    setError("");
+    try {
+      if (file.type.startsWith("video/")) {
+        const frames = await extractVideoFrames(file);
+        const image = pickKeyFrame(frames);
+        if (!image) throw new Error("Gat ekki lesið ramma úr videóinu");
+        await stampPart(part, { image, frames, name: file.name });
+        return;
+      }
+      const image = await readImageFile(file);
+      await stampPart(part, { image, name: file.name });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lesið skrána á partinn");
+    }
+  }
+
+  async function stampPart(part: BodyPart, stamp: PartStamp) {
     setError("");
     try {
       let start = studioStill(working, images, source);
       if (!start) start = await rasterizeBase(selectedBaseImage());
-      const next = await imprintOnto(start, image, part);
-      setPartStamps((cur) => ({ ...cur, [part.id]: image }));
+      const next = await imprintOnto(start, stamp.image, part);
+      setPartStamps((cur) => ({ ...cur, [part.id]: stamp }));
       adoptStill(next, `part-${part.id}.png`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki málað partinn");
@@ -534,7 +559,7 @@ export default function StudioClient() {
     const part = bodyPart(partId);
     const stamp = partStamps[partId];
     const start = studioStill(working, images, source);
-    if (!part || !stamp || !start) {
+    if (!part || !stamp?.image || !start) {
       setError("Málaðu partinn fyrst.");
       return;
     }
@@ -547,10 +572,44 @@ export default function StudioClient() {
       mask: maskUrl,
       initImage: start,
       denoisingStrength: IMPRINT_DENOISING,
-      styleRef: stamp,
+      styleRef: stamp.image,
     });
     if (out[0]) {
       adoptStill(out[0], `baka-${part.id}.png`);
+    }
+  }
+
+  async function playPart(partId: string) {
+    const part = bodyPart(partId);
+    const stamp = partStamps[partId];
+    const start = studioStill(working, images, source);
+    const frames = stamp?.frames || [];
+    if (!part || !isClipStamp(stamp) || !start) {
+      setError("Dragðu videóbrot á partinn fyrst.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      const out: string[] = [];
+      for (let i = 0; i < frames.length; i++) {
+        setClipText(`${part.label} ${i + 1}/${frames.length}`);
+        out.push(await imprintOnto(start, frames[i], part));
+      }
+      setClipText("Sauma partahreyfingu…");
+      const blob = await stitchWebm(out, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(out);
+      if (out[out.length - 1]) setWorking(out[out.length - 1]);
+      setClipText(`${out.length} rammar · ${part.label}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki hreyft partinn");
+      setClipText("");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1121,9 +1180,10 @@ export default function StudioClient() {
                 <PartsPanel
                   still={studioStill(working, images, source) || mannequinDataUrl(studioBase(baseId))}
                   stamps={partStamps}
-                  onStamp={(part, image) => void stampPart(part, image)}
+                  onFile={(part, file) => void takePartFile(part, file)}
                   onBake={(id) => void bakePart(id)}
                   onBakeAll={() => void bakeAllParts()}
+                  onPlay={(id) => void playPart(id)}
                   onClear={(id) =>
                     setPartStamps((cur) => {
                       const next = { ...cur };

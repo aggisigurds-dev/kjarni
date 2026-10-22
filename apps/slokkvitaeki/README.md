@@ -31,8 +31,9 @@ Hægt er að snúa avatarnum um horn, mála galla og biðja um lagfæringu
 á því svæði. Útgáfur (sumar, elegant, jólafatnaður, diskó, eða eigið nafn)
 vistast með prófílnum. Leirmannequin-grunnar (A-pose, liðamót) læsa
 hlutföllum; prófíllinn aðlagar andlit. Eigin grunnur má vera skjámynd
-af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir yfir
-andlit, bol, hendur og fætur — part fyrir part — og baka saumana.
+af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir eða stutt
+videóbrot yfir andlit, bol, hendur og fætur — part fyrir part — baka saumana
+eða hreyfa aðeins þann part.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

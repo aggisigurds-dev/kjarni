@@ -57,3 +57,29 @@ export function coverageLabel(done: string[]): string {
   const n = new Set(done.filter((id) => bodyPart(id))).size;
   return `${n} af ${BODY_PARTS.length} pörtum`;
 }
+
+export type PartStamp = {
+  image: string;
+  frames?: string[];
+  name?: string;
+};
+
+export function pickKeyFrame(frames: string[]): string {
+  if (frames.length === 0) return "";
+  return frames[Math.floor((frames.length - 1) / 2)] || frames[0];
+}
+
+export function clipFrameCount(stamp: PartStamp | undefined): number {
+  return stamp?.frames?.length || 0;
+}
+
+export function isClipStamp(stamp: PartStamp | undefined): boolean {
+  return clipFrameCount(stamp) > 1;
+}
+
+export function stampIds(stamps: Partial<Record<string, PartStamp | string>>): string[] {
+  return Object.keys(stamps).filter((id) => {
+    const row = stamps[id];
+    return Boolean(row && (typeof row === "string" ? row : row.image));
+  });
+}
