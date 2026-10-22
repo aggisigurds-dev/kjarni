@@ -14,8 +14,22 @@ Forge / SD.Next (`--api` + CORS). Hægt er að setja inn eigin mynd, stilla stæ
 skref / CFG / seed / sampler / denoising, fínpússa líkamslínur (þenja, minnka,
 draga) og mála maska sem promptið fókusar á. Greina merkir manneskju, föt,
 bakgrunn og hluti; síðan má fjarlægja, breyta lit eða skipta um bakgrunn.
-Stúdíóljós (high-key / Rembrandt / Butterfly) stilla þrjú flass og bakgrunn og
-bætast við promptið.
+Stúdíóljós (high-key / Rembrandt / Butterfly) stilla þrjú flass. Bakgrunnur er
+valinn sem pappírsdúkur (bleikur, hvítur, beige, grár, blár, grænn, vínrauður,
+strigi, kolagrár, svartur); „Stúdíómyndataka“ skiptir um bakgrunn og heldur
+manneskju og stellingu. Persónuprófíll geymir allt að 10 skýrar andlitsmyndir
+og 8 sjónarhorn allan hringinn; „Skerpa andlit“ endurbyggir óskýrt andlit og
+„Realistic avatar“ gerir samræmdan 2D-snúningsblað (ekki 3D-möskva) með GFPGAN
+og IP-Adapter Face þegar það er til á vélinni. „Hreyfimynd“ gengur ramma-fyrir-ramma
+úr avatar/stúdíómynd. Athafnir: öndun, dansa, pósur, standa upp, snúa í hring;
+hægt er að vista nýjar skipanir úr prompti. Saumar WebM. Útlitsflísar (myndavél,
+svipbrigði, fatnaður), lookbook (4 kyrrar), athafnaröð og uppruna/útkomu-samanburður.
+Pósuviðmið (OpenPose þegar það er til) læsir stellingu avatarsins við markmiðsmynd.
+Stutt videó er lesið í ramma og avatarinn endurgerir hreyfinguna. Skjámynd af
+fatnaði eða skarti fer á manneskjuna (IP-Adapter án andlits, annars prompt).
+Hægt er að snúa avatarnum um horn, mála galla og biðja um lagfæringu
+á því svæði. Útgáfur (sumar, elegant, jólafatnaður, diskó, eða eigið nafn)
+vistast með prófílnum.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

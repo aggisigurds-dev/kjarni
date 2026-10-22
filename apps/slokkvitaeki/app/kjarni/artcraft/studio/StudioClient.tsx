@@ -8,14 +8,89 @@ import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
 import LightPlanPanel from "./LightPlan";
 import {
+  backdropShootPrompt,
+  backgroundOf,
   DEFAULT_LIGHT_PLAN,
   LIGHTS_KEY,
   mergePrompt,
   readStoredLights,
+  STUDIO_SHOOT_DENOISING,
   type LightPlan,
 } from "./lights";
 import { analyzeStudioImage, type StudioRegion } from "./analyzeImage";
 import { assertAdultPrompt } from "./guard";
+import PersonProfilePanel from "./PersonProfile";
+import {
+  avatarPrompt,
+  AVATAR_DENOISING,
+  canBuildAvatar,
+  hasIdentity,
+  identityPrompt,
+  identityRefs,
+  mergeIdentity,
+  orbitImages,
+  SHARPEN_DENOISING,
+  type OrbitId,
+  type PersonProfile,
+} from "./profile";
+import { faceSheet } from "./profileImage";
+import AvatarTurn from "./AvatarTurn";
+import LooksPanel from "./LooksPanel";
+import {
+  LOOKBOOK_DENOISING,
+  LOOKBOOK_SHOTS,
+  lookbookPrompt,
+  mergeLooks,
+  sequenceFrames,
+} from "./looks";
+import RefsPanel from "./RefsPanel";
+import {
+  FIX_DENOISING,
+  STYLE_DENOISING,
+  TURN_DENOISING,
+  fixPrompt,
+  mergePose,
+  mergeStyle,
+  motionRecreatePrompt,
+  nearestOrbitView,
+  poseDenoising,
+  studioStill,
+  turnPreview,
+  yawPrompt,
+  yawSlot,
+  yawToSlot,
+  type StyleKind,
+} from "./refs";
+import { extractVideoFrames } from "./refsImage";
+import VersionsPanel from "./VersionsPanel";
+import {
+  VERSION_DENOISING,
+  dropVersion,
+  loadVersions,
+  mergeVersion,
+  newVersionId,
+  saveVersions,
+  upsertVersion,
+  versionPreset,
+  versionPrompt,
+  type AvatarVersion,
+} from "./versions";
+import VideoPanel from "./VideoPanel";
+import {
+  commandFromPrompt,
+  DEFAULT_VIDEO,
+  deleteCustomAction,
+  loopFrames,
+  mergeMotion,
+  readCustomActions,
+  readStoredVideo,
+  saveCustomAction,
+  VIDEO_KEY,
+  videoDenoising,
+  type ActionCommand,
+  type VideoSettings,
+} from "./video";
+import { stitchWebm } from "./videoImage";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_WEBUI_URL,
@@ -25,11 +100,13 @@ import {
   WEBUI_URL_KEY,
   canEmbedLocalWebui,
   denoisingHint,
+  findStudioAdapters,
   generateLocal,
   pingWebui,
   readStoredSettings,
   readStoredWebuiUrl,
   sizePresetId,
+  type FaceAdapter,
   type LocalModel,
   type StudioSettings,
 } from "./webui";
@@ -75,16 +152,41 @@ export default function StudioClient() {
   const [colorWant, setColorWant] = useState("red");
   const [bgWant, setBgWant] = useState("soft daylight, quiet street");
   const [lights, setLights] = useState<LightPlan>(DEFAULT_LIGHT_PLAN);
+  const [activeProfileId, setActiveProfileId] = useState("");
+  const [profile, setProfile] = useState<PersonProfile | null>(null);
+  const [useProfile, setUseProfile] = useState(true);
+  const [faceAdapter, setFaceAdapter] = useState<FaceAdapter | null>(null);
+  const [poseAdapter, setPoseAdapter] = useState<FaceAdapter | null>(null);
+  const [styleAdapter, setStyleAdapter] = useState<FaceAdapter | null>(null);
+  const [poseRef, setPoseRef] = useState("");
+  const [styleRef, setStyleRef] = useState("");
+  const [styleKind, setStyleKind] = useState<StyleKind>("clothes");
+  const [motionFrames, setMotionFrames] = useState<string[]>([]);
+  const [motionName, setMotionName] = useState("");
+  const [yaw, setYaw] = useState(0);
+  const [turnViews, setTurnViews] = useState<Partial<Record<OrbitId, string>>>({});
+  const [versions, setVersions] = useState<AvatarVersion[]>([]);
+  const [versionPresetId, setVersionPresetId] = useState("summer");
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [clip, setClip] = useState<VideoSettings>(DEFAULT_VIDEO);
+  const [clipText, setClipText] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [customActions, setCustomActions] = useState<ActionCommand[]>([]);
+  const [looks, setLooks] = useState<string[]>([]);
+  const [queue, setQueue] = useState<string[]>([]);
+  const [compare, setCompare] = useState(50);
+  const [sheetUrl, setSheetUrl] = useState("");
 
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
     setWebui(readStoredWebuiUrl());
     setSettings(readStoredSettings());
     setLights(readStoredLights());
+    setClip(readStoredVideo());
+    setCustomActions(readCustomActions());
     setReady(true);
   }, []);
 
@@ -97,6 +199,25 @@ export default function StudioClient() {
     if (!ready) return;
     window.localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
   }, [ready, lights]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(VIDEO_KEY, JSON.stringify(clip));
+  }, [ready, clip]);
+
+  useEffect(() => {
+    return () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    };
+  }, [videoUrl]);
+
+  useEffect(() => {
+    if (!activeProfileId) {
+      setVersions([]);
+      return;
+    }
+    void loadVersions(activeProfileId).then(setVersions);
+  }, [activeProfileId]);
 
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
@@ -150,6 +271,10 @@ export default function StudioClient() {
     if (result.ok) {
       setStatus("up");
       setModels(result.models);
+      const adapters = await findStudioAdapters(url);
+      setFaceAdapter(adapters.face);
+      setPoseAdapter(adapters.pose);
+      setStyleAdapter(adapters.style);
       setStatusText(
         result.models.length > 0
           ? `Tengt · ${result.models.length} líkön`
@@ -159,6 +284,9 @@ export default function StudioClient() {
     } else {
       setStatus("down");
       setModels([]);
+      setFaceAdapter(null);
+      setPoseAdapter(null);
+      setStyleAdapter(null);
       setStatusText(result.error);
     }
   }
@@ -186,32 +314,71 @@ export default function StudioClient() {
     void takeFile(e.dataTransfer.files[0]);
   }
 
-  async function generate(e: FormEvent) {
-    e.preventDefault();
+  function extraControls(override?: { poseRef?: string }) {
+    return {
+      poseRef: override?.poseRef || poseRef || undefined,
+      styleRef: styleRef || undefined,
+      poseAdapter,
+      styleAdapter,
+    };
+  }
+
+  function adoptStill(src: string, name: string) {
+    setSource(src);
+    setSourceName(name);
+    setWorking(src);
+    setMask(null);
+    setRegions([]);
+    setSelectedRegion(null);
+    setPresetMask(null);
+    setError("");
+  }
+
+  async function runGenerate(opts?: {
+    prompt?: string;
+    mask?: string | null;
+    denoisingStrength?: number;
+    initImage?: string;
+    poseRef?: string;
+  }): Promise<string[]> {
+    const text = opts?.prompt ?? prompt;
+    const init = opts?.initImage || working || source || undefined;
     setError("");
     try {
-      assertAdultPrompt(prompt, negative);
+      assertAdultPrompt(text, negative);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
-      return;
+      return [];
     }
-    if (!source && !prompt.trim()) {
+    if (!init && !text.trim()) {
       setError("Skrifaðu prompt, eða settu inn mynd til að breyta.");
-      return;
+      return [];
     }
     setBusy(true);
     try {
+      const useId = Boolean(useProfile && hasIdentity(profile));
+      let faceRefs: string[] | undefined;
+      if (useId && profile) {
+        const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
+        faceRefs = identityRefs(profile.faces, sheet, orbitSheet);
+      }
       const out = await generateLocal(webui, {
-        prompt: mergePrompt(prompt, lights),
+        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", useId),
         negativePrompt: negative.trim(),
-        initImage: working || source || undefined,
-        mask: mask || undefined,
+        initImage: init,
+        mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
         maskBlur,
+        restoreFaces: useId,
+        faceRefs,
+        faceAdapter: useId ? faceAdapter : null,
+        ...extraControls(opts?.poseRef ? { poseRef: opts.poseRef } : undefined),
         ...settings,
+        denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
       });
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
       setStatus("up");
+      return out;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
       setError(
@@ -219,9 +386,525 @@ export default function StudioClient() {
           ? "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api og CORS?"
           : raw || "Gat ekki myndað. Er staðbundna WebUI-ið í gangi með --api og CORS?",
       );
+      return [];
     } finally {
       setBusy(false);
     }
+  }
+
+  async function generate(e: FormEvent) {
+    e.preventDefault();
+    await runGenerate();
+  }
+
+  async function sharpenFace() {
+    if (!source) {
+      setError("Settu inn mynd til að skerpa.");
+      return;
+    }
+    if (!profile?.faces.length) {
+      setError("Búðu til persónuprófíl með skýrum andlitsmyndum fyrst.");
+      return;
+    }
+    setError("");
+    let found = regions;
+    if (!found.some((r) => r.kind === "head" || r.kind === "person")) {
+      setAnalyzing(true);
+      setAnalyzeText("Greini andlit…");
+      try {
+        found = await analyzeStudioImage(source, setAnalyzeText);
+        setRegions(found);
+        setAnalyzeText(`${found.length} svæði`);
+      } catch {
+        setAnalyzeText("");
+      } finally {
+        setAnalyzing(false);
+      }
+    }
+    const head = found.find((r) => r.kind === "head") || found.find((r) => r.kind === "person");
+    if (head) pickRegion(head);
+    const text = identityPrompt(profile.name);
+    setPrompt(text);
+    setUseProfile(true);
+    patchSettings({ denoisingStrength: SHARPEN_DENOISING });
+    await runGenerate({ prompt: text, mask: head?.maskUrl || null, denoisingStrength: SHARPEN_DENOISING });
+  }
+
+  async function studioShoot() {
+    const paper = backgroundOf(lights.background);
+    const text = backdropShootPrompt(lights.background, profile?.name || "");
+    setPrompt(text);
+    setBgWant(paper.prompt);
+    patchSettings({ denoisingStrength: STUDIO_SHOOT_DENOISING });
+    setError("");
+    let bgMask: string | null | undefined;
+    if (source) {
+      let found = regions;
+      if (!found.some((r) => r.kind === "background")) {
+        setAnalyzing(true);
+        setAnalyzeText("Greini bakgrunn…");
+        try {
+          found = await analyzeStudioImage(source, setAnalyzeText);
+          setRegions(found);
+          setAnalyzeText(`${found.length} svæði`);
+        } catch {
+          setAnalyzeText("");
+        } finally {
+          setAnalyzing(false);
+        }
+      }
+      const bg = found.find((r) => r.kind === "background");
+      if (bg) {
+        pickRegion(bg);
+        bgMask = bg.maskUrl;
+      }
+    }
+    await runGenerate({
+      prompt: text,
+      mask: source ? bgMask || null : undefined,
+      denoisingStrength: STUDIO_SHOOT_DENOISING,
+    });
+  }
+
+  async function makeAvatar() {
+    if (!canBuildAvatar(profile)) {
+      setError("Settu inn að minnsta kosti 4 skýrar myndir (andlit + hringur) til að gera avatar.");
+      return;
+    }
+    const text = avatarPrompt(profile?.name || "");
+    setPrompt(text);
+    setUseProfile(true);
+    patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
+    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
+    if (out[0]) {
+      setTurnViews({ front: out[0] });
+      adoptStill(out[0], "avatar.png");
+    }
+  }
+
+  async function identityBundle() {
+    const useId = Boolean(useProfile && hasIdentity(profile));
+    if (!useId || !profile) return { useId: false, faceRefs: undefined as string[] | undefined };
+    const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
+    return { useId: true, faceRefs: identityRefs(profile.faces, sheet, orbitSheet) };
+  }
+
+  async function makeVideo(still?: string) {
+    const start = still || studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst — hreyfimyndin byrjar á þeim ramma.");
+      return;
+    }
+    const text = mergeIdentity(
+      mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", clip.kind, customActions), looks), lights),
+      profile?.name || "",
+      Boolean(useProfile && hasIdentity(profile)),
+    );
+    try {
+      assertAdultPrompt(text, negative);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    setClipText(`Rami 1/${clip.frames}`);
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const frames = [start];
+      let prev = start;
+      const denoise = videoDenoising(clip.motion);
+      for (let i = 1; i < clip.frames; i++) {
+        setClipText(`Rami ${i + 1}/${clip.frames}`);
+        const out = await generateLocal(webui, {
+          prompt: text,
+          negativePrompt: negative.trim(),
+          initImage: prev,
+          restoreFaces: useId,
+          faceRefs,
+          faceAdapter: useId ? faceAdapter : null,
+          ...extraControls(),
+          ...settings,
+          denoisingStrength: denoise,
+          seed: settings.seed === -1 ? -1 : settings.seed + i,
+        });
+        frames.push(out[0]);
+        prev = out[0];
+      }
+      setClipText("Sauma WebM…");
+      const blob = await stitchWebm(loopFrames(frames, clip.kind, customActions), clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(frames);
+      setClipText(`${frames.length} rammar · lykkja`);
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(
+        /fetch|network|failed to load/i.test(raw)
+          ? "Gat ekki saumað hreyfimynd. Er staðbundna WebUI-ið í gangi með --api og CORS?"
+          : raw || "Gat ekki saumað hreyfimynd.",
+      );
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeLookbook() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst — lookbookið byrjar á henni.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    setClipText("Lookbook…");
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const out: string[] = [];
+      for (const shot of LOOKBOOK_SHOTS) {
+        setClipText(`Lookbook · ${shot.label}`);
+        const text = mergeIdentity(
+          mergePrompt(mergeLooks(lookbookPrompt(shot.id, profile?.name || ""), looks), lights),
+          profile?.name || "",
+          useId,
+        );
+        assertAdultPrompt(text, negative);
+        const imgs = await generateLocal(webui, {
+          prompt: text,
+          negativePrompt: negative.trim(),
+          initImage: start,
+          restoreFaces: useId,
+          faceRefs,
+          faceAdapter: useId ? faceAdapter : null,
+          ...extraControls(),
+          ...settings,
+          denoisingStrength: LOOKBOOK_DENOISING,
+        });
+        out.push(imgs[0]);
+      }
+      setImages(out);
+      setClipText("Lookbook tilbúið · 4 myndir");
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(raw || "Gat ekki gert lookbook.");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeSequence() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst.");
+      return;
+    }
+    if (queue.length === 0) {
+      setError("Bættu athöfn við röðina fyrst.");
+      return;
+    }
+    const per = sequenceFrames(queue.length, clip.frames);
+    setError("");
+    setBusy(true);
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const all: string[] = [];
+      let prev = start;
+      let step = 0;
+      const total = per * queue.length;
+      for (const kind of queue) {
+        const text = mergeIdentity(
+          mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", kind, customActions), looks), lights),
+          profile?.name || "",
+          useId,
+        );
+        assertAdultPrompt(text, negative);
+        const denoise = videoDenoising(clip.motion);
+        for (let i = 0; i < per; i++) {
+          step += 1;
+          setClipText(`Röð ${step}/${total}`);
+          const imgs = await generateLocal(webui, {
+            prompt: text,
+            negativePrompt: negative.trim(),
+            initImage: prev,
+            restoreFaces: useId,
+            faceRefs,
+            faceAdapter: useId ? faceAdapter : null,
+            ...extraControls(),
+            ...settings,
+            denoisingStrength: denoise,
+            seed: settings.seed === -1 ? -1 : settings.seed + step,
+          });
+          all.push(imgs[0]);
+          prev = imgs[0];
+        }
+      }
+      setClipText("Sauma röð…");
+      const blob = await stitchWebm(all, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(all);
+      setClipText(`${all.length} rammar · röð`);
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(raw || "Gat ekki keyrt röð.");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeSheet() {
+    if (images.length === 0) return;
+    const sheet = await faceSheet(images);
+    if (sheet) setSheetUrl(sheet);
+  }
+
+  async function takeMotion(file: File) {
+    setError("");
+    try {
+      const frames = await extractVideoFrames(file);
+      setMotionFrames(frames);
+      setMotionName(`${file.name} · ${frames.length} rammar`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lesið videóið");
+    }
+  }
+
+  async function matchPose() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst — pósuviðmiðið vinnur á honum.");
+      return;
+    }
+    if (!poseRef) {
+      setError("Veldu pósuviðmið fyrst.");
+      return;
+    }
+    const text = mergePose(prompt, profile?.name || "");
+    const denoise = poseDenoising(Boolean(poseAdapter));
+    setPrompt(text);
+    patchSettings({ denoisingStrength: denoise });
+    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: denoise, initImage: start });
+    if (out[0]) setWorking(out[0]);
+  }
+
+  async function applyStyle() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst.");
+      return;
+    }
+    if (!styleRef) {
+      setError("Veldu skjámynd af fötum eða skarti fyrst.");
+      return;
+    }
+    const text = mergeStyle(prompt, styleKind);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: STYLE_DENOISING });
+    const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: STYLE_DENOISING, initImage: start });
+    if (out[0]) setWorking(out[0]);
+  }
+
+  async function recreateMotion() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst.");
+      return;
+    }
+    if (motionFrames.length === 0) {
+      setError("Veldu stutt videó fyrst.");
+      return;
+    }
+    const text = mergeIdentity(
+      mergePrompt(mergeLooks(motionRecreatePrompt(profile?.name || ""), looks), lights),
+      profile?.name || "",
+      Boolean(useProfile && hasIdentity(profile)),
+    );
+    try {
+      assertAdultPrompt(text, negative);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const frames = [start];
+      let prev = start;
+      const denoise = videoDenoising(Math.max(clip.motion, 6));
+      for (let i = 0; i < motionFrames.length; i++) {
+        setClipText(`Hreyfing ${i + 1}/${motionFrames.length}`);
+        const out = await generateLocal(webui, {
+          prompt: text,
+          negativePrompt: negative.trim(),
+          initImage: prev,
+          restoreFaces: useId,
+          faceRefs,
+          faceAdapter: useId ? faceAdapter : null,
+          ...extraControls({ poseRef: motionFrames[i] }),
+          ...settings,
+          denoisingStrength: denoise,
+          seed: settings.seed === -1 ? -1 : settings.seed + i + 1,
+        });
+        frames.push(out[0]);
+        prev = out[0];
+      }
+      setClipText("Sauma hreyfingu…");
+      const blob = await stitchWebm(frames, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(frames);
+      if (frames[frames.length - 1]) setWorking(frames[frames.length - 1]);
+      setClipText(`${frames.length} rammar · hreyfistykki`);
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(raw || "Gat ekki endurgert hreyfingu.");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openTurnView() {
+    const preview = turnPreview(yaw, turnViews, profile, studioStill(working, images, source));
+    if (!preview) {
+      setError("Snúðu avatarnum eða settu inn hringmynd fyrst.");
+      return;
+    }
+    adoptStill(preview.src, `sjónarhorn-${preview.label}.png`);
+  }
+
+  async function turnAvatar() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar fyrst.");
+      return;
+    }
+    const slot = yawSlot(yaw);
+    const text = yawPrompt(yaw, profile?.name || "");
+    const orbit = nearestOrbitView(profile, yaw);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: TURN_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask: null,
+      denoisingStrength: TURN_DENOISING,
+      initImage: start,
+      poseRef: orbit?.src,
+    });
+    if (out[0]) {
+      setTurnViews((cur) => ({ ...cur, [slot.id]: out[0] }));
+      adoptStill(out[0], `avatar-${slot.label}.png`);
+    }
+  }
+
+  async function fixPainted() {
+    if (!mask) {
+      setError("Málaðu gallann rauðan fyrst.");
+      return;
+    }
+    const text = fixPrompt(prompt);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: FIX_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask,
+      denoisingStrength: FIX_DENOISING,
+      initImage: working || source,
+    });
+    if (out[0]) {
+      setTurnViews((cur) => ({ ...cur, [yawToSlot(yaw)]: out[0] }));
+      adoptStill(out[0], sourceName || "avatar-lagad.png");
+    }
+  }
+
+  async function persistVersions(next: AvatarVersion[]) {
+    if (!activeProfileId) {
+      setError("Búðu til prófíl fyrst til að vista útgáfur.");
+      return;
+    }
+    setVersions(await saveVersions(activeProfileId, next));
+  }
+
+  async function makeVersion(label: string) {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar fyrst.");
+      return;
+    }
+    if (!activeProfileId) {
+      setError("Búðu til prófíl fyrst.");
+      return;
+    }
+    const preset = versionPreset(versionPresetId);
+    const line = preset && preset.label === label ? preset.prompt : versionPrompt(label);
+    const text = mergeVersion(prompt, line);
+    try {
+      assertAdultPrompt(text, negative);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
+      return;
+    }
+    setPrompt(text);
+    patchSettings({ denoisingStrength: VERSION_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask: null,
+      denoisingStrength: VERSION_DENOISING,
+      initImage: start,
+    });
+    if (!out[0]) return;
+    const row: AvatarVersion = {
+      id: newVersionId(),
+      label,
+      image: out[0],
+      prompt: text,
+      updatedAt: Date.now(),
+    };
+    await persistVersions(upsertVersion(versions, row));
+    adoptStill(out[0], `utgafa-${label}.png`);
+  }
+
+  async function saveCurrentVersion(label: string) {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar fyrst.");
+      return;
+    }
+    if (!activeProfileId) {
+      setError("Búðu til prófíl fyrst.");
+      return;
+    }
+    const row: AvatarVersion = {
+      id: newVersionId(),
+      label,
+      image: start,
+      prompt: prompt.trim(),
+      updatedAt: Date.now(),
+    };
+    await persistVersions(upsertVersion(versions, row));
+  }
+
+  function loadVersion(row: AvatarVersion) {
+    adoptStill(row.image, `utgafa-${row.label}.png`);
+    if (row.prompt) setPrompt(row.prompt);
   }
 
   function download(src: string, index: number) {
@@ -243,6 +926,7 @@ export default function StudioClient() {
 
   const editing = Boolean(source);
   const preset = sizePresetId(settings.width, settings.height);
+  const hasStill = Boolean(studioStill(working, images, source));
 
   return (
     <StationChrome tool="artcraft">
@@ -322,6 +1006,51 @@ export default function StudioClient() {
                 )}
               </section>
 
+              <section className="ac-panel">
+                <PersonProfilePanel
+                  activeId={activeProfileId}
+                  onActive={(id, next) => {
+                    if (id !== activeProfileId) setTurnViews({});
+                    setActiveProfileId(id);
+                    setProfile(next);
+                  }}
+                  useProfile={useProfile}
+                  onUseProfile={setUseProfile}
+                  adapterHint={
+                    faceAdapter
+                      ? `Andlitsadapter: ${faceAdapter.model}`
+                      : status === "up"
+                        ? "GFPGAN restore_faces — ControlNet IP-Adapter Face fannst ekki á vélinni"
+                        : "Prófaðu tengingu til að sjá hvort andlitsadapter er til"
+                  }
+                  onAvatar={() => void makeAvatar()}
+                  avatarBusy={busy || analyzing}
+                />
+                <AvatarTurn
+                  yaw={yaw}
+                  onYaw={setYaw}
+                  view={turnPreview(yaw, turnViews, profile, studioStill(working, images, source))}
+                  onTurn={() => void turnAvatar()}
+                  onOpen={openTurnView}
+                  onFix={() => void fixPainted()}
+                  busy={busy}
+                  hasMask={Boolean(mask)}
+                  hasStill={hasStill}
+                />
+                <VersionsPanel
+                  presetId={versionPresetId}
+                  onPreset={setVersionPresetId}
+                  versions={versions}
+                  onMake={(label) => void makeVersion(label)}
+                  onSave={(label) => void saveCurrentVersion(label)}
+                  onLoad={loadVersion}
+                  onDelete={(id) => void persistVersions(dropVersion(versions, id))}
+                  busy={busy}
+                  hasStill={hasStill}
+                  hasProfile={Boolean(activeProfileId)}
+                />
+              </section>
+
               <form className="ac-panel" onSubmit={generate}>
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
@@ -360,6 +1089,14 @@ export default function StudioClient() {
                             disabled={analyzing}
                           >
                             {analyzing ? "Greini…" : "Greina"}
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => void sharpenFace()}
+                            disabled={busy || analyzing || !hasIdentity(profile)}
+                          >
+                            Skerpa andlit
                           </button>
                           <button
                             type="button"
@@ -461,7 +1198,62 @@ export default function StudioClient() {
                   </>
                 )}
 
-                <LightPlanPanel plan={lights} onChange={setLights} />
+                <LightPlanPanel
+                  plan={lights}
+                  onChange={(next) => {
+                    if (next.background !== lights.background) {
+                      setBgWant(backgroundOf(next.background).prompt);
+                    }
+                    setLights(next);
+                  }}
+                  onStudioShoot={() => void studioShoot()}
+                  shootBusy={busy || analyzing}
+                />
+
+                <LooksPanel
+                  selected={looks}
+                  onChange={setLooks}
+                  onLookbook={() => void makeLookbook()}
+                  busy={busy}
+                  hasStill={hasStill}
+                />
+
+                <RefsPanel
+                  poseRef={poseRef}
+                  styleRef={styleRef}
+                  styleKind={styleKind}
+                  motionFrames={motionFrames}
+                  motionName={motionName}
+                  onPose={setPoseRef}
+                  onStyle={setStyleRef}
+                  onStyleKind={setStyleKind}
+                  onMotionFile={(file) => void takeMotion(file)}
+                  onClearPose={() => setPoseRef("")}
+                  onClearStyle={() => setStyleRef("")}
+                  onClearMotion={() => {
+                    setMotionFrames([]);
+                    setMotionName("");
+                  }}
+                  onMatchPose={() => void matchPose()}
+                  onApplyStyle={() => void applyStyle()}
+                  onRecreateMotion={() => void recreateMotion()}
+                  busy={busy}
+                  hasStill={hasStill}
+                  poseHint={
+                    poseAdapter
+                      ? `OpenPose: ${poseAdapter.model}`
+                      : status === "up"
+                        ? "Engin OpenPose á vélinni — prófum með prompti"
+                        : "Prófaðu tengingu til að sjá hvort OpenPose er til"
+                  }
+                  styleHint={
+                    styleAdapter
+                      ? `Útlitsadapter: ${styleAdapter.model}`
+                      : status === "up"
+                        ? "Ekkert IP-Adapter (án andlits) — prófum með prompti"
+                        : "Prófaðu tengingu til að sjá hvort útlitsadapter er til"
+                  }
+                />
 
                 <label>
                   Lýsing
@@ -589,14 +1381,118 @@ export default function StudioClient() {
                 </div>
 
                 {error && <p className="ac-error">{error}</p>}
-                <button type="submit" className="ac-btn" disabled={busy}>
-                  {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
-                </button>
+                <div className="ac-row">
+                  <button type="submit" className="ac-btn" disabled={busy}>
+                    {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    onClick={() => void studioShoot()}
+                    disabled={busy || analyzing}
+                  >
+                    Stúdíómyndataka
+                  </button>
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    onClick={() => void makeAvatar()}
+                    disabled={busy || analyzing || !canBuildAvatar(profile)}
+                  >
+                    Realistic avatar
+                  </button>
+                  {editing && (
+                    <button
+                      type="button"
+                      className="ac-btn ghost"
+                      onClick={() => void sharpenFace()}
+                      disabled={busy || analyzing || !hasIdentity(profile)}
+                    >
+                      Skerpa andlit
+                    </button>
+                  )}
+                </div>
               </form>
+
+              <VideoPanel
+                settings={clip}
+                onChange={setClip}
+                onMake={() => void makeVideo()}
+                busy={busy}
+                progress={clipText}
+                videoUrl={videoUrl}
+                hasStill={hasStill}
+                prompt={prompt}
+                custom={customActions}
+                onSaveAction={(label) => {
+                  try {
+                    assertAdultPrompt(prompt, negative);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Óleyfileg skipun");
+                    return;
+                  }
+                  const row = commandFromPrompt(label, prompt);
+                  if (!row) {
+                    setError("Skrifaðu prompt til að vista skipun.");
+                    return;
+                  }
+                  setCustomActions(saveCustomAction(customActions, row));
+                  setClip((cur) => ({ ...cur, kind: row.id, motion: row.motion }));
+                  setError("");
+                }}
+                onDeleteAction={(id) => {
+                  const next = deleteCustomAction(customActions, id);
+                  setCustomActions(next);
+                  if (clip.kind === id) {
+                    setClip((cur) => ({ ...cur, kind: "breathe" }));
+                  }
+                }}
+                queue={queue}
+                onQueue={setQueue}
+                onRunQueue={() => void makeSequence()}
+              />
 
               {images.length > 0 && (
                 <section className="ac-panel">
                   <h2>Útkoma</h2>
+                  {source && images[0] && (
+                    <div className="ac-compare">
+                      <p className="ac-hint">Samanburður — dragðu til að sjá uppruna á móti útkomu.</p>
+                      <div className="ac-compare-stage">
+                        <img src={images[0]} alt="Nýtt" />
+                        <img
+                          src={source}
+                          alt="Uppruni"
+                          style={{ clipPath: `inset(0 ${100 - compare}% 0 0)` }}
+                        />
+                      </div>
+                      <label className="ac-range">
+                        Uppruni ← {compare}% → Nýtt
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={compare}
+                          onChange={(e) => setCompare(Number(e.target.value))}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <div className="ac-row">
+                    <button type="button" className="ac-btn ghost" onClick={() => void makeSheet()} disabled={images.length < 2}>
+                      Snertilisti
+                    </button>
+                  </div>
+                  {sheetUrl && (
+                    <figure className="ac-clip">
+                      <img src={sheetUrl} alt="Snertilisti" />
+                      <figcaption>
+                        <a className="ac-btn ghost" href={sheetUrl} download="kjarni-studio-snertilisti.jpg">
+                          Sækja snertilista
+                        </a>
+                      </figcaption>
+                    </figure>
+                  )}
                   <div className="ac-results">
                     {images.map((src, i) => (
                       <figure key={i}>
@@ -619,6 +1515,14 @@ export default function StudioClient() {
                             }}
                           >
                             Nota sem uppruna
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => void makeVideo(src)}
+                            disabled={busy}
+                          >
+                            Hreyfimynd
                           </button>
                           <a className="ac-btn ghost" href={artcraftAppHref("photocraft")}>
                             Opna PhotoCraft

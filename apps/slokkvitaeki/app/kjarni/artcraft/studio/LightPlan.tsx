@@ -17,22 +17,40 @@ import {
 type Props = {
   plan: LightPlan;
   onChange: (next: LightPlan) => void;
+  onStudioShoot?: () => void;
+  shootBusy?: boolean;
 };
 
 function patchLight(plan: LightPlan, slot: LightSlot, patch: Partial<StudioLight>): LightPlan {
   return { ...plan, [slot]: { ...plan[slot], ...patch } };
 }
 
-export default function LightPlanPanel({ plan, onChange }: Props) {
+export default function LightPlanPanel({ plan, onChange, onStudioShoot, shootBusy }: Props) {
   const hint = lightingPrompt(plan);
+  const paper = BACKGROUNDS.find((b) => b.id === plan.background);
 
   return (
     <div className="ac-lights">
       <h2>Stúdíóljós</h2>
       <p className="ac-hint">
-        Þrjú flass eins og á ljósaáætlun — vinstri og hægri 85" paraply, lykilljós 110". +/- stillir
-        styrk. Þetta fer inn í promptið við myndun.
+        Veldu pappírsdúk, stilltu þrjú flass, og fáðu stúdíómyndatöku. Manneskjan og stellingin
+        haldast; bakgrunnurinn verður dúkurinn.
       </p>
+      <div className="ac-backdrops" role="listbox" aria-label="Bakgrunnur">
+        {BACKGROUNDS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="option"
+            aria-selected={plan.background === item.id}
+            className={`ac-backdrop ${plan.background === item.id ? "on" : ""}`}
+            onClick={() => onChange({ ...plan, background: item.id })}
+          >
+            <span className="ac-backdrop-swatch" style={{ background: item.swatch }} />
+            {item.label}
+          </button>
+        ))}
+      </div>
       <div className="ac-row ac-chips">
         {PLAN_PRESETS.map((item) => (
           <button
@@ -90,20 +108,15 @@ export default function LightPlanPanel({ plan, onChange }: Props) {
         </div>
       </div>
 
+      {onStudioShoot && (
+        <div className="ac-row">
+          <button type="button" className="ac-btn" onClick={onStudioShoot} disabled={shootBusy}>
+            Stúdíómyndataka · {paper?.label || "dúkur"}
+          </button>
+        </div>
+      )}
+
       <div className="ac-settings">
-        <label>
-          Bakgrunnur
-          <select
-            value={plan.background}
-            onChange={(e) => onChange({ ...plan, background: e.target.value as LightPlan["background"] })}
-          >
-            {BACKGROUNDS.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </label>
         {LIGHT_SLOTS.map((slot) => (
           <label key={`${slot.id}-color`}>
             {slot.label} litur
