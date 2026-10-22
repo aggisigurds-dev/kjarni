@@ -137,6 +137,31 @@ test("img2img uses latent-noise fill when the painted prompt must rewrite the ho
   }
 });
 
+test("img2img can turn off full-res inpaint for a large body mask", async () => {
+  const prev = globalThis.fetch;
+  let sent: Record<string, unknown> = {};
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ images: ["zzz"] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    await img2img("http://127.0.0.1:7860", {
+      prompt: "same adult person",
+      initImage: "data:image/png;base64,SRC",
+      mask: "data:image/png;base64,MASK",
+      inpaintFullRes: false,
+      inpaintingFill: 1,
+    });
+    assert.equal(sent.inpaint_full_res, false);
+    assert.equal(sent.inpainting_fill, 1);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
 test("img2img posts init_images and denoising_strength", async () => {
   const prev = globalThis.fetch;
   let sent: { url?: string; body?: Record<string, unknown> } = {};

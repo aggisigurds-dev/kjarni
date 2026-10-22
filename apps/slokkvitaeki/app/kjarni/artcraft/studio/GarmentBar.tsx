@@ -36,7 +36,7 @@ export default function GarmentBar({
   return (
     <div className="ac-garment">
       <p className="ac-hint">
-        Endurbyggja teiknar allan líkamann sem var undir fötunum. Andlitið helst.
+        Endurbyggja vinnur út frá myndinni sjálfri, ekki suði. Andlitið helst.
         Áframhald lengir fætur eða hendur út fyrir rammann. Svo bætirðu nýjum
         fötum ofan á.
       </p>

@@ -7,13 +7,17 @@ import {
   addsForSlot,
   continuePad,
   continueStripMask,
+  GARMENT_DENOISING,
+  GARMENT_INPAINT_FILL,
   GARMENT_NEGATIVE,
   garmentBodyPrompt,
   garmentContinuePrompt,
   garmentRemovePrompt,
+  garmentRunOptions,
   isGarmentChip,
   padHasExtent,
   padRaster,
+  scaleMaskTo,
   slotOfRegion,
 } from "./garments.ts";
 
@@ -52,6 +56,15 @@ test("slot maps chips; adds are delete-then-add not in-place rewrite", () => {
   assert.match(garmentContinuePrompt("pants"), /outpaint and continue both adult legs/);
   assert.match(garmentBodyPrompt(), /complete adult body that was underneath/);
   assert.match(GARMENT_NEGATIVE, /hole/);
+  assert.match(GARMENT_NEGATIVE, /mosaic/);
+  const flags = garmentRunOptions();
+  assert.equal(flags.skipPaint, true);
+  assert.equal(flags.ignoreRefs, true);
+  assert.equal(flags.inpaintingFill, GARMENT_INPAINT_FILL);
+  assert.equal(flags.inpaintingFill, 1);
+  assert.equal(flags.inpaintFullRes, false);
+  assert.ok(flags.denoisingStrength <= 0.5);
+  assert.equal(GARMENT_DENOISING, flags.denoisingStrength);
   assert.match(shorts!.prompt, /over the existing reconstructed legs/);
   assert.equal(addMaskId(shorts!, "pants"), "shortsZone");
 });
@@ -96,4 +109,14 @@ test("continuePad grows the canvas when legs are cropped", () => {
   assert.equal(strip.data[(7 * 8 + 4) * 4], 255);
   assert.equal(strip.data[(12 * 8 + 4) * 4], 255);
   assert.equal(strip.data[(12 * 8 + 0) * 4], 0);
+});
+
+test("scaleMaskTo keeps the white hole when the still is a different size", () => {
+  const mask = createRaster(4, 4, 0);
+  paint(mask, 1, 1, 2, 2);
+  const scaled = scaleMaskTo(mask, 8, 8);
+  assert.equal(scaled.width, 8);
+  assert.equal(scaled.height, 8);
+  assert.equal(scaled.data[(3 * 8 + 3) * 4], 255);
+  assert.equal(scaled.data[(0 * 8 + 0) * 4], 0);
 });

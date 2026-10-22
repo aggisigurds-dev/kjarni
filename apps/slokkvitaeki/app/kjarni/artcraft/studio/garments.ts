@@ -15,7 +15,46 @@ export const GARMENT_FILL =
   "fill every masked pixel, reconstruct the body underneath, continue the anatomy, no hole, no gap, no transparency, no missing limbs, painted masked region only";
 
 export const GARMENT_NEGATIVE =
-  "hole, gap, empty cutout, missing legs, missing arms, missing limb, transparency, checkerboard, background showing through the body, amputated, cropped body, floating clothes, discontinuity";
+  "hole, gap, empty cutout, missing legs, missing arms, missing limb, transparency, checkerboard, background showing through the body, amputated, cropped body, floating clothes, discontinuity, latent noise, mosaic, pixelated body, statue, marble, blue statue";
+
+/** Keep the photo pixels. Paint-edit latent noise (fill 2) turns the whole body into a mosaic. */
+export const GARMENT_DENOISING = 0.46;
+export const GARMENT_INPAINT_FILL = 1;
+
+export function garmentRunOptions(): {
+  skipPaint: true;
+  ignoreRefs: true;
+  denoisingStrength: number;
+  inpaintingFill: number;
+  inpaintFullRes: false;
+} {
+  return {
+    skipPaint: true,
+    ignoreRefs: true,
+    denoisingStrength: GARMENT_DENOISING,
+    inpaintingFill: GARMENT_INPAINT_FILL,
+    inpaintFullRes: false,
+  };
+}
+
+export function scaleMaskTo(src: Raster, width: number, height: number): Raster {
+  const out = createRaster(width, height, 0);
+  if (src.width < 1 || src.height < 1 || width < 1 || height < 1) return out;
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(src.height - 1, Math.floor((y / height) * src.height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(src.width - 1, Math.floor((x / width) * src.width));
+      const si = (sy * src.width + sx) * 4;
+      const di = (y * width + x) * 4;
+      const on = src.data[si] > 20 ? 255 : 0;
+      out.data[di] = on;
+      out.data[di + 1] = on;
+      out.data[di + 2] = on;
+      out.data[di + 3] = 255;
+    }
+  }
+  return out;
+}
 
 export type GarmentAdd = {
   id: string;
