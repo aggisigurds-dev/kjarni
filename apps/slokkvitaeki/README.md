@@ -20,7 +20,8 @@ strigi, kolagrár, svartur); „Stúdíómyndataka“ skiptir um bakgrunn og hel
 manneskju og stellingu. Persónuprófíll geymir allt að 10 skýrar andlitsmyndir
 og 8 sjónarhorn allan hringinn; „Skerpa andlit“ endurbyggir óskýrt andlit og
 „Realistic avatar“ gerir samræmdan 2D-snúningsblað (ekki 3D-möskva) með GFPGAN
-og IP-Adapter Face þegar það er til á vélinni.
+og IP-Adapter Face þegar það er til á vélinni. „Hreyfimynd“ gengur ramma-fyrir-ramma
+úr avatar/stúdíómynd (öndun, höfuð, snúningur) og saumar WebM-lykkju.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

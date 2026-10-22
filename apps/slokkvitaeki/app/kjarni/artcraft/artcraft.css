@@ -1037,3 +1037,26 @@
   border-color: var(--rg-gold-fill, #c9982f);
   box-shadow: 0 0 0 2px var(--rg-gold-fill, #c9982f);
 }
+
+.ac-video {
+  margin-top: 8px;
+}
+
+.ac-clip {
+  margin: 16px 0 0;
+}
+
+.ac-clip video {
+  display: block;
+  width: 100%;
+  max-height: min(70vh, 520px);
+  border-radius: 12px;
+  background: #111;
+}
+
+.ac-clip figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}

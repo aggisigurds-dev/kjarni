@@ -33,6 +33,17 @@ import {
   type PersonProfile,
 } from "./profile";
 import { faceSheet } from "./profileImage";
+import VideoPanel from "./VideoPanel";
+import {
+  DEFAULT_VIDEO,
+  mergeMotion,
+  pingPong,
+  readStoredVideo,
+  VIDEO_KEY,
+  videoDenoising,
+  type VideoSettings,
+} from "./video";
+import { stitchWebm } from "./videoImage";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_WEBUI_URL,
@@ -102,12 +113,16 @@ export default function StudioClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [clip, setClip] = useState<VideoSettings>(DEFAULT_VIDEO);
+  const [clipText, setClipText] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
 
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
     setWebui(readStoredWebuiUrl());
     setSettings(readStoredSettings());
     setLights(readStoredLights());
+    setClip(readStoredVideo());
     setReady(true);
   }, []);
 
@@ -120,6 +135,17 @@ export default function StudioClient() {
     if (!ready) return;
     window.localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
   }, [ready, lights]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(VIDEO_KEY, JSON.stringify(clip));
+  }, [ready, clip]);
+
+  useEffect(() => {
+    return () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    };
+  }, [videoUrl]);
 
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
@@ -344,6 +370,77 @@ export default function StudioClient() {
     setUseProfile(true);
     patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
     await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
+  }
+
+  async function identityBundle() {
+    const useId = Boolean(useProfile && hasIdentity(profile));
+    if (!useId || !profile) return { useId: false, faceRefs: undefined as string[] | undefined };
+    const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
+    return { useId: true, faceRefs: identityRefs(profile.faces, sheet, orbitSheet) };
+  }
+
+  async function makeVideo(still?: string) {
+    const start = still || working || source || images[0] || "";
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst — hreyfimyndin byrjar á þeim ramma.");
+      return;
+    }
+    const text = mergeIdentity(
+      mergePrompt(mergeMotion(prompt || "same adult person", clip.kind), lights),
+      profile?.name || "",
+      Boolean(useProfile && hasIdentity(profile)),
+    );
+    try {
+      assertAdultPrompt(text, negative);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    setClipText(`Rami 1/${clip.frames}`);
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const frames = [start];
+      let prev = start;
+      const denoise = videoDenoising(clip.motion);
+      for (let i = 1; i < clip.frames; i++) {
+        setClipText(`Rami ${i + 1}/${clip.frames}`);
+        const out = await generateLocal(webui, {
+          prompt: text,
+          negativePrompt: negative.trim(),
+          initImage: prev,
+          restoreFaces: useId,
+          faceRefs,
+          faceAdapter: useId ? faceAdapter : null,
+          ...settings,
+          denoisingStrength: denoise,
+          seed: settings.seed === -1 ? -1 : settings.seed + i,
+        });
+        frames.push(out[0]);
+        prev = out[0];
+      }
+      setClipText("Sauma WebM…");
+      const blob = await stitchWebm(pingPong(frames), clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(frames);
+      setClipText(`${frames.length} rammar · lykkja`);
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(
+        /fetch|network|failed to load/i.test(raw)
+          ? "Gat ekki saumað hreyfimynd. Er staðbundna WebUI-ið í gangi með --api og CORS?"
+          : raw || "Gat ekki saumað hreyfimynd.",
+      );
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function download(src: string, index: number) {
@@ -783,6 +880,16 @@ export default function StudioClient() {
                 </div>
               </form>
 
+              <VideoPanel
+                settings={clip}
+                onChange={setClip}
+                onMake={() => void makeVideo()}
+                busy={busy}
+                progress={clipText}
+                videoUrl={videoUrl}
+                hasStill={Boolean(working || source || images[0])}
+              />
+
               {images.length > 0 && (
                 <section className="ac-panel">
                   <h2>Útkoma</h2>
@@ -808,6 +915,14 @@ export default function StudioClient() {
                             }}
                           >
                             Nota sem uppruna
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-btn ghost"
+                            onClick={() => void makeVideo(src)}
+                            disabled={busy}
+                          >
+                            Hreyfimynd
                           </button>
                           <a className="ac-btn ghost" href={artcraftAppHref("photocraft")}>
                             Opna PhotoCraft
