@@ -5,10 +5,15 @@ import { bboxMask, garmentRegions, sleeveMask } from "./analyze.ts";
 import {
   addMaskId,
   addsForSlot,
+  continuePad,
+  continueStripMask,
   GARMENT_NEGATIVE,
+  garmentBodyPrompt,
   garmentContinuePrompt,
   garmentRemovePrompt,
   isGarmentChip,
+  padHasExtent,
+  padRaster,
   slotOfRegion,
 } from "./garments.ts";
 
@@ -44,7 +49,8 @@ test("slot maps chips; adds are delete-then-add not in-place rewrite", () => {
   assert.match(takeOff, /no hole/);
   assert.match(takeOff, /continue the hips/);
   assert.doesNotMatch(takeOff, /change the trousers/);
-  assert.match(garmentContinuePrompt("pants"), /continue generating the adult legs/);
+  assert.match(garmentContinuePrompt("pants"), /outpaint and continue both adult legs/);
+  assert.match(garmentBodyPrompt(), /complete adult body that was underneath/);
   assert.match(GARMENT_NEGATIVE, /hole/);
   assert.match(shorts!.prompt, /over the existing reconstructed legs/);
   assert.equal(addMaskId(shorts!, "pants"), "shortsZone");
@@ -71,4 +77,23 @@ test("garment bands split torso, sleeves and pants", () => {
   assert.equal(bboxMask(person, 0.5, 0.9).data[(10 * 40 + 20) * 4], 0);
   assert.equal(sleeveMask(person, 0.16, 0.5).data[(28 * 40 + 3) * 4], 255);
   assert.equal(sleeveMask(person, 0.16, 0.5).data[(28 * 40 + 20) * 4], 0);
+});
+
+test("continuePad grows the canvas when legs are cropped", () => {
+  const cropped = continuePad("pants", 40, 80, { x0: 8, y0: 4, x1: 31, y1: 78 });
+  assert.ok(padHasExtent(cropped));
+  assert.ok(cropped.bottom >= 24);
+  assert.equal(cropped.bottom % 8, 0);
+  const roomy = continuePad("pants", 40, 160, { x0: 8, y0: 4, x1: 31, y1: 78 });
+  assert.equal(roomy.bottom, 0);
+  const src = createRaster(8, 8, 90);
+  const padded = padRaster(src, { left: 0, right: 0, top: 0, bottom: 8 });
+  assert.equal(padded.width, 8);
+  assert.equal(padded.height, 16);
+  assert.equal(padded.data[0], 90);
+  assert.equal(padded.data[(8 * 8 + 0) * 4], 18);
+  const strip = continueStripMask(8, 16, { left: 0, right: 0, top: 0, bottom: 8 }, { x0: 2, y0: 1, x1: 5, y1: 7 }, "pants", 1);
+  assert.equal(strip.data[(7 * 8 + 4) * 4], 255);
+  assert.equal(strip.data[(12 * 8 + 4) * 4], 255);
+  assert.equal(strip.data[(12 * 8 + 0) * 4], 0);
 });

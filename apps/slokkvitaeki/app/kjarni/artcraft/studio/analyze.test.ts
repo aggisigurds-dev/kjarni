@@ -53,7 +53,12 @@ test("regionsFromPerson returns person, garments, background and objects", () =>
   assert.ok(ids.includes("person"));
   assert.ok(ids.includes("pants"));
   assert.ok(ids.includes("top"));
+  assert.ok(ids.includes("bodyUnder"));
   assert.ok(ids.includes("background"));
+  const body = regions.find((r) => r.id === "bodyUnder")!;
+  assert.ok(body.hidden);
+  assert.equal(body.mask.data[(10 * 48 + 20) * 4], 0);
+  assert.equal(body.mask.data[(30 * 48 + 20) * 4], 255);
   assert.equal(ids.includes("clothes"), false);
   assert.ok(regions.some((r) => r.kind === "object"), "red blob on green field should become an object");
 });

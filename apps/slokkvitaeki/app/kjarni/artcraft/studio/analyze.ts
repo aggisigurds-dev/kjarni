@@ -291,6 +291,18 @@ export function regionsFromPerson(image: Raster, person: Raster): AnalyzedRegion
     if (headCov > 0.004) {
       regions.push({ id: "head", kind: "head", label: "Andlit / hár", mask: head, coverage: headCov });
     }
+    const bodyUnder = subtractMask(person, head);
+    const bodyCov = coverageOf(bodyUnder);
+    if (bodyCov > 0.01) {
+      regions.push({
+        id: "bodyUnder",
+        kind: "clothes",
+        label: "Líkami undir",
+        mask: bodyUnder,
+        coverage: bodyCov,
+        hidden: true,
+      });
+    }
     regions.push(...garmentRegions(person));
   }
   const background = invertMask(person);

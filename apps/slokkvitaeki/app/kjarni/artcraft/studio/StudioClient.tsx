@@ -7,7 +7,18 @@ import "../artcraft.css";
 import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
 import GarmentBar from "./GarmentBar";
-import { addMaskId, GARMENT_NEGATIVE, isGarmentChip, type GarmentAdd } from "./garments";
+import {
+  addMaskId,
+  BODY_UNDER_ID,
+  GARMENT_NEGATIVE,
+  garmentBodyPrompt,
+  garmentContinuePrompt,
+  isGarmentChip,
+  slotOfRegion,
+  type GarmentAdd,
+  type GarmentSlot,
+} from "./garments";
+import { extendForContinue } from "./garmentsImage";
 import LightPlanPanel from "./LightPlan";
 import {
   backdropShootPrompt,
@@ -161,6 +172,7 @@ import {
   SIZE_PRESETS,
   WEBUI_URL_KEY,
   canEmbedLocalWebui,
+  clampSize,
   denoisingHint,
   findStudioAdapters,
   generateLocal,
@@ -315,13 +327,13 @@ export default function StudioClient() {
     setPresetMaskTick((n) => n + 1);
   }
 
-  async function analyze() {
-    if (!source) return;
+  async function analyze(src = source) {
+    if (!src) return;
     setError("");
     setAnalyzing(true);
     setAnalyzeText("Greini myndina…");
     try {
-      const found = await analyzeStudioImage(source, setAnalyzeText);
+      const found = await analyzeStudioImage(src, setAnalyzeText);
       setRegions(found);
       const first =
         found.find((r) => r.id === "pants") ||
@@ -330,7 +342,9 @@ export default function StudioClient() {
         found[0];
       if (first) pickRegion(first);
       const chips = found.filter((r) => !r.hidden);
-      setAnalyzeText(`${chips.length} svæði · eyða fyllir fætur, svo bæta við`);
+      setAnalyzeText(
+        `${chips.length} svæði · endurbyggja allan líkamann undir fötunum, svo bæta við`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki greint myndina");
       setAnalyzeText("");
@@ -350,24 +364,31 @@ export default function StudioClient() {
     patchSettings({ denoisingStrength: actionDenoising(action) });
   }
 
-  async function runGarment(prompt: string, maskId: string) {
+  async function runGarment(
+    prompt: string,
+    maskId: string,
+    opts?: { initImage?: string; width?: number; height?: number; maskUrl?: string },
+  ) {
     const region = regions.find((r) => r.id === maskId);
-    if (!region?.maskUrl) {
-      setError("Greindu myndina og veldu fatnað fyrst.");
+    const maskUrl = opts?.maskUrl || region?.maskUrl;
+    if (!maskUrl) {
+      setError("Greindu myndina fyrst.");
       return;
     }
-    pickRegion(region);
+    if (region) pickRegion(region);
     setPrompt(prompt);
     const out = await runGenerate({
       prompt,
-      mask: region.maskUrl,
+      mask: maskUrl,
       extraNegative: GARMENT_NEGATIVE,
+      initImage: opts?.initImage,
+      width: opts?.width,
+      height: opts?.height,
     });
     if (out[0]) {
       setSource(out[0]);
       setWorking(out[0]);
-      const chip = regions.find((r) => !r.hidden && r.slot === region.slot);
-      if (chip) pickRegion(chip);
+      await analyze(out[0]);
     }
   }
 
@@ -375,6 +396,41 @@ export default function StudioClient() {
     const preferred = addMaskId(add, selectedRegion || add.slot);
     const maskId = regions.some((r) => r.id === preferred) ? preferred : add.slot;
     void runGarment(add.prompt, maskId);
+  }
+
+  function runRebuildBody() {
+    const body = regions.find((r) => r.id === BODY_UNDER_ID);
+    if (!body?.maskUrl) {
+      setError("Greindu myndina fyrst svo hægt sé að endurbyggja líkamann undir fötunum.");
+      return;
+    }
+    void runGarment(garmentBodyPrompt(), BODY_UNDER_ID);
+  }
+
+  async function runContinueBody() {
+    const still = identityStill({ working, source, profile });
+    const person = regions.find((r) => r.id === "person");
+    const body = regions.find((r) => r.id === BODY_UNDER_ID);
+    const selected = regions.find((r) => r.id === selectedRegion);
+    const slot: GarmentSlot = slotOfRegion(selected?.id || "", selected?.kind) || "pants";
+    if (!still || !person?.maskUrl) {
+      setError("Greindu myndina fyrst.");
+      return;
+    }
+    try {
+      const extent = await extendForContinue(still, slot, person.maskUrl, body?.maskUrl || selected?.maskUrl);
+      if (extent.padded) {
+        patchSettings({ width: clampSize(extent.width), height: clampSize(extent.height) });
+      }
+      await runGarment(garmentContinuePrompt(slot), body?.id || selected?.id || "pants", {
+        initImage: extent.image,
+        maskUrl: extent.mask,
+        width: clampSize(extent.width),
+        height: clampSize(extent.height),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lengt líkamann");
+    }
   }
 
   async function checkServer(url = webui) {
@@ -457,6 +513,8 @@ export default function StudioClient() {
     turn?: boolean;
     quiet?: boolean;
     extraNegative?: string;
+    width?: number;
+    height?: number;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
     const neg = [negative, opts?.extraNegative].filter((s) => s && s.trim()).join(", ");
@@ -516,6 +574,8 @@ export default function StudioClient() {
         faceAdapter,
         ...extraControls({ poseRef: opts?.poseRef, styleRef: useShot ? shot : opts?.styleRef }),
         ...settings,
+        width: opts?.width ?? settings.width,
+        height: opts?.height ?? settings.height,
         cfgScale: userPaint ? paintEditCfg(settings.cfgScale) : settings.cfgScale,
         denoisingStrength: denoise,
       });
@@ -1597,7 +1657,7 @@ export default function StudioClient() {
                         {regions.length > 0 && (
                           <>
                             <p className="ac-hint">
-                              Ýttu á buxur. Eyða teiknar fæturna undir, ekki gat. Svo stuttbuxur ofan á.
+                              Endurbyggja teiknar allan líkamann undir fötunum. Svo stuttbuxur ofan á.
                             </p>
                             <div className="ac-row ac-chips">
                               {regions
@@ -1615,7 +1675,10 @@ export default function StudioClient() {
                             </div>
                             <GarmentBar
                               region={regions.find((r) => r.id === selectedRegion)}
+                              canRebuild={regions.some((r) => r.id === BODY_UNDER_ID)}
                               busy={busy}
+                              onRebuild={runRebuildBody}
+                              onContinue={() => void runContinueBody()}
                               onFill={(text, maskId) => void runGarment(text, maskId)}
                               onAdd={addGarment}
                             />

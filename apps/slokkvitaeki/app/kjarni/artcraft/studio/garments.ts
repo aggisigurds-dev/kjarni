@@ -1,6 +1,14 @@
 /** Delete a garment, then add a new one. In-place "change pants to shorts" rewrites the whole person. */
 
+import { createRaster, type Raster } from "./adjust";
+
 export type GarmentSlot = "top" | "sleeves" | "pants" | "shoes";
+
+export const BODY_UNDER_ID = "bodyUnder";
+
+export type BodyBox = { x0: number; y0: number; x1: number; y1: number };
+
+export type ContinuePad = { left: number; right: number; top: number; bottom: number };
 
 /** Inpaint must reconstruct the body under the clothes, never punch a hole. */
 export const GARMENT_FILL =
@@ -94,12 +102,17 @@ export function slotOfRegion(id: string, kind?: string): GarmentSlot | null {
 }
 
 export function isGarmentChip(id: string): boolean {
-  return id === "top" || id === "sleeves" || id === "pants" || id === "shoes";
+  return id === "top" || id === "sleeves" || id === "pants" || id === "shoes" || id === BODY_UNDER_ID;
 }
 
 export function addsForSlot(slot: GarmentSlot | null): GarmentAdd[] {
   if (!slot) return [];
   return GARMENT_ADDS.filter((row) => row.slot === slot);
+}
+
+/** Rebuild the whole body under every garment. Face stays; clothes in the mask go. */
+export function garmentBodyPrompt(): string {
+  return `take off the clothes in the masked body and reconstruct the complete adult body that was underneath, torso both arms and both legs down to the feet, matching skin and pose, keep the unmasked face and hair identical, ${GARMENT_FILL}, same adult person, photorealistic, no extra people`;
 }
 
 export function garmentRemovePrompt(slot: GarmentSlot): string {
@@ -118,13 +131,141 @@ export function garmentRemovePrompt(slot: GarmentSlot): string {
 export function garmentContinuePrompt(slot: GarmentSlot): string {
   const limb =
     slot === "pants"
-      ? "continue generating the adult legs, complete both legs from hip to ankle, matching skin and pose"
+      ? "outpaint and continue both adult legs below the frame, complete legs from hip to feet, matching skin and pose"
       : slot === "sleeves"
-        ? "continue generating the adult arms, complete both arms, matching skin and pose"
+        ? "outpaint and continue both adult arms beyond the frame, complete the arms, matching skin and pose"
         : slot === "top"
           ? "continue generating the adult torso, complete the body, matching skin"
-          : "continue generating the adult feet, complete the anatomy, matching skin";
+          : "outpaint and continue the adult feet below the frame, complete the anatomy, matching skin";
   return `${limb}, ${GARMENT_FILL}, same adult person, keep unmasked pixels, photorealistic, no extra people`;
+}
+
+function round8(n: number): number {
+  return Math.max(0, Math.round(n / 8) * 8);
+}
+
+/** Extra canvas so Áframhald can generate legs/arms that were cropped off. */
+export function continuePad(
+  slot: GarmentSlot,
+  width: number,
+  height: number,
+  box: BodyBox,
+): ContinuePad {
+  const pad: ContinuePad = { left: 0, right: 0, top: 0, bottom: 0 };
+  const bodyH = Math.max(1, box.y1 - box.y0 + 1);
+  const bodyW = Math.max(1, box.x1 - box.x0 + 1);
+  if (slot === "pants" || slot === "shoes") {
+    const want = round8(bodyH * 0.55);
+    const room = Math.max(0, height - 1 - box.y1);
+    pad.bottom = round8(Math.max(0, want - room));
+  }
+  if (slot === "sleeves") {
+    const want = round8(bodyW * 0.4);
+    pad.left = round8(Math.max(0, want - box.x0));
+    pad.right = round8(Math.max(0, want - (width - 1 - box.x1)));
+  }
+  return pad;
+}
+
+export function padHasExtent(pad: ContinuePad): boolean {
+  return pad.left + pad.right + pad.top + pad.bottom > 0;
+}
+
+export function padRaster(src: Raster, pad: ContinuePad, fill = 18): Raster {
+  const width = src.width + pad.left + pad.right;
+  const height = src.height + pad.top + pad.bottom;
+  const out = createRaster(width, height, fill);
+  for (let y = 0; y < src.height; y++) {
+    for (let x = 0; x < src.width; x++) {
+      const si = (y * src.width + x) * 4;
+      const di = ((y + pad.top) * width + (x + pad.left)) * 4;
+      out.data[di] = src.data[si];
+      out.data[di + 1] = src.data[si + 1];
+      out.data[di + 2] = src.data[si + 2];
+      out.data[di + 3] = src.data[si + 3];
+    }
+  }
+  return out;
+}
+
+export function shiftRaster(src: Raster, pad: ContinuePad, destW: number, destH: number): Raster {
+  const out = createRaster(destW, destH, 0);
+  for (let y = 0; y < src.height; y++) {
+    const dy = y + pad.top;
+    if (dy < 0 || dy >= destH) continue;
+    for (let x = 0; x < src.width; x++) {
+      const dx = x + pad.left;
+      if (dx < 0 || dx >= destW) continue;
+      const si = (y * src.width + x) * 4;
+      const di = (dy * destW + dx) * 4;
+      out.data[di] = src.data[si];
+      out.data[di + 1] = src.data[si + 1];
+      out.data[di + 2] = src.data[si + 2];
+      out.data[di + 3] = src.data[si + 3];
+    }
+  }
+  return out;
+}
+
+export function orRaster(a: Raster, b: Raster): Raster {
+  const width = Math.min(a.width, b.width);
+  const height = Math.min(a.height, b.height);
+  const out = createRaster(a.width, a.height, 0);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * a.width + x) * 4;
+      const j = (y * b.width + x) * 4;
+      const on = a.data[i] > 20 || b.data[j] > 20 ? 255 : 0;
+      out.data[i] = on;
+      out.data[i + 1] = on;
+      out.data[i + 2] = on;
+      out.data[i + 3] = 255;
+    }
+  }
+  return out;
+}
+
+/** White strip where the body should continue (below hips, or beside arms). */
+export function continueStripMask(
+  destW: number,
+  destH: number,
+  pad: ContinuePad,
+  box: BodyBox,
+  slot: GarmentSlot,
+  overlap = 24,
+): Raster {
+  const out = createRaster(destW, destH, 0);
+  const x0 = Math.max(0, box.x0 + pad.left);
+  const x1 = Math.min(destW - 1, box.x1 + pad.left);
+  const y0 = Math.max(0, box.y0 + pad.top);
+  const y1 = Math.min(destH - 1, box.y1 + pad.top);
+  if (slot === "pants" || slot === "shoes") {
+    const top = Math.max(0, y1 - overlap);
+    fillWhite(out, x0, top, x1, destH - 1);
+  }
+  if (slot === "sleeves") {
+    const armTop = y0 + Math.round((y1 - y0) * 0.16);
+    const armBot = y0 + Math.round((y1 - y0) * 0.55);
+    if (pad.left > 0) fillWhite(out, 0, armTop, x0 + overlap, armBot);
+    if (pad.right > 0) fillWhite(out, x1 - overlap, armTop, destW - 1, armBot);
+  }
+  return out;
+}
+
+function fillWhite(dest: Raster, x0: number, y0: number, x1: number, y1: number): void {
+  const xa = Math.max(0, Math.min(x0, x1));
+  const xb = Math.min(dest.width - 1, Math.max(x0, x1));
+  const ya = Math.max(0, Math.min(y0, y1));
+  const yb = Math.min(dest.height - 1, Math.max(y0, y1));
+  for (let y = ya; y <= yb; y++) {
+    for (let x = xa; x <= xb; x++) {
+      const i = (y * dest.width + x) * 4;
+      dest.data[i] = 255;
+      dest.data[i + 1] = 255;
+      dest.data[i + 2] = 255;
+      dest.data[i + 3] = 255;
+    }
+  }
 }
 
 export function addMaskId(add: GarmentAdd, fallback: string): string {
