@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { StationChrome } from "../kjarni/StationChrome";
 import {
-  AFSLATTUR, DESTS, FERDASKRIFSTOFUR, TRAVELLERS, WINDOWS, addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, isk, stutt,
+  AFSLATTUR, DESTS, FERDASKRIFSTOFUR, GAUTABORG_BEINT, GAUTABORG_GLUGGI, KAUPMANNAHOFN_LEID, TRAVELLERS, WINDOWS,
+  addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, isk, stutt,
   type DestCode, type Settings,
 } from "./trip";
 import "./borgarferdir.css";
@@ -13,11 +14,14 @@ const DEFAULTS: Settings = { out: "2026-11-12", nights: 3, bags: 2, rooms: 1, ge
 const STADA = { athuga: "Athuga", lokid: "Líklega búið", ekki: "Gildir ekki hér", rad: "Ráð" } as const;
 const num = (v: string, min: number) => Math.max(min, Number(v) || 0);
 
+type ReqState = "idle" | "sending" | "sent" | "error";
+
 export default function BorgarferdirClient() {
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
   const [dest, setDest] = useState<DestCode | "allt">("allt");
   const [allir, setAllir] = useState(false);
+  const [req, setReq] = useState<ReqState>("idle");
 
   useEffect(() => {
     try {
@@ -38,6 +42,31 @@ export default function BorgarferdirClient() {
   const pakkar = useMemo(() => buildPackages(s).filter((p) => dest === "allt" || p.dest.code === dest), [s, dest]);
   const syna = allir ? pakkar : pakkar.slice(0, 6);
   const cheapest = pakkar.find((p) => p.fits);
+
+  async function bidjaUmRannsokn() {
+    setReq("sending");
+    const hvada = dest === "allt" ? "Manchester og Glasgow" : DESTS[dest].borg;
+    try {
+      const res = await fetch("https://brunaholf.netlify.app/api/verkefnalisti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add",
+          title: "Borgarferðir: endurnýja rannsóknina (tilboð úrelt/upppseld)",
+          description:
+            `Tilboðin á /borgarferdir eru orðin úreld — mörg upppseld eða útrunnin. ` +
+            `Vinsamlegast farið yfir flug og hótel aftur fyrir ${hvada} (${dagsetning(s.out)} – ${dagsetning(ret)}) ` +
+            `og uppfærið gögnin í apps/slokkvitaeki/app/borgarferdir/trip.ts með nýjum verðum, dagsetningum og tenglum.`,
+          status: "beidni",
+        }),
+      });
+      const data: unknown = await res.json().catch(() => null);
+      const ok = res.ok && !(data && typeof data === "object" && "error" in data);
+      setReq(ok ? "sent" : "error");
+    } catch {
+      setReq("error");
+    }
+  }
 
   return (
     <StationChrome tool="borgarferdir">
@@ -62,6 +91,18 @@ export default function BorgarferdirClient() {
               </div>
             )}
           </header>
+
+          <div className="bf-refresh">
+            <p>Tilboðin hér eldast hratt — mörg eru núna upppseld eða útrunnin. Smelltu til að biðja um að rannsóknin verði gerð aftur.</p>
+            <button
+              type="button"
+              className={`bf-refresh-btn${req === "sent" ? " ok" : ""}${req === "error" ? " err" : ""}`}
+              onClick={bidjaUmRannsokn}
+              disabled={req === "sending" || req === "sent"}
+            >
+              {req === "sent" ? "Beiðni send ✓" : req === "sending" ? "Sendi…" : req === "error" ? "Villa — prófa aftur" : "🔎 Biðja um nýja rannsókn"}
+            </button>
+          </div>
 
           <section className="bf-sec" aria-labelledby="bf-dags">
             <h2 id="bf-dags">Dagsetning</h2>
@@ -134,6 +175,42 @@ export default function BorgarferdirClient() {
               £15 / £47 hvor leið. Hótelverð eru „frá“-verð af öðrum dagsetningum. Barn greiðir fullt fargjald. Hótel án verðs eru ekki
               í röðuninni.
             </p>
+          </section>
+
+          <section className="bf-sec" aria-labelledby="bf-got">
+            <h2 id="bf-got">Gautaborg (Svíþjóð) · {GAUTABORG_GLUGGI}</h2>
+            <p className="bf-note">
+              Ný fyrirspurn, aðeins flug — ekkert hótel reiknað. Ekkert núllstopp (beint) flug KEF–GOT fannst á þessar dagsetningar á
+              Google Flights — líklega árstíðabundin leið sem flýgur ekki á veturna; öll flug hér eru með einu stoppi. Verðin eru
+              fyrir 1 fullorðinn, ekki fjölskyldu eins og restin af síðunni, sótt 22. okt. 2026 — staðfestu með tenglunum. Ekki er
+              ljóst hvort 27. jan. 2026 eða 2027 var átt við (sá dagur í 2026 er liðinn) — hér er miðað við 2027.
+            </p>
+            <div className="bf-links">
+              {GAUTABORG_BEINT.map((f) => (
+                <a key={f.nafn} href={f.href} target="_blank" rel="noreferrer">
+                  <strong>{f.nafn} ↗</strong>
+                  <small>{f.leid} · {f.timi}</small>
+                  <small><b>{f.verd}</b></small>
+                  <small>{f.lysing}</small>
+                </a>
+              ))}
+            </div>
+            <p className="bf-note">
+              <b>Valkostur:</b> fljúga beint til Kaupmannahafnar og taka lest til Gautaborgar — oft hraðara og ódýrara en
+              stoppflugin að ofan, og hægt að stoppa í Köben á leiðinni.
+            </p>
+            <div className="bf-links">
+              <a href={KAUPMANNAHOFN_LEID.flug.href} target="_blank" rel="noreferrer">
+                <strong>{KAUPMANNAHOFN_LEID.flug.nafn} ↗</strong>
+                <small>{KAUPMANNAHOFN_LEID.flug.timi}</small>
+                <small><b>{KAUPMANNAHOFN_LEID.flug.verd}</b></small>
+              </a>
+              <a href={KAUPMANNAHOFN_LEID.lest.href} target="_blank" rel="noreferrer">
+                <strong>{KAUPMANNAHOFN_LEID.lest.nafn} ↗</strong>
+                <small>{KAUPMANNAHOFN_LEID.lest.timi}</small>
+                <small><b>{KAUPMANNAHOFN_LEID.lest.verd}</b></small>
+              </a>
+            </div>
           </section>
 
           <section className="bf-sec" aria-labelledby="bf-fs">

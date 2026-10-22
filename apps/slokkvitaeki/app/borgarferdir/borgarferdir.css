@@ -22,6 +22,19 @@
 .bf-best small { color:rgba(255,255,255,.75); }
 .bf-best .bf-kicker { color:#f5d76e; }
 
+.bf-refresh {
+  display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:14px 18px; background:var(--m-card,#fff8e8); border:1px dashed var(--m-org,#b8862b); border-radius:var(--m-radius,2px);
+}
+.bf-refresh p { margin:0; font-size:13px; line-height:1.4; color:var(--m-soft,#6b5a3c); max-width:60ch; }
+.bf-refresh-btn {
+  flex:none; font:inherit; font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap;
+  padding:10px 16px; border:1px solid var(--m-org,#b8862b); background:var(--m-org,#b8862b); color:#fff; border-radius:var(--m-radius,2px);
+}
+.bf-refresh-btn:disabled { cursor:default; }
+.bf-refresh-btn.ok { background:#2e7d32; border-color:#2e7d32; }
+.bf-refresh-btn.err { background:#b3261e; border-color:#b3261e; }
+
 .bf-sec { display:flex; flex-direction:column; gap:14px; }
 .bf-sec-h { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
 .bf-chips { display:flex; flex-wrap:wrap; gap:8px; }

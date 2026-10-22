@@ -140,6 +140,48 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
 export const TRAVELLERS = 4;
 export const WINDOWS = ["2026-11-05", "2026-11-12", "2026-11-19", "2026-11-26"] as const;
 
+/* Gautaborg (Gothenburg) — flug-aðeins könnun fyrir 27. jan – 1. feb. 27. jan. 2026 er liðinn dagur (í dag er 22. okt.
+ * 2026), svo gert ráð fyrir 2027. Verð sótt af Google Flights 22. okt. 2026, fyrir 1 fullorðinn — ekki fjölskylduverð
+ * eins og restin af síðunni. Ekkert beint flug KEF–GOT fannst á þessum dögum (reynt bæði með leit og handvirkt). */
+export const GAUTABORG_GLUGGI = "27. jan. – 1. feb. 2027";
+
+export const GAUTABORG_BEINT: { nafn: string; leid: string; timi: string; verd: string; lysing: string; href: string }[] = [
+  {
+    nafn: "KLM / Transavia", leid: "um Amsterdam", timi: "6 klst. 40 mín. · 1 stopp (2 klst. í AMS)",
+    verd: "frá ISK 64.891", lysing: "Ódýrasta flugið sem fannst á þessar dagsetningar.",
+    href: "https://www.google.com/travel/flights?q=Flights%20from%20KEF%20to%20GOT%20on%202027-01-27%20through%202027-02-01",
+  },
+  {
+    nafn: "Finnair", leid: "um Helsinki", timi: "5 klst. 45 mín. · 1 stopp (50 mín. í HEL)",
+    verd: "ISK 91.931", lysing: "Stysta biðin af stopp-flugunum, en dýrara en um Amsterdam.",
+    href: "https://www.google.com/travel/flights?q=Flights%20from%20KEF%20to%20GOT%20on%202027-01-27%20through%202027-02-01",
+  },
+  {
+    nafn: "SAS", leid: "um Kaupmannahöfn", timi: "4 klst. 50 mín. · 1 stopp (1 klst. í CPH)",
+    verd: "verð ekki sýnt á Google Flights", lysing: "Stysta heildarferðin — athugaðu verð beint hjá SAS.",
+    href: "https://www.flysas.com",
+  },
+  {
+    nafn: "Icelandair + Finnair", leid: "um Reykjavík/Helsinki", timi: "8 klst. 15 mín. · 1 stopp (3 klst. 15 mín.)",
+    verd: "ISK 125.831", lysing: "Dýrasti og lengsti kosturinn af þessum.",
+    href: "https://www.google.com/travel/flights?q=Flights%20from%20KEF%20to%20GOT%20on%202027-01-27%20through%202027-02-01",
+  },
+];
+
+/** DIY-leiðin: beint til Köben, svo lest til Gautaborgar — oft hraðara og ódýrara en stopp-flugin að ofan. */
+export const KAUPMANNAHOFN_LEID = {
+  flug: {
+    nafn: "Icelandair, beint KEF–CPH", timi: "3 klst. 15 mín., nánast daglega",
+    verd: "frá ISK 30.721 á mann fram og til baka (1 fullorðinn, sömu dagsetningar)",
+    href: "https://www.google.com/travel/flights?q=Flights%20from%20KEF%20to%20CPH%20on%202027-01-27%20through%202027-02-01",
+  },
+  lest: {
+    nafn: "Öresundståg / SJ, beint Kaupmannahöfn H–Gautaborg C", timi: "um 3 klst. 20–50 mín., u.þ.b. á klukkutíma fresti",
+    verd: "um 40–90 EUR aðra leið eftir því hvað er bókað snemma",
+    href: "https://www.omio.com/trains/copenhagen-central-station/gothenburg-centralstation-mkgrq",
+  },
+};
+
 const DAGAR = ["sun", "mán", "þri", "mið", "fim", "fös", "lau"];
 const MANUDIR = ["jan", "feb", "mar", "apr", "maí", "jún", "júl", "ágú", "sep", "okt", "nóv", "des"];
 
