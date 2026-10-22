@@ -1050,6 +1050,10 @@
   margin-top: 8px;
 }
 
+.ac-action-prompt {
+  word-break: break-word;
+}
+
 .ac-clip {
   margin: 16px 0 0;
 }

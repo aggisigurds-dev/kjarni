@@ -35,12 +35,17 @@ import {
 import { faceSheet } from "./profileImage";
 import VideoPanel from "./VideoPanel";
 import {
+  commandFromPrompt,
   DEFAULT_VIDEO,
+  deleteCustomAction,
+  loopFrames,
   mergeMotion,
-  pingPong,
+  readCustomActions,
   readStoredVideo,
+  saveCustomAction,
   VIDEO_KEY,
   videoDenoising,
+  type ActionCommand,
   type VideoSettings,
 } from "./video";
 import { stitchWebm } from "./videoImage";
@@ -116,6 +121,7 @@ export default function StudioClient() {
   const [clip, setClip] = useState<VideoSettings>(DEFAULT_VIDEO);
   const [clipText, setClipText] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
+  const [customActions, setCustomActions] = useState<ActionCommand[]>([]);
 
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
@@ -123,6 +129,7 @@ export default function StudioClient() {
     setSettings(readStoredSettings());
     setLights(readStoredLights());
     setClip(readStoredVideo());
+    setCustomActions(readCustomActions());
     setReady(true);
   }, []);
 
@@ -386,7 +393,7 @@ export default function StudioClient() {
       return;
     }
     const text = mergeIdentity(
-      mergePrompt(mergeMotion(prompt || "same adult person", clip.kind), lights),
+      mergePrompt(mergeMotion(prompt || "same adult person", clip.kind, customActions), lights),
       profile?.name || "",
       Boolean(useProfile && hasIdentity(profile)),
     );
@@ -421,7 +428,7 @@ export default function StudioClient() {
         prev = out[0];
       }
       setClipText("Sauma WebM…");
-      const blob = await stitchWebm(pingPong(frames), clip.fps);
+      const blob = await stitchWebm(loopFrames(frames, clip.kind, customActions), clip.fps);
       setVideoUrl((cur) => {
         if (cur) URL.revokeObjectURL(cur);
         return URL.createObjectURL(blob);
@@ -888,6 +895,31 @@ export default function StudioClient() {
                 progress={clipText}
                 videoUrl={videoUrl}
                 hasStill={Boolean(working || source || images[0])}
+                prompt={prompt}
+                custom={customActions}
+                onSaveAction={(label) => {
+                  try {
+                    assertAdultPrompt(prompt, negative);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Óleyfileg skipun");
+                    return;
+                  }
+                  const row = commandFromPrompt(label, prompt);
+                  if (!row) {
+                    setError("Skrifaðu prompt til að vista skipun.");
+                    return;
+                  }
+                  setCustomActions(saveCustomAction(customActions, row));
+                  setClip((cur) => ({ ...cur, kind: row.id, motion: row.motion }));
+                  setError("");
+                }}
+                onDeleteAction={(id) => {
+                  const next = deleteCustomAction(customActions, id);
+                  setCustomActions(next);
+                  if (clip.kind === id) {
+                    setClip((cur) => ({ ...cur, kind: "breathe" }));
+                  }
+                }}
               />
 
               {images.length > 0 && (
