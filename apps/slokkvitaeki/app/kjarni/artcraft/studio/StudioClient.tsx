@@ -30,6 +30,7 @@ import {
   mergeIdentity,
   orbitImages,
   SHARPEN_DENOISING,
+  type OrbitId,
   type PersonProfile,
 } from "./profile";
 import { faceSheet } from "./profileImage";
@@ -46,6 +47,7 @@ import RefsPanel from "./RefsPanel";
 import {
   FIX_DENOISING,
   STYLE_DENOISING,
+  TURN_DENOISING,
   fixPrompt,
   mergePose,
   mergeStyle,
@@ -53,9 +55,26 @@ import {
   nearestOrbitView,
   poseDenoising,
   studioStill,
+  turnPreview,
+  yawPrompt,
+  yawSlot,
+  yawToSlot,
   type StyleKind,
 } from "./refs";
 import { extractVideoFrames } from "./refsImage";
+import VersionsPanel from "./VersionsPanel";
+import {
+  VERSION_DENOISING,
+  dropVersion,
+  loadVersions,
+  mergeVersion,
+  newVersionId,
+  saveVersions,
+  upsertVersion,
+  versionPreset,
+  versionPrompt,
+  type AvatarVersion,
+} from "./versions";
 import VideoPanel from "./VideoPanel";
 import {
   commandFromPrompt,
@@ -145,6 +164,9 @@ export default function StudioClient() {
   const [motionFrames, setMotionFrames] = useState<string[]>([]);
   const [motionName, setMotionName] = useState("");
   const [yaw, setYaw] = useState(0);
+  const [turnViews, setTurnViews] = useState<Partial<Record<OrbitId, string>>>({});
+  const [versions, setVersions] = useState<AvatarVersion[]>([]);
+  const [versionPresetId, setVersionPresetId] = useState("summer");
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -188,6 +210,14 @@ export default function StudioClient() {
       if (videoUrl) URL.revokeObjectURL(videoUrl);
     };
   }, [videoUrl]);
+
+  useEffect(() => {
+    if (!activeProfileId) {
+      setVersions([]);
+      return;
+    }
+    void loadVersions(activeProfileId).then(setVersions);
+  }, [activeProfileId]);
 
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
@@ -293,11 +323,23 @@ export default function StudioClient() {
     };
   }
 
+  function adoptStill(src: string, name: string) {
+    setSource(src);
+    setSourceName(name);
+    setWorking(src);
+    setMask(null);
+    setRegions([]);
+    setSelectedRegion(null);
+    setPresetMask(null);
+    setError("");
+  }
+
   async function runGenerate(opts?: {
     prompt?: string;
     mask?: string | null;
     denoisingStrength?: number;
     initImage?: string;
+    poseRef?: string;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
     const init = opts?.initImage || working || source || undefined;
@@ -329,7 +371,7 @@ export default function StudioClient() {
         restoreFaces: useId,
         faceRefs,
         faceAdapter: useId ? faceAdapter : null,
-        ...extraControls(),
+        ...extraControls(opts?.poseRef ? { poseRef: opts.poseRef } : undefined),
         ...settings,
         denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
       });
@@ -434,7 +476,10 @@ export default function StudioClient() {
     setUseProfile(true);
     patchSettings({ width: 1024, height: 1024, denoisingStrength: AVATAR_DENOISING });
     const out = await runGenerate({ prompt: text, mask: null, denoisingStrength: AVATAR_DENOISING });
-    if (out[0]) setWorking(out[0]);
+    if (out[0]) {
+      setTurnViews({ front: out[0] });
+      adoptStill(out[0], "avatar.png");
+    }
   }
 
   async function identityBundle() {
@@ -737,20 +782,37 @@ export default function StudioClient() {
     }
   }
 
-  function openOrbitView() {
-    const view = nearestOrbitView(profile, yaw);
-    if (!view) {
-      setError("Settu inn hringmyndir í prófílinn fyrst.");
+  function openTurnView() {
+    const preview = turnPreview(yaw, turnViews, profile, studioStill(working, images, source));
+    if (!preview) {
+      setError("Snúðu avatarnum eða settu inn hringmynd fyrst.");
       return;
     }
-    setSource(view.src);
-    setSourceName(`sjónarhorn-${view.label}.png`);
-    setWorking("");
-    setMask(null);
-    setRegions([]);
-    setSelectedRegion(null);
-    setPresetMask(null);
-    setError("");
+    adoptStill(preview.src, `sjónarhorn-${preview.label}.png`);
+  }
+
+  async function turnAvatar() {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar fyrst.");
+      return;
+    }
+    const slot = yawSlot(yaw);
+    const text = yawPrompt(yaw, profile?.name || "");
+    const orbit = nearestOrbitView(profile, yaw);
+    setPrompt(text);
+    patchSettings({ denoisingStrength: TURN_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask: null,
+      denoisingStrength: TURN_DENOISING,
+      initImage: start,
+      poseRef: orbit?.src,
+    });
+    if (out[0]) {
+      setTurnViews((cur) => ({ ...cur, [slot.id]: out[0] }));
+      adoptStill(out[0], `avatar-${slot.label}.png`);
+    }
   }
 
   async function fixPainted() {
@@ -761,7 +823,88 @@ export default function StudioClient() {
     const text = fixPrompt(prompt);
     setPrompt(text);
     patchSettings({ denoisingStrength: FIX_DENOISING });
-    await runGenerate({ prompt: text, mask, denoisingStrength: FIX_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask,
+      denoisingStrength: FIX_DENOISING,
+      initImage: working || source,
+    });
+    if (out[0]) {
+      setTurnViews((cur) => ({ ...cur, [yawToSlot(yaw)]: out[0] }));
+      adoptStill(out[0], sourceName || "avatar-lagad.png");
+    }
+  }
+
+  async function persistVersions(next: AvatarVersion[]) {
+    if (!activeProfileId) {
+      setError("Búðu til prófíl fyrst til að vista útgáfur.");
+      return;
+    }
+    setVersions(await saveVersions(activeProfileId, next));
+  }
+
+  async function makeVersion(label: string) {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar fyrst.");
+      return;
+    }
+    if (!activeProfileId) {
+      setError("Búðu til prófíl fyrst.");
+      return;
+    }
+    const preset = versionPreset(versionPresetId);
+    const line = preset && preset.label === label ? preset.prompt : versionPrompt(label);
+    const text = mergeVersion(prompt, line);
+    try {
+      assertAdultPrompt(text, negative);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
+      return;
+    }
+    setPrompt(text);
+    patchSettings({ denoisingStrength: VERSION_DENOISING });
+    const out = await runGenerate({
+      prompt: text,
+      mask: null,
+      denoisingStrength: VERSION_DENOISING,
+      initImage: start,
+    });
+    if (!out[0]) return;
+    const row: AvatarVersion = {
+      id: newVersionId(),
+      label,
+      image: out[0],
+      prompt: text,
+      updatedAt: Date.now(),
+    };
+    await persistVersions(upsertVersion(versions, row));
+    adoptStill(out[0], `utgafa-${label}.png`);
+  }
+
+  async function saveCurrentVersion(label: string) {
+    const start = studioStill(working, images, source);
+    if (!start) {
+      setError("Gerðu avatar fyrst.");
+      return;
+    }
+    if (!activeProfileId) {
+      setError("Búðu til prófíl fyrst.");
+      return;
+    }
+    const row: AvatarVersion = {
+      id: newVersionId(),
+      label,
+      image: start,
+      prompt: prompt.trim(),
+      updatedAt: Date.now(),
+    };
+    await persistVersions(upsertVersion(versions, row));
+  }
+
+  function loadVersion(row: AvatarVersion) {
+    adoptStill(row.image, `utgafa-${row.label}.png`);
+    if (row.prompt) setPrompt(row.prompt);
   }
 
   function download(src: string, index: number) {
@@ -783,7 +926,6 @@ export default function StudioClient() {
 
   const editing = Boolean(source);
   const preset = sizePresetId(settings.width, settings.height);
-  const orbitView = nearestOrbitView(profile, yaw);
   const hasStill = Boolean(studioStill(working, images, source));
 
   return (
@@ -868,6 +1010,7 @@ export default function StudioClient() {
                 <PersonProfilePanel
                   activeId={activeProfileId}
                   onActive={(id, next) => {
+                    if (id !== activeProfileId) setTurnViews({});
                     setActiveProfileId(id);
                     setProfile(next);
                   }}
@@ -886,11 +1029,25 @@ export default function StudioClient() {
                 <AvatarTurn
                   yaw={yaw}
                   onYaw={setYaw}
-                  view={orbitView}
-                  onOpen={openOrbitView}
+                  view={turnPreview(yaw, turnViews, profile, studioStill(working, images, source))}
+                  onTurn={() => void turnAvatar()}
+                  onOpen={openTurnView}
                   onFix={() => void fixPainted()}
                   busy={busy}
                   hasMask={Boolean(mask)}
+                  hasStill={hasStill}
+                />
+                <VersionsPanel
+                  presetId={versionPresetId}
+                  onPreset={setVersionPresetId}
+                  versions={versions}
+                  onMake={(label) => void makeVersion(label)}
+                  onSave={(label) => void saveCurrentVersion(label)}
+                  onLoad={loadVersion}
+                  onDelete={(id) => void persistVersions(dropVersion(versions, id))}
+                  busy={busy}
+                  hasStill={hasStill}
+                  hasProfile={Boolean(activeProfileId)}
                 />
               </section>
 

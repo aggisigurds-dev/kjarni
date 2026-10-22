@@ -6,6 +6,7 @@ export const POSE_DENOISING = 0.44;
 export const POSE_DENOISING_PROMPT = 0.52;
 export const STYLE_DENOISING = 0.38;
 export const FIX_DENOISING = 0.46;
+export const TURN_DENOISING = 0.4;
 export const MAX_MOTION_FRAMES = 8;
 export const MAX_CONTROL_UNITS = MAX_FACE_UNITS;
 
@@ -203,7 +204,45 @@ export function yawToSlot(deg: number): OrbitId {
   return best.id;
 }
 
+export const YAW_PROMPTS: Record<OrbitId, string> = {
+  front: "front view, facing camera",
+  frontRight: "three-quarter view from the right",
+  right: "right side profile",
+  backRight: "three-quarter view from the back right",
+  back: "back view, facing away",
+  backLeft: "three-quarter view from the back left",
+  left: "left side profile",
+  frontLeft: "three-quarter view from the left",
+};
+
+export function yawSlot(deg: number): (typeof ORBIT_SLOTS)[number] {
+  const id = yawToSlot(deg);
+  return ORBIT_SLOTS.find((s) => s.id === id) || ORBIT_SLOTS[0];
+}
+
+export function yawPrompt(deg: number, name = ""): string {
+  const slot = yawSlot(deg);
+  const who = name.trim() || "the same adult person";
+  return `photorealistic full-body view of ${who} from ${slot.label} (${slot.deg} degrees), ${YAW_PROMPTS[slot.id]}, same clothes, same identity, studio photograph, sharp focus, single person`;
+}
+
 export type OrbitView = { id: OrbitId; label: string; deg: number; src: string };
+
+export type TurnPreview = { src: string; label: string; kind: "avatar" | "orbit" | "still" };
+
+export function turnPreview(
+  deg: number,
+  cached: Partial<Record<OrbitId, string>>,
+  profile: PersonProfile | null | undefined,
+  still: string,
+): TurnPreview | null {
+  const slot = yawSlot(deg);
+  if (cached[slot.id]) return { src: cached[slot.id]!, label: slot.label, kind: "avatar" };
+  const orbit = nearestOrbitView(profile, deg);
+  if (orbit) return { src: orbit.src, label: slot.label, kind: "orbit" };
+  if (still) return { src: still, label: slot.label, kind: "still" };
+  return null;
+}
 
 export function nearestOrbitView(profile: PersonProfile | null | undefined, deg: number): OrbitView | null {
   const wanted = yawToSlot(deg);

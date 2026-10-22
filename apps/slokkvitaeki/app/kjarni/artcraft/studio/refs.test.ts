@@ -18,6 +18,9 @@ import {
   POSE_DENOISING_PROMPT,
   studioScripts,
   studioStill,
+  turnPreview,
+  yawPrompt,
+  yawSlot,
   yawToSlot,
 } from "./refs.ts";
 
@@ -89,6 +92,23 @@ test("studioScripts stays empty without refs or restore", () => {
   const extra = studioScripts({ toApi: (s) => s });
   assert.equal(extra.restore_faces, undefined);
   assert.equal(extra.alwayson_scripts, undefined);
+});
+
+test("yawPrompt names the angle and turnPreview prefers a generated view", () => {
+  assert.match(yawPrompt(90, "Sara"), /Sara/);
+  assert.match(yawPrompt(90), /right side profile/);
+  assert.equal(yawSlot(90).id, "right");
+  const profile = {
+    id: "p",
+    name: "Sara",
+    faces: [],
+    orbit: { right: "ORBIT" },
+    updatedAt: 1,
+  };
+  assert.equal(turnPreview(90, { right: "AVATAR" }, profile, "STILL")?.kind, "avatar");
+  assert.equal(turnPreview(90, {}, profile, "STILL")?.src, "ORBIT");
+  assert.equal(turnPreview(0, {}, { ...profile, orbit: {} }, "STILL")?.kind, "still");
+  assert.equal(turnPreview(0, {}, { ...profile, orbit: {} }, ""), null);
 });
 
 test("yaw maps to the nearest orbit slot and filled neighbour", () => {

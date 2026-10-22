@@ -27,8 +27,9 @@ svipbrigði, fatnaður), lookbook (4 kyrrar), athafnaröð og uppruna/útkomu-sa
 Pósuviðmið (OpenPose þegar það er til) læsir stellingu avatarsins við markmiðsmynd.
 Stutt videó er lesið í ramma og avatarinn endurgerir hreyfinguna. Skjámynd af
 fatnaði eða skarti fer á manneskjuna (IP-Adapter án andlits, annars prompt).
-Hægt er að snúa avatarnum um hringmyndirnar, mála galla og biðja um lagfæringu
-á því svæði.
+Hægt er að snúa avatarnum um horn, mála galla og biðja um lagfæringu
+á því svæði. Útgáfur (sumar, elegant, jólafatnaður, diskó, eða eigið nafn)
+vistast með prófílnum.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.
