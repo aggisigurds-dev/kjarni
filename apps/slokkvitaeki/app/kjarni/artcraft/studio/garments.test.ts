@@ -5,6 +5,8 @@ import { bboxMask, garmentRegions, sleeveMask } from "./analyze.ts";
 import {
   addMaskId,
   addsForSlot,
+  GARMENT_NEGATIVE,
+  garmentContinuePrompt,
   garmentRemovePrompt,
   isGarmentChip,
   slotOfRegion,
@@ -37,8 +39,14 @@ test("slot maps chips; adds are delete-then-add not in-place rewrite", () => {
   assert.deepEqual(pants, ["Stuttbuxur", "Þröngar buxur", "Langar buxur"]);
   const shorts = addsForSlot("pants").find((row) => row.id === "shorts");
   assert.equal(shorts?.maskId, "shortsZone");
-  assert.match(garmentRemovePrompt("pants"), /remove the trousers/);
-  assert.doesNotMatch(garmentRemovePrompt("pants"), /change the trousers/);
+  const takeOff = garmentRemovePrompt("pants");
+  assert.match(takeOff, /reconstruct the adult legs/);
+  assert.match(takeOff, /no hole/);
+  assert.match(takeOff, /continue the hips/);
+  assert.doesNotMatch(takeOff, /change the trousers/);
+  assert.match(garmentContinuePrompt("pants"), /continue generating the adult legs/);
+  assert.match(GARMENT_NEGATIVE, /hole/);
+  assert.match(shorts!.prompt, /over the existing reconstructed legs/);
   assert.equal(addMaskId(shorts!, "pants"), "shortsZone");
 });
 

@@ -7,7 +7,7 @@ import "../artcraft.css";
 import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
 import GarmentBar from "./GarmentBar";
-import { addMaskId, isGarmentChip, type GarmentAdd } from "./garments";
+import { addMaskId, GARMENT_NEGATIVE, isGarmentChip, type GarmentAdd } from "./garments";
 import LightPlanPanel from "./LightPlan";
 import {
   backdropShootPrompt,
@@ -330,7 +330,7 @@ export default function StudioClient() {
         found[0];
       if (first) pickRegion(first);
       const chips = found.filter((r) => !r.hidden);
-      setAnalyzeText(`${chips.length} svæði · ýttu á buxur, eyða, svo bæta við`);
+      setAnalyzeText(`${chips.length} svæði · eyða fyllir fætur, svo bæta við`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki greint myndina");
       setAnalyzeText("");
@@ -358,7 +358,11 @@ export default function StudioClient() {
     }
     pickRegion(region);
     setPrompt(prompt);
-    const out = await runGenerate({ prompt, mask: region.maskUrl });
+    const out = await runGenerate({
+      prompt,
+      mask: region.maskUrl,
+      extraNegative: GARMENT_NEGATIVE,
+    });
     if (out[0]) {
       setSource(out[0]);
       setWorking(out[0]);
@@ -452,8 +456,10 @@ export default function StudioClient() {
     styleRef?: string;
     turn?: boolean;
     quiet?: boolean;
+    extraNegative?: string;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
+    const neg = [negative, opts?.extraNegative].filter((s) => s && s.trim()).join(", ");
     const init = identityStill({
       init: opts?.initImage,
       working,
@@ -464,7 +470,7 @@ export default function StudioClient() {
     const userPaint = isUserPaintEdit(painted, opts?.denoisingStrength);
     setError("");
     try {
-      assertAdultPrompt(text, negative);
+      assertAdultPrompt(text, neg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
       return [];
@@ -500,7 +506,7 @@ export default function StudioClient() {
         prompt: userPaint
           ? paintEditPrompt(text, useShot, paintShotKind)
           : mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
-        negativePrompt: mergeIdentityNegative(negative),
+        negativePrompt: mergeIdentityNegative(neg),
         initImage: initForPaint,
         mask: paintedMask,
         maskBlur: userPaint ? paintEditMaskBlur(maskBlur) : maskBlur,
@@ -1591,7 +1597,7 @@ export default function StudioClient() {
                         {regions.length > 0 && (
                           <>
                             <p className="ac-hint">
-                              Ýttu á buxur eða bol. Eyða tekur fötin af, svo bætirðu við stuttbuxum eða stutterma.
+                              Ýttu á buxur. Eyða teiknar fæturna undir, ekki gat. Svo stuttbuxur ofan á.
                             </p>
                             <div className="ac-row ac-chips">
                               {regions
@@ -1610,7 +1616,7 @@ export default function StudioClient() {
                             <GarmentBar
                               region={regions.find((r) => r.id === selectedRegion)}
                               busy={busy}
-                              onRemove={(text, maskId) => void runGarment(text, maskId)}
+                              onFill={(text, maskId) => void runGarment(text, maskId)}
                               onAdd={addGarment}
                             />
                             <div className="ac-row">
