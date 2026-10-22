@@ -16,6 +16,6 @@ test("studio has still, video and person modes", () => {
   assert.equal(studioModeOf("video"), "video");
   assert.equal(studioModeOf("nope"), "still");
   assert.match(studioModeHint("still"), /mynd/);
-  assert.match(studioModeHint("video"), /Hreyfimynd/);
+  assert.match(studioModeHint("video"), /sömu ljósmynd/);
   assert.match(studioModeHint("person"), /Prófíll/);
 });

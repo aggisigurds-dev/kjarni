@@ -168,10 +168,28 @@ export function loopFrames(frames: string[], kind: string, custom: ActionCommand
   return findAction(kind, custom).loop === "pingpong" ? pingPong(frames) : frames.slice();
 }
 
-/** Low denoising keeps the avatar; higher motion = more movement. */
+/** Max denoise for a clip. Above this, Forge draws a new person each frame. */
+export const VIDEO_DENOISING_MAX = 0.22;
+
+/** Low denoising keeps the photo; higher motion is only a shimmer, not a new face. */
 export function videoDenoising(motion: number): number {
   const n = clampMotion(motion);
-  return Math.round((0.1 + (n / 10) * 0.28) * 100) / 100;
+  return Math.round((0.1 + (n / 10) * (VIDEO_DENOISING_MAX - 0.1)) * 100) / 100;
+}
+
+/** One seed for the whole clip. −1 becomes a concrete seed so frames do not randomize. */
+export function resolveClipSeed(seed: number, random = Math.random): number {
+  if (Number.isFinite(seed) && seed >= 0) return Math.floor(seed);
+  return Math.floor(random() * 2147483647);
+}
+
+export function videoFrameSeed(clipSeed: number, frameIndex: number): number {
+  return resolveClipSeed(clipSeed, () => 0) + Math.max(0, Math.floor(frameIndex));
+}
+
+/** Generated frames always start from the original still. Chaining invents a new face. */
+export function videoFrameInit(original: string, _previous?: string): string {
+  return original;
 }
 
 export function clipSeconds(frames: number, fps: number): number {

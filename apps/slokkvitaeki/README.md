@@ -25,7 +25,8 @@ manneskju og stellingu. Persónuprófíll geymir allt að 10 skýrar andlitsmynd
 og 8 sjónarhorn allan hringinn; „Skerpa andlit“ endurbyggir óskýrt andlit og
 „Realistic avatar“ gerir samræmdan 2D-snúningsblað (ekki 3D-möskva) með GFPGAN
 og IP-Adapter Face þegar það er til á vélinni. „Hreyfimynd“ gengur ramma-fyrir-ramma
-úr avatar/stúdíómynd. Athafnir: öndun, dansa, pósur, standa upp, snúa í hring;
+úr sömu ljósmynd (ekki úr síðustu útkomu) með einu seed, svo andlitið leki
+ekki yfir í aðra konu. Athafnir: öndun, dansa, pósur, standa upp, snúa í hring;
 hægt er að vista nýjar skipanir úr prompti. Saumar WebM. Útlitsflísar (myndavél,
 svipbrigði, fatnaður), lookbook (4 kyrrar), athafnaröð og uppruna/útkomu-samanburður.
 Pósuviðmið (OpenPose þegar það er til) læsir stellingu avatarsins við markmiðsmynd.
