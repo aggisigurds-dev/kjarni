@@ -1234,9 +1234,9 @@
 .ac-base-card img {
   display: block;
   width: 100%;
-  height: 140px;
+  height: 220px;
   object-fit: contain;
-  background: #1a1a1a;
+  background: #141414;
   border-radius: 6px;
 }
 

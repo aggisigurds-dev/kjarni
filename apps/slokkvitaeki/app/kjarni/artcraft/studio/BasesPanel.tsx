@@ -40,9 +40,9 @@ export default function BasesPanel({
     <div className="ac-bases">
       <h2>Grunnur með hlutföllum</h2>
       <p className="ac-hint">
-        Byrjaðu á leirmannequin með liðamótum í stað þess að reisa líkama frá
-        grunni. Prófíllinn málar andlit og húð ofan á. Eigin grunnur má vera
-        skjámynd af Ready Player Me, VRoid eða Mixamo T-pose.
+        Byrjaðu á fullorðnum líkama með rúmmáli og liðamótum — búðarmannikin,
+        ekki spitukall. Prófíllinn málar andlit og húð ofan á. Eigin grunnur má
+        vera skjámynd af Ready Player Me, VRoid eða Mixamo T-pose.
       </p>
       <div className="ac-base-grid">
         {STUDIO_BASES.map((base) => (
@@ -69,7 +69,7 @@ export default function BasesPanel({
         </button>
         {customBase && (
           <button type="button" className="ac-btn ghost" onClick={onClearCustom}>
-            Nota leirgrunn
+            Nota líkamsgrunn
           </button>
         )}
         <button type="button" className="ac-btn" onClick={onAdapt} disabled={busy || !canAdapt}>

@@ -27,16 +27,22 @@ test("athletic man is broader in the shoulders than a slim woman", () => {
 test("adaptBasePrompt keeps proportions and names the person", () => {
   const text = adaptBasePrompt("Sara", studioBase("w-avg"));
   assert.match(text, /Sara/);
+  assert.match(text, /body volume/);
   assert.match(text, /proportions/);
   assert.match(text, /A-pose joints/);
   assert.match(text, /adult woman/);
   assert.equal(mergeBase(text, "Sara", studioBase("w-avg")), text);
 });
 
-test("mannequin svg draws joints and stays adult clay", () => {
+test("mannequin svg draws a volumetric adult body, not stick lines", () => {
   const svg = mannequinSvg(studioBase("m-ath"));
   assert.match(svg, /<svg /);
-  assert.match(svg, /circle/);
+  assert.match(svg, /<path /);
+  assert.equal((svg.match(/<path /g) || []).length >= 8, true);
+  assert.doesNotMatch(svg, /stroke-linecap/);
   assert.equal((svg.match(/<circle /g) || []).length >= 12, true);
   assert.doesNotMatch(svg, /child|kid|teen/i);
+  const woman = mannequinSvg(studioBase("w-avg"));
+  assert.match(woman, /linearGradient/);
+  assert.ok(woman.includes("e2b89a"));
 });
