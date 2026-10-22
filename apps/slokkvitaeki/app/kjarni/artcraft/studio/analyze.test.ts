@@ -41,7 +41,7 @@ test("bandMask keeps the torso and drops the head", () => {
   assert.equal(clothes.data[(20 * 20 + 10) * 4], 255);
 });
 
-test("regionsFromPerson returns person, clothes, background and objects", () => {
+test("regionsFromPerson returns person, garments, background and objects", () => {
   const image = createRaster(48, 48, 180);
   paint(image, 0, 0, 47, 47, 30, 120, 40);
   paint(image, 16, 8, 30, 40, 90, 70, 60);
@@ -51,8 +51,15 @@ test("regionsFromPerson returns person, clothes, background and objects", () => 
   const regions = regionsFromPerson(image, person);
   const ids = regions.map((r) => r.id);
   assert.ok(ids.includes("person"));
-  assert.ok(ids.includes("clothes"));
+  assert.ok(ids.includes("pants"));
+  assert.ok(ids.includes("top"));
+  assert.ok(ids.includes("bodyUnder"));
   assert.ok(ids.includes("background"));
+  const body = regions.find((r) => r.id === "bodyUnder")!;
+  assert.ok(body.hidden);
+  assert.equal(body.mask.data[(10 * 48 + 20) * 4], 0);
+  assert.equal(body.mask.data[(30 * 48 + 20) * 4], 255);
+  assert.equal(ids.includes("clothes"), false);
   assert.ok(regions.some((r) => r.kind === "object"), "red blob on green field should become an object");
 });
 

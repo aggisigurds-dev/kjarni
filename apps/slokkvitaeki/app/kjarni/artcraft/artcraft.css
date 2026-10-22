@@ -761,6 +761,19 @@
   margin: 0 0 14px;
 }
 
+.ac-garment {
+  margin: 8px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  background: var(--m-card, #fff);
+}
+
+.stn[data-skin="ragnarok"] .ac-garment {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+}
+
 .ac-chips {
   margin: 8px 0;
 }

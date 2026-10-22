@@ -6,6 +6,19 @@ import { artcraftAppHref, artcraftHubHref } from "../apps";
 import "../artcraft.css";
 import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
+import GarmentBar from "./GarmentBar";
+import {
+  addMaskId,
+  BODY_UNDER_ID,
+  GARMENT_NEGATIVE,
+  garmentBodyPrompt,
+  garmentContinuePrompt,
+  isGarmentChip,
+  slotOfRegion,
+  type GarmentAdd,
+  type GarmentSlot,
+} from "./garments";
+import { extendForContinue } from "./garmentsImage";
 import LightPlanPanel from "./LightPlan";
 import {
   backdropShootPrompt,
@@ -159,6 +172,7 @@ import {
   SIZE_PRESETS,
   WEBUI_URL_KEY,
   canEmbedLocalWebui,
+  clampSize,
   denoisingHint,
   findStudioAdapters,
   generateLocal,
@@ -313,17 +327,24 @@ export default function StudioClient() {
     setPresetMaskTick((n) => n + 1);
   }
 
-  async function analyze() {
-    if (!source) return;
+  async function analyze(src = source) {
+    if (!src) return;
     setError("");
     setAnalyzing(true);
     setAnalyzeText("Greini myndina…");
     try {
-      const found = await analyzeStudioImage(source, setAnalyzeText);
+      const found = await analyzeStudioImage(src, setAnalyzeText);
       setRegions(found);
-      const first = found.find((r) => r.kind === "person") || found[0];
+      const first =
+        found.find((r) => r.id === "pants") ||
+        found.find((r) => r.id === "top") ||
+        found.find((r) => r.kind === "person") ||
+        found[0];
       if (first) pickRegion(first);
-      setAnalyzeText(`${found.length} svæði`);
+      const chips = found.filter((r) => !r.hidden);
+      setAnalyzeText(
+        `${chips.length} svæði · endurbyggja allan líkamann undir fötunum, svo bæta við`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki greint myndina");
       setAnalyzeText("");
@@ -341,6 +362,75 @@ export default function StudioClient() {
     }
     setPrompt(actionPrompt(kind, action, action === "recolor" ? colorWant : bgWant));
     patchSettings({ denoisingStrength: actionDenoising(action) });
+  }
+
+  async function runGarment(
+    prompt: string,
+    maskId: string,
+    opts?: { initImage?: string; width?: number; height?: number; maskUrl?: string },
+  ) {
+    const region = regions.find((r) => r.id === maskId);
+    const maskUrl = opts?.maskUrl || region?.maskUrl;
+    if (!maskUrl) {
+      setError("Greindu myndina fyrst.");
+      return;
+    }
+    if (region) pickRegion(region);
+    setPrompt(prompt);
+    const out = await runGenerate({
+      prompt,
+      mask: maskUrl,
+      extraNegative: GARMENT_NEGATIVE,
+      initImage: opts?.initImage,
+      width: opts?.width,
+      height: opts?.height,
+    });
+    if (out[0]) {
+      setSource(out[0]);
+      setWorking(out[0]);
+      await analyze(out[0]);
+    }
+  }
+
+  function addGarment(add: GarmentAdd) {
+    const preferred = addMaskId(add, selectedRegion || add.slot);
+    const maskId = regions.some((r) => r.id === preferred) ? preferred : add.slot;
+    void runGarment(add.prompt, maskId);
+  }
+
+  function runRebuildBody() {
+    const body = regions.find((r) => r.id === BODY_UNDER_ID);
+    if (!body?.maskUrl) {
+      setError("Greindu myndina fyrst svo hægt sé að endurbyggja líkamann undir fötunum.");
+      return;
+    }
+    void runGarment(garmentBodyPrompt(), BODY_UNDER_ID);
+  }
+
+  async function runContinueBody() {
+    const still = identityStill({ working, source, profile });
+    const person = regions.find((r) => r.id === "person");
+    const body = regions.find((r) => r.id === BODY_UNDER_ID);
+    const selected = regions.find((r) => r.id === selectedRegion);
+    const slot: GarmentSlot = slotOfRegion(selected?.id || "", selected?.kind) || "pants";
+    if (!still || !person?.maskUrl) {
+      setError("Greindu myndina fyrst.");
+      return;
+    }
+    try {
+      const extent = await extendForContinue(still, slot, person.maskUrl, body?.maskUrl || selected?.maskUrl);
+      if (extent.padded) {
+        patchSettings({ width: clampSize(extent.width), height: clampSize(extent.height) });
+      }
+      await runGarment(garmentContinuePrompt(slot), body?.id || selected?.id || "pants", {
+        initImage: extent.image,
+        maskUrl: extent.mask,
+        width: clampSize(extent.width),
+        height: clampSize(extent.height),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lengt líkamann");
+    }
   }
 
   async function checkServer(url = webui) {
@@ -422,8 +512,12 @@ export default function StudioClient() {
     styleRef?: string;
     turn?: boolean;
     quiet?: boolean;
+    extraNegative?: string;
+    width?: number;
+    height?: number;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
+    const neg = [negative, opts?.extraNegative].filter((s) => s && s.trim()).join(", ");
     const init = identityStill({
       init: opts?.initImage,
       working,
@@ -434,7 +528,7 @@ export default function StudioClient() {
     const userPaint = isUserPaintEdit(painted, opts?.denoisingStrength);
     setError("");
     try {
-      assertAdultPrompt(text, negative);
+      assertAdultPrompt(text, neg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
       return [];
@@ -470,7 +564,7 @@ export default function StudioClient() {
         prompt: userPaint
           ? paintEditPrompt(text, useShot, paintShotKind)
           : mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
-        negativePrompt: mergeIdentityNegative(negative),
+        negativePrompt: mergeIdentityNegative(neg),
         initImage: initForPaint,
         mask: paintedMask,
         maskBlur: userPaint ? paintEditMaskBlur(maskBlur) : maskBlur,
@@ -480,6 +574,8 @@ export default function StudioClient() {
         faceAdapter,
         ...extraControls({ poseRef: opts?.poseRef, styleRef: useShot ? shot : opts?.styleRef }),
         ...settings,
+        width: opts?.width ?? settings.width,
+        height: opts?.height ?? settings.height,
         cfgScale: userPaint ? paintEditCfg(settings.cfgScale) : settings.cfgScale,
         denoisingStrength: denoise,
       });
@@ -1560,9 +1656,13 @@ export default function StudioClient() {
                         {analyzeText && <p className="ac-hint">{analyzeText}</p>}
                         {regions.length > 0 && (
                           <>
-                            <p className="ac-hint">Veldu svæði, svo hvað á að gera við það.</p>
+                            <p className="ac-hint">
+                              Endurbyggja teiknar allan líkamann undir fötunum. Svo stuttbuxur ofan á.
+                            </p>
                             <div className="ac-row ac-chips">
-                              {regions.map((region) => (
+                              {regions
+                                .filter((region) => !region.hidden)
+                                .map((region) => (
                                 <button
                                   key={region.id}
                                   type="button"
@@ -1573,10 +1673,21 @@ export default function StudioClient() {
                                 </button>
                               ))}
                             </div>
+                            <GarmentBar
+                              region={regions.find((r) => r.id === selectedRegion)}
+                              canRebuild={regions.some((r) => r.id === BODY_UNDER_ID)}
+                              busy={busy}
+                              onRebuild={runRebuildBody}
+                              onContinue={() => void runContinueBody()}
+                              onFill={(text, maskId) => void runGarment(text, maskId)}
+                              onAdd={addGarment}
+                            />
                             <div className="ac-row">
-                              <button type="button" className="ac-btn ghost" onClick={() => applyAction("remove")}>
-                                Fjarlægja
-                              </button>
+                              {!isGarmentChip(selectedRegion || "") && (
+                                <button type="button" className="ac-btn ghost" onClick={() => applyAction("remove")}>
+                                  Fjarlægja
+                                </button>
+                              )}
                               <button type="button" className="ac-btn ghost" onClick={() => applyAction("recolor")}>
                                 Breyta lit
                               </button>
