@@ -17,8 +17,9 @@ er ekki myndað, svo líkanið teikni ekki nýtt andlit. Hægt er að stilla st�
 skref / CFG / seed / sampler / denoising, fínpússa líkamslínur (þenja, minnka,
 draga) og mála maska sem promptið eða skjáskot endurskrifar (inpaint, ekki lágur
 heildar-img2img). Hægt er að sleppa skjáskoti af bikini / sundfatnaði eða höfði
-við promptið; Forge byrjar á því í máluðu gatinu. Greina merkir manneskju, föt,
-bakgrunn og hluti; síðan má fjarlægja, breyta lit eða skipta um bakgrunn.
+við promptið; Forge byrjar á því í máluðu gatinu. Greina merkir bol, ermar, buxur,
+skó, bakgrunn og hluti. Fatnaður er eytt fyrst og nýtt bætt við (t.d. buxur →
+stuttbuxur), ekki breytt á staðnum. Síðan má breyta lit eða skipta um bakgrunn.
 Stúdíóljós (high-key / Rembrandt / Butterfly) stilla þrjú flass. Bakgrunnur er
 valinn sem pappírsdúkur (bleikur, hvítur, beige, grár, blár, grænn, vínrauður,
 strigi, kolagrár, svartur); „Stúdíómyndataka“ skiptir um bakgrunn og heldur

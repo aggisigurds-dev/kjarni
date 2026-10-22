@@ -6,6 +6,8 @@ import { artcraftAppHref, artcraftHubHref } from "../apps";
 import "../artcraft.css";
 import AdjustPanel from "./AdjustPanel";
 import { actionDenoising, actionPrompt, type RegionKind } from "./analyze";
+import GarmentBar from "./GarmentBar";
+import { addMaskId, isGarmentChip, type GarmentAdd } from "./garments";
 import LightPlanPanel from "./LightPlan";
 import {
   backdropShootPrompt,
@@ -321,9 +323,14 @@ export default function StudioClient() {
     try {
       const found = await analyzeStudioImage(source, setAnalyzeText);
       setRegions(found);
-      const first = found.find((r) => r.kind === "person") || found[0];
+      const first =
+        found.find((r) => r.id === "pants") ||
+        found.find((r) => r.id === "top") ||
+        found.find((r) => r.kind === "person") ||
+        found[0];
       if (first) pickRegion(first);
-      setAnalyzeText(`${found.length} svæði`);
+      const chips = found.filter((r) => !r.hidden);
+      setAnalyzeText(`${chips.length} svæði · ýttu á buxur, eyða, svo bæta við`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki greint myndina");
       setAnalyzeText("");
@@ -341,6 +348,29 @@ export default function StudioClient() {
     }
     setPrompt(actionPrompt(kind, action, action === "recolor" ? colorWant : bgWant));
     patchSettings({ denoisingStrength: actionDenoising(action) });
+  }
+
+  async function runGarment(prompt: string, maskId: string) {
+    const region = regions.find((r) => r.id === maskId);
+    if (!region?.maskUrl) {
+      setError("Greindu myndina og veldu fatnað fyrst.");
+      return;
+    }
+    pickRegion(region);
+    setPrompt(prompt);
+    const out = await runGenerate({ prompt, mask: region.maskUrl });
+    if (out[0]) {
+      setSource(out[0]);
+      setWorking(out[0]);
+      const chip = regions.find((r) => !r.hidden && r.slot === region.slot);
+      if (chip) pickRegion(chip);
+    }
+  }
+
+  function addGarment(add: GarmentAdd) {
+    const preferred = addMaskId(add, selectedRegion || add.slot);
+    const maskId = regions.some((r) => r.id === preferred) ? preferred : add.slot;
+    void runGarment(add.prompt, maskId);
   }
 
   async function checkServer(url = webui) {
@@ -1560,9 +1590,13 @@ export default function StudioClient() {
                         {analyzeText && <p className="ac-hint">{analyzeText}</p>}
                         {regions.length > 0 && (
                           <>
-                            <p className="ac-hint">Veldu svæði, svo hvað á að gera við það.</p>
+                            <p className="ac-hint">
+                              Ýttu á buxur eða bol. Eyða tekur fötin af, svo bætirðu við stuttbuxum eða stutterma.
+                            </p>
                             <div className="ac-row ac-chips">
-                              {regions.map((region) => (
+                              {regions
+                                .filter((region) => !region.hidden)
+                                .map((region) => (
                                 <button
                                   key={region.id}
                                   type="button"
@@ -1573,10 +1607,18 @@ export default function StudioClient() {
                                 </button>
                               ))}
                             </div>
+                            <GarmentBar
+                              region={regions.find((r) => r.id === selectedRegion)}
+                              busy={busy}
+                              onRemove={(text, maskId) => void runGarment(text, maskId)}
+                              onAdd={addGarment}
+                            />
                             <div className="ac-row">
-                              <button type="button" className="ac-btn ghost" onClick={() => applyAction("remove")}>
-                                Fjarlægja
-                              </button>
+                              {!isGarmentChip(selectedRegion || "") && (
+                                <button type="button" className="ac-btn ghost" onClick={() => applyAction("remove")}>
+                                  Fjarlægja
+                                </button>
+                              )}
                               <button type="button" className="ac-btn ghost" onClick={() => applyAction("recolor")}>
                                 Breyta lit
                               </button>

@@ -1,6 +1,7 @@
-/** Turn a person cutout into selectable regions: person, clothes, background, objects. */
+/** Turn a person cutout into selectable regions: person, garments, background, objects. */
 
 import { createRaster, type Raster } from "./adjust";
+import { type GarmentSlot } from "./garments";
 
 export type RegionKind = "person" | "clothes" | "head" | "background" | "object";
 
@@ -10,6 +11,8 @@ export type AnalyzedRegion = {
   label: string;
   mask: Raster;
   coverage: number;
+  hidden?: boolean;
+  slot?: GarmentSlot;
 };
 
 export function coverageOf(mask: Raster, threshold = 20): number {
@@ -62,15 +65,20 @@ export function personBBox(mask: Raster, threshold = 20): { x0: number; y0: numb
   return x1 < 0 ? null : { x0, y0, x1, y1 };
 }
 
-export function bandMask(person: Raster, y0f: number, y1f: number): Raster {
+export function bboxMask(person: Raster, y0f: number, y1f: number, x0f = 0, x1f = 1): Raster {
   const box = personBBox(person);
   const out = createRaster(person.width, person.height, 0);
   if (!box) return out;
-  const top = box.y0 + (box.y1 - box.y0) * y0f;
-  const bot = box.y0 + (box.y1 - box.y0) * y1f;
+  const bw = Math.max(1, box.x1 - box.x0);
+  const bh = Math.max(1, box.y1 - box.y0);
+  const top = box.y0 + bh * Math.min(y0f, y1f);
+  const bot = box.y0 + bh * Math.max(y0f, y1f);
+  const left = box.x0 + bw * Math.min(x0f, x1f);
+  const right = box.x0 + bw * Math.max(x0f, x1f);
   for (let y = 0; y < person.height; y++) {
     if (y < top || y > bot) continue;
     for (let x = 0; x < person.width; x++) {
+      if (x < left || x > right) continue;
       const i = (y * person.width + x) * 4;
       if (person.data[i] <= 20) continue;
       out.data[i] = 255;
@@ -79,6 +87,52 @@ export function bandMask(person: Raster, y0f: number, y1f: number): Raster {
       out.data[i + 3] = 255;
     }
   }
+  return out;
+}
+
+export function bandMask(person: Raster, y0f: number, y1f: number): Raster {
+  return bboxMask(person, y0f, y1f, 0, 1);
+}
+
+export function subtractMask(from: Raster, cut: Raster): Raster {
+  const out = createRaster(from.width, from.height, 0);
+  const n = Math.min(from.data.length, cut.data.length);
+  for (let i = 0; i < n; i += 4) {
+    const on = from.data[i] > 20 && cut.data[i] <= 20 ? 255 : 0;
+    out.data[i] = on;
+    out.data[i + 1] = on;
+    out.data[i + 2] = on;
+    out.data[i + 3] = 255;
+  }
+  return out;
+}
+
+export function sleeveMask(person: Raster, y0f: number, y1f: number, inner0 = 0.32, inner1 = 0.68): Raster {
+  return subtractMask(bboxMask(person, y0f, y1f, 0, 1), bboxMask(person, y0f, y1f, inner0, inner1));
+}
+
+function pushGarment(
+  regions: AnalyzedRegion[],
+  id: string,
+  label: string,
+  mask: Raster,
+  slot: GarmentSlot,
+  hidden = false,
+  min = 0.004,
+): void {
+  const cov = coverageOf(mask);
+  if (cov <= min) return;
+  regions.push({ id, kind: "clothes", label, mask, coverage: cov, hidden, slot });
+}
+
+export function garmentRegions(person: Raster): AnalyzedRegion[] {
+  const out: AnalyzedRegion[] = [];
+  pushGarment(out, "top", "Bolur", bboxMask(person, 0.22, 0.5, 0.22, 0.78), "top");
+  pushGarment(out, "sleeves", "Ermar", sleeveMask(person, 0.16, 0.5), "sleeves");
+  pushGarment(out, "pants", "Buxur", bboxMask(person, 0.5, 0.9), "pants");
+  pushGarment(out, "shoes", "Skór", bboxMask(person, 0.86, 1), "shoes", false, 0.002);
+  pushGarment(out, "shortsZone", "Stuttbuxnasvæði", bboxMask(person, 0.5, 0.68), "pants", true);
+  pushGarment(out, "shortSleeveZone", "Stuttermasvæði", sleeveMask(person, 0.16, 0.34), "sleeves", true);
   return out;
 }
 
@@ -232,16 +286,12 @@ export function regionsFromPerson(image: Raster, person: Raster): AnalyzedRegion
   const personCov = coverageOf(person);
   if (personCov > 0.01) {
     regions.push({ id: "person", kind: "person", label: "Manneskja", mask: person, coverage: personCov });
-    const clothes = bandMask(person, 0.28, 0.78);
-    const clothesCov = coverageOf(clothes);
-    if (clothesCov > 0.008) {
-      regions.push({ id: "clothes", kind: "clothes", label: "Föt", mask: clothes, coverage: clothesCov });
-    }
     const head = bandMask(person, 0, 0.26);
     const headCov = coverageOf(head);
     if (headCov > 0.004) {
       regions.push({ id: "head", kind: "head", label: "Andlit / hár", mask: head, coverage: headCov });
     }
+    regions.push(...garmentRegions(person));
   }
   const background = invertMask(person);
   regions.push({

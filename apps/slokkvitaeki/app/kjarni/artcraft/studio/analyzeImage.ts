@@ -3,6 +3,7 @@
 import { createRaster, fitSize, type Raster } from "./adjust";
 import { cutProductBackground } from "../bakgrunnur/cut";
 import { personMaskFromCutout, regionsFromPerson, type AnalyzedRegion } from "./analyze";
+import type { GarmentSlot } from "./garments";
 
 export type StudioRegion = {
   id: string;
@@ -10,6 +11,8 @@ export type StudioRegion = {
   label: string;
   maskUrl: string;
   coverage: number;
+  hidden?: boolean;
+  slot?: GarmentSlot;
 };
 
 function rasterToDataUrl(raster: Raster): string {
@@ -55,13 +58,15 @@ export async function analyzeStudioImage(
     const image = await rasterFromUrl(source, fitted.width, fitted.height);
     const cutout = await rasterFromUrl(cutUrl, fitted.width, fitted.height);
     const person = personMaskFromCutout(cutout);
-    onProgress?.("Finn föt, bakgrunn og hluti…");
+    onProgress?.("Finn bol, ermar, buxur og bakgrunn…");
     return regionsFromPerson(image, person).map((region) => ({
       id: region.id,
       kind: region.kind,
       label: region.label,
       maskUrl: rasterToDataUrl(region.mask),
       coverage: region.coverage,
+      hidden: region.hidden,
+      slot: region.slot,
     }));
   } finally {
     URL.revokeObjectURL(cutUrl);
