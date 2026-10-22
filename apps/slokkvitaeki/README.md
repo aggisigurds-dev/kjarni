@@ -22,7 +22,8 @@ og 8 sjónarhorn allan hringinn; „Skerpa andlit“ endurbyggir óskýrt andlit
 „Realistic avatar“ gerir samræmdan 2D-snúningsblað (ekki 3D-möskva) með GFPGAN
 og IP-Adapter Face þegar það er til á vélinni. „Hreyfimynd“ gengur ramma-fyrir-ramma
 úr avatar/stúdíómynd. Athafnir: öndun, dansa, pósur, standa upp, snúa í hring;
-hægt er að vista nýjar skipanir úr prompti. Saumar WebM.
+hægt er að vista nýjar skipanir úr prompti. Saumar WebM. Útlitsflísar (myndavél,
+svipbrigði, fatnaður), lookbook (4 kyrrar), athafnaröð og uppruna/útkomu-samanburður.
 Fullorðinsmyndefni er leyfilegt;
 kynferðislegt myndefni af börnum er lokað. Keyrðu
 `scripts/private-studio-webui.sh` til að sjá ræsi-skipunina.

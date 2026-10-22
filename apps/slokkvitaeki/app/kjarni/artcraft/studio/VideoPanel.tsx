@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { dropQueue, pushQueue } from "./looks";
 import { catalogOf, findAction, type ActionCommand, type VideoSettings } from "./video";
 
 type Props = {
@@ -15,6 +16,9 @@ type Props = {
   custom: ActionCommand[];
   onSaveAction: (label: string) => void;
   onDeleteAction: (id: string) => void;
+  queue: string[];
+  onQueue: (next: string[]) => void;
+  onRunQueue: () => void;
 };
 
 export default function VideoPanel({
@@ -29,6 +33,9 @@ export default function VideoPanel({
   custom,
   onSaveAction,
   onDeleteAction,
+  queue,
+  onQueue,
+  onRunQueue,
 }: Props) {
   const [name, setName] = useState("");
   const actions = catalogOf(custom);
@@ -123,10 +130,52 @@ export default function VideoPanel({
           </span>
         </label>
       </div>
+      <div className="ac-queue">
+        <p className="ac-hint">
+          Athafnaröð (allt að 4): bættu við flísum og keyrðu eina lengri hreyfimynd.
+        </p>
+        <div className="ac-row">
+          <button
+            type="button"
+            className="ac-btn ghost"
+            onClick={() => onQueue(pushQueue(queue, active.id))}
+            disabled={queue.length >= 4}
+          >
+            Bæta {active.label} við röð
+          </button>
+          <button type="button" className="ac-btn ghost" onClick={() => onQueue([])} disabled={queue.length === 0}>
+            Hreinsa röð
+          </button>
+        </div>
+        {queue.length > 0 && (
+          <div className="ac-row ac-chips">
+            {queue.map((id, i) => (
+              <button
+                key={`${id}-${i}`}
+                type="button"
+                className="ac-btn ghost"
+                onClick={() => onQueue(dropQueue(queue, i))}
+              >
+                {i + 1}. {findAction(id, custom).label} ×
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {progress && <p className="ac-hint">{progress}</p>}
-      <button type="button" className="ac-btn" onClick={onMake} disabled={busy || !hasStill}>
-        {busy ? "Sauma…" : hasStill ? `Gera: ${active.label}` : "Settu inn mynd eða gerðu avatar fyrst"}
-      </button>
+      <div className="ac-row">
+        <button type="button" className="ac-btn" onClick={onMake} disabled={busy || !hasStill}>
+          {busy ? "Sauma…" : hasStill ? `Gera: ${active.label}` : "Settu inn mynd eða gerðu avatar fyrst"}
+        </button>
+        <button
+          type="button"
+          className="ac-btn ghost"
+          onClick={onRunQueue}
+          disabled={busy || !hasStill || queue.length === 0}
+        >
+          Keyra röð
+        </button>
+      </div>
       {videoUrl && (
         <figure className="ac-clip">
           <video src={videoUrl} controls loop playsInline />

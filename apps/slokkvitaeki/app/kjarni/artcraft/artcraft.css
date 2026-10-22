@@ -1054,6 +1054,40 @@
   word-break: break-word;
 }
 
+.ac-looks,
+.ac-queue {
+  margin: 0 0 16px;
+}
+
+.ac-look-group {
+  margin-bottom: 8px;
+}
+
+.ac-compare {
+  margin: 0 0 16px;
+}
+
+.ac-compare-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #111;
+}
+
+.ac-compare-stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ac-compare-stage img:last-child {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .ac-clip {
   margin: 16px 0 0;
 }

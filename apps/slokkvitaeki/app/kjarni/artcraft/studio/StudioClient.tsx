@@ -33,6 +33,14 @@ import {
   type PersonProfile,
 } from "./profile";
 import { faceSheet } from "./profileImage";
+import LooksPanel from "./LooksPanel";
+import {
+  LOOKBOOK_DENOISING,
+  LOOKBOOK_SHOTS,
+  lookbookPrompt,
+  mergeLooks,
+  sequenceFrames,
+} from "./looks";
 import VideoPanel from "./VideoPanel";
 import {
   commandFromPrompt,
@@ -122,6 +130,10 @@ export default function StudioClient() {
   const [clipText, setClipText] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [customActions, setCustomActions] = useState<ActionCommand[]>([]);
+  const [looks, setLooks] = useState<string[]>([]);
+  const [queue, setQueue] = useState<string[]>([]);
+  const [compare, setCompare] = useState(50);
+  const [sheetUrl, setSheetUrl] = useState("");
 
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
@@ -267,7 +279,7 @@ export default function StudioClient() {
         faceRefs = identityRefs(profile.faces, sheet, orbitSheet);
       }
       const out = await generateLocal(webui, {
-        prompt: mergeIdentity(mergePrompt(text, lights), profile?.name || "", useId),
+        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", useId),
         negativePrompt: negative.trim(),
         initImage: working || source || undefined,
         mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
@@ -393,7 +405,7 @@ export default function StudioClient() {
       return;
     }
     const text = mergeIdentity(
-      mergePrompt(mergeMotion(prompt || "same adult person", clip.kind, customActions), lights),
+      mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", clip.kind, customActions), looks), lights),
       profile?.name || "",
       Boolean(useProfile && hasIdentity(profile)),
     );
@@ -448,6 +460,121 @@ export default function StudioClient() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function makeLookbook() {
+    const start = working || source || images[0] || "";
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst — lookbookið byrjar á henni.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    setClipText("Lookbook…");
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const out: string[] = [];
+      for (const shot of LOOKBOOK_SHOTS) {
+        setClipText(`Lookbook · ${shot.label}`);
+        const text = mergeIdentity(
+          mergePrompt(mergeLooks(lookbookPrompt(shot.id, profile?.name || ""), looks), lights),
+          profile?.name || "",
+          useId,
+        );
+        assertAdultPrompt(text, negative);
+        const imgs = await generateLocal(webui, {
+          prompt: text,
+          negativePrompt: negative.trim(),
+          initImage: start,
+          restoreFaces: useId,
+          faceRefs,
+          faceAdapter: useId ? faceAdapter : null,
+          ...settings,
+          denoisingStrength: LOOKBOOK_DENOISING,
+        });
+        out.push(imgs[0]);
+      }
+      setImages(out);
+      setClipText("Lookbook tilbúið · 4 myndir");
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(raw || "Gat ekki gert lookbook.");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeSequence() {
+    const start = working || source || images[0] || "";
+    if (!start) {
+      setError("Gerðu avatar eða settu inn mynd fyrst.");
+      return;
+    }
+    if (queue.length === 0) {
+      setError("Bættu athöfn við röðina fyrst.");
+      return;
+    }
+    const per = sequenceFrames(queue.length, clip.frames);
+    setError("");
+    setBusy(true);
+    try {
+      const { useId, faceRefs } = await identityBundle();
+      const all: string[] = [];
+      let prev = start;
+      let step = 0;
+      const total = per * queue.length;
+      for (const kind of queue) {
+        const text = mergeIdentity(
+          mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", kind, customActions), looks), lights),
+          profile?.name || "",
+          useId,
+        );
+        assertAdultPrompt(text, negative);
+        const denoise = videoDenoising(clip.motion);
+        for (let i = 0; i < per; i++) {
+          step += 1;
+          setClipText(`Röð ${step}/${total}`);
+          const imgs = await generateLocal(webui, {
+            prompt: text,
+            negativePrompt: negative.trim(),
+            initImage: prev,
+            restoreFaces: useId,
+            faceRefs,
+            faceAdapter: useId ? faceAdapter : null,
+            ...settings,
+            denoisingStrength: denoise,
+            seed: settings.seed === -1 ? -1 : settings.seed + step,
+          });
+          all.push(imgs[0]);
+          prev = imgs[0];
+        }
+      }
+      setClipText("Sauma röð…");
+      const blob = await stitchWebm(all, clip.fps);
+      setVideoUrl((cur) => {
+        if (cur) URL.revokeObjectURL(cur);
+        return URL.createObjectURL(blob);
+      });
+      setImages(all);
+      setClipText(`${all.length} rammar · röð`);
+      window.localStorage.setItem(WEBUI_URL_KEY, webui);
+      setStatus("up");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(raw || "Gat ekki keyrt röð.");
+      setClipText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeSheet() {
+    if (images.length === 0) return;
+    const sheet = await faceSheet(images);
+    if (sheet) setSheetUrl(sheet);
   }
 
   function download(src: string, index: number) {
@@ -728,6 +855,14 @@ export default function StudioClient() {
                   shootBusy={busy || analyzing}
                 />
 
+                <LooksPanel
+                  selected={looks}
+                  onChange={setLooks}
+                  onLookbook={() => void makeLookbook()}
+                  busy={busy}
+                  hasStill={Boolean(working || source || images[0])}
+                />
+
                 <label>
                   Lýsing
                   <textarea
@@ -920,11 +1055,52 @@ export default function StudioClient() {
                     setClip((cur) => ({ ...cur, kind: "breathe" }));
                   }
                 }}
+                queue={queue}
+                onQueue={setQueue}
+                onRunQueue={() => void makeSequence()}
               />
 
               {images.length > 0 && (
                 <section className="ac-panel">
                   <h2>Útkoma</h2>
+                  {source && images[0] && (
+                    <div className="ac-compare">
+                      <p className="ac-hint">Samanburður — dragðu til að sjá uppruna á móti útkomu.</p>
+                      <div className="ac-compare-stage">
+                        <img src={images[0]} alt="Nýtt" />
+                        <img
+                          src={source}
+                          alt="Uppruni"
+                          style={{ clipPath: `inset(0 ${100 - compare}% 0 0)` }}
+                        />
+                      </div>
+                      <label className="ac-range">
+                        Uppruni ← {compare}% → Nýtt
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={compare}
+                          onChange={(e) => setCompare(Number(e.target.value))}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <div className="ac-row">
+                    <button type="button" className="ac-btn ghost" onClick={() => void makeSheet()} disabled={images.length < 2}>
+                      Snertilisti
+                    </button>
+                  </div>
+                  {sheetUrl && (
+                    <figure className="ac-clip">
+                      <img src={sheetUrl} alt="Snertilisti" />
+                      <figcaption>
+                        <a className="ac-btn ghost" href={sheetUrl} download="kjarni-studio-snertilisti.jpg">
+                          Sækja snertilista
+                        </a>
+                      </figcaption>
+                    </figure>
+                  )}
                   <div className="ac-results">
                     {images.map((src, i) => (
                       <figure key={i}>
