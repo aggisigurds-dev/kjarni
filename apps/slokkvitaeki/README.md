@@ -36,8 +36,9 @@ stýra mannikin og aðlögun. Eigin grunnur má vera skjámynd
 af Ready Player Me, VRoid eða Mixamo. Hægt er að draga ljósmyndir eða stutt
 videóbrot yfir andlit, bol, hendur og fætur — part fyrir part — baka saumana
 eða hreyfa aðeins þann part.
-Ófullkominn hringur: „Fylla vantar horn með 3D“ notar innbyggðan 3D-líkama
-(hæð, þyngd, húð, hár) og málar myndirnar þínar á nálæg sjónarhorn. Á
+Ófullkominn hringur: „Fylla vantar horn“ málar vantar gráður af næstu
+ljósmynd gegnum Forge. 3D er aðeins stelling — dúkka og Barbie fara ekki
+inn sem mynd. Á
 3D-spjaldinu eru hlekkir og skref-fyrir-skref leiðbeiningar (Meshy, Tripo,
 Sketchfab, Modly): sækja GLB, Setja inn GLB, fylla hornin. Duix og SMPL-X
 eru merkt sem ekki fyrsta skref.

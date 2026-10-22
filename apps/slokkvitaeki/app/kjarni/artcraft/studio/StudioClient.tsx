@@ -35,6 +35,7 @@ import {
   mergeIdentity,
   mergeIdentityNegative,
   orbitImages,
+  ORBIT_SLOTS,
   SHARPEN_DENOISING,
   type OrbitId,
   type OrbitMap,
@@ -45,12 +46,11 @@ import AvatarTurn from "./AvatarTurn";
 import BasesPanel from "./BasesPanel";
 import MeshPanel from "./MeshPanel";
 import PartsPanel from "./PartsPanel";
-import { shouldStampPhoto, spinYaws, type CaptureYaws } from "./mesh";
+import { spinYaws, type CaptureYaws } from "./mesh";
 import { captureStandInYaws } from "./meshView";
 import {
   IMPRINT_DENOISING,
   bodyPart,
-  FULL_STAMP,
   imprintPrompt,
   isClipStamp,
   pickKeyFrame,
@@ -87,6 +87,8 @@ import {
   mergeStyle,
   motionRecreatePrompt,
   nearestOrbitView,
+  orbitFillDenoising,
+  orbitFillOrder,
   poseDenoising,
   studioStill,
   turnPreview,
@@ -386,6 +388,8 @@ export default function StudioClient() {
     initImage?: string;
     poseRef?: string;
     styleRef?: string;
+    turn?: boolean;
+    quiet?: boolean;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
     const init = identityStill({
@@ -406,7 +410,7 @@ export default function StudioClient() {
       setError("Settu inn ljósmynd af manneskjunni. Án myndar teiknar líkanið nýtt andlit.");
       return [];
     }
-    setBusy(true);
+    if (!opts?.quiet) setBusy(true);
     try {
       const { faceRefs } = await identityBundle(init);
       const out = await generateLocal(webui, {
@@ -424,6 +428,7 @@ export default function StudioClient() {
           opts?.denoisingStrength ?? settings.denoisingStrength,
           true,
           painted,
+          Boolean(opts?.turn),
         ),
       });
       setImages(out);
@@ -439,7 +444,7 @@ export default function StudioClient() {
       );
       return [];
     } finally {
-      setBusy(false);
+      if (!opts?.quiet) setBusy(false);
     }
   }
 
@@ -1026,36 +1031,56 @@ export default function StudioClient() {
       setError("Búðu fyrst til prófíl.");
       return null;
     }
+    if (orbitCount(profile) === 0) {
+      setError("Settu inn að minnsta kosti eina ljósmynd á hringinn. 3D-dúkkan er bara horn, ekki manneskjan.");
+      return null;
+    }
     const missing = missingOrbitSlots(profile.orbit);
     if (missing.length === 0) return profile.orbit;
+    const photos = ORBIT_SLOTS.filter((slot) => profile.orbit[slot.id]).map((slot) => ({ deg: slot.deg }));
+    const queue = orbitFillOrder(missing, photos);
     const orbit: OrbitMap = { ...profile.orbit };
     setError("");
     setBusy(true);
     try {
-      setClipText("Teikna 3D-grunn…");
-      const yaws = missing.map((slot) => slot.deg);
+      setClipText("Les 3D-horn…");
+      const yaws = queue.map((slot) => slot.deg);
       const shots = meshCaptureRef.current
         ? await meshCaptureRef.current(yaws)
         : await captureStandInYaws(bodyLook, studioBase(baseId), yaws);
-      for (let i = 0; i < missing.length; i++) {
-        const slot = missing[i];
-        setClipText(`Fylla ${slot.label} (${i + 1}/${missing.length})`);
-        let src = shots[slot.deg];
-        if (!src) continue;
-        const neighbor = nearestOrbitView(profile, slot.deg);
-        if (neighbor && shouldStampPhoto(slot.deg, neighbor.deg)) {
-          src = await imprintOnto(src, neighbor.src, FULL_STAMP);
-        }
-        orbit[slot.id] = src;
-        setTurnViews((cur) => ({ ...cur, [slot.id]: src }));
+      let filled = 0;
+      for (let i = 0; i < queue.length; i++) {
+        const slot = queue[i];
+        setClipText(`Mála ${slot.label} af ljósmynd (${i + 1}/${queue.length})`);
+        const neighbor = nearestOrbitView({ ...profile, orbit }, slot.deg);
+        if (!neighbor) continue;
+        const pose = shots[slot.deg] || "";
+        const text = yawPrompt(slot.deg, profile.name);
+        const out = await runGenerate({
+          prompt: text,
+          mask: null,
+          initImage: neighbor.src,
+          poseRef: pose || undefined,
+          denoisingStrength: orbitFillDenoising(neighbor.deg, slot.deg),
+          turn: true,
+          quiet: true,
+        });
+        if (!out[0]) continue;
+        orbit[slot.id] = out[0];
+        filled += 1;
+        setTurnViews((cur) => ({ ...cur, [slot.id]: out[0] }));
       }
-      const first = orbit.front || orbit.frontRight || Object.values(orbit)[0];
-      if (first) adoptStill(first, "3d-grunnur.png");
-      setClipText(`${Object.keys(orbit).length} af 8 hornum · 3D-grunnur`);
+      if (filled === 0) {
+        setError("Gat ekki málað vantar horn. Tengdu Forge og reyndu aftur — dúkkan er ekki sett inn sem mynd.");
+        return null;
+      }
+      const first = orbit.front || orbit.frontLeft || orbit.frontRight || Object.values(orbit)[0];
+      if (first) adoptStill(first, "hringur.png");
+      setClipText(`${orbitCount({ ...profile, orbit })} af 8 hornum · málað af ljósmynd`);
       return orbit;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gat ekki fyllt hornin með 3D-grunni.");
-      return Object.keys(orbit).length > orbitCount(profile) ? orbit : null;
+      setError(err instanceof Error ? err.message : "Gat ekki fyllt hornin af ljósmyndinni.");
+      return orbitCount({ ...profile, orbit }) > orbitCount(profile) ? orbit : null;
     } finally {
       setBusy(false);
     }

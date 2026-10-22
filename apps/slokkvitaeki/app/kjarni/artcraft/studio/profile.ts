@@ -6,6 +6,7 @@ export const SHARPEN_DENOISING = 0.4;
 export const AVATAR_DENOISING = 0.48;
 export const MAX_FACE_UNITS = 4;
 export const IDENTITY_DENOISING_MAX = 0.38;
+export const IDENTITY_TURN_MAX = 0.52;
 export const IDENTITY_NEGATIVE =
   "different person, different face, face swap, new identity, another woman, another man, changed facial features";
 
@@ -57,7 +58,7 @@ export function missingOrbitSlots(orbit: OrbitMap | undefined): Array<(typeof OR
 }
 
 export function canGuessOrbit(profile: PersonProfile | null | undefined): boolean {
-  return missingOrbitSlots(profile?.orbit).length > 0;
+  return orbitCount(profile) > 0 && missingOrbitSlots(profile?.orbit).length > 0;
 }
 
 export function avatarPrompt(name: string): string {
@@ -90,10 +91,10 @@ export function mergeIdentityNegative(user: string): string {
   return `${base}, ${IDENTITY_NEGATIVE}`;
 }
 
-export function clampIdentityDenoising(value: number, locked: boolean, masked = false): number {
+export function clampIdentityDenoising(value: number, locked: boolean, masked = false, turn = false): number {
   const n = Number.isFinite(value) ? value : 0.35;
   if (!locked) return n;
-  const cap = masked ? 0.72 : IDENTITY_DENOISING_MAX;
+  const cap = masked ? 0.72 : turn ? IDENTITY_TURN_MAX : IDENTITY_DENOISING_MAX;
   return Math.min(cap, Math.max(0.05, Math.round(n * 100) / 100));
 }
 

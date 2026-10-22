@@ -52,6 +52,7 @@ test("lockFaceRefs puts the current photo first so Forge keeps that face", () =>
 test("identity lock keeps denoising below a face-swap band unless a mask protects the face", () => {
   assert.equal(clampIdentityDenoising(0.8, true), 0.38);
   assert.ok(clampIdentityDenoising(0.56, true, true) > 0.38);
+  assert.equal(clampIdentityDenoising(0.8, true, false, true), 0.52);
   assert.equal(clampIdentityDenoising(0.8, false), 0.8);
   assert.match(mergeIdentityNegative(""), /different person/);
   assert.match(mergeIdentityNegative("blurry"), /blurry.*different person/);
@@ -80,7 +81,7 @@ test("orbit + faces unlock a realistic avatar", () => {
   assert.match(avatarPrompt("Sara"), /Sara/);
   assert.match(avatarPrompt("Sara"), /turnaround/);
   assert.match(avatarPrompt("Sara"), /every angle/);
-  assert.equal(canGuessOrbit(empty), true);
+  assert.equal(canGuessOrbit(empty), false);
   assert.equal(canGuessOrbit(half), true);
   assert.deepEqual(
     missingOrbitSlots(half.orbit).map((s) => s.id),
