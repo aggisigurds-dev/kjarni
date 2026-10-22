@@ -67,6 +67,7 @@ export default function RefsPanel({
         Gerðu avatar fyrst. Markmiðsmynd læsir pósu hans (ekki upprunalegu
         ljósmyndinni). Stutt videó verður að römmum sem hann endurgerir.
         Skjámynd af fötum eða skarti fer á manneskjuna — andlitið helst.
+        Við promptið má líka sleppa skjáskoti inn á málað svæði (bikini / haus).
       </p>
 
       <div className="ac-ref-grid">

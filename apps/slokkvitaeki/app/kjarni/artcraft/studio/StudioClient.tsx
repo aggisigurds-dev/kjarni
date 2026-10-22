@@ -86,13 +86,19 @@ import {
 } from "./looks";
 import RefsPanel from "./RefsPanel";
 import {
+  canPaintSubmit,
   isUserPaintEdit,
-  PAINT_INPAINT_FILL,
   paintEditCfg,
   paintEditDenoising,
+  paintEditFaceRefs,
   paintEditMaskBlur,
   paintEditPrompt,
+  paintEditRestoreFaces,
+  paintInpaintFill,
+  type PaintShotKind,
 } from "./paintEdit";
+import { stampShotIntoMask } from "./paintEditImage";
+import WantShot from "./WantShot";
 import {
   FIX_DENOISING,
   STYLE_DENOISING,
@@ -212,6 +218,7 @@ export default function StudioClient() {
   const [poseRef, setPoseRef] = useState("");
   const [styleRef, setStyleRef] = useState("");
   const [styleKind, setStyleKind] = useState<StyleKind>("clothes");
+  const [paintShotKind, setPaintShotKind] = useState<PaintShotKind>("clothes");
   const [motionFrames, setMotionFrames] = useState<string[]>([]);
   const [motionName, setMotionName] = useState("");
   const [yaw, setYaw] = useState(0);
@@ -435,9 +442,21 @@ export default function StudioClient() {
     }
     if (!opts?.quiet) setBusy(true);
     try {
-      const { faceRefs } = await identityBundle(init);
+      const paintedMask = (opts && "mask" in opts ? opts.mask : mask) || undefined;
+      const shot = (opts?.styleRef || styleRef || "").trim();
+      const useShot = userPaint && Boolean(shot);
+      let initForPaint = init;
+      if (useShot && paintedMask) {
+        try {
+          initForPaint = await stampShotIntoMask(init, paintedMask, shot);
+        } catch {
+          initForPaint = init;
+        }
+      }
+      const { faceRefs: locked } = await identityBundle(init);
+      const faceRefs = userPaint ? paintEditFaceRefs(paintShotKind, useShot ? shot : "", locked) : locked;
       const denoise = userPaint
-        ? paintEditDenoising(settings.denoisingStrength)
+        ? paintEditDenoising(settings.denoisingStrength, useShot)
         : clampIdentityDenoising(
             opts?.denoisingStrength ?? settings.denoisingStrength,
             true,
@@ -446,17 +465,17 @@ export default function StudioClient() {
           );
       const out = await generateLocal(webui, {
         prompt: userPaint
-          ? paintEditPrompt(text)
+          ? paintEditPrompt(text, useShot, paintShotKind)
           : mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
         negativePrompt: mergeIdentityNegative(negative),
-        initImage: init,
-        mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
+        initImage: initForPaint,
+        mask: paintedMask,
         maskBlur: userPaint ? paintEditMaskBlur(maskBlur) : maskBlur,
-        inpaintingFill: userPaint ? PAINT_INPAINT_FILL : undefined,
-        restoreFaces: true,
+        inpaintingFill: userPaint ? paintInpaintFill(useShot) : undefined,
+        restoreFaces: userPaint ? paintEditRestoreFaces(paintShotKind, useShot) : true,
         faceRefs,
         faceAdapter,
-        ...extraControls({ poseRef: opts?.poseRef, styleRef: opts?.styleRef }),
+        ...extraControls({ poseRef: opts?.poseRef, styleRef: useShot ? shot : opts?.styleRef }),
         ...settings,
         cfgScale: userPaint ? paintEditCfg(settings.cfgScale) : settings.cfgScale,
         denoisingStrength: denoise,
@@ -480,8 +499,8 @@ export default function StudioClient() {
 
   async function generate(e: FormEvent) {
     e.preventDefault();
-    if (mask && !prompt.trim()) {
-      setError("Skrifaðu hvað á að koma í staðinn á rauða svæðinu.");
+    if (!canPaintSubmit(mask, prompt, styleRef)) {
+      setError("Skrifaðu hvað á að koma eða slepptu skjáskoti (bikini / haus) á rauða svæðið.");
       return;
     }
     await runGenerate();
@@ -1447,7 +1466,7 @@ export default function StudioClient() {
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
                   {mask
-                    ? "Málaðu yfir það sem á að breytast, skrifaðu hvað á að koma (t.d. red dress). Aðeins rauða svæðið er endurskrifað."
+                    ? "Málaðu yfir kjól eða haus. Skrifaðu bikini / sundfatnaður eða slepptu skjáskoti af því sem á að koma. Aðeins rauða svæðið er endurskrifað."
                     : editing
                       ? "Promptið eitt og sér málar yfir alla myndina og skemmir hana. Málaðu fyrst svæðið sem á að breytast."
                       : "Settu inn ljósmynd af manneskjunni fyrst. Án myndar teiknar líkanið alltaf nýtt andlit."}
@@ -1649,19 +1668,30 @@ export default function StudioClient() {
                   }
                 />
 
-                <label>
-                  Lýsing
-                  <textarea
-                    rows={5}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={
-                      editing
-                        ? "same adult woman, red dress, keep face and pose…"
-                        : "nude adult woman, natural light, film still…"
-                    }
+                <div className="ac-paint-ask">
+                  <label>
+                    Lýsing
+                    <textarea
+                      rows={5}
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder={
+                        mask
+                          ? "t.d. bikini / sundfatnaður — eða slepptu skjáskoti"
+                          : editing
+                            ? "same adult woman, red dress, keep face and pose…"
+                            : "nude adult woman, natural light, film still…"
+                      }
+                    />
+                  </label>
+                  <WantShot
+                    src={styleRef}
+                    kind={paintShotKind}
+                    onSrc={setStyleRef}
+                    onKind={setPaintShotKind}
+                    onClear={() => setStyleRef("")}
                   />
-                </label>
+                </div>
                 <label>
                   Negative (valfrjálst — ekki fyllt með nsfw-banni)
                   <textarea
@@ -1753,11 +1783,13 @@ export default function StudioClient() {
                       onChange={(e) => patchSettings({ denoisingStrength: Number(e.target.value) })}
                     />
                     <span className="ac-hint">
-                      {mask
-                        ? "Málað svæði er endurskrifað (minnst 0.62). Utan rauða helst."
-                        : editing
-                          ? denoisingHint(settings.denoisingStrength)
-                          : "Kemur í gagnið þegar mynd er sett inn"}
+                      {mask && styleRef
+                        ? "Skjáskot er sett í gatið (minnst 0.50). Utan rauða helst."
+                        : mask
+                          ? "Málað svæði er endurskrifað (minnst 0.62). Utan rauða helst."
+                          : editing
+                            ? denoisingHint(settings.denoisingStrength)
+                            : "Kemur í gagnið þegar mynd er sett inn"}
                     </span>
                   </label>
                   {mask && (
