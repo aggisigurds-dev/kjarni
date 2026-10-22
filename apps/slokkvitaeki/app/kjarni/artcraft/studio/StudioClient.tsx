@@ -18,6 +18,13 @@ import {
   type LightPlan,
 } from "./lights";
 import { analyzeStudioImage, type StudioRegion } from "./analyzeImage";
+import {
+  STUDIO_MODES,
+  readStoredMode,
+  studioModeHint,
+  writeStoredMode,
+  type StudioMode,
+} from "./modes";
 import { assertAdultPrompt } from "./guard";
 import PersonProfilePanel from "./PersonProfile";
 import {
@@ -220,6 +227,7 @@ export default function StudioClient() {
   const [queue, setQueue] = useState<string[]>([]);
   const [compare, setCompare] = useState(50);
   const [sheetUrl, setSheetUrl] = useState("");
+  const [mode, setMode] = useState<StudioMode>("still");
 
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
@@ -229,6 +237,7 @@ export default function StudioClient() {
     setBodyLook(readStoredLook());
     setClip(readStoredVideo());
     setCustomActions(readCustomActions());
+    setMode(readStoredMode());
     setReady(true);
   }, []);
 
@@ -269,6 +278,11 @@ export default function StudioClient() {
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
     setAccepted(true);
+  }
+
+  function pickMode(id: StudioMode) {
+    setMode(id);
+    writeStoredMode(id);
   }
 
   function patchSettings(patch: Partial<StudioSettings>) {
@@ -1207,12 +1221,38 @@ export default function StudioClient() {
           <p className="ac-kicker">
             <a href={artcraftHubHref()}>ArtCraft</a> · Einkastúdíó
           </p>
-          <h1>Staðbundið líkan</h1>
+          <div className="ac-studio-head">
+            <h1>Staðbundið líkan</h1>
+            {accepted && (
+              <div className="ac-modes" role="tablist" aria-label="Stúdíóhamur">
+                {STUDIO_MODES.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    id={`studio-mode-${item.id}`}
+                    aria-controls={`studio-mode-panel-${item.id}`}
+                    aria-selected={mode === item.id}
+                    className={mode === item.id ? "on" : undefined}
+                    onClick={() => pickMode(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <p className="ac-lead">
-            Myndirnar verða til á tölvunni þinni gegnum Automatic1111, Forge eða
-            SD.Next. Engin skýjasía, ekkert sent út. Fullorðinsmyndefni er leyfilegt.
-            Ekkert sem snýr að börnum.
+            {accepted
+              ? studioModeHint(mode)
+              : "Myndirnar verða til á tölvunni þinni gegnum Automatic1111, Forge eða SD.Next. Engin skýjasía, ekkert sent út. Fullorðinsmyndefni er leyfilegt. Ekkert sem snýr að börnum."}
           </p>
+          {accepted && (
+            <p className="ac-hint">
+              Automatic1111, Forge eða SD.Next á tölvunni þinni. Ekkert sent út. Ekkert
+              sem snýr að börnum.
+            </p>
+          )}
 
           {!accepted ? (
             <div className="ac-gate">
@@ -1278,7 +1318,13 @@ export default function StudioClient() {
                 )}
               </section>
 
-              <section className="ac-panel">
+              {mode === "person" && (
+              <section
+                className="ac-panel"
+                id="studio-mode-panel-person"
+                role="tabpanel"
+                aria-labelledby="studio-mode-person"
+              >
                 <PersonProfilePanel
                   activeId={activeProfileId}
                   onActive={(id, next) => {
@@ -1367,8 +1413,17 @@ export default function StudioClient() {
                   hasProfile={Boolean(activeProfileId)}
                 />
               </section>
+              )}
 
-              <form className="ac-panel" onSubmit={generate}>
+              {mode === "still" && (
+              <>
+              <form
+                className="ac-panel"
+                id="studio-mode-panel-still"
+                role="tabpanel"
+                aria-labelledby="studio-mode-still"
+                onSubmit={generate}
+              >
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
                   {editing
@@ -1737,44 +1792,6 @@ export default function StudioClient() {
                 </div>
               </form>
 
-              <VideoPanel
-                settings={clip}
-                onChange={setClip}
-                onMake={() => void makeVideo()}
-                busy={busy}
-                progress={clipText}
-                videoUrl={videoUrl}
-                hasStill={hasStill}
-                prompt={prompt}
-                custom={customActions}
-                onSaveAction={(label) => {
-                  try {
-                    assertAdultPrompt(prompt, negative);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Óleyfileg skipun");
-                    return;
-                  }
-                  const row = commandFromPrompt(label, prompt);
-                  if (!row) {
-                    setError("Skrifaðu prompt til að vista skipun.");
-                    return;
-                  }
-                  setCustomActions(saveCustomAction(customActions, row));
-                  setClip((cur) => ({ ...cur, kind: row.id, motion: row.motion }));
-                  setError("");
-                }}
-                onDeleteAction={(id) => {
-                  const next = deleteCustomAction(customActions, id);
-                  setCustomActions(next);
-                  if (clip.kind === id) {
-                    setClip((cur) => ({ ...cur, kind: "breathe" }));
-                  }
-                }}
-                queue={queue}
-                onQueue={setQueue}
-                onRunQueue={() => void makeSequence()}
-              />
-
               {images.length > 0 && (
                 <section className="ac-panel">
                   <h2>Útkoma</h2>
@@ -1842,7 +1859,10 @@ export default function StudioClient() {
                           <button
                             type="button"
                             className="ac-btn ghost"
-                            onClick={() => void makeVideo(src)}
+                            onClick={() => {
+                              pickMode("video");
+                              void makeVideo(src);
+                            }}
                             disabled={busy}
                           >
                             Hreyfimynd
@@ -1855,6 +1875,54 @@ export default function StudioClient() {
                     ))}
                   </div>
                 </section>
+              )}
+              </>
+              )}
+
+              {mode === "video" && (
+              <div
+                id="studio-mode-panel-video"
+                role="tabpanel"
+                aria-labelledby="studio-mode-video"
+              >
+              <VideoPanel
+                settings={clip}
+                onChange={setClip}
+                onMake={() => void makeVideo()}
+                busy={busy}
+                progress={clipText}
+                videoUrl={videoUrl}
+                hasStill={hasStill}
+                prompt={prompt}
+                custom={customActions}
+                onSaveAction={(label) => {
+                  try {
+                    assertAdultPrompt(prompt, negative);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Óleyfileg skipun");
+                    return;
+                  }
+                  const row = commandFromPrompt(label, prompt);
+                  if (!row) {
+                    setError("Skrifaðu prompt til að vista skipun.");
+                    return;
+                  }
+                  setCustomActions(saveCustomAction(customActions, row));
+                  setClip((cur) => ({ ...cur, kind: row.id, motion: row.motion }));
+                  setError("");
+                }}
+                onDeleteAction={(id) => {
+                  const next = deleteCustomAction(customActions, id);
+                  setCustomActions(next);
+                  if (clip.kind === id) {
+                    setClip((cur) => ({ ...cur, kind: "breathe" }));
+                  }
+                }}
+                queue={queue}
+                onQueue={setQueue}
+                onRunQueue={() => void makeSequence()}
+              />
+              </div>
               )}
             </>
           )}

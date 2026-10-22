@@ -9,7 +9,9 @@ GridCraft) eru opin WASM-útgáfur frá
 [getartcraft.com/apps](https://getartcraft.com/apps). Þau eru sótt við
 `pnpm artcraft:install` / `prebuild` og hýst undir `/artcraft/<app>/`.
 
-Einkastúdíó (`/kjarni/artcraft/studio`) myndar staðbundið gegnum Automatic1111 /
+Einkastúdíó (`/kjarni/artcraft/studio`) er skipt í þrjá hama við titilinn: Stakar
+(prompt og ein mynd), Videó (hreyfimynd og athafnir) og Persóna (prófíll, hringur,
+3D-stelling). Staðbundið WebUI helst alltaf sýnilegt. Myndun gengur gegnum Automatic1111 /
 Forge / SD.Next (`--api` + CORS). Það breytir ljósmynd sem þú setur inn — án myndar
 er ekki myndað, svo líkanið teikni ekki nýtt andlit. Hægt er að stilla stærð /
 skref / CFG / seed / sampler / denoising, fínpússa líkamslínur (þenja, minnka,

@@ -93,6 +93,38 @@
   font: 800 clamp(28px, 4vw, 44px)/1.05 var(--font-sans, system-ui, sans-serif);
 }
 
+.ac-studio-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 10px;
+}
+
+.ac-studio-head h1 {
+  margin: 0;
+}
+
+.ac-studio-head .ac-modes {
+  margin: 0;
+}
+
+.ac-modes button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  min-width: 7.5rem;
+  justify-content: center;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--m-line, #d5dee8);
+  background: transparent;
+  color: inherit;
+  font: 700 13px var(--font-sans, system-ui, sans-serif);
+  cursor: pointer;
+}
+
 .ac-lead {
   margin: 0 0 28px;
   max-width: 62ch;
@@ -310,7 +342,8 @@
   font: 700 13px var(--font-sans, system-ui, sans-serif);
 }
 
-.ac-modes a.on {
+.ac-modes a.on,
+.ac-modes button.on {
   background: var(--m-navy, #102038);
   border-color: var(--m-navy, #102038);
   color: #fff;
@@ -468,10 +501,17 @@
   color: var(--rg-text-gold, #ffd98a);
 }
 
-.stn[data-skin="ragnarok"] .ac-modes a.on {
+.stn[data-skin="ragnarok"] .ac-modes a.on,
+.stn[data-skin="ragnarok"] .ac-modes button.on {
   background: var(--rg-gold-fill, #c9982f);
   border-color: var(--rg-gold-fill, #c9982f);
   color: #1a1004;
+}
+
+.stn[data-skin="ragnarok"] .ac-modes button {
+  border-radius: 0;
+  border-color: rgba(201, 152, 47, 0.35);
+  color: var(--rg-text-gold, #ffd98a);
 }
 
 .ac-studio h2 {
