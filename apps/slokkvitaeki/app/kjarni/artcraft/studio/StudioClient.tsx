@@ -18,19 +18,31 @@ import {
   type LightPlan,
 } from "./lights";
 import { analyzeStudioImage, type StudioRegion } from "./analyzeImage";
+import {
+  STUDIO_MODES,
+  readStoredMode,
+  studioModeHint,
+  writeStoredMode,
+  type StudioMode,
+} from "./modes";
 import { assertAdultPrompt } from "./guard";
 import PersonProfilePanel from "./PersonProfile";
 import {
   avatarPrompt,
   AVATAR_DENOISING,
+  IDENTITY_DENOISING_MAX,
   canBuildAvatar,
+  clampIdentityDenoising,
   missingOrbitSlots,
   orbitCount,
   hasIdentity,
   identityPrompt,
-  identityRefs,
+  identityStill,
+  lockFaceRefs,
   mergeIdentity,
+  mergeIdentityNegative,
   orbitImages,
+  ORBIT_SLOTS,
   SHARPEN_DENOISING,
   type OrbitId,
   type OrbitMap,
@@ -41,12 +53,11 @@ import AvatarTurn from "./AvatarTurn";
 import BasesPanel from "./BasesPanel";
 import MeshPanel from "./MeshPanel";
 import PartsPanel from "./PartsPanel";
-import { shouldStampPhoto, spinYaws, type CaptureYaws } from "./mesh";
+import { spinYaws, type CaptureYaws } from "./mesh";
 import { captureStandInYaws } from "./meshView";
 import {
   IMPRINT_DENOISING,
   bodyPart,
-  FULL_STAMP,
   imprintPrompt,
   isClipStamp,
   pickKeyFrame,
@@ -83,6 +94,8 @@ import {
   mergeStyle,
   motionRecreatePrompt,
   nearestOrbitView,
+  orbitFillDenoising,
+  orbitFillOrder,
   poseDenoising,
   studioStill,
   turnPreview,
@@ -214,6 +227,7 @@ export default function StudioClient() {
   const [queue, setQueue] = useState<string[]>([]);
   const [compare, setCompare] = useState(50);
   const [sheetUrl, setSheetUrl] = useState("");
+  const [mode, setMode] = useState<StudioMode>("still");
 
   useEffect(() => {
     setAccepted(window.localStorage.getItem(GATE_KEY) === "1");
@@ -223,6 +237,7 @@ export default function StudioClient() {
     setBodyLook(readStoredLook());
     setClip(readStoredVideo());
     setCustomActions(readCustomActions());
+    setMode(readStoredMode());
     setReady(true);
   }, []);
 
@@ -263,6 +278,11 @@ export default function StudioClient() {
   function acceptGate() {
     window.localStorage.setItem(GATE_KEY, "1");
     setAccepted(true);
+  }
+
+  function pickMode(id: StudioMode) {
+    setMode(id);
+    writeStoredMode(id);
   }
 
   function patchSettings(patch: Partial<StudioSettings>) {
@@ -382,9 +402,17 @@ export default function StudioClient() {
     initImage?: string;
     poseRef?: string;
     styleRef?: string;
+    turn?: boolean;
+    quiet?: boolean;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
-    const init = opts?.initImage || working || source || undefined;
+    const init = identityStill({
+      init: opts?.initImage,
+      working,
+      source,
+      profile,
+    });
+    const painted = Boolean((opts && "mask" in opts ? opts.mask : mask) || "");
     setError("");
     try {
       assertAdultPrompt(text, negative);
@@ -392,30 +420,30 @@ export default function StudioClient() {
       setError(err instanceof Error ? err.message : "Óleyfileg beiðni");
       return [];
     }
-    if (!init && !text.trim()) {
-      setError("Skrifaðu prompt, eða settu inn mynd til að breyta.");
+    if (!init) {
+      setError("Settu inn ljósmynd af manneskjunni. Án myndar teiknar líkanið nýtt andlit.");
       return [];
     }
-    setBusy(true);
+    if (!opts?.quiet) setBusy(true);
     try {
-      const useId = Boolean(useProfile && hasIdentity(profile));
-      let faceRefs: string[] | undefined;
-      if (useId && profile) {
-        const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
-        faceRefs = identityRefs(profile.faces, sheet, orbitSheet);
-      }
+      const { faceRefs } = await identityBundle(init);
       const out = await generateLocal(webui, {
-        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", useId),
-        negativePrompt: negative.trim(),
+        prompt: mergeIdentity(mergePrompt(mergeLooks(text, looks), lights), profile?.name || "", true),
+        negativePrompt: mergeIdentityNegative(negative),
         initImage: init,
         mask: (opts && "mask" in opts ? opts.mask : mask) || undefined,
         maskBlur,
-        restoreFaces: useId,
+        restoreFaces: true,
         faceRefs,
-        faceAdapter: useId ? faceAdapter : null,
+        faceAdapter,
         ...extraControls({ poseRef: opts?.poseRef, styleRef: opts?.styleRef }),
         ...settings,
-        denoisingStrength: opts?.denoisingStrength ?? settings.denoisingStrength,
+        denoisingStrength: clampIdentityDenoising(
+          opts?.denoisingStrength ?? settings.denoisingStrength,
+          true,
+          painted,
+          Boolean(opts?.turn),
+        ),
       });
       setImages(out);
       window.localStorage.setItem(WEBUI_URL_KEY, webui);
@@ -430,7 +458,7 @@ export default function StudioClient() {
       );
       return [];
     } finally {
-      setBusy(false);
+      if (!opts?.quiet) setBusy(false);
     }
   }
 
@@ -473,6 +501,10 @@ export default function StudioClient() {
   }
 
   async function studioShoot() {
+    if (!identityStill({ working, source, profile })) {
+      setError("Settu inn ljósmynd. Án myndar teiknar líkanið nýtt andlit á dúkinn.");
+      return;
+    }
     const paper = backgroundOf(lights.background);
     const text = backdropShootPrompt(lights.background, profile?.name || "");
     setPrompt(text);
@@ -518,17 +550,21 @@ export default function StudioClient() {
       return;
     }
     const base = studioBase(baseId);
+    const photo = identityStill({ working, source, profile });
     const raw = selectedBaseImage();
-    let init: string | undefined;
+    let mannequin = "";
     try {
-      init = await rasterizeBase(raw);
+      mannequin = await rasterizeBase(raw);
     } catch {
-      init = undefined;
+      mannequin = "";
     }
-    const text = init
-      ? adaptBasePrompt(profile?.name || "", base, bodyLook)
-      : avatarPrompt(profile?.name || "");
-    const denoise = init ? BASE_DENOISING : AVATAR_DENOISING;
+    const init = photo || mannequin || undefined;
+    const text = photo
+      ? mergeIdentity(adaptBasePrompt(profile?.name || "", base, bodyLook), profile?.name || "", true)
+      : mannequin
+        ? adaptBasePrompt(profile?.name || "", base, bodyLook)
+        : avatarPrompt(profile?.name || "");
+    const denoise = photo ? IDENTITY_DENOISING_MAX : mannequin ? BASE_DENOISING : AVATAR_DENOISING;
     setPrompt(text);
     setUseProfile(true);
     patchSettings({ width: 768, height: 1024, denoisingStrength: denoise });
@@ -665,11 +701,17 @@ export default function StudioClient() {
     }
   }
 
-  async function identityBundle() {
-    const useId = Boolean(useProfile && hasIdentity(profile));
-    if (!useId || !profile) return { useId: false, faceRefs: undefined as string[] | undefined };
-    const [sheet, orbitSheet] = await Promise.all([faceSheet(profile.faces), faceSheet(orbitImages(profile))]);
-    return { useId: true, faceRefs: identityRefs(profile.faces, sheet, orbitSheet) };
+  async function identityBundle(still?: string) {
+    const photo = identityStill({ init: still, working, source, profile });
+    const faces = profile?.faces || [];
+    if (!photo && faces.length === 0 && orbitCount(profile) === 0) {
+      return { useId: false, faceRefs: undefined as string[] | undefined };
+    }
+    const [sheet, orbitSheet] = await Promise.all([
+      faceSheet(faces),
+      faceSheet(orbitImages(profile)),
+    ]);
+    return { useId: true, faceRefs: lockFaceRefs(photo, faces, sheet, orbitSheet) };
   }
 
   async function makeVideo(still?: string) {
@@ -681,7 +723,7 @@ export default function StudioClient() {
     const text = mergeIdentity(
       mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", clip.kind, customActions), looks), lights),
       profile?.name || "",
-      Boolean(useProfile && hasIdentity(profile)),
+      true,
     );
     try {
       assertAdultPrompt(text, negative);
@@ -693,19 +735,19 @@ export default function StudioClient() {
     setBusy(true);
     setClipText(`Rami 1/${clip.frames}`);
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const frames = [start];
       let prev = start;
-      const denoise = videoDenoising(clip.motion);
+      const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
       for (let i = 1; i < clip.frames; i++) {
         setClipText(`Rami ${i + 1}/${clip.frames}`);
         const out = await generateLocal(webui, {
           prompt: text,
-          negativePrompt: negative.trim(),
+          negativePrompt: mergeIdentityNegative(negative),
           initImage: prev,
-          restoreFaces: useId,
+          restoreFaces: true,
           faceRefs,
-          faceAdapter: useId ? faceAdapter : null,
+          faceAdapter,
           ...extraControls(),
           ...settings,
           denoisingStrength: denoise,
@@ -747,26 +789,26 @@ export default function StudioClient() {
     setBusy(true);
     setClipText("Lookbook…");
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const out: string[] = [];
       for (const shot of LOOKBOOK_SHOTS) {
         setClipText(`Lookbook · ${shot.label}`);
         const text = mergeIdentity(
           mergePrompt(mergeLooks(lookbookPrompt(shot.id, profile?.name || ""), looks), lights),
           profile?.name || "",
-          useId,
+          true,
         );
         assertAdultPrompt(text, negative);
         const imgs = await generateLocal(webui, {
           prompt: text,
-          negativePrompt: negative.trim(),
+          negativePrompt: mergeIdentityNegative(negative),
           initImage: start,
-          restoreFaces: useId,
+          restoreFaces: true,
           faceRefs,
-          faceAdapter: useId ? faceAdapter : null,
+          faceAdapter,
           ...extraControls(),
           ...settings,
-          denoisingStrength: LOOKBOOK_DENOISING,
+          denoisingStrength: clampIdentityDenoising(LOOKBOOK_DENOISING, true),
         });
         out.push(imgs[0]);
       }
@@ -797,7 +839,7 @@ export default function StudioClient() {
     setError("");
     setBusy(true);
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const all: string[] = [];
       let prev = start;
       let step = 0;
@@ -806,20 +848,20 @@ export default function StudioClient() {
         const text = mergeIdentity(
           mergePrompt(mergeLooks(mergeMotion(prompt || "same adult person", kind, customActions), looks), lights),
           profile?.name || "",
-          useId,
+          true,
         );
         assertAdultPrompt(text, negative);
-        const denoise = videoDenoising(clip.motion);
+        const denoise = clampIdentityDenoising(videoDenoising(clip.motion), true);
         for (let i = 0; i < per; i++) {
           step += 1;
           setClipText(`Röð ${step}/${total}`);
           const imgs = await generateLocal(webui, {
             prompt: text,
-            negativePrompt: negative.trim(),
+            negativePrompt: mergeIdentityNegative(negative),
             initImage: prev,
-            restoreFaces: useId,
+            restoreFaces: true,
             faceRefs,
-            faceAdapter: useId ? faceAdapter : null,
+            faceAdapter,
             ...extraControls(),
             ...settings,
             denoisingStrength: denoise,
@@ -913,7 +955,7 @@ export default function StudioClient() {
     const text = mergeIdentity(
       mergePrompt(mergeLooks(motionRecreatePrompt(profile?.name || ""), looks), lights),
       profile?.name || "",
-      Boolean(useProfile && hasIdentity(profile)),
+      true,
     );
     try {
       assertAdultPrompt(text, negative);
@@ -924,19 +966,19 @@ export default function StudioClient() {
     setError("");
     setBusy(true);
     try {
-      const { useId, faceRefs } = await identityBundle();
+      const { faceRefs } = await identityBundle(start);
       const frames = [start];
       let prev = start;
-      const denoise = videoDenoising(Math.max(clip.motion, 6));
+      const denoise = clampIdentityDenoising(videoDenoising(Math.max(clip.motion, 6)), true);
       for (let i = 0; i < motionFrames.length; i++) {
         setClipText(`Hreyfing ${i + 1}/${motionFrames.length}`);
         const out = await generateLocal(webui, {
           prompt: text,
-          negativePrompt: negative.trim(),
+          negativePrompt: mergeIdentityNegative(negative),
           initImage: prev,
-          restoreFaces: useId,
+          restoreFaces: true,
           faceRefs,
-          faceAdapter: useId ? faceAdapter : null,
+          faceAdapter,
           ...extraControls({ poseRef: motionFrames[i] }),
           ...settings,
           denoisingStrength: denoise,
@@ -1003,36 +1045,56 @@ export default function StudioClient() {
       setError("Búðu fyrst til prófíl.");
       return null;
     }
+    if (orbitCount(profile) === 0) {
+      setError("Settu inn að minnsta kosti eina ljósmynd á hringinn. 3D-dúkkan er bara horn, ekki manneskjan.");
+      return null;
+    }
     const missing = missingOrbitSlots(profile.orbit);
     if (missing.length === 0) return profile.orbit;
+    const photos = ORBIT_SLOTS.filter((slot) => profile.orbit[slot.id]).map((slot) => ({ deg: slot.deg }));
+    const queue = orbitFillOrder(missing, photos);
     const orbit: OrbitMap = { ...profile.orbit };
     setError("");
     setBusy(true);
     try {
-      setClipText("Teikna 3D-grunn…");
-      const yaws = missing.map((slot) => slot.deg);
+      setClipText("Les 3D-horn…");
+      const yaws = queue.map((slot) => slot.deg);
       const shots = meshCaptureRef.current
         ? await meshCaptureRef.current(yaws)
         : await captureStandInYaws(bodyLook, studioBase(baseId), yaws);
-      for (let i = 0; i < missing.length; i++) {
-        const slot = missing[i];
-        setClipText(`Fylla ${slot.label} (${i + 1}/${missing.length})`);
-        let src = shots[slot.deg];
-        if (!src) continue;
-        const neighbor = nearestOrbitView(profile, slot.deg);
-        if (neighbor && shouldStampPhoto(slot.deg, neighbor.deg)) {
-          src = await imprintOnto(src, neighbor.src, FULL_STAMP);
-        }
-        orbit[slot.id] = src;
-        setTurnViews((cur) => ({ ...cur, [slot.id]: src }));
+      let filled = 0;
+      for (let i = 0; i < queue.length; i++) {
+        const slot = queue[i];
+        setClipText(`Mála ${slot.label} af ljósmynd (${i + 1}/${queue.length})`);
+        const neighbor = nearestOrbitView({ ...profile, orbit }, slot.deg);
+        if (!neighbor) continue;
+        const pose = shots[slot.deg] || "";
+        const text = yawPrompt(slot.deg, profile.name);
+        const out = await runGenerate({
+          prompt: text,
+          mask: null,
+          initImage: neighbor.src,
+          poseRef: pose || undefined,
+          denoisingStrength: orbitFillDenoising(neighbor.deg, slot.deg),
+          turn: true,
+          quiet: true,
+        });
+        if (!out[0]) continue;
+        orbit[slot.id] = out[0];
+        filled += 1;
+        setTurnViews((cur) => ({ ...cur, [slot.id]: out[0] }));
       }
-      const first = orbit.front || orbit.frontRight || Object.values(orbit)[0];
-      if (first) adoptStill(first, "3d-grunnur.png");
-      setClipText(`${Object.keys(orbit).length} af 8 hornum · 3D-grunnur`);
+      if (filled === 0) {
+        setError("Gat ekki málað vantar horn. Tengdu Forge og reyndu aftur — dúkkan er ekki sett inn sem mynd.");
+        return null;
+      }
+      const first = orbit.front || orbit.frontLeft || orbit.frontRight || Object.values(orbit)[0];
+      if (first) adoptStill(first, "hringur.png");
+      setClipText(`${orbitCount({ ...profile, orbit })} af 8 hornum · málað af ljósmynd`);
       return orbit;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gat ekki fyllt hornin með 3D-grunni.");
-      return Object.keys(orbit).length > orbitCount(profile) ? orbit : null;
+      setError(err instanceof Error ? err.message : "Gat ekki fyllt hornin af ljósmyndinni.");
+      return orbitCount({ ...profile, orbit }) > orbitCount(profile) ? orbit : null;
     } finally {
       setBusy(false);
     }
@@ -1148,6 +1210,7 @@ export default function StudioClient() {
   }
 
   const editing = Boolean(source);
+  const hasPerson = Boolean(identityStill({ working, source, profile }));
   const preset = sizePresetId(settings.width, settings.height);
   const hasStill = Boolean(studioStill(working, images, source));
 
@@ -1158,12 +1221,38 @@ export default function StudioClient() {
           <p className="ac-kicker">
             <a href={artcraftHubHref()}>ArtCraft</a> · Einkastúdíó
           </p>
-          <h1>Staðbundið líkan</h1>
+          <div className="ac-studio-head">
+            <h1>Staðbundið líkan</h1>
+            {accepted && (
+              <div className="ac-modes" role="tablist" aria-label="Stúdíóhamur">
+                {STUDIO_MODES.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    id={`studio-mode-${item.id}`}
+                    aria-controls={`studio-mode-panel-${item.id}`}
+                    aria-selected={mode === item.id}
+                    className={mode === item.id ? "on" : undefined}
+                    onClick={() => pickMode(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <p className="ac-lead">
-            Myndirnar verða til á tölvunni þinni gegnum Automatic1111, Forge eða
-            SD.Next. Engin skýjasía, ekkert sent út. Fullorðinsmyndefni er leyfilegt.
-            Ekkert sem snýr að börnum.
+            {accepted
+              ? studioModeHint(mode)
+              : "Myndirnar verða til á tölvunni þinni gegnum Automatic1111, Forge eða SD.Next. Engin skýjasía, ekkert sent út. Fullorðinsmyndefni er leyfilegt. Ekkert sem snýr að börnum."}
           </p>
+          {accepted && (
+            <p className="ac-hint">
+              Automatic1111, Forge eða SD.Next á tölvunni þinni. Ekkert sent út. Ekkert
+              sem snýr að börnum.
+            </p>
+          )}
 
           {!accepted ? (
             <div className="ac-gate">
@@ -1229,7 +1318,13 @@ export default function StudioClient() {
                 )}
               </section>
 
-              <section className="ac-panel">
+              {mode === "person" && (
+              <section
+                className="ac-panel"
+                id="studio-mode-panel-person"
+                role="tabpanel"
+                aria-labelledby="studio-mode-person"
+              >
                 <PersonProfilePanel
                   activeId={activeProfileId}
                   onActive={(id, next) => {
@@ -1318,13 +1413,22 @@ export default function StudioClient() {
                   hasProfile={Boolean(activeProfileId)}
                 />
               </section>
+              )}
 
-              <form className="ac-panel" onSubmit={generate}>
+              {mode === "still" && (
+              <>
+              <form
+                className="ac-panel"
+                id="studio-mode-panel-still"
+                role="tabpanel"
+                aria-labelledby="studio-mode-still"
+                onSubmit={generate}
+              >
                 <h2>{editing ? "Breyta mynd" : "Prompt"}</h2>
                 <p className="ac-hint">
                   {editing
-                    ? "Promptið segir hvað á að breytast. Denoising stýrir hversu mikið líkanið má fara frá upprunalegu myndinni."
-                    : "Án myndar verður til ný mynd. Settu inn ljósmynd til að breyta fötum, bakgrunni eða smáatriðum."}
+                    ? "Promptið segir hvað á að breytast (föt, bakgrunnur). Andlitið kemur af myndinni — líkanið má ekki teikna nýjan einstakling."
+                    : "Settu inn ljósmynd af manneskjunni fyrst. Án myndar teiknar líkanið alltaf nýtt andlit."}
                 </p>
 
                 <div
@@ -1650,8 +1754,14 @@ export default function StudioClient() {
 
                 {error && <p className="ac-error">{error}</p>}
                 <div className="ac-row">
-                  <button type="submit" className="ac-btn" disabled={busy}>
-                    {busy ? "Mynda…" : mask ? "Breyta máluðu svæði" : editing ? "Breyta mynd" : "Mynda staðbundið"}
+                  <button type="submit" className="ac-btn" disabled={busy || !hasPerson}>
+                    {busy
+                      ? "Mynda…"
+                      : mask
+                        ? "Breyta máluðu svæði"
+                        : hasPerson
+                          ? "Breyta mynd"
+                          : "Settu inn mynd fyrst"}
                   </button>
                   <button
                     type="button"
@@ -1681,44 +1791,6 @@ export default function StudioClient() {
                   )}
                 </div>
               </form>
-
-              <VideoPanel
-                settings={clip}
-                onChange={setClip}
-                onMake={() => void makeVideo()}
-                busy={busy}
-                progress={clipText}
-                videoUrl={videoUrl}
-                hasStill={hasStill}
-                prompt={prompt}
-                custom={customActions}
-                onSaveAction={(label) => {
-                  try {
-                    assertAdultPrompt(prompt, negative);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Óleyfileg skipun");
-                    return;
-                  }
-                  const row = commandFromPrompt(label, prompt);
-                  if (!row) {
-                    setError("Skrifaðu prompt til að vista skipun.");
-                    return;
-                  }
-                  setCustomActions(saveCustomAction(customActions, row));
-                  setClip((cur) => ({ ...cur, kind: row.id, motion: row.motion }));
-                  setError("");
-                }}
-                onDeleteAction={(id) => {
-                  const next = deleteCustomAction(customActions, id);
-                  setCustomActions(next);
-                  if (clip.kind === id) {
-                    setClip((cur) => ({ ...cur, kind: "breathe" }));
-                  }
-                }}
-                queue={queue}
-                onQueue={setQueue}
-                onRunQueue={() => void makeSequence()}
-              />
 
               {images.length > 0 && (
                 <section className="ac-panel">
@@ -1787,7 +1859,10 @@ export default function StudioClient() {
                           <button
                             type="button"
                             className="ac-btn ghost"
-                            onClick={() => void makeVideo(src)}
+                            onClick={() => {
+                              pickMode("video");
+                              void makeVideo(src);
+                            }}
                             disabled={busy}
                           >
                             Hreyfimynd
@@ -1800,6 +1875,54 @@ export default function StudioClient() {
                     ))}
                   </div>
                 </section>
+              )}
+              </>
+              )}
+
+              {mode === "video" && (
+              <div
+                id="studio-mode-panel-video"
+                role="tabpanel"
+                aria-labelledby="studio-mode-video"
+              >
+              <VideoPanel
+                settings={clip}
+                onChange={setClip}
+                onMake={() => void makeVideo()}
+                busy={busy}
+                progress={clipText}
+                videoUrl={videoUrl}
+                hasStill={hasStill}
+                prompt={prompt}
+                custom={customActions}
+                onSaveAction={(label) => {
+                  try {
+                    assertAdultPrompt(prompt, negative);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Óleyfileg skipun");
+                    return;
+                  }
+                  const row = commandFromPrompt(label, prompt);
+                  if (!row) {
+                    setError("Skrifaðu prompt til að vista skipun.");
+                    return;
+                  }
+                  setCustomActions(saveCustomAction(customActions, row));
+                  setClip((cur) => ({ ...cur, kind: row.id, motion: row.motion }));
+                  setError("");
+                }}
+                onDeleteAction={(id) => {
+                  const next = deleteCustomAction(customActions, id);
+                  setCustomActions(next);
+                  if (clip.kind === id) {
+                    setClip((cur) => ({ ...cur, kind: "breathe" }));
+                  }
+                }}
+                queue={queue}
+                onQueue={setQueue}
+                onRunQueue={() => void makeSequence()}
+              />
+              </div>
               )}
             </>
           )}

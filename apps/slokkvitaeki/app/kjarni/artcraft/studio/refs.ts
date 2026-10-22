@@ -1,5 +1,6 @@
 /** Pose, style and motion references so the avatar can copy a still, a clip, or an item. */
 
+import { yawGap } from "./mesh";
 import { MAX_FACE_UNITS, ORBIT_SLOTS, controlNetFaceArgs, type OrbitId, type PersonProfile } from "./profile";
 
 export const POSE_DENOISING = 0.44;
@@ -242,6 +243,25 @@ export function turnPreview(
   if (orbit) return { src: orbit.src, label: slot.label, kind: "orbit" };
   if (still) return { src: still, label: slot.label, kind: "still" };
   return null;
+}
+
+/** How hard Forge may turn the photo toward a missing yaw. 3D is pose-only. */
+export function orbitFillDenoising(fromDeg: number, toDeg: number): number {
+  const gap = yawGap(fromDeg, toDeg);
+  if (gap <= 50) return 0.34;
+  if (gap <= 100) return 0.44;
+  return 0.52;
+}
+
+export function orbitFillOrder(
+  missing: Array<(typeof ORBIT_SLOTS)[number]>,
+  photos: Array<{ deg: number }>,
+): Array<(typeof ORBIT_SLOTS)[number]> {
+  return [...missing].sort((a, b) => {
+    const da = Math.min(...photos.map((p) => yawGap(p.deg, a.deg)), 180);
+    const db = Math.min(...photos.map((p) => yawGap(p.deg, b.deg)), 180);
+    return da - db || a.deg - b.deg;
+  });
 }
 
 export function nearestOrbitView(profile: PersonProfile | null | undefined, deg: number): OrbitView | null {

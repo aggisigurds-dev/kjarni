@@ -45,11 +45,11 @@ export const MESH_GUIDES: MeshGuide[] = [
     label: "Ekkert extra forrit",
     kind: "studio",
     href: "",
-    why: "Innbyggði 3D-líkaminn dugar. Þú þarft ekki Meshy né Sketchfab til að fylla hringinn.",
+    why: "3D-dúkkan er aðeins horn og stelling. Pixlarnir koma af ljósmyndinni þinni, aldrei af dúkku.",
     steps: [
-      "Settu 1–2 myndir á Framan og Hægri ¾ í hringnum hér fyrir ofan.",
-      "Ýttu á Fylla vantar horn með 3D.",
-      "Bak og hliðar koma af 3D-grunninum. Myndirnar þínar málast á nálæg horn.",
+      "Settu 1–2 ljósmyndir af manneskjunni á hringinn (t.d. Framan og Hægri ¾).",
+      "Tengdu Forge. Ýttu á Fylla vantar horn.",
+      "Vantar gráður eru málaðar af næstu ljósmynd. Dúkka og Barbie fara ekki inn á hringinn.",
     ],
   },
   {
@@ -136,8 +136,8 @@ export type CaptureYaws = (yaws: number[]) => Promise<Partial<Record<number, str
 export function meshHint(hasMesh: boolean, name = ""): string {
   if (hasMesh) {
     return name
-      ? `Möskvi: ${name}. Taktu mynd, snúðu í videó, eða fylltu vantar horn með þessum líkama.`
+      ? `Möskvi: ${name}. Hann gefur stellingu. Vantar horn eru málaðar af ljósmyndinni, ekki af dúkku.`
       : "Möskvi tilbúinn.";
   }
-  return "Innbyggður 3D-líkami fyllir vantar horn. Myndirnar þínar málast á nálæg sjónarhorn. Leiðbeiningar og hlekkir eru hér fyrir neðan — þú þarft ekkert extra forrit til að byrja.";
+  return "3D er bara horn. Settu ljósmynd á hringinn og ýttu á Fylla vantar horn — Forge málar manneskjuna, dúkkan fer ekki inn.";
 }

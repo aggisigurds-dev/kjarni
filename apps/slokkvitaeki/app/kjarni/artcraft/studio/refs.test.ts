@@ -8,6 +8,8 @@ import {
   motionFrameCount,
   motionRecreatePrompt,
   nearestOrbitView,
+  orbitFillDenoising,
+  orbitFillOrder,
   pickPoseModel,
   pickPoseModule,
   pickStyleModel,
@@ -126,6 +128,19 @@ test("yaw maps to the nearest orbit slot and filled neighbour", () => {
   assert.equal(view?.id, "right");
   assert.equal(view?.src, "R");
   assert.equal(nearestOrbitView({ ...profile, orbit: {} }, 0), null);
+});
+
+test("orbit fill walks from the nearest photo and never treats a doll as the start", () => {
+  const missing = [
+    { id: "back" as const, label: "Aftan", deg: 180 },
+    { id: "left" as const, label: "Vinstri", deg: 270 },
+    { id: "front" as const, label: "Framan", deg: 0 },
+  ];
+  const order = orbitFillOrder(missing, [{ deg: 315 }]);
+  assert.equal(order[0].id, "front");
+  assert.equal(order[1].id, "left");
+  assert.equal(order[2].id, "back");
+  assert.ok(orbitFillDenoising(315, 0) < orbitFillDenoising(315, 180));
 });
 
 test("studioStill prefers the avatar result over the original upload", () => {

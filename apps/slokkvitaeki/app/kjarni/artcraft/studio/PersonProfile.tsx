@@ -277,8 +277,9 @@ export default function PersonProfilePanel({
           <h3>Hringur — 8 sjónarhorn</h3>
           <p className="ac-hint">
             Fullorðin manneskja, sama fatnaður, skýrt ljós. Framan → hægri → aftan → vinstri.
-            Vantar horn? Ýttu á Fylla vantar horn með 3D — ekkert extra forrit þarf.
-            Leiðbeiningar og hlekkir (Meshy, Tripo, Sketchfab) eru undir 3D möskvi.
+            Vantar horn? Ýttu á Fylla vantar horn. Forge málar næstu gráður af ljósmyndinni
+            þinni. 3D er bara stelling — dúkka fer ekki inn sem mynd. Sérðu dúkku núna:
+            Taka út, svo fylla aftur.
           </p>
           <div className="ac-orbit">
             {ORBIT_SLOTS.map((slot) => {
@@ -328,7 +329,7 @@ export default function PersonProfilePanel({
                   disabled={avatarBusy || busy || !canGuessOrbit(active)}
                   onClick={() => void guessRest()}
                 >
-                  {avatarBusy ? "Áætla…" : `Fylla vantar horn með 3D (${missingOrbitSlots(active.orbit).length})`}
+                  {avatarBusy ? "Máli…" : `Fylla vantar horn (${missingOrbitSlots(active.orbit).length})`}
                 </button>
               )}
               {onAvatar && (
