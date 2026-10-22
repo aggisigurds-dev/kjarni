@@ -79,6 +79,7 @@ export type Img2ImgInput = Txt2ImgInput & {
   mask?: string;
   maskBlur?: number;
   inpaintingFill?: number;
+  inpaintFullRes?: boolean;
 };
 
 export type StudioGenInput = Txt2ImgInput & {
@@ -87,6 +88,7 @@ export type StudioGenInput = Txt2ImgInput & {
   mask?: string;
   maskBlur?: number;
   inpaintingFill?: number;
+  inpaintFullRes?: boolean;
 };
 
 export type LocalModel = { title: string; model_name: string };
@@ -320,7 +322,7 @@ export async function img2img(base: string, input: Img2ImgInput): Promise<string
               mask: toApiImage(input.mask!),
               mask_blur: clampMaskBlur(input.maskBlur ?? 4),
               inpainting_fill: input.inpaintingFill ?? 1,
-              inpaint_full_res: true,
+              inpaint_full_res: input.inpaintFullRes ?? true,
               inpaint_full_res_padding: 32,
               inpainting_mask_invert: 0,
             }

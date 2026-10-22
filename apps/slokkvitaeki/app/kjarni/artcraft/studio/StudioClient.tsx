@@ -13,12 +13,13 @@ import {
   GARMENT_NEGATIVE,
   garmentBodyPrompt,
   garmentContinuePrompt,
+  garmentRunOptions,
   isGarmentChip,
   slotOfRegion,
   type GarmentAdd,
   type GarmentSlot,
 } from "./garments";
-import { extendForContinue } from "./garmentsImage";
+import { alignMaskToStill, extendForContinue, stillSize } from "./garmentsImage";
 import LightPlanPanel from "./LightPlan";
 import {
   backdropShootPrompt,
@@ -370,20 +371,33 @@ export default function StudioClient() {
     opts?: { initImage?: string; width?: number; height?: number; maskUrl?: string },
   ) {
     const region = regions.find((r) => r.id === maskId);
-    const maskUrl = opts?.maskUrl || region?.maskUrl;
-    if (!maskUrl) {
+    const still = opts?.initImage || identityStill({ working, source, profile });
+    const rawMask = opts?.maskUrl || region?.maskUrl;
+    if (!rawMask || !still) {
       setError("Greindu myndina fyrst.");
       return;
     }
     if (region) pickRegion(region);
     setPrompt(prompt);
+    let maskUrl = rawMask;
+    let width = opts?.width;
+    let height = opts?.height;
+    try {
+      maskUrl = await alignMaskToStill(rawMask, still);
+      const size = await stillSize(still);
+      width = width ?? clampSize(size.width);
+      height = height ?? clampSize(size.height);
+    } catch {
+      maskUrl = rawMask;
+    }
     const out = await runGenerate({
       prompt,
       mask: maskUrl,
       extraNegative: GARMENT_NEGATIVE,
-      initImage: opts?.initImage,
-      width: opts?.width,
-      height: opts?.height,
+      initImage: still,
+      width,
+      height,
+      ...garmentRunOptions(),
     });
     if (out[0]) {
       setSource(out[0]);
@@ -485,8 +499,8 @@ export default function StudioClient() {
 
   function extraControls(override?: { poseRef?: string; styleRef?: string }) {
     return {
-      poseRef: override?.poseRef || poseRef || undefined,
-      styleRef: override?.styleRef || styleRef || undefined,
+      poseRef: override && "poseRef" in override ? override.poseRef || undefined : poseRef || undefined,
+      styleRef: override && "styleRef" in override ? override.styleRef || undefined : styleRef || undefined,
       poseAdapter,
       styleAdapter,
     };
@@ -515,6 +529,10 @@ export default function StudioClient() {
     extraNegative?: string;
     width?: number;
     height?: number;
+    skipPaint?: boolean;
+    ignoreRefs?: boolean;
+    inpaintingFill?: number;
+    inpaintFullRes?: boolean;
   }): Promise<string[]> {
     const text = opts?.prompt ?? prompt;
     const neg = [negative, opts?.extraNegative].filter((s) => s && s.trim()).join(", ");
@@ -525,7 +543,7 @@ export default function StudioClient() {
       profile,
     });
     const painted = Boolean((opts && "mask" in opts ? opts.mask : mask) || "");
-    const userPaint = isUserPaintEdit(painted, opts?.denoisingStrength);
+    const userPaint = !opts?.skipPaint && isUserPaintEdit(painted, opts?.denoisingStrength);
     setError("");
     try {
       assertAdultPrompt(text, neg);
@@ -568,11 +586,16 @@ export default function StudioClient() {
         initImage: initForPaint,
         mask: paintedMask,
         maskBlur: userPaint ? paintEditMaskBlur(maskBlur) : maskBlur,
-        inpaintingFill: userPaint ? paintInpaintFill(useShot) : undefined,
+        inpaintingFill: opts?.inpaintingFill ?? (userPaint ? paintInpaintFill(useShot) : 1),
+        inpaintFullRes: opts?.inpaintFullRes,
         restoreFaces: userPaint ? paintEditRestoreFaces(paintShotKind, useShot) : true,
         faceRefs,
         faceAdapter,
-        ...extraControls({ poseRef: opts?.poseRef, styleRef: useShot ? shot : opts?.styleRef }),
+        ...extraControls(
+          opts?.ignoreRefs
+            ? { poseRef: "", styleRef: "" }
+            : { poseRef: opts?.poseRef, styleRef: useShot ? shot : opts?.styleRef },
+        ),
         ...settings,
         width: opts?.width ?? settings.width,
         height: opts?.height ?? settings.height,

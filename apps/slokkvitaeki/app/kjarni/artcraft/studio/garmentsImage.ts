@@ -8,6 +8,7 @@ import {
   orRaster,
   padHasExtent,
   padRaster,
+  scaleMaskTo,
   shiftRaster,
   type GarmentSlot,
 } from "./garments";
@@ -42,6 +43,21 @@ function rasterToDataUrl(raster: Raster): string {
   if (!ctx) return "";
   ctx.putImageData(new ImageData(new Uint8ClampedArray(raster.data), raster.width, raster.height), 0, 0);
   return canvas.toDataURL("image/png");
+}
+
+export async function stillSize(src: string): Promise<{ width: number; height: number }> {
+  const img = await load(src);
+  return { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height };
+}
+
+/** Forge needs the mask at the same pixel size as the still, not the Greina crop. */
+export async function alignMaskToStill(maskUrl: string, stillUrl: string): Promise<string> {
+  const [maskImg, stillImg] = await Promise.all([load(maskUrl), load(stillUrl)]);
+  const width = stillImg.naturalWidth || stillImg.width;
+  const height = stillImg.naturalHeight || stillImg.height;
+  const mask = rasterFromImage(maskImg, maskImg.naturalWidth || maskImg.width, maskImg.naturalHeight || maskImg.height);
+  if (mask.width === width && mask.height === height) return maskUrl;
+  return rasterToDataUrl(scaleMaskTo(mask, width, height));
 }
 
 export type ContinueExtent = {
