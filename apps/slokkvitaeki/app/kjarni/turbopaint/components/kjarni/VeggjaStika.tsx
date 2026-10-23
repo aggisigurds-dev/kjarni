@@ -37,6 +37,7 @@ const TEGUNDIR: { id: VeggTegund; texti: string; titill: string; takn: ReactNode
   { id: "ei60", texti: "EI-60", titill: "Gera að eldvegg EI-60 — rauður (4)", takn: <Flame className="size-3.5" /> },
   { id: "ei30", texti: "EI-30", titill: "Gera að eldvegg EI-30 — ljósrauður (5)", takn: <Flame className="size-3.5" /> },
   { id: "svalir", texti: "Svalir", titill: "Svalir / svalahandrið — lágur veggur 1,1 m í 3D (6)", takn: <Fence className="size-3.5" /> },
+  { id: "stigi", texti: "Stigi", titill: "Stigi — þrepastigi frá neðri enda upp á efri í 3D (7)", takn: <Fence className="size-3.5" /> },
 ];
 
 function valdirVeggir(objects: BoardObject[], selectedIds: string[]): LineObject[] {
