@@ -18,8 +18,8 @@ skref / CFG / seed / sampler / denoising, fínpússa líkamslínur (þenja, minn
 draga) og mála maska sem promptið eða skjáskot endurskrifar (inpaint, ekki lágur
 heildar-img2img). Hægt er að sleppa skjáskoti af bikini / sundfatnaði eða höfði
 við promptið; Forge byrjar á því í máluðu gatinu. Greina merkir bol, ermar, buxur,
-skó, bakgrunn og hluti. Fatnaður er eytt fyrst: Endurbyggja teiknar allan
-líkamann sem var undir fötunum (andlitið helst, ekkert gat). Áframhald lengir
+skó, bakgrunn og hluti. Fatnaður er strokaður út fyrst (ekki suði, ekki
+mynsturbolur): Endurbyggja fyllir húð undir fötunum (andlitið helst, ekkert gat). Áframhald lengir
 fætur eða hendur út fyrir rammann ef myndin skerast. Svo er nýtt bætt ofan á
 (t.d. stuttbuxur). Ekki breytt á staðnum.
 Síðan má breyta lit eða skipta um bakgrunn.
