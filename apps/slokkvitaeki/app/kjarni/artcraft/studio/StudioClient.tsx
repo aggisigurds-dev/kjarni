@@ -15,11 +15,12 @@ import {
   garmentContinuePrompt,
   garmentRunOptions,
   isGarmentChip,
+  shouldWipeClothes,
   slotOfRegion,
   type GarmentAdd,
   type GarmentSlot,
 } from "./garments";
-import { alignMaskToStill, extendForContinue, stillSize } from "./garmentsImage";
+import { alignMaskToStill, extendForContinue, stillSize, wipeClothesOnStill } from "./garmentsImage";
 import LightPlanPanel from "./LightPlan";
 import {
   backdropShootPrompt,
@@ -368,7 +369,7 @@ export default function StudioClient() {
   async function runGarment(
     prompt: string,
     maskId: string,
-    opts?: { initImage?: string; width?: number; height?: number; maskUrl?: string },
+    opts?: { initImage?: string; width?: number; height?: number; maskUrl?: string; wipeClothes?: boolean },
   ) {
     const region = regions.find((r) => r.id === maskId);
     const still = opts?.initImage || identityStill({ working, source, profile });
@@ -390,11 +391,20 @@ export default function StudioClient() {
     } catch {
       maskUrl = rawMask;
     }
+    let init = still;
+    if (opts?.wipeClothes) {
+      try {
+        init = await wipeClothesOnStill(still, maskUrl);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gat ekki strokað fötin út");
+        return;
+      }
+    }
     const out = await runGenerate({
       prompt,
       mask: maskUrl,
       extraNegative: GARMENT_NEGATIVE,
-      initImage: still,
+      initImage: init,
       width,
       height,
       ...garmentRunOptions(),
@@ -409,7 +419,7 @@ export default function StudioClient() {
   function addGarment(add: GarmentAdd) {
     const preferred = addMaskId(add, selectedRegion || add.slot);
     const maskId = regions.some((r) => r.id === preferred) ? preferred : add.slot;
-    void runGarment(add.prompt, maskId);
+    void runGarment(add.prompt, maskId, { wipeClothes: shouldWipeClothes("add") });
   }
 
   function runRebuildBody() {
@@ -418,7 +428,7 @@ export default function StudioClient() {
       setError("Greindu myndina fyrst svo hægt sé að endurbyggja líkamann undir fötunum.");
       return;
     }
-    void runGarment(garmentBodyPrompt(), BODY_UNDER_ID);
+    void runGarment(garmentBodyPrompt(), BODY_UNDER_ID, { wipeClothes: shouldWipeClothes("rebuild") });
   }
 
   async function runContinueBody() {
@@ -441,6 +451,7 @@ export default function StudioClient() {
         maskUrl: extent.mask,
         width: clampSize(extent.width),
         height: clampSize(extent.height),
+        wipeClothes: shouldWipeClothes("continue"),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki lengt líkamann");
@@ -1704,7 +1715,9 @@ export default function StudioClient() {
                               busy={busy}
                               onRebuild={runRebuildBody}
                               onContinue={() => void runContinueBody()}
-                              onFill={(text, maskId) => void runGarment(text, maskId)}
+                              onFill={(text, maskId) =>
+                                void runGarment(text, maskId, { wipeClothes: shouldWipeClothes("remove") })
+                              }
                               onAdd={addGarment}
                             />
                             <div className="ac-row">
