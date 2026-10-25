@@ -538,6 +538,8 @@ export function WhiteboardApp() {
       skonnun?: { blob: Blob; nafn: string; b: number; h: number; lykill?: string };
       /** Skoðun: teikningin ein — enginn 165.BR1-miði við hliðina. */
       anMerkja?: boolean;
+      /** Skjáskot úr klippiborði (hluti af teikningu): miðjuð á `world`, minnkuð ef hún er stór, valin — og myndavélin hreyfist EKKI. */
+      hluti?: boolean;
     }
   ): Promise<BoardObject[]> => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
@@ -574,6 +576,28 @@ export function WhiteboardApp() {
         const kind = classifyFile(f);
         return kind === "pdf" || kind === "tiff";
       });
+      if (opts?.hluti) {
+        // Skjáskot af litlum hluta teikningar (Agnar 23.10.2026: „paste að skjáskot inn á turboprint … af svona litlum pörtum"):
+        // lendir MIÐJUÐ í sjónsviðinu og er minnkuð niður í 60 % af því ef hún er stærri, svo hún sé á skjánum og hægt sé að draga hana á
+        // réttan stað og stilla stærðina. Hún er valin; myndavélin helst kyrr (annars hoppar borðið út af hverju límdu broti).
+        const view = shellRef.current;
+        const cam = useBoardStore.getState().camera;
+        const vw = view ? view.clientWidth / cam.scale : 0;
+        const vh = view ? view.clientHeight / cam.scale : 0;
+        const stillt = incoming.map((img) => {
+          const k = vw > 0 && vh > 0 ? Math.min(1, (vw * 0.6) / img.width, (vh * 0.6) / img.height) : 1;
+          const w = img.width * k;
+          const h = img.height * k;
+          return { ...img, width: w, height: h, x: origin.x - w / 2, y: origin.y - h / 2 };
+        });
+        useBoardStore.getState().addObjects(stillt, false);
+        useBoardStore.getState().setTool("select");
+        useBoardStore.getState().setSelected(stillt.map((o) => o.id));
+        useBoardStore.getState().setImportProgress(null);
+        toast.success("Skjáskotið er á borðinu — dragðu það á réttan stað og stilltu stærðina");
+        warnings.forEach((w) => toast.message(w));
+        return stillt;
+      }
       const kit = isPlan && !opts?.anMerkja ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
       useBoardStore.getState().addObjects([...incoming, ...kit], false);
       useBoardStore.getState().setTool("select");
@@ -1689,6 +1713,23 @@ export function WhiteboardApp() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       nativeClipboardSeen.current.paste = Date.now();
+      // Skjáskot (eða afrituð mynd) í klippiborðinu → hluti á borðið. Ekki þegar skrifað er í reit; skrár (t.d. afrituð PDF) fara áfram um
+      // dragðu-og-slepptu / „Hlaða upp".
+      const mynd = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/") && !/tiff?$/i.test(f.type));
+      if (mynd && !isTyping(e.target)) {
+        e.preventDefault();
+        const nu = new Date();
+        const stimpill = [nu.getHours(), nu.getMinutes(), nu.getSeconds()].map((n) => String(n).padStart(2, "0")).join(".");
+        const ending = mynd.type === "image/jpeg" ? "jpg" : mynd.type.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+        const skra = new File([mynd], `Skjáskot ${stimpill}.${ending}`, { type: mynd.type });
+        const shell = shellRef.current;
+        const cam = useBoardStore.getState().camera;
+        const mid = shell
+          ? worldFromScreen({ x: shell.clientWidth / 2, y: shell.clientHeight / 2 }, cam)
+          : undefined;
+        void runImport([skra], mid, { hluti: true });
+        return;
+      }
       const text = e.clipboardData?.getData("text")?.trim() ?? "";
       const copiedObjects = text ? parseClipboard(text) : null;
       if (copiedObjects) {
@@ -1733,7 +1774,7 @@ export function WhiteboardApp() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [runUrlImport]);
+  }, [runUrlImport, runImport]);
 
   const openSamplePlan = useCallback(async () => {
     try {
