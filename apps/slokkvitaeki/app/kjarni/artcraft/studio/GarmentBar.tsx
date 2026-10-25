@@ -36,9 +36,9 @@ export default function GarmentBar({
   return (
     <div className="ac-garment">
       <p className="ac-hint">
-        Endurbyggja teiknar allan líkamann sem var undir fötunum. Andlitið helst.
-        Áframhald lengir fætur eða hendur út fyrir rammann. Svo bætirðu nýjum
-        fötum ofan á.
+        Endurbyggja strokar fötin út fyrst og fyllir húð, ekki suði og ekki
+        mynstur. Andlitið helst. Áframhald lengir fætur eða hendur út fyrir
+        rammann. Svo bætirðu nýjum fötum ofan á.
       </p>
       <div className="ac-row">
         <button type="button" className="ac-btn" disabled={busy} onClick={onRebuild}>

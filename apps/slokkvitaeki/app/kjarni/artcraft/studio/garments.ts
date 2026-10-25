@@ -1,8 +1,15 @@
 /** Delete a garment, then add a new one. In-place "change pants to shorts" rewrites the whole person. */
 
-import { createRaster, type Raster } from "./adjust";
+import { cloneRaster, createRaster, type Raster } from "./adjust";
 
 export type GarmentSlot = "top" | "sleeves" | "pants" | "shoes";
+
+export type GarmentAction = "rebuild" | "remove" | "continue" | "add";
+
+/** Rebuild/remove must wipe the pattern. Add keeps the reconstructed skin. */
+export function shouldWipeClothes(action: GarmentAction): boolean {
+  return action !== "add";
+}
 
 export const BODY_UNDER_ID = "bodyUnder";
 
@@ -10,12 +17,69 @@ export type BodyBox = { x0: number; y0: number; x1: number; y1: number };
 
 export type ContinuePad = { left: number; right: number; top: number; bottom: number };
 
-/** Inpaint must reconstruct the body under the clothes, never punch a hole. */
+/** Inpaint must reconstruct the body under the clothes, never punch a hole or paint a pattern. */
 export const GARMENT_FILL =
-  "fill every masked pixel, reconstruct the body underneath, continue the anatomy, no hole, no gap, no transparency, no missing limbs, painted masked region only";
+  "photorealistic skin and anatomy, no clothing pattern, no scribble, no crayon, no brush texture, no mosaic, no statue, no hole, no gap, no transparency, no missing limbs";
 
 export const GARMENT_NEGATIVE =
-  "hole, gap, empty cutout, missing legs, missing arms, missing limb, transparency, checkerboard, background showing through the body, amputated, cropped body, floating clothes, discontinuity";
+  "hole, gap, empty cutout, missing legs, missing arms, missing limb, transparency, checkerboard, background showing through the body, amputated, cropped body, floating clothes, discontinuity, latent noise, mosaic, pixelated body, statue, marble, blue statue, scribble, crayon, colored pencil, abstract pattern, painted bodysuit";
+
+/** Keep the photo pixels. Paint-edit latent noise (fill 2) turns the whole body into a mosaic. */
+export const GARMENT_DENOISING = 0.46;
+export const GARMENT_INPAINT_FILL = 1;
+
+export function garmentRunOptions(): {
+  skipPaint: true;
+  ignoreRefs: true;
+  restoreFaces: false;
+  denoisingStrength: number;
+  inpaintingFill: number;
+  inpaintFullRes: false;
+} {
+  return {
+    skipPaint: true,
+    ignoreRefs: true,
+    restoreFaces: false,
+    denoisingStrength: GARMENT_DENOISING,
+    inpaintingFill: GARMENT_INPAINT_FILL,
+    inpaintFullRes: false,
+  };
+}
+
+/** Exact Forge fields. Tests fail if Endurbyggja goes back to noise fill or GFPGAN. */
+export function garmentApiFields(): {
+  denoising_strength: number;
+  inpainting_fill: number;
+  inpaint_full_res: boolean;
+  restore_faces: boolean;
+} {
+  const flags = garmentRunOptions();
+  return {
+    denoising_strength: flags.denoisingStrength,
+    inpainting_fill: flags.inpaintingFill,
+    inpaint_full_res: flags.inpaintFullRes,
+    restore_faces: flags.restoreFaces,
+  };
+}
+
+export function scaleMaskTo(src: Raster, width: number, height: number): Raster {
+  const out = createRaster(width, height, 0);
+  if (src.width < 1 || src.height < 1 || width < 1 || height < 1) return out;
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(src.height - 1, Math.floor((y / height) * src.height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(src.width - 1, Math.floor((x / width) * src.width));
+      const si = (sy * src.width + sx) * 4;
+      const di = (y * width + x) * 4;
+      const on = src.data[si] > 20 ? 255 : 0;
+      out.data[di] = on;
+      out.data[di + 1] = on;
+      out.data[di + 2] = on;
+      out.data[di + 3] = 255;
+    }
+  }
+  return out;
+}
 
 export type GarmentAdd = {
   id: string;
@@ -25,6 +89,9 @@ export type GarmentAdd = {
   prompt: string;
 };
 
+const GARMENT_ADD_KEEP =
+  "photorealistic clothing, no scribble, no crayon, no abstract pattern, no extra people";
+
 export const GARMENT_ADDS: GarmentAdd[] = [
   {
     id: "shorts",
@@ -32,7 +99,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Stuttbuxur",
     maskId: "shortsZone",
     prompt:
-      "add fitted adult shorts over the existing reconstructed legs, keep the lower legs fully visible and complete below the hem, do not erase the legs, no hole, same adult person, keep face body and pose, photorealistic, no extra people, painted masked region only",
+      `add fitted adult shorts over the existing reconstructed legs, keep the lower legs fully visible and complete below the hem, do not erase the legs, no hole, same adult person, keep face body and pose, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "skinny",
@@ -40,7 +107,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Þröngar buxur",
     maskId: "pants",
     prompt:
-      "add tight slim-fit long trousers over the existing legs, keep the legs complete underneath, no hole, same adult person, keep face pose and shoes, photorealistic, no extra people, painted masked region only",
+      `add tight slim-fit long trousers over the existing legs, keep the legs complete underneath, no hole, same adult person, keep face pose and shoes, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "longPants",
@@ -48,7 +115,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Langar buxur",
     maskId: "pants",
     prompt:
-      "add long straight trousers over the existing legs, keep the legs complete underneath, no hole, same adult person, keep face pose and shoes, photorealistic, no extra people, painted masked region only",
+      `add long straight trousers over the existing legs, keep the legs complete underneath, no hole, same adult person, keep face pose and shoes, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "shortSleeve",
@@ -56,7 +123,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Stutterma",
     maskId: "shortSleeveZone",
     prompt:
-      "add short sleeves over the existing reconstructed arms, keep the lower arms fully visible and complete, do not erase the arms, no hole, keep the same torso, same adult person, keep face and pose, photorealistic, no extra people, painted masked region only",
+      `add short sleeves over the existing reconstructed arms, keep the lower arms fully visible and complete, do not erase the arms, no hole, keep the same torso, same adult person, keep face and pose, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "sleeveless",
@@ -64,7 +131,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Ermalaus",
     maskId: "sleeves",
     prompt:
-      "sleeveless top over the existing reconstructed arms, keep the arms fully visible and complete, no hole, keep the same torso, same adult person, keep face and pose, photorealistic, no extra people, painted masked region only",
+      `sleeveless top over the existing reconstructed arms, keep the arms fully visible and complete, no hole, keep the same torso, same adult person, keep face and pose, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "longSleeve",
@@ -72,7 +139,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Síðerma",
     maskId: "sleeves",
     prompt:
-      "add long sleeves over the existing arms, keep the arms complete underneath, no hole, keep the same torso, same adult person, keep face and pose, photorealistic, no extra people, painted masked region only",
+      `add long sleeves over the existing arms, keep the arms complete underneath, no hole, keep the same torso, same adult person, keep face and pose, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "tee",
@@ -80,7 +147,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Stutterma bolur",
     maskId: "top",
     prompt:
-      "add a short-sleeve t-shirt over the existing torso, keep the body complete underneath, no hole, same adult person, keep face pose and lower body, photorealistic, no extra people, painted masked region only",
+      `add a short-sleeve t-shirt over the existing torso, keep the body complete underneath, no hole, same adult person, keep face pose and lower body, ${GARMENT_ADD_KEEP}`,
   },
   {
     id: "longTee",
@@ -88,7 +155,7 @@ export const GARMENT_ADDS: GarmentAdd[] = [
     label: "Síðerma bolur",
     maskId: "top",
     prompt:
-      "add a long-sleeve top over the existing torso, keep the body complete underneath, no hole, same adult person, keep face pose and lower body, photorealistic, no extra people, painted masked region only",
+      `add a long-sleeve top over the existing torso, keep the body complete underneath, no hole, same adult person, keep face pose and lower body, ${GARMENT_ADD_KEEP}`,
   },
 ];
 
@@ -270,4 +337,90 @@ function fillWhite(dest: Raster, x0: number, y0: number, x1: number, y1: number)
 
 export function addMaskId(add: GarmentAdd, fallback: string): string {
   return add.maskId || fallback;
+}
+
+/** Skin sampled from the neck line. Grass beside the body must not win. */
+export const FALLBACK_SKIN = { r: 214, g: 176, b: 148 };
+
+function isSkinLike(r: number, g: number, b: number): boolean {
+  const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+  if (luma < 70 || luma > 245) return false;
+  if (r < g + 8) return false;
+  if (r < b) return false;
+  const max = Math.max(r, g, b);
+  const sat = (max - Math.min(r, g, b)) / Math.max(1, max);
+  return sat <= 0.55;
+}
+
+function addSample(
+  image: Raster,
+  x: number,
+  y: number,
+  acc: { r: number; g: number; b: number; n: number },
+): void {
+  const i = (y * image.width + x) * 4;
+  const r = image.data[i];
+  const g = image.data[i + 1];
+  const b = image.data[i + 2];
+  if (!isSkinLike(r, g, b)) return;
+  acc.r += r;
+  acc.g += g;
+  acc.b += b;
+  acc.n += 1;
+}
+
+export function sampleEdgeSkin(image: Raster, mask: Raster): { r: number; g: number; b: number } {
+  const width = Math.min(image.width, mask.width);
+  const height = Math.min(image.height, mask.height);
+  const neck = { r: 0, g: 0, b: 0, n: 0 };
+  const any = { r: 0, g: 0, b: 0, n: 0 };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (mask.data[(y * mask.width + x) * 4] <= 20) continue;
+      if (y > 0 && mask.data[((y - 1) * mask.width + x) * 4] <= 20) {
+        addSample(image, x, y - 1, neck);
+      }
+      for (const [dx, dy] of [
+        [0, -1],
+        [0, 1],
+        [-1, 0],
+        [1, 0],
+      ] as const) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        if (mask.data[(ny * mask.width + nx) * 4] > 20) continue;
+        addSample(image, nx, ny, any);
+      }
+    }
+  }
+  const pick = neck.n >= 4 ? neck : any.n >= 4 ? any : null;
+  if (!pick) return { ...FALLBACK_SKIN };
+  return {
+    r: Math.round(pick.r / pick.n),
+    g: Math.round(pick.g / pick.n),
+    b: Math.round(pick.b / pick.n),
+  };
+}
+
+/**
+ * Replace clothing in the mask with skin. Fill 1 on the original sweater is what
+ * became the scribble turtleneck.
+ */
+export function eraseMaskedClothes(image: Raster, mask: Raster): Raster {
+  const fill = sampleEdgeSkin(image, mask);
+  const out = cloneRaster(image);
+  const width = Math.min(image.width, mask.width);
+  const height = Math.min(image.height, mask.height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (mask.data[(y * mask.width + x) * 4] <= 20) continue;
+      const i = (y * out.width + x) * 4;
+      out.data[i] = fill.r;
+      out.data[i + 1] = fill.g;
+      out.data[i + 2] = fill.b;
+      out.data[i + 3] = 255;
+    }
+  }
+  return out;
 }
