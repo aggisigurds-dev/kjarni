@@ -235,18 +235,40 @@ export function artcraftStaticPath(id: ArtcraftAppId): string {
   return `/artcraft/${id}/index.html`;
 }
 
-/** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio. */
+/** Dæmi um notkun hjá Slökkvitæki/Brunahólf — hugmyndir, ekki loforð; sýnd á spjöldum yfirlitsins.
+ *  `satisfies` fellir byggingu ef nýtt forrit bætist í ARTCRAFT_APPS án dæma. */
+const ARTCRAFT_USES = {
+  photocraft: ["Laga skönnuð skjöl fyrir OCR", "Þoka nafnaskilti á verkstaðamynd", "Örvar og merkingar á skýrslumynd"],
+  vectorcraft: ["Eigin tákn í merkjasafn TurboPaint", "Lógó sem hreint SVG fyrir miða og prent"],
+  filmcraft: ["30 sek. þjónustumyndband á vefinn", "Kennslumyndband fyrir starfsfólk"],
+  lightcraft: ["Fara yfir myndir dagsins af verkstað", "Velja bestu myndirnar í skýrsluna"],
+  pdfcraft: ["Skýrsla + reikningur + samningur í eina skrá", "Skipta stórum útdrætti í eina skrá á verkstað", "Læsa tilboð með lykilorði"],
+  effectcraft: ["Hreyfitexti fyrir myndbönd", "Hreyfiborði fyrir Facebook-auglýsingu"],
+  designcraft: ["Flyer: „Árleg skoðun slökkvitækja“", "Leiðbeiningaplakat við slökkvitæki", "Flóttaleiðablað með TurboPaint-teikningu"],
+  figcraft: ["Skissa nýtt Kjarna-spjald áður en það er smíðað", "Frumgerð af „Bóka skoðun“ síðu"],
+  wordcraft: ["Þjónustusamningur með breytingarrakningu", "Skýrslusniðmát með búnaðartöflu", "Staðlað tilboðsbréf"],
+  soundcraft: ["Talsetning fyrir myndbönd", "Raddskilaboð fyrir jarvis-yfirlitið"],
+  deckcraft: ["Tilboðskynning fyrir húsfélag eða hótel", "Kynning fyrir nýtt starfsfólk"],
+  cadcraft: ["Bæta „Brunavarnir“-lagi á DXF frá arkitekt", "Málsett skissa af hlut áður en hann er smíðaður"],
+  gridcraft: ["Verðtafla með VSK og afsláttardálki", "Skoðunardagatal eftir mánuðum", "Bera Payday-útdrátt saman við úttektir"],
+} satisfies Record<(typeof ARTCRAFT_APPS)[number]["id"], string[]>;
+
+/** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio.
+ *  role/desc/uses fylgja með svo yfirlitssíður (Ragnarök, StodView) geti sýnt meira en bara nafn. */
 export const ARTCRAFT_INTERFACES = [
-  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨" },
+  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll 16 viðmótin á einum stað, með niðurhali og útgáfum.", uses: [] as readonly string[] },
   ...ARTCRAFT_APPS.map((app) => ({
     id: app.id,
     name: app.name,
     href: artcraftAppHref(app.id),
     icon: app.icon,
+    role: app.role,
+    desc: app.desc,
+    uses: ARTCRAFT_USES[app.id] as readonly string[],
   })),
-  { id: "tol", name: "Tól", href: artcraftToolsHref(), icon: "⚡" },
-  { id: "bakgrunnur", name: "Bakgrunnur", href: artcraftBakgrunnurHref(), icon: "✂️" },
-  { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓" },
+  { id: "tol", name: "Tól", href: artcraftToolsHref(), icon: "⚡", role: "Sjálfvirkt", desc: "Fjarlægja bakgrunn, setja vöru á hvítt, eða opna Einkastúdíóið — eitt smell, ekkert að stilla.", uses: ["Eitt smell: bakgrunnur burt, vara á hvítt", "Opnar Einkastúdíó beint"] as readonly string[] },
+  { id: "bakgrunnur", name: "Bakgrunnur", href: artcraftBakgrunnurHref(), icon: "✂️", role: "Vörumyndir", desc: "Fjarlægðu vegg, borð og skugga af vörumynd — tilbúin mynd á sekúndum, engin uppsetning.", uses: ["Vörumyndir fyrir vefverslun á hvítum grunni", "Hreinsa vegg og skugga af tilboðsmynd", "Myndir fyrir Facebook-auglýsingar"] as readonly string[] },
+  { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓", role: "Staðbundið líkan", desc: "Texti → mynd á þinni vél (Automatic1111/Forge/SD.Next). Ekkert fer í skýið, engin ritskoðun.", uses: ["Mynd úr texta án skýs — allt helst á vélinni"] as readonly string[] },
 ] as const;
 
 export type ArtcraftInterfaceId = (typeof ARTCRAFT_INTERFACES)[number]["id"];
