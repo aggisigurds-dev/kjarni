@@ -235,18 +235,21 @@ export function artcraftStaticPath(id: ArtcraftAppId): string {
   return `/artcraft/${id}/index.html`;
 }
 
-/** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio. */
+/** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio.
+ *  role/desc fylgja með svo yfirlitssíður (Ragnarök, StodView) geti sýnt meira en bara nafn. */
 export const ARTCRAFT_INTERFACES = [
-  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨" },
+  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll 16 viðmótin á einum stað, með niðurhali og útgáfum." },
   ...ARTCRAFT_APPS.map((app) => ({
     id: app.id,
     name: app.name,
     href: artcraftAppHref(app.id),
     icon: app.icon,
+    role: app.role,
+    desc: app.desc,
   })),
-  { id: "tol", name: "Tól", href: artcraftToolsHref(), icon: "⚡" },
-  { id: "bakgrunnur", name: "Bakgrunnur", href: artcraftBakgrunnurHref(), icon: "✂️" },
-  { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓" },
+  { id: "tol", name: "Tól", href: artcraftToolsHref(), icon: "⚡", role: "Sjálfvirkt", desc: "Fjarlægja bakgrunn, setja vöru á hvítt, eða opna Einkastúdíóið — eitt smell, ekkert að stilla." },
+  { id: "bakgrunnur", name: "Bakgrunnur", href: artcraftBakgrunnurHref(), icon: "✂️", role: "Vörumyndir", desc: "Fjarlægðu vegg, borð og skugga af vörumynd — tilbúin mynd á sekúndum, engin uppsetning." },
+  { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓", role: "Staðbundið líkan", desc: "Texti → mynd á þinni vél (Automatic1111/Forge/SD.Next). Ekkert fer í skýið, engin ritskoðun." },
 ] as const;
 
 export type ArtcraftInterfaceId = (typeof ARTCRAFT_INTERFACES)[number]["id"];

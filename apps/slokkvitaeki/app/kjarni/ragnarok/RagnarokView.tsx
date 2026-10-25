@@ -170,16 +170,22 @@ export function RagnarokView(d: RagnarokData) {
 
           <Panel className="rgk-leit">
             <div className="rgk-h2row">
-              <h2 className="rg-h2">ArtCraft — viðmót</h2>
+              <h2 className="rg-h2">ArtCraft — 16 sköpunarviðmót</h2>
               <a className="rgk-link" href="/kjarni/artcraft">OPNA YFIRLIT →</a>
             </div>
-            <p className="rgk-sub">Smelltu á viðmót — það opnast á Kjarnasíðunni.</p>
-            <div className="rgk-launch ac-launch">
+            <p className="rgk-sub">
+              Opin sköpunartól hýst hér í Kjarnanum — smelltu og þau opnast beint á Kjarnasíðunni,
+              ekkert að setja upp eða borga fyrir.
+            </p>
+            <div className="rgk-gal-grid ac-grid">
               {ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub").map((item) => (
-                <a key={item.id} href={item.href} className="rgk-lnk">
-                  <span>
-                    <i className="rg-diamond" />
-                    {item.name}
+                <a key={item.id} href={item.href} className="rgk-mod">
+                  <span className="rgk-mod-face">
+                    <span className="rgk-mod-top">
+                      <b>{item.icon} {item.name}</b>
+                      <span className="rgk-mod-kind">{item.role}</span>
+                    </span>
+                    <span className="rgk-mod-desc">{item.desc}</span>
                   </span>
                 </a>
               ))}
