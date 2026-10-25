@@ -184,8 +184,12 @@ a.rgk-lnk .rg-diamond { flex:none; }
 .rgk-count { font:600 11px var(--rg-mono) !important; padding:3px 10px; border:1px solid rgba(230,176,74,.5); color:var(--rg-gold-500) !important; }
 .rgk-gal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr)); gap:10px; }
 /* ArtCraft-kortin í Yfirliti bera lengri lýsingu en Einingar-flísarnar — aðeins breiðari dálkar */
-.ac-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr)); }
+.ac-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr)); }
 .ac-grid .rgk-mod-face { min-height:76px; }
+.ac-uses { display:flex; flex-direction:column; gap:4px; margin-top:4px; padding-top:8px; border-top:1px solid rgba(201,160,74,.2); }
+.ac-uses-h { font:700 8.5px var(--rg-mono); letter-spacing:.2em; color:var(--rg-gold-500); }
+.ac-use { position:relative; padding-left:12px; font:400 11px/1.4 var(--rg-font); color:var(--rg-text-dim); }
+.ac-use::before { content:"›"; position:absolute; left:0; color:var(--rg-ember-500); }
 .rgk-mod {
   display:block; padding:1px; background:var(--rg-frame-dim); color:inherit;
   clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);

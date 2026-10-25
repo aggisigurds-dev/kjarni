@@ -186,6 +186,14 @@ export function RagnarokView(d: RagnarokData) {
                       <span className="rgk-mod-kind">{item.role}</span>
                     </span>
                     <span className="rgk-mod-desc">{item.desc}</span>
+                    {item.uses.length > 0 && (
+                      <span className="ac-uses">
+                        <span className="ac-uses-h">DÆMI</span>
+                        {item.uses.map((u) => (
+                          <span key={u} className="ac-use">{u}</span>
+                        ))}
+                      </span>
+                    )}
                   </span>
                 </a>
               ))}
