@@ -74,7 +74,7 @@ export default function BorgarferdirClient() {
         <div className="bf-in">
           <header className="bf-hero">
             <div>
-              <span className="bf-kicker">Borgarferðir · nóvember 2026</span>
+              <span className="bf-kicker">Borgarferðir · nóvember–desember 2026</span>
               <h1>Manchester <i aria-hidden="true">·</i> Glasgow</h1>
               <p>
                 Flugleit og bestu pakkarnir fyrir {TRAVELLERS} (3 fullorðnir + barn 10 ára). Flug, töskur og hótel reiknað
@@ -114,7 +114,7 @@ export default function BorgarferdirClient() {
               ))}
             </div>
             <div className="bf-fields">
-              <label>Út<input type="date" min="2026-11-01" max="2026-11-30" value={s.out} onChange={(e) => e.target.value && patch({ out: e.target.value })} /></label>
+              <label>Út<input type="date" min="2026-11-01" max="2026-12-15" value={s.out} onChange={(e) => e.target.value && patch({ out: e.target.value })} /></label>
               <label>Nætur<input type="number" min={1} max={14} value={s.nights} onChange={(e) => patch({ nights: Math.min(14, Math.round(num(e.target.value, 1))) })} /></label>
               <label>Heim<input type="date" value={ret} readOnly /></label>
               <label>Töskur (alls)<input type="number" min={0} max={8} value={s.bags} onChange={(e) => patch({ bags: num(e.target.value, 0) })} /></label>

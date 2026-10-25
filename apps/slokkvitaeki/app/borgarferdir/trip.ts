@@ -138,7 +138,9 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
 ];
 
 export const TRAVELLERS = 4;
-export const WINDOWS = ["2026-11-05", "2026-11-12", "2026-11-19", "2026-11-26"] as const;
+/** 3. og 10. des. bætt við 25. okt. eftir víðari leit (nóv.–miðjan des.): 3. des. var ódýrasta 3-nátta flugið sem
+ * fannst á öllu tímabilinu (Google Flights, ISK 45.896–48.896 fyrir 4, „prices currently low"). */
+export const WINDOWS = ["2026-11-05", "2026-11-12", "2026-11-19", "2026-11-26", "2026-12-03", "2026-12-10"] as const;
 
 /* Gautaborg (Gothenburg) — flug-aðeins könnun fyrir 27. jan – 1. feb. 27. jan. 2026 er liðinn dagur (í dag er 22. okt.
  * 2026), svo gert ráð fyrir 2027. Verð sótt af Google Flights 22. okt. 2026, fyrir 1 fullorðinn — ekki fjölskylduverð
