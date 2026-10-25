@@ -115,6 +115,7 @@ import { LayerChips, LayerList, UNSORTED_LAYER } from './library-layers';
 import { NameDialog } from './name-dialog';
 import { compactPicture, renderThumbnail } from './thumbnail';
 import { ACTION_GHOST, ACTION_PRIMARY, FIELD, PANEL } from './ui';
+import './ragnarok/light.css';
 
 export type LibraryTab = 'starred' | 'library' | 'builds';
 
@@ -253,19 +254,19 @@ function Chip({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[0.72rem] font-bold transition-colors ${
-        active
-          ? 'border-[var(--wb-accent)] bg-[var(--wb-accent)] text-[var(--wb-accent-ink)]'
-          : 'border-[var(--wb-tool-border)] bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]'
-      } ${dim && !active ? 'opacity-50' : ''}`}
+      className={`rgl-chip${active ? ' on' : ''}${dim && !active ? ' dim' : ''}`}
     >
-      {label}
-      <span className="font-mono text-[0.65rem] opacity-70">{count}</span>
+      <span className="f">
+        <span className="i">
+          {label}
+          <span className="n">{count}</span>
+        </span>
+      </span>
     </button>
   );
 }
 
-const CHIP_ROW = 'flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]';
+const CHIP_ROW = 'flex min-w-0 gap-2.5 overflow-x-auto overscroll-x-contain pb-1.5 [scrollbar-width:thin]';
 
 interface PartsLibraryProps {
   open: boolean;
@@ -1201,25 +1202,23 @@ export function PartsLibrary({
           )}
         </div>
 
-        <div
-          className={`mb-2 flex shrink-0 overflow-hidden rounded border border-[var(--wb-tool-border)] sm:self-start ${isPage ? 'md:hidden' : ''}`}
-          role="tablist"
-        >
+        <div className={`mb-2.5 flex shrink-0 gap-2.5 pb-1 sm:self-start ${isPage ? 'md:hidden' : ''}`} role="tablist">
           {TABS.map((entry) => (
             <button
               key={entry.tab}
               type="button"
               role="tab"
               aria-selected={tab === entry.tab}
-              className={`min-h-10 flex-1 whitespace-nowrap px-3 text-[0.72rem] font-bold sm:flex-none ${
-                tab === entry.tab
-                  ? 'bg-[var(--wb-accent)] text-[var(--wb-accent-ink)]'
-                  : 'bg-[var(--wb-tool-bg)] text-[var(--wb-tool-ink)] hover:bg-[var(--wb-tool-hover)]'
-              }`}
+              className={`rgl-tab${tab === entry.tab ? ' on' : ''}`}
               onClick={() => setTab(entry.tab)}
             >
-              {entry.tab === 'starred' && <Star className="mr-1 inline h-3 w-3" />}
-              {entry.label} <span className="font-mono opacity-70">{counts[entry.tab]}</span>
+              <span className="f">
+                <span className="i">
+                  {entry.tab === 'starred' && <Star className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {entry.label}
+                  <span className="n">{counts[entry.tab]}</span>
+                </span>
+              </span>
             </button>
           ))}
         </div>
@@ -1281,13 +1280,13 @@ export function PartsLibrary({
                   onClick={() => pickCollection(collection.id)}
                 />
               ))}
-              <button
-                type="button"
-                className="inline-flex min-h-10 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-[var(--wb-label)] px-3 text-[0.72rem] font-bold text-[var(--wb-label)] hover:bg-[var(--wb-tool-hover)]"
-                onClick={() => setCollectionEdit({ mode: 'new', name: '' })}
-              >
-                <FolderPlus className="h-3.5 w-3.5" />
-                Nýtt safn
+              <button type="button" className="rgl-chip add" onClick={() => setCollectionEdit({ mode: 'new', name: '' })}>
+                <span className="f">
+                  <span className="i">
+                    <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                    Nýtt safn
+                  </span>
+                </span>
               </button>
             </div>
 
@@ -1356,7 +1355,7 @@ export function PartsLibrary({
                   {moveTarget(editedCollection.id) && (
                     <button
                       type="button"
-                      className="min-h-10 rounded border border-[var(--wb-accent)] bg-[var(--wb-accent)] px-3 text-[0.72rem] font-bold text-[var(--wb-accent-ink)] disabled:opacity-40"
+                      className="wb-bronze-btn min-h-10 px-3 text-[0.72rem] font-bold disabled:opacity-40"
                       disabled={Boolean(busy)}
                       onClick={() =>
                         void dropCollection(editedCollection, moveTarget(editedCollection.id)!.id, countIn(editedCollection.id))
@@ -1559,7 +1558,7 @@ export function PartsLibrary({
                       </button>
                       <button
                         type="button"
-                        className="inline-flex min-h-9 items-center gap-1 rounded bg-[var(--wb-accent)] px-2.5 text-[0.7rem] font-bold text-[var(--wb-accent-ink)] disabled:opacity-40"
+                        className="wb-bronze-btn inline-flex min-h-9 items-center gap-1 px-2.5 text-[0.7rem] font-bold disabled:opacity-40"
                         onClick={() => void confirmAuto()}
                         disabled={Boolean(busy)}
                       >

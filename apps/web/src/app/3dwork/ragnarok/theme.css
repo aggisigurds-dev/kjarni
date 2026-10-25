@@ -126,36 +126,29 @@
   }
 }
 
-/* Real forged metal, not a flat fill — the primary-action buttons.
-   Structure copied exactly from brunaholf's own .boss-btn.gold recipe
-   (css/theme.css: --gold-face / --gold-bevel-*): a diagonal glare sweep,
-   a brushed horizontal grain, a bevelled border (light top / dark bottom
-   edge) and a two-layer inset+glow shadow. Only the hue changed — pulled
-   toward brown/bronze instead of gold, same structure, same stop
-   positions. One extra layer (a finer vertical micro-hatch, the same
-   technique as Ragnarök's --rg-steel brush) is added for a slightly
-   rougher, more forged texture than the smooth original. */
+/* Primary-action buttons: dark gold metal (Agnar 2026-10-25: "breyttu gulu tökkunum í dark gull metal", and "notaðu þennan
+   gulllit" — the gold of the Brunahólf wordmark and the Tímabil badge). The ramp is brunaholf's own --gold-face
+   (#f3dc95 → #d9b25a → #b8892e → #8f6a1c → #cfa54a) pulled DARK: body #d9b25a → #7a5612, a soft diagonal glare, a
+   2px deep-bronze rim drawn as an inset shadow, cream text. Cut top-left / bottom-right like the Ragnarök Light chips.
+   It replaces the light tan "forged bronze" of #220. Crisp on purpose: no blur, no glow, no brightness filter. */
 .wb-bronze-btn {
-  border: 1px solid #4a3620;
-  border-top-color: #f3e2bf;
-  border-bottom-color: #2a1d0e;
-  border-radius: 5px;
-  color: #241a0c;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  border: 0;
+  border-radius: 0;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  color: #fff7df;
+  text-shadow: 0 1px 0 rgba(30, 16, 2, 0.75);
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.45) 45%, rgba(255, 255, 255, 0) 52%),
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0 1px, rgba(0, 0, 0, 0) 1px 3px),
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, #f0ddba 0%, #dcc294 14%, #a9825a 46%, #86643c 52%, #99764a 74%, #c0a070 92%, #e3cba0 100%);
+    linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(255, 244, 209, 0.2) 46%, rgba(255, 255, 255, 0) 54%),
+    linear-gradient(180deg, #d9b25a 0%, #b8892e 22%, #8f6a1c 50%, #7a5612 54%, #8f6a1c 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -2px 3px rgba(42, 29, 14, 0.45),
-    0 3px 6px rgba(20, 16, 10, 0.35),
-    0 0 10px rgba(138, 106, 63, 0.3);
+    inset 0 0 0 2px #4a2c06,
+    inset 0 4px 0 -1px rgba(255, 236, 170, 0.28);
 }
 .wb-bronze-btn:hover {
-  filter: brightness(1.06);
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(255, 244, 209, 0.26) 46%, rgba(255, 255, 255, 0) 54%),
+    linear-gradient(180deg, #e8cb7a 0%, #c9a54a 22%, #a07420 50%, #86621a 54%, #a07420 100%);
 }
 .wb-bronze-btn:active {
-  filter: brightness(0.94);
+  background: linear-gradient(180deg, #7a5612, #6b4a0e);
 }
