@@ -275,6 +275,53 @@ export function buildPackages(s: Settings): Package[] {
   return out.sort((a, b) => Number(b.fits) - Number(a.fits) || a.total - b.total);
 }
 
+/** Athugasemdir um einstaka brottfarardaga (3 nátta ferðir, fim → sun). */
+export const WINDOW_NOTES: Record<string, string> = {
+  "2026-12-03": "Ódýrasta 3 nátta flugið sem Google Flights fann á öllu tímabilinu (um 46–49 þús. kr. fyrir 4, easyJet).",
+  "2026-12-10": "Næstódýrasta 3 nátta flugið á Google Flights.",
+};
+
+/** Forgangur dagsetninga þegar verðið er það sama (lægri tala = betri). */
+const WINDOW_RANK: Record<string, number> = {
+  "2026-12-03": 0, "2026-12-10": 1, "2026-11-12": 2, "2026-11-19": 3, "2026-11-26": 4, "2026-11-05": 5,
+};
+
+export type TopPackage = Package & {
+  /** besta brottfarardag (3 nátta ferð) fyrir þennan pakka */
+  windowOut: string;
+  /** aðrir dagar sem henta líka */
+  otherWindows: string[];
+  /** engar flugdagaviðvaranir og enginn heimaleikur á Old Trafford á besta deginum */
+  clean: boolean;
+};
+
+/**
+ * Topp-pakkar yfir ÖLL tímabilin: hver pakki (áfangastaður + flugfélag + hótel) er reiknaður fyrir 3 nátta ferð,
+ * og besti brottfarardagurinn valinn — dagur þar sem flugfélagið flaug og enginn heimaleikur er á Old Trafford.
+ * Flugverð eru ekki sundurliðuð eftir dögum í gögnunum, svo pakkar með sama verð raðast eftir bestu dagsetningu.
+ */
+export function topPackages(s: Settings, n = 5): TopPackage[] {
+  const base = buildPackages({ ...s, nights: 3 });
+  const rows = base.map((p) => {
+    const scored = WINDOWS.map((w) => {
+      const fits = fitsDays(p.airline, w, 3);
+      const game = p.dest.code === "MAN" && heimaleikirI(w, 3).length > 0;
+      return { w, fits, game, score: (fits ? 0 : 100) + (game ? 10 : 0) + WINDOW_RANK[w] };
+    }).sort((a, b) => a.score - b.score);
+    const best = scored[0];
+    return {
+      ...p,
+      fits: best.fits,
+      windowOut: best.w,
+      otherWindows: scored.slice(1).filter((x) => x.fits && !x.game).map((x) => x.w),
+      clean: best.fits && !best.game,
+    };
+  });
+  return rows
+    .sort((a, b) => Number(b.clean) - Number(a.clean) || a.total - b.total || WINDOW_RANK[a.windowOut] - WINDOW_RANK[b.windowOut])
+    .slice(0, n);
+}
+
 const punkta = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 /** £ → kr., rúnnað á þúsund */
 export const isk = (pund: number, gengi: number) => punkta(Math.round((pund * gengi) / 1000) * 1000) + " kr.";

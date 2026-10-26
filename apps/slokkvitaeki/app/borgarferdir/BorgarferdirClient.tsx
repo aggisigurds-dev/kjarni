@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { StationChrome } from "../kjarni/StationChrome";
 import {
-  AFSLATTUR, DESTS, FERDASKRIFSTOFUR, GAUTABORG_BEINT, GAUTABORG_GLUGGI, KAUPMANNAHOFN_LEID, TRAVELLERS, WINDOWS,
+  AFSLATTUR, WINDOW_NOTES, topPackages, DESTS, FERDASKRIFSTOFUR, GAUTABORG_BEINT, GAUTABORG_GLUGGI, KAUPMANNAHOFN_LEID, TRAVELLERS, WINDOWS,
   addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, heimaleikirI, isk, stutt,
   type DestCode, type Settings,
 } from "./trip";
@@ -48,6 +48,7 @@ export default function BorgarferdirClient() {
     [s, dest, svaedi],
   );
   const leikir = heimaleikirI(s.out, s.nights);
+  const topp = useMemo(() => topPackages(s, 5), [s.bags, s.rooms, s.gengi]);
   const syna = allir ? pakkar : pakkar.slice(0, 6);
   const cheapest = pakkar.find((p) => p.fits);
 
@@ -111,6 +112,46 @@ export default function BorgarferdirClient() {
               {req === "sent" ? "Beiðni send ✓" : req === "sending" ? "Sendi…" : req === "error" ? "Villa — prófa aftur" : "🔎 Biðja um nýja rannsókn"}
             </button>
           </div>
+
+          <section className="bf-sec" aria-labelledby="bf-topp">
+            <div className="bf-sec-h">
+              <h2 id="bf-topp">Topp 5 pakkar — öll tímabil</h2>
+              <small>Nóv. 5.–8. til des. 10.–13., 3 nætur, allir áfangastaðir og hótel</small>
+            </div>
+            <div className="bf-grid">
+              {topp.map((p, i) => (
+                <article key={p.id} className={`bf-card${i === 0 ? " top" : ""}`}>
+                  <div className="bf-card-h">
+                    <span className="bf-rank">{i + 1}</span>
+                    <div>
+                      <strong>{p.dest.borg}{p.hotel.svaedi === "trafford" ? " · við Trafford Centre" : ""}</strong>
+                      <small>{p.airline.nafn} · {p.hotel.nafn} {p.hotel.stjornur}</small>
+                    </div>
+                  </div>
+                  <div className="bf-total">
+                    {isk(p.total, s.gengi)}
+                    <small>{gbp(p.total)} alls</small>
+                  </div>
+                  <p className="bf-note">
+                    <b>Besta ferð:</b> {dagsetning(p.windowOut)} → {dagsetning(addDays(p.windowOut, 3))}
+                    {WINDOW_NOTES[p.windowOut] ? ` — ${WINDOW_NOTES[p.windowOut]}` : ""}
+                    {p.otherWindows.length > 0 ? ` Einnig: ${p.otherWindows.slice(0, 3).map(stutt).join(", ")}.` : ""}
+                  </p>
+                  {!p.clean && <p className="bf-warn">Enginn dagur án flugdagaviðvörunar eða heimaleiks — athugaðu dagana.</p>}
+                  <div className="bf-actions">
+                    <button type="button" onClick={() => { setDest(p.dest.code); setSvaedi(p.hotel.svaedi ?? "midborg"); patch({ out: p.windowOut, nights: 3 }); }}>
+                      Velja þessa daga
+                    </button>
+                    <a href={bookingUrl(`${p.hotel.nafn} ${p.dest.borg}`, { ...s, out: p.windowOut, nights: 3 })} target="_blank" rel="noreferrer">Hótel ↗</a>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <p className="bf-note">
+              Verð á flugi er ekki sundurliðað eftir dögum í gögnunum, svo röðin ræðst af heildarverði og síðan af besta degi:
+              flugfélagið flaug þá og enginn heimaleikur er á Old Trafford.
+            </p>
+          </section>
 
           <section className="bf-sec" aria-labelledby="bf-dags">
             <h2 id="bf-dags">Dagsetning</h2>

@@ -75,6 +75,7 @@
   background:var(--m-navy,#1a1208); color:#fff; border-radius:var(--m-radius,2px);
 }
 .bf-actions a { flex:1; }
+.bf-actions button { font:inherit; font-weight:700; font-size:13px; cursor:pointer; padding:8px 12px; border:1px solid var(--m-navy,#1a1208); background:transparent; color:var(--m-ink,#1a1208); border-radius:var(--m-radius,2px); }
 .bf-more { align-self:flex-start; font:inherit; font-weight:700; padding:9px 16px; cursor:pointer; border:1px solid var(--m-org,#b8862b); background:transparent; color:var(--m-ink,#1a1208); border-radius:var(--m-radius,2px); }
 
 .bf-links { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
