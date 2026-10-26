@@ -16,7 +16,8 @@ export type Airline = {
   athugasemd: string;
 };
 
-export type Hotel = { nafn: string; stjornur: string; hverfi: string; rate: number | null; hvers: string };
+export type Svaedi = "trafford" | "midborg";
+export type Hotel = { nafn: string; stjornur: string; hverfi: string; rate: number | null; hvers: string; svaedi?: Svaedi };
 
 export type Dest = {
   code: DestCode;
@@ -35,12 +36,17 @@ export const DESTS: Record<DestCode, Dest> = {
     skyscanner: "man",
     flugtimi: "um 2 klst. 45 mín.",
     airlines: [
-      { id: "ez", nafn: "easyJet", fare: 66, bag: 15, days: [4, 0], athugasemd: "Beint, fimmtudaga og sunnudaga. Taska bókuð á netinu." },
-      { id: "ic", nafn: "Icelandair", fare: 161, bag: 47, athugasemd: "Beint, nánast daglega. Economy Light." },
+      { id: "ez", nafn: "easyJet", fare: 66, bag: 15, days: [4, 0], athugasemd: "Beint. Google Flights sýndi fimmtudaga og sunnudaga, Kayak segir um 9 flug á viku — athugaðu dagana. Taska bókuð á netinu." },
+      { id: "ic", nafn: "Icelandair", fare: 161, bag: 47, athugasemd: "Beint, nánast daglega (um 7 á viku). Sást £161 fyrir 19.–22. nóv. Economy Light." },
     ],
     hotels: [
+      { nafn: "Holiday Inn Express Manchester – Trafford City", stjornur: "3★", hverfi: "Trafford City, við Trafford Centre", svaedi: "trafford", rate: 70, hvers: "Sást £55 á einni síðu, $70–96 á öðrum (almennt herbergi, aðrar dagsetningar). Holiday Inn Express-fjölskylduherbergi taka yfirleitt 4, en ég staðfesti ekki 3 fullorðna." },
+      { nafn: "Premier Inn Manchester Trafford Centre West", stjornur: "3★", hverfi: "Við Trafford Centre", svaedi: "trafford", rate: 60, hvers: "Sást um $58–78 nóttin (almennt herbergi, aðrar dagsetningar). Premier Inn-fjölskylduherbergi taka yfirleitt 2 fullorðna og 2 börn, svo þið þurfið líklega tvö herbergi." },
+      { nafn: "Hilton Garden Inn Manchester Emirates Old Trafford", stjornur: "4★", hverfi: "Við Old Trafford, nálægt Trafford Centre", svaedi: "trafford", rate: null, hvers: "Ein síða sýndi £34 nóttin, sem er líklega úrelt — athugaðu lifandi verð. Nálægt leikvanginum, svo dýrara á leikdögum." },
       { nafn: "The Midland", stjornur: "4★", hverfi: "0,6 km frá miðbæ", rate: 120, hvers: "Fjölskylduherbergi. Fínasti kosturinn." },
       { nafn: "INNSiDE by Meliá Manchester", stjornur: "4★", hverfi: "Miðborg", rate: 80, hvers: "Fjölskylduherbergi og ódýrasta 4★ sem fannst." },
+      { nafn: "The Wilde Manchester", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Sást frá um $85 nóttin í lok nóv. (ein nótt, ekki tilboð fyrir ykkar daga)." },
+      { nafn: "Leonardo Hotel Manchester Piccadilly", stjornur: "4★", hverfi: "Piccadilly", rate: 60, hvers: "Sást frá um $79 nóttin 23.–24. nóv. (ein nótt, ekki tilboð fyrir ykkar daga)." },
       { nafn: "Manchester Portland by Sunday", stjornur: "3,5★", hverfi: "Miðborg", rate: 60, hvers: "Góð staðsetning og gott verð — sparnaðarkosturinn." },
       { nafn: "Crowne Plaza Manchester City Centre", stjornur: "4★", hverfi: "Við Arndale", rate: null, hvers: "Foreldrar mæla með herbergi með tveimur stórum rúmum — biðja um það." },
       { nafn: "DoubleTree by Hilton Manchester Piccadilly", stjornur: "4★", hverfi: "Piccadilly", rate: null, hvers: "Innisundlaug — gott fyrir 10 ára." },
@@ -56,17 +62,34 @@ export const DESTS: Record<DestCode, Dest> = {
     code: "GLA",
     borg: "Glasgow",
     skyscanner: "gla",
-    airlines: [{ id: "ic", nafn: "Icelandair", fare: 192, bag: 47, athugasemd: "Beint, um 2 klst. 25 mín., 6–7 flug á viku. Eina flugfélagið á leiðinni. Dagar óstaðfestir." }],
+    airlines: [{ id: "ic", nafn: "Icelandair", fare: 213, bag: 47, athugasemd: "Beint, um 2 klst. 25 mín., 6–7 flug á viku. Eina flugfélagið á leiðinni. Dagar óstaðfestir. Fargjöld sáust £130–253 eftir heimild og dagsetningu." }],
     hotels: [
       { nafn: "DoubleTree by Hilton Glasgow Central", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Innisundlaug og heitur pottur." },
-      { nafn: "voco Grand Central Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Morgunverður í boði og veitingastaður." },
+      { nafn: "voco Grand Central Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 90, hvers: "Morgunverður í boði og veitingastaður. Verð ber ekki saman: frá um $86 í des., en $171 hjá annarri síðu." },
       { nafn: "Hilton Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 85, hvers: "Innisundlaug — örugg fjölskylduleið." },
       { nafn: "Apex City of Glasgow Hotel", stjornur: "4★", hverfi: "Bath Street", rate: 85, hvers: "Rúmgóð fjölskylduherbergi og þjónusta fyrir börn." },
+      { nafn: "Holiday Inn Glasgow City Centre Theatreland", stjornur: "3–4★", hverfi: "Miðborg", rate: 118, hvers: "Birt verð £118 með morgunverði fyrir tvo (hótelbæklingur 2026) — ekki staðfest fyrir ykkar daga." },
+      { nafn: "Premier Inn Glasgow City Centre (Buchanan Galleries)", stjornur: "3★", hverfi: "Miðborg", rate: 55, hvers: "Frá um $72 nóttin (almennt herbergi). Fjölskylduherbergi hjá Premier Inn taka yfirleitt 2 fullorðna og 2 börn, svo þið þurfið líklega tvö herbergi." },
       { nafn: "Novotel Glasgow Centre", stjornur: "4★", hverfi: "Pitt Street", rate: null, hvers: "Fjölskylduvænt, með gufubaði og líkamsrækt." },
     ],
     flugLinks: [{ nafn: "Icelandair", href: "https://www.icelandair.com/en-gb/" }],
   },
 };
+
+/** Heimaleikir Manchester United á Old Trafford (rétt við Trafford Centre) — hótelverð hækka. Dagsetningar óstaðfestar. */
+export const HEIMALEIKIR: { dags: string; lysing: string }[] = [
+  { dags: "2026-11-03", lysing: "Man Utd – Roma (Meistaradeild, þriðjudagur)" },
+  { dags: "2026-11-07", lysing: "Man Utd – Aston Villa (laugardagur kl. 15, ein heimild segir sun. 8. nóv. kl. 16:30)" },
+  { dags: "2026-11-28", lysing: "Man Utd – Brentford (laugardagur kl. 15)" },
+  { dags: "2026-12-05", lysing: "Man Utd – Coventry (laugardagur kl. 15)" },
+  { dags: "2026-12-08", lysing: "Man Utd – RB Leipzig (Meistaradeild, þriðjudagur kl. 20)" },
+];
+
+/** Heimaleikir sem lenda á ferðinni (út- og heimferðardagar meðtaldir). */
+export function heimaleikirI(out: string, nights: number) {
+  const ret = addDays(out, nights);
+  return HEIMALEIKIR.filter((m) => m.dags >= out && m.dags <= ret);
+}
 
 /** pakkar frá ferðaskrifstofum — aðeins tenglar; verð fundust ekki á lifandi síðum */
 export const FERDASKRIFSTOFUR: { nafn: string; lysing: string; href: string }[] = [
@@ -97,9 +120,18 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
     ],
   },
   {
+    titill: "Manchester — Trafford Centre",
+    atridi: [
+      { stada: "rad", titill: "Heimaleikir á Old Trafford", texti: "Leikvangurinn er rétt hjá Trafford Centre. Heimaleikir: 3. nóv. (Roma), 7. nóv. (Aston Villa), 28. nóv. (Brentford), 5. des. (Coventry) og 8. des. (Leipzig). Dagsetningar eru óstaðfestar. Ferðirnar 12.–15. nóv., 19.–22. nóv. og 10.–13. des. lenda ekki á heimaleik, en 5.–8. nóv., 26.–29. nóv. og 3.–6. des. gera það — búast má við hærra hótelverði þá.", href: "https://skysports.com/football/news/11095/13555679/man-utd-premier-league-2026-27-fixtures-and-schedule" },
+      { stada: "rad", titill: "Að komast þangað", texti: "Metrolink gengur á 10 mínútna fresti frá Deansgate-Castlefield á Trafford Centre-stöðina, um 20 mín. og £2–4. Leigubíll úr miðborginni tekur um 10 mín. og kostar £15–19. Strætó frá Cambridge Street tekur um 30 mín. Ég fann ekkert um leiðina frá Manchester-flugvelli — leigubíll er líklega fljótlegastur, svo athugaðu verð fyrirfram.", href: "https://www.rome2rio.com/s/Spinningfields/Trafford-Centre" },
+      { stada: "rad", titill: "Fyrir 10 ára í Trafford Centre", texti: "LEGOLAND Discovery Centre og SEA LIFE eru inni í verslunarmiðstöðinni og þarf að bóka tíma fyrirfram. Chill Factore er skammt frá. Opnunartímar um jól fundust ekki — athugaðu á vefjum þeirra.", href: "https://www.visitsealife.com/manchester/" },
+      { stada: "rad", titill: "Hótel nálægt", texti: "Holiday Inn Express Trafford City og Premier Inn Trafford Centre West eru ódýrust (um £55–78 nóttin, aðrar dagsetningar), Hilton Garden Inn við Old Trafford er dýrari. Þau eru ódýrari en miðborgarhótelin, en 3 fullorðnir og barn komast sjaldnast í eitt herbergi — reiknaðu með tveimur.", href: "https://www.booking.com/landmark/gb/trafford-centre.en-gb.html" },
+    ],
+  },
+  {
     titill: "Glasgow",
     atridi: [
-      { stada: "athuga", titill: "Flugið", texti: "Icelandair flýgur beint, um 2 klst. 25 mín., og FlightsFrom sýnir 7 flug á viku fram í lok nóvember (aðrar heimildir segja 6). Icelandair auglýsti flug fram og til baka í nóvember frá £192 (um 30.000 kr. á annarri síðu). Ég fékk ekki dag-fyrir-dag áætlun, svo staðfestu dagana.", href: "https://www.flightsfrom.com/KEF-GLA" },
+      { stada: "athuga", titill: "Flugið", texti: "Icelandair flýgur beint, um 2 klst. 25 mín., og FlightsFrom sýnir 7 flug á viku fram í lok nóvember (aðrar heimildir segja 6). Icelandair auglýsti flug fram og til baka í nóvember frá £192 (um 30.000 kr. á annarri síðu), Kayak sýndi £253 fyrir 21.–23. nóv. og Google Flights ódýrasta 3 nátta flugið á um £213 á mann. Ég stilli á £213. Ég fékk ekki dag-fyrir-dag áætlun, svo staðfestu dagana.", href: "https://www.flightsfrom.com/KEF-GLA" },
       { stada: "rad", titill: "Edinborg sem valkostur", texti: "Til Edinborgar fljúga bæði Icelandair og easyJet, daglega, og fargjöld sáust frá um €86 fram og til baka — oft ódýrara en til Glasgow, og miðborgirnar eru stutt á milli með lest. Berðu saman áður en þú bókar.", href: "https://www.skyscanner.ie/routes/kef/edi/reykjavik-keflavik-to-edinburgh.html" },
       { stada: "athuga", titill: "Pakkar", texti: "Ég fann ekkert um Glasgow-pakka frá Icelandair, Vita eða Úrval Útsýn (síða Úrvals Útsýnar fannst ekki). Tango og Lastminute birta pakka — sjá tengla ofar." },
       { stada: "rad", titill: "Hótelverð", texti: "Miðlungs miðborgarhótel með morgunverði eru sögð £80–120 á nótt, og ódýr £55 og upp. Premier Inn Buchanan Galleries sást frá um $42 (almennt herbergi, ekki fjölskylduherbergi). Ég fann ekkert verð fyrir herbergi fyrir 3 fullorðna + barn.", href: "https://www.glasgowtourism.org/best-hotels-glasgow-city-centre/" },
@@ -111,6 +143,8 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
     titill: "Flug",
     atridi: [
       { stada: "rad", titill: "Verðvakt og sveigjanlegir dagar", texti: "Settu verðvakt á KEF–MAN og KEF–GLA í Google Flights, Skyscanner eða Kayak, og skoðaðu heilan mánuð í einu. Einn dagur til eða frá getur breytt verðinu mikið." },
+      { stada: "rad", titill: "Ódýrustu dagarnir", texti: "Kayak sýnir sunnudag sem ódýrasta brottfarardag til Manchester (að meðaltali £152 fram og til baka) og fimmtudag til Glasgow (£212). Föstudagar eru dýrastir á báðum leiðum. Þetta eru meðaltöl yfir árið." },
+      { stada: "rad", titill: "Jet2 til Manchester", texti: "Kayak sýnir líka um eitt beint Jet2-flug á viku til Manchester, auk easyJet og Icelandair. Ég sá ekkert verð fyrir nóvember." },
       { stada: "rad", titill: "Tveir stakir miðar", texti: "Stundum er ódýrara að fljúga út með einu félagi og heim með öðru (easyJet út, Icelandair heim) en að kaupa miða báðar leiðir. Þeir eru þá tvær aðskildar bókanir og engin vernd ef annar fellur niður." },
       { stada: "rad", titill: "Töskur", texti: "Icelandair Economy Light hefur enga innritaða tösku, Standard hefur eina 23 kg. Barn með sæti fær sömu heimild og fullorðinn. Berðu saman Standard við Light plús tösku. Hjá easyJet er taska miklu ódýrari bókuð á netinu en á flugvellinum.", href: "https://www.icelandair.com/support/on-board/classes-of-service/" },
       { stada: "rad", titill: "Bókaðu fljótt", texti: "Nóvember er eftir tæpan mánuð. Verð á stuttum fyrirvara lækka sjaldan. Ábendingin um að sunnudagar séu ódýrastir til að bóka byggir á bandarískum gögnum og er óviss." },
@@ -241,6 +275,53 @@ export function buildPackages(s: Settings): Package[] {
     }
   }
   return out.sort((a, b) => Number(b.fits) - Number(a.fits) || a.total - b.total);
+}
+
+/** Athugasemdir um einstaka brottfarardaga (3 nátta ferðir, fim → sun). */
+export const WINDOW_NOTES: Record<string, string> = {
+  "2026-12-03": "Ódýrasta 3 nátta flugið á Google Flights (um 46–49 þús. kr. fyrir 4, easyJet), en heimaleikur á Old Trafford 5. des.",
+  "2026-12-10": "Næstódýrasta 3 nátta flugið á Google Flights.",
+};
+
+/** Forgangur dagsetninga þegar verðið er það sama (lægri tala = betri). */
+const WINDOW_RANK: Record<string, number> = {
+  "2026-12-03": 0, "2026-12-10": 1, "2026-11-12": 2, "2026-11-19": 3, "2026-11-26": 4, "2026-11-05": 5,
+};
+
+export type TopPackage = Package & {
+  /** besta brottfarardag (3 nátta ferð) fyrir þennan pakka */
+  windowOut: string;
+  /** aðrir dagar sem henta líka */
+  otherWindows: string[];
+  /** engar flugdagaviðvaranir og enginn heimaleikur á Old Trafford á besta deginum */
+  clean: boolean;
+};
+
+/**
+ * Topp-pakkar yfir ÖLL tímabilin: hver pakki (áfangastaður + flugfélag + hótel) er reiknaður fyrir 3 nátta ferð,
+ * og besti brottfarardagurinn valinn — dagur þar sem flugfélagið flaug og enginn heimaleikur er á Old Trafford.
+ * Flugverð eru ekki sundurliðuð eftir dögum í gögnunum, svo pakkar með sama verð raðast eftir bestu dagsetningu.
+ */
+export function topPackages(s: Settings, n = 5): TopPackage[] {
+  const base = buildPackages({ ...s, nights: 3 });
+  const rows = base.map((p) => {
+    const scored = WINDOWS.map((w) => {
+      const fits = fitsDays(p.airline, w, 3);
+      const game = p.dest.code === "MAN" && heimaleikirI(w, 3).length > 0;
+      return { w, fits, game, score: (fits ? 0 : 100) + (game ? 10 : 0) + WINDOW_RANK[w] };
+    }).sort((a, b) => a.score - b.score);
+    const best = scored[0];
+    return {
+      ...p,
+      fits: best.fits,
+      windowOut: best.w,
+      otherWindows: scored.slice(1).filter((x) => x.fits && !x.game).map((x) => x.w),
+      clean: best.fits && !best.game,
+    };
+  });
+  return rows
+    .sort((a, b) => Number(b.clean) - Number(a.clean) || a.total - b.total || WINDOW_RANK[a.windowOut] - WINDOW_RANK[b.windowOut])
+    .slice(0, n);
 }
 
 const punkta = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");

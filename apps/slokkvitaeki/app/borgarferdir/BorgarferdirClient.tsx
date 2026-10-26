@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { StationChrome } from "../kjarni/StationChrome";
 import {
-  AFSLATTUR, DESTS, FERDASKRIFSTOFUR, GAUTABORG_BEINT, GAUTABORG_GLUGGI, KAUPMANNAHOFN_LEID, TRAVELLERS, WINDOWS,
-  addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, isk, stutt,
+  AFSLATTUR, WINDOW_NOTES, topPackages, DESTS, FERDASKRIFSTOFUR, GAUTABORG_BEINT, GAUTABORG_GLUGGI, KAUPMANNAHOFN_LEID, TRAVELLERS, WINDOWS,
+  addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, heimaleikirI, isk, stutt,
   type DestCode, type Settings,
 } from "./trip";
 import "./borgarferdir.css";
@@ -19,7 +19,8 @@ type ReqState = "idle" | "sending" | "sent" | "error";
 export default function BorgarferdirClient() {
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
-  const [dest, setDest] = useState<DestCode | "allt">("allt");
+  const [dest, setDest] = useState<DestCode | "allt">("MAN");
+  const [svaedi, setSvaedi] = useState<"allt" | "trafford" | "midborg">("trafford");
   const [allir, setAllir] = useState(false);
   const [req, setReq] = useState<ReqState>("idle");
 
@@ -39,7 +40,15 @@ export default function BorgarferdirClient() {
 
   const patch = (p: Partial<Settings>) => setS((cur) => ({ ...cur, ...p }));
   const ret = addDays(s.out, s.nights);
-  const pakkar = useMemo(() => buildPackages(s).filter((p) => dest === "allt" || p.dest.code === dest), [s, dest]);
+  const pakkar = useMemo(
+    () =>
+      buildPackages(s)
+        .filter((p) => dest === "allt" || p.dest.code === dest)
+        .filter((p) => p.dest.code !== "MAN" || svaedi === "allt" || (p.hotel.svaedi ?? "midborg") === svaedi),
+    [s, dest, svaedi],
+  );
+  const leikir = heimaleikirI(s.out, s.nights);
+  const topp = useMemo(() => topPackages(s, 5), [s.bags, s.rooms, s.gengi]);
   const syna = allir ? pakkar : pakkar.slice(0, 6);
   const cheapest = pakkar.find((p) => p.fits);
 
@@ -104,6 +113,46 @@ export default function BorgarferdirClient() {
             </button>
           </div>
 
+          <section className="bf-sec" aria-labelledby="bf-topp">
+            <div className="bf-sec-h">
+              <h2 id="bf-topp">Topp 5 pakkar — öll tímabil</h2>
+              <small>Nóv. 5.–8. til des. 10.–13., 3 nætur, allir áfangastaðir og hótel</small>
+            </div>
+            <div className="bf-grid">
+              {topp.map((p, i) => (
+                <article key={p.id} className={`bf-card${i === 0 ? " top" : ""}`}>
+                  <div className="bf-card-h">
+                    <span className="bf-rank">{i + 1}</span>
+                    <div>
+                      <strong>{p.dest.borg}{p.hotel.svaedi === "trafford" ? " · við Trafford Centre" : ""}</strong>
+                      <small>{p.airline.nafn} · {p.hotel.nafn} {p.hotel.stjornur}</small>
+                    </div>
+                  </div>
+                  <div className="bf-total">
+                    {isk(p.total, s.gengi)}
+                    <small>{gbp(p.total)} alls</small>
+                  </div>
+                  <p className="bf-note">
+                    <b>Besta ferð:</b> {dagsetning(p.windowOut)} → {dagsetning(addDays(p.windowOut, 3))}
+                    {WINDOW_NOTES[p.windowOut] ? ` — ${WINDOW_NOTES[p.windowOut]}` : ""}
+                    {p.otherWindows.length > 0 ? ` Einnig: ${p.otherWindows.slice(0, 3).map(stutt).join(", ")}.` : ""}
+                  </p>
+                  {!p.clean && <p className="bf-warn">Enginn dagur án flugdagaviðvörunar eða heimaleiks — athugaðu dagana.</p>}
+                  <div className="bf-actions">
+                    <button type="button" onClick={() => { setDest(p.dest.code); setSvaedi(p.hotel.svaedi ?? "midborg"); patch({ out: p.windowOut, nights: 3 }); }}>
+                      Velja þessa daga
+                    </button>
+                    <a href={bookingUrl(`${p.hotel.nafn} ${p.dest.borg}`, { ...s, out: p.windowOut, nights: 3 })} target="_blank" rel="noreferrer">Hótel ↗</a>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <p className="bf-note">
+              Verð á flugi er ekki sundurliðað eftir dögum í gögnunum, svo röðin ræðst af heildarverði og síðan af besta degi:
+              flugfélagið flaug þá og enginn heimaleikur er á Old Trafford.
+            </p>
+          </section>
+
           <section className="bf-sec" aria-labelledby="bf-dags">
             <h2 id="bf-dags">Dagsetning</h2>
             <div className="bf-chips">
@@ -122,9 +171,15 @@ export default function BorgarferdirClient() {
               <label>Gengi (kr. á £)<input type="number" min={1} value={s.gengi} onChange={(e) => patch({ gengi: num(e.target.value, 1) })} /></label>
             </div>
             <p className="bf-note">
-              {dagsetning(s.out)} → {dagsetning(ret)}. easyJet flaug aðeins fimmtudaga og sunnudaga á Manchester-leiðinni; aðrar
+              {dagsetning(s.out)} → {dagsetning(ret)}. Google Flights sýndi easyJet aðeins á fimmtudögum og sunnudögum á Manchester-leiðinni (Kayak segir um 9 flug á viku, svo athugaðu); aðrar
               dagsetningar geta þýtt að það flug sé ekki til.
             </p>
+            {leikir.length > 0 && (dest !== "GLA") && (
+              <p className="bf-warn">
+                Heimaleikur á Old Trafford (rétt við Trafford Centre) í þessari ferð: {leikir.map((m) => `${dagsetning(m.dags)} ${m.lysing}`).join("; ")}.
+                Hótelverð þar í kring hækka líklega. Dagsetningar óstaðfestar.
+              </p>
+            )}
           </section>
 
           <section className="bf-sec" aria-labelledby="bf-pakkar">
@@ -138,6 +193,16 @@ export default function BorgarferdirClient() {
                 ))}
               </div>
             </div>
+            {dest !== "GLA" && (
+              <div className="bf-chips sm" role="group" aria-label="Hótelsvæði í Manchester">
+                <span className="bf-note">Hótel í Manchester:</span>
+                {([["trafford", "Við Trafford Centre"], ["midborg", "Miðborg"], ["allt", "Allt"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" className={svaedi === k ? "on" : ""} aria-pressed={svaedi === k} onClick={() => setSvaedi(k)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="bf-grid">
               {syna.map((p, i) => (
                 <article key={p.id} className={`bf-card${i === 0 && p.fits ? " top" : ""}${p.fits ? "" : " dim"}`}>
@@ -157,7 +222,7 @@ export default function BorgarferdirClient() {
                     <div><dt>Töskur ({s.bags} × 2 leiðir)</dt><dd>{isk(p.bags, s.gengi)}</dd></div>
                     <div><dt>Hótel, {s.nights} nætur</dt><dd>{isk(p.hotelCost, s.gengi)}</dd></div>
                   </dl>
-                  {!p.fits && <p className="bf-warn">{p.airline.nafn} flaug ekki á þessa daga — veldu fimmtudag til sunnudags.</p>}
+                  {!p.fits && <p className="bf-warn">{p.airline.nafn} sást ekki fljúga á þessa daga (heimildir ber ekki saman) — athugaðu flugdaga.</p>}
                   <div className="bf-actions">
                     <a href={flugLeit(p.dest, s)[1].href} target="_blank" rel="noreferrer">Flug ↗</a>
                     <a href={bookingUrl(`${p.hotel.nafn} ${p.dest.borg}`, s)} target="_blank" rel="noreferrer">Hótel ↗</a>
@@ -171,7 +236,7 @@ export default function BorgarferdirClient() {
               </button>
             )}
             <p className="bf-note">
-              Verð á mann: easyJet £66 og Icelandair £161 til Manchester, Icelandair £192 til Glasgow (fram og til baka), töskugjald
+              Verð uppfærð 26. okt. 2026 úr leitarvélum. Nóvember er dýrasti mánuðurinn fyrir hótel í Manchester (um £111 að meðaltali). Verð á mann: easyJet £66 og Icelandair £161 til Manchester, Icelandair £213 til Glasgow (fram og til baka), töskugjald
               £15 / £47 hvor leið. Hótelverð eru „frá“-verð af öðrum dagsetningum. Barn greiðir fullt fargjald. Hótel án verðs eru ekki
               í röðuninni.
             </p>
