@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StationChrome } from "../kjarni/StationChrome";
 import {
   AFSLATTUR, DESTS, FERDASKRIFSTOFUR, GAUTABORG_BEINT, GAUTABORG_GLUGGI, KAUPMANNAHOFN_LEID, TRAVELLERS, WINDOWS,
-  addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, isk, stutt,
+  addDays, bookingUrl, buildPackages, dagsetning, flugLeit, gbp, heimaleikirI, isk, stutt,
   type DestCode, type Settings,
 } from "./trip";
 import "./borgarferdir.css";
@@ -19,7 +19,8 @@ type ReqState = "idle" | "sending" | "sent" | "error";
 export default function BorgarferdirClient() {
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
-  const [dest, setDest] = useState<DestCode | "allt">("allt");
+  const [dest, setDest] = useState<DestCode | "allt">("MAN");
+  const [svaedi, setSvaedi] = useState<"allt" | "trafford" | "midborg">("trafford");
   const [allir, setAllir] = useState(false);
   const [req, setReq] = useState<ReqState>("idle");
 
@@ -39,7 +40,14 @@ export default function BorgarferdirClient() {
 
   const patch = (p: Partial<Settings>) => setS((cur) => ({ ...cur, ...p }));
   const ret = addDays(s.out, s.nights);
-  const pakkar = useMemo(() => buildPackages(s).filter((p) => dest === "allt" || p.dest.code === dest), [s, dest]);
+  const pakkar = useMemo(
+    () =>
+      buildPackages(s)
+        .filter((p) => dest === "allt" || p.dest.code === dest)
+        .filter((p) => p.dest.code !== "MAN" || svaedi === "allt" || (p.hotel.svaedi ?? "midborg") === svaedi),
+    [s, dest, svaedi],
+  );
+  const leikir = heimaleikirI(s.out, s.nights);
   const syna = allir ? pakkar : pakkar.slice(0, 6);
   const cheapest = pakkar.find((p) => p.fits);
 
@@ -125,6 +133,12 @@ export default function BorgarferdirClient() {
               {dagsetning(s.out)} → {dagsetning(ret)}. Google Flights sýndi easyJet aðeins á fimmtudögum og sunnudögum á Manchester-leiðinni (Kayak segir um 9 flug á viku, svo athugaðu); aðrar
               dagsetningar geta þýtt að það flug sé ekki til.
             </p>
+            {leikir.length > 0 && (dest !== "GLA") && (
+              <p className="bf-warn">
+                Heimaleikur á Old Trafford (rétt við Trafford Centre) í þessari ferð: {leikir.map((m) => `${dagsetning(m.dags)} ${m.lysing}`).join("; ")}.
+                Hótelverð þar í kring hækka líklega. Dagsetningar óstaðfestar.
+              </p>
+            )}
           </section>
 
           <section className="bf-sec" aria-labelledby="bf-pakkar">
@@ -138,6 +152,16 @@ export default function BorgarferdirClient() {
                 ))}
               </div>
             </div>
+            {dest !== "GLA" && (
+              <div className="bf-chips sm" role="group" aria-label="Hótelsvæði í Manchester">
+                <span className="bf-note">Hótel í Manchester:</span>
+                {([["trafford", "Við Trafford Centre"], ["midborg", "Miðborg"], ["allt", "Allt"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" className={svaedi === k ? "on" : ""} aria-pressed={svaedi === k} onClick={() => setSvaedi(k)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="bf-grid">
               {syna.map((p, i) => (
                 <article key={p.id} className={`bf-card${i === 0 && p.fits ? " top" : ""}${p.fits ? "" : " dim"}`}>

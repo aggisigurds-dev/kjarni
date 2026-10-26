@@ -16,7 +16,8 @@ export type Airline = {
   athugasemd: string;
 };
 
-export type Hotel = { nafn: string; stjornur: string; hverfi: string; rate: number | null; hvers: string };
+export type Svaedi = "trafford" | "midborg";
+export type Hotel = { nafn: string; stjornur: string; hverfi: string; rate: number | null; hvers: string; svaedi?: Svaedi };
 
 export type Dest = {
   code: DestCode;
@@ -39,6 +40,9 @@ export const DESTS: Record<DestCode, Dest> = {
       { id: "ic", nafn: "Icelandair", fare: 161, bag: 47, athugasemd: "Beint, nánast daglega (um 7 á viku). Sást £161 fyrir 19.–22. nóv. Economy Light." },
     ],
     hotels: [
+      { nafn: "Holiday Inn Express Manchester – Trafford City", stjornur: "3★", hverfi: "Trafford City, við Trafford Centre", svaedi: "trafford", rate: 70, hvers: "Sást £55 á einni síðu, $70–96 á öðrum (almennt herbergi, aðrar dagsetningar). Holiday Inn Express-fjölskylduherbergi taka yfirleitt 4, en ég staðfesti ekki 3 fullorðna." },
+      { nafn: "Premier Inn Manchester Trafford Centre West", stjornur: "3★", hverfi: "Við Trafford Centre", svaedi: "trafford", rate: 60, hvers: "Sást um $58–78 nóttin (almennt herbergi, aðrar dagsetningar). Premier Inn-fjölskylduherbergi taka yfirleitt 2 fullorðna og 2 börn, svo þið þurfið líklega tvö herbergi." },
+      { nafn: "Hilton Garden Inn Manchester Emirates Old Trafford", stjornur: "4★", hverfi: "Við Old Trafford, nálægt Trafford Centre", svaedi: "trafford", rate: null, hvers: "Ein síða sýndi £34 nóttin, sem er líklega úrelt — athugaðu lifandi verð. Nálægt leikvanginum, svo dýrara á leikdögum." },
       { nafn: "The Midland", stjornur: "4★", hverfi: "0,6 km frá miðbæ", rate: 120, hvers: "Fjölskylduherbergi. Fínasti kosturinn." },
       { nafn: "INNSiDE by Meliá Manchester", stjornur: "4★", hverfi: "Miðborg", rate: 80, hvers: "Fjölskylduherbergi og ódýrasta 4★ sem fannst." },
       { nafn: "The Wilde Manchester", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Sást frá um $85 nóttin í lok nóv. (ein nótt, ekki tilboð fyrir ykkar daga)." },
@@ -72,6 +76,19 @@ export const DESTS: Record<DestCode, Dest> = {
   },
 };
 
+/** Heimaleikir Manchester United á Old Trafford (rétt við Trafford Centre) — hótelverð hækka. Dagsetningar óstaðfestar. */
+export const HEIMALEIKIR: { dags: string; lysing: string }[] = [
+  { dags: "2026-11-03", lysing: "Man Utd – Roma (Meistaradeild, þriðjudagur)" },
+  { dags: "2026-11-07", lysing: "Man Utd – Aston Villa (laugardagur kl. 15, ein heimild segir sun. 8. nóv. kl. 16:30)" },
+  { dags: "2026-11-28", lysing: "Man Utd – Brentford (laugardagur kl. 15)" },
+];
+
+/** Heimaleikir sem lenda á ferðinni (út- og heimferðardagar meðtaldir). */
+export function heimaleikirI(out: string, nights: number) {
+  const ret = addDays(out, nights);
+  return HEIMALEIKIR.filter((m) => m.dags >= out && m.dags <= ret);
+}
+
 /** pakkar frá ferðaskrifstofum — aðeins tenglar; verð fundust ekki á lifandi síðum */
 export const FERDASKRIFSTOFUR: { nafn: string; lysing: string; href: string }[] = [
   { nafn: "Icelandair — Manchester", lysing: "Flug báðar leiðir, hótel með morgunverði, handfarangur og taska. Frá 72.900 kr. á mann (miðað við 2 fullorðna).", href: "https://www.icelandair.com/is/pakkaferdir/manchester-borgarferdir/" },
@@ -98,6 +115,15 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
       { stada: "athuga", titill: "Icelandair VITA — tilboð", texti: "Tilboðsferðir Icelandair VITA. Ég sá ekki verð.", href: "https://vita.is/tilbod" },
       { stada: "lokid", titill: "easyJet HOLIDAYSALE", texti: "Allt að £400 af pökkum, en bókunartíminn rann út 29. sept. Skráðu þig á póstlista easyJet til að sjá næstu útsölu.", href: "https://www.easyjet.com/en/" },
       { stada: "rad", titill: "Black Friday", texti: "27. nóvember 2026 (Cyber Monday 30. nóv.). Engin útsala frá Icelandair eða easyJet var auglýst enn, og hún kemur líklega of seint fyrir nóvemberferð." },
+    ],
+  },
+  {
+    titill: "Manchester — Trafford Centre",
+    atridi: [
+      { stada: "rad", titill: "Heimaleikir á Old Trafford", texti: "Leikvangurinn er rétt hjá Trafford Centre. Heimaleikir í nóv.: 3. nóv. (Roma), 7. nóv. (Aston Villa) og 28. nóv. (Brentford). Dagsetningar eru óstaðfestar. Ferðirnar 12.–15. nóv. og 19.–22. nóv. lenda ekki á heimaleik, en 5.–8. og 26.–29. nóv. gera það — búast má við hærra hótelverði þá.", href: "https://skysports.com/football/news/11095/13555679/man-utd-premier-league-2026-27-fixtures-and-schedule" },
+      { stada: "rad", titill: "Að komast þangað", texti: "Metrolink gengur á 10 mínútna fresti frá Deansgate-Castlefield á Trafford Centre-stöðina, um 20 mín. og £2–4. Leigubíll úr miðborginni tekur um 10 mín. og kostar £15–19. Strætó frá Cambridge Street tekur um 30 mín. Ég fann ekkert um leiðina frá Manchester-flugvelli — leigubíll er líklega fljótlegastur, svo athugaðu verð fyrirfram.", href: "https://www.rome2rio.com/s/Spinningfields/Trafford-Centre" },
+      { stada: "rad", titill: "Fyrir 10 ára í Trafford Centre", texti: "LEGOLAND Discovery Centre og SEA LIFE eru inni í verslunarmiðstöðinni og þarf að bóka tíma fyrirfram. Chill Factore er skammt frá. Opnunartímar um jól fundust ekki — athugaðu á vefjum þeirra.", href: "https://www.visitsealife.com/manchester/" },
+      { stada: "rad", titill: "Hótel nálægt", texti: "Holiday Inn Express Trafford City og Premier Inn Trafford Centre West eru ódýrust (um £55–78 nóttin, aðrar dagsetningar), Hilton Garden Inn við Old Trafford er dýrari. Þau eru ódýrari en miðborgarhótelin, en 3 fullorðnir og barn komast sjaldnast í eitt herbergi — reiknaðu með tveimur.", href: "https://www.booking.com/landmark/gb/trafford-centre.en-gb.html" },
     ],
   },
   {
