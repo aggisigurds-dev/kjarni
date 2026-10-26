@@ -128,6 +128,7 @@ import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
+import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
@@ -1966,6 +1967,7 @@ export function WhiteboardApp() {
         onOpenLayers={() => setPanelOpen(true)}
         viewSize={size}
       />
+      <VeggjaYfirlit />
       {skodunVirk ? (
         <div
           data-skodun-bordi
