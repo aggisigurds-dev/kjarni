@@ -122,7 +122,7 @@ export default function BorgarferdirClient() {
               <label>Gengi (kr. á £)<input type="number" min={1} value={s.gengi} onChange={(e) => patch({ gengi: num(e.target.value, 1) })} /></label>
             </div>
             <p className="bf-note">
-              {dagsetning(s.out)} → {dagsetning(ret)}. easyJet flaug aðeins fimmtudaga og sunnudaga á Manchester-leiðinni; aðrar
+              {dagsetning(s.out)} → {dagsetning(ret)}. Google Flights sýndi easyJet aðeins á fimmtudögum og sunnudögum á Manchester-leiðinni (Kayak segir um 9 flug á viku, svo athugaðu); aðrar
               dagsetningar geta þýtt að það flug sé ekki til.
             </p>
           </section>
@@ -157,7 +157,7 @@ export default function BorgarferdirClient() {
                     <div><dt>Töskur ({s.bags} × 2 leiðir)</dt><dd>{isk(p.bags, s.gengi)}</dd></div>
                     <div><dt>Hótel, {s.nights} nætur</dt><dd>{isk(p.hotelCost, s.gengi)}</dd></div>
                   </dl>
-                  {!p.fits && <p className="bf-warn">{p.airline.nafn} flaug ekki á þessa daga — veldu fimmtudag til sunnudags.</p>}
+                  {!p.fits && <p className="bf-warn">{p.airline.nafn} sást ekki fljúga á þessa daga (heimildir ber ekki saman) — athugaðu flugdaga.</p>}
                   <div className="bf-actions">
                     <a href={flugLeit(p.dest, s)[1].href} target="_blank" rel="noreferrer">Flug ↗</a>
                     <a href={bookingUrl(`${p.hotel.nafn} ${p.dest.borg}`, s)} target="_blank" rel="noreferrer">Hótel ↗</a>
@@ -171,7 +171,7 @@ export default function BorgarferdirClient() {
               </button>
             )}
             <p className="bf-note">
-              Verð á mann: easyJet £66 og Icelandair £161 til Manchester, Icelandair £192 til Glasgow (fram og til baka), töskugjald
+              Verð uppfærð 26. okt. 2026 úr leitarvélum. Nóvember er dýrasti mánuðurinn fyrir hótel í Manchester (um £111 að meðaltali). Verð á mann: easyJet £66 og Icelandair £161 til Manchester, Icelandair £213 til Glasgow (fram og til baka), töskugjald
               £15 / £47 hvor leið. Hótelverð eru „frá“-verð af öðrum dagsetningum. Barn greiðir fullt fargjald. Hótel án verðs eru ekki
               í röðuninni.
             </p>
