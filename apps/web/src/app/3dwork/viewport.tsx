@@ -38,6 +38,7 @@ import {
 } from '@/lib/3dwork/seam-brush';
 import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
+import { cyclePose, scrubToTime, type CyclePhases } from '@/lib/3dwork/motion';
 import { worldTurnQuaternion } from '@/lib/3dwork/turn';
 import type { SeamTool } from './seam-brush-bar';
 
@@ -53,6 +54,22 @@ export interface ViewportPart {
   scale: { x: number; y: number; z: number };
   /** Spare variants are drawn faded so the fitted part reads clearly. */
   dimmed: boolean;
+  /** Prufukeyrsla: mechanical role, so the cycle loop knows what to move. */
+  role?: 'recip' | 'valve' | 'ball';
+}
+
+/** Prufukeyrsla: the blowback cycle the viewport animates when test-run is on. */
+export interface MotionDrive {
+  enabled: boolean;
+  playing: boolean;
+  /** 0..1 to freeze the cycle at; null plays from the clock. */
+  scrub: number | null;
+  /** Unit vector toward the muzzle, world space. */
+  axis: { x: number; y: number; z: number };
+  strokeMm: number;
+  valveLiftMm: number;
+  ballFlightMm: number;
+  phases: CyclePhases;
 }
 
 export interface ViewportCallout {
@@ -161,6 +178,10 @@ interface ViewportProps {
   onDragMove: (ids: string[], delta: { x: number; y: number; z: number }) => void;
   /** Commit a rotation of a part: degrees about the world axes, x then y then z. */
   onDragRotate: (id: string, delta: { x: number; y: number; z: number }) => void;
+  /** Prufukeyrsla: the blowback cycle to animate, or null when test-run is off. */
+  motion?: MotionDrive | null;
+  /** Prufukeyrsla: ids whose boxes newly overlap during the cycle (interference). */
+  onClash?: (ids: string[]) => void;
 }
 
 /** The colours of the three axes, shared with the move / rotate panel: X red, Y green, Z blue. */
@@ -410,6 +431,75 @@ function buildBrushGeometry(brush: SeamBrushMesh): THREE.BufferGeometry {
   return geometry;
 }
 
+/** Prufukeyrsla loop state kept in a ref, read every frame by the render loop. */
+interface MotionRefState {
+  drive: MotionDrive | null;
+  time: number;
+  last: number;
+  baseline: Set<string>;
+  lastClash: string;
+}
+
+const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+/** Every pair of part meshes whose world boxes currently overlap. */
+function overlapPairs(state: SceneRefs | null): Set<string> {
+  const out = new Set<string>();
+  if (!state) return out;
+  const boxes: Array<[string, THREE.Box3]> = [];
+  for (const [id, mesh] of state.meshes) boxes.push([id, new THREE.Box3().setFromObject(mesh)]);
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      if (boxes[i][1].intersectsBox(boxes[j][1])) out.add(pairKey(boxes[i][0], boxes[j][0]));
+    }
+  }
+  return out;
+}
+
+/** Drop the red interference tint from every part. */
+function clearClashTint(state: SceneRefs | null): void {
+  if (!state) return;
+  for (const [, mesh] of state.meshes) {
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.emissive && material.emissive.getHex() !== 0) {
+      material.emissive.setHex(0);
+      material.emissiveIntensity = 0;
+    }
+  }
+}
+
+/**
+ * Light up parts whose boxes overlap now but did not at rest — interference the
+ * stroke introduces, as opposed to the nesting a marker has by design.
+ */
+function runClearance(state: SceneRefs, md: MotionRefState, onClash?: (ids: string[]) => void): void {
+  const current = overlapPairs(state);
+  const clash = new Set<string>();
+  for (const key of current) {
+    if (md.baseline.has(key)) continue;
+    const [a, b] = key.split('|');
+    clash.add(a);
+    clash.add(b);
+  }
+  for (const [id, mesh] of state.meshes) {
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    const hot = clash.has(id);
+    const cur = material.emissive ? material.emissive.getHex() : 0;
+    if (hot && cur !== 0xef4444) {
+      material.emissive.setHex(0xef4444);
+      material.emissiveIntensity = 0.5;
+    } else if (!hot && cur !== 0) {
+      material.emissive.setHex(0);
+      material.emissiveIntensity = 0;
+    }
+  }
+  const sig = [...clash].sort().join(',');
+  if (sig !== md.lastClash) {
+    md.lastClash = sig;
+    onClash?.([...clash]);
+  }
+}
+
 export function Viewport({
   parts,
   selectedId,
@@ -453,8 +543,19 @@ export function Viewport({
   onEnterMoveMode,
   onDragMove,
   onDragRotate,
+  motion,
+  onClash,
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const motionRef = useRef<MotionRefState>({
+    drive: null,
+    time: 0,
+    last: performance.now(),
+    baseline: new Set<string>(),
+    lastClash: '',
+  });
+  const onClashRef = useRef(onClash);
+  onClashRef.current = onClash;
   const refs = useRef<SceneRefs | null>(null);
 
   // Callout DOM, addressed by slot id and positioned from the render loop.
@@ -874,14 +975,39 @@ export function Viewport({
       state.raf = requestAnimationFrame(tick);
       runSeamStroke(SEAM_FRAME_BUDGET_MS);
       syncSeamBrush();
+      // Prufukeyrsla: where in the blowback cycle we are this frame (null = off).
+      const md = motionRef.current;
+      const drive = md.drive;
+      let pose = null as ReturnType<typeof cyclePose> | null;
+      if (drive && drive.enabled) {
+        const nowMs = performance.now();
+        const dt = Math.min((nowMs - md.last) / 1000, 0.05);
+        md.last = nowMs;
+        if (drive.scrub != null) md.time = scrubToTime(drive.scrub, drive.phases);
+        else if (drive.playing) md.time += dt;
+        pose = cyclePose(md.time, drive.phases, drive.strokeMm, drive.valveLiftMm);
+      }
       // Ease every mesh toward its arrangement position; this is what makes
-      // scatter and assemble read as one motion instead of a jump cut.
+      // scatter and assemble read as one motion instead of a jump cut. Parts
+      // with a cycle role are driven straight to their stroke position instead.
       for (const [id, mesh] of state.meshes) {
         const target = state.targets.get(id);
+        const role = mesh.userData.role as 'recip' | 'valve' | 'ball' | undefined;
+        if (pose && drive && role && target) {
+          const off =
+            role === 'recip' ? pose.recipMm : role === 'valve' ? pose.valveMm : pose.ball * drive.ballFlightMm;
+          mesh.position.set(
+            target.x + drive.axis.x * off,
+            target.y + drive.axis.y * off,
+            target.z + drive.axis.z * off
+          );
+          continue;
+        }
         if (target && mesh.position.distanceToSquared(target) > 1e-4) {
           mesh.position.lerp(target, EASE);
         }
       }
+      if (pose) runClearance(state, md, onClashRef.current);
       if (state.selection.visible) state.selection.update();
       for (const box of state.markedBoxes.children) (box as THREE.BoxHelper).update();
       // The cut plane rides the part it belongs to while that part eases home.
@@ -1530,6 +1656,25 @@ export function Viewport({
     state.controls.update();
   }, []);
 
+  // Prufukeyrsla: keep the loop's motion state in step with the prop, and capture
+  // the resting overlaps as a baseline so only NEW interference during the stroke
+  // lights up — not the parts that nest inside each other by design.
+  useEffect(() => {
+    const m = motionRef.current;
+    const was = m.drive?.enabled ?? false;
+    const now = motion?.enabled ?? false;
+    m.drive = motion ?? null;
+    if (now && !was) {
+      m.time = 0;
+      m.last = performance.now();
+      m.baseline = overlapPairs(refs.current);
+      m.lastClash = '';
+    } else if (!now && was) {
+      clearClashTint(refs.current);
+      m.lastClash = '';
+    }
+  }, [motion]);
+
   // Reconcile the scene against the part list.
   useEffect(() => {
     const state = refs.current;
@@ -1571,6 +1716,7 @@ export function Viewport({
         mesh.geometry = brushed ? buildBrushGeometry(brushed) : buildGeometry(part.soup);
       }
       mesh.userData.soup = source;
+      mesh.userData.role = part.role;
 
       const material = mesh.material as THREE.MeshStandardMaterial;
       const ghosted = isolating && part.id !== selectedId;

@@ -69,6 +69,7 @@ import {
   House,
   SquarePen,
   BookmarkPlus,
+  Gauge,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -133,6 +134,7 @@ import {
   type Placement,
   type Project,
   type Transform,
+  type MarkerRole,
   flattenGroupMembers,
 } from '@/lib/3dwork/project';
 import {
@@ -236,7 +238,7 @@ import { ProjectListItem } from './project-list-item';
 import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
-import { Viewport, type ViewportCallout, type ViewportPart, type ViewportSeamBrush } from './viewport';
+import { Viewport, type MotionDrive, type ViewportCallout, type ViewportPart, type ViewportSeamBrush } from './viewport';
 import { SeamBrushBar, type SeamStrength, type SeamTool } from './seam-brush-bar';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
@@ -254,6 +256,9 @@ import { BuilderPanel } from './builder-panel';
 import { PartsLibrary, type LibraryTab } from './parts-library';
 import { NameDialog } from './name-dialog';
 import { HammerDialog } from './hammer-dialog';
+import { MotionPanel } from './motion-panel';
+import { DEFAULT_HAMMER, hammerStrike, springRate, type HammerInputs, type SpringCoil } from '@/lib/3dwork/hammer';
+import { cyclePhases } from '@/lib/3dwork/motion';
 import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
 import { addFavorite, updateFavoriteMesh } from '@/lib/3dwork/favorites';
 import { turnAboutWorld } from '@/lib/3dwork/turn';
@@ -449,6 +454,14 @@ export function Workbench({
   // Centre mode: every drawn part laid on one vertical wall (shared Z), camera
   // pinned front-on and depth locked, so they line up in 2-D before 3-D.
   const [centerMode, setCenterMode] = useState(false);
+  // Prufukeyrsla (test-run): play the blowback cycle on the real parts.
+  const [motionMode, setMotionMode] = useState(false);
+  const [motionPlaying, setMotionPlaying] = useState(true);
+  const [motionScrub, setMotionScrub] = useState<number | null>(null);
+  const [motionSpeed, setMotionSpeed] = useState(0.8);
+  const [motionInput, setMotionInput] = useState<HammerInputs>(DEFAULT_HAMMER);
+  const [motionCoil, setMotionCoil] = useState<SpringCoil>({ wireMm: 1.6, meanDiameterMm: 12, activeCoils: 18 });
+  const [motionClash, setMotionClash] = useState<string[]>([]);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -1323,6 +1336,7 @@ export function Workbench({
         rotation: part.transform.rotation,
         scale: part.transform.scale,
         dimmed: placement.dimmed,
+        role: part.role,
       });
     }
     return parts;
@@ -1548,6 +1562,130 @@ export function Workbench({
     },
     []
   );
+
+  // ---- Prufukeyrsla (test-run) derivations ----
+  const motionResult = useMemo(
+    () => hammerStrike({ ...motionInput, springRateNmm: springRate(motionCoil) }),
+    [motionInput, motionCoil]
+  );
+  const motionStroke = Math.max(1, motionInput.strikeLengthMm - motionInput.cockedLengthMm);
+
+  // The world axis the bolt+hammer group reciprocates along — the long axis of
+  // the parts tagged recip (or of the whole bench when none are tagged yet).
+  const recipAxis = useMemo<{ axis: 'x' | 'y' | 'z'; sign: 1 | -1 }>(() => {
+    const recip = new Set(project.parts.filter((p) => p.role === 'recip').map((p) => p.id));
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    let any = false;
+    for (const part of project.parts) {
+      if (recip.size > 0 && !recip.has(part.id)) continue;
+      const soup = geometries.get(part.activeVersionId);
+      if (!soup) continue;
+      const b = computeBounds(soup);
+      const pos = partWorldPos(part);
+      const base = [pos.x, pos.y, pos.z];
+      for (let k = 0; k < 3; k++) {
+        lo[k] = Math.min(lo[k], base[k] + b.min[k]);
+        hi[k] = Math.max(hi[k], base[k] + b.max[k]);
+      }
+      any = true;
+    }
+    if (!any) return { axis: 'x', sign: 1 };
+    const span = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+    const idx = span[0] >= span[1] && span[0] >= span[2] ? 0 : span[1] >= span[2] ? 1 : 2;
+    return { axis: (['x', 'y', 'z'] as const)[idx], sign: 1 };
+  }, [project.parts, geometries, partWorldPos]);
+
+  const axisCfg = project.motionAxis ?? recipAxis;
+  const axisUnit = useMemo(
+    () => ({
+      x: axisCfg.axis === 'x' ? axisCfg.sign : 0,
+      y: axisCfg.axis === 'y' ? axisCfg.sign : 0,
+      z: axisCfg.axis === 'z' ? axisCfg.sign : 0,
+    }),
+    [axisCfg.axis, axisCfg.sign]
+  );
+
+  const motionDrive = useMemo<MotionDrive | null>(() => {
+    if (!motionMode) return null;
+    return {
+      enabled: true,
+      playing: motionPlaying,
+      scrub: motionScrub,
+      axis: axisUnit,
+      strokeMm: motionStroke,
+      valveLiftMm: Math.min(Math.max(motionInput.valveLiftMm, 0.5), 8),
+      ballFlightMm: Math.max(motionStroke * 4, 120),
+      phases: cyclePhases(motionResult, motionSpeed),
+    };
+  }, [motionMode, motionPlaying, motionScrub, axisUnit, motionStroke, motionInput.valveLiftMm, motionResult, motionSpeed]);
+
+  const setPartRole = useCallback(
+    (id: string, role: MarkerRole | undefined) => {
+      patchProject(
+        (cur) => ({ ...cur, parts: cur.parts.map((p) => (p.id === id ? { ...p, role } : p)) }),
+        { history: false }
+      );
+    },
+    [patchProject]
+  );
+  const autoRoles = useCallback(() => {
+    const guess = (name: string): MarkerRole | undefined => {
+      const n = name.toLowerCase();
+      if (/(kúla|kula|\bball\b|paintball|\bbb\b)/.test(n)) return 'ball';
+      if (/(ventil|valve|poppet|pinni|\bpin\b|stem)/.test(n)) return 'valve';
+      if (/(bolt|bolti|hamar|hammer|striker|slag|breech|ram)/.test(n)) return 'recip';
+      return undefined;
+    };
+    patchProject((cur) => ({ ...cur, parts: cur.parts.map((p) => ({ ...p, role: guess(p.name) })) }), {
+      history: false,
+    });
+  }, [patchProject]);
+  const setMotionAxis = useCallback(
+    (axis: 'x' | 'y' | 'z') => {
+      patchProject((cur) => ({ ...cur, motionAxis: { axis, sign: cur.motionAxis?.sign ?? 1 } }), { history: false });
+    },
+    [patchProject]
+  );
+  const flipMotion = useCallback(() => {
+    patchProject(
+      (cur) => ({
+        ...cur,
+        motionAxis: { axis: cur.motionAxis?.axis ?? 'x', sign: ((cur.motionAxis?.sign ?? 1) * -1) as 1 | -1 },
+      }),
+      { history: false }
+    );
+  }, [patchProject]);
+  const toggleMotion = useCallback(() => {
+    setMotionMode((v) => {
+      const next = !v;
+      if (next) {
+        setMotionPlaying(true);
+        setMotionScrub(null);
+      }
+      return next;
+    });
+  }, []);
+  const motionPartList = useMemo(
+    () => project.parts.filter((p) => p.visible).map((p) => ({ id: p.id, name: p.name, role: p.role })),
+    [project.parts]
+  );
+  // Share the hammer numbers with the Hammer dialog's store, so both agree.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('kjarni3d_hammer');
+      if (raw) setMotionInput((cur) => ({ ...cur, ...(JSON.parse(raw) as Partial<HammerInputs>) }));
+    } catch {
+      /* private mode, or an older value */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('kjarni3d_hammer', JSON.stringify(motionInput));
+    } catch {
+      /* the numbers just are not remembered */
+    }
+  }, [motionInput]);
 
   /**
    * Move one step along the history in either direction.
@@ -4166,7 +4304,7 @@ export function Workbench({
 
   /** The selected part weighed, for the hammer calculator — only while it is open. */
   const hammerCandidate = useMemo(() => {
-    if (!showHammer || !selectedPart) return null;
+    if ((!showHammer && !motionMode) || !selectedPart) return null;
     const soup = soupOfPart(selectedPart.id);
     if (!soup) return null;
     const { scale: s } = selectedPart.transform;
@@ -4182,7 +4320,7 @@ export function Workbench({
       name: selectedPart.name,
       massG: massGrams(stats.volume * scale, materialById(selectedPart.materialId).density),
     };
-  }, [showHammer, selectedPart, soupOfPart]);
+  }, [showHammer, motionMode, selectedPart, soupOfPart]);
 
   const sliceAxisIndex = { x: 0, y: 1, z: 2 }[sliceSpec.axis];
 
@@ -5840,6 +5978,7 @@ export function Workbench({
           cap: 'Physics',
           tools: [
             { icon: Zap, label: 'Hammer', tone: 'primary', disabled: !hasSel, onClick: () => setShowHammer(true) },
+            { icon: Gauge, label: 'Prufukeyrsla', on: motionMode, onClick: toggleMotion },
           ],
         },
       ],
@@ -7225,7 +7364,40 @@ export function Workbench({
             onEnterMoveMode={enterMoveMode}
             onDragMove={nudgeParts}
             onDragRotate={spinPart}
+            motion={motionDrive}
+            onClash={setMotionClash}
           />
+
+          {motionMode && (
+            <MotionPanel
+              onClose={() => setMotionMode(false)}
+              parts={motionPartList}
+              onRole={setPartRole}
+              onAuto={autoRoles}
+              input={motionInput}
+              setInput={(patch) => setMotionInput((cur) => ({ ...cur, ...patch }))}
+              coil={motionCoil}
+              setCoil={(patch) => setMotionCoil((cur) => ({ ...cur, ...patch }))}
+              result={motionResult}
+              strokeMm={motionStroke}
+              setStroke={(mm) =>
+                setMotionInput((cur) => ({ ...cur, cockedLengthMm: Math.max(0, cur.strikeLengthMm - mm) }))
+              }
+              selected={hammerCandidate}
+              playing={motionPlaying}
+              setPlaying={setMotionPlaying}
+              scrub={motionScrub}
+              setScrub={setMotionScrub}
+              speed={motionSpeed}
+              setSpeed={setMotionSpeed}
+              axis={axisCfg.axis}
+              sign={axisCfg.sign}
+              setAxis={setMotionAxis}
+              flip={flipMotion}
+              clashCount={motionClash.length}
+              onOpenHammer={() => setShowHammer(true)}
+            />
+          )}
 
           {project.parts.length > 0 && moveModeId && (() => {
             const mp = project.parts.find((part) => part.id === moveModeId);

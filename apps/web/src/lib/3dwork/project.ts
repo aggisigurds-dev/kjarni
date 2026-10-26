@@ -22,6 +22,13 @@ export interface Transform {
 }
 
 /**
+ * Prufukeyrsla (test-run): a part's mechanical role in the blowback cycle.
+ * `recip` = the bolt + hammer group that reciprocates, `valve` = the valve pin
+ * that lifts while firing, `ball` = the projectile. Anything else stays still.
+ */
+export type MarkerRole = 'recip' | 'valve' | 'ball';
+
+/**
  * One saved state of a part's geometry.
  *
  * Repairing is destructive and not always right, so a fix never overwrites: it
@@ -99,6 +106,8 @@ export interface Part {
    * outer ones can be switched off to see in. None: from its category.
    */
   layer?: number;
+  /** Prufukeyrsla: this part's role in the blowback cycle. None = stays still. */
+  role?: MarkerRole;
   /** In the Partasafn: Body, Innvols, … — `none` when the user chose Óflokkað. */
   category?: CategoryValue;
   /** The category is the auto-sorter's suggestion, not yet confirmed by the user. */
@@ -161,6 +170,12 @@ export interface Project {
    * where every part sits exactly where its own position puts it.
    */
   assembly?: boolean;
+  /**
+   * Prufukeyrsla: which world axis the bolt+hammer group reciprocates along, and
+   * which way along it counts as "forward" (toward the muzzle). None: inferred
+   * from the longest axis of the reciprocating parts.
+   */
+  motionAxis?: { axis: 'x' | 'y' | 'z'; sign: 1 | -1 };
 }
 
 /** Whether the blaster slot system is switched on for this project. */
