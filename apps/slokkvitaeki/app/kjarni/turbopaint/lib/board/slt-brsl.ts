@@ -181,9 +181,15 @@ export interface Hringur {
  *      gegnheill (súla, fylltur veggur);
  *   4. miðja hans innan 7,5 stafahæða frá orðinu.
  * Skilar tákninu næst orðinu sem stenst (Álfaborg: stafir 20 dílar, keflið ~80 dílar + ör), eða null. */
-export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?: (lina: string) => void, kassi?: Svaedi): Hringur | null {
-  const beint = finnaHringMed(blek, cx, cy, h, skra, {});
+/** `tett`: leyfir þéttara tákn (allt að 75 % blek í stað 30 %) — keflið á lágupplausnar-skönnun verður að dökkum kringlóttum depli
+ * (Höfðatorg: 58 %). Aðeins notað við SLT-orð (sjá sltBrslStadir); gegnheil tákn (súlur) falla áfram á gegnheilt-reglunni. */
+export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?: (lina: string) => void, kassi?: Svaedi, tett = false): Hringur | null {
+  const beint = finnaHringMed(blek, cx, cy, h, skra, { tett });
   if (beint) return beint;
+  if (tett) {
+    const k = finnaHringMed(blek, cx, cy, h, skra, { tett: true, kekkir: true, v: 1, kassi });
+    if (k) return k;
+  }
   // Punktalínu-spírall (Lindaberg 20.10.2026: keflið er teiknað með stökum punktum, 1,6–2 stafahæðir á kant): 3×3 þensla
   // tengir ekki punktana. Seinna þrep á ÞUNNU bleki (þykkt blek — stafir, veggir, fyllt ör — tekið burt, annars rennur
   // textinn „30 m" saman við hringinn) með meiri þenslu og lægra lágmarki; þátturinn verður að vera gisinn.
@@ -200,7 +206,7 @@ function finnaHringMed(
   cy: number,
   h: number,
   skra: ((lina: string) => void) | undefined,
-  val: { thunnt?: boolean; v?: number; minStaerd?: number; kassi?: Svaedi }
+  val: { thunnt?: boolean; v?: number; minStaerd?: number; kassi?: Svaedi; tett?: boolean; kekkir?: boolean }
 ): Hringur | null {
   const k = blek.kvardi;
   const hk = Math.max(3, h * k);
@@ -218,7 +224,7 @@ function finnaHringMed(
     const row = (y + y0) * blek.w + x0;
     for (let x = 0; x < W; x++) if (blek.data[row + x]) g[y * W + x] = 1;
   }
-  if (val.thunnt) {
+  if (val.thunnt || val.kekkir) {
     // textinn sjálfur (OCR-kassi orðsins) er ekki tákn
     if (val.kassi) {
       const ax = Math.max(0, Math.floor(val.kassi.x0 * k - x0)), bx = Math.min(W - 1, Math.ceil(val.kassi.x1 * k - x0));
@@ -248,7 +254,10 @@ function finnaHringMed(
         }
       }
     }
-    for (let i = 0; i < W * H; i++) if (thykkt[i]) g[i] = 0;
+    // thunnt: þykka bleki (stafir, veggir) burt — eftir verða punktar og þunnar línur (punktalínu-spírall).
+    // kekkir: AÐEINS þykka bleki eftir — keflið á lágupplausnar-skönnun er þéttur, dökkur depill (Höfðatorg), en textinn,
+    // þunnar línur og ryk hverfa svo depillinn losnar frá HST-textanum og veggnum sem hann snertir.
+    for (let i = 0; i < W * H; i++) { if (val.kekkir ? !thykkt[i] : thykkt[i]) g[i] = 0; }
   }
   // 1. beinar línur burt
   const lina = new Uint8Array(W * H);
@@ -324,16 +333,16 @@ function finnaHringMed(
     const bw = mxx - mnx + 1, bh = mxy - mny + 1;
     const hvar = () => `${Math.round((mnx + mxx) / 2 / k + x0 / k)},${Math.round((mny + mxy) / 2 / k + y0 / k)} ${Math.round(bw / k)}×${Math.round(bh / k)}`;
     if (skra && px.length > 40 && Math.max(bw, bh) >= minD) skra(`þáttur ${hvar()} n${px.length}`);
-    if (Math.min(bw, bh) < minD || Math.max(bw, bh) > maxD) continue;
-    if (Math.max(bw, bh) / Math.min(bw, bh) > 1.6) continue;
+    if (Math.min(bw, bh) < minD || Math.max(bw, bh) > maxD) { if (px.length > 40 && Math.max(bw, bh) >= minD) skra?.(`  stærð ${hvar()} utan ${minD.toFixed(0)}–${maxD.toFixed(0)}`); continue; }
+    if (Math.max(bw, bh) / Math.min(bw, bh) > 1.6) { skra?.(`  ekki ferningslaga ${hvar()}`); continue; }
     if (val.thunnt) {
       let ink = 0;
       for (const j of px) if (g[j]) ink++;
       // punktalínu-spírall er mjög gisinn (Lindaberg: ~3 % af kassanum); 11 % á Álfaborg var súla + texti
       if (ink / (bw * bh) > 0.07) continue;
-    } else if (px.length / (bw * bh) > 0.3) continue;
+    } else if (px.length / (bw * bh) > (val.kekkir ? 0.9 : val.tett ? 0.75 : 0.3)) { skra?.(`  of þétt ${hvar()} ${(px.length / (bw * bh)).toFixed(2)}`); continue; }
     const mx = (mnx + mxx) / 2, my = (mny + mxy) / 2;
-    if (Math.hypot(mx + x0 - ocx, my + y0 - ocy) > leit) continue;
+    if (Math.hypot(mx + x0 - ocx, my + y0 - ocy) > leit) { skra?.(`  of langt frá orði ${hvar()}`); continue; }
     // 3. lokað form: stefnur frá miðjunni sem rekast á þáttinn
     // og hve kringlótt: ysta blek þáttarins í hverri stefnu (spírall ≈ 0,65–1 R; hrúga af línum og texta óregluleg)
     let lok = 0;
@@ -378,7 +387,8 @@ function finnaHringMed(
         if (full) gegnheilt++;
       }
     }
-    if (lengst > 0.6 * Math.max(bw, bh)) { skra?.(`  bein lína ${hvar()} ${lengst}`); continue; }
+    // þéttur depill (kekkir) hefur náttúrulega breiða blekröð (skífa: raðir jafn breiðar og skífan) — þar ræður kringlóttleikinn
+    if (!val.kekkir && lengst > 0.6 * Math.max(bw, bh)) { skra?.(`  bein lína ${hvar()} ${lengst}`); continue; }
     if (gegnheilt > 60 + 0.02 * bw * bh) { skra?.(`  gegnheilt ${hvar()} ${gegnheilt}`); continue; }
     skra?.(`  TÁKN ${hvar()} lokun ${lok}/${NA} frávik ${frav.toFixed(2)} fjarl ${(Math.hypot(mx + x0 - ocx, my + y0 - ocy) / hk).toFixed(1)}h`);
     const fjarl = Math.hypot(mx + x0 - ocx, my + y0 - ocy);
@@ -411,7 +421,7 @@ export interface SbStadur {
  * ekkert tákn er staðurinn textinn. SLT nálægt BRSL-stað (≤ 6,5 stafahæðir frá tákninu / textanum — merkingin
  * „BRSL SLT" við keflið) fer á þann stað (varnarstaður: slanga + slökkvitæki); annað SLT er sér staður þar sem
  * textinn er (teikningin sýnir ekkert tákn fyrir stakt slökkvitæki). Slanga er ALDREI ályktuð af tákni einu saman —
- * aðeins af BRSL-orði. */
+ * aðeins af BRSL-orði, EÐA af hring slöngukeflis sem stendur við SLT-orð (26.10.2026: hringur með „BS“ inni sem OCR les ekki). */
 export function sltBrslStadir(ord: SbOrd[], blek: Blek | null, skra?: (lina: string) => void): SbStadur[] {
   const stadir: SbStadur[] = [];
   const merki = (o: SbOrd) => `${o.texti.trim()} (${Math.round(o.vissa)} %)`;
@@ -454,6 +464,25 @@ export function sltBrslStadir(ord: SbOrd[], blek: Blek | null, skra?: (lina: str
       naest.slt = true;
       naest.sltVid = { x: o.x, y: o.y };
       naest.ord.push(merki(o));
+      continue;
+    }
+    // 26.10.2026 (Agnar: „kenna kerfinu að finna slöngurnar … eða þekkja merkið“; Höfðatorg, PK/ÖRUGG): slöngukeflið er hringur
+    // með „BS“ inni í sem OCR les ekki sem orð, en HST stendur við hlið þess. Hringur (sama form og við BRSL: kringlóttur, gisinn,
+    // lokaður, ekki kassi) við SLT sem hefur engan BRSL-stað er því þekktur sem slöngukefli — slanga og slökkvitæki saman, eins og
+    // „BRSL SLT“. Merkt sem ályktað („HST + tákn“) svo yfirferð sjái hvaðan staðurinn kom.
+    const hringur0 = blek ? finnaHring(blek, o.x, o.y, o.h, skra, o.kassi, true) : null;
+    // táknið þarf að standa NÆRRI orðinu (≤ 5 stafahæðir) — langsótt tákn með þéttu bleki er oftar súla en kefli
+    const hringur = hringur0 && Math.hypot(hringur0.x - o.x, hringur0.y - o.y) <= o.h * 5 ? hringur0 : null;
+    if (hringur) {
+      const sami = stadir.find((s) => s.takn && Math.hypot(s.takn.x - hringur.x, s.takn.y - hringur.y) < Math.max(s.takn.r, hringur.r));
+      if (sami) {
+        sami.slt = true;
+        sami.sltVid = sami.sltVid ?? { x: o.x, y: o.y };
+        sami.ord.push(merki(o));
+        continue;
+      }
+      skra?.(`  ${o.texti.trim()} með kefli (hringur) — slanga þekkt af tákni`);
+      stadir.push({ x: hringur.x, y: hringur.y, brsl: true, slt: true, takn: hringur, sltVid: { x: o.x, y: o.y }, ord: [merki(o) + " + tákn"] });
       continue;
     }
     stadir.push({ x: o.x, y: o.y, brsl: false, slt: true, takn: null, sltVid: { x: o.x, y: o.y }, ord: [merki(o)] });
