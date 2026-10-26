@@ -97,6 +97,30 @@ export interface SbOrd {
 
 export type Svaedi = { x0: number; y0: number; x1: number; y1: number };
 
+/** Orð í SKÝRINGARTEXTA blaðsins, ekki tákn á teikningunni (Bríetartún 9 / Höfðatorg 26.10.2026: „HST = Handslökkvitæki“ og
+ * „BS = Brunaslanga“ stóðu í skýringunum og urðu að stöðum). Skýringar eru lína af stuttum kóðum (AG, BO, BS, DF, GNF, HST …)
+ * sem standa í sömu stöðu þvert á lesstefnuna — súla á láréttu blaði, lína á blaði sem er teiknað á hlið. Orð sem hefur
+ * ≥ 4 slíka kóða á sömu línu (aðrar stöður) er skýringarlína. */
+export function erSkyringarOrd(w: OcrWord, words: OcrWord[]): boolean {
+  const lodrett = !!w.vertical && w.height >= w.width;
+  const thykkt = Math.max(4, lodrett ? w.width : w.height);
+  const lina = (o: OcrWord) => (lodrett ? o.y : o.x);          // staða þvert á lesstefnu (sama gildi á allri skýringarlínunni)
+  const staflad = (o: OcrWord) => (lodrett ? o.x : o.y);        // röðin í skýringunni
+  const stadir = new Set<number>();
+  for (const o of words) {
+    if (o === w || o.confidence < 20) continue;
+    const c = hreint(o.text);
+    if (c.length < 1 || c.length > 4 || /[0-9]/.test(c)) continue;
+    const olodrett = !!o.vertical && o.height >= o.width;
+    if (olodrett !== lodrett) continue;
+    if (Math.abs(lina(o) - lina(w)) > thykkt * 1.5) continue;
+    const d = Math.abs(staflad(o) - staflad(w));
+    if (d < thykkt * 0.6 || d > thykkt * 60) continue;
+    stadir.add(Math.round(staflad(o) / (thykkt * 0.8)));
+  }
+  return stadir.size >= 4;
+}
+
 /** BRSL/SLT-orð teikningarinnar, innan `svaedi` (hússins á blaðinu, myndardílar) ef það er gefið, annars utan
  * titilreitsins (neðst til hægri á blaðinu). Tvítekin orð (sami staður, sama tegund) talin einu sinni. Lóðrétt skrifuð
  * orð gilda líka (DRA ehf 11.10.2026: „HSL" stendur upp á rönd við vegginn) — kassi þeirra er hár og mjór. */
@@ -104,6 +128,7 @@ export function sltBrslOrd(words: OcrWord[], mynd: { b: number; h: number }, sva
   const ut: SbOrd[] = [];
   for (const w of words) {
     const x = w.x + w.width / 2, y = w.y + w.height / 2;
+    if (erSkyringarOrd(w, words)) continue;
     // OCR merkir stundum láréttan kassa „lóðréttan" (Lindaberg: „30 m" 68 × 37 með vertical) — kassi sem er breiðari en hann
     // er hár er láréttur, annars fengi orðið fáránlega litla stafahæð og leitin að tákninu færi á rangan stað.
     const lodrett = w.vertical && w.height >= w.width;

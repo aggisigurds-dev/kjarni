@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { OcrWord } from "./firewall-rating";
-import { aetlaSltBrsl, finnaHring, hnitABord, ordTegundir, skiltiUrOrdum, sltBrslOrd, sltBrslStadir, type Blek } from "./slt-brsl";
+import { aetlaSltBrsl, erSkyringarOrd, finnaHring, hnitABord, ordTegundir, skiltiUrOrdum, sltBrslOrd, sltBrslStadir, type Blek } from "./slt-brsl";
 import { TaekjaSjodur } from "./sjalftenging";
 import type { BoardObject, SymbolObject } from "./types";
 
@@ -331,4 +331,23 @@ test("sltBrslOrd: kassi sem OCR merkir „lóðréttan“ en er breiðari en han
   const p = sltBrslOrd([l], { b: 7507, h: 5328 }, null);
   assert.equal(p.length, 1);
   assert.ok(p[0].h >= 25 && p[0].h <= 30, `h = ${p[0].h}`);
+});
+
+test("erSkyringarOrd: HST/BS í skýringarlínu blaðsins (Höfðatorg, teiknað á hlið) eru ekki merki; sama orð eitt á teikningu er það", () => {
+  const lod = (text: string, x: number, y: number, conf = 80): OcrWord => ({ text, x, y, width: 15, height: 26, confidence: conf, vertical: true });
+  // skýringarlína: kóðar í sömu stöðu (y ≈ 685) með 48 díla millibili — eins og „AG BO BS DF GNF GR HO HL HST“ á blaðinu
+  const kodar = ["AG", "BO", "BS", "DF", "GNF", "GR", "HO", "HL", "HST"].map((t, i) => lod(t, 924 + i * 48, 685 + (i % 3)));
+  const einn = lod("HST", 2054, 7094, 38);
+  const allt = [...kodar, einn, lod("LR", 300, 4000), lod("LR", 700, 5200)];
+  const hst = kodar[8];
+  assert.equal(erSkyringarOrd(hst, allt), true, "kóði í skýringarlínu");
+  assert.equal(erSkyringarOrd(kodar[2], allt), true, "BS í skýringarlínu");
+  assert.equal(erSkyringarOrd(einn, allt), false, "HST á teikningunni sjálfri");
+  const mynd = { b: 4470, h: 8948 };
+  assert.deepEqual(sltBrslOrd(allt, mynd, null).map((o) => o.tegund + "@" + Math.round(o.x) + "," + Math.round(o.y)), ["slt@" + Math.round(2054 + 7.5) + "," + Math.round(7094 + 13)]);
+  // láréttur texti: skýringar standa í súlu (sama x, stafla í y)
+  const lar = (text: string, y: number): OcrWord => ({ text, x: 100, y, width: 40, height: 14, confidence: 85, vertical: false });
+  const sula = ["AG", "BO", "BS", "DF", "HST", "HV"].map((t, i) => lar(t, 500 + i * 24));
+  assert.equal(erSkyringarOrd(sula[4], sula), true);
+  assert.equal(erSkyringarOrd(lar("HST", 900), [lar("HST", 900), lar("LR", 100), lar("EI", 300)]), false);
 });
