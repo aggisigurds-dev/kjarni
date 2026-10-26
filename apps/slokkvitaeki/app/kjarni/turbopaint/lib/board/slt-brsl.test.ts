@@ -35,6 +35,12 @@ test("ordTegundir: BRSL og SLT, líka með OCR-villum (8RSL, BR5L, SL1, 5LT) og 
   // 15.10.2026 (Trönuhraun 10): slöngulengd við keflið, björgunarop, flóttaleið
   assert.deepEqual(ordTegundir("30m"), [{ tegund: "brsl", sterkt: false, metri: true }]);
   assert.deepEqual(ordTegundir("25 m"), [{ tegund: "brsl", sterkt: false, metri: true }]);
+  // 26.10.2026 (Bríetartún 9, Höfðatorg): „HST = Handslökkvitæki", „BS = Brunaslanga" í skýringum blaðsins
+  assert.deepEqual(ordTegundir("HST"), [{ tegund: "slt", sterkt: true }]);
+  assert.deepEqual(ordTegundir("H5T"), [{ tegund: "slt", sterkt: false }]);
+  assert.deepEqual(ordTegundir("BS"), [{ tegund: "brsl", sterkt: false, metri: true }], "BS gildir aðeins með hring keflisins");
+  assert.deepEqual(ordTegundir("BS2"), [{ tegund: "brsl", sterkt: false, metri: true }]);
+  for (const t of ["HSTA", "BSA", "BSI", "HST-1X", "ABS"]) assert.deepEqual(ordTegundir(t), [], t);
   assert.deepEqual(ordTegundir("BO"), [{ tegund: "bo", sterkt: true }]);
   assert.deepEqual(ordTegundir("ÚT"), [{ tegund: "ut", sterkt: true }]);
   assert.deepEqual(ordTegundir("UT"), [{ tegund: "ut", sterkt: true }]);

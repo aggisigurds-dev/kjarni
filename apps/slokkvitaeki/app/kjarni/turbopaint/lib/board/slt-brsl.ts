@@ -47,6 +47,11 @@ export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean;
     if (/^BRSL\d{0,2}$/.test(c)) baeta("brsl", true);
     else if (/^SLT\d{0,2}$/.test(c)) baeta("slt", true);
     else if (/^HSL\d{0,2}$/.test(c)) baeta("slt", true);
+    // 26.10.2026 (Bríetartún 9 = Höfðatorg, PK/ÖRUGG): skýringar blaðsins segja „HST = Handslökkvitæki" og „BS =
+    // Brunaslanga" — talningin las hvorugt. BS er tveggja stafa orð (oft tilviljun í texta) og gildir því aðeins með
+    // hring keflisins við orðið, eins og slöngulengdin („30 m"): sltBrslStadir sleppir því án tákns.
+    else if (/^HST\d{0,2}$/.test(c)) baeta("slt", true);
+    else if (/^BS\d{0,2}$/.test(c)) baeta("brsl", false, true);
     // 15.10.2026 (Trönuhraun 10): slöngukeflið er merkt með lengd slöngunnar („30 m", EN 671-1 ≤ 30 m), ekki BRSL —
     // gildir AÐEINS með spíral keflisins við orðið (metri: sltBrslStadir sleppir orðinu án tákns). BO = björgunarop,
     // ÚT = flóttaleiðarör — skilti, ekki tæki.
@@ -59,6 +64,7 @@ export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean;
     } else if (/^[B8]R[S5$]([L1I]|LL)?$/.test(c)) baeta("brsl", false);
     else if (/^[S5$][L1I][T7I1]$/.test(c)) baeta("slt", false);
     else if (/^H[S5$][L1]$/.test(c)) baeta("slt", false);
+    else if (/^H[S5$][T7]$/.test(c)) baeta("slt", false);
     else if (/^[B8]R[S5$][L1I]?[S5$][L1I][T7I1]$/.test(c)) {
       baeta("brsl", false);
       baeta("slt", false);
