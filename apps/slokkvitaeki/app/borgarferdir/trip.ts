@@ -81,6 +81,8 @@ export const HEIMALEIKIR: { dags: string; lysing: string }[] = [
   { dags: "2026-11-03", lysing: "Man Utd – Roma (Meistaradeild, þriðjudagur)" },
   { dags: "2026-11-07", lysing: "Man Utd – Aston Villa (laugardagur kl. 15, ein heimild segir sun. 8. nóv. kl. 16:30)" },
   { dags: "2026-11-28", lysing: "Man Utd – Brentford (laugardagur kl. 15)" },
+  { dags: "2026-12-05", lysing: "Man Utd – Coventry (laugardagur kl. 15)" },
+  { dags: "2026-12-08", lysing: "Man Utd – RB Leipzig (Meistaradeild, þriðjudagur kl. 20)" },
 ];
 
 /** Heimaleikir sem lenda á ferðinni (út- og heimferðardagar meðtaldir). */
@@ -120,7 +122,7 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
   {
     titill: "Manchester — Trafford Centre",
     atridi: [
-      { stada: "rad", titill: "Heimaleikir á Old Trafford", texti: "Leikvangurinn er rétt hjá Trafford Centre. Heimaleikir í nóv.: 3. nóv. (Roma), 7. nóv. (Aston Villa) og 28. nóv. (Brentford). Dagsetningar eru óstaðfestar. Ferðirnar 12.–15. nóv. og 19.–22. nóv. lenda ekki á heimaleik, en 5.–8. og 26.–29. nóv. gera það — búast má við hærra hótelverði þá.", href: "https://skysports.com/football/news/11095/13555679/man-utd-premier-league-2026-27-fixtures-and-schedule" },
+      { stada: "rad", titill: "Heimaleikir á Old Trafford", texti: "Leikvangurinn er rétt hjá Trafford Centre. Heimaleikir: 3. nóv. (Roma), 7. nóv. (Aston Villa), 28. nóv. (Brentford), 5. des. (Coventry) og 8. des. (Leipzig). Dagsetningar eru óstaðfestar. Ferðirnar 12.–15. nóv., 19.–22. nóv. og 10.–13. des. lenda ekki á heimaleik, en 5.–8. nóv., 26.–29. nóv. og 3.–6. des. gera það — búast má við hærra hótelverði þá.", href: "https://skysports.com/football/news/11095/13555679/man-utd-premier-league-2026-27-fixtures-and-schedule" },
       { stada: "rad", titill: "Að komast þangað", texti: "Metrolink gengur á 10 mínútna fresti frá Deansgate-Castlefield á Trafford Centre-stöðina, um 20 mín. og £2–4. Leigubíll úr miðborginni tekur um 10 mín. og kostar £15–19. Strætó frá Cambridge Street tekur um 30 mín. Ég fann ekkert um leiðina frá Manchester-flugvelli — leigubíll er líklega fljótlegastur, svo athugaðu verð fyrirfram.", href: "https://www.rome2rio.com/s/Spinningfields/Trafford-Centre" },
       { stada: "rad", titill: "Fyrir 10 ára í Trafford Centre", texti: "LEGOLAND Discovery Centre og SEA LIFE eru inni í verslunarmiðstöðinni og þarf að bóka tíma fyrirfram. Chill Factore er skammt frá. Opnunartímar um jól fundust ekki — athugaðu á vefjum þeirra.", href: "https://www.visitsealife.com/manchester/" },
       { stada: "rad", titill: "Hótel nálægt", texti: "Holiday Inn Express Trafford City og Premier Inn Trafford Centre West eru ódýrust (um £55–78 nóttin, aðrar dagsetningar), Hilton Garden Inn við Old Trafford er dýrari. Þau eru ódýrari en miðborgarhótelin, en 3 fullorðnir og barn komast sjaldnast í eitt herbergi — reiknaðu með tveimur.", href: "https://www.booking.com/landmark/gb/trafford-centre.en-gb.html" },
@@ -277,7 +279,7 @@ export function buildPackages(s: Settings): Package[] {
 
 /** Athugasemdir um einstaka brottfarardaga (3 nátta ferðir, fim → sun). */
 export const WINDOW_NOTES: Record<string, string> = {
-  "2026-12-03": "Ódýrasta 3 nátta flugið sem Google Flights fann á öllu tímabilinu (um 46–49 þús. kr. fyrir 4, easyJet).",
+  "2026-12-03": "Ódýrasta 3 nátta flugið á Google Flights (um 46–49 þús. kr. fyrir 4, easyJet), en heimaleikur á Old Trafford 5. des.",
   "2026-12-10": "Næstódýrasta 3 nátta flugið á Google Flights.",
 };
 
