@@ -7,6 +7,7 @@ import "../artcraft.css";
 import {
   DEFAULT_SPOTLIGHT_SETTINGS,
   GRADIENT_DIRECTIONS,
+  type EdgeAmounts,
   type GradientDirection,
   type SpotlightSettings,
 } from "./gradient";
@@ -33,26 +34,23 @@ function downloadBlob(url: string, name: string) {
   a.click();
 }
 
-function DirectionPicker({
-  value,
-  onChange,
-}: {
-  value: GradientDirection;
-  onChange: (d: GradientDirection) => void;
-}) {
+/** Four sliders, one per edge, -100..100 — negative darkens that edge,
+ * positive brightens it, and all four can be set at once so corners can
+ * stack (e.g. "dark bottom" + "darker right" together). */
+function EdgeSliders({ value, onChange }: { value: EdgeAmounts; onChange: (next: EdgeAmounts) => void }) {
   return (
-    <div className="ac-modes" role="radiogroup">
+    <div className="ac-edges">
       {GRADIENT_DIRECTIONS.map((d) => (
-        <button
-          key={d}
-          type="button"
-          role="radio"
-          aria-checked={value === d}
-          className={value === d ? "on" : undefined}
-          onClick={() => onChange(d)}
-        >
-          {DIRECTION_LABEL[d]}
-        </button>
+        <label key={d} className="ac-edge">
+          {DIRECTION_LABEL[d]} ({value[d]}%{value[d] > 0 ? " — bjartara" : value[d] < 0 ? " — dekkra" : ""})
+          <input
+            type="range"
+            min={-100}
+            max={100}
+            value={value[d]}
+            onChange={(e) => onChange({ ...value, [d]: Number(e.target.value) })}
+          />
+        </label>
       ))}
     </div>
   );
@@ -158,38 +156,18 @@ export default function KastljosClient() {
 
           {sourceUrl && (
             <section className="ac-panel">
-              <h2>Bakgrunnur — dimmir frá einni hlið</h2>
-              <DirectionPicker
-                value={settings.backgroundDirection}
-                onChange={(d) => setSettings((s) => ({ ...s, backgroundDirection: d }))}
+              <h2>Bakgrunnur — stilltu hverja hlið sér</h2>
+              <p className="ac-hint">
+                Hægt að stilla allar fjórar hliðar í einu — t.d. dökkt að neðan og hægra megin, ljósara
+                vinstra megin.
+              </p>
+              <EdgeSliders
+                value={settings.background}
+                onChange={(next) => setSettings((s) => ({ ...s, background: next }))}
               />
-              <label>
-                Styrkur ({Math.round(settings.backgroundStrength * 100)}%)
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={Math.round(settings.backgroundStrength * 100)}
-                  onChange={(e) => setSettings((s) => ({ ...s, backgroundStrength: Number(e.target.value) / 100 }))}
-                />
-              </label>
 
-              <h2>Persóna — bjartari eða dekkri frá einni hlið</h2>
-              <DirectionPicker
-                value={settings.personDirection}
-                onChange={(d) => setSettings((s) => ({ ...s, personDirection: d }))}
-              />
-              <label>
-                Styrkur ({Math.round(settings.personStrength * 100)}% —{" "}
-                {settings.personStrength > 0 ? "bjartara" : settings.personStrength < 0 ? "dekkra" : "óbreytt"})
-                <input
-                  type="range"
-                  min={-100}
-                  max={100}
-                  value={Math.round(settings.personStrength * 100)}
-                  onChange={(e) => setSettings((s) => ({ ...s, personStrength: Number(e.target.value) / 100 }))}
-                />
-              </label>
+              <h2>Persóna — bjartari eða dekkri frá hverri hlið</h2>
+              <EdgeSliders value={settings.person} onChange={(next) => setSettings((s) => ({ ...s, person: next }))} />
 
               {progress && <p className="ac-status">{progress}</p>}
               {error && <p className="ac-error">{error}</p>}
