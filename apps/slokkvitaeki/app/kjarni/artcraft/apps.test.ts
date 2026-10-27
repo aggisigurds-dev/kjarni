@@ -58,7 +58,7 @@ test("private studio is a dedicated route, not a Crafting App", () => {
 test("kjarni can open every ArtCraft interface from one list", () => {
   assert.deepEqual(
     ARTCRAFT_INTERFACES.map((item) => item.id),
-    ["hub", ...ARTCRAFT_APP_IDS, "tol", "bakgrunnur", "studio"],
+    ["hub", ...ARTCRAFT_APP_IDS, "tol", "bakgrunnur", "studio", "kastljos", "vidgerd", "mota", "comfy", "leidarvisir"],
   );
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft"), "hub");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/"), "hub");

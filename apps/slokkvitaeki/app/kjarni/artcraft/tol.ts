@@ -68,4 +68,13 @@ export const AUTO_TOOLS = [
     href: "/kjarni/artcraft/comfy",
     ready: true,
   },
+  {
+    id: "leidarvisir",
+    name: "Leiðarvísir",
+    role: "Hjálp",
+    desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum — hvað þarf að setja upp og hvað virkar strax.",
+    icon: "📖",
+    href: "/kjarni/artcraft/leidarvisir",
+    ready: true,
+  },
 ] as const;
