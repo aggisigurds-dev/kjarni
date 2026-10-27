@@ -7368,6 +7368,22 @@ export function Workbench({
             onClash={setMotionClash}
           />
 
+          {workspace === 'bench' && (
+            <button
+              type="button"
+              onClick={toggleMotion}
+              title="Prufukeyrsla — spila blowback-hringinn á pörtunum"
+              className={`absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-4 py-2 text-[0.8rem] font-bold shadow-lg transition ${
+                motionMode
+                  ? 'border-amber-300 bg-amber-500 text-amber-950'
+                  : 'border-amber-500/60 bg-slate-900/90 text-amber-300 hover:bg-slate-800'
+              }`}
+            >
+              <Gauge className="h-4 w-4" />
+              Prufukeyrsla
+            </button>
+          )}
+
           {motionMode && (
             <MotionPanel
               onClose={() => setMotionMode(false)}
