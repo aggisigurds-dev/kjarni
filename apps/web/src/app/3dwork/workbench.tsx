@@ -259,6 +259,7 @@ import { HammerDialog } from './hammer-dialog';
 import { MotionPanel } from './motion-panel';
 import { DEFAULT_HAMMER, hammerStrike, springRate, type HammerInputs, type SpringCoil } from '@/lib/3dwork/hammer';
 import { cyclePhases } from '@/lib/3dwork/motion';
+import { muzzleResult, DEFAULT_SHOT, type ShotParams } from '@/lib/3dwork/muzzle';
 import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
 import { addFavorite, updateFavoriteMesh } from '@/lib/3dwork/favorites';
 import { turnAboutWorld } from '@/lib/3dwork/turn';
@@ -462,6 +463,7 @@ export function Workbench({
   const [motionInput, setMotionInput] = useState<HammerInputs>(DEFAULT_HAMMER);
   const [motionCoil, setMotionCoil] = useState<SpringCoil>({ wireMm: 1.6, meanDiameterMm: 12, activeCoils: 18 });
   const [motionClash, setMotionClash] = useState<string[]>([]);
+  const [motionShot, setMotionShot] = useState<ShotParams>(DEFAULT_SHOT);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -1569,6 +1571,14 @@ export function Workbench({
     [motionInput, motionCoil]
   );
   const motionStroke = Math.max(1, motionInput.strikeLengthMm - motionInput.cockedLengthMm);
+  const motionMuzzle = useMemo(
+    () =>
+      muzzleResult(
+        { ...motionShot, pressureBar: motionInput.pressureBar },
+        { dwellMs: motionResult.dwellMs, opens: motionResult.bottomsOut || motionResult.valveLiftMm > 0.5 }
+      ),
+    [motionShot, motionInput.pressureBar, motionResult]
+  );
 
   // The world axis the bolt+hammer group reciprocates along — the long axis of
   // the parts tagged recip (or of the whole bench when none are tagged yet).
@@ -7411,6 +7421,9 @@ export function Workbench({
               setAxis={setMotionAxis}
               flip={flipMotion}
               clashCount={motionClash.length}
+              muzzle={motionMuzzle}
+              shot={motionShot}
+              setShot={(patch) => setMotionShot((cur) => ({ ...cur, ...patch }))}
               onOpenHammer={() => setShowHammer(true)}
             />
           )}
