@@ -41,4 +41,13 @@ export const AUTO_TOOLS = [
     href: "/kjarni/artcraft/vidgerd",
     ready: true,
   },
+  {
+    id: "kastljos",
+    name: "Kastljós",
+    role: "Birta",
+    desc: "Finnur persónuna og stillir birtu sitt í hvoru lagi á henni og bakgrunninum — upp, niður, hægri, vinstri.",
+    icon: "🔦",
+    href: "/kjarni/artcraft/kastljos",
+    ready: true,
+  },
 ] as const;
