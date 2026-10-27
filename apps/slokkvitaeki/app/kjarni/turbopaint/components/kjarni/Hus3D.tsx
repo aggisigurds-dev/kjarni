@@ -30,6 +30,7 @@ import {
 } from "../../lib/board/hus3d";
 import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
 import { gluggaHaedir } from "../../lib/board/hus3d-gluggar";
+import { STIGA_BRUN_LITUR_3D, STIGA_GLER_LITUR_3D, STIGA_VANGI_LITUR_3D, stigar3D } from "../../lib/board/hus3d-stigar";
 import { smatengingar3D } from "../../lib/board/hus3d-smasamkeyti";
 import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
@@ -322,7 +323,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const m4 = new T.Matrix4(), q = new T.Quaternion(), ofan = new T.Vector3(0, 1, 0), st3 = new T.Vector3(), kv3 = new T.Vector3();
         const lit = new T.Color();
         let haedY = 0;
-        const fjoldi = { veggir: 0, gler: 0, hurdir: 0, brunahurdir: 0, e60: 0, e30: 0, taeki: 0, likon: 0 };
+        const fjoldi = { veggir: 0, gler: 0, hurdir: 0, brunahurdir: 0, stigar: 0, e60: 0, e30: 0, taeki: 0, likon: 0 };
 
         for (let nr = 0; nr < valdar.length; nr++) {
           const hd = valdar[nr];
@@ -380,9 +381,11 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           const gler = synilegirVeggbutar.filter((v) => v.tegund === "gler");
           const hurdir = synilegirVeggbutar.filter((v) => v.tegund === "hurd");
           const svalir = synilegirVeggbutar.filter((v) => v.tegund === "svalir");
+          const stigar = synilegirVeggbutar.filter((v) => v.tegund === "stigi");
           fjoldi.veggir += veggir.length;
           fjoldi.gler += gler.length;
           fjoldi.hurdir += hurdir.length;
+          fjoldi.stigar += stigar.length;
           if (veggir.length) {
             // HEILIR VEGGIR: einn kassi á bút, lengdur um hálfa þykkt í hvorn enda svo hornin fyllist.
             const mesh = new T.InstancedMesh(kG, kEfni, veggir.length);
@@ -473,6 +476,54 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             svM.instanceMatrix.needsUpdate = true;
             if (svM.instanceColor) svM.instanceColor.needsUpdate = true;
             hopur.add(svM);
+          }
+          if (stigar.length) {
+            // Stigar: þrep sem hækka frá gólfi upp í lofthæð með dökkum þrepabrúnum og hliðarvöngum svo stiginn
+            // lesist skýrt beint ofan frá í sama stíl og veggirnir.
+            const stGogn = stigar3D(stigar, synilegirVeggbutar, veggH, metri);
+            if (stGogn.threp.length) {
+              const threpE = new T.MeshLambertMaterial({ color: 0xffffff });
+              const brunE = new T.MeshLambertMaterial({ color: STIGA_BRUN_LITUR_3D });
+              const vangiE = new T.MeshLambertMaterial({ color: STIGA_VANGI_LITUR_3D });
+              const threpM = new T.InstancedMesh(kG, threpE, stGogn.threp.length);
+              const brunM = new T.InstancedMesh(kG, brunE, stGogn.brir.length);
+              const vangiM = new T.InstancedMesh(kG, vangiE, stGogn.vangar.length);
+              const qHalli = new T.Quaternion(), asZ = new T.Vector3(0, 0, 1);
+              const setKassa = (mesh: Three, listi: typeof stGogn.threp, medLit: boolean) => {
+                listi.forEach((b, i) => {
+                  q.setFromAxisAngle(ofan, b.horn);
+                  if (b.halli) {
+                    qHalli.setFromAxisAngle(asZ, b.halli);
+                    q.multiply(qHalli);
+                  }
+                  m4.compose(st3.set(b.x, b.y, b.z), q, kv3.set(b.lengd, b.haed, b.breidd));
+                  mesh.setMatrixAt(i, m4);
+                  if (medLit) mesh.setColorAt(i, lit.setHex(b.litur));
+                });
+                mesh.instanceMatrix.needsUpdate = true;
+                if (medLit && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+              };
+              setKassa(threpM, stGogn.threp, true);
+              setKassa(brunM, stGogn.brir, false);
+              setKassa(vangiM, stGogn.vangar, false);
+              hopur.add(threpM, brunM, vangiM);
+              losa.push(threpE, brunE, vangiE);
+              veggEfni.push(threpE);
+              if (stGogn.gler.length) {
+                const sGlerE = new T.MeshLambertMaterial({
+                  color: STIGA_GLER_LITUR_3D,
+                  transparent: true,
+                  opacity: 0.34,
+                  depthWrite: false,
+                  side: T.DoubleSide,
+                });
+                const sGlerM = new T.InstancedMesh(kG, sGlerE, stGogn.gler.length);
+                setKassa(sGlerM, stGogn.gler, false);
+                sGlerM.renderOrder = 2;
+                hopur.add(sGlerM);
+                losa.push(sGlerE);
+              }
+            }
           }
           if (hurdir.length) {
             // Hurðargöt: veggurinn heldur áfram OFAN við hurðina (dyrakarmur, efsti fjórðungur vegghæðar) — gengt undir.
