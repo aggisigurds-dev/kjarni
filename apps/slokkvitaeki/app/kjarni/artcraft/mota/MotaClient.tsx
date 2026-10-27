@@ -76,6 +76,7 @@ function downloadBlob(url: string, name: string) {
 export default function MotaClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const originalRef = useRef<Raster | null>(null);
   const workingRef = useRef<Raster | null>(null);
   const undoRef = useRef<Raster[]>([]);
@@ -93,6 +94,7 @@ export default function MotaClient() {
   const [strength, setStrength] = useState(0.55);
   const [canUndo, setCanUndo] = useState(false);
   const [error, setError] = useState("");
+  const [cursor, setCursor] = useState<{ x: number; y: number; size: number } | null>(null);
 
   toolRef.current = tool;
   radiusRef.current = radius;
@@ -171,7 +173,22 @@ export default function MotaClient() {
     dab(p.x, p.y, null);
   }
 
+  function updateCursor(e: PointerEvent<HTMLCanvasElement>) {
+    const canvas = viewRef.current;
+    const stage = stageRef.current;
+    if (!canvas || !stage) return;
+    const canvasRect = canvas.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    const scale = canvasRect.width / canvas.width;
+    setCursor({
+      x: e.clientX - stageRect.left,
+      y: e.clientY - stageRect.top,
+      size: radiusRef.current * 2 * scale,
+    });
+  }
+
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
+    updateCursor(e);
     if (!drawingRef.current) return;
     const p = canvasPoint(e);
     dab(p.x, p.y, lastRef.current);
@@ -181,6 +198,10 @@ export default function MotaClient() {
   function onPointerUp() {
     drawingRef.current = false;
     lastRef.current = null;
+  }
+
+  function onPointerLeave() {
+    setCursor(null);
   }
 
   function undo() {
@@ -278,7 +299,7 @@ export default function MotaClient() {
                 Strjúktu yfir mynd með bustanum — {TOOLS.find((t) => t.id === tool)?.hint.toLowerCase()}.
               </p>
 
-              <div className="ac-adjust-stage">
+              <div className="ac-adjust-stage" ref={stageRef}>
                 <canvas
                   ref={viewRef}
                   className="ac-adjust-canvas"
@@ -286,7 +307,14 @@ export default function MotaClient() {
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
                   onPointerCancel={onPointerUp}
+                  onPointerLeave={onPointerLeave}
                 />
+                {cursor && (
+                  <div
+                    className="ac-brush-cursor"
+                    style={{ left: cursor.x, top: cursor.y, width: cursor.size, height: cursor.size }}
+                  />
+                )}
               </div>
 
               <div className="ac-settings">

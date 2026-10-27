@@ -1,8 +1,10 @@
 /** Spotlight compositing — pure pixel math, no DOM/Canvas. Takes a plain
  * RGBA buffer (shape matches ImageData, but isn't the browser class, so
  * this is testable in plain Node) plus a person-coverage mask (alpha
- * channel = how "person" vs "background" a pixel is) and darkens the
- * background / brightens-or-darkens the person along a chosen edge. */
+ * channel = how "person" vs "background" a pixel is) and brightens or
+ * darkens the background / the person independently from each of the
+ * four edges — the edges combine additively, so a corner can get two
+ * edges' worth of effect at once. */
 
 export type GradientDirection = "upp" | "nidur" | "vinstri" | "haegri";
 
@@ -14,21 +16,36 @@ export type PixelBuffer = {
   height: number;
 };
 
+/** One signed amount per edge, -100..100. Negative darkens toward that
+ * edge, positive brightens toward it. All four can be set at once. */
+export type EdgeAmounts = Record<GradientDirection, number>;
+
+export const ZERO_EDGES: EdgeAmounts = { upp: 0, nidur: 0, vinstri: 0, haegri: 0 };
+
 export type SpotlightSettings = {
-  backgroundDirection: GradientDirection;
-  /** 0..1 — how much the darkest edge of the background dims. */
-  backgroundStrength: number;
-  personDirection: GradientDirection;
-  /** -1..1 — negative darkens, positive brightens the person's darkest/brightest edge. */
-  personStrength: number;
+  background: EdgeAmounts;
+  person: EdgeAmounts;
 };
 
 export const DEFAULT_SPOTLIGHT_SETTINGS: SpotlightSettings = {
-  backgroundDirection: "nidur",
-  backgroundStrength: 0.6,
-  personDirection: "upp",
-  personStrength: 0,
+  background: { upp: 0, nidur: -75, vinstri: 0, haegri: 0 },
+  person: { upp: 20, nidur: 0, vinstri: 0, haegri: 0 },
 };
+
+function clampEdgeAmount(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(-100, Math.min(100, v));
+}
+
+export function normalizeEdges(raw: Partial<EdgeAmounts> | null | undefined): EdgeAmounts {
+  const src = raw || {};
+  return {
+    upp: clampEdgeAmount(src.upp ?? 0),
+    nidur: clampEdgeAmount(src.nidur ?? 0),
+    vinstri: clampEdgeAmount(src.vinstri ?? 0),
+    haegri: clampEdgeAmount(src.haegri ?? 0),
+  };
+}
 
 /** 1 at the named edge, fading linearly to 0 at the opposite edge. */
 export function directionFactor(
@@ -50,6 +67,20 @@ export function directionFactor(
   }
 }
 
+/** Combined signed multiplier offset from all four edges at one pixel —
+ * e.g. a bottom-right corner pixel sums both "nidur" and "haegri"'s
+ * contribution, so corners can get darker/brighter than a single edge
+ * alone would make them. */
+export function edgeMultiplier(edges: EdgeAmounts, x: number, y: number, width: number, height: number): number {
+  let total = 0;
+  for (const dir of GRADIENT_DIRECTIONS) {
+    const amount = edges[dir] / 100;
+    if (amount === 0) continue;
+    total += amount * directionFactor(dir, x, y, width, height);
+  }
+  return total;
+}
+
 function clamp255(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v;
 }
@@ -63,22 +94,22 @@ function clamp255(v: number): number {
 export function applySpotlight(image: PixelBuffer, mask: PixelBuffer, settings: SpotlightSettings): PixelBuffer {
   const { width, height } = image;
   const out = new Uint8ClampedArray(image.data.length);
-  const bgStrength = Math.max(0, Math.min(1, settings.backgroundStrength));
-  const personStrength = Math.max(-1, Math.min(1, settings.personStrength));
+  const background = normalizeEdges(settings.background);
+  const person = normalizeEdges(settings.person);
 
   for (let y = 0; y < height; y++) {
-    const bgFactorRow = [];
-    const personFactorRow = [];
+    const bgRow: number[] = [];
+    const personRow: number[] = [];
     for (let x = 0; x < width; x++) {
-      bgFactorRow.push(directionFactor(settings.backgroundDirection, x, y, width, height));
-      personFactorRow.push(directionFactor(settings.personDirection, x, y, width, height));
+      bgRow.push(edgeMultiplier(background, x, y, width, height));
+      personRow.push(edgeMultiplier(person, x, y, width, height));
     }
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
       const personWeight = mask.data[i + 3] / 255;
       const bgWeight = 1 - personWeight;
 
-      const multiplier = 1 - bgWeight * bgStrength * bgFactorRow[x] + personWeight * personStrength * personFactorRow[x];
+      const multiplier = 1 + bgWeight * bgRow[x] + personWeight * personRow[x];
 
       out[i] = clamp255(image.data[i] * multiplier);
       out[i + 1] = clamp255(image.data[i + 1] * multiplier);
