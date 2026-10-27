@@ -247,6 +247,10 @@ export function artcraftHreyfimyndHref(): string {
   return "/kjarni/artcraft/hreyfimynd";
 }
 
+export function artcraftSkyjastudioHref(): string {
+  return "/kjarni/artcraft/skyjastudio";
+}
+
 export function artcraftLeidarvisirHref(): string {
   return "/kjarni/artcraft/leidarvisir";
 }
@@ -280,7 +284,7 @@ const ARTCRAFT_USES = {
 /** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio.
  *  role/desc/uses fylgja með svo yfirlitssíður (Ragnarök, StodView) geti sýnt meira en bara nafn. */
 export const ARTCRAFT_INTERFACES = [
-  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll 22 viðmótin á einum stað, með niðurhali og útgáfum.", uses: [] as readonly string[] },
+  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll 23 viðmótin á einum stað, með niðurhali og útgáfum.", uses: [] as readonly string[] },
   ...ARTCRAFT_APPS.map((app) => ({
     id: app.id,
     name: app.name,
@@ -298,6 +302,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "mota", name: "Móta", href: artcraftMotaHref(), icon: "🖌️", role: "Lögun", desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.", uses: ["Fínstilla fatasnið fyrir vörumynd"] as readonly string[] },
   { id: "comfy", name: "ComfyUI", href: artcraftComfyHref(), icon: "🧩", role: "Texti → mynd", desc: "Teiknar með þínu eigin ComfyUI á vélinni — staðbundið hnútaverk, engin mynd send neitt.", uses: ["Mynd úr texta með þínu eigin ComfyUI-flæði"] as readonly string[] },
   { id: "hreyfimynd", name: "Hreyfimynd", href: artcraftHreyfimyndHref(), icon: "🎞️", role: "Mynd → myndband", desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist.", uses: ["Láta kyrrmynd af starfsfólki hreyfa sig í stuttu kynningarmyndbandi"] as readonly string[] },
+  { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Juggernaut XL v7 á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina"] as readonly string[] },
   { id: "leidarvisir", name: "Leiðarvísir", href: artcraftLeidarvisirHref(), icon: "📖", role: "Hjálp", desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum af alvöru viðmótinu.", uses: [] as readonly string[] },
 ] as const;
 
@@ -314,6 +319,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/mota") return "mota";
   if (path === "/kjarni/artcraft/comfy") return "comfy";
   if (path === "/kjarni/artcraft/hreyfimynd") return "hreyfimynd";
+  if (path === "/kjarni/artcraft/skyjastudio") return "skyjastudio";
   if (path === "/kjarni/artcraft/leidarvisir") return "leidarvisir";
   const slug = path.split("/").pop() || "";
   if (isArtcraftAppId(slug)) return slug;

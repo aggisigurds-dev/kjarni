@@ -9,7 +9,18 @@ test("auto tools live on their own Kjarni page", () => {
   assert.equal(artcraftBakgrunnurWhiteHref(), "/kjarni/artcraft/bakgrunnur?botn=hvitt");
   assert.deepEqual(
     AUTO_TOOLS.map((tool) => tool.id),
-    ["bakgrunnur", "hvitt", "studio", "vidgerd", "kastljos", "mota", "comfy", "hreyfimynd", "leidarvisir"],
+    [
+      "bakgrunnur",
+      "hvitt",
+      "studio",
+      "vidgerd",
+      "kastljos",
+      "mota",
+      "comfy",
+      "hreyfimynd",
+      "skyjastudio",
+      "leidarvisir",
+    ],
   );
   assert.equal(AUTO_TOOLS.every((tool) => tool.href.startsWith("/kjarni/artcraft/")), true);
 });
