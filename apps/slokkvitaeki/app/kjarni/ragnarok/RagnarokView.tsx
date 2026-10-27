@@ -170,7 +170,7 @@ export function RagnarokView(d: RagnarokData) {
 
           <Panel className="rgk-leit">
             <div className="rgk-h2row">
-              <h2 className="rg-h2">ArtCraft — 21 sköpunarviðmót</h2>
+              <h2 className="rg-h2">ArtCraft — 22 sköpunarviðmót</h2>
               <a className="rgk-link" href="/kjarni/artcraft">OPNA YFIRLIT →</a>
             </div>
             <p className="rgk-sub">

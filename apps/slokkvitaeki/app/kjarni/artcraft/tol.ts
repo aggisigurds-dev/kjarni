@@ -69,6 +69,15 @@ export const AUTO_TOOLS = [
     ready: true,
   },
   {
+    id: "hreyfimynd",
+    name: "Hreyfimynd",
+    role: "Mynd → myndband",
+    desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist. Stórt líkan, þarf gott skjákort.",
+    icon: "🎞️",
+    href: "/kjarni/artcraft/hreyfimynd",
+    ready: true,
+  },
+  {
     id: "leidarvisir",
     name: "Leiðarvísir",
     role: "Hjálp",
