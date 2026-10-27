@@ -148,11 +148,14 @@ export default function SkyjastudioClient() {
     }
   }
 
-  // The <canvas> only mounts once hasImage flips true and React commits.
+  // The <canvas> only mounts while hasImage && mode === "inpaint" — it
+  // remounts blank when switching back from txt2img mode without hasImage
+  // itself changing, so `mode` has to be a dependency too, not just
+  // hasImage, or the remounted canvas never gets its first repaint.
   useEffect(() => {
-    if (hasImage) paintCanvas();
+    if (hasImage && mode === "inpaint") paintCanvas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasImage]);
+  }, [hasImage, mode]);
 
   function canvasPoint(e: PointerEvent<HTMLCanvasElement>): { x: number; y: number } {
     const canvas = viewRef.current;
