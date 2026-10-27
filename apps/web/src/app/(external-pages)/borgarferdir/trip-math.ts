@@ -52,7 +52,7 @@ export const DESTINATIONS: Record<DestCode, Destination> = {
     skyscanner: 'man',
     flightTime: 'about 2h45',
     airlines: [
-      { id: 'ez', name: 'easyJet', note: 'Direct, about Thu and Sun. Bag fee is per bag, each way, booked online.', baseFare: 66, bagFee: 15, days: [4, 0] },
+      { id: 'ez', name: 'easyJet', note: 'Direct, about Thu and Sun (fits 12 to 15 Nov). Bag fee is per bag, each way, booked online.', baseFare: 66, bagFee: 15, days: [4, 0] },
       { id: 'ic', name: 'Icelandair', note: 'Direct, about daily. Economy Light, bag fee per bag, each way.', baseFare: 161, bagFee: 47 },
     ],
     hotelDefault: 150,
@@ -79,8 +79,9 @@ export const DESTINATIONS: Record<DestCode, Destination> = {
     code: 'GLA',
     city: 'Glasgow',
     skyscanner: 'gla',
+    flightTime: 'about 2h25',
     airlines: [
-      { id: 'ic', name: 'Icelandair', note: 'Direct. The only airline named for this route. Economy Light, bag fee per bag, each way.', baseFare: 222, bagFee: 47 },
+      { id: 'ic', name: 'Icelandair', note: 'Direct, 2h25. FI431 out around 11:35, FI430 home around 09:55. 6 to 7 flights a week. The only airline on this route. Fares seen £130 to £253 depending on source and date. Economy Light, bag fee per bag, each way.', baseFare: 213, bagFee: 47 },
     ],
     hotelDefault: 100,
     hotels: [

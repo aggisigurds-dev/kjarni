@@ -36,7 +36,7 @@ export const DESTS: Record<DestCode, Dest> = {
     skyscanner: "man",
     flugtimi: "um 2 klst. 45 mín.",
     airlines: [
-      { id: "ez", nafn: "easyJet", fare: 66, bag: 15, days: [4, 0], athugasemd: "Beint. Google Flights sýndi fimmtudaga og sunnudaga, Kayak segir um 9 flug á viku — athugaðu dagana. Taska bókuð á netinu." },
+      { id: "ez", nafn: "easyJet", fare: 66, bag: 15, days: [4, 0], athugasemd: "Beint. Google Flights sýndi fimmtudaga og sunnudaga (passar 12.→15. nóv.), Kayak segir um 9 flug á viku — athugaðu dagana. Taska bókuð á netinu." },
       { id: "ic", nafn: "Icelandair", fare: 161, bag: 47, athugasemd: "Beint, nánast daglega (um 7 á viku). Sást £161 fyrir 19.–22. nóv. Economy Light." },
     ],
     hotels: [
@@ -62,7 +62,8 @@ export const DESTS: Record<DestCode, Dest> = {
     code: "GLA",
     borg: "Glasgow",
     skyscanner: "gla",
-    airlines: [{ id: "ic", nafn: "Icelandair", fare: 213, bag: 47, athugasemd: "Beint, um 2 klst. 25 mín., 6–7 flug á viku. Eina flugfélagið á leiðinni. Dagar óstaðfestir. Fargjöld sáust £130–253 eftir heimild og dagsetningu." }],
+    flugtimi: "um 2 klst. 25 mín.",
+    airlines: [{ id: "ic", nafn: "Icelandair", fare: 213, bag: 47, athugasemd: "Beint, 2 klst. 25 mín., FI431 um 11:35 út / FI430 um 09:55 heim. 6–7 flug á viku. Eina flugfélagið á leiðinni. Fargjöld sáust £130–253 eftir heimild og dagsetningu." }],
     hotels: [
       { nafn: "DoubleTree by Hilton Glasgow Central", stjornur: "4★", hverfi: "Miðborg", rate: 65, hvers: "Innisundlaug og heitur pottur." },
       { nafn: "voco Grand Central Glasgow", stjornur: "4★", hverfi: "Miðborg", rate: 90, hvers: "Morgunverður í boði og veitingastaður. Verð ber ekki saman: frá um $86 í des., en $171 hjá annarri síðu." },
@@ -116,7 +117,7 @@ export const AFSLATTUR: { titill: string; atridi: Atridi[] }[] = [
       { stada: "ekki", titill: "OLIS-kóðinn (30%)", texti: "Fyrir ferðir 1. nóv.–15. des., Economy Standard og Saga Premium, en Manchester og Glasgow eru ekki á listanum, og bókunartíminn á síðunni var 20.–22. okt. 2025.", href: "https://www.olis.is/frettir/flugtilbod-icelandair-oktober" },
       { stada: "athuga", titill: "Icelandair VITA — tilboð", texti: "Tilboðsferðir Icelandair VITA. Ég sá ekki verð.", href: "https://vita.is/tilbod" },
       { stada: "lokid", titill: "easyJet HOLIDAYSALE", texti: "Allt að £400 af pökkum, en bókunartíminn rann út 29. sept. Skráðu þig á póstlista easyJet til að sjá næstu útsölu.", href: "https://www.easyjet.com/en/" },
-      { stada: "rad", titill: "Black Friday", texti: "27. nóvember 2026 (Cyber Monday 30. nóv.). Engin útsala frá Icelandair eða easyJet var auglýst enn, og hún kemur líklega of seint fyrir nóvemberferð." },
+      { stada: "lokid", titill: "Black Friday", texti: "27. nóvember 2026 (Cyber Monday 30. nóv.). Engin BF-sala auglýst 27. okt., og hún kemur hvort eð er of seint fyrir ferðir fyrir 27. nóv." },
     ],
   },
   {
