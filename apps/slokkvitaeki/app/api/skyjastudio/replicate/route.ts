@@ -88,6 +88,12 @@ function clampNumOutputs(n: unknown, fallback: number): number {
   return Math.min(4, Math.max(1, Math.round(num)));
 }
 
+function clampStrength(n: unknown, fallback: number): number {
+  const num = typeof n === "number" ? n : fallback;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(1, Math.max(0, num));
+}
+
 async function toDataUrl(token: string, uri: string): Promise<string> {
   const res = await fetch(uri, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Gat ekki sótt mynd af Replicate (${res.status})`);
@@ -114,6 +120,9 @@ export async function POST(req: NextRequest) {
     seed?: number;
     disableSafetyChecker?: boolean;
     applyWatermark?: boolean;
+    promptStrength?: number;
+    image?: string;
+    mask?: string;
   };
   try {
     body = await req.json();
@@ -123,6 +132,10 @@ export async function POST(req: NextRequest) {
 
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
+
+  const hasImage = typeof body.image === "string" && body.image.startsWith("data:image/");
+  const hasMask = typeof body.mask === "string" && body.mask.startsWith("data:image/");
+  if (hasMask && !hasImage) return bad(400, "mask krefst image (inpaint þarf bæði)");
 
   const input: Record<string, unknown> = {
     prompt,
@@ -137,6 +150,11 @@ export async function POST(req: NextRequest) {
     apply_watermark: body.applyWatermark !== false,
   };
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
+  if (hasImage) {
+    input.image = body.image;
+    input.prompt_strength = clampStrength(body.promptStrength, 0.8);
+  }
+  if (hasMask) input.mask = body.mask;
 
   try {
     const version = await resolveLatestVersion(token);

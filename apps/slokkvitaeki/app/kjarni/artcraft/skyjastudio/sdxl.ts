@@ -35,6 +35,7 @@ export type SdxlSettings = {
   seed: number;
   disableSafetyChecker: boolean;
   applyWatermark: boolean;
+  promptStrength: number;
 };
 
 export const DEFAULT_SDXL_PROMPT = "An astronaut riding a rainbow unicorn";
@@ -51,6 +52,7 @@ export const DEFAULT_SDXL_SETTINGS: SdxlSettings = {
   seed: -1,
   disableSafetyChecker: false,
   applyWatermark: true,
+  promptStrength: 0.8,
 };
 
 export function clampSdxlSize(n: number): number {
@@ -80,6 +82,13 @@ export function clampSdxlSeed(n: number): number {
   return Math.trunc(n);
 }
 
+/** prompt_strength for img2img/inpaint: 1.0 = full destruction of the
+ * source image's information in the masked area. */
+export function clampSdxlStrength(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_SDXL_SETTINGS.promptStrength;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+
 export function normalizeSdxlSettings(raw: Partial<SdxlSettings> | null | undefined): SdxlSettings {
   const src = raw || {};
   return {
@@ -97,6 +106,7 @@ export function normalizeSdxlSettings(raw: Partial<SdxlSettings> | null | undefi
     disableSafetyChecker:
       typeof src.disableSafetyChecker === "boolean" ? src.disableSafetyChecker : DEFAULT_SDXL_SETTINGS.disableSafetyChecker,
     applyWatermark: typeof src.applyWatermark === "boolean" ? src.applyWatermark : DEFAULT_SDXL_SETTINGS.applyWatermark,
+    promptStrength: clampSdxlStrength(src.promptStrength ?? DEFAULT_SDXL_SETTINGS.promptStrength),
   };
 }
 
@@ -121,12 +131,20 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([arr], { type: mime });
 }
 
-export async function generateSdxlImage(settings: SdxlSettings): Promise<Blob[]> {
+export type InpaintExtra = {
+  imageDataUrl: string;
+  maskDataUrl: string;
+};
+
+export async function generateSdxlImage(settings: SdxlSettings, inpaint?: InpaintExtra): Promise<Blob[]> {
   if (!settings.prompt.trim()) throw new Error("Skrifaðu prompt fyrst.");
   const res = await fetch("/api/skyjastudio/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(settings),
+    body: JSON.stringify({
+      ...settings,
+      ...(inpaint ? { image: inpaint.imageDataUrl, mask: inpaint.maskDataUrl } : {}),
+    }),
   });
   const text = await res.text();
   if (!res.ok) {

@@ -6,6 +6,7 @@ import {
   clampSdxlSeed,
   clampSdxlSize,
   clampSdxlSteps,
+  clampSdxlStrength,
   DEFAULT_SDXL_SETTINGS,
   normalizeSdxlSettings,
 } from "./sdxl.ts";
@@ -23,6 +24,10 @@ test("clamp helpers keep values in SDXL's accepted ranges", () => {
   assert.equal(clampSdxlSeed(3.7), 3);
   assert.equal(clampSdxlSeed(NaN), -1);
   assert.equal(clampSdxlSize(NaN), DEFAULT_SDXL_SETTINGS.width);
+  assert.equal(clampSdxlStrength(-1), 0);
+  assert.equal(clampSdxlStrength(2), 1);
+  assert.equal(clampSdxlStrength(0.456), 0.46);
+  assert.equal(clampSdxlStrength(NaN), DEFAULT_SDXL_SETTINGS.promptStrength);
 });
 
 test("normalizeSdxlSettings falls back to defaults for unknown scheduler and keeps a valid one", () => {
@@ -50,4 +55,12 @@ test("normalizeSdxlSettings keeps disableSafetyChecker/applyWatermark booleans, 
   const defaults = normalizeSdxlSettings({});
   assert.equal(defaults.disableSafetyChecker, DEFAULT_SDXL_SETTINGS.disableSafetyChecker);
   assert.equal(defaults.applyWatermark, DEFAULT_SDXL_SETTINGS.applyWatermark);
+});
+
+test("normalizeSdxlSettings clamps promptStrength, defaults when missing", () => {
+  const out = normalizeSdxlSettings({ promptStrength: 0.3 });
+  assert.equal(out.promptStrength, 0.3);
+
+  const defaults = normalizeSdxlSettings({});
+  assert.equal(defaults.promptStrength, DEFAULT_SDXL_SETTINGS.promptStrength);
 });
