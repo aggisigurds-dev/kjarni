@@ -1023,6 +1023,7 @@
 
 .ac-results figure { margin: 0; }
 .ac-results img { width: 100%; height: auto; border-radius: 10px; display: block; }
+.ac-results video { width: 100%; height: auto; border-radius: 10px; display: block; background: #000; }
 .ac-results figcaption {
   display: flex;
   flex-wrap: wrap;
