@@ -78,6 +78,15 @@ export const AUTO_TOOLS = [
     ready: true,
   },
   {
+    id: "skyjastudio",
+    name: "Skýjastúdíó",
+    role: "Texti → mynd",
+    desc: "Teiknar með Stability AI's SDXL á Replicate — engin uppsetning, byrjar strax, kostar smá upphæð per mynd.",
+    icon: "☁️",
+    href: "/kjarni/artcraft/skyjastudio",
+    ready: true,
+  },
+  {
     id: "leidarvisir",
     name: "Leiðarvísir",
     role: "Hjálp",

@@ -69,6 +69,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
       "mota",
       "comfy",
       "hreyfimynd",
+      "skyjastudio",
       "leidarvisir",
     ],
   );
@@ -79,6 +80,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/bakgrunnur"), "bakgrunnur");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/studio?x=1"), "studio");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/hreyfimynd"), "hreyfimynd");
+  assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/skyjastudio"), "skyjastudio");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/missing"), "hub");
 });
 
