@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { StationChrome } from "../../StationChrome";
 import { artcraftAppHref, artcraftBakgrunnurHref, artcraftHubHref, artcraftToolsHref } from "../apps";
 import { artcraftBakgrunnurWhiteHref } from "../tol";
+import ImageZoom from "../ImageZoom";
 import "../artcraft.css";
 import { PRODUCTS } from "../../../verslun/products";
 import {
@@ -209,12 +210,12 @@ export default function BakgrunnurClient() {
                   <article key={job.id} className="ac-cut">
                     <div className="ac-cut-pair">
                       <figure>
-                        <img src={job.sourceUrl} alt={`Fyrir: ${job.name}`} />
+                        <ImageZoom src={job.sourceUrl} alt={`Fyrir: ${job.name}`} />
                         <figcaption>Fyrir</figcaption>
                       </figure>
                       <figure className={white ? "ac-cut-out ac-cut-white" : "ac-cut-out"}>
                         {job.resultUrl ? (
-                          <img src={job.resultUrl} alt={`Eftir: ${job.name}`} />
+                          <ImageZoom src={job.resultUrl} alt={`Eftir: ${job.name}`} />
                         ) : (
                           <p>
                             {job.status === "err"
