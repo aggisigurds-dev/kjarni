@@ -59,4 +59,13 @@ export const AUTO_TOOLS = [
     href: "/kjarni/artcraft/mota",
     ready: true,
   },
+  {
+    id: "comfy",
+    name: "ComfyUI",
+    role: "Texti → mynd",
+    desc: "Teiknar með þínu eigin ComfyUI á vélinni — staðbundið hnútaverk, engin mynd send neitt. Þarf ComfyUI í gangi.",
+    icon: "🧩",
+    href: "/kjarni/artcraft/comfy",
+    ready: true,
+  },
 ] as const;
