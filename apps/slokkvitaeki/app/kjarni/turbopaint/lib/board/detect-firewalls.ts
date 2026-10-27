@@ -199,6 +199,18 @@ function rotate90cw(src: HTMLCanvasElement) {
   return dst;
 }
 
+function rotate180(src: HTMLCanvasElement) {
+  const dst = document.createElement("canvas");
+  dst.width = src.width;
+  dst.height = src.height;
+  const ctx = dst.getContext("2d");
+  if (!ctx) throw new Error("Gat ekki snúið mynd");
+  ctx.translate(dst.width, dst.height);
+  ctx.rotate(Math.PI);
+  ctx.drawImage(src, 0, 0);
+  return dst;
+}
+
 function rotate90ccw(src: HTMLCanvasElement) {
   const dst = document.createElement("canvas");
   dst.width = src.height;
@@ -239,11 +251,17 @@ function mapCcwRotatedWord(word: OcrWord, srcWidth: number): OcrWord {
   };
 }
 
+/** Orð úr mynd sem var snúið 180° (texti á hvolfi — merki á vegg sem snýr frá lesandanum). */
+function mapRot180Word(word: OcrWord, srcWidth: number, srcHeight: number): OcrWord {
+  return { ...word, x: srcWidth - (word.x + word.width), y: srcHeight - (word.y + word.height) };
+}
+
 async function ocrPlan(
   prepared: { canvas: HTMLCanvasElement; scale: number },
   extra: OcrWord[],
   onProgress?: (message: string, percent: number) => void,
-  lodrett = true
+  lodrett = true,
+  hvolf = false
 ) {
   const { canvas, scale } = prepared;
   const worker = await getWorker(onProgress);
@@ -270,6 +288,15 @@ async function ocrPlan(
   }
   const srcW = canvas.width;
   const srcH = canvas.height;
+  // 180°: texti á hvolfi (Agnar 26.10.2026: „það þarf að lesa úr nokkrum angles“) — aðeins SLT / BRSL, sem er á vegg í hvaða átt sem er
+  let hvolfRes: Awaited<ReturnType<TesseractWorker["recognize"]>> | null = null;
+  if (hvolf) {
+    onProgress?.("Les merkingar á hvolfi…", 88);
+    const rotated180 = rotate180(canvas);
+    hvolfRes = await worker.recognize(rotated180, {}, { blocks: true, text: true });
+    rotated180.width = 0;
+    rotated180.height = 0;
+  }
   canvas.width = 0;
   canvas.height = 0;
 
@@ -277,6 +304,7 @@ async function ocrPlan(
     ...wordsFromResult(horiz.data, false),
     ...(vertCw ? wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, srcH)) : []),
     ...(vertCcw ? wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, srcW)) : []),
+    ...(hvolfRes ? wordsFromResult(hvolfRes.data, false).map((w) => mapRot180Word(w, srcW, srcH)) : []),
   ].map((w) => ({
     ...w,
     x: w.x / scale,
@@ -372,6 +400,8 @@ export async function lesaTextaTeikningar(
     medBlek?: boolean;
     /** false = aðeins láréttur texti (⅓ tímans) — SLT/BRSL. Sjálfgefið: allar þrjár stefnur (EI). */
     lodrett?: boolean;
+    /** Líka lesið með myndina á hvolfi (180°) — fjórða stefnan. Sjálfgefið ekki (EI les 3). */
+    hvolf?: boolean;
   }
 ): Promise<{ words: OcrWord[]; hits: FirewallHit[]; srcW: number; srcH: number; blek: BlekGrima | null }> {
   const canvas = await loadPlanCanvas(plan);
@@ -389,7 +419,7 @@ export async function lesaTextaTeikningar(
   const blekData = options?.medBlek ? new Uint8Array(bw * bh) : undefined;
   await binarizeForOcr(ocrFit.canvas, blekData);
 
-  const { words, hits } = await ocrPlan(ocrFit, extra, options?.onProgress, options?.lodrett !== false);
+  const { words, hits } = await ocrPlan(ocrFit, extra, options?.onProgress, options?.lodrett !== false, options?.hvolf === true);
   return {
     words,
     hits,

@@ -430,11 +430,14 @@ export function WhiteboardApp() {
         const bruP = merkiUrBru(plan.assetId, (t) => {
           bruStada = t;
         }).catch(() => null);
-        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: false, onProgress: framvinda });
-        framvinda(bruStada ? "Skrifstofutölvan: " + bruStada : "Bíð eftir skrifstofutölvunni (RapidOCR)…", 92);
+        // Allar fjórar áttir (0°, 90°, 270°, 180°) í vafranum: blöð eru teiknuð á hlið og merki standa á hvolfi (Agnar 26.10.2026:
+        // „það þarf að lesa úr nokkrum angles“; Bríetartún 9 / Höfðatorg: texti lóðréttur, HST ekki lesið). Mælt: lárétt eitt og sér
+        // fann 0 HST/BS á blaðinu, lóðrétt lestur 2 101 orð. Skrifstofutölvan bætir RapidOCR við ef hún svarar.
+        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: true, hvolf: true, onProgress: framvinda });
+        framvinda(bruStada ? "Skrifstofutölvan: " + bruStada : "Bíð eftir skrifstofutölvunni (RapidOCR)…", 96);
         const bru = await bruP;
         if (bru && bru.ord.length) r.words = r.words.concat(iMyndardila(bru, r.srcW, r.srcH));
-        if (!bru) toast.message("Skrifstofutölvan svaraði ekki — aðeins lestur vafrans (lóðrétt merki geta vantað)");
+        if (!bru) toast.message("Skrifstofutölvan svaraði ekki — lestur vafrans úr öllum fjórum áttum stendur einn");
         const { teikning, log } = await sltBrslUrTexta(plan, r, framvinda);
         console.info("[SLT] " + JSON.stringify(log));
         teikningar.push(teikning);
