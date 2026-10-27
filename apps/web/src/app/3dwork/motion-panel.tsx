@@ -9,6 +9,7 @@
 
 import { Play, Pause, Gauge, X } from 'lucide-react';
 import type { HammerInputs, HammerResult, SpringCoil } from '@/lib/3dwork/hammer';
+import type { MuzzleResult, ShotParams } from '@/lib/3dwork/muzzle';
 import type { MarkerRole } from '@/lib/3dwork/project';
 import { ACTION_GHOST, FIELD, LABEL } from './ui';
 
@@ -45,6 +46,9 @@ export interface MotionPanelProps {
   setAxis: (a: 'x' | 'y' | 'z') => void;
   flip: () => void;
   clashCount: number;
+  muzzle: MuzzleResult;
+  shot: ShotParams;
+  setShot: (patch: Partial<ShotParams>) => void;
   onOpenHammer: () => void;
 }
 
@@ -111,15 +115,18 @@ export function MotionPanel({
   setAxis,
   flip,
   clashCount,
+  muzzle,
+  shot,
+  setShot,
   onOpenHammer,
 }: MotionPanelProps) {
   const tagged = parts.filter((p) => p.role).length;
-  const energyTone =
-    result.energyJ <= 0
+  const muzzleTone =
+    muzzle.energyJ <= 0
       ? 'text-slate-400'
-      : result.energyJ < 8
+      : muzzle.energyJ < 8
         ? 'text-amber-600'
-        : result.energyJ <= 16
+        : muzzle.energyJ <= 16
           ? 'text-emerald-600'
           : 'text-red-600';
 
@@ -287,18 +294,43 @@ export function MotionPanel({
           ) : null}
         </section>
 
+        {/* Shot / muzzle */}
+        <section className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+          <span className={`${LABEL} block`}>Skot / útkeyrsla</span>
+          <Slider label="Kúluþyngd" suffix="g" min={0.5} max={10} step={0.1} value={shot.ballG} onChange={(v) => setShot({ ballG: v })} />
+          <Slider label="Ventilháls ⌀ (flæði)" suffix="mm" min={2} max={14} step={0.5} value={shot.throatMm} onChange={(v) => setShot({ throatMm: v })} />
+          <Slider label="Hlaupvídd ⌀" suffix="mm" min={8} max={26} step={0.1} value={shot.boreMm} onChange={(v) => setShot({ boreMm: v })} />
+          <Slider label="Hlauplengd" suffix="mm" min={60} max={400} step={5} value={shot.barrelMm} onChange={(v) => setShot({ barrelMm: v })} />
+          <Slider label="Nýtni (meðalþr. %)" suffix="%" min={5} max={30} step={1} value={shot.effPct} onChange={(v) => setShot({ effPct: v })} />
+          <label className="mt-1 flex items-center gap-2 text-[0.72rem] text-slate-600">
+            <input type="checkbox" checked={shot.airThrough} onChange={(e) => setShot({ airThrough: e.target.checked })} className="accent-amber-500" />
+            Loftgegnum bolti (lokar mötun)
+          </label>
+        </section>
+
         {/* Results */}
         <section className="rounded-lg border border-slate-200 bg-white p-2">
           <div className="flex items-baseline justify-between border-b border-slate-100 pb-1">
-            <span className={LABEL}>Orka</span>
-            <span className={`font-mono text-lg font-bold ${energyTone}`}>
-              {fixed(result.energyJ, 1)} <span className="text-[0.7rem] font-normal text-slate-400">J</span>
+            <span className={LABEL}>Útkeyrsluorka</span>
+            <span className={`font-mono text-lg font-bold ${muzzleTone}`}>
+              {fixed(muzzle.energyJ, 1)} <span className="text-[0.7rem] font-normal text-slate-400">J</span>
             </span>
           </div>
           <div className="mt-1 space-y-0.5 text-[0.72rem]">
             <div className="flex justify-between">
-              <span className="text-slate-500">Hamarhraði</span>
-              <span className="font-mono font-semibold">{fixed(result.velocityMs, 2)} m/s</span>
+              <span className="text-slate-500">Hraði</span>
+              <span className="font-mono font-semibold">
+                {muzzle.fps > 0 ? `${Math.round(muzzle.fps)} fps · ${fixed(muzzle.velocityMs, 0)} m/s` : '—'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Háls-flæði</span>
+              <span className="font-mono font-semibold">{Math.round(muzzle.throatFactor * 100)}%</span>
+            </div>
+            <div className="my-1 border-t border-slate-100" />
+            <div className="flex justify-between">
+              <span className="text-slate-500">Hamarorka</span>
+              <span className="font-mono font-semibold">{fixed(result.energyJ, 2)} J</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Dvöl (dwell)</span>
