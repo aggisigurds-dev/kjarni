@@ -302,7 +302,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "mota", name: "Móta", href: artcraftMotaHref(), icon: "🖌️", role: "Lögun", desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.", uses: ["Fínstilla fatasnið fyrir vörumynd"] as readonly string[] },
   { id: "comfy", name: "ComfyUI", href: artcraftComfyHref(), icon: "🧩", role: "Texti → mynd", desc: "Teiknar með þínu eigin ComfyUI á vélinni — staðbundið hnútaverk, engin mynd send neitt.", uses: ["Mynd úr texta með þínu eigin ComfyUI-flæði"] as readonly string[] },
   { id: "hreyfimynd", name: "Hreyfimynd", href: artcraftHreyfimyndHref(), icon: "🎞️", role: "Mynd → myndband", desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist.", uses: ["Láta kyrrmynd af starfsfólki hreyfa sig í stuttu kynningarmyndbandi"] as readonly string[] },
-  { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Juggernaut XL v7 á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina"] as readonly string[] },
+  { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Stability AI's SDXL á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina"] as readonly string[] },
   { id: "leidarvisir", name: "Leiðarvísir", href: artcraftLeidarvisirHref(), icon: "📖", role: "Hjálp", desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum af alvöru viðmótinu.", uses: [] as readonly string[] },
 ] as const;
 

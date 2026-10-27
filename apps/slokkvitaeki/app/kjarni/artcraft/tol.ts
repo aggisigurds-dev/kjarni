@@ -81,7 +81,7 @@ export const AUTO_TOOLS = [
     id: "skyjastudio",
     name: "Skýjastúdíó",
     role: "Texti → mynd",
-    desc: "Teiknar með Juggernaut XL v7 á Replicate — engin uppsetning, byrjar strax, kostar smá upphæð per mynd.",
+    desc: "Teiknar með Stability AI's SDXL á Replicate — engin uppsetning, byrjar strax, kostar smá upphæð per mynd.",
     icon: "☁️",
     href: "/kjarni/artcraft/skyjastudio",
     ready: true,

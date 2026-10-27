@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Skýjastúdíó: texti → mynd með asiryan/juggernaut-xl-v7 á Replicate
-// (https://replicate.com/asiryan/juggernaut-xl-v7) — ekkert staðbundið að
-// setja upp (ólíkt Einkastúdíó/ComfyUI), en kostar smá upphæð per mynd og
-// myndin fer út af vélinni.
+// Skýjastúdíó: texti → mynd með stability-ai/sdxl á Replicate
+// (https://replicate.com/stability-ai/sdxl) — ekkert staðbundið að setja
+// upp (ólíkt Einkastúdíó/ComfyUI), en kostar smá upphæð per mynd og myndin
+// fer út af vélinni.
+//
+// Valið fram yfir önnur SDXL-afbrigði því þetta er eina líkanið sem
+// útsetur disable_safety_checker/apply_watermark sem skjalfesta
+// API-breytu, sjá https://replicate.com/docs/how-does-replicate-work#safety.
 //
 // Flæði og input/output-skema staðfest beint gegn Replicate's API
-// (GET /v1/models/asiryan/juggernaut-xl-v7 — openapi_schema), ekki giskað,
-// sama mynstur og app/api/vidgerd/replicate/route.ts:
-//   1) GET  /v1/models/asiryan/juggernaut-xl-v7   → latest_version.id
+// (GET /v1/models/stability-ai/sdxl — openapi_schema), ekki giskað, sama
+// mynstur og app/api/vidgerd/replicate/route.ts:
+//   1) GET  /v1/models/stability-ai/sdxl          → latest_version.id
 //   2) POST /v1/predictions (Prefer: wait)         → keyrir líkanið
 //   3) ef ekki búið innan "wait"-gluggans: póllum urls.get þangað til
 //   4) sækjum úttaksslóðirnar (output er fylki af URI-um) og sendum
@@ -18,8 +22,8 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 60;
 
 const REPLICATE_API = "https://api.replicate.com/v1";
-const MODEL_OWNER = "asiryan";
-const MODEL_NAME = "juggernaut-xl-v7";
+const MODEL_OWNER = "stability-ai";
+const MODEL_NAME = "sdxl";
 const SCHEDULERS = ["DDIM", "DPMSolverMultistep", "HeunDiscrete", "KarrasDPM", "K_EULER_ANCESTRAL", "K_EULER", "PNDM"];
 
 function bad(status: number, error: string) {
@@ -38,10 +42,10 @@ async function resolveLatestVersion(token: string): Promise<string> {
   const res = await fetch(`${REPLICATE_API}/models/${MODEL_OWNER}/${MODEL_NAME}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Fann ekki Juggernaut XL v7 á Replicate (${res.status})`);
+  if (!res.ok) throw new Error(`Fann ekki SDXL á Replicate (${res.status})`);
   const data = (await res.json()) as { latest_version?: { id?: string } };
   const id = data.latest_version?.id;
-  if (!id) throw new Error("Replicate skilaði engri útgáfu af Juggernaut XL v7");
+  if (!id) throw new Error("Replicate skilaði engri útgáfu af SDXL");
   return id;
 }
 
@@ -108,6 +112,8 @@ export async function POST(req: NextRequest) {
     scheduler?: string;
     numOutputs?: number;
     seed?: number;
+    disableSafetyChecker?: boolean;
+    applyWatermark?: boolean;
   };
   try {
     body = await req.json();
@@ -123,10 +129,12 @@ export async function POST(req: NextRequest) {
     negative_prompt: body.negativePrompt || "",
     width: clampSize(body.width, 1024),
     height: clampSize(body.height, 1024),
-    num_inference_steps: clampSteps(body.steps, 40),
-    guidance_scale: clampGuidance(body.guidanceScale, 7),
-    scheduler: SCHEDULERS.includes(body.scheduler || "") ? body.scheduler : "K_EULER_ANCESTRAL",
+    num_inference_steps: clampSteps(body.steps, 50),
+    guidance_scale: clampGuidance(body.guidanceScale, 7.5),
+    scheduler: SCHEDULERS.includes(body.scheduler || "") ? body.scheduler : "K_EULER",
     num_outputs: clampNumOutputs(body.numOutputs, 1),
+    disable_safety_checker: body.disableSafetyChecker === true,
+    apply_watermark: body.applyWatermark !== false,
   };
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
 
@@ -151,7 +159,7 @@ export async function POST(req: NextRequest) {
       prediction = await pollPrediction(token, prediction.urls.get, Date.now() + 55_000);
     }
     if (prediction.status !== "succeeded" || !prediction.output?.length) {
-      return bad(502, prediction.error || "Juggernaut XL v7 á Replicate mistókst");
+      return bad(502, prediction.error || "SDXL á Replicate mistókst");
     }
 
     const images = await Promise.all(prediction.output.map((uri) => toDataUrl(token, uri)));

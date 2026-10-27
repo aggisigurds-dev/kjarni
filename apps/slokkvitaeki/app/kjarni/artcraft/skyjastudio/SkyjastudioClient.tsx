@@ -5,14 +5,14 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import {
-  DEFAULT_JUGGERNAUT_SETTINGS,
-  generateJuggernaut,
-  JUGGERNAUT_SCHEDULERS,
-  JUGGERNAUT_SETTINGS_KEY,
-  normalizeJuggernautSettings,
-  readStoredJuggernautSettings,
-  type JuggernautSettings,
-} from "./juggernaut";
+  DEFAULT_SDXL_SETTINGS,
+  generateSdxlImage,
+  SDXL_SCHEDULERS,
+  SDXL_SETTINGS_KEY,
+  normalizeSdxlSettings,
+  readStoredSdxlSettings,
+  type SdxlSettings,
+} from "./sdxl";
 import ImageZoom from "../ImageZoom";
 
 function downloadBlob(url: string, name: string) {
@@ -24,7 +24,7 @@ function downloadBlob(url: string, name: string) {
 
 export default function SkyjastudioClient() {
   const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState<JuggernautSettings>(DEFAULT_JUGGERNAUT_SETTINGS);
+  const [settings, setSettings] = useState<SdxlSettings>(DEFAULT_SDXL_SETTINGS);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -32,7 +32,7 @@ export default function SkyjastudioClient() {
   const resultUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
-    setSettings(readStoredJuggernautSettings());
+    setSettings(readStoredSdxlSettings());
     setReady(true);
   }, []);
 
@@ -42,10 +42,10 @@ export default function SkyjastudioClient() {
     };
   }, []);
 
-  function updateSettings(next: Partial<JuggernautSettings>) {
+  function updateSettings(next: Partial<SdxlSettings>) {
     setSettings((s) => {
-      const merged = normalizeJuggernautSettings({ ...s, ...next });
-      window.localStorage.setItem(JUGGERNAUT_SETTINGS_KEY, JSON.stringify(merged));
+      const merged = normalizeSdxlSettings({ ...s, ...next });
+      window.localStorage.setItem(SDXL_SETTINGS_KEY, JSON.stringify(merged));
       return merged;
     });
   }
@@ -58,7 +58,7 @@ export default function SkyjastudioClient() {
     setBusy(true);
     setError("");
     try {
-      const blobs = await generateJuggernaut(settings);
+      const blobs = await generateSdxlImage(settings);
       for (const url of resultUrlsRef.current) URL.revokeObjectURL(url);
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current = urls;
@@ -92,9 +92,9 @@ export default function SkyjastudioClient() {
           </p>
           <h1>Skýjastúdíó</h1>
           <p className="ac-lead">
-            Texti → mynd með Juggernaut XL v7 (Replicate) — engin uppsetning, byrjar strax, en
-            kostar smá upphæð per mynd og myndin fer út af vélinni. Vilt þú frekar ókeypis og
-            staðbundið: sjá Einkastúdíó eða ComfyUI.
+            Texti → mynd með Stability AI's eigin SDXL-líkani (Replicate) — engin uppsetning,
+            byrjar strax, en kostar smá upphæð per mynd og myndin fer út af vélinni. Vilt þú
+            frekar ókeypis og staðbundið: sjá Einkastúdíó eða ComfyUI.
           </p>
 
           <section className="ac-panel">
@@ -164,9 +164,9 @@ export default function SkyjastudioClient() {
                 Scheduler
                 <select
                   value={settings.scheduler}
-                  onChange={(e) => updateSettings({ scheduler: e.target.value as JuggernautSettings["scheduler"] })}
+                  onChange={(e) => updateSettings({ scheduler: e.target.value as SdxlSettings["scheduler"] })}
                 >
-                  {JUGGERNAUT_SCHEDULERS.map((s) => (
+                  {SDXL_SCHEDULERS.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
@@ -192,6 +192,27 @@ export default function SkyjastudioClient() {
                 />
               </label>
             </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={settings.disableSafetyChecker}
+                onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
+              />
+              Slökkva á öryggissíu (disable_safety_checker)
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={settings.applyWatermark}
+                onChange={(e) => updateSettings({ applyWatermark: e.target.checked })}
+              />
+              Setja vatnsmerki á myndina (apply_watermark)
+            </label>
+            <p className="ac-hint">
+              Bæði eru skjalfestar Replicate-breytur fyrir þetta líkan — öryggissían er sjálfgefið
+              á, vatnsmerkið sjálfgefið á. Þú berð ábyrgð á notkuninni þegar slökkt er á síunni.
+            </p>
 
             {error && <p className="ac-error">{error}</p>}
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy}>
