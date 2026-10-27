@@ -8,7 +8,7 @@ import { veggLengd } from "./veggja-ritill";
 import type { VeggTegund } from "./teikning-veggir";
 import type { BoardObject, ImageObject } from "./types";
 
-export const VEGG_TEGUNDIR: VeggTegund[] = ["veggur", "ei60", "ei30", "gler", "hurd", "svalir"];
+export const VEGG_TEGUNDIR: VeggTegund[] = ["veggur", "ei60", "ei30", "gler", "hurd", "svalir", "stigi"];
 
 export interface TegundTala {
   /** Fjöldi búta. */
@@ -47,8 +47,8 @@ function kvardiBords(objects: BoardObject[], pixelsPerMeter: number | null): { p
 
 export function veggjaSamantekt(objects: BoardObject[], pixelsPerMeter: number | null): VeggjaSamantekt {
   const { ppm, kvardi } = kvardiBords(objects, pixelsPerMeter);
-  const dilar: Record<VeggTegund, number> = { veggur: 0, ei60: 0, ei30: 0, gler: 0, hurd: 0, svalir: 0 };
-  const fjoldi: Record<VeggTegund, number> = { veggur: 0, ei60: 0, ei30: 0, gler: 0, hurd: 0, svalir: 0 };
+  const dilar: Record<VeggTegund, number> = { veggur: 0, ei60: 0, ei30: 0, gler: 0, hurd: 0, svalir: 0, stigi: 0 };
+  const fjoldi: Record<VeggTegund, number> = { veggur: 0, ei60: 0, ei30: 0, gler: 0, hurd: 0, svalir: 0, stigi: 0 };
   let veggir = 0, oflokkadir = 0, rymi = 0, rymiPx2 = 0;
   const taeki = { slokkvitaeki: 0, slanga: 0, ut: 0 };
   for (const o of objects) {
