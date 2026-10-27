@@ -50,4 +50,13 @@ export const AUTO_TOOLS = [
     href: "/kjarni/artcraft/kastljos",
     ready: true,
   },
+  {
+    id: "mota",
+    name: "Móta",
+    role: "Lögun",
+    desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.",
+    icon: "🖌️",
+    href: "/kjarni/artcraft/mota",
+    ready: true,
+  },
 ] as const;
