@@ -32,4 +32,13 @@ export const AUTO_TOOLS = [
     href: "/kjarni/artcraft/studio",
     ready: true,
   },
+  {
+    id: "vidgerd",
+    name: "Ljósmyndaviðgerð",
+    role: "Andlit & áferð",
+    desc: "Laga óskýr andlit, rauð augu og áferð — staðbundinn netþjónn á vélinni þinni.",
+    icon: "🩹",
+    href: "/kjarni/artcraft/vidgerd",
+    ready: true,
+  },
 ] as const;
