@@ -122,13 +122,10 @@ export function readStoredSdxlSettings(): SdxlSettings {
   }
 }
 
-function dataUrlToBlob(dataUrl: string): Blob {
-  const [header, base64] = dataUrl.split(",");
-  const mime = /data:(.*?);base64/.exec(header)?.[1] || "image/png";
-  const bytes = atob(base64);
-  const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  return new Blob([arr], { type: mime });
+async function fetchImageBlob(url: string): Promise<Blob> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Gat ekki sótt mynd af Replicate (${res.status})`);
+  return res.blob();
 }
 
 export type InpaintExtra = {
@@ -157,5 +154,10 @@ export async function generateSdxlImage(settings: SdxlSettings, inpaint?: Inpain
     throw new Error(message || `Skýjastúdíó mistókst (${res.status})`);
   }
   const data = JSON.parse(text) as { images: string[] };
-  return data.images.map(dataUrlToBlob);
+  // The server returns Replicate's own delivery URLs directly (they're
+  // publicly fetchable, Access-Control-Allow-Origin: *) rather than
+  // base64-encoding the images into its own JSON response — a multi-image
+  // batch re-encoded that way could exceed Vercel's 4.5MB function
+  // response limit and silently lose a successful, paid prediction.
+  return Promise.all(data.images.map(fetchImageBlob));
 }

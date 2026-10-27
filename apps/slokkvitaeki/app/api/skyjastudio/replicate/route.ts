@@ -11,13 +11,17 @@ import { NextRequest, NextResponse } from "next/server";
 //
 // Flæði og input/output-skema staðfest beint gegn Replicate's API
 // (GET /v1/models/stability-ai/sdxl — openapi_schema), ekki giskað, sama
-// mynstur og app/api/vidgerd/replicate/route.ts:
+// mynstur og app/api/vidgerd/replicate/route.ts, með einni breytingu:
 //   1) GET  /v1/models/stability-ai/sdxl          → latest_version.id
 //   2) POST /v1/predictions (Prefer: wait)         → keyrir líkanið
 //   3) ef ekki búið innan "wait"-gluggans: póllum urls.get þangað til
-//   4) sækjum úttaksslóðirnar (output er fylki af URI-um) og sendum
-//      myndirnar til baka sem base64 data-URL-ar — tókinn fer aldrei til
-//      vafrans.
+//   4) skilum úttaksslóðunum (replicate.delivery) BEINT til vafrans — EKKI
+//      base64-encoded í JSON-inu. Staðfest að þær slóðir eru sjálfar
+//      opinberlega sækjanlegar án Authorization (Access-Control-Allow-
+//      Origin: *), svo það þarf ekki að proxy-a bætunum í gegnum þessa
+//      leið. Að base64-encode allt að 4 SDXL-myndir hér myndi geta farið
+//      yfir Vercel's 4.5MB svarstærðarmörk fyrir Serverless Functions og
+//      týnt niðurstöðu úr borgaðri keyrslu — sjá PR #256 review.
 
 export const maxDuration = 60;
 
@@ -92,14 +96,6 @@ function clampStrength(n: unknown, fallback: number): number {
   const num = typeof n === "number" ? n : fallback;
   if (!Number.isFinite(num)) return fallback;
   return Math.min(1, Math.max(0, num));
-}
-
-async function toDataUrl(token: string, uri: string): Promise<string> {
-  const res = await fetch(uri, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Gat ekki sótt mynd af Replicate (${res.status})`);
-  const contentType = res.headers.get("content-type") || "image/png";
-  const buf = Buffer.from(await res.arrayBuffer());
-  return `data:${contentType};base64,${buf.toString("base64")}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -180,8 +176,7 @@ export async function POST(req: NextRequest) {
       return bad(502, prediction.error || "SDXL á Replicate mistókst");
     }
 
-    const images = await Promise.all(prediction.output.map((uri) => toDataUrl(token, uri)));
-    return NextResponse.json({ images });
+    return NextResponse.json({ images: prediction.output });
   } catch (err) {
     return bad(502, err instanceof Error ? err.message : "Óvænt villa við Replicate-kall");
   }
