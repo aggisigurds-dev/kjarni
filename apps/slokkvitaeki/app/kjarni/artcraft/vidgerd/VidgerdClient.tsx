@@ -14,6 +14,7 @@ import {
 import { enhancePhotoViaCloud } from "./cloud";
 import { enhancePhotoInBrowser } from "./sharpenCanvas";
 import { DEFAULT_SHARPEN_SETTINGS, type SharpenSettings } from "./sharpen";
+import ImageZoom from "../ImageZoom";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
@@ -324,12 +325,12 @@ export default function VidgerdClient() {
                 <article className="ac-cut">
                   <div className="ac-cut-pair">
                     <figure>
-                      <img src={sourceUrl} alt={`Fyrir: ${sourceName}`} />
+                      <ImageZoom src={sourceUrl} alt={`Fyrir: ${sourceName}`} />
                       <figcaption>Fyrir</figcaption>
                     </figure>
                     <figure className="ac-cut-out">
                       {resultUrl ? (
-                        <img src={resultUrl} alt={`Eftir: ${sourceName}`} />
+                        <ImageZoom src={resultUrl} alt={`Eftir: ${sourceName}`} />
                       ) : (
                         <p>{busy ? "Laga…" : "Smelltu á „Laga mynd“"}</p>
                       )}

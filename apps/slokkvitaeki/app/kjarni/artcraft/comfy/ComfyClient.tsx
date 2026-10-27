@@ -19,6 +19,7 @@ import {
   txt2img,
   type ComfySettings,
 } from "./comfy";
+import ImageZoom from "../ImageZoom";
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -318,7 +319,7 @@ export default function ComfyClient() {
               <div className="ac-results">
                 {results.map((url, i) => (
                   <figure key={url}>
-                    <img src={url} alt={`ComfyUI útkoma ${i + 1}`} />
+                    <ImageZoom src={url} alt={`ComfyUI útkoma ${i + 1}`} />
                     <figcaption>
                       <button
                         type="button"

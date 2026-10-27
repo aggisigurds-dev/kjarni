@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
+import ImageZoom from "../ImageZoom";
 import "../artcraft.css";
 import {
   DEFAULT_SPOTLIGHT_SETTINGS,
@@ -190,12 +191,12 @@ export default function KastljosClient() {
                 <article className="ac-cut">
                   <div className="ac-cut-pair">
                     <figure>
-                      <img src={sourceUrl} alt={`Fyrir: ${sourceName}`} />
+                      <ImageZoom src={sourceUrl} alt={`Fyrir: ${sourceName}`} />
                       <figcaption>Fyrir</figcaption>
                     </figure>
                     <figure className="ac-cut-out">
                       {resultUrl ? (
-                        <img src={resultUrl} alt={`Eftir: ${sourceName}`} />
+                        <ImageZoom src={resultUrl} alt={`Eftir: ${sourceName}`} />
                       ) : (
                         <p>{busy ? "Vinn…" : "Smelltu á „Reikna kastljós“"}</p>
                       )}
