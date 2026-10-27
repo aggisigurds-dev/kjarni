@@ -36,7 +36,7 @@ import * as symbolSettingsApi from "../../lib/board/symbol-settings";
 import * as symbolsApi from "../../lib/board/symbols";
 import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
 import { iMyndardila, merkiUrBru } from "../../lib/board/merki-ocr";
-import { DRAEGI_LYKILL, sltBrslOrd, sltBrslStadir } from "../../lib/board/slt-brsl";
+import { DRAEGI_LYKILL, finnaHring, sltBrslOrd, sltBrslStadir } from "../../lib/board/slt-brsl";
 import { sltBrslUrTexta } from "../../lib/board/slt-brsl-lestur";
 import { beitaSltBrsl, type SltBrslTeikning } from "../../lib/board/slt-brsl-bord";
 import { nyttTexti, TEGUND_HEITI, type TaekjaTegund } from "../../lib/board/sjalftenging";
@@ -275,7 +275,7 @@ export function WhiteboardApp() {
     w.__tpSjalfvirkt = useSjalfvirkt;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
-    w.__tpKit = { makeSymbol, exportTiledPdf, getRegisteredStage, detectFirewallsOnPlan, loadPlanCanvas, lesaTextaTeikningar, sltBrslOrd, sltBrslStadir };
+    w.__tpKit = { makeSymbol, exportTiledPdf, getRegisteredStage, detectFirewallsOnPlan, loadPlanCanvas, lesaTextaTeikningar, sltBrslOrd, sltBrslStadir, finnaHring };
     // Skoðunarprófið (tools/turbopaint-skodun.cjs) les stöðu skoðunar og mælir upplausn myndarinnar sjálfrar.
     w.__tpSkodun = useSkodun;
     w.__tpEign = getAssetBlob;

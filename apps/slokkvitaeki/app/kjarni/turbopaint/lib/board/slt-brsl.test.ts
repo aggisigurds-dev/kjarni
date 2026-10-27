@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { OcrWord } from "./firewall-rating";
-import { aetlaSltBrsl, erSkyringarOrd, finnaHring, hnitABord, ordTegundir, skiltiUrOrdum, sltBrslOrd, sltBrslStadir, type Blek } from "./slt-brsl";
+import { aetlaSltBrsl, erSkyringarOrd, finnaHring, hnitABord, ordTegundir, skiltiUrOrdum, sltBrslOrd, sltBrslStadir, type Blek, type SbOrd } from "./slt-brsl";
 import { TaekjaSjodur } from "./sjalftenging";
 import type { BoardObject, SymbolObject } from "./types";
 
@@ -350,4 +350,50 @@ test("erSkyringarOrd: HST/BS í skýringarlínu blaðsins (Höfðatorg, teiknað
   const sula = ["AG", "BO", "BS", "DF", "HST", "HV"].map((t, i) => lar(t, 500 + i * 24));
   assert.equal(erSkyringarOrd(sula[4], sula), true);
   assert.equal(erSkyringarOrd(lar("HST", 900), [lar("HST", 900), lar("LR", 100), lar("EI", 300)]), false);
+});
+
+// ── Slöngukeflið þekkt af tákninu við SLT (Höfðatorg 26.10.2026: hringur með „BS“ inni sem OCR les ekki) ──
+function blekMed(teikna: (set: (x: number, y: number) => void) => void, w = 320, h = 320): Blek {
+  const data = new Uint8Array(w * h);
+  teikna((x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) data[Math.round(y) * w + Math.round(x)] = 1; });
+  return { w, h, kvardi: 1, data };
+}
+/** Dökkur kringlóttur depill eins og keflið á lágupplausnar-skönnun: sammiðja hringir 4 dílar þykkir með 3 díla bili (~55 % blek). */
+const kefli = (cx: number, cy: number, R: number) => (set: (x: number, y: number) => void) => {
+  for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) {
+    const d = Math.hypot(x, y);
+    if (d <= R && (d < 5 || d % 8 < 4.5)) set(cx + x, cy + y);
+  }
+};
+const sulaFyllt = (cx: number, cy: number, R: number) => (set: (x: number, y: number) => void) => {
+  for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) if (Math.hypot(x, y) <= R) set(cx + x, cy + y);
+};
+
+test("finnaHring (tett): dökkur kringlóttur depill við SLT-orðið þekkist; gegnheil súla og tómt blað ekki", () => {
+  const blek = blekMed(kefli(200, 160, 22));
+  assert.equal(finnaHring(blek, 150, 160, 15), null, "án tett: of þétt fyrir gisið tákn (óbreytt hegðun við BRSL)");
+  const r = finnaHring(blek, 150, 160, 15, undefined, undefined, true);
+  assert.ok(r, "depillinn finnst");
+  assert.ok(Math.abs(r!.x - 200) < 4 && Math.abs(r!.y - 160) < 4, `miðja ${r!.x},${r!.y}`);
+  assert.ok(r!.lokun >= 0.9);
+  assert.equal(finnaHring(blekMed(sulaFyllt(200, 160, 22)), 150, 160, 15, undefined, undefined, true), null, "súla (svartur fylltur hringur) er ekki kefli");
+  assert.equal(finnaHring(blekMed(() => {}), 150, 160, 15, undefined, undefined, true), null);
+});
+
+test("sltBrslStadir: HST við kefli án BRSL-orðs → staður með slöngu OG slökkvitæki á keflinu; HST án tákns er áfram stakt SLT", () => {
+  const orD = (x: number, y: number): SbOrd => ({ tegund: "slt", x, y, h: 15, vissa: 38, texti: "HST" });
+  const med = sltBrslStadir([orD(150, 160)], blekMed(kefli(200, 160, 22)));
+  assert.equal(med.length, 1);
+  assert.equal(med[0].brsl, true);
+  assert.equal(med[0].slt, true);
+  assert.ok(med[0].takn && Math.abs(med[0].x - 200) < 4);
+  assert.match(med[0].ord.join(" "), /\+ tákn/, "merkt sem ályktað af tákni");
+  const an = sltBrslStadir([orD(150, 160)], blekMed(() => {}));
+  assert.equal(an.length, 1);
+  assert.deepEqual([an[0].brsl, an[0].slt, an[0].takn], [false, true, null]);
+  const sula = sltBrslStadir([orD(150, 160)], blekMed(sulaFyllt(200, 160, 22)));
+  assert.deepEqual([sula[0].brsl, sula[0].slt], [false, true], "súla við SLT gerir ekki slöngu");
+  // tákn langt frá orðinu (> 5 stafahæðir) tilheyrir því ekki
+  const langt = sltBrslStadir([orD(60, 160)], blekMed(kefli(260, 160, 22)));
+  assert.equal(langt[0].brsl, false);
 });
