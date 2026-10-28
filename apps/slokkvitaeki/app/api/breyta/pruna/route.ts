@@ -36,8 +36,11 @@ export async function POST(req: NextRequest) {
     return bad(400, "image vantar (data:image/... URL)");
   }
 
+  // prunaai/p-image-edit tekur `images` (array af uri) ekki `image`
+  // (staðfest 2026-10-28: 422 „input: images is required"). Við sendum enn
+  // eina mynd frá client-inu og vefjum í array hér.
   const input: Record<string, unknown> = {
-    image: body.image,
+    images: [body.image],
     prompt,
     disable_safety_checker: body.disableSafetyChecker === true,
   };

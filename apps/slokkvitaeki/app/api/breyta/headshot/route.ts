@@ -10,6 +10,8 @@ import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replica
 
 export const maxDuration = 60;
 
+const BACKGROUNDS = ["neutral", "white", "black", "gray", "office"];
+
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
@@ -39,7 +41,9 @@ export async function POST(req: NextRequest) {
 
   const input: Record<string, unknown> = {
     input_image: body.image,
-    background: typeof body.background === "string" && body.background.trim() ? body.background : "neutral grey studio backdrop",
+    // flux-kontext-apps/professional-headshot schema: background er enum
+    // með 5 gildum (neutral/white/black/gray/office). Ekki frjáls texti.
+    background: BACKGROUNDS.includes(body.background || "") ? body.background : "neutral",
     disable_safety_checker: body.disableSafetyChecker === true,
   };
   if (body.gender === "male" || body.gender === "female") input.gender = body.gender;

@@ -270,15 +270,22 @@ export default function BreytaClient() {
                       <option value="male">Karlkyn</option>
                     </select>
                   </label>
+                  <label>
+                    Bakgrunnur
+                    <select
+                      value={headshot.background}
+                      onChange={(e) =>
+                        updateHeadshot({ background: e.target.value as HeadshotSettings["background"] })
+                      }
+                    >
+                      <option value="neutral">Neutral</option>
+                      <option value="white">White</option>
+                      <option value="black">Black</option>
+                      <option value="gray">Gray</option>
+                      <option value="office">Office</option>
+                    </select>
+                  </label>
                 </div>
-                <label>
-                  Bakgrunnur (texti)
-                  <textarea
-                    value={headshot.background}
-                    onChange={(e) => updateHeadshot({ background: e.target.value })}
-                    rows={2}
-                  />
-                </label>
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"

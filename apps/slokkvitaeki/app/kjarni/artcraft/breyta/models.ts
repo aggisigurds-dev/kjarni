@@ -30,15 +30,21 @@ export const BREYTA_MODE_LABELS: Record<BreytaMode, { label: string; hint: strin
   },
 };
 
-// Headshot
+// Headshot — flux-kontext-apps/professional-headshot
+// background er enum (staðfest 2026-10-28: 422 „background must be one of
+// the following: 'white', 'black', 'neutral', 'gray', 'office'"), ekki
+// frjáls texti.
+export const HEADSHOT_BACKGROUNDS = ["neutral", "white", "black", "gray", "office"] as const;
+export type HeadshotBackground = (typeof HEADSHOT_BACKGROUNDS)[number];
+
 export type HeadshotSettings = {
   gender: "none" | "male" | "female";
-  background: string; // free text prompt för bakgrunn
+  background: HeadshotBackground;
   disableSafetyChecker: boolean;
 };
 export const DEFAULT_HEADSHOT_SETTINGS: HeadshotSettings = {
   gender: "none",
-  background: "neutral grey studio backdrop",
+  background: "neutral",
   disableSafetyChecker: false,
 };
 export const HEADSHOT_SETTINGS_KEY = "kjarni_private_breyta_headshot_settings";
@@ -95,8 +101,9 @@ export function normalizeHeadshotSettings(raw: Partial<HeadshotSettings>): Heads
     src.gender === "male" || src.gender === "female" ? src.gender : "none";
   return {
     gender,
-    background:
-      typeof src.background === "string" ? src.background : DEFAULT_HEADSHOT_SETTINGS.background,
+    background: HEADSHOT_BACKGROUNDS.includes(src.background as HeadshotBackground)
+      ? (src.background as HeadshotBackground)
+      : DEFAULT_HEADSHOT_SETTINGS.background,
     disableSafetyChecker:
       typeof src.disableSafetyChecker === "boolean"
         ? src.disableSafetyChecker
