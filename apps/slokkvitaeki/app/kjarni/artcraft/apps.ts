@@ -251,6 +251,18 @@ export function artcraftSkyjastudioHref(): string {
   return "/kjarni/artcraft/skyjastudio";
 }
 
+export function artcraftSkyjahreyfimyndHref(): string {
+  return "/kjarni/artcraft/skyjahreyfimynd";
+}
+
+export function artcraftUpplyftingHref(): string {
+  return "/kjarni/artcraft/upplyfting";
+}
+
+export function artcraftBreytaHref(): string {
+  return "/kjarni/artcraft/breyta";
+}
+
 export function artcraftLeidarvisirHref(): string {
   return "/kjarni/artcraft/leidarvisir";
 }
@@ -302,7 +314,10 @@ export const ARTCRAFT_INTERFACES = [
   { id: "mota", name: "Móta", href: artcraftMotaHref(), icon: "🖌️", role: "Lögun", desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.", uses: ["Fínstilla fatasnið fyrir vörumynd"] as readonly string[] },
   { id: "comfy", name: "ComfyUI", href: artcraftComfyHref(), icon: "🧩", role: "Texti → mynd", desc: "Teiknar með þínu eigin ComfyUI á vélinni — staðbundið hnútaverk, engin mynd send neitt.", uses: ["Mynd úr texta með þínu eigin ComfyUI-flæði"] as readonly string[] },
   { id: "hreyfimynd", name: "Hreyfimynd", href: artcraftHreyfimyndHref(), icon: "🎞️", role: "Mynd → myndband", desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist.", uses: ["Láta kyrrmynd af starfsfólki hreyfa sig í stuttu kynningarmyndbandi"] as readonly string[] },
-  { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Stability AI's SDXL á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina"] as readonly string[] },
+  { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Stability SDXL, Juggernaut XL v7 eða Flux Fill á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina", "Portrett með Juggernaut-stíl (minni plastic áferð)"] as readonly string[] },
+  { id: "skyjahreyfimynd", name: "Skýjahreyfimynd", href: artcraftSkyjahreyfimyndHref(), icon: "🌥️", role: "Mynd → myndband", desc: "Mynd → myndband með Wan 2.2 á Replicate — opin uppspretta úr Alibaba, ~$0.05 per myndband. Skýja-mótvægi við Hreyfimynd.", uses: ["Láta kyrrmynd af vöru hreyfa sig í stuttu Facebook-videói", "Vekja staðreyndamynd til lífsins án ComfyUI uppsetningar"] as readonly string[] },
+  { id: "upplyfting", name: "Upplyfting", href: artcraftUpplyftingHref(), icon: "🔍", role: "Upscale", desc: "Faglegt myndupplyfting með Topaz Labs á Replicate — stækkar og skerpir án þess að breyta efni.", uses: ["Lítil mynd af vöru stækkuð í fulla upplausn fyrir vefsíðuna", "Óskýr skönnuð skýrslu-mynd gerð læsileg"] as readonly string[] },
+  { id: "breyta", name: "Breyta mynd", href: artcraftBreytaHref(), icon: "🪄", role: "Mynd → mynd", desc: "Þrjú skýja-líkön: pro headshot, nýr bakgrunnur með texta, hraðvirk multi-image edit.", uses: ["Starfsmannamyndir á grafitt bakgrunn", "Vörumynd úr bílskúr → stúdíó-bakgrunnur", "Hraðar tilraunir á sömu mynd fyrir pence"] as readonly string[] },
   { id: "leidarvisir", name: "Leiðarvísir", href: artcraftLeidarvisirHref(), icon: "📖", role: "Hjálp", desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum af alvöru viðmótinu.", uses: [] as readonly string[] },
 ] as const;
 
@@ -320,6 +335,9 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/comfy") return "comfy";
   if (path === "/kjarni/artcraft/hreyfimynd") return "hreyfimynd";
   if (path === "/kjarni/artcraft/skyjastudio") return "skyjastudio";
+  if (path === "/kjarni/artcraft/skyjahreyfimynd") return "skyjahreyfimynd";
+  if (path === "/kjarni/artcraft/upplyfting") return "upplyfting";
+  if (path === "/kjarni/artcraft/breyta") return "breyta";
   if (path === "/kjarni/artcraft/leidarvisir") return "leidarvisir";
   const slug = path.split("/").pop() || "";
   if (isArtcraftAppId(slug)) return slug;

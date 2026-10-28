@@ -21,6 +21,15 @@ import {
   readStoredFluxFillSettings,
   type FluxFillSettings,
 } from "./fluxFill";
+import {
+  DEFAULT_JUGGERNAUT_SETTINGS,
+  generateJuggernautImage,
+  JUGGERNAUT_SCHEDULERS,
+  JUGGERNAUT_SETTINGS_KEY,
+  normalizeJuggernautSettings,
+  readStoredJuggernautSettings,
+  type JuggernautSettings,
+} from "./juggernaut";
 import { cloneRaster, createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
 import { compositeMaskOverlay, maskCoverage, paintCircle } from "./maskPaint";
 import ImageZoom from "../ImageZoom";
@@ -39,7 +48,25 @@ const MODES: Array<{ id: Mode; label: string; hint: string }> = [
   },
 ];
 
-type InpaintModel = "sdxl" | "flux-fill";
+type Txt2ImgModel = "sdxl" | "juggernaut";
+
+const TXT2IMG_MODELS: Array<{ id: Txt2ImgModel; label: string; hint: string }> = [
+  { id: "sdxl", label: "Stability SDXL", hint: "Opinber SDXL frá Stability AI — jafnvægt, hægt að slökkva á vatnsmerki." },
+  {
+    id: "juggernaut",
+    label: "Juggernaut XL v7",
+    hint: "RunDiffusion-fín-tjúnuð SDXL — sterk portrett og raunsæisleg áferð, minni „plastic“ áferð á fólki.",
+  },
+];
+const TXT2IMG_MODEL_KEY = "kjarni_private_skyjastudio_txt2img_model";
+
+function readStoredTxt2ImgModel(): Txt2ImgModel {
+  if (typeof window === "undefined") return "sdxl";
+  const raw = window.localStorage.getItem(TXT2IMG_MODEL_KEY);
+  return raw === "juggernaut" ? "juggernaut" : "sdxl";
+}
+
+type InpaintModel = "sdxl" | "flux-fill" | "juggernaut";
 
 const INPAINT_MODELS: Array<{ id: InpaintModel; label: string; hint: string }> = [
   { id: "sdxl", label: "Stability SDXL", hint: "Fleiri stillingar (scheduler, vatnsmerki o.fl.)." },
@@ -48,13 +75,20 @@ const INPAINT_MODELS: Array<{ id: InpaintModel; label: string; hint: string }> =
     label: "Flux Fill",
     hint: "Sérsmíðað fyrir nákvæmlega þetta — skilur prómt oft betur, t.d. að fjarlægja hlut sem hylur eitthvað.",
   },
+  {
+    id: "juggernaut",
+    label: "Juggernaut XL v7",
+    hint: "Fín-tjúnuð SDXL — gott í portrett-inpaint þar sem SDXL verður of „plastic“.",
+  },
 ];
 const INPAINT_MODEL_KEY = "kjarni_private_skyjastudio_inpaint_model";
 
 function readStoredInpaintModel(): InpaintModel {
   if (typeof window === "undefined") return "sdxl";
   const raw = window.localStorage.getItem(INPAINT_MODEL_KEY);
-  return raw === "flux-fill" ? "flux-fill" : "sdxl";
+  if (raw === "flux-fill") return "flux-fill";
+  if (raw === "juggernaut") return "juggernaut";
+  return "sdxl";
 }
 
 function isPhotoFile(file: { type: string; name: string }): boolean {
@@ -108,9 +142,12 @@ export default function SkyjastudioClient() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<SdxlSettings>(DEFAULT_SDXL_SETTINGS);
   const [fluxSettings, setFluxSettings] = useState<FluxFillSettings>(DEFAULT_FLUX_FILL_SETTINGS);
+  const [juggernautSettings, setJuggernautSettings] = useState<JuggernautSettings>(DEFAULT_JUGGERNAUT_SETTINGS);
   const [mode, setMode] = useState<Mode>("txt2img");
+  const [txt2imgModel, setTxt2ImgModel] = useState<Txt2ImgModel>("sdxl");
   const [inpaintModel, setInpaintModel] = useState<InpaintModel>("sdxl");
   const isFlux = mode === "inpaint" && inpaintModel === "flux-fill";
+  const isJuggernaut = (mode === "txt2img" && txt2imgModel === "juggernaut") || (mode === "inpaint" && inpaintModel === "juggernaut");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -137,6 +174,8 @@ export default function SkyjastudioClient() {
   useEffect(() => {
     setSettings(readStoredSdxlSettings());
     setFluxSettings(readStoredFluxFillSettings());
+    setJuggernautSettings(readStoredJuggernautSettings());
+    setTxt2ImgModel(readStoredTxt2ImgModel());
     setInpaintModel(readStoredInpaintModel());
     setReady(true);
   }, []);
@@ -161,6 +200,19 @@ export default function SkyjastudioClient() {
       window.localStorage.setItem(FLUX_FILL_SETTINGS_KEY, JSON.stringify(merged));
       return merged;
     });
+  }
+
+  function updateJuggernautSettings(next: Partial<JuggernautSettings>) {
+    setJuggernautSettings((s) => {
+      const merged = normalizeJuggernautSettings({ ...s, ...next });
+      window.localStorage.setItem(JUGGERNAUT_SETTINGS_KEY, JSON.stringify(merged));
+      return merged;
+    });
+  }
+
+  function selectTxt2ImgModel(next: Txt2ImgModel) {
+    setTxt2ImgModel(next);
+    window.localStorage.setItem(TXT2IMG_MODEL_KEY, next);
   }
 
   function selectInpaintModel(next: InpaintModel) {
@@ -276,7 +328,7 @@ export default function SkyjastudioClient() {
   }
 
   async function run() {
-    const prompt = isFlux ? fluxSettings.prompt : settings.prompt;
+    const prompt = isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt;
     if (!prompt.trim()) {
       setError("Skrifaðu prompt fyrst.");
       return;
@@ -304,10 +356,15 @@ export default function SkyjastudioClient() {
         };
         if (isFlux) {
           blobs = await generateFluxFillImage(fluxSettings, inpaintExtra);
+        } else if (isJuggernaut) {
+          const sizedJugg = { ...juggernautSettings, width: sourceRef.current.width, height: sourceRef.current.height };
+          blobs = await generateJuggernautImage(sizedJugg, inpaintExtra);
         } else {
           const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
           blobs = await generateSdxlImage(sizedSettings, inpaintExtra);
         }
+      } else if (isJuggernaut) {
+        blobs = await generateJuggernautImage(juggernautSettings);
       } else {
         blobs = await generateSdxlImage(settings);
       }
@@ -370,6 +427,27 @@ export default function SkyjastudioClient() {
             </div>
             <p className="ac-hint">{MODES.find((m) => m.id === mode)?.hint}</p>
           </section>
+
+          {mode === "txt2img" && (
+            <section className="ac-panel">
+              <h2>Líkan</h2>
+              <div className="ac-modes" role="radiogroup">
+                {TXT2IMG_MODELS.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={txt2imgModel === m.id}
+                    className={txt2imgModel === m.id ? "on" : undefined}
+                    onClick={() => selectTxt2ImgModel(m.id)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <p className="ac-hint">{TXT2IMG_MODELS.find((m) => m.id === txt2imgModel)?.hint}</p>
+            </section>
+          )}
 
           {mode === "inpaint" && (
             <section className="ac-panel">
@@ -477,9 +555,13 @@ export default function SkyjastudioClient() {
               <label>
                 {mode === "inpaint" ? "Hvað á að koma í staðinn á máluðu svæði" : "Lýsing"}
                 <textarea
-                  value={isFlux ? fluxSettings.prompt : settings.prompt}
+                  value={isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt}
                   onChange={(e) =>
-                    isFlux ? updateFluxSettings({ prompt: e.target.value }) : updateSettings({ prompt: e.target.value })
+                    isFlux
+                      ? updateFluxSettings({ prompt: e.target.value })
+                      : isJuggernaut
+                        ? updateJuggernautSettings({ prompt: e.target.value })
+                        : updateSettings({ prompt: e.target.value })
                   }
                   rows={3}
                 />
@@ -488,8 +570,12 @@ export default function SkyjastudioClient() {
                 <label>
                   Neikvæð lýsing (má sleppa)
                   <textarea
-                    value={settings.negativePrompt}
-                    onChange={(e) => updateSettings({ negativePrompt: e.target.value })}
+                    value={isJuggernaut ? juggernautSettings.negativePrompt : settings.negativePrompt}
+                    onChange={(e) =>
+                      isJuggernaut
+                        ? updateJuggernautSettings({ negativePrompt: e.target.value })
+                        : updateSettings({ negativePrompt: e.target.value })
+                    }
                     rows={3}
                   />
                 </label>
@@ -534,6 +620,112 @@ export default function SkyjastudioClient() {
                       value={fluxSettings.seed}
                       onChange={(e) => updateFluxSettings({ seed: Number(e.target.value) })}
                     />
+                  </label>
+                </div>
+              ) : isJuggernaut ? (
+                <div className="ac-settings">
+                  {mode === "txt2img" && (
+                    <>
+                      <label>
+                        Breidd ({juggernautSettings.width}px)
+                        <input
+                          type="range"
+                          min={512}
+                          max={1536}
+                          step={8}
+                          value={juggernautSettings.width}
+                          onChange={(e) => updateJuggernautSettings({ width: Number(e.target.value) })}
+                        />
+                      </label>
+                      <label>
+                        Hæð ({juggernautSettings.height}px)
+                        <input
+                          type="range"
+                          min={512}
+                          max={1536}
+                          step={8}
+                          value={juggernautSettings.height}
+                          onChange={(e) => updateJuggernautSettings({ height: Number(e.target.value) })}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {mode === "inpaint" && (
+                    <label>
+                      Styrkur breytinga ({juggernautSettings.strength.toFixed(2)})
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={juggernautSettings.strength}
+                        onChange={(e) => updateJuggernautSettings({ strength: Number(e.target.value) })}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Skref ({juggernautSettings.steps})
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      value={juggernautSettings.steps}
+                      onChange={(e) => updateJuggernautSettings({ steps: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Guidance ({juggernautSettings.guidanceScale.toFixed(1)})
+                    <input
+                      type="range"
+                      min={1}
+                      max={50}
+                      step={0.5}
+                      value={juggernautSettings.guidanceScale}
+                      onChange={(e) => updateJuggernautSettings({ guidanceScale: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Scheduler
+                    <select
+                      value={juggernautSettings.scheduler}
+                      onChange={(e) =>
+                        updateJuggernautSettings({ scheduler: e.target.value as JuggernautSettings["scheduler"] })
+                      }
+                    >
+                      {JUGGERNAUT_SCHEDULERS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {mode === "txt2img" && (
+                    <label>
+                      Fjöldi mynda ({juggernautSettings.numOutputs})
+                      <input
+                        type="range"
+                        min={1}
+                        max={4}
+                        value={juggernautSettings.numOutputs}
+                        onChange={(e) => updateJuggernautSettings({ numOutputs: Number(e.target.value) })}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Seed ({juggernautSettings.seed === -1 ? "slembið" : juggernautSettings.seed})
+                    <input
+                      type="number"
+                      value={juggernautSettings.seed}
+                      onChange={(e) => updateJuggernautSettings({ seed: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={juggernautSettings.useKarrasSigmas}
+                      onChange={(e) => updateJuggernautSettings({ useKarrasSigmas: e.target.checked })}
+                    />
+                    Karras sigmas
                   </label>
                 </div>
               ) : (
@@ -646,6 +838,21 @@ export default function SkyjastudioClient() {
                   </label>
                   <p className="ac-hint">
                     Skjalfest Replicate-breyta fyrir þetta líkan — sjálfgefið á. Þú berð ábyrgð á
+                    notkuninni þegar slökkt er á síunni.
+                  </p>
+                </>
+              ) : isJuggernaut ? (
+                <>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={juggernautSettings.disableSafetyChecker}
+                      onChange={(e) => updateJuggernautSettings({ disableSafetyChecker: e.target.checked })}
+                    />
+                    Slökkva á öryggissíu (disable_safety_checker)
+                  </label>
+                  <p className="ac-hint">
+                    Replicate-breyta hjá asiryan/juggernaut-xl-v7 — sjálfgefið á. Þú berð ábyrgð á
                     notkuninni þegar slökkt er á síunni.
                   </p>
                 </>
