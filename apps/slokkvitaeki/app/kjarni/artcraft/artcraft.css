@@ -1892,3 +1892,142 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Prompt slots — 3 geymsluhólf fyrir mismunandi prompts, eitt virkt í einu. */
+.ac-prompt-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.ac-prompt-slots-label {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ac-prompt-slot {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  background: var(--m-card, #fff);
+  transition: border-color 150ms, background 150ms;
+}
+
+.ac-prompt-slot.on {
+  border-color: var(--m-navy, #102038);
+  background: color-mix(in srgb, var(--m-navy, #102038) 6%, var(--m-card, #fff));
+}
+
+.ac-prompt-slot-num {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 20px;
+  padding-top: 10px;
+  font-weight: 700;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.ac-prompt-slot-preview {
+  flex: 1;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.ac-prompt-slot-preview:hover {
+  background: rgba(16, 32, 56, 0.04);
+}
+
+.ac-prompt-slot-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  color: inherit;
+  font-size: 14px;
+}
+
+.ac-prompt-slot-empty {
+  opacity: 0.5;
+  font-style: italic;
+  font-size: 14px;
+}
+
+.ac-prompt-slot textarea {
+  flex: 1;
+  min-height: 72px;
+}
+
+.ac-prompt-slot-pick {
+  flex-shrink: 0;
+  align-self: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--m-line, #d5dee8);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 150ms;
+}
+
+.ac-prompt-slot-pick:hover {
+  border-color: var(--m-navy, #102038);
+}
+
+.ac-prompt-slot-pick.on {
+  background: var(--m-navy, #102038);
+  border-color: var(--m-navy, #102038);
+  color: #fff;
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot.on {
+  border-color: var(--rg-gold-fill, #c9982f);
+  background: rgba(201, 152, 47, 0.08);
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot-preview:hover {
+  background: rgba(201, 152, 47, 0.06);
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot-pick {
+  border-color: rgba(201, 152, 47, 0.5);
+  color: var(--rg-text-gold);
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot-pick:hover {
+  border-color: var(--rg-gold-fill, #c9982f);
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot-pick.on {
+  background: var(--rg-gold-fill, #c9982f);
+  border-color: var(--rg-gold-fill, #c9982f);
+  color: #1a1004;
+}
+

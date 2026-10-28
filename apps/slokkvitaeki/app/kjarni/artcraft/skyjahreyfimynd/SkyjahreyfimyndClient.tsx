@@ -6,6 +6,11 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
+import {
+  PromptSlots,
+  readStoredPromptSlots,
+  type PromptSlotData,
+} from "../PromptSlots";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
@@ -30,6 +35,9 @@ import {
   WAN_SETTINGS_KEY,
   type WanSettings,
 } from "./wan";
+
+const WAN_PROMPT_SLOTS_KEY = "kjarni_private_skyjahreyfimynd_wan_prompt_slots";
+const KLING_PROMPT_SLOTS_KEY = "kjarni_private_skyjahreyfimynd_kling_prompt_slots";
 
 const SAVED_KEY = "skyjahreyfimynd";
 
@@ -65,6 +73,14 @@ export default function SkyjahreyfimyndClient() {
   const [model, setModel] = useState<VideoModel>("wan");
   const [settings, setSettings] = useState<WanSettings>(DEFAULT_WAN_SETTINGS);
   const [kling, setKling] = useState<KlingSettings>(DEFAULT_KLING_SETTINGS);
+  const [wanSlots, setWanSlots] = useState<PromptSlotData>({
+    slots: [DEFAULT_WAN_SETTINGS.prompt, "", ""],
+    active: 0,
+  });
+  const [klingSlots, setKlingSlots] = useState<PromptSlotData>({
+    slots: [DEFAULT_KLING_SETTINGS.prompt, "", ""],
+    active: 0,
+  });
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{
     status: string;
@@ -86,8 +102,12 @@ export default function SkyjahreyfimyndClient() {
   const [drag, setDrag] = useState(false);
 
   useEffect(() => {
-    setSettings(readStoredWanSettings());
-    setKling(readStoredKlingSettings());
+    const storedWan = readStoredWanSettings();
+    const storedKling = readStoredKlingSettings();
+    setSettings(storedWan);
+    setKling(storedKling);
+    setWanSlots(readStoredPromptSlots(WAN_PROMPT_SLOTS_KEY, storedWan.prompt));
+    setKlingSlots(readStoredPromptSlots(KLING_PROMPT_SLOTS_KEY, storedKling.prompt));
     setModel(readStoredModel());
     setReady(true);
     void (async () => {
@@ -174,6 +194,16 @@ export default function SkyjahreyfimyndClient() {
     });
   }
 
+  function updateWanSlots(next: PromptSlotData) {
+    setWanSlots(next);
+    window.localStorage.setItem(WAN_PROMPT_SLOTS_KEY, JSON.stringify(next));
+  }
+
+  function updateKlingSlots(next: PromptSlotData) {
+    setKlingSlots(next);
+    window.localStorage.setItem(KLING_PROMPT_SLOTS_KEY, JSON.stringify(next));
+  }
+
   function selectModel(next: VideoModel) {
     setModel(next);
     window.localStorage.setItem(MODEL_KEY, next);
@@ -207,7 +237,16 @@ export default function SkyjahreyfimyndClient() {
     setBusy(true);
     setError("");
     setProgress({ status: "starting", elapsed: 0 });
-    const activePrompt = model === "kling" ? kling.prompt : settings.prompt;
+    const activePrompt =
+      model === "kling" ? klingSlots.slots[klingSlots.active] : wanSlots.slots[wanSlots.active];
+    if (!activePrompt.trim()) {
+      setBusy(false);
+      setProgress(null);
+      setError("Virka prompt-ið er tómt — tappaðu á það og skrifaðu lýsingu fyrst.");
+      return;
+    }
+    const wanWithPrompt: WanSettings = { ...settings, prompt: activePrompt };
+    const klingWithPrompt: KlingSettings = { ...kling, prompt: activePrompt };
     const statusCallback = (p: {
       status: string;
       elapsedSeconds: number;
@@ -239,11 +278,11 @@ export default function SkyjahreyfimyndClient() {
     try {
       const blob =
         model === "kling"
-          ? await generateKlingVideo(kling, sourceDataUrlRef.current, {
+          ? await generateKlingVideo(klingWithPrompt, sourceDataUrlRef.current, {
               onStatus: statusCallback,
               onPredictionId,
             })
-          : await generateWanVideo(settings, sourceDataUrlRef.current, {
+          : await generateWanVideo(wanWithPrompt, sourceDataUrlRef.current, {
               onStatus: statusCallback,
               onPredictionId,
             });
@@ -391,14 +430,13 @@ export default function SkyjahreyfimyndClient() {
             <h2>Prompt</h2>
             {model === "kling" ? (
               <>
-                <label>
-                  Hvað gerist í myndbandinu?
-                  <textarea
-                    value={kling.prompt}
-                    onChange={(e) => updateKling({ prompt: e.target.value })}
-                    rows={3}
-                  />
-                </label>
+                <PromptSlots
+                  label="Hvað gerist í myndbandinu? (3 slots — tappaðu á textann til að breyta, + til að velja virkt)"
+                  data={klingSlots}
+                  onChange={updateKlingSlots}
+                  rows={3}
+                  placeholder="cinematic motion, subtle camera push-in…"
+                />
                 <label>
                   Neikvæð lýsing (má sleppa)
                   <textarea
@@ -455,14 +493,13 @@ export default function SkyjahreyfimyndClient() {
               </>
             ) : (
               <>
-            <label>
-              Hvað gerist í myndbandinu?
-              <textarea
-                value={settings.prompt}
-                onChange={(e) => updateSettings({ prompt: e.target.value })}
-                rows={3}
-              />
-            </label>
+            <PromptSlots
+              label="Hvað gerist í myndbandinu? (3 slots — tappaðu á textann til að breyta, + til að velja virkt)"
+              data={wanSlots}
+              onChange={updateWanSlots}
+              rows={3}
+              placeholder="cinematic motion, subtle camera push-in…"
+            />
             <label>
               Neikvæð lýsing (má sleppa)
               <textarea
