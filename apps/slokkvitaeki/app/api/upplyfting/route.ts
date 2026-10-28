@@ -9,6 +9,7 @@ import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replica
 export const maxDuration = 120;
 
 const ENHANCE_MODELS = ["Standard V2", "Low Resolution V2", "CGI", "High Fidelity V2", "Text Refine"];
+const UPSCALE_FACTORS = ["None", "2x", "4x", "6x"];
 const SUBJECT_DETECTIONS = ["None", "Foreground", "Background", "All"];
 const OUTPUT_FORMATS = ["jpg", "png", "webp"];
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   let body: {
     image?: string;
     enhanceModel?: string;
-    upscaleFactor?: number;
+    upscaleFactor?: string;
     faceEnhancement?: boolean;
     faceEnhancementCreativity?: number;
     faceEnhancementStrength?: number;
@@ -52,10 +53,9 @@ export async function POST(req: NextRequest) {
   const input: Record<string, unknown> = {
     image: body.image,
     enhance_model: ENHANCE_MODELS.includes(body.enhanceModel || "") ? body.enhanceModel : "Standard V2",
-    // Topaz schema vill upscale_factor sem streng, ekki number (fékk 422:
-    // "Invalid type. Expected: string, given: integer"). Stringify-um
-    // eftir clamp — allt gildum factor sem tala virkar sem strengur.
-    upscale_factor: String(clampNumber(body.upscaleFactor, 2, 1, 6)),
+    // Topaz schema krefst enum: "None" | "2x" | "4x" | "6x" (ekki tala, ekki
+    // frjáls strengur). Fékk 422 áður þegar við sendum "2" sem passar ekki.
+    upscale_factor: UPSCALE_FACTORS.includes(body.upscaleFactor || "") ? body.upscaleFactor : "2x",
     face_enhancement: body.faceEnhancement === true,
     face_enhancement_creativity: clampNumber(body.faceEnhancementCreativity, 0, 0, 1),
     face_enhancement_strength: clampNumber(body.faceEnhancementStrength, 0.8, 0, 1),

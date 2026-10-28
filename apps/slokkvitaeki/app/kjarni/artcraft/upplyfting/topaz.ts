@@ -32,9 +32,15 @@ export type TopazSubjectDetection = (typeof TOPAZ_SUBJECT_DETECTIONS)[number];
 export const TOPAZ_OUTPUT_FORMATS = ["jpg", "png", "webp"] as const;
 export type TopazOutputFormat = (typeof TOPAZ_OUTPUT_FORMATS)[number];
 
+/** Topaz schema vill upscale_factor sem enum (staðfest 2026-10-28: 422
+ *  „upscale_factor must be one of the following: 'None', '2x', '4x', '6x'").
+ *  „None" þýðir enginn upscale — bara enhance/face-fix á sömu upplausn. */
+export const TOPAZ_UPSCALE_FACTORS = ["None", "2x", "4x", "6x"] as const;
+export type TopazUpscaleFactor = (typeof TOPAZ_UPSCALE_FACTORS)[number];
+
 export type TopazSettings = {
   enhanceModel: TopazEnhanceModel;
-  upscaleFactor: number; // 1 – 6
+  upscaleFactor: TopazUpscaleFactor;
   faceEnhancement: boolean;
   faceEnhancementCreativity: number; // 0 – 1
   faceEnhancementStrength: number; // 0 – 1
@@ -44,7 +50,7 @@ export type TopazSettings = {
 
 export const DEFAULT_TOPAZ_SETTINGS: TopazSettings = {
   enhanceModel: "Standard V2",
-  upscaleFactor: 2,
+  upscaleFactor: "2x",
   faceEnhancement: false,
   faceEnhancementCreativity: 0,
   faceEnhancementStrength: 0.8,
@@ -52,9 +58,10 @@ export const DEFAULT_TOPAZ_SETTINGS: TopazSettings = {
   outputFormat: "jpg",
 };
 
-export function clampUpscaleFactor(n: number): number {
-  if (!Number.isFinite(n)) return DEFAULT_TOPAZ_SETTINGS.upscaleFactor;
-  return Math.min(6, Math.max(1, Math.round(n * 10) / 10));
+/** Parse upscale factor string into a numeric multiplier for MP preview math. */
+export function upscaleFactorNumber(f: TopazUpscaleFactor): number {
+  if (f === "None") return 1;
+  return Number.parseInt(f.replace("x", ""), 10) || 1;
 }
 
 function clampUnit(n: number, fallback: number): number {
@@ -68,7 +75,9 @@ export function normalizeTopazSettings(raw: Partial<TopazSettings> | null | unde
     enhanceModel: TOPAZ_ENHANCE_MODELS.includes(src.enhanceModel as TopazEnhanceModel)
       ? (src.enhanceModel as TopazEnhanceModel)
       : DEFAULT_TOPAZ_SETTINGS.enhanceModel,
-    upscaleFactor: clampUpscaleFactor(src.upscaleFactor ?? DEFAULT_TOPAZ_SETTINGS.upscaleFactor),
+    upscaleFactor: TOPAZ_UPSCALE_FACTORS.includes(src.upscaleFactor as TopazUpscaleFactor)
+      ? (src.upscaleFactor as TopazUpscaleFactor)
+      : DEFAULT_TOPAZ_SETTINGS.upscaleFactor,
     faceEnhancement:
       typeof src.faceEnhancement === "boolean" ? src.faceEnhancement : DEFAULT_TOPAZ_SETTINGS.faceEnhancement,
     faceEnhancementCreativity: clampUnit(
