@@ -4,14 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import { clearPending, loadPending, savePending } from "../pendingPredictions";
+import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
   composeMusic,
   DEFAULT_MUSIC_SETTINGS,
   MUSIC_SETTINGS_KEY,
   normalizeMusicSettings,
   readStoredMusicSettings,
+  resumeMusic,
   type MusicSettings,
 } from "./music";
+
+const SAVED_KEY = "tonsmid";
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -27,11 +32,52 @@ export default function TonsmidClient() {
   const [progress, setProgress] = useState<{ status: string; elapsed: number } | null>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState<string>("");
+  const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string } | null>(null);
   const resultUrlRef = useRef<string>("");
 
   useEffect(() => {
     setSettings(readStoredMusicSettings());
     setReady(true);
+    void (async () => {
+      const saved = await loadResult(SAVED_KEY);
+      if (saved) {
+        if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+        const url = URL.createObjectURL(saved.blobs[0]);
+        resultUrlRef.current = url;
+        setResult(url);
+        setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt });
+      }
+      const pending = await loadPending(SAVED_KEY);
+      if (pending) {
+        setBusy(true);
+        setError("");
+        setProgress({ status: "ræsing úr vistun", elapsed: 0 });
+        try {
+          const blob = await resumeMusic(pending.predictionId, pending.submittedAt, {
+            onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+          });
+          if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+          const url = URL.createObjectURL(blob);
+          resultUrlRef.current = url;
+          setResult(url);
+          const now = Date.now();
+          setSavedMeta({ timestamp: now, prompt: pending.prompt });
+          void saveResult({
+            key: SAVED_KEY,
+            timestamp: now,
+            mediaType: "audio",
+            blobs: [blob],
+            prompt: pending.prompt,
+          });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Resume mistókst");
+        } finally {
+          await clearPending(SAVED_KEY);
+          setBusy(false);
+          setProgress(null);
+        }
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -55,17 +101,43 @@ export default function TonsmidClient() {
     try {
       const blob = await composeMusic(settings, {
         onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+        onPredictionId: (id) => {
+          void savePending({
+            key: SAVED_KEY,
+            predictionId: id,
+            submittedAt: Date.now(),
+            prompt: settings.prompt,
+          });
+        },
       });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
       setResult(url);
+      const now = Date.now();
+      setSavedMeta({ timestamp: now, prompt: settings.prompt });
+      void saveResult({
+        key: SAVED_KEY,
+        timestamp: now,
+        mediaType: "audio",
+        blobs: [blob],
+        prompt: settings.prompt,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tónsmíð mistókst.");
     } finally {
+      await clearPending(SAVED_KEY);
       setBusy(false);
       setProgress(null);
     }
+  }
+
+  async function clearSavedResults() {
+    if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+    resultUrlRef.current = "";
+    setResult("");
+    setSavedMeta(null);
+    await clearResult(SAVED_KEY);
   }
 
   if (!ready) {
@@ -134,7 +206,7 @@ export default function TonsmidClient() {
               <p className="ac-hint">
                 Staða: {progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}
                 {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
-                {". ElevenLabs Music tekur venjulega 30–60s."}
+                {". ElevenLabs Music tekur venjulega 30–60s. Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
               </p>
             )}
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy}>
@@ -145,6 +217,12 @@ export default function TonsmidClient() {
           {result && (
             <section className="ac-panel">
               <h2>Útkoma</h2>
+              {savedMeta && (
+                <p className="ac-hint">
+                  Vistað {formatSavedTime(savedMeta.timestamp)}
+                  {savedMeta.prompt ? ` · „${savedMeta.prompt.slice(0, 80)}${savedMeta.prompt.length > 80 ? "…" : ""}"` : ""}
+                </p>
+              )}
               <audio src={result} controls style={{ width: "100%" }} />
               <div className="ac-row">
                 <button
@@ -153,6 +231,9 @@ export default function TonsmidClient() {
                   onClick={() => downloadBlob(result, `tonsmid-${Date.now()}.mp3`)}
                 >
                   Sækja hljóðskrá
+                </button>
+                <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
+                  Hreinsa vistað
                 </button>
               </div>
             </section>

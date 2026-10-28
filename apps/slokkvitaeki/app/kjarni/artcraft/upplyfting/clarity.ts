@@ -85,12 +85,7 @@ async function fetchImageBlob(url: string): Promise<Blob> {
   return res.blob();
 }
 
-export async function upscaleWithClarity(settings: ClaritySettings, imageDataUrl: string): Promise<Blob> {
-  const res = await fetch("/api/upplyfting/clarity", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...settings, image: imageDataUrl }),
-  });
+async function parseJsonResponse(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   if (!res.ok) {
     let message = text;
@@ -101,7 +96,84 @@ export async function upscaleWithClarity(settings: ClaritySettings, imageDataUrl
     }
     throw new Error(message || `Clarity mistókst (${res.status})`);
   }
-  const data = JSON.parse(text) as { images: string[] };
-  if (!data.images?.[0]) throw new Error("Clarity skilaði engri mynd");
-  return fetchImageBlob(data.images[0]);
+  return JSON.parse(text) as Record<string, unknown>;
+}
+
+async function pollClarityStatus(
+  predictionId: string,
+  onStatus: (status: string, elapsedSeconds: number) => void,
+  startTime: number,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const deadline = startTime + 10 * 60 * 1000;
+  while (Date.now() < deadline) {
+    if (signal?.aborted) throw new Error("Hætt við");
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 4000);
+      function onVisible() {
+        if (document.visibilityState === "visible") {
+          clearTimeout(timer);
+          document.removeEventListener("visibilitychange", onVisible);
+          resolve();
+        }
+      }
+      document.addEventListener("visibilitychange", onVisible);
+    });
+    if (signal?.aborted) throw new Error("Hætt við");
+    const res = await fetch(`/api/upplyfting/clarity/status?id=${encodeURIComponent(predictionId)}`, { signal });
+    const data = await parseJsonResponse(res);
+    const status = typeof data.status === "string" ? data.status : "processing";
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    onStatus(status, elapsed);
+    if (status === "succeeded") {
+      const images = Array.isArray(data.images) ? (data.images as string[]) : [];
+      if (!images[0]) throw new Error("Clarity skilaði engri mynd");
+      return images;
+    }
+    if (status === "failed" || status === "canceled") {
+      throw new Error((typeof data.error === "string" && data.error) || "Clarity mistókst");
+    }
+  }
+  throw new Error("Clarity var ekki tilbúið innan 10 mínútna");
+}
+
+export type UpscaleWithClarityOpts = {
+  onStatus?: (status: string, elapsedSeconds: number) => void;
+  onPredictionId?: (id: string) => void;
+  signal?: AbortSignal;
+};
+
+export async function upscaleWithClarity(
+  settings: ClaritySettings,
+  imageDataUrl: string,
+  opts?: UpscaleWithClarityOpts,
+): Promise<Blob> {
+  const onStatus = opts?.onStatus ?? (() => {});
+  const res = await fetch("/api/upplyfting/clarity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...settings, image: imageDataUrl }),
+    signal: opts?.signal,
+  });
+  const data = await parseJsonResponse(res);
+  if (Array.isArray(data.images) && typeof data.images[0] === "string") {
+    return fetchImageBlob(data.images[0] as string);
+  }
+  if (typeof data.predictionId !== "string") {
+    throw new Error("Clarity skilaði hvorki mynd né prediction id");
+  }
+  opts?.onPredictionId?.(data.predictionId);
+  onStatus(typeof data.status === "string" ? data.status : "starting", 0);
+  const images = await pollClarityStatus(data.predictionId, onStatus, Date.now(), opts?.signal);
+  return fetchImageBlob(images[0]);
+}
+
+export async function resumeClarity(
+  predictionId: string,
+  startedAt: number,
+  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+): Promise<Blob> {
+  const onStatus = opts?.onStatus ?? (() => {});
+  const images = await pollClarityStatus(predictionId, onStatus, startedAt, opts?.signal);
+  return fetchImageBlob(images[0]);
 }

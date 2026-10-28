@@ -5,15 +5,20 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
+import { clearPending, loadPending, savePending } from "../pendingPredictions";
 import { shrinkImageForUpload } from "../replicateImage";
+import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
   CLARITY_SETTINGS_KEY,
   DEFAULT_CLARITY_SETTINGS,
   normalizeClaritySettings,
   readStoredClaritySettings,
+  resumeClarity,
   type ClaritySettings,
   upscaleWithClarity,
 } from "./clarity";
+
+const SAVED_KEY = "upplyfting";
 import {
   DEFAULT_TOPAZ_SETTINGS,
   normalizeTopazSettings,
@@ -52,9 +57,11 @@ export default function UpplyftingClient() {
   const [settings, setSettings] = useState<TopazSettings>(DEFAULT_TOPAZ_SETTINGS);
   const [clarity, setClarity] = useState<ClaritySettings>(DEFAULT_CLARITY_SETTINGS);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ status: string; elapsed: number } | null>(null);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
   const [result, setResult] = useState<string>("");
+  const [savedMeta, setSavedMeta] = useState<{ timestamp: number; mode?: string } | null>(null);
   const resultUrlRef = useRef<string>("");
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
@@ -66,6 +73,47 @@ export default function UpplyftingClient() {
     setClarity(readStoredClaritySettings());
     setMode(readStoredMode());
     setReady(true);
+    void (async () => {
+      const saved = await loadResult(SAVED_KEY);
+      if (saved) {
+        if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+        const url = URL.createObjectURL(saved.blobs[0]);
+        resultUrlRef.current = url;
+        setResult(url);
+        setSavedMeta({ timestamp: saved.timestamp, mode: saved.mode });
+      }
+      const pending = await loadPending(SAVED_KEY);
+      if (pending) {
+        setBusy(true);
+        setError("");
+        setProgress({ status: "ræsing úr vistun", elapsed: 0 });
+        try {
+          const blob = await resumeClarity(pending.predictionId, pending.submittedAt, {
+            onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+          });
+          if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+          const url = URL.createObjectURL(blob);
+          resultUrlRef.current = url;
+          setResult(url);
+          const now = Date.now();
+          setSavedMeta({ timestamp: now, mode: pending.mode });
+          void saveResult({
+            key: SAVED_KEY,
+            timestamp: now,
+            mediaType: "image",
+            blobs: [blob],
+            mode: pending.mode,
+            sourceName: pending.sourceName,
+          });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Resume mistókst");
+        } finally {
+          await clearPending(SAVED_KEY);
+          setBusy(false);
+          setProgress(null);
+        }
+      }
+    })();
   }, []);
 
   function selectMode(next: UpscaleMode) {
@@ -124,20 +172,53 @@ export default function UpplyftingClient() {
     }
     setBusy(true);
     setError("");
+    setProgress(mode === "clarity" ? { status: "starting", elapsed: 0 } : null);
     try {
       const blob =
         mode === "clarity"
-          ? await upscaleWithClarity(clarity, sourceDataUrlRef.current)
+          ? await upscaleWithClarity(clarity, sourceDataUrlRef.current, {
+              onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+              onPredictionId: (id) => {
+                void savePending({
+                  key: SAVED_KEY,
+                  predictionId: id,
+                  submittedAt: Date.now(),
+                  mode: "clarity",
+                  sourceName: source.name,
+                });
+              },
+            })
           : await upscaleWithTopaz(settings, sourceDataUrlRef.current);
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
       setResult(url);
+      const now = Date.now();
+      const modeLabel = mode === "clarity" ? "clarity" : `topaz/${settings.enhanceModel}`;
+      setSavedMeta({ timestamp: now, mode: modeLabel });
+      void saveResult({
+        key: SAVED_KEY,
+        timestamp: now,
+        mediaType: "image",
+        blobs: [blob],
+        mode: modeLabel,
+        sourceName: source.name,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upplyfting mistókst.");
     } finally {
+      await clearPending(SAVED_KEY);
       setBusy(false);
+      setProgress(null);
     }
+  }
+
+  async function clearSavedResults() {
+    if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+    resultUrlRef.current = "";
+    setResult("");
+    setSavedMeta(null);
+    await clearResult(SAVED_KEY);
   }
 
   if (!ready) {
@@ -336,6 +417,13 @@ export default function UpplyftingClient() {
                 </div>
 
                 {error && <p className="ac-error">{error}</p>}
+                {busy && progress && (
+                  <p className="ac-hint">
+                    Staða: {progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}
+                    {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
+                    {". Clarity tekur venjulega 1–3 mín (cold start lengur). Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
+                  </p>
+                )}
                 <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
                   {busy ? "Upplyfti…" : "Upplyfta mynd"}
                 </button>
@@ -454,8 +542,14 @@ export default function UpplyftingClient() {
           {result && (
             <section className="ac-panel">
               <h2>Útkoma</h2>
+              {savedMeta && (
+                <p className="ac-hint">
+                  Vistuð {formatSavedTime(savedMeta.timestamp)}
+                  {savedMeta.mode ? ` · ${savedMeta.mode}` : ""}
+                </p>
+              )}
               <ImageZoom src={result} alt="Upplyft mynd" className="ac-upscale-preview" />
-              <p className="ac-hint">Smelltu til að zoom-a. Topaz skilar oft mjög stórri mynd — forsýningin er skölun, en niðurhal nær fullri upplausn.</p>
+              <p className="ac-hint">Smelltu til að zoom-a. Topaz/Clarity skila oft mjög stórri mynd — forsýningin er skölun, en niðurhal nær fullri upplausn.</p>
               <div className="ac-row">
                 <button
                   type="button"
@@ -463,6 +557,9 @@ export default function UpplyftingClient() {
                   onClick={() => downloadBlob(result, `upplyft-${source?.name || "mynd"}`)}
                 >
                   Sækja mynd
+                </button>
+                <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
+                  Hreinsa vistað
                 </button>
               </div>
             </section>

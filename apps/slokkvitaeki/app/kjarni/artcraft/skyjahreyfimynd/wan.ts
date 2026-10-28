@@ -110,27 +110,40 @@ async function parseJsonResponse(res: Response): Promise<Record<string, unknown>
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-/** Poll status-route-ið á 5s fresti þangað til succeeded/failed. Vegna
- *  cold-start getur Wan tekið 5+ mínútur í fyrsta kalli; við bíðum í allt
- *  að 15 mínútur áður en við gefumst upp (user getur alltaf hætt).
+/** Poll status-route-ið þangað til succeeded/failed. Vegna cold-start getur
+ *  Wan tekið 5+ mínútur í fyrsta kalli; við bíðum í allt að 15 mínútur
+ *  áður en við gefumst upp.
  *
- *  onStatus kallbakkar með „starting" | „processing" svo UI geti sýnt
- *  framvindu í stað þess að hanga á „Teikna..." án nokkurs. */
+ *  Browser suspendar bakgrunnstab sem drepur setTimeout — en Replicate-
+ *  keyrslan lifir áfram á þeirra GPU, og þegar tab verður sýnilegt aftur
+ *  tökum við strax upp þráðinn með visibilitychange event. */
 async function pollWanStatus(
   predictionId: string,
   onStatus: (status: string, elapsedSeconds: number) => void,
+  startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const start = Date.now();
-  const deadline = start + 15 * 60 * 1000;
-  for (;;) {
+  const deadline = startTime + 15 * 60 * 1000;
+  while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
-    await new Promise((r) => setTimeout(r, 5000));
+    // Bíðum sjálfgefið 5s, en ef tab er sýnilegt tengjumst strax þegar
+    // user kemur til baka úr öðrum tab (sparar allt að 5s per switch).
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 5000);
+      function onVisible() {
+        if (document.visibilityState === "visible") {
+          clearTimeout(timer);
+          document.removeEventListener("visibilitychange", onVisible);
+          resolve();
+        }
+      }
+      document.addEventListener("visibilitychange", onVisible);
+    });
     if (signal?.aborted) throw new Error("Hætt við");
     const res = await fetch(`/api/skyjahreyfimynd/status?id=${encodeURIComponent(predictionId)}`, { signal });
     const data = await parseJsonResponse(res);
     const status = typeof data.status === "string" ? data.status : "processing";
-    const elapsed = Math.round((Date.now() - start) / 1000);
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
     onStatus(status, elapsed);
     if (status === "succeeded") {
       const videos = Array.isArray(data.videos) ? (data.videos as string[]) : [];
@@ -140,14 +153,20 @@ async function pollWanStatus(
     if (status === "failed" || status === "canceled") {
       throw new Error((typeof data.error === "string" && data.error) || "Wan 2.2 mistókst");
     }
-    if (Date.now() > deadline) throw new Error("Wan 2.2 var ekki tilbúið innan 15 mínútna — reyndu aftur");
   }
+  throw new Error("Wan 2.2 var ekki tilbúið innan 15 mínútna — reyndu aftur");
 }
+
+export type GenerateWanOpts = {
+  onStatus?: (status: string, elapsedSeconds: number) => void;
+  onPredictionId?: (id: string) => void;
+  signal?: AbortSignal;
+};
 
 export async function generateWanVideo(
   settings: WanSettings,
   imageDataUrl: string,
-  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+  opts?: GenerateWanOpts,
 ): Promise<Blob> {
   if (!settings.prompt.trim()) throw new Error("Skrifaðu lýsingu á hreyfingu fyrst.");
   const onStatus = opts?.onStatus ?? (() => {});
@@ -158,15 +177,27 @@ export async function generateWanVideo(
     signal: opts?.signal,
   });
   const data = await parseJsonResponse(res);
-  // Fljótleg leið: líkanið var warm og klárað innan Prefer: wait=5.
   if (Array.isArray(data.videos) && typeof data.videos[0] === "string") {
     return fetchVideoBlob(data.videos[0] as string);
   }
-  // Annars pollum við þangað til status er succeeded.
   if (typeof data.predictionId !== "string") {
     throw new Error("Wan 2.2 skilaði hvorki myndbandi né prediction id");
   }
+  opts?.onPredictionId?.(data.predictionId);
   onStatus(typeof data.status === "string" ? data.status : "starting", 0);
-  const videos = await pollWanStatus(data.predictionId, onStatus, opts?.signal);
+  const videos = await pollWanStatus(data.predictionId, onStatus, Date.now(), opts?.signal);
+  return fetchVideoBlob(videos[0]);
+}
+
+/** Resuma pollun á prediction sem var þegar sent inn (t.d. eftir tab-switch
+ *  eða page-reload). startedAt skal vera upphaflegi tíminn úr IndexedDB svo
+ *  elapsed-mælir hald áfram. */
+export async function resumeWanVideo(
+  predictionId: string,
+  startedAt: number,
+  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+): Promise<Blob> {
+  const onStatus = opts?.onStatus ?? (() => {});
+  const videos = await pollWanStatus(predictionId, onStatus, startedAt, opts?.signal);
   return fetchVideoBlob(videos[0]);
 }

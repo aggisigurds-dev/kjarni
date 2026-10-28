@@ -74,18 +74,28 @@ async function parseJsonResponse(res: Response): Promise<Record<string, unknown>
 async function pollMusicStatus(
   predictionId: string,
   onStatus: (status: string, elapsedSeconds: number) => void,
+  startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const start = Date.now();
-  const deadline = start + 10 * 60 * 1000;
-  for (;;) {
+  const deadline = startTime + 10 * 60 * 1000;
+  while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
-    await new Promise((r) => setTimeout(r, 4000));
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 4000);
+      function onVisible() {
+        if (document.visibilityState === "visible") {
+          clearTimeout(timer);
+          document.removeEventListener("visibilitychange", onVisible);
+          resolve();
+        }
+      }
+      document.addEventListener("visibilitychange", onVisible);
+    });
     if (signal?.aborted) throw new Error("Hætt við");
     const res = await fetch(`/api/tonsmid/status?id=${encodeURIComponent(predictionId)}`, { signal });
     const data = await parseJsonResponse(res);
     const status = typeof data.status === "string" ? data.status : "processing";
-    const elapsed = Math.round((Date.now() - start) / 1000);
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
     onStatus(status, elapsed);
     if (status === "succeeded") {
       const audio = Array.isArray(data.audio) ? (data.audio as string[]) : [];
@@ -95,14 +105,17 @@ async function pollMusicStatus(
     if (status === "failed" || status === "canceled") {
       throw new Error((typeof data.error === "string" && data.error) || "Tónsmíð mistókst");
     }
-    if (Date.now() > deadline) throw new Error("Tónsmíð var ekki tilbúin innan 10 mínútna");
   }
+  throw new Error("Tónsmíð var ekki tilbúin innan 10 mínútna");
 }
 
-export async function composeMusic(
-  settings: MusicSettings,
-  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
-): Promise<Blob> {
+export type ComposeMusicOpts = {
+  onStatus?: (status: string, elapsedSeconds: number) => void;
+  onPredictionId?: (id: string) => void;
+  signal?: AbortSignal;
+};
+
+export async function composeMusic(settings: MusicSettings, opts?: ComposeMusicOpts): Promise<Blob> {
   if (!settings.prompt.trim()) throw new Error("Skrifaðu lýsingu á laginu fyrst.");
   const onStatus = opts?.onStatus ?? (() => {});
   const res = await fetch("/api/tonsmid", {
@@ -118,7 +131,18 @@ export async function composeMusic(
   if (typeof data.predictionId !== "string") {
     throw new Error("Tónsmíð skilaði hvorki hljóði né prediction id");
   }
+  opts?.onPredictionId?.(data.predictionId);
   onStatus(typeof data.status === "string" ? data.status : "starting", 0);
-  const audio = await pollMusicStatus(data.predictionId, onStatus, opts?.signal);
+  const audio = await pollMusicStatus(data.predictionId, onStatus, Date.now(), opts?.signal);
+  return fetchBlob(audio[0]);
+}
+
+export async function resumeMusic(
+  predictionId: string,
+  startedAt: number,
+  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+): Promise<Blob> {
+  const onStatus = opts?.onStatus ?? (() => {});
+  const audio = await pollMusicStatus(predictionId, onStatus, startedAt, opts?.signal);
   return fetchBlob(audio[0]);
 }

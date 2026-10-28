@@ -5,16 +5,21 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import { shrinkImageForUpload } from "../replicateImage";
+import { clearPending, loadPending, savePending } from "../pendingPredictions";
+import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
   DEFAULT_WAN_SETTINGS,
   generateWanVideo,
   normalizeWanSettings,
   readStoredWanSettings,
+  resumeWanVideo,
   WAN_ASPECT_RATIOS,
   WAN_RESOLUTIONS,
   WAN_SETTINGS_KEY,
   type WanSettings,
 } from "./wan";
+
+const SAVED_KEY = "skyjahreyfimynd";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
@@ -33,6 +38,7 @@ export default function SkyjahreyfimyndClient() {
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
   const [result, setResult] = useState<string>("");
+  const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string } | null>(null);
   const resultUrlRef = useRef<string>("");
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
@@ -42,6 +48,48 @@ export default function SkyjahreyfimyndClient() {
   useEffect(() => {
     setSettings(readStoredWanSettings());
     setReady(true);
+    void (async () => {
+      const saved = await loadResult(SAVED_KEY);
+      if (saved) {
+        if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+        const url = URL.createObjectURL(saved.blobs[0]);
+        resultUrlRef.current = url;
+        setResult(url);
+        setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt });
+      }
+      // Resuma pending prediction ef eitthvað var í vinnslu þegar user
+      // skipti um tab eða endurræsti vafra.
+      const pending = await loadPending(SAVED_KEY);
+      if (pending) {
+        setBusy(true);
+        setError("");
+        setProgress({ status: "ræsing úr vistun", elapsed: 0 });
+        try {
+          const blob = await resumeWanVideo(pending.predictionId, pending.submittedAt, {
+            onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+          });
+          if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+          const url = URL.createObjectURL(blob);
+          resultUrlRef.current = url;
+          setResult(url);
+          const now = Date.now();
+          setSavedMeta({ timestamp: now, prompt: pending.prompt });
+          void saveResult({
+            key: SAVED_KEY,
+            timestamp: now,
+            mediaType: "video",
+            blobs: [blob],
+            prompt: pending.prompt,
+          });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Resume mistókst");
+        } finally {
+          await clearPending(SAVED_KEY);
+          setBusy(false);
+          setProgress(null);
+        }
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -89,17 +137,47 @@ export default function SkyjahreyfimyndClient() {
     try {
       const blob = await generateWanVideo(settings, sourceDataUrlRef.current, {
         onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+        onPredictionId: (id) => {
+          // Vistum pending strax svo tab-switch/refresh virki — Replicate
+          // heldur áfram á sinni hlið og við tengjumst aftur á mount.
+          void savePending({
+            key: SAVED_KEY,
+            predictionId: id,
+            submittedAt: Date.now(),
+            prompt: settings.prompt,
+            sourceName: source.name,
+          });
+        },
       });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
       setResult(url);
+      const now = Date.now();
+      setSavedMeta({ timestamp: now, prompt: settings.prompt });
+      void saveResult({
+        key: SAVED_KEY,
+        timestamp: now,
+        mediaType: "video",
+        blobs: [blob],
+        prompt: settings.prompt,
+        sourceName: source.name,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.");
     } finally {
+      await clearPending(SAVED_KEY);
       setBusy(false);
       setProgress(null);
     }
+  }
+
+  async function clearSavedResults() {
+    if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+    resultUrlRef.current = "";
+    setResult("");
+    setSavedMeta(null);
+    await clearResult(SAVED_KEY);
   }
 
   if (!ready) {
@@ -283,7 +361,7 @@ export default function SkyjahreyfimyndClient() {
               <p className="ac-hint">
                 Staða: {progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}
                 {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
-                {". Wan 2.2 tekur oft 1–5 mín (lengur ef cold start)."}
+                {". Wan 2.2 tekur oft 1–5 mín (lengur ef cold start). Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
               </p>
             )}
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
@@ -294,6 +372,12 @@ export default function SkyjahreyfimyndClient() {
           {result && (
             <section className="ac-panel">
               <h2>Útkoma</h2>
+              {savedMeta && (
+                <p className="ac-hint">
+                  Vistað {formatSavedTime(savedMeta.timestamp)}
+                  {savedMeta.prompt ? ` · „${savedMeta.prompt.slice(0, 80)}${savedMeta.prompt.length > 80 ? "…" : ""}"` : ""}
+                </p>
+              )}
               <video src={result} controls autoPlay loop muted style={{ maxWidth: "100%", borderRadius: 8 }} />
               <div className="ac-row">
                 <button
@@ -302,6 +386,9 @@ export default function SkyjahreyfimyndClient() {
                   onClick={() => downloadBlob(result, `skyjahreyfimynd-${source?.name?.replace(/\.[^.]+$/, "") || "myndband"}.mp4`)}
                 >
                   Sækja myndband
+                </button>
+                <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
+                  Hreinsa vistað
                 </button>
               </div>
             </section>

@@ -33,6 +33,9 @@ import {
 import { cloneRaster, createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
 import { compositeMaskOverlay, maskCoverage, paintCircle } from "./maskPaint";
 import ImageZoom from "../ImageZoom";
+import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+
+const SAVED_RESULT_KEY = "skyjastudio";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const MAX_SOURCE_DIMENSION = 1024;
@@ -152,6 +155,7 @@ export default function SkyjastudioClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<string[]>([]);
+  const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string; mode?: string } | null>(null);
   const resultUrlsRef = useRef<string[]>([]);
 
   // Inpaint brush state.
@@ -178,6 +182,16 @@ export default function SkyjastudioClient() {
     setTxt2ImgModel(readStoredTxt2ImgModel());
     setInpaintModel(readStoredInpaintModel());
     setReady(true);
+    void (async () => {
+      const saved = await loadResult(SAVED_RESULT_KEY);
+      if (saved) {
+        for (const url of resultUrlsRef.current) URL.revokeObjectURL(url);
+        const urls = saved.blobs.map((b) => URL.createObjectURL(b));
+        resultUrlsRef.current = urls;
+        setResults(urls);
+        setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt, mode: saved.mode });
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -372,11 +386,31 @@ export default function SkyjastudioClient() {
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current = urls;
       setResults(urls);
+      const activePrompt = isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt;
+      const modeLabel = `${mode}/${isFlux ? "flux-fill" : isJuggernaut ? "juggernaut" : "sdxl"}`;
+      const now = Date.now();
+      setSavedMeta({ timestamp: now, prompt: activePrompt, mode: modeLabel });
+      void saveResult({
+        key: SAVED_RESULT_KEY,
+        timestamp: now,
+        mediaType: "image",
+        blobs,
+        prompt: activePrompt,
+        mode: modeLabel,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Skýjastúdíó-myndgerð mistókst.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function clearSavedResults() {
+    for (const url of resultUrlsRef.current) URL.revokeObjectURL(url);
+    resultUrlsRef.current = [];
+    setResults([]);
+    setSavedMeta(null);
+    await clearResult(SAVED_RESULT_KEY);
   }
 
   if (!ready) {
@@ -892,6 +926,13 @@ export default function SkyjastudioClient() {
           {results.length > 0 && (
             <section className="ac-panel">
               <h2>Útkoma</h2>
+              {savedMeta && (
+                <p className="ac-hint">
+                  Vistuð {formatSavedTime(savedMeta.timestamp)}
+                  {savedMeta.mode ? ` · ${savedMeta.mode}` : ""}
+                  {savedMeta.prompt ? ` · „${savedMeta.prompt.slice(0, 80)}${savedMeta.prompt.length > 80 ? "…" : ""}"` : ""}
+                </p>
+              )}
               <div className="ac-results">
                 {results.map((url, i) => (
                   <figure key={url}>
@@ -907,6 +948,11 @@ export default function SkyjastudioClient() {
                     </figcaption>
                   </figure>
                 ))}
+              </div>
+              <div className="ac-row">
+                <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
+                  Hreinsa vistaða útkomu
+                </button>
               </div>
             </section>
           )}

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
 
-// Upplyfting → Clarity — philz1337x/clarity-pro-upscaler á Replicate
-// (https://replicate.com/philz1337x/clarity-pro-upscaler). Creative upscaler
-// sem notar diffusion til að endurskapa smáatriði á meðan hann heldur
-// sjálfsmynd. Gott við hliðina á Topaz: Clarity bætir meiri áferð, Topaz
-// er trú upprunalegri mynd.
+// Upplyfting → Clarity — philz1337x/clarity-pro-upscaler á Replicate.
+// Diffusion-based upscaler getur tekið 1–3 mínútur, sérstaklega á cold
+// start, svo við notum async-mynstur eins og Wan 2.2:
+//   POST /api/upplyfting/clarity         → {predictionId} eða {images: [...]}
+//   GET  /api/upplyfting/clarity/status  → {status, images?, error?}
 
-export const maxDuration = 120;
+export const maxDuration = 30;
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -20,7 +20,6 @@ function clampNumber(n: unknown, fallback: number, min: number, max: number): nu
 }
 
 export async function POST(req: NextRequest) {
-  const functionStart = Date.now();
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
@@ -58,15 +57,19 @@ export async function POST(req: NextRequest) {
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
 
   try {
-    const output = await runReplicate({
+    const prediction = await submitReplicate({
       token,
       owner: "philz1337x",
       name: "clarity-pro-upscaler",
       input,
-      functionStart,
-      budgetMs: 110_000,
     });
-    return NextResponse.json({ images: outputToUrls(output) });
+    if (prediction.status === "succeeded" && prediction.output != null) {
+      return NextResponse.json({ images: outputToUrls(prediction.output) });
+    }
+    if (prediction.status === "failed" || prediction.status === "canceled") {
+      return bad(502, prediction.error || "Clarity mistókst strax");
+    }
+    return NextResponse.json({ predictionId: prediction.id, status: prediction.status });
   } catch (err) {
     const r = badReplicate(err);
     return bad(r.status, r.error);
