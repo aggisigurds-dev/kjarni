@@ -139,7 +139,7 @@ async function pollClarityStatus(
       throw new Error((typeof data.error === "string" && data.error) || "Clarity mistókst");
     }
   }
-  throw new Error("Clarity var ekki tilbúið innan 10 mínútna");
+  throw new Error("LOCAL_TIMEOUT: Clarity var ekki tilbúið innan 10 mínútna — Replicate getur enn verið að vinna, endurhlað síðuna til að tengjast aftur");
 }
 
 export type UpscaleWithClarityOpts = {

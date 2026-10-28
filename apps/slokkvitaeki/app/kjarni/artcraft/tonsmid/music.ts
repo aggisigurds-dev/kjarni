@@ -111,7 +111,7 @@ async function pollMusicStatus(
       throw new Error((typeof data.error === "string" && data.error) || "Tónsmíð mistókst");
     }
   }
-  throw new Error("Tónsmíð var ekki tilbúin innan 10 mínútna");
+  throw new Error("LOCAL_TIMEOUT: Tónsmíð var ekki tilbúin innan 10 mínútna — Replicate getur enn verið að vinna, endurhlað síðuna til að tengjast aftur");
 }
 
 export type ComposeMusicOpts = {

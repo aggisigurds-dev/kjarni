@@ -86,9 +86,10 @@ export default function TonsmidClient() {
             prompt: pending.prompt,
           });
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Resume mistókst");
+          const msg = err instanceof Error ? err.message : "Resume mistókst";
+          setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
+          if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
         } finally {
-          await clearPending(SAVED_KEY);
           setBusy(false);
           setProgress(null);
         }
@@ -148,9 +149,10 @@ export default function TonsmidClient() {
         prompt: settings.prompt,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Tónsmíð mistókst.");
+      const msg = err instanceof Error ? err.message : "Tónsmíð mistókst.";
+      setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
+      if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
     } finally {
-      await clearPending(SAVED_KEY);
       setBusy(false);
       setProgress(null);
     }

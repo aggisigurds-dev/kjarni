@@ -122,9 +122,10 @@ export default function UpplyftingClient() {
             sourceName: pending.sourceName,
           });
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Resume mistókst");
+          const msg = err instanceof Error ? err.message : "Resume mistókst";
+          setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
+          if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
         } finally {
-          await clearPending(SAVED_KEY);
           setBusy(false);
           setProgress(null);
         }
@@ -229,9 +230,10 @@ export default function UpplyftingClient() {
         sourceName: source.name,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upplyfting mistókst.");
+      const msg = err instanceof Error ? err.message : "Upplyfting mistókst.";
+      setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
+      if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
     } finally {
-      await clearPending(SAVED_KEY);
       setBusy(false);
       setProgress(null);
     }

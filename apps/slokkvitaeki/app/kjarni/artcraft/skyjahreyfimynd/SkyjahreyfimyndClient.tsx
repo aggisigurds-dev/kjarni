@@ -98,9 +98,10 @@ export default function SkyjahreyfimyndClient() {
             prompt: pending.prompt,
           });
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Resume mistókst");
+          const msg = err instanceof Error ? err.message : "Resume mistókst";
+          setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
+          if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
         } finally {
-          await clearPending(SAVED_KEY);
           setBusy(false);
           setProgress(null);
         }
@@ -188,9 +189,12 @@ export default function SkyjahreyfimyndClient() {
         sourceName: source.name,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.");
+      const msg = err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.";
+      setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
+      // Ekki hreinsa pending ef þetta var okkar eigin poll-timeout — Replicate
+      // getur enn verið að vinna, user getur refreshað og við tengjumst aftur.
+      if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
     } finally {
-      await clearPending(SAVED_KEY);
       setBusy(false);
       setProgress(null);
     }

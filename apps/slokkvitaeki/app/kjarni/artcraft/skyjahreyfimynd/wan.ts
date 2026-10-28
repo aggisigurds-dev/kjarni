@@ -127,7 +127,7 @@ async function pollWanStatus(
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const deadline = startTime + 15 * 60 * 1000;
+  const deadline = startTime + 30 * 60 * 1000;
   while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
     await new Promise<void>((resolve) => {
@@ -157,7 +157,7 @@ async function pollWanStatus(
       throw new Error((typeof data.error === "string" && data.error) || "Wan 2.2 mistókst");
     }
   }
-  throw new Error("Wan 2.2 var ekki tilbúið innan 15 mínútna — reyndu aftur");
+  throw new Error("LOCAL_TIMEOUT: Wan 2.2 var ekki tilbúið innan 30 mínútna — Replicate getur enn verið að vinna, endurhlað síðuna til að tengjast aftur");
 }
 
 export type GenerateWanOpts = {
