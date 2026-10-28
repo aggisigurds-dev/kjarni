@@ -23,19 +23,22 @@ export async function GET(req: NextRequest) {
 
   try {
     const prediction = await getReplicatePrediction({ token, predictionId: id });
+    const logs = typeof prediction.logs === "string" ? prediction.logs : undefined;
     if (prediction.status === "succeeded" && prediction.output != null) {
       return NextResponse.json({
         status: "succeeded",
         videos: outputToUrls(prediction.output),
+        logs,
       });
     }
     if (prediction.status === "failed" || prediction.status === "canceled") {
       return NextResponse.json({
         status: prediction.status,
         error: prediction.error || "Wan 2.2 mistókst",
+        logs,
       });
     }
-    return NextResponse.json({ status: prediction.status });
+    return NextResponse.json({ status: prediction.status, logs });
   } catch (err) {
     const r = badReplicate(err);
     return bad(r.status, r.error);

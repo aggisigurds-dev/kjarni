@@ -289,6 +289,10 @@ export function artcraftTonsmidHref(): string {
   return "/kjarni/artcraft/tonsmid";
 }
 
+export function artcraftVinnslurHref(): string {
+  return "/kjarni/artcraft/vinnslur";
+}
+
 export function artcraftLeidarvisirHref(): string {
   return "/kjarni/artcraft/leidarvisir";
 }
@@ -323,6 +327,7 @@ const ARTCRAFT_USES = {
  *  role/desc/uses fylgja með svo yfirlitssíður (Ragnarök, StodView) geti sýnt meira en bara nafn. */
 export const ARTCRAFT_INTERFACES = [
   { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll 23 viðmótin á einum stað, með niðurhali og útgáfum.", uses: [] as readonly string[] },
+  { id: "vinnslur", name: "Verkbók", href: artcraftVinnslurHref(), icon: "📋", role: "Vinnslur", desc: "Allar pending Replicate-vinnslur og vistaðar útkomur á einum stað. Opnaðu beint í tólið sem gerði hana.", uses: ["Fylgjast með mörgum vinnslum í einu", "Opna aftur eldri útkomu án þess að muna hvaða tól var notað"] as readonly string[] },
   ...ARTCRAFT_APPS.map((app) => ({
     id: app.id,
     name: app.name,
@@ -366,6 +371,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/upplyfting") return "upplyfting";
   if (path === "/kjarni/artcraft/breyta") return "breyta";
   if (path === "/kjarni/artcraft/tonsmid") return "tonsmid";
+  if (path === "/kjarni/artcraft/vinnslur") return "vinnslur";
   if (path === "/kjarni/artcraft/leidarvisir") return "leidarvisir";
   const slug = path.split("/").pop() || "";
   if (isArtcraftAppId(slug)) return slug;

@@ -117,17 +117,19 @@ async function parseJsonResponse(res: Response): Promise<Record<string, unknown>
  *  Browser suspendar bakgrunnstab sem drepur setTimeout — en Replicate-
  *  keyrslan lifir áfram á þeirra GPU, og þegar tab verður sýnilegt aftur
  *  tökum við strax upp þráðinn með visibilitychange event. */
+import { parseReplicateLogs, type ParsedProgress } from "../replicateProgress";
+
+export type WanProgress = ParsedProgress & { status: string; elapsedSeconds: number };
+
 async function pollWanStatus(
   predictionId: string,
-  onStatus: (status: string, elapsedSeconds: number) => void,
+  onStatus: (progress: WanProgress) => void,
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
   const deadline = startTime + 15 * 60 * 1000;
   while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
-    // Bíðum sjálfgefið 5s, en ef tab er sýnilegt tengjumst strax þegar
-    // user kemur til baka úr öðrum tab (sparar allt að 5s per switch).
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 5000);
       function onVisible() {
@@ -144,7 +146,8 @@ async function pollWanStatus(
     const data = await parseJsonResponse(res);
     const status = typeof data.status === "string" ? data.status : "processing";
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    onStatus(status, elapsed);
+    const parsed = parseReplicateLogs(typeof data.logs === "string" ? data.logs : undefined);
+    onStatus({ status, elapsedSeconds: elapsed, ...parsed });
     if (status === "succeeded") {
       const videos = Array.isArray(data.videos) ? (data.videos as string[]) : [];
       if (!videos[0]) throw new Error("Wan 2.2 skilaði engu myndbandi");
@@ -158,7 +161,7 @@ async function pollWanStatus(
 }
 
 export type GenerateWanOpts = {
-  onStatus?: (status: string, elapsedSeconds: number) => void;
+  onStatus?: (progress: WanProgress) => void;
   onPredictionId?: (id: string) => void;
   signal?: AbortSignal;
 };
@@ -184,7 +187,7 @@ export async function generateWanVideo(
     throw new Error("Wan 2.2 skilaði hvorki myndbandi né prediction id");
   }
   opts?.onPredictionId?.(data.predictionId);
-  onStatus(typeof data.status === "string" ? data.status : "starting", 0);
+  onStatus({ status: typeof data.status === "string" ? data.status : "starting", elapsedSeconds: 0 });
   const videos = await pollWanStatus(data.predictionId, onStatus, Date.now(), opts?.signal);
   return fetchVideoBlob(videos[0]);
 }
@@ -195,7 +198,7 @@ export async function generateWanVideo(
 export async function resumeWanVideo(
   predictionId: string,
   startedAt: number,
-  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+  opts?: { onStatus?: (progress: WanProgress) => void; signal?: AbortSignal },
 ): Promise<Blob> {
   const onStatus = opts?.onStatus ?? (() => {});
   const videos = await pollWanStatus(predictionId, onStatus, startedAt, opts?.signal);

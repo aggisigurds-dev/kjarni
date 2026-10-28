@@ -147,6 +147,72 @@
   letter-spacing: 0.01em;
 }
 
+.ac-job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ac-job-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 10px;
+  background: var(--m-card, #fff);
+}
+
+.ac-job-ico {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.ac-job-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ac-job-main b {
+  font-size: 15px;
+}
+
+.ac-job-status {
+  font-size: 13px;
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-job-prompt {
+  font-size: 13px;
+  color: var(--m-soft, #5a6b80);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-job-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .ac-job-row {
+    grid-template-columns: auto 1fr;
+  }
+  .ac-job-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
 .ac-card {
   display: flex;
   flex-direction: column;

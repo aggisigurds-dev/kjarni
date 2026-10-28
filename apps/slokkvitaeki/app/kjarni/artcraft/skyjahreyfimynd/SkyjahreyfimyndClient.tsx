@@ -6,6 +6,7 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
+import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
   DEFAULT_WAN_SETTINGS,
@@ -34,7 +35,14 @@ export default function SkyjahreyfimyndClient() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<WanSettings>(DEFAULT_WAN_SETTINGS);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<{ status: string; elapsed: number } | null>(null);
+  const [progress, setProgress] = useState<{
+    status: string;
+    elapsed: number;
+    percent?: number;
+    current?: number;
+    total?: number;
+    etaSeconds?: number;
+  } | null>(null);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
   const [result, setResult] = useState<string>("");
@@ -66,7 +74,15 @@ export default function SkyjahreyfimyndClient() {
         setProgress({ status: "ræsing úr vistun", elapsed: 0 });
         try {
           const blob = await resumeWanVideo(pending.predictionId, pending.submittedAt, {
-            onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+            onStatus: (p) =>
+              setProgress({
+                status: p.status,
+                elapsed: p.elapsedSeconds,
+                percent: p.percent,
+                current: p.current,
+                total: p.total,
+                etaSeconds: p.etaSeconds,
+              }),
           });
           if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
           const url = URL.createObjectURL(blob);
@@ -136,7 +152,15 @@ export default function SkyjahreyfimyndClient() {
     setProgress({ status: "starting", elapsed: 0 });
     try {
       const blob = await generateWanVideo(settings, sourceDataUrlRef.current, {
-        onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+        onStatus: (p) =>
+          setProgress({
+            status: p.status,
+            elapsed: p.elapsedSeconds,
+            percent: p.percent,
+            current: p.current,
+            total: p.total,
+            etaSeconds: p.etaSeconds,
+          }),
         onPredictionId: (id) => {
           // Vistum pending strax svo tab-switch/refresh virki — Replicate
           // heldur áfram á sinni hlið og við tengjumst aftur á mount.
@@ -359,9 +383,11 @@ export default function SkyjahreyfimyndClient() {
             {error && <p className="ac-error">{error}</p>}
             {busy && progress && (
               <p className="ac-hint">
-                Staða: {progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}
+                {typeof progress.percent === "number"
+                  ? `${progress.percent}%${progress.current != null && progress.total != null ? ` · rammi ${progress.current}/${progress.total}` : ""}${progress.etaSeconds ? ` · ~${formatEta(progress.etaSeconds)} eftir` : ""}`
+                  : `Staða: ${progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}`}
                 {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
-                {". Wan 2.2 tekur oft 1–5 mín (lengur ef cold start). Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
+                {". Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
               </p>
             )}
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>

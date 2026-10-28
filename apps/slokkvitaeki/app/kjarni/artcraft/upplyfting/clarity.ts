@@ -99,9 +99,13 @@ async function parseJsonResponse(res: Response): Promise<Record<string, unknown>
   return JSON.parse(text) as Record<string, unknown>;
 }
 
+import { parseReplicateLogs, type ParsedProgress } from "../replicateProgress";
+
+export type ClarityProgress = ParsedProgress & { status: string; elapsedSeconds: number };
+
 async function pollClarityStatus(
   predictionId: string,
-  onStatus: (status: string, elapsedSeconds: number) => void,
+  onStatus: (progress: ClarityProgress) => void,
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
@@ -124,7 +128,8 @@ async function pollClarityStatus(
     const data = await parseJsonResponse(res);
     const status = typeof data.status === "string" ? data.status : "processing";
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    onStatus(status, elapsed);
+    const parsed = parseReplicateLogs(typeof data.logs === "string" ? data.logs : undefined);
+    onStatus({ status, elapsedSeconds: elapsed, ...parsed });
     if (status === "succeeded") {
       const images = Array.isArray(data.images) ? (data.images as string[]) : [];
       if (!images[0]) throw new Error("Clarity skilaði engri mynd");
@@ -138,7 +143,7 @@ async function pollClarityStatus(
 }
 
 export type UpscaleWithClarityOpts = {
-  onStatus?: (status: string, elapsedSeconds: number) => void;
+  onStatus?: (progress: ClarityProgress) => void;
   onPredictionId?: (id: string) => void;
   signal?: AbortSignal;
 };
@@ -163,7 +168,7 @@ export async function upscaleWithClarity(
     throw new Error("Clarity skilaði hvorki mynd né prediction id");
   }
   opts?.onPredictionId?.(data.predictionId);
-  onStatus(typeof data.status === "string" ? data.status : "starting", 0);
+  onStatus({ status: typeof data.status === "string" ? data.status : "starting", elapsedSeconds: 0 });
   const images = await pollClarityStatus(data.predictionId, onStatus, Date.now(), opts?.signal);
   return fetchImageBlob(images[0]);
 }
@@ -171,7 +176,7 @@ export async function upscaleWithClarity(
 export async function resumeClarity(
   predictionId: string,
   startedAt: number,
-  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+  opts?: { onStatus?: (progress: ClarityProgress) => void; signal?: AbortSignal },
 ): Promise<Blob> {
   const onStatus = opts?.onStatus ?? (() => {});
   const images = await pollClarityStatus(predictionId, onStatus, startedAt, opts?.signal);

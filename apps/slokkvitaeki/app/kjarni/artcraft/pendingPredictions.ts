@@ -16,7 +16,7 @@
  * Við hreinsum líka pending sem er orðið eldra en 1 klst — Replicate drepur
  * predictions sjálf á þeim tíma, ekkert gagn að reyna. */
 
-import { del, get, set } from "idb-keyval";
+import { del, get, keys, set } from "idb-keyval";
 
 export type PendingPrediction = {
   key: string;
@@ -61,5 +61,30 @@ export async function clearPending(key: string): Promise<void> {
     await del(PREFIX + key);
   } catch (err) {
     console.warn("clearPending failed", err);
+  }
+}
+
+/** Lista allar pending predictions — notað í Verkbók. */
+export async function listAllPending(): Promise<PendingPrediction[]> {
+  if (typeof window === "undefined") return [];
+  try {
+    const allKeys = await keys();
+    const pendingKeys = allKeys.filter((k) => typeof k === "string" && k.startsWith(PREFIX));
+    const now = Date.now();
+    const list: PendingPrediction[] = [];
+    for (const k of pendingKeys) {
+      const stored = (await get(k)) as PendingPrediction | undefined;
+      if (stored && typeof stored.predictionId === "string") {
+        if (now - stored.submittedAt > MAX_AGE_MS) {
+          await del(k);
+          continue;
+        }
+        list.push(stored);
+      }
+    }
+    return list.sort((a, b) => b.submittedAt - a.submittedAt);
+  } catch (err) {
+    console.warn("listAllPending failed", err);
+    return [];
   }
 }

@@ -11,7 +11,7 @@
  * Skrifum YFIR síðustu niðurstöðu (ekki historíu) — eitt tól = eitt
  * útkomuslot. Ef user vill fulla sögu, bætist það við síðar. */
 
-import { del, get, set } from "idb-keyval";
+import { del, get, keys, set } from "idb-keyval";
 
 export type SavedResultMediaType = "image" | "video" | "audio";
 
@@ -61,6 +61,27 @@ export async function clearResult(key: string): Promise<void> {
     await del(PREFIX + key);
   } catch (err) {
     console.warn("clearResult failed", err);
+  }
+}
+
+/** Lista alla vistaða útkomur yfir öll tól — notað í Verkbók. */
+export async function listAllResults(): Promise<SavedResult[]> {
+  if (typeof window === "undefined") return [];
+  try {
+    const allKeys = await keys();
+    const resultKeys = allKeys.filter((k) => typeof k === "string" && k.startsWith(PREFIX));
+    const results: SavedResult[] = [];
+    for (const k of resultKeys) {
+      const stored = (await get(k)) as SavedResult | undefined;
+      if (stored && Array.isArray(stored.blobs) && stored.blobs.length > 0) {
+        const allOk = stored.blobs.every((b) => b instanceof Blob && b.size > 0);
+        if (allOk) results.push(stored);
+      }
+    }
+    return results.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (err) {
+    console.warn("listAllResults failed", err);
+    return [];
   }
 }
 

@@ -7,6 +7,7 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
 import { shrinkImageForUpload } from "../replicateImage";
+import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
   CLARITY_SETTINGS_KEY,
@@ -57,7 +58,14 @@ export default function UpplyftingClient() {
   const [settings, setSettings] = useState<TopazSettings>(DEFAULT_TOPAZ_SETTINGS);
   const [clarity, setClarity] = useState<ClaritySettings>(DEFAULT_CLARITY_SETTINGS);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<{ status: string; elapsed: number } | null>(null);
+  const [progress, setProgress] = useState<{
+    status: string;
+    elapsed: number;
+    percent?: number;
+    current?: number;
+    total?: number;
+    etaSeconds?: number;
+  } | null>(null);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
   const [result, setResult] = useState<string>("");
@@ -89,7 +97,15 @@ export default function UpplyftingClient() {
         setProgress({ status: "ræsing úr vistun", elapsed: 0 });
         try {
           const blob = await resumeClarity(pending.predictionId, pending.submittedAt, {
-            onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+            onStatus: (p) =>
+              setProgress({
+                status: p.status,
+                elapsed: p.elapsedSeconds,
+                percent: p.percent,
+                current: p.current,
+                total: p.total,
+                etaSeconds: p.etaSeconds,
+              }),
           });
           if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
           const url = URL.createObjectURL(blob);
@@ -177,7 +193,15 @@ export default function UpplyftingClient() {
       const blob =
         mode === "clarity"
           ? await upscaleWithClarity(clarity, sourceDataUrlRef.current, {
-              onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+              onStatus: (p) =>
+                setProgress({
+                  status: p.status,
+                  elapsed: p.elapsedSeconds,
+                  percent: p.percent,
+                  current: p.current,
+                  total: p.total,
+                  etaSeconds: p.etaSeconds,
+                }),
               onPredictionId: (id) => {
                 void savePending({
                   key: SAVED_KEY,
@@ -419,9 +443,11 @@ export default function UpplyftingClient() {
                 {error && <p className="ac-error">{error}</p>}
                 {busy && progress && (
                   <p className="ac-hint">
-                    Staða: {progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}
+                    {typeof progress.percent === "number"
+                      ? `${progress.percent}%${progress.current != null && progress.total != null ? ` · skref ${progress.current}/${progress.total}` : ""}${progress.etaSeconds ? ` · ~${formatEta(progress.etaSeconds)} eftir` : ""}`
+                      : `Staða: ${progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}`}
                     {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
-                    {". Clarity tekur venjulega 1–3 mín (cold start lengur). Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
+                    {". Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
                   </p>
                 )}
                 <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>

@@ -71,9 +71,13 @@ async function parseJsonResponse(res: Response): Promise<Record<string, unknown>
   return JSON.parse(text) as Record<string, unknown>;
 }
 
+import { parseReplicateLogs, type ParsedProgress } from "../replicateProgress";
+
+export type MusicProgress = ParsedProgress & { status: string; elapsedSeconds: number };
+
 async function pollMusicStatus(
   predictionId: string,
-  onStatus: (status: string, elapsedSeconds: number) => void,
+  onStatus: (progress: MusicProgress) => void,
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
@@ -96,7 +100,8 @@ async function pollMusicStatus(
     const data = await parseJsonResponse(res);
     const status = typeof data.status === "string" ? data.status : "processing";
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    onStatus(status, elapsed);
+    const parsed = parseReplicateLogs(typeof data.logs === "string" ? data.logs : undefined);
+    onStatus({ status, elapsedSeconds: elapsed, ...parsed });
     if (status === "succeeded") {
       const audio = Array.isArray(data.audio) ? (data.audio as string[]) : [];
       if (!audio[0]) throw new Error("Tónsmíð skilaði engu hljóði");
@@ -110,7 +115,7 @@ async function pollMusicStatus(
 }
 
 export type ComposeMusicOpts = {
-  onStatus?: (status: string, elapsedSeconds: number) => void;
+  onStatus?: (progress: MusicProgress) => void;
   onPredictionId?: (id: string) => void;
   signal?: AbortSignal;
 };
@@ -132,7 +137,7 @@ export async function composeMusic(settings: MusicSettings, opts?: ComposeMusicO
     throw new Error("Tónsmíð skilaði hvorki hljóði né prediction id");
   }
   opts?.onPredictionId?.(data.predictionId);
-  onStatus(typeof data.status === "string" ? data.status : "starting", 0);
+  onStatus({ status: typeof data.status === "string" ? data.status : "starting", elapsedSeconds: 0 });
   const audio = await pollMusicStatus(data.predictionId, onStatus, Date.now(), opts?.signal);
   return fetchBlob(audio[0]);
 }
@@ -140,7 +145,7 @@ export async function composeMusic(settings: MusicSettings, opts?: ComposeMusicO
 export async function resumeMusic(
   predictionId: string,
   startedAt: number,
-  opts?: { onStatus?: (status: string, elapsedSeconds: number) => void; signal?: AbortSignal },
+  opts?: { onStatus?: (progress: MusicProgress) => void; signal?: AbortSignal },
 ): Promise<Blob> {
   const onStatus = opts?.onStatus ?? (() => {});
   const audio = await pollMusicStatus(predictionId, onStatus, startedAt, opts?.signal);
