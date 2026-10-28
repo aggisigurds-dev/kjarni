@@ -81,7 +81,9 @@ async function pollMusicStatus(
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const deadline = startTime + 10 * 60 * 1000;
+  // Deadline er mældur frá NÚNA — ekki frá submittedAt. Resume eftir refresh
+  // má ekki hafa minna svigrúm en upphafskallið.
+  const deadline = Date.now() + 60 * 60 * 1000;
   while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
     await new Promise<void>((resolve) => {
@@ -118,7 +120,7 @@ async function pollMusicStatus(
       throw new Error((typeof data.error === "string" && data.error) || "Tónsmíð mistókst");
     }
   }
-  throw new Error("LOCAL_TIMEOUT: Tónsmíð var ekki tilbúin innan 10 mínútna — Replicate getur enn verið að vinna, endurhlað síðuna til að tengjast aftur");
+  throw new Error("LOCAL_TIMEOUT: Tónsmíð svaraði ekki í 1 klst — líklegast tapaðist predictionið. Prófaðu nýtt.");
 }
 
 export type ComposeMusicOpts = {

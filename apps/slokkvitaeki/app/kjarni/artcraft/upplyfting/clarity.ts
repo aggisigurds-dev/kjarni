@@ -109,7 +109,9 @@ async function pollClarityStatus(
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const deadline = startTime + 10 * 60 * 1000;
+  // Deadline er mældur frá NÚNA — ekki frá submittedAt. Annars hefur resume
+  // eftir refresh bara stuttan tíma eftir og lendir strax í LOCAL_TIMEOUT.
+  const deadline = Date.now() + 60 * 60 * 1000;
   while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
     await new Promise<void>((resolve) => {
@@ -146,7 +148,7 @@ async function pollClarityStatus(
       throw new Error((typeof data.error === "string" && data.error) || "Clarity mistókst");
     }
   }
-  throw new Error("LOCAL_TIMEOUT: Clarity var ekki tilbúið innan 10 mínútna — Replicate getur enn verið að vinna, endurhlað síðuna til að tengjast aftur");
+  throw new Error("LOCAL_TIMEOUT: Clarity svaraði ekki í 1 klst — líklegast tapaðist predictionið. Prófaðu nýtt.");
 }
 
 export type UpscaleWithClarityOpts = {
