@@ -14,7 +14,9 @@ import {
   TOPAZ_OUTPUT_FORMATS,
   TOPAZ_SETTINGS_KEY,
   TOPAZ_SUBJECT_DETECTIONS,
+  TOPAZ_UPSCALE_FACTORS,
   type TopazSettings,
+  upscaleFactorNumber,
   upscaleWithTopaz,
 } from "./topaz";
 
@@ -110,10 +112,9 @@ export default function UpplyftingClient() {
     );
   }
 
+  const factorNum = upscaleFactorNumber(settings.upscaleFactor);
   const estimatedOutputMp =
-    source != null
-      ? ((source.width * settings.upscaleFactor * source.height * settings.upscaleFactor) / 1_000_000).toFixed(1)
-      : null;
+    source != null ? ((source.width * factorNum * source.height * factorNum) / 1_000_000).toFixed(1) : null;
 
   return (
     <StationChrome tool="artcraft">
@@ -209,15 +210,18 @@ export default function UpplyftingClient() {
                 </select>
               </label>
               <label>
-                Stækkun ({settings.upscaleFactor}×{estimatedOutputMp != null ? ` · ~${estimatedOutputMp} MP` : ""})
-                <input
-                  type="range"
-                  min={1}
-                  max={6}
-                  step={0.5}
+                Stækkun ({settings.upscaleFactor}
+                {estimatedOutputMp != null ? ` · ~${estimatedOutputMp} MP` : ""})
+                <select
                   value={settings.upscaleFactor}
-                  onChange={(e) => updateSettings({ upscaleFactor: Number(e.target.value) })}
-                />
+                  onChange={(e) => updateSettings({ upscaleFactor: e.target.value as TopazSettings["upscaleFactor"] })}
+                >
+                  {TOPAZ_UPSCALE_FACTORS.map((f) => (
+                    <option key={f} value={f}>
+                      {f === "None" ? "Enginn (bara enhance)" : f}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 Subject detection
