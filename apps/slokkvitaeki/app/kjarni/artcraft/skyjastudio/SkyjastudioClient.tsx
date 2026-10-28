@@ -40,10 +40,15 @@ const SAVED_RESULT_KEY = "skyjastudio";
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const MAX_SOURCE_DIMENSION = 1024;
 
-type Mode = "txt2img" | "inpaint";
+type Mode = "txt2img" | "img2img" | "inpaint";
 
 const MODES: Array<{ id: Mode; label: string; hint: string }> = [
   { id: "txt2img", label: "Texti → mynd", hint: "Lýstu mynd frá grunni." },
+  {
+    id: "img2img",
+    label: "Mynd → mynd",
+    hint: "Hladdu upp mynd og lýstu útkomunni — enginn bursti. Styrkur ræður hversu mikið líkanið breytir myndinni.",
+  },
   {
     id: "inpaint",
     label: "Mála yfir (inpaint)",
@@ -150,7 +155,14 @@ export default function SkyjastudioClient() {
   const [txt2imgModel, setTxt2ImgModel] = useState<Txt2ImgModel>("sdxl");
   const [inpaintModel, setInpaintModel] = useState<InpaintModel>("sdxl");
   const isFlux = mode === "inpaint" && inpaintModel === "flux-fill";
-  const isJuggernaut = (mode === "txt2img" && txt2imgModel === "juggernaut") || (mode === "inpaint" && inpaintModel === "juggernaut");
+  // Img2img notar sömu „inpaint-model" radio-nn en Flux Fill er sérstaklega
+  // inpaint-only svo það fellur niður í SDXL ef user hafði Flux valið.
+  const effectiveInpaintModel: InpaintModel =
+    mode === "img2img" && inpaintModel === "flux-fill" ? "sdxl" : inpaintModel;
+  const isJuggernaut =
+    (mode === "txt2img" && txt2imgModel === "juggernaut") ||
+    (mode === "inpaint" && inpaintModel === "juggernaut") ||
+    (mode === "img2img" && effectiveInpaintModel === "juggernaut");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -359,6 +371,10 @@ export default function SkyjastudioClient() {
         return;
       }
     }
+    if (mode === "img2img" && !sourceRef.current) {
+      setError("Hladdu upp mynd fyrst.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -376,6 +392,18 @@ export default function SkyjastudioClient() {
         } else {
           const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
           blobs = await generateSdxlImage(sizedSettings, inpaintExtra);
+        }
+      } else if (mode === "img2img" && sourceRef.current) {
+        // Img2img: image uten mask — SDXL/Juggernaut routes meðhöndla það
+        // sjálfkrafa (sjá hasMask check); Flux Fill er inpaint-only svo það
+        // fellur niður í SDXL í effectiveInpaintModel.
+        const extra = { imageDataUrl: rasterToDataUrl(sourceRef.current, "image/jpeg", 0.92) };
+        if (isJuggernaut) {
+          const sizedJugg = { ...juggernautSettings, width: sourceRef.current.width, height: sourceRef.current.height };
+          blobs = await generateJuggernautImage(sizedJugg, extra);
+        } else {
+          const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
+          blobs = await generateSdxlImage(sizedSettings, extra);
         }
       } else if (isJuggernaut) {
         blobs = await generateJuggernautImage(juggernautSettings);
@@ -483,28 +511,33 @@ export default function SkyjastudioClient() {
             </section>
           )}
 
-          {mode === "inpaint" && (
+          {(mode === "inpaint" || mode === "img2img") && (
             <section className="ac-panel">
               <h2>Líkan</h2>
               <div className="ac-modes" role="radiogroup">
-                {INPAINT_MODELS.map((m) => (
+                {INPAINT_MODELS.filter((m) => mode === "inpaint" || m.id !== "flux-fill").map((m) => (
                   <button
                     key={m.id}
                     type="button"
                     role="radio"
-                    aria-checked={inpaintModel === m.id}
-                    className={inpaintModel === m.id ? "on" : undefined}
+                    aria-checked={effectiveInpaintModel === m.id}
+                    className={effectiveInpaintModel === m.id ? "on" : undefined}
                     onClick={() => selectInpaintModel(m.id)}
                   >
                     {m.label}
                   </button>
                 ))}
               </div>
-              <p className="ac-hint">{INPAINT_MODELS.find((m) => m.id === inpaintModel)?.hint}</p>
+              <p className="ac-hint">{INPAINT_MODELS.find((m) => m.id === effectiveInpaintModel)?.hint}</p>
+              {mode === "img2img" && inpaintModel === "flux-fill" && (
+                <p className="ac-hint" style={{ color: "var(--m-ember, #c9982f)" }}>
+                  Flux Fill er aðeins til í inpaint-ham — valið fellur niður í SDXL hér.
+                </p>
+              )}
             </section>
           )}
 
-          {mode === "inpaint" && !hasImage && (
+          {(mode === "inpaint" || mode === "img2img") && !hasImage && (
             <section
               className={`ac-drop ${drag ? "on" : ""}`}
               onDragOver={(e) => {
@@ -526,7 +559,7 @@ export default function SkyjastudioClient() {
             </section>
           )}
 
-          {mode === "inpaint" && (
+          {(mode === "inpaint" || mode === "img2img") && (
             <input
               ref={inputRef}
               type="file"
@@ -538,6 +571,20 @@ export default function SkyjastudioClient() {
                 e.target.value = "";
               }}
             />
+          )}
+
+          {mode === "img2img" && hasImage && (
+            <section className="ac-panel ac-adjust">
+              <p className="ac-hint">Myndin sem er sótt — enginn bursti í „Mynd → mynd" ham.</p>
+              <div className="ac-adjust-stage" ref={stageRef}>
+                <canvas ref={viewRef} className="ac-adjust-canvas" />
+              </div>
+              <div className="ac-row">
+                <button type="button" className="ac-btn ghost" onClick={newImage}>
+                  Ný mynd
+                </button>
+              </div>
+            </section>
           )}
 
           {mode === "inpaint" && hasImage && (
@@ -587,7 +634,7 @@ export default function SkyjastudioClient() {
             <section className="ac-panel">
               <h2>Prompt</h2>
               <label>
-                {mode === "inpaint" ? "Hvað á að koma í staðinn á máluðu svæði" : "Lýsing"}
+                {mode === "inpaint" ? "Hvað á að koma í staðinn á máluðu svæði" : mode === "img2img" ? "Hvernig á myndin að breytast?" : "Lýsing"}
                 <textarea
                   value={isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt}
                   onChange={(e) =>

@@ -134,7 +134,8 @@ async function fetchImageBlob(url: string): Promise<Blob> {
 
 export type InpaintExtra = {
   imageDataUrl: string;
-  maskDataUrl: string;
+  /** Optional: ef sleppt, þá er þetta img2img (image uten mask). */
+  maskDataUrl?: string;
 };
 
 export async function generateSdxlImage(settings: SdxlSettings, inpaint?: InpaintExtra): Promise<Blob[]> {
