@@ -38,11 +38,15 @@ export type SdxlSettings = {
   promptStrength: number;
 };
 
-export const DEFAULT_SDXL_PROMPT = "An astronaut riding a rainbow unicorn";
+export const DEFAULT_SDXL_PROMPT =
+  "RAW photo, extreme sharpness, 8k resolution, cinematic studio lighting, highly detailed skin realism, visible skin pores, smooth lace patterns, masterfully color graded portrait";
+
+export const DEFAULT_SDXL_NEGATIVE =
+  "(worst quality, low quality:1.4), (airbrushed, cartoon, anime, semi-realistic, cgi, render, 3d, digital art:1.3), plastic skin, fake lighting, blurry, glowing eyes, deformed limbs";
 
 export const DEFAULT_SDXL_SETTINGS: SdxlSettings = {
   prompt: DEFAULT_SDXL_PROMPT,
-  negativePrompt: "",
+  negativePrompt: DEFAULT_SDXL_NEGATIVE,
   width: 1024,
   height: 1024,
   steps: 50,
