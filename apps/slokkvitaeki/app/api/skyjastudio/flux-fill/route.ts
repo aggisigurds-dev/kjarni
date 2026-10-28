@@ -82,6 +82,7 @@ function clampNumOutputs(n: unknown, fallback: number): number {
 }
 
 export async function POST(req: NextRequest) {
+  const functionStart = Date.now();
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
@@ -128,7 +129,14 @@ export async function POST(req: NextRequest) {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        Prefer: "wait",
+        // A bare "Prefer: wait" defaults to the full 60s — which alone can
+        // exhaust this function's entire maxDuration budget before our own
+        // poll loop even starts, losing a successful paid prediction when
+        // Vercel kills the function mid-wait. Ask Replicate for a short
+        // synchronous wait instead and hand control back to our own loop,
+        // which budgets the *remaining* time precisely (see functionStart
+        // below) — verified against https://replicate.com/docs/reference/http.
+        Prefer: "wait=3",
       },
       body: JSON.stringify({ version, input }),
     });
@@ -139,7 +147,10 @@ export async function POST(req: NextRequest) {
 
     let prediction = (await createRes.json()) as ReplicatePrediction;
     if (prediction.status !== "succeeded" && prediction.status !== "failed" && prediction.status !== "canceled") {
-      prediction = await pollPrediction(token, prediction.urls.get, Date.now() + 55_000);
+      // Deadline is relative to when THIS function started, not to when the
+      // initial fetch above returned — the initial wait already spent some
+      // of our maxDuration budget, so the poll loop must account for that.
+      prediction = await pollPrediction(token, prediction.urls.get, functionStart + 55_000);
     }
     if (prediction.status !== "succeeded" || !prediction.output?.length) {
       return bad(502, prediction.error || "Flux Fill á Replicate mistókst");
