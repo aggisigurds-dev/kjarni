@@ -142,8 +142,16 @@ async function pollWanStatus(
       document.addEventListener("visibilitychange", onVisible);
     });
     if (signal?.aborted) throw new Error("Hætt við");
-    const res = await fetch(`/api/skyjahreyfimynd/status?id=${encodeURIComponent(predictionId)}`, { signal });
-    const data = await parseJsonResponse(res);
+    // Network-villur eru TRANSIENT — reyna aftur í næsta cycle.
+    let data: Record<string, unknown>;
+    try {
+      const res = await fetch(`/api/skyjahreyfimynd/status?id=${encodeURIComponent(predictionId)}`, { signal });
+      data = await parseJsonResponse(res);
+    } catch (err) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      onStatus({ status: "transient-error", elapsedSeconds: elapsed, logTail: err instanceof Error ? err.message : "" });
+      continue;
+    }
     const status = typeof data.status === "string" ? data.status : "processing";
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     const parsed = parseReplicateLogs(typeof data.logs === "string" ? data.logs : undefined);

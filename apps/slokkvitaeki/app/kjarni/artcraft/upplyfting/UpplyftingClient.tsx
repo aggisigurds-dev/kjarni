@@ -126,7 +126,8 @@ export default function UpplyftingClient() {
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Resume mistókst";
           setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
-          if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
+          const isRecoverable = msg.startsWith("LOCAL_TIMEOUT:") || /^(Failed to fetch|NetworkError|TypeError:)/i.test(msg);
+          if (!isRecoverable) await clearPending(SAVED_KEY);
         } finally {
           setBusy(false);
           setProgress(null);
@@ -235,7 +236,8 @@ export default function UpplyftingClient() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upplyfting mistókst.";
       setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
-      if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
+      const isRecoverable = msg.startsWith("LOCAL_TIMEOUT:") || /^(Failed to fetch|NetworkError|TypeError:)/i.test(msg);
+      if (!isRecoverable) await clearPending(SAVED_KEY);
     } finally {
       setBusy(false);
       setProgress(null);

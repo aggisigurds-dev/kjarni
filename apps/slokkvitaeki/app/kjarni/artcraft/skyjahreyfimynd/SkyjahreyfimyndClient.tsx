@@ -137,7 +137,12 @@ export default function SkyjahreyfimyndClient() {
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Resume mistókst";
           setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
-          if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
+          // Hreinsa pending AÐEINS ef Replicate confirmaði failure/canceled
+          // (meaning: ekki LOCAL_TIMEOUT og ekki transient network error).
+          // Transient errors og page-reloads þurfa pending til að geta reynt
+          // aftur næst þegar user hleður síðunni.
+          const isRecoverable = msg.startsWith("LOCAL_TIMEOUT:") || /^(Failed to fetch|NetworkError|TypeError:)/i.test(msg);
+          if (!isRecoverable) await clearPending(SAVED_KEY);
         } finally {
           setBusy(false);
           setProgress(null);
@@ -261,7 +266,8 @@ export default function SkyjahreyfimyndClient() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.";
       setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
-      if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
+      const isRecoverable = msg.startsWith("LOCAL_TIMEOUT:") || /^(Failed to fetch|NetworkError|TypeError:)/i.test(msg);
+      if (!isRecoverable) await clearPending(SAVED_KEY);
     } finally {
       setBusy(false);
       setProgress(null);
