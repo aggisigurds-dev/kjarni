@@ -1915,6 +1915,7 @@
   border: 2px solid var(--m-line, #d5dee8);
   border-radius: 12px;
   background: var(--m-card, #fff);
+  color: var(--m-ink, #141822);
   transition: border-color 150ms, background 150ms;
 }
 
@@ -2005,11 +2006,21 @@
   background: #0a0a0a;
   border-color: rgba(201, 152, 47, 0.35);
   border-radius: 0;
+  color: var(--rg-text, #f3e4bf);
 }
 
 .stn[data-skin="ragnarok"] .ac-prompt-slot.on {
   border-color: var(--rg-gold-fill, #c9982f);
   background: rgba(201, 152, 47, 0.08);
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot textarea {
+  color: var(--rg-text, #f3e4bf);
+  background: #050505;
+}
+
+.stn[data-skin="ragnarok"] .ac-prompt-slot-empty {
+  color: var(--rg-text-faint, #7d6238);
 }
 
 .stn[data-skin="ragnarok"] .ac-prompt-slot-preview:hover {
