@@ -5,6 +5,7 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
+import { shrinkImageForUpload } from "../replicateImage";
 import {
   BREYTA_MODE_KEY,
   BREYTA_MODE_LABELS,
@@ -32,15 +33,6 @@ import {
 } from "./models";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Gat ekki lesið mynd"));
-    reader.readAsDataURL(blob);
-  });
-}
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -113,11 +105,13 @@ export default function BreytaClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      const dataUrl = await blobToDataUrl(file);
+      // Headshot/Background/Pruna vinna vel við 1024px — passar undir
+      // Vercel's 4.5MB body-mörk líka á stórum síma-ljósmyndum.
+      const shrunk = await shrinkImageForUpload(file, { maxDim: 1024 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = dataUrl;
+      sourceDataUrlRef.current = shrunk.dataUrl;
       setSource({ url, name: file.name });
       for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
       resultUrlsRef.current = [];

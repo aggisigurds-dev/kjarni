@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import { shrinkImageForUpload } from "../replicateImage";
 import {
   DEFAULT_WAN_SETTINGS,
   generateWanVideo,
@@ -16,15 +17,6 @@ import {
 } from "./wan";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Gat ekki lesið mynd"));
-    reader.readAsDataURL(blob);
-  });
-}
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -69,11 +61,13 @@ export default function SkyjahreyfimyndClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      const dataUrl = await blobToDataUrl(file);
+      // Wan 2.2 i2v notar lágupplausn uppfletti; 1024px passar fínt
+      // og heldur okkur örugglega undir Vercel's 4.5MB body-mörkum.
+      const shrunk = await shrinkImageForUpload(file, { maxDim: 1024 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = dataUrl;
+      sourceDataUrlRef.current = shrunk.dataUrl;
       setSource({ url, name: file.name });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       resultUrlRef.current = "";

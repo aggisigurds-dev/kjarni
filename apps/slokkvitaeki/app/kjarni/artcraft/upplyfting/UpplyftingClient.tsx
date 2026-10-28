@@ -5,6 +5,7 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
+import { shrinkImageForUpload } from "../replicateImage";
 import {
   DEFAULT_TOPAZ_SETTINGS,
   normalizeTopazSettings,
@@ -18,24 +19,6 @@ import {
 } from "./topaz";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
-    img.src = src;
-  });
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Gat ekki lesið mynd"));
-    reader.readAsDataURL(blob);
-  });
-}
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -80,13 +63,15 @@ export default function UpplyftingClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      const dataUrl = await blobToDataUrl(file);
-      const img = await loadImage(dataUrl);
+      // Topaz skilar hámarksgæðum þegar uppflettingin er há; við þurfum samt
+      // að halda okkur undir Vercel's 4.5MB — leyfum 2048px hámarks hlið og
+      // JPEG q=0.95 til að forðast óþarfa tap á áferð áður en Topaz sér hana.
+      const shrunk = await shrinkImageForUpload(file, { maxDim: 2048, mime: "image/jpeg", quality: 0.95 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = dataUrl;
-      setSource({ url, name: file.name, width: img.naturalWidth, height: img.naturalHeight });
+      sourceDataUrlRef.current = shrunk.dataUrl;
+      setSource({ url, name: file.name, width: shrunk.width, height: shrunk.height });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       resultUrlRef.current = "";
       setResult("");
