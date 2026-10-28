@@ -13,6 +13,14 @@ import {
   readStoredSdxlSettings,
   type SdxlSettings,
 } from "./sdxl";
+import {
+  DEFAULT_FLUX_FILL_SETTINGS,
+  generateFluxFillImage,
+  FLUX_FILL_SETTINGS_KEY,
+  normalizeFluxFillSettings,
+  readStoredFluxFillSettings,
+  type FluxFillSettings,
+} from "./fluxFill";
 import { cloneRaster, createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
 import { compositeMaskOverlay, maskCoverage, paintCircle } from "./maskPaint";
 import ImageZoom from "../ImageZoom";
@@ -30,6 +38,24 @@ const MODES: Array<{ id: Mode; label: string; hint: string }> = [
     hint: "Hladdu upp mynd, málaðu yfir svæðið sem á að breyta, lýstu því sem á að koma í staðinn.",
   },
 ];
+
+type InpaintModel = "sdxl" | "flux-fill";
+
+const INPAINT_MODELS: Array<{ id: InpaintModel; label: string; hint: string }> = [
+  { id: "sdxl", label: "Stability SDXL", hint: "Fleiri stillingar (scheduler, vatnsmerki o.fl.)." },
+  {
+    id: "flux-fill",
+    label: "Flux Fill",
+    hint: "Sérsmíðað fyrir nákvæmlega þetta — skilur prómt oft betur, t.d. að fjarlægja hlut sem hylur eitthvað.",
+  },
+];
+const INPAINT_MODEL_KEY = "kjarni_private_skyjastudio_inpaint_model";
+
+function readStoredInpaintModel(): InpaintModel {
+  if (typeof window === "undefined") return "sdxl";
+  const raw = window.localStorage.getItem(INPAINT_MODEL_KEY);
+  return raw === "flux-fill" ? "flux-fill" : "sdxl";
+}
 
 function isPhotoFile(file: { type: string; name: string }): boolean {
   if (/^image\/(jpeg|png|webp)$/i.test(file.type)) return true;
@@ -81,7 +107,10 @@ function downloadBlob(url: string, name: string) {
 export default function SkyjastudioClient() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<SdxlSettings>(DEFAULT_SDXL_SETTINGS);
+  const [fluxSettings, setFluxSettings] = useState<FluxFillSettings>(DEFAULT_FLUX_FILL_SETTINGS);
   const [mode, setMode] = useState<Mode>("txt2img");
+  const [inpaintModel, setInpaintModel] = useState<InpaintModel>("sdxl");
+  const isFlux = mode === "inpaint" && inpaintModel === "flux-fill";
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -107,6 +136,8 @@ export default function SkyjastudioClient() {
 
   useEffect(() => {
     setSettings(readStoredSdxlSettings());
+    setFluxSettings(readStoredFluxFillSettings());
+    setInpaintModel(readStoredInpaintModel());
     setReady(true);
   }, []);
 
@@ -122,6 +153,19 @@ export default function SkyjastudioClient() {
       window.localStorage.setItem(SDXL_SETTINGS_KEY, JSON.stringify(merged));
       return merged;
     });
+  }
+
+  function updateFluxSettings(next: Partial<FluxFillSettings>) {
+    setFluxSettings((s) => {
+      const merged = normalizeFluxFillSettings({ ...s, ...next });
+      window.localStorage.setItem(FLUX_FILL_SETTINGS_KEY, JSON.stringify(merged));
+      return merged;
+    });
+  }
+
+  function selectInpaintModel(next: InpaintModel) {
+    setInpaintModel(next);
+    window.localStorage.setItem(INPAINT_MODEL_KEY, next);
   }
 
   function paintCanvas() {
@@ -232,7 +276,8 @@ export default function SkyjastudioClient() {
   }
 
   async function run() {
-    if (!settings.prompt.trim()) {
+    const prompt = isFlux ? fluxSettings.prompt : settings.prompt;
+    if (!prompt.trim()) {
       setError("Skrifaðu prompt fyrst.");
       return;
     }
@@ -253,11 +298,16 @@ export default function SkyjastudioClient() {
     try {
       let blobs: Blob[];
       if (mode === "inpaint" && sourceRef.current && maskRef.current) {
-        const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
-        blobs = await generateSdxlImage(sizedSettings, {
+        const inpaintExtra = {
           imageDataUrl: rasterToDataUrl(sourceRef.current, "image/jpeg", 0.92),
           maskDataUrl: rasterToDataUrl(maskRef.current, "image/png"),
-        });
+        };
+        if (isFlux) {
+          blobs = await generateFluxFillImage(fluxSettings, inpaintExtra);
+        } else {
+          const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
+          blobs = await generateSdxlImage(sizedSettings, inpaintExtra);
+        }
       } else {
         blobs = await generateSdxlImage(settings);
       }
@@ -320,6 +370,27 @@ export default function SkyjastudioClient() {
             </div>
             <p className="ac-hint">{MODES.find((m) => m.id === mode)?.hint}</p>
           </section>
+
+          {mode === "inpaint" && (
+            <section className="ac-panel">
+              <h2>Líkan</h2>
+              <div className="ac-modes" role="radiogroup">
+                {INPAINT_MODELS.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={inpaintModel === m.id}
+                    className={inpaintModel === m.id ? "on" : undefined}
+                    onClick={() => selectInpaintModel(m.id)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <p className="ac-hint">{INPAINT_MODELS.find((m) => m.id === inpaintModel)?.hint}</p>
+            </section>
+          )}
 
           {mode === "inpaint" && !hasImage && (
             <section
@@ -406,136 +477,203 @@ export default function SkyjastudioClient() {
               <label>
                 {mode === "inpaint" ? "Hvað á að koma í staðinn á máluðu svæði" : "Lýsing"}
                 <textarea
-                  value={settings.prompt}
-                  onChange={(e) => updateSettings({ prompt: e.target.value })}
+                  value={isFlux ? fluxSettings.prompt : settings.prompt}
+                  onChange={(e) =>
+                    isFlux ? updateFluxSettings({ prompt: e.target.value }) : updateSettings({ prompt: e.target.value })
+                  }
                   rows={3}
                 />
               </label>
-              <label>
-                Neikvæð lýsing (má sleppa)
-                <textarea
-                  value={settings.negativePrompt}
-                  onChange={(e) => updateSettings({ negativePrompt: e.target.value })}
-                  rows={3}
-                />
-              </label>
+              {!isFlux && (
+                <label>
+                  Neikvæð lýsing (má sleppa)
+                  <textarea
+                    value={settings.negativePrompt}
+                    onChange={(e) => updateSettings({ negativePrompt: e.target.value })}
+                    rows={3}
+                  />
+                </label>
+              )}
 
-              <div className="ac-settings">
-                {mode === "txt2img" && (
-                  <>
-                    <label>
-                      Breidd ({settings.width}px)
-                      <input
-                        type="range"
-                        min={512}
-                        max={1536}
-                        step={8}
-                        value={settings.width}
-                        onChange={(e) => updateSettings({ width: Number(e.target.value) })}
-                      />
-                    </label>
-                    <label>
-                      Hæð ({settings.height}px)
-                      <input
-                        type="range"
-                        min={512}
-                        max={1536}
-                        step={8}
-                        value={settings.height}
-                        onChange={(e) => updateSettings({ height: Number(e.target.value) })}
-                      />
-                    </label>
-                  </>
-                )}
-                {mode === "inpaint" && (
+              {isFlux ? (
+                <div className="ac-settings">
                   <label>
-                    Styrkur breytinga ({settings.promptStrength.toFixed(2)})
+                    Skref ({fluxSettings.steps})
+                    <input
+                      type="range"
+                      min={1}
+                      max={50}
+                      value={fluxSettings.steps}
+                      onChange={(e) => updateFluxSettings({ steps: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Guidance ({fluxSettings.guidance})
                     <input
                       type="range"
                       min={0}
-                      max={1}
-                      step={0.05}
-                      value={settings.promptStrength}
-                      onChange={(e) => updateSettings({ promptStrength: Number(e.target.value) })}
+                      max={100}
+                      value={fluxSettings.guidance}
+                      onChange={(e) => updateFluxSettings({ guidance: Number(e.target.value) })}
                     />
                   </label>
-                )}
-                <label>
-                  Skref ({settings.steps})
-                  <input
-                    type="range"
-                    min={1}
-                    max={100}
-                    value={settings.steps}
-                    onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  Guidance ({settings.guidanceScale.toFixed(1)})
-                  <input
-                    type="range"
-                    min={1}
-                    max={50}
-                    step={0.5}
-                    value={settings.guidanceScale}
-                    onChange={(e) => updateSettings({ guidanceScale: Number(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  Scheduler
-                  <select
-                    value={settings.scheduler}
-                    onChange={(e) => updateSettings({ scheduler: e.target.value as SdxlSettings["scheduler"] })}
-                  >
-                    {SDXL_SCHEDULERS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {mode === "txt2img" && (
                   <label>
-                    Fjöldi mynda ({settings.numOutputs})
+                    Fjöldi mynda ({fluxSettings.numOutputs})
                     <input
                       type="range"
                       min={1}
                       max={4}
-                      value={settings.numOutputs}
-                      onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
+                      value={fluxSettings.numOutputs}
+                      onChange={(e) => updateFluxSettings({ numOutputs: Number(e.target.value) })}
                     />
                   </label>
-                )}
-                <label>
-                  Seed ({settings.seed === -1 ? "slembið" : settings.seed})
-                  <input
-                    type="number"
-                    value={settings.seed}
-                    onChange={(e) => updateSettings({ seed: Number(e.target.value) })}
-                  />
-                </label>
-              </div>
+                  <label>
+                    Seed ({fluxSettings.seed === -1 ? "slembið" : fluxSettings.seed})
+                    <input
+                      type="number"
+                      value={fluxSettings.seed}
+                      onChange={(e) => updateFluxSettings({ seed: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="ac-settings">
+                  {mode === "txt2img" && (
+                    <>
+                      <label>
+                        Breidd ({settings.width}px)
+                        <input
+                          type="range"
+                          min={512}
+                          max={1536}
+                          step={8}
+                          value={settings.width}
+                          onChange={(e) => updateSettings({ width: Number(e.target.value) })}
+                        />
+                      </label>
+                      <label>
+                        Hæð ({settings.height}px)
+                        <input
+                          type="range"
+                          min={512}
+                          max={1536}
+                          step={8}
+                          value={settings.height}
+                          onChange={(e) => updateSettings({ height: Number(e.target.value) })}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {mode === "inpaint" && (
+                    <label>
+                      Styrkur breytinga ({settings.promptStrength.toFixed(2)})
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={settings.promptStrength}
+                        onChange={(e) => updateSettings({ promptStrength: Number(e.target.value) })}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Skref ({settings.steps})
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      value={settings.steps}
+                      onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Guidance ({settings.guidanceScale.toFixed(1)})
+                    <input
+                      type="range"
+                      min={1}
+                      max={50}
+                      step={0.5}
+                      value={settings.guidanceScale}
+                      onChange={(e) => updateSettings({ guidanceScale: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Scheduler
+                    <select
+                      value={settings.scheduler}
+                      onChange={(e) => updateSettings({ scheduler: e.target.value as SdxlSettings["scheduler"] })}
+                    >
+                      {SDXL_SCHEDULERS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {mode === "txt2img" && (
+                    <label>
+                      Fjöldi mynda ({settings.numOutputs})
+                      <input
+                        type="range"
+                        min={1}
+                        max={4}
+                        value={settings.numOutputs}
+                        onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Seed ({settings.seed === -1 ? "slembið" : settings.seed})
+                    <input
+                      type="number"
+                      value={settings.seed}
+                      onChange={(e) => updateSettings({ seed: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+              )}
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={settings.disableSafetyChecker}
-                  onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
-                />
-                Slökkva á öryggissíu (disable_safety_checker)
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={settings.applyWatermark}
-                  onChange={(e) => updateSettings({ applyWatermark: e.target.checked })}
-                />
-                Setja vatnsmerki á myndina (apply_watermark)
-              </label>
-              <p className="ac-hint">
-                Bæði eru skjalfestar Replicate-breytur fyrir þetta líkan — öryggissían er sjálfgefið
-                á, vatnsmerkið sjálfgefið á. Þú berð ábyrgð á notkuninni þegar slökkt er á síunni.
-              </p>
+              {isFlux ? (
+                <>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={fluxSettings.disableSafetyChecker}
+                      onChange={(e) => updateFluxSettings({ disableSafetyChecker: e.target.checked })}
+                    />
+                    Slökkva á öryggissíu (disable_safety_checker)
+                  </label>
+                  <p className="ac-hint">
+                    Skjalfest Replicate-breyta fyrir þetta líkan — sjálfgefið á. Þú berð ábyrgð á
+                    notkuninni þegar slökkt er á síunni.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={settings.disableSafetyChecker}
+                      onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
+                    />
+                    Slökkva á öryggissíu (disable_safety_checker)
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={settings.applyWatermark}
+                      onChange={(e) => updateSettings({ applyWatermark: e.target.checked })}
+                    />
+                    Setja vatnsmerki á myndina (apply_watermark)
+                  </label>
+                  <p className="ac-hint">
+                    Bæði eru skjalfestar Replicate-breytur fyrir þetta líkan — öryggissían er
+                    sjálfgefið á, vatnsmerkið sjálfgefið á. Þú berð ábyrgð á notkuninni þegar slökkt
+                    er á síunni.
+                  </p>
+                </>
+              )}
 
               {error && <p className="ac-error">{error}</p>}
               <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy}>
