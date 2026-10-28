@@ -73,6 +73,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
       "skyjahreyfimynd",
       "upplyfting",
       "breyta",
+      "tonsmid",
       "leidarvisir",
     ],
   );
@@ -87,6 +88,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/skyjahreyfimynd"), "skyjahreyfimynd");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/upplyfting"), "upplyfting");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/breyta"), "breyta");
+  assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/tonsmid"), "tonsmid");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/missing"), "hub");
 });
 

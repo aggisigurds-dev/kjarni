@@ -7,6 +7,14 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import {
+  CLARITY_SETTINGS_KEY,
+  DEFAULT_CLARITY_SETTINGS,
+  normalizeClaritySettings,
+  readStoredClaritySettings,
+  type ClaritySettings,
+  upscaleWithClarity,
+} from "./clarity";
+import {
   DEFAULT_TOPAZ_SETTINGS,
   normalizeTopazSettings,
   readStoredTopazSettings,
@@ -20,6 +28,15 @@ import {
   upscaleWithTopaz,
 } from "./topaz";
 
+type UpscaleMode = "topaz" | "clarity";
+
+const UPSCALE_MODE_KEY = "kjarni_private_upplyfting_mode";
+
+function readStoredMode(): UpscaleMode {
+  if (typeof window === "undefined") return "topaz";
+  return window.localStorage.getItem(UPSCALE_MODE_KEY) === "clarity" ? "clarity" : "topaz";
+}
+
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
 function downloadBlob(url: string, name: string) {
@@ -31,7 +48,9 @@ function downloadBlob(url: string, name: string) {
 
 export default function UpplyftingClient() {
   const [ready, setReady] = useState(false);
+  const [mode, setMode] = useState<UpscaleMode>("topaz");
   const [settings, setSettings] = useState<TopazSettings>(DEFAULT_TOPAZ_SETTINGS);
+  const [clarity, setClarity] = useState<ClaritySettings>(DEFAULT_CLARITY_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
@@ -44,8 +63,16 @@ export default function UpplyftingClient() {
 
   useEffect(() => {
     setSettings(readStoredTopazSettings());
+    setClarity(readStoredClaritySettings());
+    setMode(readStoredMode());
     setReady(true);
   }, []);
+
+  function selectMode(next: UpscaleMode) {
+    setMode(next);
+    window.localStorage.setItem(UPSCALE_MODE_KEY, next);
+    setError("");
+  }
 
   useEffect(() => {
     return () => {
@@ -58,6 +85,14 @@ export default function UpplyftingClient() {
     setSettings((s) => {
       const merged = normalizeTopazSettings({ ...s, ...next });
       window.localStorage.setItem(TOPAZ_SETTINGS_KEY, JSON.stringify(merged));
+      return merged;
+    });
+  }
+
+  function updateClarity(next: Partial<ClaritySettings>) {
+    setClarity((s) => {
+      const merged = normalizeClaritySettings({ ...s, ...next });
+      window.localStorage.setItem(CLARITY_SETTINGS_KEY, JSON.stringify(merged));
       return merged;
     });
   }
@@ -90,7 +125,10 @@ export default function UpplyftingClient() {
     setBusy(true);
     setError("");
     try {
-      const blob = await upscaleWithTopaz(settings, sourceDataUrlRef.current);
+      const blob =
+        mode === "clarity"
+          ? await upscaleWithClarity(clarity, sourceDataUrlRef.current)
+          : await upscaleWithTopaz(settings, sourceDataUrlRef.current);
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
@@ -112,7 +150,7 @@ export default function UpplyftingClient() {
     );
   }
 
-  const factorNum = upscaleFactorNumber(settings.upscaleFactor);
+  const factorNum = mode === "clarity" ? clarity.scaleFactor : upscaleFactorNumber(settings.upscaleFactor);
   const estimatedOutputMp =
     source != null ? ((source.width * factorNum * source.height * factorNum) / 1_000_000).toFixed(1) : null;
 
@@ -194,7 +232,116 @@ export default function UpplyftingClient() {
           )}
 
           <section className="ac-panel">
+            <h2>Líkan</h2>
+            <div className="ac-modes" role="radiogroup">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={mode === "topaz"}
+                className={mode === "topaz" ? "on" : undefined}
+                onClick={() => selectMode("topaz")}
+              >
+                Topaz
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={mode === "clarity"}
+                className={mode === "clarity" ? "on" : undefined}
+                onClick={() => selectMode("clarity")}
+              >
+                Clarity Pro
+              </button>
+            </div>
+            <p className="ac-hint">
+              {mode === "topaz"
+                ? "Topaz Labs — klassískur pixel-upscaler, trú upprunalegri mynd. Enhance-líkön og face enhancement passa sig við hvað er á myndinni."
+                : "philz1337x Clarity Pro — creative upscaler sem endurskapar smáatriði en heldur sjálfsmynd. Hærri creativity = meiri áferð bætt við, lægri resemblance = frjálsari túlkun."}
+            </p>
+          </section>
+
+          <section className="ac-panel">
             <h2>Stillingar</h2>
+            {mode === "clarity" ? (
+              <>
+                <label>
+                  Prompt (hvað skal líkanið sjá)
+                  <textarea
+                    value={clarity.prompt}
+                    onChange={(e) => updateClarity({ prompt: e.target.value })}
+                    rows={2}
+                  />
+                </label>
+                <label>
+                  Neikvæð lýsing
+                  <textarea
+                    value={clarity.negativePrompt}
+                    onChange={(e) => updateClarity({ negativePrompt: e.target.value })}
+                    rows={2}
+                  />
+                </label>
+                <div className="ac-settings">
+                  <label>
+                    Scale ({clarity.scaleFactor.toFixed(1)}×
+                    {estimatedOutputMp != null ? ` · ~${estimatedOutputMp} MP` : ""})
+                    <input
+                      type="range"
+                      min={1}
+                      max={4}
+                      step={0.5}
+                      value={clarity.scaleFactor}
+                      onChange={(e) => updateClarity({ scaleFactor: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Creativity ({clarity.creativity.toFixed(2)})
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={clarity.creativity}
+                      onChange={(e) => updateClarity({ creativity: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Resemblance ({clarity.resemblance.toFixed(2)})
+                    <input
+                      type="range"
+                      min={0}
+                      max={3}
+                      step={0.05}
+                      value={clarity.resemblance}
+                      onChange={(e) => updateClarity({ resemblance: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Skref ({clarity.steps})
+                    <input
+                      type="range"
+                      min={1}
+                      max={50}
+                      value={clarity.steps}
+                      onChange={(e) => updateClarity({ steps: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Seed ({clarity.seed === -1 ? "slembið" : clarity.seed})
+                    <input
+                      type="number"
+                      value={clarity.seed}
+                      onChange={(e) => updateClarity({ seed: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+
+                {error && <p className="ac-error">{error}</p>}
+                <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
+                  {busy ? "Upplyfti…" : "Upplyfta mynd"}
+                </button>
+              </>
+            ) : (
+              <>
             <div className="ac-settings">
               <label>
                 Enhance-líkan
@@ -292,6 +439,8 @@ export default function UpplyftingClient() {
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
               {busy ? "Upplyfti…" : "Upplyfta mynd"}
             </button>
+            </>
+            )}
           </section>
 
           {source && !result && (

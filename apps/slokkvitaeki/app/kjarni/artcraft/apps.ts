@@ -285,6 +285,10 @@ export function artcraftBreytaHref(): string {
   return "/kjarni/artcraft/breyta";
 }
 
+export function artcraftTonsmidHref(): string {
+  return "/kjarni/artcraft/tonsmid";
+}
+
 export function artcraftLeidarvisirHref(): string {
   return "/kjarni/artcraft/leidarvisir";
 }
@@ -340,6 +344,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "skyjahreyfimynd", name: "Skýjahreyfimynd", href: artcraftSkyjahreyfimyndHref(), icon: "🌥️", role: "Mynd → myndband", desc: "Mynd → myndband með Wan 2.2 á Replicate — opin uppspretta úr Alibaba, ~$0.05 per myndband. Skýja-mótvægi við Hreyfimynd.", uses: ["Láta kyrrmynd af vöru hreyfa sig í stuttu Facebook-videói", "Vekja staðreyndamynd til lífsins án ComfyUI uppsetningar"] as readonly string[] },
   { id: "upplyfting", name: "Upplyfting", href: artcraftUpplyftingHref(), icon: "🔍", role: "Upscale", desc: "Faglegt myndupplyfting með Topaz Labs á Replicate — stækkar og skerpir án þess að breyta efni.", uses: ["Lítil mynd af vöru stækkuð í fulla upplausn fyrir vefsíðuna", "Óskýr skönnuð skýrslu-mynd gerð læsileg"] as readonly string[] },
   { id: "breyta", name: "Breyta mynd", href: artcraftBreytaHref(), icon: "🪄", role: "Mynd → mynd", desc: "Þrjú skýja-líkön: pro headshot, nýr bakgrunnur með texta, hraðvirk multi-image edit.", uses: ["Starfsmannamyndir á grafitt bakgrunn", "Vörumynd úr bílskúr → stúdíó-bakgrunnur", "Hraðar tilraunir á sömu mynd fyrir pence"] as readonly string[] },
+  { id: "tonsmid", name: "Tónsmíð", href: artcraftTonsmidHref(), icon: "🎵", role: "Texti → lag", desc: "Semur heilt lag úr texta með ElevenLabs Music á Replicate — jinglar, útvarpsauglýsingar, bakgrunnstónlist.", uses: ["Útvarpsjingill fyrir Slökkvitæki", "Bakgrunnstónlist fyrir Facebook-video", "Róandi lag fyrir Jarvis-tilkynningar"] as readonly string[] },
   { id: "leidarvisir", name: "Leiðarvísir", href: artcraftLeidarvisirHref(), icon: "📖", role: "Hjálp", desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum af alvöru viðmótinu.", uses: [] as readonly string[] },
 ] as const;
 
@@ -360,6 +365,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/skyjahreyfimynd") return "skyjahreyfimynd";
   if (path === "/kjarni/artcraft/upplyfting") return "upplyfting";
   if (path === "/kjarni/artcraft/breyta") return "breyta";
+  if (path === "/kjarni/artcraft/tonsmid") return "tonsmid";
   if (path === "/kjarni/artcraft/leidarvisir") return "leidarvisir";
   const slug = path.split("/").pop() || "";
   if (isArtcraftAppId(slug)) return slug;
