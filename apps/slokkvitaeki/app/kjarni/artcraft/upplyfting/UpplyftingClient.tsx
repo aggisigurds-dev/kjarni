@@ -6,6 +6,11 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
+import {
+  PromptSlots,
+  readStoredPromptSlots,
+  type PromptSlotData,
+} from "../PromptSlots";
 import { shrinkImageForUpload } from "../replicateImage";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
@@ -18,6 +23,8 @@ import {
   type ClaritySettings,
   upscaleWithClarity,
 } from "./clarity";
+
+const CLARITY_PROMPT_SLOTS_KEY = "kjarni_private_upplyfting_clarity_prompt_slots";
 
 const SAVED_KEY = "upplyfting";
 import {
@@ -57,6 +64,10 @@ export default function UpplyftingClient() {
   const [mode, setMode] = useState<UpscaleMode>("topaz");
   const [settings, setSettings] = useState<TopazSettings>(DEFAULT_TOPAZ_SETTINGS);
   const [clarity, setClarity] = useState<ClaritySettings>(DEFAULT_CLARITY_SETTINGS);
+  const [claritySlots, setClaritySlots] = useState<PromptSlotData>({
+    slots: [DEFAULT_CLARITY_SETTINGS.prompt, "", ""],
+    active: 0,
+  });
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{
     status: string;
@@ -79,7 +90,9 @@ export default function UpplyftingClient() {
 
   useEffect(() => {
     setSettings(readStoredTopazSettings());
-    setClarity(readStoredClaritySettings());
+    const storedClarity = readStoredClaritySettings();
+    setClarity(storedClarity);
+    setClaritySlots(readStoredPromptSlots(CLARITY_PROMPT_SLOTS_KEY, storedClarity.prompt));
     setMode(readStoredMode());
     setReady(true);
     void (async () => {
@@ -165,6 +178,11 @@ export default function UpplyftingClient() {
     });
   }
 
+  function updateClaritySlots(next: PromptSlotData) {
+    setClaritySlots(next);
+    window.localStorage.setItem(CLARITY_PROMPT_SLOTS_KEY, JSON.stringify(next));
+  }
+
   async function addFile(file: File) {
     setError("");
     try {
@@ -194,9 +212,11 @@ export default function UpplyftingClient() {
     setError("");
     setProgress(mode === "clarity" ? { status: "starting", elapsed: 0 } : null);
     try {
+      const activeClarityPrompt = claritySlots.slots[claritySlots.active];
+      const clarityWithPrompt: ClaritySettings = { ...clarity, prompt: activeClarityPrompt };
       const blob =
         mode === "clarity"
-          ? await upscaleWithClarity(clarity, sourceDataUrlRef.current, {
+          ? await upscaleWithClarity(clarityWithPrompt, sourceDataUrlRef.current, {
               onStatus: (p) =>
                 setProgress({
                   status: p.status,
@@ -376,14 +396,13 @@ export default function UpplyftingClient() {
             <h2>Stillingar</h2>
             {mode === "clarity" ? (
               <>
-                <label>
-                  Prompt (hvað skal líkanið sjá)
-                  <textarea
-                    value={clarity.prompt}
-                    onChange={(e) => updateClarity({ prompt: e.target.value })}
-                    rows={2}
-                  />
-                </label>
+                <PromptSlots
+                  label="Prompt (hvað skal líkanið sjá) — 3 slots, tappaðu á textann til að breyta, + til að velja virkt"
+                  data={claritySlots}
+                  onChange={updateClaritySlots}
+                  rows={2}
+                  placeholder="masterpiece, best quality, highres, detailed…"
+                />
                 <label>
                   Neikvæð lýsing
                   <textarea
