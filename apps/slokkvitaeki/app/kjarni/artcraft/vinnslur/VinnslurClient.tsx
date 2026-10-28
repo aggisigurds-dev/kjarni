@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref } from "../apps";
 import "../artcraft.css";
 import { clearPending, listAllPending, type PendingPrediction } from "../pendingPredictions";
+import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, listAllResults, type SavedResult } from "../savedResults";
+import { canPollInBackground, pollJob, type PollState } from "./vinnsluPoller";
 
 // Hvert vistað key samsvarar þessu tóli — notum það til að sýna nafn + href
 // á listanum. Haldum lista í sync við app.ts registry-ið.
@@ -34,6 +36,8 @@ export default function VinnslurClient() {
   const [pending, setPending] = useState<PendingPrediction[]>([]);
   const [results, setResults] = useState<SavedResult[]>([]);
   const [ready, setReady] = useState(false);
+  const [progressByKey, setProgressByKey] = useState<Record<string, PollState>>({});
+  const pollersRef = useRef<Map<string, AbortController>>(new Map());
 
   async function refresh() {
     const [p, r] = await Promise.all([listAllPending(), listAllResults()]);
@@ -46,10 +50,52 @@ export default function VinnslurClient() {
       await refresh();
       setReady(true);
     })();
-    // Refresh á 10s fresti ef notandi hangir á síðunni (til að ná pending →
-    // ready switch án þess að endurhlaða).
     const timer = setInterval(() => void refresh(), 10000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Background polling: hvert pending fær sinn eigin pollara sem lýkur þegar
+  // Replicate confirmar terminal status. Vinnur óháð því hvort notandi er í
+  // samsvarandi tóli eða ekki — niðurstöður skila sér beint í Verkbók.
+  useEffect(() => {
+    const current = pollersRef.current;
+    // Byrja poll fyrir hvert nýtt pending
+    for (const job of pending) {
+      if (current.has(job.key)) continue;
+      if (!canPollInBackground(job)) continue;
+      const ctrl = new AbortController();
+      current.set(job.key, ctrl);
+      void pollJob(
+        job,
+        (state) => {
+          setProgressByKey((prev) => ({ ...prev, [job.key]: state }));
+        },
+        ctrl.signal,
+      ).finally(() => {
+        current.delete(job.key);
+        setProgressByKey((prev) => {
+          const next = { ...prev };
+          delete next[job.key];
+          return next;
+        });
+        void refresh();
+      });
+    }
+    // Hreinsa poll fyrir keys sem er horfið úr pending (t.d. user hreinsaði)
+    for (const [key, ctrl] of current.entries()) {
+      if (!pending.some((p) => p.key === key)) {
+        ctrl.abort();
+        current.delete(key);
+      }
+    }
+  }, [pending]);
+
+  useEffect(() => {
+    const current = pollersRef.current;
+    return () => {
+      for (const ctrl of current.values()) ctrl.abort();
+      current.clear();
+    };
   }, []);
 
   async function removePending(key: string) {
@@ -84,9 +130,9 @@ export default function VinnslurClient() {
           </p>
           <h1>Verkbók</h1>
           <p className="ac-lead">
-            Allar vinnslur og tilbúnar útkomur á einum stað. Pending-vinnslur halda áfram á
-            Replicate þótt þú skiptir um tab — opnaðu tólið til að ljúka upp niðurstöðuna. Þessi
-            síða endurhleður sjálf á 10s fresti.
+            Allar vinnslur og tilbúnar útkomur á einum stað. Verkbók pollar sjálf status á
+            Replicate á 5s fresti — þú þarft ekki að opna tólið til að sækja útkomuna. Þegar
+            vinnsla klárast birtist hún beint hér.
           </p>
 
           {!hasAnything && (
@@ -113,12 +159,37 @@ export default function VinnslurClient() {
               <ul className="ac-job-list">
                 {pending.map((job) => {
                   const info = toolInfo(job.key);
+                  const state = progressByKey[job.key];
+                  let statusLine: string;
+                  if (state && typeof state.percent === "number") {
+                    statusLine = `⏳ ${state.percent}%`;
+                    if (state.current != null && state.total != null) {
+                      statusLine += ` · ${state.current}/${state.total}`;
+                    }
+                    if (state.etaSeconds) {
+                      statusLine += ` · ~${formatEta(state.etaSeconds)} eftir`;
+                    }
+                  } else if (state) {
+                    const label =
+                      state.status === "starting"
+                        ? "ræsing"
+                        : state.status === "processing"
+                          ? "vinnsla"
+                          : state.status === "transient-error"
+                            ? "⚠️ tengingarvandi, reyni aftur"
+                            : state.status;
+                    statusLine = `⏳ ${label}`;
+                  } else {
+                    statusLine = "⏳ í vinnslu";
+                  }
                   return (
                     <li key={job.key} className="ac-job-row">
                       <span className="ac-job-ico" aria-hidden="true">{info.icon}</span>
                       <div className="ac-job-main">
                         <b>{info.name}</b>
-                        <span className="ac-job-status">⏳ í vinnslu · {minutesAgo(job.submittedAt)}</span>
+                        <span className="ac-job-status">
+                          {statusLine} · {minutesAgo(job.submittedAt)}
+                        </span>
                         {job.prompt && (
                           <span className="ac-job-prompt">„{job.prompt.slice(0, 100)}{job.prompt.length > 100 ? "…" : ""}"</span>
                         )}
