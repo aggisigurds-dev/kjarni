@@ -293,14 +293,16 @@ export default function UpplyftingClient() {
           {source && !result && (
             <section className="ac-panel">
               <h2>Upprunalegt</h2>
-              <ImageZoom src={source.url} alt={source.name} />
+              <ImageZoom src={source.url} alt={source.name} className="ac-upscale-preview" />
+              <p className="ac-hint">Smelltu á myndina til að zoom-a inn og út.</p>
             </section>
           )}
 
           {result && (
             <section className="ac-panel">
               <h2>Útkoma</h2>
-              <ImageZoom src={result} alt="Upplyft mynd" />
+              <ImageZoom src={result} alt="Upplyft mynd" className="ac-upscale-preview" />
+              <p className="ac-hint">Smelltu til að zoom-a. Topaz skilar oft mjög stórri mynd — forsýningin er skölun, en niðurhal nær fullri upplausn.</p>
               <div className="ac-row">
                 <button
                   type="button"

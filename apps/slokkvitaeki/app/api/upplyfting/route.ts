@@ -52,7 +52,10 @@ export async function POST(req: NextRequest) {
   const input: Record<string, unknown> = {
     image: body.image,
     enhance_model: ENHANCE_MODELS.includes(body.enhanceModel || "") ? body.enhanceModel : "Standard V2",
-    upscale_factor: clampNumber(body.upscaleFactor, 2, 1, 6),
+    // Topaz schema vill upscale_factor sem streng, ekki number (fékk 422:
+    // "Invalid type. Expected: string, given: integer"). Stringify-um
+    // eftir clamp — allt gildum factor sem tala virkar sem strengur.
+    upscale_factor: String(clampNumber(body.upscaleFactor, 2, 1, 6)),
     face_enhancement: body.faceEnhancement === true,
     face_enhancement_creativity: clampNumber(body.faceEnhancementCreativity, 0, 0, 1),
     face_enhancement_strength: clampNumber(body.faceEnhancementStrength, 0.8, 0, 1),
