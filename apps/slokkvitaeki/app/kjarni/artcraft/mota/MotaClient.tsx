@@ -13,16 +13,37 @@ import {
   type LiquifyMode,
   type Raster,
 } from "../studio/adjust";
+import { applyRetouch, type RetouchMode } from "./retouch";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const MAX_DIMENSION = 1200;
 const MAX_UNDO = 20;
 
-const TOOLS: Array<{ id: LiquifyMode; label: string; hint: string }> = [
+type ToolCategory = "lögun" | "áferð";
+type AnyMode = LiquifyMode | RetouchMode;
+
+const CATEGORIES: Array<{ id: ToolCategory; label: string; hint: string }> = [
+  { id: "lögun", label: "Lögun", hint: "Breyta lögun líkamslína — mjókka, þenja eða draga útlínu." },
+  { id: "áferð", label: "Áferð", hint: "Jafna húð, lýsa upp, skyggja eða fjarlægja bletti/ör." },
+];
+
+const LIQUIFY_TOOLS: Array<{ id: LiquifyMode; label: string; hint: string }> = [
   { id: "shrink", label: "Minnka", hint: "Dregur inn — mjókkar" },
   { id: "expand", label: "Stækka", hint: "Þenur út — gerir fyllra" },
   { id: "drag", label: "Færa", hint: "Færir útlínu með bustanum" },
 ];
+
+const RETOUCH_TOOLS: Array<{ id: RetouchMode; label: string; hint: string }> = [
+  { id: "smooth", label: "Slétta", hint: "Mjúkt blur — jafnar út húð og dregur úr hrukkum" },
+  { id: "heal", label: "Fjarlægja", hint: "Blandar úr hringnum í kring — tekur burt bletti, ör, hárspotti" },
+  { id: "clone", label: "Afrita", hint: "Clone Stamp — veldu upptökustað, sléttu yfir annað" },
+  { id: "lighten", label: "Lýsa", hint: "Hækkar birtu smám saman (dodge)" },
+  { id: "darken", label: "Skyggja", hint: "Lækkar birtu smám saman (burn)" },
+];
+
+function isLiquifyMode(id: AnyMode): id is LiquifyMode {
+  return id === "shrink" || id === "expand" || id === "drag";
+}
 
 function isPhotoFile(file: { type: string; name: string }): boolean {
   if (/^image\/(jpeg|png|webp)$/i.test(file.type)) return true;
@@ -82,14 +103,22 @@ export default function MotaClient() {
   const undoRef = useRef<Raster[]>([]);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
-  const toolRef = useRef<LiquifyMode>("shrink");
+  const toolRef = useRef<AnyMode>("shrink");
   const radiusRef = useRef(44);
   const strengthRef = useRef(0.55);
+  // Clone stamp state: anchor er upptökustaður, offset reiknast við fyrsta
+  // dab-ið í stroke-i svo src færist með dst á meðan user strjúkur.
+  const cloneAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  const cloneOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
+  const strokeStartDstRef = useRef<{ x: number; y: number } | null>(null);
+  const [pickingSource, setPickingSource] = useState(false);
+  const [cloneAnchor, setCloneAnchor] = useState<{ x: number; y: number } | null>(null);
 
   const [drag, setDrag] = useState(false);
   const [sourceName, setSourceName] = useState("");
   const [ready, setReady] = useState(false);
-  const [tool, setTool] = useState<LiquifyMode>("shrink");
+  const [category, setCategory] = useState<ToolCategory>("lögun");
+  const [tool, setTool] = useState<AnyMode>("shrink");
   const [radius, setRadius] = useState(44);
   const [strength, setStrength] = useState(0.55);
   const [canUndo, setCanUndo] = useState(false);
@@ -154,21 +183,63 @@ export default function MotaClient() {
     const working = workingRef.current;
     if (!working) return;
     const pts = prev ? strokePoints(prev.x, prev.y, x, y, Math.max(2, radiusRef.current * 0.32)) : [{ x, y }];
-    for (const p of pts) {
-      const moveX = prev ? x - prev.x : 0;
-      const moveY = prev ? y - prev.y : 0;
-      liquifyInPlace(working, p.x, p.y, radiusRef.current, strengthRef.current, toolRef.current, moveX, moveY);
+    const currentTool = toolRef.current;
+    if (isLiquifyMode(currentTool)) {
+      for (const p of pts) {
+        const moveX = prev ? x - prev.x : 0;
+        const moveY = prev ? y - prev.y : 0;
+        liquifyInPlace(working, p.x, p.y, radiusRef.current, strengthRef.current, currentTool, moveX, moveY);
+      }
+    } else if (currentTool === "clone") {
+      const anchor = cloneAnchorRef.current;
+      if (!anchor) return;
+      // Reiknum offset frá upphafsdabs í þessu stroke-i — src færist með dst.
+      if (!cloneOffsetRef.current && strokeStartDstRef.current) {
+        cloneOffsetRef.current = {
+          dx: strokeStartDstRef.current.x - anchor.x,
+          dy: strokeStartDstRef.current.y - anchor.y,
+        };
+      }
+      const offset = cloneOffsetRef.current ?? { dx: 0, dy: 0 };
+      for (const p of pts) {
+        applyRetouch(working, p.x, p.y, radiusRef.current, strengthRef.current, currentTool, {
+          srcX: p.x - offset.dx,
+          srcY: p.y - offset.dy,
+        });
+      }
+    } else {
+      for (const p of pts) {
+        applyRetouch(working, p.x, p.y, radiusRef.current, strengthRef.current, currentTool);
+      }
     }
     paint();
+  }
+
+  function selectCategory(next: ToolCategory) {
+    setCategory(next);
+    // Veljum sjálfkrafa fyrsta tólið í nýja flokknum svo user þurfi ekki
+    // að smella tvisvar.
+    const first = next === "lögun" ? LIQUIFY_TOOLS[0].id : RETOUCH_TOOLS[0].id;
+    setTool(first);
   }
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!workingRef.current) return;
     e.preventDefault();
+    const p = canvasPoint(e);
+    // Ef user valdi að taka clone-source, þá fer fyrsta smell í að setja
+    // anchor-inn — ekki strik.
+    if (pickingSource) {
+      cloneAnchorRef.current = { x: p.x, y: p.y };
+      setCloneAnchor({ x: p.x, y: p.y });
+      setPickingSource(false);
+      return;
+    }
     e.currentTarget.setPointerCapture(e.pointerId);
     drawingRef.current = true;
     pushUndo();
-    const p = canvasPoint(e);
+    strokeStartDstRef.current = { x: p.x, y: p.y };
+    cloneOffsetRef.current = null; // reiknast á næsta dab
     lastRef.current = p;
     dab(p.x, p.y, null);
   }
@@ -198,6 +269,8 @@ export default function MotaClient() {
   function onPointerUp() {
     drawingRef.current = false;
     lastRef.current = null;
+    strokeStartDstRef.current = null;
+    cloneOffsetRef.current = null;
   }
 
   function onPointerLeave() {
@@ -240,8 +313,9 @@ export default function MotaClient() {
           </p>
           <h1>Móta</h1>
           <p className="ac-lead">
-            Mjókka, þenja eða draga líkamslínur með bursta — stilltu stærð og styrk og strjúktu
-            yfir myndina. Allt gerist í vafranum, engin mynd fer neitt.
+            Mjókka, þenja og draga líkamslínur í „Lögun"-ham; jafna húð, lýsa, skyggja og fjarlægja
+            bletti/ör í „Áferð"-ham. Stilltu stærð og styrk og strjúktu yfir myndina — allt gerist í
+            vafranum, engin mynd fer neitt.
           </p>
 
           {!ready && (
@@ -282,8 +356,23 @@ export default function MotaClient() {
 
           {ready && (
             <section className="ac-panel ac-adjust">
+              <div className="ac-row ac-tools" role="radiogroup" aria-label="Flokkur">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={category === c.id}
+                    className={`ac-btn ghost ${category === c.id ? "on" : ""}`}
+                    title={c.hint}
+                    onClick={() => selectCategory(c.id)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
               <div className="ac-row ac-tools">
-                {TOOLS.map((item) => (
+                {(category === "lögun" ? LIQUIFY_TOOLS : RETOUCH_TOOLS).map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -296,8 +385,32 @@ export default function MotaClient() {
                 ))}
               </div>
               <p className="ac-hint">
-                Strjúktu yfir mynd með bustanum — {TOOLS.find((t) => t.id === tool)?.hint.toLowerCase()}.
+                Strjúktu yfir mynd með bustanum —{" "}
+                {(category === "lögun" ? LIQUIFY_TOOLS : RETOUCH_TOOLS).find((t) => t.id === tool)?.hint.toLowerCase()}
+                .
               </p>
+
+              {tool === "clone" && (
+                <div className="ac-row">
+                  <button
+                    type="button"
+                    className={`ac-btn ${pickingSource ? "" : "ghost"}`}
+                    onClick={() => setPickingSource(true)}
+                  >
+                    {cloneAnchor ? "Velja annan upptökustað" : "Velja upptökustað"}
+                  </button>
+                  {cloneAnchor && (
+                    <span className="ac-hint" style={{ marginLeft: 8 }}>
+                      Upptökustaður: ({Math.round(cloneAnchor.x)}, {Math.round(cloneAnchor.y)})
+                    </span>
+                  )}
+                  {pickingSource && (
+                    <span className="ac-hint" style={{ marginLeft: 8, color: "var(--m-ember, #c9982f)" }}>
+                      Smelltu þar sem þú vilt afrita FRÁ.
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="ac-adjust-stage" ref={stageRef}>
                 <canvas
@@ -315,6 +428,21 @@ export default function MotaClient() {
                     style={{ left: cursor.x, top: cursor.y, width: cursor.size, height: cursor.size }}
                   />
                 )}
+                {tool === "clone" && cloneAnchor && viewRef.current && stageRef.current && (() => {
+                  const canvasRect = viewRef.current.getBoundingClientRect();
+                  const stageRect = stageRef.current.getBoundingClientRect();
+                  const scale = canvasRect.width / viewRef.current.width;
+                  return (
+                    <div
+                      className="ac-clone-anchor"
+                      style={{
+                        left: canvasRect.left - stageRect.left + cloneAnchor.x * scale,
+                        top: canvasRect.top - stageRect.top + cloneAnchor.y * scale,
+                      }}
+                      aria-hidden="true"
+                    />
+                  );
+                })()}
               </div>
 
               <div className="ac-settings">
