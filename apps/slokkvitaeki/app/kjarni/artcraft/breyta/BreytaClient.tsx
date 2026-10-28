@@ -6,6 +6,13 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
+import {
+  SavedPresets,
+  makePresetId,
+  readStoredPresets,
+  writeStoredPresets,
+  type SavedPreset,
+} from "../SavedPresets";
 import { shrinkImageForUpload } from "../replicateImage";
 import {
   BREYTA_MODE_KEY,
@@ -36,6 +43,8 @@ import {
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const BAKGRUNNUR_PROMPT_SLOTS_KEY = "kjarni_private_breyta_bakgrunnur_prompt_slots";
 const PRUNA_PROMPT_SLOTS_KEY = "kjarni_private_breyta_pruna_prompt_slots";
+const BAKGRUNNUR_PRESETS_KEY = "kjarni_private_breyta_bakgrunnur_saved_presets";
+const PRUNA_PRESETS_KEY = "kjarni_private_breyta_pruna_saved_presets";
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -52,6 +61,12 @@ export default function BreytaClient() {
   const [pruna, setPruna] = useState<PrunaSettings>(DEFAULT_PRUNA_SETTINGS);
   const [bakgrunnurSlots, setBakgrunnurSlots] = useState<PromptSlotData>({ slots: ["", "", ""], active: 0 });
   const [prunaSlots, setPrunaSlots] = useState<PromptSlotData>({ slots: ["", "", ""], active: 0 });
+  const [bakgrunnurPresets, setBakgrunnurPresets] = useState<SavedPreset[]>([]);
+  const [prunaPresets, setPrunaPresets] = useState<SavedPreset[]>([]);
+  // Síðasta vel heppnaða keyrsla í hvorum ham: notað til að ákveða hvort
+  // "Vista stillingu" sé virkt (bara eftir keyrslu sem skilaði útkomu).
+  const [lastRunBakgrunnurPrompt, setLastRunBakgrunnurPrompt] = useState<string>("");
+  const [lastRunPrunaPrompt, setLastRunPrunaPrompt] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
@@ -71,6 +86,8 @@ export default function BreytaClient() {
     setPruna(nextPruna);
     setBakgrunnurSlots(readStoredPromptSlots(BAKGRUNNUR_PROMPT_SLOTS_KEY, nextBackground.prompt));
     setPrunaSlots(readStoredPromptSlots(PRUNA_PROMPT_SLOTS_KEY, nextPruna.prompt));
+    setBakgrunnurPresets(readStoredPresets(BAKGRUNNUR_PRESETS_KEY));
+    setPrunaPresets(readStoredPresets(PRUNA_PRESETS_KEY));
     setReady(true);
   }, []);
 
@@ -129,6 +146,73 @@ export default function BreytaClient() {
     }
   }
 
+  function saveBakgrunnurPreset(name: string) {
+    const preset: SavedPreset = {
+      id: makePresetId(),
+      name,
+      prompt: lastRunBakgrunnurPrompt,
+      negativePrompt: background.negativePrompt,
+      seed: background.seed,
+      createdAt: Date.now(),
+    };
+    const next = [preset, ...bakgrunnurPresets];
+    setBakgrunnurPresets(next);
+    writeStoredPresets(BAKGRUNNUR_PRESETS_KEY, next);
+  }
+
+  function deleteBakgrunnurPreset(id: string) {
+    const next = bakgrunnurPresets.filter((p) => p.id !== id);
+    setBakgrunnurPresets(next);
+    writeStoredPresets(BAKGRUNNUR_PRESETS_KEY, next);
+  }
+
+  function applyBakgrunnurPreset(p: SavedPreset) {
+    // Setjum prompt í virka slot-ið; seed og negative í settings-ið.
+    const activeIdx = bakgrunnurSlots.active;
+    const nextSlots: [string, string, string] = [
+      bakgrunnurSlots.slots[0],
+      bakgrunnurSlots.slots[1],
+      bakgrunnurSlots.slots[2],
+    ];
+    nextSlots[activeIdx] = p.prompt;
+    updateBakgrunnurSlots({ slots: nextSlots, active: activeIdx });
+    updateBackground({
+      negativePrompt: p.negativePrompt ?? background.negativePrompt,
+      seed: p.seed,
+    });
+  }
+
+  function savePrunaPreset(name: string) {
+    const preset: SavedPreset = {
+      id: makePresetId(),
+      name,
+      prompt: lastRunPrunaPrompt,
+      seed: pruna.seed,
+      createdAt: Date.now(),
+    };
+    const next = [preset, ...prunaPresets];
+    setPrunaPresets(next);
+    writeStoredPresets(PRUNA_PRESETS_KEY, next);
+  }
+
+  function deletePrunaPreset(id: string) {
+    const next = prunaPresets.filter((p) => p.id !== id);
+    setPrunaPresets(next);
+    writeStoredPresets(PRUNA_PRESETS_KEY, next);
+  }
+
+  function applyPrunaPreset(p: SavedPreset) {
+    const activeIdx = prunaSlots.active;
+    const nextSlots: [string, string, string] = [
+      prunaSlots.slots[0],
+      prunaSlots.slots[1],
+      prunaSlots.slots[2],
+    ];
+    nextSlots[activeIdx] = p.prompt;
+    updatePrunaSlots({ slots: nextSlots, active: activeIdx });
+    updatePruna({ seed: p.seed });
+  }
+
   async function addFile(file: File) {
     setError("");
     try {
@@ -173,11 +257,15 @@ export default function BreytaClient() {
       let blobs: Blob[];
       if (mode === "headshot") blobs = await runHeadshot(headshot, sourceDataUrlRef.current);
       else if (mode === "bakgrunnur") {
-        const bgWithPrompt: BackgroundSettings = { ...background, prompt: bakgrunnurSlots.slots[bakgrunnurSlots.active] };
+        const activePrompt = bakgrunnurSlots.slots[bakgrunnurSlots.active];
+        const bgWithPrompt: BackgroundSettings = { ...background, prompt: activePrompt };
         blobs = await runBackground(bgWithPrompt, sourceDataUrlRef.current);
+        setLastRunBakgrunnurPrompt(activePrompt);
       } else {
-        const prunaWithPrompt: PrunaSettings = { ...pruna, prompt: prunaSlots.slots[prunaSlots.active] };
+        const activePrompt = prunaSlots.slots[prunaSlots.active];
+        const prunaWithPrompt: PrunaSettings = { ...pruna, prompt: activePrompt };
         blobs = await runPruna(prunaWithPrompt, sourceDataUrlRef.current);
+        setLastRunPrunaPrompt(activePrompt);
       }
       for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
       const urls = blobs.map((b) => URL.createObjectURL(b));
@@ -416,6 +504,31 @@ export default function BreytaClient() {
               {busy ? "Breyti…" : "Breyta mynd"}
             </button>
           </section>
+
+          {mode === "bakgrunnur" && (
+            <SavedPresets
+              title="Vistaðir bakgrunnar"
+              presets={bakgrunnurPresets}
+              onSave={saveBakgrunnurPreset}
+              onDelete={deleteBakgrunnurPreset}
+              onApply={applyBakgrunnurPreset}
+              canSave={!!lastRunBakgrunnurPrompt && results.length > 0}
+              saveHint="Vistar virka prompt-ið, neikvæða lýsingu og seed úr síðustu keyrslu. Nota sama seed á næstu mynd úr myndatökunni → mjög svipaður bakgrunnur."
+              showNegativePrompt
+            />
+          )}
+
+          {mode === "pruna" && (
+            <SavedPresets
+              title="Vistaðar stillingar"
+              presets={prunaPresets}
+              onSave={savePrunaPreset}
+              onDelete={deletePrunaPreset}
+              onApply={applyPrunaPreset}
+              canSave={!!lastRunPrunaPrompt && results.length > 0}
+              saveHint="Vistar virka prompt-ið og seed úr síðustu keyrslu. Sama seed á næstu mynd úr myndatökunni → svipuð útkoma."
+            />
+          )}
 
           {results.length > 0 && (
             <section className="ac-panel">

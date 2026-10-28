@@ -2042,3 +2042,96 @@
   color: #1a1004;
 }
 
+/* ===== SavedPresets — vistaðir bakgrunnar o.fl. ===== */
+.ac-saved-save-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 10px;
+  flex-wrap: wrap;
+}
+
+.ac-saved-save-row input {
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid rgba(20, 24, 34, 0.15);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--m-ink, #141822);
+  font-size: 14px;
+}
+
+.ac-saved-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ac-saved-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  padding: 10px 12px;
+  border: 1px solid rgba(20, 24, 34, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--m-ink, #141822);
+}
+
+.ac-saved-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ac-saved-main b {
+  font-size: 14px;
+}
+
+.ac-saved-text,
+.ac-saved-neg,
+.ac-saved-seed {
+  font-size: 12.5px;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-saved-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ac-saved-neg {
+  font-style: italic;
+}
+
+.ac-saved-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stn[data-skin="ragnarok"] .ac-saved-save-row input {
+  background: #050505;
+  border-color: rgba(201, 152, 47, 0.35);
+  color: var(--rg-text, #f3e4bf);
+  border-radius: 0;
+}
+
+.stn[data-skin="ragnarok"] .ac-saved-row {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+  color: var(--rg-text, #f3e4bf);
+}
+
