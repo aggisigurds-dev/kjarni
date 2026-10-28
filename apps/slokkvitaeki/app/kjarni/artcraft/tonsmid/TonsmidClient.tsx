@@ -5,6 +5,7 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
+import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
@@ -18,6 +19,7 @@ import {
 } from "./music";
 
 const SAVED_KEY = "tonsmid";
+const MUSIC_PROMPT_SLOTS_KEY = "kjarni_private_tonsmid_prompt_slots";
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -29,6 +31,10 @@ function downloadBlob(url: string, name: string) {
 export default function TonsmidClient() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<MusicSettings>(DEFAULT_MUSIC_SETTINGS);
+  const [musicSlots, setMusicSlots] = useState<PromptSlotData>({
+    slots: ["", "", ""],
+    active: 0,
+  });
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{
     status: string;
@@ -45,7 +51,9 @@ export default function TonsmidClient() {
   const resultUrlRef = useRef<string>("");
 
   useEffect(() => {
-    setSettings(readStoredMusicSettings());
+    const nextSettings = readStoredMusicSettings();
+    setSettings(nextSettings);
+    setMusicSlots(readStoredPromptSlots(MUSIC_PROMPT_SLOTS_KEY, nextSettings.prompt));
     setReady(true);
     void (async () => {
       const saved = await loadResult(SAVED_KEY);
@@ -114,12 +122,27 @@ export default function TonsmidClient() {
     });
   }
 
+  function updateMusicSlots(next: PromptSlotData) {
+    setMusicSlots(next);
+    try {
+      window.localStorage.setItem(MUSIC_PROMPT_SLOTS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore quota errors */
+    }
+  }
+
   async function run() {
+    const activePrompt = musicSlots.slots[musicSlots.active];
+    if (!activePrompt.trim()) {
+      setError("Virka prompt-ið er tómt — tappaðu á það og skrifaðu lýsingu fyrst.");
+      return;
+    }
+    const musicWithPrompt: MusicSettings = { ...settings, prompt: activePrompt };
     setBusy(true);
     setError("");
     setProgress({ status: "starting", elapsed: 0 });
     try {
-      const blob = await composeMusic(settings, {
+      const blob = await composeMusic(musicWithPrompt, {
         onStatus: (p) =>
           setProgress({
             status: p.status,
@@ -135,7 +158,7 @@ export default function TonsmidClient() {
             key: SAVED_KEY,
             predictionId: id,
             submittedAt: Date.now(),
-            prompt: settings.prompt,
+            prompt: activePrompt,
           });
         },
       });
@@ -144,13 +167,13 @@ export default function TonsmidClient() {
       resultUrlRef.current = url;
       setResult(url);
       const now = Date.now();
-      setSavedMeta({ timestamp: now, prompt: settings.prompt });
+      setSavedMeta({ timestamp: now, prompt: activePrompt });
       void saveResult({
         key: SAVED_KEY,
         timestamp: now,
         mediaType: "audio",
         blobs: [blob],
-        prompt: settings.prompt,
+        prompt: activePrompt,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Tónsmíð mistókst.";
@@ -201,15 +224,13 @@ export default function TonsmidClient() {
 
           <section className="ac-panel">
             <h2>Prompt</h2>
-            <label>
-              Lýsing á laginu
-              <textarea
-                value={settings.prompt}
-                onChange={(e) => updateSettings({ prompt: e.target.value })}
-                rows={4}
-                placeholder="t.d. upbeat acoustic jingle, 30 seconds, cheerful, light percussion, warm major key"
-              />
-            </label>
+            <PromptSlots
+              label="Lýsing á laginu"
+              data={musicSlots}
+              onChange={updateMusicSlots}
+              rows={4}
+              placeholder="t.d. upbeat acoustic jingle, 30 seconds, cheerful, light percussion, warm major key"
+            />
             <div className="ac-settings">
               <label>
                 Lengd ({settings.lengthSeconds}s)

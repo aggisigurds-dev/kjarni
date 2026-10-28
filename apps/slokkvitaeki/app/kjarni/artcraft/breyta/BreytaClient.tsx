@@ -5,6 +5,7 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
+import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import { shrinkImageForUpload } from "../replicateImage";
 import {
   BREYTA_MODE_KEY,
@@ -33,6 +34,8 @@ import {
 } from "./models";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+const BAKGRUNNUR_PROMPT_SLOTS_KEY = "kjarni_private_breyta_bakgrunnur_prompt_slots";
+const PRUNA_PROMPT_SLOTS_KEY = "kjarni_private_breyta_pruna_prompt_slots";
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -47,6 +50,8 @@ export default function BreytaClient() {
   const [headshot, setHeadshot] = useState<HeadshotSettings>(DEFAULT_HEADSHOT_SETTINGS);
   const [background, setBackground] = useState<BackgroundSettings>(DEFAULT_BACKGROUND_SETTINGS);
   const [pruna, setPruna] = useState<PrunaSettings>(DEFAULT_PRUNA_SETTINGS);
+  const [bakgrunnurSlots, setBakgrunnurSlots] = useState<PromptSlotData>({ slots: ["", "", ""], active: 0 });
+  const [prunaSlots, setPrunaSlots] = useState<PromptSlotData>({ slots: ["", "", ""], active: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
@@ -60,8 +65,12 @@ export default function BreytaClient() {
   useEffect(() => {
     setMode(readStoredBreytaMode());
     setHeadshot(readStoredHeadshotSettings());
-    setBackground(readStoredBackgroundSettings());
-    setPruna(readStoredPrunaSettings());
+    const nextBackground = readStoredBackgroundSettings();
+    const nextPruna = readStoredPrunaSettings();
+    setBackground(nextBackground);
+    setPruna(nextPruna);
+    setBakgrunnurSlots(readStoredPromptSlots(BAKGRUNNUR_PROMPT_SLOTS_KEY, nextBackground.prompt));
+    setPrunaSlots(readStoredPromptSlots(PRUNA_PROMPT_SLOTS_KEY, nextPruna.prompt));
     setReady(true);
   }, []);
 
@@ -102,6 +111,24 @@ export default function BreytaClient() {
     });
   }
 
+  function updateBakgrunnurSlots(next: PromptSlotData) {
+    setBakgrunnurSlots(next);
+    try {
+      window.localStorage.setItem(BAKGRUNNUR_PROMPT_SLOTS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore quota errors */
+    }
+  }
+
+  function updatePrunaSlots(next: PromptSlotData) {
+    setPrunaSlots(next);
+    try {
+      window.localStorage.setItem(PRUNA_PROMPT_SLOTS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore quota errors */
+    }
+  }
+
   async function addFile(file: File) {
     setError("");
     try {
@@ -126,13 +153,32 @@ export default function BreytaClient() {
       setError("Hladdu upp mynd fyrst.");
       return;
     }
+    if (mode === "bakgrunnur") {
+      const activePrompt = bakgrunnurSlots.slots[bakgrunnurSlots.active];
+      if (!activePrompt.trim()) {
+        setError("Virka prompt-ið er tómt — tappaðu á það og lýstu bakgrunninum fyrst.");
+        return;
+      }
+    }
+    if (mode === "pruna") {
+      const activePrompt = prunaSlots.slots[prunaSlots.active];
+      if (!activePrompt.trim()) {
+        setError("Virka prompt-ið er tómt — tappaðu á það og skrifaðu lýsingu fyrst.");
+        return;
+      }
+    }
     setBusy(true);
     setError("");
     try {
       let blobs: Blob[];
       if (mode === "headshot") blobs = await runHeadshot(headshot, sourceDataUrlRef.current);
-      else if (mode === "bakgrunnur") blobs = await runBackground(background, sourceDataUrlRef.current);
-      else blobs = await runPruna(pruna, sourceDataUrlRef.current);
+      else if (mode === "bakgrunnur") {
+        const bgWithPrompt: BackgroundSettings = { ...background, prompt: bakgrunnurSlots.slots[bakgrunnurSlots.active] };
+        blobs = await runBackground(bgWithPrompt, sourceDataUrlRef.current);
+      } else {
+        const prunaWithPrompt: PrunaSettings = { ...pruna, prompt: prunaSlots.slots[prunaSlots.active] };
+        blobs = await runPruna(prunaWithPrompt, sourceDataUrlRef.current);
+      }
       for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current = urls;
@@ -299,14 +345,12 @@ export default function BreytaClient() {
 
             {mode === "bakgrunnur" && (
               <>
-                <label>
-                  Hvernig bakgrunnur?
-                  <textarea
-                    value={background.prompt}
-                    onChange={(e) => updateBackground({ prompt: e.target.value })}
-                    rows={3}
-                  />
-                </label>
+                <PromptSlots
+                  label="Hvernig bakgrunnur?"
+                  data={bakgrunnurSlots}
+                  onChange={updateBakgrunnurSlots}
+                  rows={3}
+                />
                 <label>
                   Neikvæð lýsing (má sleppa)
                   <textarea
@@ -340,14 +384,12 @@ export default function BreytaClient() {
 
             {mode === "pruna" && (
               <>
-                <label>
-                  Hvað á að breyta?
-                  <textarea
-                    value={pruna.prompt}
-                    onChange={(e) => updatePruna({ prompt: e.target.value })}
-                    rows={3}
-                  />
-                </label>
+                <PromptSlots
+                  label="Hvað á að breyta?"
+                  data={prunaSlots}
+                  onChange={updatePrunaSlots}
+                  rows={3}
+                />
                 <div className="ac-settings">
                   <label>
                     Seed ({pruna.seed === -1 ? "slembið" : pruna.seed})

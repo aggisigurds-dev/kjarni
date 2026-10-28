@@ -33,9 +33,11 @@ import {
 import { cloneRaster, createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
 import { compositeMaskOverlay, maskCoverage, paintCircle } from "./maskPaint";
 import ImageZoom from "../ImageZoom";
+import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 
 const SAVED_RESULT_KEY = "skyjastudio";
+const SKYJASTUDIO_PROMPT_SLOTS_KEY = "kjarni_private_skyjastudio_prompt_slots";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const MAX_SOURCE_DIMENSION = 1024;
@@ -168,6 +170,7 @@ export default function SkyjastudioClient() {
   const [error, setError] = useState("");
   const [results, setResults] = useState<string[]>([]);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string; mode?: string } | null>(null);
+  const [promptSlots, setPromptSlots] = useState<PromptSlotData>({ slots: ["", "", ""], active: 0 });
   const resultUrlsRef = useRef<string[]>([]);
 
   // Inpaint brush state.
@@ -188,11 +191,16 @@ export default function SkyjastudioClient() {
   brushSizeRef.current = brushSize;
 
   useEffect(() => {
-    setSettings(readStoredSdxlSettings());
-    setFluxSettings(readStoredFluxFillSettings());
-    setJuggernautSettings(readStoredJuggernautSettings());
+    const nextSdxl = readStoredSdxlSettings();
+    const nextFlux = readStoredFluxFillSettings();
+    const nextJugg = readStoredJuggernautSettings();
+    setSettings(nextSdxl);
+    setFluxSettings(nextFlux);
+    setJuggernautSettings(nextJugg);
     setTxt2ImgModel(readStoredTxt2ImgModel());
     setInpaintModel(readStoredInpaintModel());
+    // Fyrsta slot seed-ast af SDXL prompt-i ef ekkert er vistað
+    setPromptSlots(readStoredPromptSlots(SKYJASTUDIO_PROMPT_SLOTS_KEY, nextSdxl.prompt));
     setReady(true);
     void (async () => {
       const saved = await loadResult(SAVED_RESULT_KEY);
@@ -239,6 +247,15 @@ export default function SkyjastudioClient() {
   function selectTxt2ImgModel(next: Txt2ImgModel) {
     setTxt2ImgModel(next);
     window.localStorage.setItem(TXT2IMG_MODEL_KEY, next);
+  }
+
+  function updatePromptSlots(next: PromptSlotData) {
+    setPromptSlots(next);
+    try {
+      window.localStorage.setItem(SKYJASTUDIO_PROMPT_SLOTS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore quota errors */
+    }
   }
 
   function selectInpaintModel(next: InpaintModel) {
@@ -354,11 +371,16 @@ export default function SkyjastudioClient() {
   }
 
   async function run() {
-    const prompt = isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt;
-    if (!prompt.trim()) {
-      setError("Skrifaðu prompt fyrst.");
+    const activePrompt = promptSlots.slots[promptSlots.active];
+    if (!activePrompt.trim()) {
+      setError("Virka prompt-ið er tómt — tappaðu á það og skrifaðu lýsingu fyrst.");
       return;
     }
+    // Dreifum virku prompt-slot-i inn í hvaða líkan sem er valið; -Settings
+    // undir hælnum geyma hvert sitt prompt field, en slot-UI-ið er sameiginlegt.
+    const sdxlForRun: SdxlSettings = { ...settings, prompt: activePrompt };
+    const fluxForRun: FluxFillSettings = { ...fluxSettings, prompt: activePrompt };
+    const juggForRun: JuggernautSettings = { ...juggernautSettings, prompt: activePrompt };
     if (mode === "inpaint") {
       const source = sourceRef.current;
       const mask = maskRef.current;
@@ -385,12 +407,12 @@ export default function SkyjastudioClient() {
           maskDataUrl: rasterToDataUrl(maskRef.current, "image/png"),
         };
         if (isFlux) {
-          blobs = await generateFluxFillImage(fluxSettings, inpaintExtra);
+          blobs = await generateFluxFillImage(fluxForRun, inpaintExtra);
         } else if (isJuggernaut) {
-          const sizedJugg = { ...juggernautSettings, width: sourceRef.current.width, height: sourceRef.current.height };
+          const sizedJugg = { ...juggForRun, width: sourceRef.current.width, height: sourceRef.current.height };
           blobs = await generateJuggernautImage(sizedJugg, inpaintExtra);
         } else {
-          const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
+          const sizedSettings = { ...sdxlForRun, width: sourceRef.current.width, height: sourceRef.current.height };
           blobs = await generateSdxlImage(sizedSettings, inpaintExtra);
         }
       } else if (mode === "img2img" && sourceRef.current) {
@@ -399,22 +421,21 @@ export default function SkyjastudioClient() {
         // fellur niður í SDXL í effectiveInpaintModel.
         const extra = { imageDataUrl: rasterToDataUrl(sourceRef.current, "image/jpeg", 0.92) };
         if (isJuggernaut) {
-          const sizedJugg = { ...juggernautSettings, width: sourceRef.current.width, height: sourceRef.current.height };
+          const sizedJugg = { ...juggForRun, width: sourceRef.current.width, height: sourceRef.current.height };
           blobs = await generateJuggernautImage(sizedJugg, extra);
         } else {
-          const sizedSettings = { ...settings, width: sourceRef.current.width, height: sourceRef.current.height };
+          const sizedSettings = { ...sdxlForRun, width: sourceRef.current.width, height: sourceRef.current.height };
           blobs = await generateSdxlImage(sizedSettings, extra);
         }
       } else if (isJuggernaut) {
-        blobs = await generateJuggernautImage(juggernautSettings);
+        blobs = await generateJuggernautImage(juggForRun);
       } else {
-        blobs = await generateSdxlImage(settings);
+        blobs = await generateSdxlImage(sdxlForRun);
       }
       for (const url of resultUrlsRef.current) URL.revokeObjectURL(url);
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current = urls;
       setResults(urls);
-      const activePrompt = isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt;
       const modeLabel = `${mode}/${isFlux ? "flux-fill" : isJuggernaut ? "juggernaut" : "sdxl"}`;
       const now = Date.now();
       setSavedMeta({ timestamp: now, prompt: activePrompt, mode: modeLabel });
@@ -633,20 +654,12 @@ export default function SkyjastudioClient() {
           {(mode === "txt2img" || hasImage) && (
             <section className="ac-panel">
               <h2>Prompt</h2>
-              <label>
-                {mode === "inpaint" ? "Hvað á að koma í staðinn á máluðu svæði" : mode === "img2img" ? "Hvernig á myndin að breytast?" : "Lýsing"}
-                <textarea
-                  value={isFlux ? fluxSettings.prompt : isJuggernaut ? juggernautSettings.prompt : settings.prompt}
-                  onChange={(e) =>
-                    isFlux
-                      ? updateFluxSettings({ prompt: e.target.value })
-                      : isJuggernaut
-                        ? updateJuggernautSettings({ prompt: e.target.value })
-                        : updateSettings({ prompt: e.target.value })
-                  }
-                  rows={3}
-                />
-              </label>
+              <PromptSlots
+                label={mode === "inpaint" ? "Hvað á að koma í staðinn á máluðu svæði" : mode === "img2img" ? "Hvernig á myndin að breytast?" : "Lýsing"}
+                data={promptSlots}
+                onChange={updatePromptSlots}
+                rows={3}
+              />
               {!isFlux && (
                 <label>
                   Neikvæð lýsing (má sleppa)
