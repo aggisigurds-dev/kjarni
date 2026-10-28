@@ -31,7 +31,7 @@ export const DEFAULT_WAN_PROMPT =
 export const DEFAULT_WAN_SETTINGS: WanSettings = {
   prompt: DEFAULT_WAN_PROMPT,
   negativePrompt: "static, no motion, blurry, distorted, text overlay, watermark",
-  numFrames: 81, // ~5 sek á 16fps
+  numFrames: 81, // ~5 sek á 16fps — lágmark samkvæmt Replicate schema
   framesPerSecond: 16,
   seed: -1,
   resolution: "480p",
@@ -41,8 +41,9 @@ export const DEFAULT_WAN_SETTINGS: WanSettings = {
 
 export function clampFrames(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_WAN_SETTINGS.numFrames;
-  // Wan 2.2 i2v tekur venjulega 4N+1 frames (17, 33, 49, 65, 81, 97, 113, 129)
-  return Math.min(129, Math.max(17, Math.round((n - 1) / 4) * 4 + 1));
+  // wan-video/wan-2.2-i2v-fast krefst num_frames ≥ 81 (schema validation).
+  // Haldum 4N+1 mynstrinu (81, 97, 113, 129) sem er algengt í Wan fjölskyldu.
+  return Math.min(129, Math.max(81, Math.round((n - 1) / 4) * 4 + 1));
 }
 
 export function clampFps(n: number): number {

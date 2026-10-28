@@ -211,6 +211,28 @@ export function getArtcraftApp(id: string): ArtcraftApp | undefined {
   return ARTCRAFT_APPS.find((app) => app.id === id);
 }
 
+/** Flokkun á öppunum milli ArtCraft (listrænt/myndrænt) og MultiCraft
+ *  (forrita/vinnutengt — Office-ígildi). Öppin búa samt öll undir sömu
+ *  /kjarni/artcraft/<id> leiðinni; þetta er aðeins fyrir yfirlitið. */
+export type ArtcraftCategory = "artcraft" | "multicraft";
+
+export const MULTICRAFT_APP_IDS: ReadonlyArray<ArtcraftAppId> = [
+  "wordcraft",
+  "deckcraft",
+  "pdfcraft",
+  "gridcraft",
+  "cadcraft",
+  "figcraft",
+];
+
+export function getArtcraftCategory(id: ArtcraftAppId): ArtcraftCategory {
+  return MULTICRAFT_APP_IDS.includes(id) ? "multicraft" : "artcraft";
+}
+
+export function artcraftAppsByCategory(category: ArtcraftCategory): ReadonlyArray<ArtcraftApp> {
+  return ARTCRAFT_APPS.filter((app) => getArtcraftCategory(app.id) === category);
+}
+
 export function artcraftHubHref(): string {
   return "/kjarni/artcraft";
 }

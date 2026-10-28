@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     prompt,
     image: body.image,
     negative_prompt: body.negativePrompt || "",
-    num_frames: clampNumber(body.numFrames, 81, 17, 129),
+    num_frames: clampNumber(body.numFrames, 81, 81, 129),
     frames_per_second: clampNumber(body.framesPerSecond, 16, 8, 30),
     resolution: RESOLUTIONS.includes(body.resolution || "") ? body.resolution : "480p",
     aspect_ratio: ASPECT_RATIOS.includes(body.aspectRatio || "") ? body.aspectRatio : "16:9",

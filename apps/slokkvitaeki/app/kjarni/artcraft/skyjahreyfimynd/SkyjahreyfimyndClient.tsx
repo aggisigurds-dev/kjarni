@@ -207,7 +207,7 @@ export default function SkyjahreyfimyndClient() {
                 Fjöldi ramma ({settings.numFrames} ≈ {(settings.numFrames / settings.framesPerSecond).toFixed(1)}s)
                 <input
                   type="range"
-                  min={17}
+                  min={81}
                   max={129}
                   step={4}
                   value={settings.numFrames}

@@ -139,6 +139,14 @@
   gap: 14px;
 }
 
+.ac-section-title {
+  margin: 28px 0 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--m-ink, #0f172a);
+  letter-spacing: 0.01em;
+}
+
 .ac-card {
   display: flex;
   flex-direction: column;
