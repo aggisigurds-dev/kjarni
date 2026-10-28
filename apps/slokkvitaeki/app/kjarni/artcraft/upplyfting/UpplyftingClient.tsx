@@ -65,6 +65,7 @@ export default function UpplyftingClient() {
     current?: number;
     total?: number;
     etaSeconds?: number;
+    logTail?: string;
   } | null>(null);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
@@ -105,6 +106,7 @@ export default function UpplyftingClient() {
                 current: p.current,
                 total: p.total,
                 etaSeconds: p.etaSeconds,
+                logTail: p.logTail,
               }),
           });
           if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
@@ -202,6 +204,7 @@ export default function UpplyftingClient() {
                   current: p.current,
                   total: p.total,
                   etaSeconds: p.etaSeconds,
+                  logTail: p.logTail,
                 }),
               onPredictionId: (id) => {
                 void savePending({
@@ -444,13 +447,20 @@ export default function UpplyftingClient() {
 
                 {error && <p className="ac-error">{error}</p>}
                 {busy && progress && (
-                  <p className="ac-hint">
-                    {typeof progress.percent === "number"
-                      ? `${progress.percent}%${progress.current != null && progress.total != null ? ` · skref ${progress.current}/${progress.total}` : ""}${progress.etaSeconds ? ` · ~${formatEta(progress.etaSeconds)} eftir` : ""}`
-                      : `Staða: ${progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}`}
-                    {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
-                    {". Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
-                  </p>
+                  <>
+                    <p className="ac-hint">
+                      {typeof progress.percent === "number"
+                        ? `${progress.percent}%${progress.current != null && progress.total != null ? ` · skref ${progress.current}/${progress.total}` : ""}${progress.etaSeconds ? ` · ~${formatEta(progress.etaSeconds)} eftir` : ""}`
+                        : `Staða: ${progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}`}
+                      {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
+                      {". Þú getur skipt um tab — vinnslan heldur áfram og vistast þegar hún er tilbúin."}
+                    </p>
+                    {progress.logTail && typeof progress.percent !== "number" && (
+                      <p className="ac-hint" style={{ fontFamily: "monospace", fontSize: 12, opacity: 0.7 }}>
+                        {progress.logTail.slice(0, 120)}
+                      </p>
+                    )}
+                  </>
                 )}
                 <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
                   {busy ? "Upplyfti…" : "Upplyfta mynd"}
