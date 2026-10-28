@@ -9,6 +9,17 @@ import { clearPending, loadPending, savePending } from "../pendingPredictions";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
+  DEFAULT_KLING_SETTINGS,
+  generateKlingVideo,
+  KLING_ASPECT_RATIOS,
+  KLING_DURATIONS,
+  KLING_SETTINGS_KEY,
+  normalizeKlingSettings,
+  readStoredKlingSettings,
+  resumeKling,
+  type KlingSettings,
+} from "./kling";
+import {
   DEFAULT_WAN_SETTINGS,
   generateWanVideo,
   normalizeWanSettings,
@@ -22,6 +33,24 @@ import {
 
 const SAVED_KEY = "skyjahreyfimynd";
 
+type VideoModel = "wan" | "kling";
+
+const VIDEO_MODELS: Array<{ id: VideoModel; label: string; hint: string }> = [
+  { id: "wan", label: "Wan 2.2", hint: "Opin, ódýrt (~$0.05), hratt (~30s). Fín fyrir dagleg tilraunir." },
+  {
+    id: "kling",
+    label: "Kling 2.1",
+    hint: "Premium cinematic gæði (~$0.28, 1–3 mín). Fyrir lykilsenur í Facebook-auglýsingum. Enginn disable_safety_checker togglinn — Kuaishou-filter er server-side.",
+  },
+];
+
+const MODEL_KEY = "kjarni_private_skyjahreyfimynd_model";
+
+function readStoredModel(): VideoModel {
+  if (typeof window === "undefined") return "wan";
+  return window.localStorage.getItem(MODEL_KEY) === "kling" ? "kling" : "wan";
+}
+
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
 function downloadBlob(url: string, name: string) {
@@ -33,7 +62,9 @@ function downloadBlob(url: string, name: string) {
 
 export default function SkyjahreyfimyndClient() {
   const [ready, setReady] = useState(false);
+  const [model, setModel] = useState<VideoModel>("wan");
   const [settings, setSettings] = useState<WanSettings>(DEFAULT_WAN_SETTINGS);
+  const [kling, setKling] = useState<KlingSettings>(DEFAULT_KLING_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{
     status: string;
@@ -55,6 +86,8 @@ export default function SkyjahreyfimyndClient() {
 
   useEffect(() => {
     setSettings(readStoredWanSettings());
+    setKling(readStoredKlingSettings());
+    setModel(readStoredModel());
     setReady(true);
     void (async () => {
       const saved = await loadResult(SAVED_KEY);
@@ -66,14 +99,16 @@ export default function SkyjahreyfimyndClient() {
         setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt });
       }
       // Resuma pending prediction ef eitthvað var í vinnslu þegar user
-      // skipti um tab eða endurræsti vafra.
+      // skipti um tab eða endurræsti vafra. Resume-ar með sama líkani og
+      // var sent inn (geymt í pending.mode).
       const pending = await loadPending(SAVED_KEY);
       if (pending) {
         setBusy(true);
         setError("");
         setProgress({ status: "ræsing úr vistun", elapsed: 0 });
         try {
-          const blob = await resumeWanVideo(pending.predictionId, pending.submittedAt, {
+          const resumeFn = pending.mode === "kling" ? resumeKling : resumeWanVideo;
+          const blob = await resumeFn(pending.predictionId, pending.submittedAt, {
             onStatus: (p) =>
               setProgress({
                 status: p.status,
@@ -124,6 +159,20 @@ export default function SkyjahreyfimyndClient() {
     });
   }
 
+  function updateKling(next: Partial<KlingSettings>) {
+    setKling((s) => {
+      const merged = normalizeKlingSettings({ ...s, ...next });
+      window.localStorage.setItem(KLING_SETTINGS_KEY, JSON.stringify(merged));
+      return merged;
+    });
+  }
+
+  function selectModel(next: VideoModel) {
+    setModel(next);
+    window.localStorage.setItem(MODEL_KEY, next);
+    setError("");
+  }
+
   async function addFile(file: File) {
     setError("");
     try {
@@ -151,48 +200,63 @@ export default function SkyjahreyfimyndClient() {
     setBusy(true);
     setError("");
     setProgress({ status: "starting", elapsed: 0 });
-    try {
-      const blob = await generateWanVideo(settings, sourceDataUrlRef.current, {
-        onStatus: (p) =>
-          setProgress({
-            status: p.status,
-            elapsed: p.elapsedSeconds,
-            percent: p.percent,
-            current: p.current,
-            total: p.total,
-            etaSeconds: p.etaSeconds,
-          }),
-        onPredictionId: (id) => {
-          // Vistum pending strax svo tab-switch/refresh virki — Replicate
-          // heldur áfram á sinni hlið og við tengjumst aftur á mount.
-          void savePending({
-            key: SAVED_KEY,
-            predictionId: id,
-            submittedAt: Date.now(),
-            prompt: settings.prompt,
-            sourceName: source.name,
-          });
-        },
+    const activePrompt = model === "kling" ? kling.prompt : settings.prompt;
+    const statusCallback = (p: {
+      status: string;
+      elapsedSeconds: number;
+      percent?: number;
+      current?: number;
+      total?: number;
+      etaSeconds?: number;
+    }) =>
+      setProgress({
+        status: p.status,
+        elapsed: p.elapsedSeconds,
+        percent: p.percent,
+        current: p.current,
+        total: p.total,
+        etaSeconds: p.etaSeconds,
       });
+    const onPredictionId = (id: string) => {
+      void savePending({
+        key: SAVED_KEY,
+        predictionId: id,
+        submittedAt: Date.now(),
+        prompt: activePrompt,
+        mode: model, // notum þetta í resume til að velja rétta pollara
+        sourceName: source.name,
+      });
+    };
+    try {
+      const blob =
+        model === "kling"
+          ? await generateKlingVideo(kling, sourceDataUrlRef.current, {
+              onStatus: statusCallback,
+              onPredictionId,
+            })
+          : await generateWanVideo(settings, sourceDataUrlRef.current, {
+              onStatus: statusCallback,
+              onPredictionId,
+            });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
       setResult(url);
       const now = Date.now();
-      setSavedMeta({ timestamp: now, prompt: settings.prompt });
+      setSavedMeta({ timestamp: now, prompt: activePrompt });
       void saveResult({
         key: SAVED_KEY,
         timestamp: now,
         mediaType: "video",
         blobs: [blob],
-        prompt: settings.prompt,
+        prompt: activePrompt,
+        mode: model,
         sourceName: source.name,
       });
+      await clearPending(SAVED_KEY);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.";
       setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
-      // Ekki hreinsa pending ef þetta var okkar eigin poll-timeout — Replicate
-      // getur enn verið að vinna, user getur refreshað og við tengjumst aftur.
       if (!msg.startsWith("LOCAL_TIMEOUT:")) await clearPending(SAVED_KEY);
     } finally {
       setBusy(false);
@@ -230,10 +294,29 @@ export default function SkyjahreyfimyndClient() {
           </p>
           <h1>Skýjahreyfimynd</h1>
           <p className="ac-lead">
-            Mynd → myndband með Wan 2.2 í skýinu (Replicate) — opin uppspretta úr Alibaba, ~$0.05 per
-            myndband, ~30s í generation. Vilt þú frekar ókeypis og staðbundið: sjá Hreyfimynd (Wan 2.1
+            Mynd → myndband í skýinu (Replicate). Veldu Wan 2.2 fyrir hratt og ódýrt, eða Kling 2.1
+            fyrir cinematic gæði. Vilt þú frekar ókeypis og staðbundið: sjá Hreyfimynd (Wan 2.1
             gegnum þitt eigið ComfyUI).
           </p>
+
+          <section className="ac-panel">
+            <h2>Líkan</h2>
+            <div className="ac-modes" role="radiogroup">
+              {VIDEO_MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={model === m.id}
+                  className={model === m.id ? "on" : undefined}
+                  onClick={() => selectModel(m.id)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="ac-hint">{VIDEO_MODELS.find((m) => m.id === model)?.hint}</p>
+          </section>
 
           {!source && (
             <section
@@ -296,6 +379,72 @@ export default function SkyjahreyfimyndClient() {
 
           <section className="ac-panel">
             <h2>Prompt</h2>
+            {model === "kling" ? (
+              <>
+                <label>
+                  Hvað gerist í myndbandinu?
+                  <textarea
+                    value={kling.prompt}
+                    onChange={(e) => updateKling({ prompt: e.target.value })}
+                    rows={3}
+                  />
+                </label>
+                <label>
+                  Neikvæð lýsing (má sleppa)
+                  <textarea
+                    value={kling.negativePrompt}
+                    onChange={(e) => updateKling({ negativePrompt: e.target.value })}
+                    rows={2}
+                  />
+                </label>
+                <div className="ac-settings">
+                  <label>
+                    Lengd
+                    <select
+                      value={kling.duration}
+                      onChange={(e) => updateKling({ duration: Number(e.target.value) as KlingSettings["duration"] })}
+                    >
+                      {KLING_DURATIONS.map((d) => (
+                        <option key={d} value={d}>
+                          {d}s
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Hlutfall
+                    <select
+                      value={kling.aspectRatio}
+                      onChange={(e) =>
+                        updateKling({ aspectRatio: e.target.value as KlingSettings["aspectRatio"] })
+                      }
+                    >
+                      {KLING_ASPECT_RATIOS.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    CFG scale ({kling.cfgScale.toFixed(2)})
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={kling.cfgScale}
+                      onChange={(e) => updateKling({ cfgScale: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+                <p className="ac-hint">
+                  Kling exposar ekki disable_safety_checker í schema — Kuaishou-filter er server-side.
+                  Ef þú vilt engan filter er Wan 2.2 eina leiðin hér.
+                </p>
+              </>
+            ) : (
+              <>
             <label>
               Hvað gerist í myndbandinu?
               <textarea
@@ -383,6 +532,8 @@ export default function SkyjahreyfimyndClient() {
               Skjalfest Replicate-breyta hjá wan-video/wan-2.2-i2v-fast — sjálfgefið á. Þú berð ábyrgð á
               notkuninni þegar slökkt er á síunni.
             </p>
+              </>
+            )}
 
             {error && <p className="ac-error">{error}</p>}
             {busy && progress && (
