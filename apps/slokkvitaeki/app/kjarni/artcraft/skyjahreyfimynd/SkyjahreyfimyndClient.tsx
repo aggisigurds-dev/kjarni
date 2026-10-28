@@ -29,6 +29,7 @@ export default function SkyjahreyfimyndClient() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<WanSettings>(DEFAULT_WAN_SETTINGS);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ status: string; elapsed: number } | null>(null);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
   const [result, setResult] = useState<string>("");
@@ -84,8 +85,11 @@ export default function SkyjahreyfimyndClient() {
     }
     setBusy(true);
     setError("");
+    setProgress({ status: "starting", elapsed: 0 });
     try {
-      const blob = await generateWanVideo(settings, sourceDataUrlRef.current);
+      const blob = await generateWanVideo(settings, sourceDataUrlRef.current, {
+        onStatus: (status, elapsed) => setProgress({ status, elapsed }),
+      });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
@@ -94,6 +98,7 @@ export default function SkyjahreyfimyndClient() {
       setError(err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.");
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -274,6 +279,13 @@ export default function SkyjahreyfimyndClient() {
             </p>
 
             {error && <p className="ac-error">{error}</p>}
+            {busy && progress && (
+              <p className="ac-hint">
+                Staða: {progress.status === "starting" ? "ræsing" : progress.status === "processing" ? "vinnsla" : progress.status}
+                {progress.elapsed > 0 ? ` · ${progress.elapsed}s liðnar` : ""}
+                {". Wan 2.2 tekur oft 1–5 mín (lengur ef cold start)."}
+              </p>
+            )}
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
               {busy ? "Teikna myndband…" : "Teikna myndband"}
             </button>

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
 
-// Skýjahreyfimynd — mynd → myndband með Wan 2.2 i2v á Replicate (skýja-
-// mótvægi við Hreyfimynd-tólið sem keyrir Wan 2.1 á þínu eigin ComfyUI).
-//
-// Replicate's „Open source video is back"-collection (júlí 2025) vísar á
-// wan-video/wan-2.2 fjölskylduna; wan-video/wan-2.2-i2v-fast er sú
-// ódýrasta sem passar við notkunarsviðið okkar (~$0.05 per myndband).
+// Skýjahreyfimynd — mynd → myndband með Wan 2.2 i2v á Replicate.
+// Þetta líkan er sagt „~30s per generation" á vefnum en með cold start getur
+// það tekið 5+ mínútur — of lengi fyrir eitt sync Vercel-fall. Þess vegna
+// notum við async-mynstrið (submit → prediction id → client pollar status):
+//   POST /api/skyjahreyfimynd        → {predictionId} eða {videos: [...]}
+//   GET  /api/skyjahreyfimynd/status?id=... → {status, videos?, error?}
 
-export const maxDuration = 300; // Vercel Pro leyfir upp í 300s; Hobby fær þakið lækkað.
+export const maxDuration = 30; // Prefer: wait=5 + schema fetch; þarf ekki meira.
 
 const RESOLUTIONS = ["480p", "720p"];
 const ASPECT_RATIOS = ["16:9", "9:16", "1:1"];
@@ -24,7 +24,6 @@ function clampNumber(n: unknown, fallback: number, min: number, max: number): nu
 }
 
 export async function POST(req: NextRequest) {
-  const functionStart = Date.now();
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
@@ -66,15 +65,21 @@ export async function POST(req: NextRequest) {
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
 
   try {
-    const output = await runReplicate({
+    const prediction = await submitReplicate({
       token,
       owner: "wan-video",
       name: "wan-2.2-i2v-fast",
       input,
-      functionStart,
-      budgetMs: 280_000,
     });
-    return NextResponse.json({ videos: outputToUrls(output) });
+    // Ef warm model klárar innan Prefer: wait=5, erum við strax búin.
+    if (prediction.status === "succeeded" && prediction.output != null) {
+      return NextResponse.json({ videos: outputToUrls(prediction.output) });
+    }
+    if (prediction.status === "failed" || prediction.status === "canceled") {
+      return bad(502, prediction.error || "Wan 2.2 mistókst strax");
+    }
+    // Annars segjum við client-inu að pollea status route-ið.
+    return NextResponse.json({ predictionId: prediction.id, status: prediction.status });
   } catch (err) {
     const r = badReplicate(err);
     return bad(r.status, r.error);
