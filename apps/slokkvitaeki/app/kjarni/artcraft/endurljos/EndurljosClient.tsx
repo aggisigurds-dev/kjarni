@@ -379,6 +379,17 @@ export default function EndurljosClient() {
             </label>
             <label
               style={{ display: "flex", alignItems: "center", gap: 8 }}
+              title="A: Keyrir face-swap eftir Endurljós — setur upprunalega andlitid aftur a relit myndina. Pixel-perfect andlit. Tvofaldar kostnad og tima. AF: ekkert face-swap."
+            >
+              <input
+                type="checkbox"
+                checked={settings.preserveFace}
+                onChange={(e) => updateSettings({ preserveFace: e.target.checked })}
+              />
+              Varðveita andlit nákvæmlega (face-swap eftir Endurljós, 2x kostnaður)
+            </label>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
               title="Sleppir NSFW-filter módelsins. Kjarni leyfir nekt — aðeins kynferðislegt myndefni af börnum er bannað."
             >
               <input

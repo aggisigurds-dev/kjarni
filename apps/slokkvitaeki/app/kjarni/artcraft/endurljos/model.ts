@@ -33,6 +33,7 @@ export type EndurljosSettings = {
   prompt: string;
   lightSource: LightSource;
   preserveBackground: boolean;
+  preserveFace: boolean;
   negativePrompt: string;
   numResults: number;
   seed: number;
@@ -52,6 +53,9 @@ export const DEFAULT_ENDURLJOS_SETTINGS: EndurljosSettings = {
   // Default: NÝR bakgrunnur (foreground-only ic-light). Notandi togglar ON ef
   // hann vill halda bakgrunninum (ic-light-background variant).
   preserveBackground: false,
+  // Default: AF. Þegar ON keyrir face-swap eftir IC-Light sem setur
+  // upprunalega andlitið aftur á relit-myndina. Tvöfaldar kostnað og tíma.
+  preserveFace: false,
   negativePrompt: "lowres, bad anatomy, bad hands, cropped, worst quality, blurry",
   numResults: 1,
   seed: -1,
@@ -92,6 +96,10 @@ export function normalizeEndurljosSettings(
       typeof src.preserveBackground === "boolean"
         ? src.preserveBackground
         : DEFAULT_ENDURLJOS_SETTINGS.preserveBackground,
+    preserveFace:
+      typeof src.preserveFace === "boolean"
+        ? src.preserveFace
+        : DEFAULT_ENDURLJOS_SETTINGS.preserveFace,
     negativePrompt:
       typeof src.negativePrompt === "string"
         ? src.negativePrompt
@@ -143,6 +151,7 @@ export async function relightImage(
     body: JSON.stringify({
       image: imageDataUrl,
       preserveBackground: settings.preserveBackground,
+      preserveFace: settings.preserveFace,
       prompt: activePrompt,
       lightSource: settings.lightSource,
       negativePrompt: settings.negativePrompt,

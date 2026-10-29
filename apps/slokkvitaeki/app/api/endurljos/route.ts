@@ -15,7 +15,8 @@ import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replica
 // flatara ljós; hærra = meiri drama en meiri breyting). `output_quality`
 // hækkar webp-gæðin — default 80 skilar oft smárri skrá.
 
-export const maxDuration = 60;
+// 120s þegar face-swap eftirvinnsla er ON — tveir Replicate kall í röð.
+export const maxDuration = 120;
 
 const LIGHT_SOURCES = ["Left Light", "Right Light", "Top Light", "Bottom Light", "None"] as const;
 type LightSource = (typeof LIGHT_SOURCES)[number];
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
     image?: string;
     backgroundImage?: string;
     preserveBackground?: boolean;
+    preserveFace?: boolean;
     prompt?: string;
     appendedPrompt?: string;
     negativePrompt?: string;
@@ -130,14 +132,47 @@ export async function POST(req: NextRequest) {
       };
 
   try {
+    // Fyrri skref: IC-Light eða IC-Light-background endurlýsir myndina.
+    // Budget skiptum við á milli skrefa: 55s á IC-Light + 55s á face-swap
+    // ef togglad, annars 110s á IC-Light eitt.
+    const budget = body.preserveFace === true ? 55_000 : 110_000;
     const output = await runReplicate({
       token,
       owner: "zsxkib",
       name: useBackgroundModel ? "ic-light-background" : "ic-light",
       input,
       functionStart,
+      budgetMs: budget,
     });
-    return NextResponse.json({ images: outputToUrls(output) });
+    let urls = outputToUrls(output);
+
+    // Seinni skref (optional): face-swap með upprunalegu andlitinu til að
+    // tryggja pixel-perfect andlits-identity. Keyrir face-swap á hvert
+    // IC-Light output með upprunalegu myndinni sem andlits-source. Þetta
+    // tvöfaldar kostnað og tíma, en gefur andlit sem breytist ekki.
+    if (body.preserveFace === true && urls.length > 0) {
+      const faceSwapped: string[] = [];
+      for (const relitUrl of urls) {
+        const swapOutput = await runReplicate({
+          token,
+          owner: "noahgsolomon",
+          name: "face-swap",
+          input: {
+            // input_image: myndin sem andlitið er sett á (endurlýstu)
+            // swap_image: andlits-source (upprunalega myndin)
+            input_image: relitUrl,
+            swap_image: body.image,
+          },
+          functionStart,
+          budgetMs: 110_000,
+        });
+        const swapped = outputToUrls(swapOutput);
+        if (swapped[0]) faceSwapped.push(swapped[0]);
+      }
+      if (faceSwapped.length > 0) urls = faceSwapped;
+    }
+
+    return NextResponse.json({ images: urls });
   } catch (err) {
     const r = badReplicate(err);
     return bad(r.status, r.error);
