@@ -212,16 +212,6 @@ export const AUTO_TOOLS = [
     category: "enhance" as ToolCategory,
   },
   {
-    id: "vakna",
-    name: "Vakna",
-    role: "Mynd → myndband",
-    desc: "Wan 2.2 TI2V á OKKAR EIGIN RunPod serverless — mynd + lýsing á hreyfingu → stutt video. Scales to zero, engin NSFW-takmörk. Fyrsti cold-start 10-15 mín, síðan 60-120s per video.",
-    icon: "🌅",
-    href: "/kjarni/artcraft/vakna",
-    ready: true,
-    category: "video" as ToolCategory,
-  },
-  {
     id: "skyjahreyfimynd",
     name: "Skýjahreyfimynd",
     role: "Mynd → myndband",
