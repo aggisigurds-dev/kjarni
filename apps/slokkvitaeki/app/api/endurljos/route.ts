@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
 
-// Endurljós — zsxkib/ic-light á Replicate
-// (https://replicate.com/zsxkib/ic-light). Lítur á forgrunns-mynd (persóna/vara)
-// og lýsir hana upp samkvæmt texta + ljósastefnu. Depth-aware að innan — sér
-// formið á modelinu og dreifir ljósinu rétt (rim, soft, moody o.s.frv.).
+// Endurljós — zsxkib/ic-light á Replicate (foreground only)
+// og zsxkib/ic-light-background (foreground + background preserved).
 //
-// Perfect fyrir myndatöku: ef lýsingin á stúdíóinu var flöt eða rangri áttu
-// stillt getur Endurljós endurlýst myndina á sekúndum án þess að rekast á
-// hárið eða fötin.
+// Þegar notandi vill halda bakgrunninum: notum ic-light-background með
+// upprunalegu myndinni sem BÆÐI subject og background. Þá endurlýsir
+// modelið subject-ið og passar sig við bakgrunninn sem er fyrir. Þegar
+// notandi vill nýjan bakgrunn: ic-light foreground-only, model býr til
+// nýjan bakgrunn eftir prompt.
 //
-// Útkomustærð + varaauðkenni: `lowres_denoise` + `highres_denoise` ráða hversu
-// mikið módelið má endurteikna (lægra = meira trú upprunalegri mynd en flatara
-// ljós; hærra = meiri drama en meiri breyting á andliti). `output_quality`
+// Útkomustærð + varaauðkenni: `lowres_denoise` + `highres_denoise` ráða
+// hversu mikið módelið má endurteikna (lægra = meira trú upprunalegu en
+// flatara ljós; hærra = meiri drama en meiri breyting). `output_quality`
 // hækkar webp-gæðin — default 80 skilar oft smárri skrá.
 
 export const maxDuration = 60;
@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
 
   let body: {
     image?: string;
+    backgroundImage?: string;
+    preserveBackground?: boolean;
     prompt?: string;
     appendedPrompt?: string;
     negativePrompt?: string;
@@ -74,6 +76,18 @@ export async function POST(req: NextRequest) {
   if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
     return bad(400, "image vantar (data:image/... URL)");
   }
+
+  // Veldu módel: ef preserveBackground er true notum við ic-light-background
+  // með upprunalegu myndinni (eða annarri uppsettri bg) sem bakgrunns-conditioning.
+  // Annars venjulegt foreground-only ic-light.
+  const useBackgroundModel =
+    body.preserveBackground === true ||
+    (typeof body.backgroundImage === "string" && body.backgroundImage.startsWith("data:image/"));
+  const backgroundImageData =
+    typeof body.backgroundImage === "string" && body.backgroundImage.startsWith("data:image/")
+      ? body.backgroundImage
+      : body.image; // ef preserveBackground án uppsettrar bg: notum upprunalegu myndina
+
   const lightSource: LightSource = LIGHT_SOURCES.includes(body.lightSource as LightSource)
     ? (body.lightSource as LightSource)
     : "Left Light";
@@ -81,10 +95,9 @@ export async function POST(req: NextRequest) {
     ? (body.outputFormat as OutputFormat)
     : "webp";
 
-  const input: Record<string, unknown> = {
+  const commonInput: Record<string, unknown> = {
     subject_image: body.image,
     prompt,
-    light_source: lightSource,
     appended_prompt:
       body.appendedPrompt?.trim() ||
       "best quality, highres, cinematic lighting, intricate details, sharp focus",
@@ -100,14 +113,27 @@ export async function POST(req: NextRequest) {
     output_format: outputFormat,
     output_quality: clampInt(body.outputQuality, 95, 1, 100),
   };
-  if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
-  if (body.disableSafetyChecker === true) input.disable_safety_checker = true;
+  if (typeof body.seed === "number" && body.seed >= 0) commonInput.seed = Math.trunc(body.seed);
+  if (body.disableSafetyChecker === true) commonInput.disable_safety_checker = true;
+
+  const input: Record<string, unknown> = useBackgroundModel
+    ? {
+        ...commonInput,
+        background_image: backgroundImageData,
+        // ic-light-background notar "Use Background Image" sem sérstaka ljósastefnu.
+        // Ef notandi hefur valið ljósastefnu notum við hana, annars Background.
+        light_source: lightSource === "None" ? "Use Background Image" : lightSource,
+      }
+    : {
+        ...commonInput,
+        light_source: lightSource,
+      };
 
   try {
     const output = await runReplicate({
       token,
       owner: "zsxkib",
-      name: "ic-light",
+      name: useBackgroundModel ? "ic-light-background" : "ic-light",
       input,
       functionStart,
     });

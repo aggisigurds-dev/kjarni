@@ -32,6 +32,7 @@ export type EndurljosOutputFormat = (typeof ENDURLJOS_OUTPUT_FORMATS)[number];
 export type EndurljosSettings = {
   prompt: string;
   lightSource: LightSource;
+  preserveBackground: boolean;
   negativePrompt: string;
   numResults: number;
   seed: number;
@@ -48,6 +49,9 @@ export type EndurljosSettings = {
 export const DEFAULT_ENDURLJOS_SETTINGS: EndurljosSettings = {
   prompt: "soft studio key light, warm rim, deep shadows, cinematic",
   lightSource: "Left Light",
+  // Default: NÝR bakgrunnur (foreground-only ic-light). Notandi togglar ON ef
+  // hann vill halda bakgrunninum (ic-light-background variant).
+  preserveBackground: false,
   negativePrompt: "lowres, bad anatomy, bad hands, cropped, worst quality, blurry",
   numResults: 1,
   seed: -1,
@@ -84,6 +88,10 @@ export function normalizeEndurljosSettings(
     lightSource: LIGHT_SOURCES.includes(src.lightSource as LightSource)
       ? (src.lightSource as LightSource)
       : DEFAULT_ENDURLJOS_SETTINGS.lightSource,
+    preserveBackground:
+      typeof src.preserveBackground === "boolean"
+        ? src.preserveBackground
+        : DEFAULT_ENDURLJOS_SETTINGS.preserveBackground,
     negativePrompt:
       typeof src.negativePrompt === "string"
         ? src.negativePrompt
@@ -132,6 +140,7 @@ export async function relightImage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       image: imageDataUrl,
+      preserveBackground: settings.preserveBackground,
       prompt: activePrompt,
       lightSource: settings.lightSource,
       negativePrompt: settings.negativePrompt,

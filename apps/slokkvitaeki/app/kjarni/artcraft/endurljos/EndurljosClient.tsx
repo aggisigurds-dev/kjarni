@@ -368,6 +368,17 @@ export default function EndurljosClient() {
             </label>
             <label
               style={{ display: "flex", alignItems: "center", gap: 8 }}
+              title="A: Halda upprunalegum bakgrunni (notar ic-light-background module, endurlysir ad eins subject-id). AF: Byr til nyjan bakgrunn eftir prompt (venjulegt ic-light)."
+            >
+              <input
+                type="checkbox"
+                checked={settings.preserveBackground}
+                onChange={(e) => updateSettings({ preserveBackground: e.target.checked })}
+              />
+              Halda upprunalegum bakgrunni
+            </label>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
               title="Sleppir NSFW-filter módelsins. Kjarni leyfir nekt — aðeins kynferðislegt myndefni af börnum er bannað."
             >
               <input
