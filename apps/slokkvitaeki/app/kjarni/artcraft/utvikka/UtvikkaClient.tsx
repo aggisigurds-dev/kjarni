@@ -242,6 +242,7 @@ export default function UtvikkaClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: Allar hliðar (sléttur rammi); Vinstri + hægri til að breyta portrait í landscape</small>
               </label>
               <label title="Hversu mikið er bætt við á hvorri hlið sem er valin. +50% bætir hálfum myndabreidd við á hvorri hlið.">
                 Magn
@@ -255,6 +256,7 @@ export default function UtvikkaClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: +50% (jafnvægi); +25% fyrir fíngerðari viðbætur, +100% fyrir dramatíska útvíkkun</small>
               </label>
               <label title="Hversu margar útgáfur af útvíkkuninni á að búa til. Hver kostar peninga.">
                 Fjöldi mynda ({settings.numOutputs})
@@ -266,6 +268,7 @@ export default function UtvikkaClient() {
                   value={settings.numOutputs}
                   onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 1 (hækkaðu í 2–4 til að bera saman afbrigði)</small>
               </label>
               <label title="Fjöldi diffusion skrefa. Meira = nákvæmari útkoma en lengri tími. 30 er góður meðalvegur.">
                 Skref ({settings.steps})
@@ -277,6 +280,7 @@ export default function UtvikkaClient() {
                   value={settings.steps}
                   onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 30 (góður meðalvegur); 40+ fyrir hámarks nákvæmni, 20 fyrir hraða</small>
               </label>
               <label title="Hversu stíft Flux Fill fylgir prompt-inu og brúnum myndarinnar. 30 er default. Hækkaðu ef þú vilt það halda meira af upprunalegu samhengi.">
                 Guidance ({settings.guidance.toFixed(0)})
@@ -288,6 +292,7 @@ export default function UtvikkaClient() {
                   value={settings.guidance}
                   onChange={(e) => updateSettings({ guidance: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 30 (náttúrulegt framhald); 50+ heldur stíft við prompt en getur gefið plasticky áferð</small>
               </label>
               <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu.">
                 Seed (-1 = slembið)
@@ -296,6 +301,7 @@ export default function UtvikkaClient() {
                   value={settings.seed}
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
                 />
+                <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu til að endurtaka sama útkomu)</small>
               </label>
             </div>
             <label>
@@ -306,6 +312,7 @@ export default function UtvikkaClient() {
                 onChange={(e) => updateSettings({ prompt: e.target.value })}
                 placeholder="t.d. sama bakgrunnslíking, náttúrulegt framhald, eða úthverft loft, grey wall"
               />
+              <small className="ac-rec">mælt: tómt (Flux Fill les sjálft brúnir myndarinnar); skrifaðu bara ef þú vilt stýra efnisframhaldi</small>
             </label>
             <label
               style={{ display: "flex", alignItems: "center", gap: 8 }}
@@ -317,6 +324,7 @@ export default function UtvikkaClient() {
                 onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
               />
               Slökkva á safety checker
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: AF (OFF) nema prompt-ið krefjist þess</small>
             </label>
 
             {error && <p className="ac-error">{error}</p>}

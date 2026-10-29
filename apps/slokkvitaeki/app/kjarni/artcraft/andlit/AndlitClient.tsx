@@ -345,6 +345,7 @@ export default function AndlitClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: Portrait (768×1024) fyrir fólk; Landscape fyrir vörur/umhverfi</small>
               </label>
               <label title="SDXL grunnvægi sem módelið teiknar með. RealVis = ljósraunsætt portrait, DreamShaper = listrænt, Juggernaut = fjölhæf. Hver gefur ólíkan stíl á sama prompti.">
                 Stíll (SDXL weights)
@@ -358,6 +359,7 @@ export default function AndlitClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: RealVis XL v3 (ljósraunsætt portrett); Juggernaut fyrir fjölhæf, DreamShaper fyrir listrænt</small>
               </label>
               <label title="Hversu stíft andlitið úr innsettu myndinni á að birtast. 0.8 er góður meðalvegur. 1.0+ = nákvæmara andlit en frjálsara útlit á öllu öðru.">
                 Andlits-auðkenni ({settings.ipAdapterScale.toFixed(2)})
@@ -369,6 +371,7 @@ export default function AndlitClient() {
                   value={settings.ipAdapterScale}
                   onChange={(e) => updateSettings({ ipAdapterScale: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 0.80 (sterkt andlit en umhverfi fylgir prompti); 1.0+ gefur nákvæmara andlit</small>
               </label>
               <label title="Hversu stíft valkvæða stellingarmyndin stýrir endanlegri stellingu. Hækkaðu ef þú vilt nákvæmari eftirlíkingu á pose-inu.">
                 Stellingarstyrkur ({settings.controlnetConditioningScale.toFixed(2)})
@@ -382,6 +385,7 @@ export default function AndlitClient() {
                     updateSettings({ controlnetConditioningScale: Number(e.target.value) })
                   }
                 />
+                <small className="ac-rec">mælt: 0.80 (ef stellingarmynd er sett); 0 ef engin stelling</small>
               </label>
               <label title="Hversu margar útgáfur af myndinni á að búa til í einni keyrslu. Hvert útkoma kostar peninga.">
                 Fjöldi mynda ({settings.numOutputs})
@@ -393,6 +397,7 @@ export default function AndlitClient() {
                   value={settings.numOutputs}
                   onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 1 (hækkaðu ef þú vilt bera saman afbrigði)</small>
               </label>
               <label title="Fjöldi diffusion skrefa. Meira = nákvæmari útkoma en lengri tími. 30 er góður meðalvegur.">
                 Skref ({settings.numInferenceSteps})
@@ -404,6 +409,7 @@ export default function AndlitClient() {
                   value={settings.numInferenceSteps}
                   onChange={(e) => updateSettings({ numInferenceSteps: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 30 (góður meðalvegur); 45+ fyrir hámarks nákvæmni</small>
               </label>
               <label title="Classifier-Free Guidance. Hversu stíft módelið fylgir prompt-inu. 5 er góður meðalvegur. Hækkaðu ef útkoman er ekki að fylgja því sem þú skrifaðir.">
                 Guidance ({settings.guidanceScale.toFixed(1)})
@@ -415,6 +421,7 @@ export default function AndlitClient() {
                   value={settings.guidanceScale}
                   onChange={(e) => updateSettings({ guidanceScale: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 5.0 (góður meðalvegur); 7+ ef útkoman fylgir ekki prompti; 10+ verður plasticky</small>
               </label>
               <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu í hvert sinn.">
                 Seed (-1 = slembið)
@@ -423,6 +430,7 @@ export default function AndlitClient() {
                   value={settings.seed}
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
                 />
+                <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu til að endurtaka)</small>
               </label>
             </div>
             <label>
@@ -444,6 +452,7 @@ export default function AndlitClient() {
                 onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
               />
               Slökkva á safety checker
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: AF nema þú lendir á false-positive block (Kjarni leyfir nekt annars)</small>
             </label>
 
             {error && <p className="ac-error">{error}</p>}

@@ -255,6 +255,7 @@ export default function EndurljosClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: Vinstri (klassísk Rembrandt-lýsing á andlit)</small>
               </label>
               <label title="Hversu margar útgáfur af myndinni á að búa til í einni keyrslu. Hvert útkoma kostar peninga.">
                 Fjöldi mynda ({settings.numResults})
@@ -266,6 +267,7 @@ export default function EndurljosClient() {
                   value={settings.numResults}
                   onChange={(e) => updateSettings({ numResults: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 1 (hækkaðu ef þú vilt bera saman afbrigði)</small>
               </label>
               <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu í hvert sinn.">
                 Seed (-1 = slembið)
@@ -274,6 +276,7 @@ export default function EndurljosClient() {
                   value={settings.seed}
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
                 />
+                <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu til að endurtaka)</small>
               </label>
               <label title="Hversu mikið módelið má endurteikna upprunalegu myndina. 0.7 heldur andliti og lit. Undir 0.6 brotnar IC-Light og gefur svarthvíta mynd — slíderinn stöðvast því við 0.6.">
                 Varanákvæmni ({settings.lowresDenoise.toFixed(2)}) — lágt = trú andliti
@@ -285,6 +288,7 @@ export default function EndurljosClient() {
                   value={settings.lowresDenoise}
                   onChange={(e) => updateSettings({ lowresDenoise: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 0.70 (heldur andliti; 0.80+ gefur meira drama en breytir meira)</small>
               </label>
               <label title="Hversu mikið má breyta myndinni í highres-pass. 0.3 heldur andliti nánar, 0.5+ gefur meira dramatíska lýsingu en meiri breytingu.">
                 Highres-denoise ({settings.highresDenoise.toFixed(2)}) — hækka fyrir meira drama
@@ -296,6 +300,7 @@ export default function EndurljosClient() {
                   value={settings.highresDenoise}
                   onChange={(e) => updateSettings({ highresDenoise: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 0.30 (nálægt andliti; 0.50+ = cinematic en breytir meira)</small>
               </label>
               <label title="Hvað endanleg mynd verður margfalt stærri en innri reikningur. 1.5× = hámarks skerpa en lengri tími.">
                 Highres-stækkun ({settings.highresScale.toFixed(2)}×)
@@ -307,6 +312,7 @@ export default function EndurljosClient() {
                   value={settings.highresScale}
                   onChange={(e) => updateSettings({ highresScale: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 1.50× (hámarks skerpa)</small>
               </label>
               <label title="Fjöldi diffusion skrefa. Meira = nákvæmari útkoma en lengri tími. 25 er góður meðalvegur.">
                 Skref ({settings.steps})
@@ -318,6 +324,7 @@ export default function EndurljosClient() {
                   value={settings.steps}
                   onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 25 (góður meðalvegur; 35+ fyrir hámarks nákvæmni)</small>
               </label>
               <label title="Classifier-Free Guidance. Hversu stíft módelið fylgir prompt-inu. Lágt (1-3) = frjálsari túlkun, hátt (7+) = fylgir prompt-inu bókstaflega en getur orðið plasticky.">
                 CFG ({settings.cfg.toFixed(1)})
@@ -329,6 +336,7 @@ export default function EndurljosClient() {
                   value={settings.cfg}
                   onChange={(e) => updateSettings({ cfg: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 2.0 (frjálst og náttúrulegt; 5+ fylgir prompt stíft en plasticky)</small>
               </label>
               <label title="PNG = lossless, stærst, fullgæði. WebP = minni skrá, góð gæði. JPG = minnst, góð fyrir vef.">
                 Útkomusnið
@@ -344,6 +352,7 @@ export default function EndurljosClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: PNG (lossless, hámarks gæði — WebP/JPG fyrir vef)</small>
               </label>
               <label title="JPEG/WebP compression quality (1-100). 95 er mjög góð gæði, 80 er minni skrá. PNG hunsar þetta.">
                 Gæði ({settings.outputQuality})
@@ -355,6 +364,7 @@ export default function EndurljosClient() {
                   value={settings.outputQuality}
                   onChange={(e) => updateSettings({ outputQuality: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 95 (hámarks sýnileg gæði; PNG hunsar þetta)</small>
               </label>
             </div>
             <label>

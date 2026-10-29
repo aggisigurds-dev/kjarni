@@ -458,6 +458,7 @@ export default function SkyjahreyfimyndClient() {
                         </option>
                       ))}
                     </select>
+                    <small className="ac-rec">mælt: 5s (ódýrara, nóg fyrir flestar auglýsingar); 10s fyrir lykilsenur</small>
                   </label>
                   <label>
                     Hlutfall
@@ -473,6 +474,7 @@ export default function SkyjahreyfimyndClient() {
                         </option>
                       ))}
                     </select>
+                    <small className="ac-rec">mælt: 16:9 (lárétt — video); 9:16 fyrir Reels/TikTok; 1:1 fyrir Instagram</small>
                   </label>
                   <label>
                     CFG scale ({kling.cfgScale.toFixed(2)})
@@ -484,6 +486,7 @@ export default function SkyjahreyfimyndClient() {
                       value={kling.cfgScale}
                       onChange={(e) => updateKling({ cfgScale: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: 0.50 (jafnvægi); 0.7+ fylgir prompt stíft en meira plasticky</small>
                   </label>
                 </div>
                 <p className="ac-hint">
@@ -520,6 +523,7 @@ export default function SkyjahreyfimyndClient() {
                   value={settings.numFrames}
                   onChange={(e) => updateSettings({ numFrames: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 81 (~5s á 16fps — ódýrast); 129 fyrir lengri klip</small>
               </label>
               <label>
                 FPS ({settings.framesPerSecond})
@@ -530,6 +534,7 @@ export default function SkyjahreyfimyndClient() {
                   value={settings.framesPerSecond}
                   onChange={(e) => updateSettings({ framesPerSecond: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 16 (Wan native); 24 fyrir mýkra playback (styttra klip þó)</small>
               </label>
               <label>
                 Upplausn
@@ -543,6 +548,7 @@ export default function SkyjahreyfimyndClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: 480p (hraðast, ódýrast); 720p fyrir hámarks gæði</small>
               </label>
               <label>
                 Hlutfall
@@ -556,6 +562,7 @@ export default function SkyjahreyfimyndClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: 16:9 (lárétt — video); 9:16 fyrir Reels/TikTok; 1:1 fyrir Instagram</small>
               </label>
               <label>
                 Seed ({settings.seed === -1 ? "slembið" : settings.seed})
@@ -564,6 +571,7 @@ export default function SkyjahreyfimyndClient() {
                   value={settings.seed}
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu til að endurtaka)</small>
               </label>
             </div>
 
@@ -574,6 +582,7 @@ export default function SkyjahreyfimyndClient() {
                 onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
               />
               Slökkva á öryggissíu (disable_safety_checker)
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: ON (Kjarni-reglur: aðeins CSAM blokkað)</small>
             </label>
             <p className="ac-hint">
               Skjalfest Replicate-breyta hjá wan-video/wan-2.2-i2v-fast — sjálfgefið á. Þú berð ábyrgð á

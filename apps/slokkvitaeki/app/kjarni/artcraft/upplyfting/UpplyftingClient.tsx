@@ -392,7 +392,7 @@ export default function UpplyftingClient() {
                       value={clarity.creativity}
                       onChange={(e) => updateClarity({ creativity: Number(e.target.value) })}
                     />
-                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: 3 (sýnileg áferð, trú upprunalegu)</small>
+                    <small className="ac-rec">mælt: 3 (sýnileg áferð, trú upprunalegu)</small>
                   </label>
                   <label title="Hversu mikið myndin stækkar. Fast enum: 2x, 4x, 8x, 16x. Hámark 64 MP útkoma.">
                     Scale ({clarity.scaleFactor}×
@@ -407,7 +407,7 @@ export default function UpplyftingClient() {
                         </option>
                       ))}
                     </select>
-                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: 2× (4× getur farið yfir 64 MP mörk á stórum myndum)</small>
+                    <small className="ac-rec">mælt: 2× (4× getur farið yfir 64 MP mörk á stórum myndum)</small>
                   </label>
                   <label title="PNG = lossless (stærri skrá), JPG = 95% quality (minni skrá).">
                     Snið
@@ -421,7 +421,7 @@ export default function UpplyftingClient() {
                         </option>
                       ))}
                     </select>
-                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: PNG (lossless, trúari upprunalegu)</small>
+                    <small className="ac-rec">mælt: PNG (lossless, trúari upprunalegu)</small>
                   </label>
                   <label title="-1 = slembið (nýtt í hvert sinn). Settu fasta tölu til að endurtaka sama útkomu.">
                     Seed ({clarity.seed === -1 ? "slembið" : clarity.seed})
@@ -430,7 +430,7 @@ export default function UpplyftingClient() {
                       value={clarity.seed}
                       onChange={(e) => updateClarity({ seed: Number(e.target.value) })}
                     />
-                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: -1 (slembið; nota fasta tölu bara ef þú vilt endurtaka)</small>
+                    <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu bara ef þú vilt endurtaka)</small>
                   </label>
                 </div>
 
@@ -470,6 +470,7 @@ export default function UpplyftingClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: Standard V2 (hefðbundnar myndir); Low Resolution V2 fyrir gamalt eða pixelað</small>
               </label>
               <label>
                 Stækkun ({settings.upscaleFactor}
@@ -484,6 +485,7 @@ export default function UpplyftingClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: 2× (örugg stærð); 4× á litlar myndir, None ef þú vilt bara hreinsa áferð</small>
               </label>
               <label>
                 Subject detection
@@ -499,6 +501,7 @@ export default function UpplyftingClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: None (hraðast); Foreground ef þú vilt verja persónu/vöru fyrir hávaða</small>
               </label>
               <label>
                 Output
@@ -512,6 +515,7 @@ export default function UpplyftingClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: PNG (lossless) fyrir hámarks gæði; JPG fyrir vefbirtingu</small>
               </label>
             </div>
 
@@ -522,6 +526,7 @@ export default function UpplyftingClient() {
                 onChange={(e) => updateSettings({ faceEnhancement: e.target.checked })}
               />
               Lagfæra andlit (face_enhancement)
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: AF nema andlit sé mikilvægt (hættir á plasticky áferð)</small>
             </label>
             {settings.faceEnhancement && (
               <div className="ac-settings">
@@ -535,6 +540,7 @@ export default function UpplyftingClient() {
                     value={settings.faceEnhancementCreativity}
                     onChange={(e) => updateSettings({ faceEnhancementCreativity: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 0.00 (hreinsa án að bæta við); 0.3+ gefur plasticky „beauty filter"</small>
                 </label>
                 <label>
                   Strength ({settings.faceEnhancementStrength.toFixed(2)})
@@ -546,6 +552,7 @@ export default function UpplyftingClient() {
                     value={settings.faceEnhancementStrength}
                     onChange={(e) => updateSettings({ faceEnhancementStrength: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 0.80 (sterk lagfæring án of mikillar túlkunar)</small>
                 </label>
               </div>
             )}

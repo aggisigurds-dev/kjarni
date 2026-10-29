@@ -403,6 +403,7 @@ export default function BreytaClient() {
                       <option value="female">Kvenkyn</option>
                       <option value="male">Karlkyn</option>
                     </select>
+                    <small className="ac-rec">mælt: Látum líkanið giska (nema líkanið misskilji ítrekað)</small>
                   </label>
                   <label>
                     Bakgrunnur
@@ -418,6 +419,7 @@ export default function BreytaClient() {
                       <option value="gray">Gray</option>
                       <option value="office">Office</option>
                     </select>
+                    <small className="ac-rec">mælt: Neutral (mýkra en White; Office fyrir viðskipta-headshot)</small>
                   </label>
                 </div>
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -427,6 +429,7 @@ export default function BreytaClient() {
                     onChange={(e) => updateHeadshot({ disableSafetyChecker: e.target.checked })}
                   />
                   Slökkva á öryggissíu (disable_safety_checker)
+                  <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: AF (face-engine þarf öryggissíu til að forðast falska synjun)</small>
                 </label>
               </>
             )}
@@ -446,6 +449,7 @@ export default function BreytaClient() {
                     onChange={(e) => updateBackground({ negativePrompt: e.target.value })}
                     rows={2}
                   />
+                  <small className="ac-rec">mælt: „cluttered, people in background, distracting elements" (eða autt)</small>
                 </label>
                 <div className="ac-settings">
                   <label>
@@ -457,6 +461,7 @@ export default function BreytaClient() {
                       value={background.numResults}
                       onChange={(e) => updateBackground({ numResults: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: 1 (hækkaðu í 2-4 til að bera saman afbrigði; hvert kostar sitt)</small>
                   </label>
                   <label>
                     Seed ({background.seed === -1 ? "slembið" : background.seed})
@@ -465,6 +470,7 @@ export default function BreytaClient() {
                       value={background.seed}
                       onChange={(e) => updateBackground({ seed: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu bara til að endurtaka)</small>
                   </label>
                 </div>
               </>

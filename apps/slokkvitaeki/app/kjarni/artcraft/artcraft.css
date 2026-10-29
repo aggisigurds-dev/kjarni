@@ -766,6 +766,17 @@
   color: var(--m-soft, #5a6b80);
 }
 
+/* "mælt" linuhjalp vid hverja stillingu — syn notanda hvar sliderinn
+   aetti helst ad vera an thess ad hann thurfi ad hover-a eftir tooltip. */
+.ac-rec {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.6;
+  color: var(--m-soft, #5a6b80);
+}
+
 .ac-status.up { color: #2fa56b; }
 .ac-status.down { color: #c0271c; }
 .ac-error { color: #c0271c; font-size: 14px; }

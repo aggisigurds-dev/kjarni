@@ -233,6 +233,7 @@ export default function InnblasturClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: Sama og innblástur (heldur samsetningunni; veldu annað ef þú vilt reframa)</small>
               </label>
               <label title="Hversu mörg afbrigði á að búa til í einni keyrslu. Hvert kostar peninga.">
                 Fjöldi afbrigða ({settings.numOutputs})
@@ -244,6 +245,7 @@ export default function InnblasturClient() {
                   value={settings.numOutputs}
                   onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 1 (hækkaðu í 2–4 ef þú vilt bera saman afbrigði í einni keyrslu)</small>
               </label>
               <label title="Fjöldi diffusion skrefa. Meira = nákvæmara en lengri tími. 28 er sweet spot fyrir Flux.">
                 Skref ({settings.numInferenceSteps})
@@ -255,6 +257,7 @@ export default function InnblasturClient() {
                   value={settings.numInferenceSteps}
                   onChange={(e) => updateSettings({ numInferenceSteps: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 28 (sweet spot fyrir Flux; undir 20 lækkar gæði, yfir 40 bætir litlu við)</small>
               </label>
               <label title="Endanleg upplausn. 1 MP = ~1024×1024, 0.25 MP = ~512×512. Hærra = stærri skrá en lengri tími.">
                 Upplausn
@@ -268,6 +271,7 @@ export default function InnblasturClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: 1 MP (full upplausn ~1024×1024); 0.25 MP bara fyrir hraðar prófanir</small>
               </label>
               <label title="PNG = lossless. WebP = minni skrá, góð gæði. JPG = minnst, góð fyrir vef.">
                 Output-snið
@@ -281,6 +285,7 @@ export default function InnblasturClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: WebP (gott jafnvægi gæða/stærðar); PNG fyrir lossless, JPG fyrir vef</small>
               </label>
               <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu.">
                 Seed (-1 = slembið)
@@ -289,6 +294,7 @@ export default function InnblasturClient() {
                   value={settings.seed}
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
                 />
+                <small className="ac-rec">mælt: -1 (slembið; nota fasta tölu til að endurtaka útkomu)</small>
               </label>
             </div>
             <label
@@ -301,6 +307,7 @@ export default function InnblasturClient() {
                 onChange={(e) => updateSettings({ goFast: e.target.checked })}
               />
               Go fast (lækkar gæði, hraðari keyrsla)
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: AF (gæði mikilvægari en hraði nema fyrir skyndiprófanir)</small>
             </label>
             <label
               style={{ display: "flex", alignItems: "center", gap: 8 }}
@@ -312,6 +319,7 @@ export default function InnblasturClient() {
                 onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
               />
               Slökkva á safety checker
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: Á (filter er oft of varkár); AF ef þú veist að þú vilt enga síu</small>
             </label>
 
             {error && <p className="ac-error">{error}</p>}
