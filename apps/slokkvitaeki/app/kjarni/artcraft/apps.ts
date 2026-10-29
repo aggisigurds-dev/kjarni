@@ -293,6 +293,10 @@ export function artcraftEndurljosHref(): string {
   return "/kjarni/artcraft/endurljos";
 }
 
+export function artcraftInnblasturHref(): string {
+  return "/kjarni/artcraft/innblastur";
+}
+
 export function artcraftVinnslurHref(): string {
   return "/kjarni/artcraft/vinnslur";
 }
@@ -355,6 +359,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "breyta", name: "Breyta mynd", href: artcraftBreytaHref(), icon: "🪄", role: "Mynd → mynd", desc: "Þrjú skýja-líkön: pro headshot, nýr bakgrunnur með texta, hraðvirk multi-image edit.", uses: ["Starfsmannamyndir á grafitt bakgrunn", "Vörumynd úr bílskúr → stúdíó-bakgrunnur", "Hraðar tilraunir á sömu mynd fyrir pence"] as readonly string[] },
   { id: "tonsmid", name: "Tónsmíð", href: artcraftTonsmidHref(), icon: "🎵", role: "Texti → lag", desc: "Semur heilt lag úr texta með ElevenLabs Music á Replicate — jinglar, útvarpsauglýsingar, bakgrunnstónlist.", uses: ["Útvarpsjingill fyrir Slökkvitæki", "Bakgrunnstónlist fyrir Facebook-video", "Róandi lag fyrir Jarvis-tilkynningar"] as readonly string[] },
   { id: "endurljos", name: "Endurljós", href: artcraftEndurljosHref(), icon: "💡", role: "Endurlýsing", desc: "Endurlýsa persónu eða vöru með IC-Light (zsxkib/ic-light) á Replicate — texti + ljósastefna (vinstri/hægri/efst/neðst), depth-aware að innan.", uses: ["Myndataka með flötu ljósi lagfærð í stúdíó-ljós", "Vörumynd með óhentugum skuggum endurlýst", "Starfsmannaportrait með moody rim light"] as readonly string[] },
+  { id: "innblastur", name: "Innblástur", href: artcraftInnblasturHref(), icon: "✨", role: "Mynd → afbrigði", desc: "Flux Redux (black-forest-labs/flux-redux-dev) á Replicate — ein innblástursmynd → 1–4 ný afbrigði með svipaðan stíl og stemmningu.", uses: ["Framhald á myndatöku með sömu stemmningu", "Fleiri vinklar af vel heppnuðu skoti", "Mood-board útvíkkað í fulla seríu"] as readonly string[] },
   { id: "leidarvisir", name: "Leiðarvísir", href: artcraftLeidarvisirHref(), icon: "📖", role: "Hjálp", desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum af alvöru viðmótinu.", uses: [] as readonly string[] },
 ] as const;
 
@@ -377,6 +382,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/breyta") return "breyta";
   if (path === "/kjarni/artcraft/tonsmid") return "tonsmid";
   if (path === "/kjarni/artcraft/endurljos") return "endurljos";
+  if (path === "/kjarni/artcraft/innblastur") return "innblastur";
   if (path === "/kjarni/artcraft/vinnslur") return "vinnslur";
   if (path === "/kjarni/artcraft/leidarvisir") return "leidarvisir";
   const slug = path.split("/").pop() || "";

@@ -1,0 +1,348 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { StationChrome } from "../../StationChrome";
+import { artcraftHubHref, artcraftToolsHref } from "../apps";
+import "../artcraft.css";
+import { shrinkImageForUpload } from "../replicateImage";
+import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import {
+  ASPECT_RATIO_LABELS,
+  ASPECT_RATIOS,
+  DEFAULT_INNBLASTUR_SETTINGS,
+  generateInnblastur,
+  INNBLASTUR_SETTINGS_KEY,
+  MEGAPIXEL_LABELS,
+  MEGAPIXELS,
+  normalizeInnblasturSettings,
+  OUTPUT_FORMATS,
+  readStoredInnblasturSettings,
+  type AspectRatio,
+  type InnblasturSettings,
+  type Megapixels,
+  type OutputFormat,
+} from "./model";
+
+const SAVED_KEY = "innblastur";
+const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+
+function downloadBlob(url: string, name: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+}
+
+export default function InnblasturClient() {
+  const [ready, setReady] = useState(false);
+  const [settings, setSettings] = useState<InnblasturSettings>(DEFAULT_INNBLASTUR_SETTINGS);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
+  const [results, setResults] = useState<string[]>([]);
+  const [savedMeta, setSavedMeta] = useState<{ timestamp: number; sourceName?: string } | null>(null);
+  const sourceUrlRef = useRef<string>("");
+  const sourceDataUrlRef = useRef<string>("");
+  const resultUrlsRef = useRef<string[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [drag, setDrag] = useState(false);
+
+  useEffect(() => {
+    setSettings(readStoredInnblasturSettings());
+    setReady(true);
+    void (async () => {
+      const saved = await loadResult(SAVED_KEY);
+      if (saved) {
+        const urls = saved.blobs.map((b) => URL.createObjectURL(b));
+        resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+        resultUrlsRef.current = urls;
+        setResults(urls);
+        setSavedMeta({ timestamp: saved.timestamp, sourceName: saved.sourceName });
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+      resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
+
+  function updateSettings(next: Partial<InnblasturSettings>) {
+    setSettings((s) => {
+      const merged = normalizeInnblasturSettings({ ...s, ...next });
+      window.localStorage.setItem(INNBLASTUR_SETTINGS_KEY, JSON.stringify(merged));
+      return merged;
+    });
+  }
+
+  async function handleFile(file: File) {
+    setError("");
+    try {
+      const shrunk = await shrinkImageForUpload(file, { maxDim: 1536, mime: "image/jpeg", quality: 0.92 });
+      if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+      const blob = await (await fetch(shrunk.dataUrl)).blob();
+      const url = URL.createObjectURL(blob);
+      sourceUrlRef.current = url;
+      sourceDataUrlRef.current = shrunk.dataUrl;
+      setSource({ url, name: file.name, width: shrunk.width, height: shrunk.height });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
+    }
+  }
+
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDrag(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
+  }
+
+  async function run() {
+    if (!source || !sourceDataUrlRef.current) {
+      setError("Veldu innblástursmynd fyrst.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const blobs = await generateInnblastur(settings, sourceDataUrlRef.current);
+      const urls = blobs.map((b) => URL.createObjectURL(b));
+      resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      resultUrlsRef.current = urls;
+      setResults(urls);
+      const now = Date.now();
+      setSavedMeta({ timestamp: now, sourceName: source.name });
+      void saveResult({
+        key: SAVED_KEY,
+        timestamp: now,
+        mediaType: "image",
+        blobs,
+        prompt: `Flux Redux variations af ${source.name}`,
+        mode: settings.aspectRatio,
+        sourceName: source.name,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Innblástur mistókst.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearSavedResults() {
+    resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    resultUrlsRef.current = [];
+    setResults([]);
+    setSavedMeta(null);
+    await clearResult(SAVED_KEY);
+  }
+
+  if (!ready) {
+    return (
+      <StationChrome tool="artcraft">
+        <div className="ac-hub">
+          <p className="ac-lead">Hleð Innblástri…</p>
+        </div>
+      </StationChrome>
+    );
+  }
+
+  return (
+    <StationChrome tool="artcraft">
+      <div className="ac-hub">
+        <div className="ac-hub-in ac-studio">
+          <p className="ac-kicker">
+            <a href={artcraftHubHref()}>ArtCraft</a>
+            {" · "}
+            <a href={artcraftToolsHref()}>Tól</a>
+            {" · Innblástur"}
+          </p>
+          <h1>Innblástur</h1>
+          <p className="ac-lead">
+            Flux Redux á Replicate: gefðu módelinu eina innblástursmynd (eitt vel heppnað
+            skot úr myndatöku, mood-board, listaverk) og það býr til 1–4 nýjar afbrigði með
+            svipaðan stíl, lit og samsetningu — ekki afrit, heldur nýjar myndir í sömu
+            stemmningu. Opin uppspretta, styður safety-checker toggle.
+          </p>
+
+          <section className="ac-panel">
+            <h2>Innblástursmynd</h2>
+            {!source ? (
+              <div
+                className={`ac-drop ${drag ? "on" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDrag(true);
+                }}
+                onDragLeave={() => setDrag(false)}
+                onDrop={onDrop}
+                onClick={() => inputRef.current?.click()}
+              >
+                <p>Dragðu mynd hingað eða smelltu til að velja.</p>
+                <p className="ac-hint">JPEG, PNG eða WebP — allt að 1536px lengsta hliðin.</p>
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={PHOTO_ACCEPT}
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleFile(f);
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="ac-source-row">
+                <img src={source.url} alt={source.name} className="ac-source-thumb" />
+                <div className="ac-source-meta">
+                  <b>{source.name}</b>
+                  <span className="ac-hint">
+                    {source.width}×{source.height}px
+                  </span>
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    onClick={() => {
+                      if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+                      sourceUrlRef.current = "";
+                      sourceDataUrlRef.current = "";
+                      setSource(null);
+                    }}
+                  >
+                    Önnur mynd
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="ac-panel">
+            <h2>Stillingar</h2>
+            <div className="ac-settings">
+              <label>
+                Hlutföll
+                <select
+                  value={settings.aspectRatio}
+                  onChange={(e) => updateSettings({ aspectRatio: e.target.value as AspectRatio })}
+                >
+                  {ASPECT_RATIOS.map((ar) => (
+                    <option key={ar} value={ar}>
+                      {ASPECT_RATIO_LABELS[ar]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Fjöldi afbrigða ({settings.numOutputs})
+                <input
+                  type="range"
+                  min={1}
+                  max={4}
+                  step={1}
+                  value={settings.numOutputs}
+                  onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                Skref ({settings.numInferenceSteps})
+                <input
+                  type="range"
+                  min={1}
+                  max={50}
+                  step={1}
+                  value={settings.numInferenceSteps}
+                  onChange={(e) => updateSettings({ numInferenceSteps: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                Upplausn
+                <select
+                  value={settings.megapixels}
+                  onChange={(e) => updateSettings({ megapixels: e.target.value as Megapixels })}
+                >
+                  {MEGAPIXELS.map((mp) => (
+                    <option key={mp} value={mp}>
+                      {MEGAPIXEL_LABELS[mp]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Output-snið
+                <select
+                  value={settings.outputFormat}
+                  onChange={(e) => updateSettings({ outputFormat: e.target.value as OutputFormat })}
+                >
+                  {OUTPUT_FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Seed (-1 = slembið)
+                <input
+                  type="number"
+                  value={settings.seed}
+                  onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
+                />
+              </label>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={settings.goFast}
+                onChange={(e) => updateSettings({ goFast: e.target.checked })}
+              />
+              Go fast (lækkar gæði, hraðari keyrsla)
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={settings.disableSafetyChecker}
+                onChange={(e) => updateSettings({ disableSafetyChecker: e.target.checked })}
+              />
+              Slökkva á safety checker
+            </label>
+
+            {error && <p className="ac-error">{error}</p>}
+            <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
+              {busy ? "Býr til afbrigði…" : "Búa til afbrigði"}
+            </button>
+          </section>
+
+          {results.length > 0 && (
+            <section className="ac-panel">
+              <h2>Afbrigði</h2>
+              {savedMeta && (
+                <p className="ac-hint">
+                  Vistað {formatSavedTime(savedMeta.timestamp)}
+                  {savedMeta.sourceName ? ` · úr „${savedMeta.sourceName}“` : ""}
+                </p>
+              )}
+              <div className="ac-grid">
+                {results.map((url, i) => (
+                  <div key={url} className="ac-card">
+                    <img src={url} alt={`Afbrigði ${i + 1}`} style={{ width: "100%", borderRadius: 8 }} />
+                    <button
+                      type="button"
+                      className="ac-btn ghost"
+                      onClick={() => downloadBlob(url, `innblastur-${Date.now()}-${i + 1}.${settings.outputFormat}`)}
+                    >
+                      Sækja
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
+                Hreinsa vistað
+              </button>
+            </section>
+          )}
+        </div>
+      </div>
+    </StationChrome>
+  );
+}

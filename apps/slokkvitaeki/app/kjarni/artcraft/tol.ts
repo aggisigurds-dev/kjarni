@@ -72,6 +72,16 @@ export const AUTO_TOOLS = [
     category: "create" as ToolCategory,
   },
   {
+    id: "innblastur",
+    name: "Innblástur",
+    role: "Mynd → afbrigði",
+    desc: "Flux Redux (black-forest-labs/flux-redux-dev) á Replicate — ein innblástursmynd → 1–4 ný afbrigði með svipaðan stíl.",
+    icon: "✨",
+    href: "/kjarni/artcraft/innblastur",
+    ready: true,
+    category: "create" as ToolCategory,
+  },
+  {
     id: "comfy",
     name: "ComfyUI",
     role: "Texti → mynd",
