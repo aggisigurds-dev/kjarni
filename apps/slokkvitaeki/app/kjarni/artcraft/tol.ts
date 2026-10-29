@@ -92,6 +92,16 @@ export const AUTO_TOOLS = [
     category: "create" as ToolCategory,
   },
   {
+    id: "dypt",
+    name: "Dýpt",
+    role: "Dýptarkort",
+    desc: "Depth Anything (cjwbw/depth-anything) á Replicate — mynd → grátóna dýptarkort. DINOv2-DPT, Apache-2.0, enginn safety filter. Fyrir fókus-trikk, parallax eða depth-aware endurlýsingu.",
+    icon: "🗺️",
+    href: "/kjarni/artcraft/dypt",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "comfy",
     name: "ComfyUI",
     role: "Texti → mynd",
