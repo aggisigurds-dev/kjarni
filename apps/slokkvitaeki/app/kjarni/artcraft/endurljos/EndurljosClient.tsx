@@ -9,12 +9,14 @@ import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
   DEFAULT_ENDURLJOS_SETTINGS,
+  ENDURLJOS_OUTPUT_FORMATS,
   ENDURLJOS_SETTINGS_KEY,
   LIGHT_SOURCES,
   LIGHT_SOURCE_LABELS,
   normalizeEndurljosSettings,
   readStoredEndurljosSettings,
   relightImage,
+  type EndurljosOutputFormat,
   type EndurljosSettings,
   type LightSource,
 } from "./model";
@@ -272,6 +274,87 @@ export default function EndurljosClient() {
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
                 />
               </label>
+              <label>
+                Varanákvæmni ({settings.lowresDenoise.toFixed(2)}) — lágt = trú andliti
+                <input
+                  type="range"
+                  min={0.3}
+                  max={1}
+                  step={0.05}
+                  value={settings.lowresDenoise}
+                  onChange={(e) => updateSettings({ lowresDenoise: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                Highres-denoise ({settings.highresDenoise.toFixed(2)}) — hækka fyrir meira drama
+                <input
+                  type="range"
+                  min={0}
+                  max={0.8}
+                  step={0.05}
+                  value={settings.highresDenoise}
+                  onChange={(e) => updateSettings({ highresDenoise: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                Highres-stækkun ({settings.highresScale.toFixed(2)}×)
+                <input
+                  type="range"
+                  min={1}
+                  max={1.5}
+                  step={0.05}
+                  value={settings.highresScale}
+                  onChange={(e) => updateSettings({ highresScale: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                Skref ({settings.steps})
+                <input
+                  type="range"
+                  min={10}
+                  max={50}
+                  step={1}
+                  value={settings.steps}
+                  onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                CFG ({settings.cfg.toFixed(1)})
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={0.5}
+                  value={settings.cfg}
+                  onChange={(e) => updateSettings({ cfg: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                Útkomusnið
+                <select
+                  value={settings.outputFormat}
+                  onChange={(e) =>
+                    updateSettings({ outputFormat: e.target.value as EndurljosOutputFormat })
+                  }
+                >
+                  {ENDURLJOS_OUTPUT_FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Gæði ({settings.outputQuality})
+                <input
+                  type="range"
+                  min={60}
+                  max={100}
+                  step={5}
+                  value={settings.outputQuality}
+                  onChange={(e) => updateSettings({ outputQuality: Number(e.target.value) })}
+                />
+              </label>
             </div>
             <label>
               Neikvætt prompt
@@ -315,7 +398,7 @@ export default function EndurljosClient() {
                     <button
                       type="button"
                       className="ac-btn ghost"
-                      onClick={() => downloadBlob(url, `endurljos-${Date.now()}-${i + 1}.webp`)}
+                      onClick={() => downloadBlob(url, `endurljos-${Date.now()}-${i + 1}.${settings.outputFormat}`)}
                     >
                       Sækja
                     </button>

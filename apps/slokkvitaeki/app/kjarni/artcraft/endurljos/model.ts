@@ -2,7 +2,12 @@
  *
  * Image-conditional relighting með depth-aware ljósadreifingu. Lýst með texta
  * (sunset, soft studio, moody rim light o.s.frv.) og ljósastefnu (vinstri/
- * hægri/efst/neðst/engin). Myndin breytir ekki formi — bara ljósinu. */
+ * hægri/efst/neðst/engin). Myndin breytir ekki formi — bara ljósinu.
+ *
+ * `lowres_denoise` og `highres_denoise` ráða hversu mikið módelið má
+ * endurteikna: lágt gildi = meira trú upprunalegu andliti/formi en flatara
+ * ljós; hátt gildi = meira drama en meiri breyting. `output_quality` hækkar
+ * webp-gæðin (default 80 gefur oft 30-50kb skrá, 95 gefur mun stærri). */
 
 export const LIGHT_SOURCES = [
   "Left Light",
@@ -21,6 +26,9 @@ export const LIGHT_SOURCE_LABELS: Record<LightSource, string> = {
   None: "Engin stefna",
 };
 
+export const ENDURLJOS_OUTPUT_FORMATS = ["webp", "png", "jpg"] as const;
+export type EndurljosOutputFormat = (typeof ENDURLJOS_OUTPUT_FORMATS)[number];
+
 export type EndurljosSettings = {
   prompt: string;
   lightSource: LightSource;
@@ -28,6 +36,13 @@ export type EndurljosSettings = {
   numResults: number;
   seed: number;
   disableSafetyChecker: boolean;
+  lowresDenoise: number;
+  highresDenoise: number;
+  highresScale: number;
+  cfg: number;
+  steps: number;
+  outputFormat: EndurljosOutputFormat;
+  outputQuality: number;
 };
 
 export const DEFAULT_ENDURLJOS_SETTINGS: EndurljosSettings = {
@@ -37,9 +52,28 @@ export const DEFAULT_ENDURLJOS_SETTINGS: EndurljosSettings = {
   numResults: 1,
   seed: -1,
   disableSafetyChecker: false,
+  // Varanákvæmara en Replicate-default: lowres 0.7 (frá 0.9), highres 0.3 (frá 0.5).
+  // Þetta heldur andlitinu nær upprunalegri mynd — hækkaðu ef þú vilt meira drama.
+  lowresDenoise: 0.7,
+  highresDenoise: 0.3,
+  highresScale: 1.5,
+  cfg: 2,
+  steps: 25,
+  outputFormat: "png",
+  outputQuality: 95,
 };
 
 export const ENDURLJOS_SETTINGS_KEY = "kjarni_private_endurljos_settings";
+
+function clampFloat(v: unknown, def: number, min: number, max: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+function clampInt(v: unknown, def: number, min: number, max: number): number {
+  return Math.round(clampFloat(v, def, min, max));
+}
 
 export function normalizeEndurljosSettings(
   raw: Partial<EndurljosSettings> | null | undefined,
@@ -54,10 +88,19 @@ export function normalizeEndurljosSettings(
       typeof src.negativePrompt === "string"
         ? src.negativePrompt
         : DEFAULT_ENDURLJOS_SETTINGS.negativePrompt,
-    numResults: Math.min(4, Math.max(1, Math.round(Number(src.numResults) || 1))),
+    numResults: clampInt(src.numResults, 1, 1, 4),
     seed: Number.isFinite(src.seed) ? Math.trunc(src.seed as number) : -1,
     disableSafetyChecker:
       typeof src.disableSafetyChecker === "boolean" ? src.disableSafetyChecker : false,
+    lowresDenoise: clampFloat(src.lowresDenoise, DEFAULT_ENDURLJOS_SETTINGS.lowresDenoise, 0, 1),
+    highresDenoise: clampFloat(src.highresDenoise, DEFAULT_ENDURLJOS_SETTINGS.highresDenoise, 0, 1),
+    highresScale: clampFloat(src.highresScale, DEFAULT_ENDURLJOS_SETTINGS.highresScale, 1, 1.5),
+    cfg: clampFloat(src.cfg, DEFAULT_ENDURLJOS_SETTINGS.cfg, 1, 10),
+    steps: clampInt(src.steps, DEFAULT_ENDURLJOS_SETTINGS.steps, 10, 50),
+    outputFormat: ENDURLJOS_OUTPUT_FORMATS.includes(src.outputFormat as EndurljosOutputFormat)
+      ? (src.outputFormat as EndurljosOutputFormat)
+      : DEFAULT_ENDURLJOS_SETTINGS.outputFormat,
+    outputQuality: clampInt(src.outputQuality, DEFAULT_ENDURLJOS_SETTINGS.outputQuality, 1, 100),
   };
 }
 
@@ -95,6 +138,13 @@ export async function relightImage(
       numResults: settings.numResults,
       seed: settings.seed,
       disableSafetyChecker: settings.disableSafetyChecker,
+      lowresDenoise: settings.lowresDenoise,
+      highresDenoise: settings.highresDenoise,
+      highresScale: settings.highresScale,
+      cfg: settings.cfg,
+      steps: settings.steps,
+      outputFormat: settings.outputFormat,
+      outputQuality: settings.outputQuality,
     }),
   });
   const text = await res.text();
