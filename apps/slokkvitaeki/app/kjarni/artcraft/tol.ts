@@ -82,6 +82,16 @@ export const AUTO_TOOLS = [
     category: "create" as ToolCategory,
   },
   {
+    id: "andlit",
+    name: "Andlit",
+    role: "Andlits-lás",
+    desc: "InstantID (zsxkib/instant-id) á Replicate — ein andlitsmynd + lýsing → nýjar myndir þar sem sama andlitið birtist í nýju umhverfi, stellingu eða stíl. SDXL + ControlNet, styður disable_safety_checker.",
+    icon: "👤",
+    href: "/kjarni/artcraft/andlit",
+    ready: true,
+    category: "create" as ToolCategory,
+  },
+  {
     id: "comfy",
     name: "ComfyUI",
     role: "Texti → mynd",

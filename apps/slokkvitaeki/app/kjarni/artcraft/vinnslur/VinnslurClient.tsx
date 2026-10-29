@@ -19,6 +19,7 @@ const TOOL_META: Record<string, { name: string; icon: string; href: string }> = 
   tonsmid: { name: "Tónsmíð", icon: "🎵", href: "/kjarni/artcraft/tonsmid" },
   endurljos: { name: "Endurljós", icon: "💡", href: "/kjarni/artcraft/endurljos" },
   innblastur: { name: "Innblástur", icon: "✨", href: "/kjarni/artcraft/innblastur" },
+  andlit: { name: "Andlit", icon: "👤", href: "/kjarni/artcraft/andlit" },
 };
 
 function toolInfo(key: string) {
