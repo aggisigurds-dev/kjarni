@@ -17,6 +17,7 @@ const TOOL_META: Record<string, { name: string; icon: string; href: string }> = 
   upplyfting: { name: "Upplyfting", icon: "🔍", href: "/kjarni/artcraft/upplyfting" },
   breyta: { name: "Breyta mynd", icon: "🪄", href: "/kjarni/artcraft/breyta" },
   tonsmid: { name: "Tónsmíð", icon: "🎵", href: "/kjarni/artcraft/tonsmid" },
+  endurljos: { name: "Endurljós", icon: "💡", href: "/kjarni/artcraft/endurljos" },
 };
 
 function toolInfo(key: string) {

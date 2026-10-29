@@ -92,6 +92,16 @@ export const AUTO_TOOLS = [
     category: "edit" as ToolCategory,
   },
   {
+    id: "endurljos",
+    name: "Endurljós",
+    role: "Endurlýsing",
+    desc: "Endurlýsa persónu/vöru með IC-Light á Replicate — texti + stefna (vinstri/hægri/efst/neðst). Depth-aware að innan.",
+    icon: "💡",
+    href: "/kjarni/artcraft/endurljos",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "bakgrunnur",
     name: "Fjarlægja bakgrunn",
     role: "Vörumyndir",
