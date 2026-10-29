@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
@@ -229,7 +230,7 @@ export default function UtvikkaClient() {
           <section className="ac-panel">
             <h2>Útvíkkun</h2>
             <div className="ac-settings">
-              <label>
+              <label title="Hvada hlidar a ad utvikka. Allar hlidar byr til ramma utan um myndina. Vinstri + haegri breytir portrait i landscape.">
                 Hliðar
                 <select
                   value={settings.direction}
@@ -242,7 +243,7 @@ export default function UtvikkaClient() {
                   ))}
                 </select>
               </label>
-              <label>
+              <label title="Hversu mikið er bætt við á hvorri hlið sem er valin. +50% bætir hálfum myndabreidd við á hvorri hlið.">
                 Magn
                 <select
                   value={settings.amount}
@@ -255,7 +256,7 @@ export default function UtvikkaClient() {
                   ))}
                 </select>
               </label>
-              <label>
+              <label title="Hversu margar útgáfur af útvíkkuninni á að búa til. Hver kostar peninga.">
                 Fjöldi mynda ({settings.numOutputs})
                 <input
                   type="range"
@@ -266,7 +267,7 @@ export default function UtvikkaClient() {
                   onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Fjöldi diffusion skrefa. Meira = nákvæmari útkoma en lengri tími. 30 er góður meðalvegur.">
                 Skref ({settings.steps})
                 <input
                   type="range"
@@ -277,7 +278,7 @@ export default function UtvikkaClient() {
                   onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Hversu stíft Flux Fill fylgir prompt-inu og brúnum myndarinnar. 30 er default. Hækkaðu ef þú vilt það halda meira af upprunalegu samhengi.">
                 Guidance ({settings.guidance.toFixed(0)})
                 <input
                   type="range"
@@ -288,7 +289,7 @@ export default function UtvikkaClient() {
                   onChange={(e) => updateSettings({ guidance: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu.">
                 Seed (-1 = slembið)
                 <input
                   type="number"
@@ -306,7 +307,10 @@ export default function UtvikkaClient() {
                 placeholder="t.d. sama bakgrunnslíking, náttúrulegt framhald, eða úthverft loft, grey wall"
               />
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+              title="Sleppir NSFW-filter módelsins. Kjarni leyfir nekt — aðeins kynferðislegt myndefni af börnum er bannað."
+            >
               <input
                 type="checkbox"
                 checked={settings.disableSafetyChecker}
@@ -316,9 +320,29 @@ export default function UtvikkaClient() {
             </label>
 
             {error && <p className="ac-error">{error}</p>}
-            <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
-              {busy ? "Útvíkkar…" : "Útvíkka"}
-            </button>
+            <div className="ac-row">
+              <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
+                {busy ? "Útvíkkar…" : "Útvíkka"}
+              </button>
+              <button
+                type="button"
+                className="ac-btn ghost"
+                title="Núllstillir allar stillingar aftur í grunngildi."
+                onClick={() => {
+                  setSettings(DEFAULT_UTVIKKA_SETTINGS);
+                  try {
+                    window.localStorage.setItem(
+                      UTVIKKA_SETTINGS_KEY,
+                      JSON.stringify(DEFAULT_UTVIKKA_SETTINGS),
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                Grunngildi
+              </button>
+            </div>
           </section>
 
           {results.length > 0 && (
@@ -333,7 +357,7 @@ export default function UtvikkaClient() {
               <div className="ac-grid">
                 {results.map((url, i) => (
                   <div key={url} className="ac-card">
-                    <img src={url} alt={`Útvíkkuð ${i + 1}`} style={{ width: "100%", borderRadius: 8 }} />
+                    <ImageZoom src={url} alt={`Útvíkkuð ${i + 1}`} />
                     <button
                       type="button"
                       className="ac-btn ghost"

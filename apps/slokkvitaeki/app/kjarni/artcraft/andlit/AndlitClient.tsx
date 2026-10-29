@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
@@ -332,7 +333,7 @@ export default function AndlitClient() {
               placeholder="t.d. cinematic studio portrait, warm lighting, professional"
             />
             <div className="ac-settings">
-              <label>
+              <label title="Hvaða hlutföll endanleg mynd á að hafa. Portrait fyrir fólk, Landscape fyrir vörur eða umhverfi, Square fyrir Instagram.">
                 Hlutföll
                 <select
                   value={settings.aspect}
@@ -345,7 +346,7 @@ export default function AndlitClient() {
                   ))}
                 </select>
               </label>
-              <label>
+              <label title="SDXL grunnvægi sem módelið teiknar með. RealVis = ljósraunsætt portrait, DreamShaper = listrænt, Juggernaut = fjölhæf. Hver gefur ólíkan stíl á sama prompti.">
                 Stíll (SDXL weights)
                 <select
                   value={settings.sdxlWeights}
@@ -358,7 +359,7 @@ export default function AndlitClient() {
                   ))}
                 </select>
               </label>
-              <label>
+              <label title="Hversu stíft andlitið úr innsettu myndinni á að birtast. 0.8 er góður meðalvegur. 1.0+ = nákvæmara andlit en frjálsara útlit á öllu öðru.">
                 Andlits-auðkenni ({settings.ipAdapterScale.toFixed(2)})
                 <input
                   type="range"
@@ -369,7 +370,7 @@ export default function AndlitClient() {
                   onChange={(e) => updateSettings({ ipAdapterScale: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Hversu stíft valkvæða stellingarmyndin stýrir endanlegri stellingu. Hækkaðu ef þú vilt nákvæmari eftirlíkingu á pose-inu.">
                 Stellingarstyrkur ({settings.controlnetConditioningScale.toFixed(2)})
                 <input
                   type="range"
@@ -382,7 +383,7 @@ export default function AndlitClient() {
                   }
                 />
               </label>
-              <label>
+              <label title="Hversu margar útgáfur af myndinni á að búa til í einni keyrslu. Hvert útkoma kostar peninga.">
                 Fjöldi mynda ({settings.numOutputs})
                 <input
                   type="range"
@@ -393,7 +394,7 @@ export default function AndlitClient() {
                   onChange={(e) => updateSettings({ numOutputs: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Fjöldi diffusion skrefa. Meira = nákvæmari útkoma en lengri tími. 30 er góður meðalvegur.">
                 Skref ({settings.numInferenceSteps})
                 <input
                   type="range"
@@ -404,7 +405,7 @@ export default function AndlitClient() {
                   onChange={(e) => updateSettings({ numInferenceSteps: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Classifier-Free Guidance. Hversu stíft módelið fylgir prompt-inu. 5 er góður meðalvegur. Hækkaðu ef útkoman er ekki að fylgja því sem þú skrifaðir.">
                 Guidance ({settings.guidanceScale.toFixed(1)})
                 <input
                   type="range"
@@ -415,7 +416,7 @@ export default function AndlitClient() {
                   onChange={(e) => updateSettings({ guidanceScale: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu í hvert sinn.">
                 Seed (-1 = slembið)
                 <input
                   type="number"
@@ -433,7 +434,10 @@ export default function AndlitClient() {
                 placeholder="lowres, bad anatomy, blurry, …"
               />
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+              title="Sleppir NSFW-filter módelsins. Kjarni leyfir nekt — aðeins kynferðislegt myndefni af börnum er bannað."
+            >
               <input
                 type="checkbox"
                 checked={settings.disableSafetyChecker}
@@ -443,9 +447,29 @@ export default function AndlitClient() {
             </label>
 
             {error && <p className="ac-error">{error}</p>}
-            <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !face}>
-              {busy ? "Býr til…" : "Búa til"}
-            </button>
+            <div className="ac-row">
+              <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !face}>
+                {busy ? "Býr til…" : "Búa til"}
+              </button>
+              <button
+                type="button"
+                className="ac-btn ghost"
+                title="Núllstillir allar stillingar aftur í grunngildi."
+                onClick={() => {
+                  setSettings(DEFAULT_ANDLIT_SETTINGS);
+                  try {
+                    window.localStorage.setItem(
+                      ANDLIT_SETTINGS_KEY,
+                      JSON.stringify(DEFAULT_ANDLIT_SETTINGS),
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                Grunngildi
+              </button>
+            </div>
           </section>
 
           {results.length > 0 && (
@@ -462,7 +486,7 @@ export default function AndlitClient() {
               <div className="ac-grid">
                 {results.map((url, i) => (
                   <div key={url} className="ac-card">
-                    <img src={url} alt={`Andlit ${i + 1}`} style={{ width: "100%", borderRadius: 8 }} />
+                    <ImageZoom src={url} alt={`Andlit ${i + 1}`} />
                     <button
                       type="button"
                       className="ac-btn ghost"

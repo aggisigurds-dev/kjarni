@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
@@ -217,7 +218,7 @@ export default function DyptClient() {
           <section className="ac-panel">
             <h2>Stillingar</h2>
             <div className="ac-settings">
-              <label>
+              <label title="Stærð DINOv2 encoder-sins. Small = hraðast en gróft dýptarkort, Large = nákvæmast en lengri tími. Base = milliveg.">
                 Encoder-stærð
                 <select
                   value={settings.encoder}
@@ -237,9 +238,29 @@ export default function DyptClient() {
             </p>
 
             {error && <p className="ac-error">{error}</p>}
-            <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
-              {busy ? "Reiknar dýpt…" : "Reikna dýptarkort"}
-            </button>
+            <div className="ac-row">
+              <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
+                {busy ? "Reiknar dýpt…" : "Reikna dýptarkort"}
+              </button>
+              <button
+                type="button"
+                className="ac-btn ghost"
+                title="Núllstillir aftur í grunngildi (Large encoder)."
+                onClick={() => {
+                  setSettings(DEFAULT_DYPT_SETTINGS);
+                  try {
+                    window.localStorage.setItem(
+                      DYPT_SETTINGS_KEY,
+                      JSON.stringify(DEFAULT_DYPT_SETTINGS),
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                Grunngildi
+              </button>
+            </div>
           </section>
 
           {result && (
@@ -251,7 +272,7 @@ export default function DyptClient() {
                   {savedMeta.sourceName ? ` · úr „${savedMeta.sourceName}"` : ""}
                 </p>
               )}
-              <img src={result} alt="Dýptarkort" style={{ width: "100%", borderRadius: 8 }} />
+              <ImageZoom src={result} alt="Dýptarkort" />
               <div className="ac-row">
                 <button
                   type="button"

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
@@ -242,7 +243,7 @@ export default function EndurljosClient() {
               placeholder="t.d. soft studio key light, warm rim, deep shadows, cinematic"
             />
             <div className="ac-settings">
-              <label>
+              <label title="Ur hvada att nyja ljosid kemur. Engin stefna letur modelid sjalft velja.">
                 Stefna
                 <select
                   value={settings.lightSource}
@@ -255,7 +256,7 @@ export default function EndurljosClient() {
                   ))}
                 </select>
               </label>
-              <label>
+              <label title="Hversu margar útgáfur af myndinni á að búa til í einni keyrslu. Hvert útkoma kostar peninga.">
                 Fjöldi mynda ({settings.numResults})
                 <input
                   type="range"
@@ -266,7 +267,7 @@ export default function EndurljosClient() {
                   onChange={(e) => updateSettings({ numResults: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu í hvert sinn.">
                 Seed (-1 = slembið)
                 <input
                   type="number"
@@ -274,29 +275,29 @@ export default function EndurljosClient() {
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) || -1 })}
                 />
               </label>
-              <label>
+              <label title="Hversu mikið módelið má endurteikna upprunalegu myndina. 0.7 heldur andliti og lit. Undir 0.6 brotnar IC-Light og gefur svarthvíta mynd — slíderinn stöðvast því við 0.6.">
                 Varanákvæmni ({settings.lowresDenoise.toFixed(2)}) — lágt = trú andliti
                 <input
                   type="range"
-                  min={0.3}
+                  min={0.6}
                   max={1}
                   step={0.05}
                   value={settings.lowresDenoise}
                   onChange={(e) => updateSettings({ lowresDenoise: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Hversu mikið má breyta myndinni í highres-pass. 0.3 heldur andliti nánar, 0.5+ gefur meira dramatíska lýsingu en meiri breytingu.">
                 Highres-denoise ({settings.highresDenoise.toFixed(2)}) — hækka fyrir meira drama
                 <input
                   type="range"
-                  min={0}
+                  min={0.2}
                   max={0.8}
                   step={0.05}
                   value={settings.highresDenoise}
                   onChange={(e) => updateSettings({ highresDenoise: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Hvað endanleg mynd verður margfalt stærri en innri reikningur. 1.5× = hámarks skerpa en lengri tími.">
                 Highres-stækkun ({settings.highresScale.toFixed(2)}×)
                 <input
                   type="range"
@@ -307,7 +308,7 @@ export default function EndurljosClient() {
                   onChange={(e) => updateSettings({ highresScale: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Fjöldi diffusion skrefa. Meira = nákvæmari útkoma en lengri tími. 25 er góður meðalvegur.">
                 Skref ({settings.steps})
                 <input
                   type="range"
@@ -318,7 +319,7 @@ export default function EndurljosClient() {
                   onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="Classifier-Free Guidance. Hversu stíft módelið fylgir prompt-inu. Lágt (1-3) = frjálsari túlkun, hátt (7+) = fylgir prompt-inu bókstaflega en getur orðið plasticky.">
                 CFG ({settings.cfg.toFixed(1)})
                 <input
                   type="range"
@@ -329,7 +330,7 @@ export default function EndurljosClient() {
                   onChange={(e) => updateSettings({ cfg: Number(e.target.value) })}
                 />
               </label>
-              <label>
+              <label title="PNG = lossless, stærst, fullgæði. WebP = minni skrá, góð gæði. JPG = minnst, góð fyrir vef.">
                 Útkomusnið
                 <select
                   value={settings.outputFormat}
@@ -344,7 +345,7 @@ export default function EndurljosClient() {
                   ))}
                 </select>
               </label>
-              <label>
+              <label title="JPEG/WebP compression quality (1-100). 95 er mjög góð gæði, 80 er minni skrá. PNG hunsar þetta.">
                 Gæði ({settings.outputQuality})
                 <input
                   type="range"
@@ -365,7 +366,10 @@ export default function EndurljosClient() {
                 placeholder="lowres, bad anatomy, blurry, …"
               />
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+              title="Sleppir NSFW-filter módelsins. Kjarni leyfir nekt — aðeins kynferðislegt myndefni af börnum er bannað."
+            >
               <input
                 type="checkbox"
                 checked={settings.disableSafetyChecker}
@@ -375,9 +379,29 @@ export default function EndurljosClient() {
             </label>
 
             {error && <p className="ac-error">{error}</p>}
-            <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
-              {busy ? "Endurlýsir…" : "Endurlýsa"}
-            </button>
+            <div className="ac-row">
+              <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
+                {busy ? "Endurlýsir…" : "Endurlýsa"}
+              </button>
+              <button
+                type="button"
+                className="ac-btn ghost"
+                title="Nullstillir allar stillingar aftur i grunngildi: varanakvemni 0.7, highres-denoise 0.3, png q=95."
+                onClick={() => {
+                  setSettings(DEFAULT_ENDURLJOS_SETTINGS);
+                  try {
+                    window.localStorage.setItem(
+                      ENDURLJOS_SETTINGS_KEY,
+                      JSON.stringify(DEFAULT_ENDURLJOS_SETTINGS),
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                Grunngildi
+              </button>
+            </div>
           </section>
 
           {results.length > 0 && (
@@ -394,7 +418,7 @@ export default function EndurljosClient() {
               <div className="ac-grid">
                 {results.map((url, i) => (
                   <div key={url} className="ac-card">
-                    <img src={url} alt={`Endurljós ${i + 1}`} style={{ width: "100%", borderRadius: 8 }} />
+                    <ImageZoom src={url} alt={`Endurljós ${i + 1}`} />
                     <button
                       type="button"
                       className="ac-btn ghost"

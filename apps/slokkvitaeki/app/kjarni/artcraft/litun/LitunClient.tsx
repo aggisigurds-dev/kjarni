@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
+import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
@@ -216,7 +217,7 @@ export default function LitunClient() {
           <section className="ac-panel">
             <h2>Stillingar</h2>
             <div className="ac-settings">
-              <label>
+              <label title="Stærð DDColor-líkansins. Large = nákvæmari litir en lengri tími, Tiny = hraðari en gróari litir.">
                 Líkanstærð
                 <select
                   value={settings.modelSize}
@@ -232,9 +233,29 @@ export default function LitunClient() {
             </div>
 
             {error && <p className="ac-error">{error}</p>}
-            <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
-              {busy ? "Litar…" : "Lita myndina"}
-            </button>
+            <div className="ac-row">
+              <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
+                {busy ? "Litar…" : "Lita myndina"}
+              </button>
+              <button
+                type="button"
+                className="ac-btn ghost"
+                title="Núllstillir aftur í grunngildi (Large líkan)."
+                onClick={() => {
+                  setSettings(DEFAULT_LITUN_SETTINGS);
+                  try {
+                    window.localStorage.setItem(
+                      LITUN_SETTINGS_KEY,
+                      JSON.stringify(DEFAULT_LITUN_SETTINGS),
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                Grunngildi
+              </button>
+            </div>
           </section>
 
           {result && (
@@ -246,7 +267,7 @@ export default function LitunClient() {
                   {savedMeta.sourceName ? ` · úr „${savedMeta.sourceName}"` : ""}
                 </p>
               )}
-              <img src={result} alt="Lituð mynd" style={{ width: "100%", borderRadius: 8 }} />
+              <ImageZoom src={result} alt="Lituð mynd" />
               <div className="ac-row">
                 <button
                   type="button"
