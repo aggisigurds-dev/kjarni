@@ -246,6 +246,52 @@
   letter-spacing: 0.01em;
 }
 
+.ac-cat {
+  margin: 28px 0 0;
+}
+.ac-cat:first-of-type {
+  margin-top: 18px;
+}
+.ac-cat-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--m-line, #e5ecf3);
+}
+.ac-cat-ico {
+  font-size: 24px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.ac-cat-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ac-cat-txt h2 {
+  margin: 0 0 2px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--m-ink, #0f172a);
+  letter-spacing: 0.01em;
+}
+.ac-cat-txt p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--m-soft, #5a6b80);
+  line-height: 1.4;
+}
+.stn[data-skin="ragnarok"] .ac-cat-head {
+  border-bottom-color: rgba(243, 228, 191, 0.18);
+}
+.stn[data-skin="ragnarok"] .ac-cat-txt h2 {
+  color: var(--rg-text, #f3e4bf);
+}
+.stn[data-skin="ragnarok"] .ac-cat-txt p {
+  color: var(--rg-text-faint, #c9b78f);
+}
+
 .ac-job-list {
   display: flex;
   flex-direction: column;

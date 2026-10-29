@@ -98,7 +98,7 @@ export function SavedPresets({
             type="text"
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            placeholder="Nafn á stillingunni (t.d. „strönd um kvöld")"
+            placeholder="Nafn á stillingunni (t.d. „strönd um kvöld“)"
             onKeyDown={(e) => {
               if (e.key === "Enter") submit();
               if (e.key === "Escape") {
