@@ -5,10 +5,12 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
+import SendTo from "../SendTo";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
 import { shrinkImageForUpload } from "../replicateImage";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import { useStagedSource } from "../useStagedSource";
 import {
   CLARITY_OUTPUT_FORMATS,
   CLARITY_SCALES,
@@ -74,6 +76,7 @@ export default function UpplyftingClient() {
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
   const [result, setResult] = useState<string>("");
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; mode?: string } | null>(null);
   const resultUrlRef = useRef<string>("");
   const sourceUrlRef = useRef<string>("");
@@ -94,6 +97,7 @@ export default function UpplyftingClient() {
         const url = URL.createObjectURL(saved.blobs[0]);
         resultUrlRef.current = url;
         setResult(url);
+        setResultBlob(saved.blobs[0]);
         setSavedMeta({ timestamp: saved.timestamp, mode: saved.mode });
       }
       const pending = await loadPending(SAVED_KEY);
@@ -118,6 +122,7 @@ export default function UpplyftingClient() {
           const url = URL.createObjectURL(blob);
           resultUrlRef.current = url;
           setResult(url);
+          setResultBlob(blob);
           const now = Date.now();
           setSavedMeta({ timestamp: now, mode: pending.mode });
           void saveResult({
@@ -154,6 +159,15 @@ export default function UpplyftingClient() {
     };
   }, []);
 
+  // ?use=<id> — hleður mynd úr staging þegar notandi smellti "Senda í
+  // Upplyftingu" á öðru tóli. Keyrir aðeins einu sinni per mount.
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await addFile(file);
+  });
+
   function updateSettings(next: Partial<TopazSettings>) {
     setSettings((s) => {
       const merged = normalizeTopazSettings({ ...s, ...next });
@@ -185,6 +199,7 @@ export default function UpplyftingClient() {
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       resultUrlRef.current = "";
       setResult("");
+      setResultBlob(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
     }
@@ -227,6 +242,7 @@ export default function UpplyftingClient() {
       const url = URL.createObjectURL(blob);
       resultUrlRef.current = url;
       setResult(url);
+      setResultBlob(blob);
       const now = Date.now();
       const modeLabel = mode === "clarity" ? "clarity" : `topaz/${settings.enhanceModel}`;
       setSavedMeta({ timestamp: now, mode: modeLabel });
@@ -253,6 +269,7 @@ export default function UpplyftingClient() {
     if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
     resultUrlRef.current = "";
     setResult("");
+    setResultBlob(null);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
   }
@@ -340,6 +357,7 @@ export default function UpplyftingClient() {
                     if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
                     resultUrlRef.current = "";
                     setResult("");
+                    setResultBlob(null);
                   }}
                 >
                   Ný mynd
@@ -592,6 +610,15 @@ export default function UpplyftingClient() {
                 >
                   Sækja mynd
                 </button>
+                {resultBlob && (
+                  <SendTo
+                    blob={resultBlob}
+                    mediaType="image"
+                    sourceTool="upplyfting"
+                    sourceToolName="Upplyfting"
+                    name={source?.name ? `upplyft-${source.name}` : undefined}
+                  />
+                )}
                 <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                   Hreinsa vistað
                 </button>

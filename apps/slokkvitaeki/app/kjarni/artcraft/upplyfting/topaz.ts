@@ -55,7 +55,7 @@ export const DEFAULT_TOPAZ_SETTINGS: TopazSettings = {
   faceEnhancementCreativity: 0,
   faceEnhancementStrength: 0.8,
   subjectDetection: "None",
-  outputFormat: "jpg",
+  outputFormat: "png",
 };
 
 /** Parse upscale factor string into a numeric multiplier for MP preview math. */

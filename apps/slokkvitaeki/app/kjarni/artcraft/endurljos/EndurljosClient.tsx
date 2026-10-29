@@ -6,8 +6,10 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
+import SendTo from "../SendTo";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import { useStagedSource } from "../useStagedSource";
 import {
   DEFAULT_ENDURLJOS_SETTINGS,
   ENDURLJOS_OUTPUT_FORMATS,
@@ -41,12 +43,20 @@ export default function EndurljosClient() {
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
   const [results, setResults] = useState<string[]>([]);
+  const [resultBlobs, setResultBlobs] = useState<Blob[]>([]);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string } | null>(null);
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
   const resultUrlsRef = useRef<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await handleFile(file);
+  });
 
   useEffect(() => {
     const next = readStoredEndurljosSettings();
@@ -60,6 +70,7 @@ export default function EndurljosClient() {
         resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
         resultUrlsRef.current = urls;
         setResults(urls);
+        setResultBlobs(saved.blobs);
         setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt });
       }
     })();
@@ -129,6 +140,7 @@ export default function EndurljosClient() {
       resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
       resultUrlsRef.current = urls;
       setResults(urls);
+      setResultBlobs(blobs);
       const now = Date.now();
       setSavedMeta({ timestamp: now, prompt: activePrompt });
       void saveResult({
@@ -151,6 +163,7 @@ export default function EndurljosClient() {
     resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
     resultUrlsRef.current = [];
     setResults([]);
+    setResultBlobs([]);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
   }
@@ -451,13 +464,25 @@ export default function EndurljosClient() {
                 {results.map((url, i) => (
                   <div key={url} className="ac-card">
                     <ImageZoom src={url} alt={`Endurljós ${i + 1}`} />
-                    <button
-                      type="button"
-                      className="ac-btn ghost"
-                      onClick={() => downloadBlob(url, `endurljos-${Date.now()}-${i + 1}.${settings.outputFormat}`)}
-                    >
-                      Sækja
-                    </button>
+                    <div className="ac-row" style={{ gap: 8, marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="ac-btn ghost"
+                        onClick={() => downloadBlob(url, `endurljos-${Date.now()}-${i + 1}.${settings.outputFormat}`)}
+                      >
+                        Sækja
+                      </button>
+                      {resultBlobs[i] && (
+                        <SendTo
+                          blob={resultBlobs[i]}
+                          mediaType="image"
+                          sourceTool="endurljos"
+                          sourceToolName="Endurljós"
+                          prompt={savedMeta?.prompt}
+                          name={`endurljos-${Date.now()}-${i + 1}.${settings.outputFormat}`}
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

@@ -66,8 +66,8 @@ export const DEFAULT_INNBLASTUR_SETTINGS: InnblasturSettings = {
   seed: -1,
   megapixels: "1",
   goFast: false,
-  outputFormat: "webp",
-  outputQuality: 80,
+  outputFormat: "png",
+  outputQuality: 95,
   disableSafetyChecker: false,
 };
 

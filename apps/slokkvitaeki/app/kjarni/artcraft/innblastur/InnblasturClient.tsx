@@ -7,6 +7,8 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import {
   ASPECT_RATIO_LABELS,
   ASPECT_RATIOS,
@@ -45,8 +47,16 @@ export default function InnblasturClient() {
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
   const resultUrlsRef = useRef<string[]>([]);
+  const resultBlobsRef = useRef<Blob[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await handleFile(file);
+  });
 
   useEffect(() => {
     setSettings(readStoredInnblasturSettings());
@@ -57,6 +67,7 @@ export default function InnblasturClient() {
         const urls = saved.blobs.map((b) => URL.createObjectURL(b));
         resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
         resultUrlsRef.current = urls;
+        resultBlobsRef.current = saved.blobs;
         setResults(urls);
         setSavedMeta({ timestamp: saved.timestamp, sourceName: saved.sourceName });
       }
@@ -112,6 +123,7 @@ export default function InnblasturClient() {
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
       resultUrlsRef.current = urls;
+      resultBlobsRef.current = blobs;
       setResults(urls);
       const now = Date.now();
       setSavedMeta({ timestamp: now, sourceName: source.name });
@@ -134,6 +146,7 @@ export default function InnblasturClient() {
   async function clearSavedResults() {
     resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
     resultUrlsRef.current = [];
+    resultBlobsRef.current = [];
     setResults([]);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
@@ -358,18 +371,33 @@ export default function InnblasturClient() {
                 </p>
               )}
               <div className="ac-grid">
-                {results.map((url, i) => (
-                  <div key={url} className="ac-card">
-                    <ImageZoom src={url} alt={`Afbrigði ${i + 1}`} />
-                    <button
-                      type="button"
-                      className="ac-btn ghost"
-                      onClick={() => downloadBlob(url, `innblastur-${Date.now()}-${i + 1}.${settings.outputFormat}`)}
-                    >
-                      Sækja
-                    </button>
-                  </div>
-                ))}
+                {results.map((url, i) => {
+                  const blob = resultBlobsRef.current[i];
+                  return (
+                    <div key={url} className="ac-card">
+                      <ImageZoom src={url} alt={`Afbrigði ${i + 1}`} />
+                      <div className="ac-row" style={{ gap: 8, marginTop: 8 }}>
+                        <button
+                          type="button"
+                          className="ac-btn ghost"
+                          onClick={() => downloadBlob(url, `innblastur-${Date.now()}-${i + 1}.${settings.outputFormat}`)}
+                        >
+                          Sækja
+                        </button>
+                        {blob && (
+                          <SendTo
+                            blob={blob}
+                            mediaType="image"
+                            sourceTool="innblastur"
+                            sourceToolName="Innblástur"
+                            name={`innblastur-${i + 1}.${settings.outputFormat}`}
+                            prompt={source?.name ? `Flux Redux variation af ${source.name}` : undefined}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                 Hreinsa vistað

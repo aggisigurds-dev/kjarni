@@ -6,6 +6,8 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import {
   SavedPresets,
   makePresetId,
@@ -72,10 +74,18 @@ export default function BreytaClient() {
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
   const [results, setResults] = useState<string[]>([]);
   const resultUrlsRef = useRef<string[]>([]);
+  const resultBlobsRef = useRef<Blob[]>([]);
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await addFile(file);
+  });
 
   useEffect(() => {
     setMode(readStoredBreytaMode());
@@ -226,6 +236,7 @@ export default function BreytaClient() {
       setSource({ url, name: file.name });
       for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
       resultUrlsRef.current = [];
+      resultBlobsRef.current = [];
       setResults([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
@@ -270,6 +281,7 @@ export default function BreytaClient() {
       for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current = urls;
+      resultBlobsRef.current = blobs;
       setResults(urls);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Breyta mistókst.");
@@ -378,6 +390,7 @@ export default function BreytaClient() {
                     setSource(null);
                     for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
                     resultUrlsRef.current = [];
+                    resultBlobsRef.current = [];
                     setResults([]);
                   }}
                 >
@@ -544,13 +557,24 @@ export default function BreytaClient() {
                   <figure key={url}>
                     <ImageZoom src={url} alt={`Breyta útkoma ${i + 1}`} />
                     <figcaption>
-                      <button
-                        type="button"
-                        className="ac-btn ghost"
-                        onClick={() => downloadBlob(url, `breyta-${mode}-${i + 1}.png`)}
-                      >
-                        Sækja mynd
-                      </button>
+                      <div className="ac-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="ac-btn ghost"
+                          onClick={() => downloadBlob(url, `breyta-${mode}-${i + 1}.png`)}
+                        >
+                          Sækja mynd
+                        </button>
+                        {resultBlobsRef.current[i] && (
+                          <SendTo
+                            blob={resultBlobsRef.current[i]}
+                            mediaType="image"
+                            sourceTool="breyta"
+                            sourceToolName="Breyta mynd"
+                            name={`breyta-${mode}-${i + 1}.png`}
+                          />
+                        )}
+                      </div>
                     </figcaption>
                   </figure>
                 ))}
