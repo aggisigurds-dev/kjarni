@@ -112,6 +112,16 @@ export const AUTO_TOOLS = [
     category: "edit" as ToolCategory,
   },
   {
+    id: "utvikka",
+    name: "Útvíkka",
+    role: "Outpaint",
+    desc: "Flux Fill (black-forest-labs/flux-fill-dev) á Replicate — stækkar mynd út fyrir upprunalega rammann. Opin uppspretta, styður disable_safety_checker.",
+    icon: "🖼️",
+    href: "/kjarni/artcraft/utvikka",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "comfy",
     name: "ComfyUI",
     role: "Texti → mynd",

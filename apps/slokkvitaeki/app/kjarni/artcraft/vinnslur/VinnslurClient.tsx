@@ -22,6 +22,7 @@ const TOOL_META: Record<string, { name: string; icon: string; href: string }> = 
   andlit: { name: "Andlit", icon: "👤", href: "/kjarni/artcraft/andlit" },
   dypt: { name: "Dýpt", icon: "🗺️", href: "/kjarni/artcraft/dypt" },
   litun: { name: "Litun", icon: "🎨", href: "/kjarni/artcraft/litun" },
+  utvikka: { name: "Útvíkka", icon: "🖼️", href: "/kjarni/artcraft/utvikka" },
 };
 
 function toolInfo(key: string) {
