@@ -305,6 +305,10 @@ export function artcraftDyptHref(): string {
   return "/kjarni/artcraft/dypt";
 }
 
+export function artcraftLitunHref(): string {
+  return "/kjarni/artcraft/litun";
+}
+
 export function artcraftVinnslurHref(): string {
   return "/kjarni/artcraft/vinnslur";
 }
@@ -370,6 +374,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "innblastur", name: "Innblástur", href: artcraftInnblasturHref(), icon: "✨", role: "Mynd → afbrigði", desc: "Flux Redux (black-forest-labs/flux-redux-dev) á Replicate — ein innblástursmynd → 1–4 ný afbrigði með svipaðan stíl og stemmningu.", uses: ["Framhald á myndatöku með sömu stemmningu", "Fleiri vinklar af vel heppnuðu skoti", "Mood-board útvíkkað í fulla seríu"] as readonly string[] },
   { id: "andlit", name: "Andlit", href: artcraftAndlitHref(), icon: "👤", role: "Andlits-lás", desc: "InstantID (zsxkib/instant-id) á Replicate — ein andlitsmynd + lýsing → nýjar myndir þar sem sama andlitið birtist í nýju umhverfi, stellingu eða stíl. Styður disable_safety_checker.", uses: ["Starfsmannamynd í sex ólíkum stíl á sama andlitinu", "Myndatöku-fjölföldun án nýrrar myndatöku", "Prófa útlit (hár, föt, stíll) á sama fólki"] as readonly string[] },
   { id: "dypt", name: "Dýpt", href: artcraftDyptHref(), icon: "🗺️", role: "Dýptarkort", desc: "Depth Anything (cjwbw/depth-anything) á Replicate — mynd → grátóna dýptarkort. Fyrir fókus-trikk, parallax, depth-aware endurlýsingu, eða til að skilja lög í myndinni.", uses: ["Dýptarkort fyrir unsharp bakgrunn", "Parallax í hreyfimynd", "Viðmið fyrir Endurljós"] as readonly string[] },
+  { id: "litun", name: "Litun", href: artcraftLitunHref(), icon: "🎨", role: "Svart/hvítt → litur", desc: "DDColor (piddnad/ddcolor) á Replicate — litar svart/hvítt myndir með dual-decoder colorization. Classical ML, enginn safety filter.", uses: ["Gamlar skoðunarmyndir endurlitaðar", "Archive-ljósmyndir fyrir vefsíðuna", "Svarthvítar vörumyndir aftur á lit"] as readonly string[] },
   { id: "leidarvisir", name: "Leiðarvísir", href: artcraftLeidarvisirHref(), icon: "📖", role: "Hjálp", desc: "Skref-fyrir-skref leiðbeiningar fyrir öll tólin, með skjáskotum af alvöru viðmótinu.", uses: [] as readonly string[] },
 ] as const;
 
@@ -395,6 +400,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/innblastur") return "innblastur";
   if (path === "/kjarni/artcraft/andlit") return "andlit";
   if (path === "/kjarni/artcraft/dypt") return "dypt";
+  if (path === "/kjarni/artcraft/litun") return "litun";
   if (path === "/kjarni/artcraft/vinnslur") return "vinnslur";
   if (path === "/kjarni/artcraft/leidarvisir") return "leidarvisir";
   const slug = path.split("/").pop() || "";

@@ -102,6 +102,16 @@ export const AUTO_TOOLS = [
     category: "edit" as ToolCategory,
   },
   {
+    id: "litun",
+    name: "Litun",
+    role: "Svart/hvítt → litur",
+    desc: "DDColor (piddnad/ddcolor) á Replicate — dual-decoder colorization. Classical ML, enginn safety filter. Fyrir gamlar skoðunarmyndir og archive-ljósmyndir.",
+    icon: "🎨",
+    href: "/kjarni/artcraft/litun",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "comfy",
     name: "ComfyUI",
     role: "Texti → mynd",
