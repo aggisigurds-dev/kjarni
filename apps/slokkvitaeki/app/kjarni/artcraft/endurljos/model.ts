@@ -100,8 +100,10 @@ export function normalizeEndurljosSettings(
     seed: Number.isFinite(src.seed) ? Math.trunc(src.seed as number) : -1,
     disableSafetyChecker:
       typeof src.disableSafetyChecker === "boolean" ? src.disableSafetyChecker : false,
-    lowresDenoise: clampFloat(src.lowresDenoise, DEFAULT_ENDURLJOS_SETTINGS.lowresDenoise, 0, 1),
-    highresDenoise: clampFloat(src.highresDenoise, DEFAULT_ENDURLJOS_SETTINGS.highresDenoise, 0, 1),
+    // IC-Light brotnar undir 0.6 (gefur grayscale) — klemmum frá útgáfu áður en
+    // slíderinn fékk það min, svo vistuð slem gildi fari upp sjálfkrafa.
+    lowresDenoise: clampFloat(src.lowresDenoise, DEFAULT_ENDURLJOS_SETTINGS.lowresDenoise, 0.6, 1),
+    highresDenoise: clampFloat(src.highresDenoise, DEFAULT_ENDURLJOS_SETTINGS.highresDenoise, 0.2, 0.8),
     highresScale: clampFloat(src.highresScale, DEFAULT_ENDURLJOS_SETTINGS.highresScale, 1, 1.5),
     cfg: clampFloat(src.cfg, DEFAULT_ENDURLJOS_SETTINGS.cfg, 1, 10),
     steps: clampInt(src.steps, DEFAULT_ENDURLJOS_SETTINGS.steps, 10, 50),
