@@ -34,7 +34,11 @@ export const DEFAULT_WAN_SETTINGS: WanSettings = {
   numFrames: 81, // ~5 sek á 16fps — lágmark samkvæmt Replicate schema
   framesPerSecond: 16,
   seed: -1,
-  resolution: "480p",
+  // Default 720p (ekki 480p sem Replicate schema býður eins og veiku vali).
+  // Notandi kvartaði um 500kb/10s skrár á 480p; 720p hækkar fjórfaldað og
+  // kostar u.þ.b. 2x meira per video. Hægt að velja 480p ef hraði/kostnaður
+  // skipta meira máli.
+  resolution: "720p",
   aspectRatio: "16:9",
   disableSafetyChecker: false,
 };

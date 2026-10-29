@@ -548,7 +548,7 @@ export default function SkyjahreyfimyndClient() {
                     </option>
                   ))}
                 </select>
-                <small className="ac-rec">mælt: 480p (hraðast, ódýrast); 720p fyrir hámarks gæði</small>
+                <small className="ac-rec">mælt: 720p (nýr default; ~4× fleiri pixlar og 2× kostnaður en 480p — betri gæði en pastúni-stærðir)</small>
               </label>
               <label>
                 Hlutfall
