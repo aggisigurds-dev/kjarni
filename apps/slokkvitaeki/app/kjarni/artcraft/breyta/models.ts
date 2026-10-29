@@ -71,11 +71,16 @@ export const BACKGROUND_SETTINGS_KEY = "kjarni_private_breyta_background_setting
 // fullgæði. Fyrir hraða á einföldum breytingum er pruna samt enn <1s.
 export type PrunaSettings = {
   prompt: string;
+  // Þegar ON keyrir noahgsolomon/face-swap eftir pruna og setur upprunalega
+  // andlitið aftur á útkomuna. Pixel-perfect andlit en tvöfaldar kostnað og
+  // tíma. Sama mynstur og Endurljós preserveFace.
+  preserveFace: boolean;
   disableSafetyChecker: boolean;
   seed: number;
 };
 export const DEFAULT_PRUNA_SETTINGS: PrunaSettings = {
   prompt: "remove the background and put the subject on a clean white background",
+  preserveFace: false,
   disableSafetyChecker: false,
   seed: -1,
 };
@@ -130,6 +135,10 @@ export function normalizePrunaSettings(raw: Partial<PrunaSettings>): PrunaSettin
   const src = raw || {};
   return {
     prompt: typeof src.prompt === "string" ? src.prompt : DEFAULT_PRUNA_SETTINGS.prompt,
+    preserveFace:
+      typeof src.preserveFace === "boolean"
+        ? src.preserveFace
+        : DEFAULT_PRUNA_SETTINGS.preserveFace,
     disableSafetyChecker:
       typeof src.disableSafetyChecker === "boolean"
         ? src.disableSafetyChecker

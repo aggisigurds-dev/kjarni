@@ -507,6 +507,15 @@ export default function BreytaClient() {
                     />
                   </label>
                 </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="checkbox"
+                    checked={pruna.preserveFace}
+                    onChange={(e) => updatePruna({ preserveFace: e.target.checked })}
+                  />
+                  Varðveita andlit nákvæmlega (face-swap eftir pruna, 2x kostnaður)
+                  <small className="ac-rec" style={{ flexBasis: "100%" }}>mælt: ON þegar andlit skiptir máli (tvöfaldar kostnað og tíma; keyrir face-swap eftir pruna)</small>
+                </label>
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"

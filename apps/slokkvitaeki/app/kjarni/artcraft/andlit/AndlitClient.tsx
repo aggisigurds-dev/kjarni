@@ -6,8 +6,10 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
+import SendTo from "../SendTo";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import { useStagedSource } from "../useStagedSource";
 import {
   ANDLIT_SETTINGS_KEY,
   ASPECT_LABELS,
@@ -51,6 +53,7 @@ export default function AndlitClient() {
   const [face, setFace] = useState<Uploaded | null>(null);
   const [pose, setPose] = useState<Uploaded | null>(null);
   const [results, setResults] = useState<string[]>([]);
+  const [resultBlobs, setResultBlobs] = useState<Blob[]>([]);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string } | null>(null);
   const faceUrlRef = useRef<string>("");
   const poseUrlRef = useRef<string>("");
@@ -71,10 +74,18 @@ export default function AndlitClient() {
         resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
         resultUrlsRef.current = urls;
         setResults(urls);
+        setResultBlobs(saved.blobs);
         setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt });
       }
     })();
   }, []);
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await handleUpload(file, "face");
+  });
 
   useEffect(() => {
     return () => {
@@ -170,6 +181,7 @@ export default function AndlitClient() {
       resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
       resultUrlsRef.current = urls;
       setResults(urls);
+      setResultBlobs(blobs);
       const now = Date.now();
       setSavedMeta({ timestamp: now, prompt: activePrompt });
       void saveResult({
@@ -192,6 +204,7 @@ export default function AndlitClient() {
     resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
     resultUrlsRef.current = [];
     setResults([]);
+    setResultBlobs([]);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
   }
@@ -496,13 +509,25 @@ export default function AndlitClient() {
                 {results.map((url, i) => (
                   <div key={url} className="ac-card">
                     <ImageZoom src={url} alt={`Andlit ${i + 1}`} />
-                    <button
-                      type="button"
-                      className="ac-btn ghost"
-                      onClick={() => downloadBlob(url, `andlit-${Date.now()}-${i + 1}.webp`)}
-                    >
-                      Sækja
-                    </button>
+                    <div className="ac-row" style={{ gap: 8, marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="ac-btn ghost"
+                        onClick={() => downloadBlob(url, `andlit-${Date.now()}-${i + 1}.webp`)}
+                      >
+                        Sækja
+                      </button>
+                      {resultBlobs[i] && (
+                        <SendTo
+                          blob={resultBlobs[i]}
+                          mediaType="image"
+                          sourceTool="andlit"
+                          sourceToolName="Andlit"
+                          prompt={savedMeta?.prompt}
+                          name={`andlit-${i + 1}.png`}
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

@@ -7,6 +7,8 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import {
   computeExtension,
   DEFAULT_UTVIKKA_SETTINGS,
@@ -43,6 +45,7 @@ export default function UtvikkaClient() {
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; sourceName?: string } | null>(null);
   const sourceUrlRef = useRef<string>("");
   const resultUrlsRef = useRef<string[]>([]);
+  const resultBlobsRef = useRef<Blob[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
 
@@ -55,11 +58,19 @@ export default function UtvikkaClient() {
         const urls = saved.blobs.map((b) => URL.createObjectURL(b));
         resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
         resultUrlsRef.current = urls;
+        resultBlobsRef.current = saved.blobs;
         setResults(urls);
         setSavedMeta({ timestamp: saved.timestamp, sourceName: saved.sourceName });
       }
     })();
   }, []);
+
+  useStagedSource(async (blob, item) => {
+    const type = blob.type || "image/png";
+    const ext = type === "image/jpeg" ? "jpg" : type === "image/webp" ? "webp" : "png";
+    const file = new File([blob], item.name || `from-${item.sourceTool}.${ext}`, { type });
+    await handleFile(file);
+  });
 
   useEffect(() => {
     return () => {
@@ -115,6 +126,7 @@ export default function UtvikkaClient() {
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
       resultUrlsRef.current = urls;
+      resultBlobsRef.current = blobs;
       setResults(urls);
       setResultDims({ width, height });
       const now = Date.now();
@@ -138,6 +150,7 @@ export default function UtvikkaClient() {
   async function clearSavedResults() {
     resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
     resultUrlsRef.current = [];
+    resultBlobsRef.current = [];
     setResults([]);
     setResultDims(null);
     setSavedMeta(null);
@@ -363,18 +376,33 @@ export default function UtvikkaClient() {
                 </p>
               )}
               <div className="ac-grid">
-                {results.map((url, i) => (
-                  <div key={url} className="ac-card">
-                    <ImageZoom src={url} alt={`Útvíkkuð ${i + 1}`} />
-                    <button
-                      type="button"
-                      className="ac-btn ghost"
-                      onClick={() => downloadBlob(url, `utvikka-${Date.now()}-${i + 1}.webp`)}
-                    >
-                      Sækja
-                    </button>
-                  </div>
-                ))}
+                {results.map((url, i) => {
+                  const blob = resultBlobsRef.current[i];
+                  return (
+                    <div key={url} className="ac-card">
+                      <ImageZoom src={url} alt={`Útvíkkuð ${i + 1}`} />
+                      <div className="ac-row">
+                        <button
+                          type="button"
+                          className="ac-btn ghost"
+                          onClick={() => downloadBlob(url, `utvikka-${Date.now()}-${i + 1}.webp`)}
+                        >
+                          Sækja
+                        </button>
+                        {blob && (
+                          <SendTo
+                            blob={blob}
+                            mediaType="image"
+                            sourceTool="utvikka"
+                            sourceToolName="Útvíkka"
+                            name={`utvikka-${i + 1}.webp`}
+                            prompt={settings.prompt || `Útvíkka ${settings.direction} ${settings.amount}%`}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                 Hreinsa vistað
