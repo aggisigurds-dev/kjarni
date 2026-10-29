@@ -6,25 +6,22 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
-import {
-  PromptSlots,
-  readStoredPromptSlots,
-  type PromptSlotData,
-} from "../PromptSlots";
 import { shrinkImageForUpload } from "../replicateImage";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import {
+  CLARITY_OUTPUT_FORMATS,
+  CLARITY_SCALES,
   CLARITY_SETTINGS_KEY,
   DEFAULT_CLARITY_SETTINGS,
   normalizeClaritySettings,
   readStoredClaritySettings,
   resumeClarity,
+  type ClarityOutputFormat,
+  type ClarityScale,
   type ClaritySettings,
   upscaleWithClarity,
 } from "./clarity";
-
-const CLARITY_PROMPT_SLOTS_KEY = "kjarni_private_upplyfting_clarity_prompt_slots";
 
 const SAVED_KEY = "upplyfting";
 import {
@@ -64,10 +61,6 @@ export default function UpplyftingClient() {
   const [mode, setMode] = useState<UpscaleMode>("topaz");
   const [settings, setSettings] = useState<TopazSettings>(DEFAULT_TOPAZ_SETTINGS);
   const [clarity, setClarity] = useState<ClaritySettings>(DEFAULT_CLARITY_SETTINGS);
-  const [claritySlots, setClaritySlots] = useState<PromptSlotData>({
-    slots: [DEFAULT_CLARITY_SETTINGS.prompt, "", ""],
-    active: 0,
-  });
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{
     status: string;
@@ -92,7 +85,6 @@ export default function UpplyftingClient() {
     setSettings(readStoredTopazSettings());
     const storedClarity = readStoredClaritySettings();
     setClarity(storedClarity);
-    setClaritySlots(readStoredPromptSlots(CLARITY_PROMPT_SLOTS_KEY, storedClarity.prompt));
     setMode(readStoredMode());
     setReady(true);
     void (async () => {
@@ -178,11 +170,6 @@ export default function UpplyftingClient() {
     });
   }
 
-  function updateClaritySlots(next: PromptSlotData) {
-    setClaritySlots(next);
-    window.localStorage.setItem(CLARITY_PROMPT_SLOTS_KEY, JSON.stringify(next));
-  }
-
   async function addFile(file: File) {
     setError("");
     try {
@@ -212,11 +199,9 @@ export default function UpplyftingClient() {
     setError("");
     setProgress(mode === "clarity" ? { status: "starting", elapsed: 0 } : null);
     try {
-      const activeClarityPrompt = claritySlots.slots[claritySlots.active];
-      const clarityWithPrompt: ClaritySettings = { ...clarity, prompt: activeClarityPrompt };
       const blob =
         mode === "clarity"
-          ? await upscaleWithClarity(clarityWithPrompt, sourceDataUrlRef.current, {
+          ? await upscaleWithClarity(clarity, sourceDataUrlRef.current, {
               onStatus: (p) =>
                 setProgress({
                   status: p.status,
@@ -388,7 +373,7 @@ export default function UpplyftingClient() {
             <p className="ac-hint">
               {mode === "topaz"
                 ? "Topaz Labs — klassískur pixel-upscaler, trú upprunalegri mynd. Enhance-líkön og face enhancement passa sig við hvað er á myndinni."
-                : "philz1337x Clarity Pro — creative upscaler sem endurskapar smáatriði en heldur sjálfsmynd. Hærri creativity = meiri áferð bætt við, lægri resemblance = frjálsari túlkun."}
+                : "philz1337x Clarity Pro — creative upscaler sem heldur sjálfsmynd. Creativity: neikvætt = tryggara, jákvætt = meira endursköpuð áferð. Default 3 gefur sýnilega betri áferð án of mikillar túlkunar."}
             </p>
           </section>
 
@@ -396,73 +381,56 @@ export default function UpplyftingClient() {
             <h2>Stillingar</h2>
             {mode === "clarity" ? (
               <>
-                <PromptSlots
-                  label="Prompt (hvað skal líkanið sjá) — 3 slots, tappaðu á textann til að breyta, + til að velja virkt"
-                  data={claritySlots}
-                  onChange={updateClaritySlots}
-                  rows={2}
-                  placeholder="masterpiece, best quality, highres, detailed…"
-                />
-                <label>
-                  Neikvæð lýsing
-                  <textarea
-                    value={clarity.negativePrompt}
-                    onChange={(e) => updateClarity({ negativePrompt: e.target.value })}
-                    rows={2}
-                  />
-                </label>
                 <div className="ac-settings">
-                  <label>
-                    Scale ({clarity.scaleFactor.toFixed(1)}×
-                    {estimatedOutputMp != null ? ` · ~${estimatedOutputMp} MP` : ""})
+                  <label title="Hversu mikið módelið má bæta við nýjum smáatriðum. 0 = tryggt, 5+ = meira dramatískt. -10 til 10.">
+                    Creativity ({clarity.creativity.toFixed(1)})
                     <input
                       type="range"
-                      min={1}
-                      max={4}
+                      min={-10}
+                      max={10}
                       step={0.5}
-                      value={clarity.scaleFactor}
-                      onChange={(e) => updateClarity({ scaleFactor: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Creativity ({clarity.creativity.toFixed(2)})
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
                       value={clarity.creativity}
                       onChange={(e) => updateClarity({ creativity: Number(e.target.value) })}
                     />
+                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: 3 (sýnileg áferð, trú upprunalegu)</small>
                   </label>
-                  <label>
-                    Resemblance ({clarity.resemblance.toFixed(2)})
-                    <input
-                      type="range"
-                      min={0}
-                      max={3}
-                      step={0.05}
-                      value={clarity.resemblance}
-                      onChange={(e) => updateClarity({ resemblance: Number(e.target.value) })}
-                    />
+                  <label title="Hversu mikið myndin stækkar. Fast enum: 2x, 4x, 8x, 16x. Hámark 64 MP útkoma.">
+                    Scale ({clarity.scaleFactor}×
+                    {estimatedOutputMp != null ? ` · ~${estimatedOutputMp} MP` : ""})
+                    <select
+                      value={clarity.scaleFactor}
+                      onChange={(e) => updateClarity({ scaleFactor: Number(e.target.value) as ClarityScale })}
+                    >
+                      {CLARITY_SCALES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}×
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: 2× (4× getur farið yfir 64 MP mörk á stórum myndum)</small>
                   </label>
-                  <label>
-                    Skref ({clarity.steps})
-                    <input
-                      type="range"
-                      min={1}
-                      max={50}
-                      value={clarity.steps}
-                      onChange={(e) => updateClarity({ steps: Number(e.target.value) })}
-                    />
+                  <label title="PNG = lossless (stærri skrá), JPG = 95% quality (minni skrá).">
+                    Snið
+                    <select
+                      value={clarity.outputFormat}
+                      onChange={(e) => updateClarity({ outputFormat: e.target.value as ClarityOutputFormat })}
+                    >
+                      {CLARITY_OUTPUT_FORMATS.map((f) => (
+                        <option key={f} value={f}>
+                          {f.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: PNG (lossless, trúari upprunalegu)</small>
                   </label>
-                  <label>
+                  <label title="-1 = slembið (nýtt í hvert sinn). Settu fasta tölu til að endurtaka sama útkomu.">
                     Seed ({clarity.seed === -1 ? "slembið" : clarity.seed})
                     <input
                       type="number"
                       value={clarity.seed}
                       onChange={(e) => updateClarity({ seed: Number(e.target.value) })}
                     />
+                    <small style={{ opacity: 0.6, fontSize: 11, display: "block", marginTop: 2 }}>mælt: -1 (slembið; nota fasta tölu bara ef þú vilt endurtaka)</small>
                   </label>
                 </div>
 

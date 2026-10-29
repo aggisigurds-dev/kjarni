@@ -39,9 +39,15 @@ export async function POST(req: NextRequest) {
   // prunaai/p-image-edit tekur `images` (array af uri) ekki `image`
   // (staðfest 2026-10-28: 422 „input: images is required"). Við sendum enn
   // eina mynd frá client-inu og vefjum í array hér.
+  //
+  // turbo: Replicate default er TRUE sem gaf aðeins ~150-300kb myndir út
+  // (lágupplausn). Við hardcodum ALLTAF FALSE til að fá fullgæða útkomu.
+  // Notandi þarf ekki að hugsa um þennan parameter — Kjarni fer alltaf á
+  // fullgæði.
   const input: Record<string, unknown> = {
     images: [body.image],
     prompt,
+    turbo: false,
     disable_safety_checker: body.disableSafetyChecker === true,
   };
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);

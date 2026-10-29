@@ -65,6 +65,10 @@ export const DEFAULT_BACKGROUND_SETTINGS: BackgroundSettings = {
 export const BACKGROUND_SETTINGS_KEY = "kjarni_private_breyta_background_settings";
 
 // Pruna
+// Replicate default fyrir turbo-param er TRUE sem gaf aðeins ~150-300kb
+// myndir út (lágupplausn). Routinn okkar hardcoder turbo: false ALLTAF
+// — notandi þarf ekki að hugsa um þennan toggle, Kjarni fer alltaf á
+// fullgæði. Fyrir hraða á einföldum breytingum er pruna samt enn <1s.
 export type PrunaSettings = {
   prompt: string;
   disableSafetyChecker: boolean;

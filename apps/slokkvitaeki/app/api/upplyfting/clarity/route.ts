@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
 
-// Upplyfting → Clarity — philz1337x/clarity-pro-upscaler á Replicate.
-// Diffusion-based upscaler getur tekið 1–3 mínútur, sérstaklega á cold
-// start, svo við notum async-mynstur eins og Wan 2.2:
-//   POST /api/upplyfting/clarity         → {predictionId} eða {images: [...]}
-//   GET  /api/upplyfting/clarity/status  → {status, images?, error?}
+// Upplyfting -> Clarity -- philz1337x/clarity-pro-upscaler a Replicate.
+//
+// UPPFAERT 2026-10-29: schemad styttist i fjora inputa:
+//   image, creativity (-10..10), scale_factor (2|4|8|16), output_format (png|jpg).
+// Gomul UI sendi prompt, negative_prompt, resemblance og num_inference_steps
+// sem Replicate hunsadi hljodlega og creativity 0.3 var naestum nulit -> notandi
+// sa engar breytingar. Nu sendum vid einungis skraleg field.
 
 export const maxDuration = 30;
+
+const SCALES = [2, 4, 8, 16];
+const OUTPUT_FORMATS = ["png", "jpg"];
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
 
-function clampNumber(n: unknown, fallback: number, min: number, max: number): number {
+function clampFloat(n: unknown, fallback: number, min: number, max: number): number {
   const num = typeof n === "number" ? n : fallback;
   if (!Number.isFinite(num)) return fallback;
   return Math.min(max, Math.max(min, num));
@@ -27,12 +32,9 @@ export async function POST(req: NextRequest) {
 
   let body: {
     image?: string;
-    prompt?: string;
-    negativePrompt?: string;
     creativity?: number;
-    resemblance?: number;
-    steps?: number;
     scaleFactor?: number;
+    outputFormat?: string;
     seed?: number;
   };
   try {
@@ -45,14 +47,18 @@ export async function POST(req: NextRequest) {
     return bad(400, "image vantar (data:image/... URL)");
   }
 
+  const scale = SCALES.includes(Math.round(body.scaleFactor as number))
+    ? Math.round(body.scaleFactor as number)
+    : 2;
+  const outputFormat = OUTPUT_FORMATS.includes(body.outputFormat || "")
+    ? (body.outputFormat as string)
+    : "png";
+
   const input: Record<string, unknown> = {
     image: body.image,
-    prompt: body.prompt || "masterpiece, best quality, highres, detailed",
-    negative_prompt: body.negativePrompt || "(worst quality, low quality, normal quality:2)",
-    creativity: clampNumber(body.creativity, 0.3, 0, 1),
-    resemblance: clampNumber(body.resemblance, 0.6, 0, 3),
-    num_inference_steps: clampNumber(body.steps, 18, 1, 50),
-    scale_factor: clampNumber(body.scaleFactor, 2, 1, 4),
+    creativity: clampFloat(body.creativity, 3, -10, 10),
+    scale_factor: scale,
+    output_format: outputFormat,
   };
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
 

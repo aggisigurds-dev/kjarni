@@ -1,68 +1,68 @@
 /** Clarity Pro Upscaler — philz1337x/clarity-pro-upscaler á Replicate.
  *
- * Ólíkt Topaz (sem er klassískur „pixel-based" upscaler) er Clarity creative
- * upscaler: notar diffusion-líkan til að endurskapa smáatriði á meðan hann
- * heldur sjálfsmynd (face/subject). Gott val þegar þú vilt skarpari HEILA
- * mynd með meiri áferð, en sættir þig við aðeins meira „listræna túlkun".
+ * UPPFÆRT 2026-10-29: Replicate endurhannaði módelið og tók út prompt,
+ * negative_prompt, resemblance og num_inference_steps. Nú tekur bara:
+ *   image, creativity (-10 til +10), scale_factor (2|4|8|16), output_format.
  *
- * Þrír aðalstillingar:
- *   creativity — hversu mikið líkanið má bæta við nýjum smáatriðum (0 = engin,
- *                1 = frjáls túlkun). 0.3 er góður start.
- *   resemblance — hversu nálægt upprunalegu myndinni (0 = frjálst, 3 = næstum
- *                 eins). 0.6 jafnvægir.
- *   num_inference_steps — fleiri skref = meiri gæði + tími. 18 fyrir hraða,
- *                         28 fyrir jafnvægi, 50 fyrir hámark. */
+ * Diffusion-based creative upscaler sem heldur sjálfsmynd (face/subject)
+ * en endurskapar smáatriði. „creativity" ræður hversu mikið módelið má
+ * bæta við nýjum smáatriðum — jákvætt gildi bætir dramatískari áferð,
+ * neikvætt heldur útkomunni nær upprunalegu.
+ *
+ * Gamla stillingarnar frá fyrri UI (prompt, resemblance, steps) voru
+ * hunsaðar af Replicate hljóðlega og creativity-slíderinn okkar sendi
+ * gildi á bilinu 0-1 sem er nánast núll á nýja -10..+10 skalanum →
+ * útkoman leit næstum eins út og upprunalega myndin. normalizer færir
+ * slík gömul stilligildi upp í safe default.
+ */
+
+export const CLARITY_SCALES = [2, 4, 8, 16] as const;
+export type ClarityScale = (typeof CLARITY_SCALES)[number];
+
+export const CLARITY_OUTPUT_FORMATS = ["png", "jpg"] as const;
+export type ClarityOutputFormat = (typeof CLARITY_OUTPUT_FORMATS)[number];
 
 export type ClaritySettings = {
-  prompt: string;
-  negativePrompt: string;
   creativity: number;
-  resemblance: number;
-  steps: number;
-  scaleFactor: number; // 1 – 4
+  scaleFactor: ClarityScale;
+  outputFormat: ClarityOutputFormat;
   seed: number;
 };
 
 export const DEFAULT_CLARITY_SETTINGS: ClaritySettings = {
-  prompt: "masterpiece, best quality, highres, detailed",
-  negativePrompt: "(worst quality, low quality, normal quality:2)",
-  creativity: 0.3,
-  resemblance: 0.6,
-  steps: 18,
+  creativity: 3,
   scaleFactor: 2,
+  outputFormat: "png",
   seed: -1,
 };
 
-function clampUnit(n: number, fallback: number): number {
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+function clampCreativity(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_CLARITY_SETTINGS.creativity;
+  return Math.min(10, Math.max(-10, Math.round(n * 10) / 10));
 }
 
-function clampResemblance(n: number): number {
-  if (!Number.isFinite(n)) return DEFAULT_CLARITY_SETTINGS.resemblance;
-  return Math.min(3, Math.max(0, Math.round(n * 100) / 100));
-}
-
-function clampSteps(n: number): number {
-  if (!Number.isFinite(n)) return DEFAULT_CLARITY_SETTINGS.steps;
-  return Math.min(50, Math.max(1, Math.round(n)));
-}
-
-function clampScale(n: number): number {
-  if (!Number.isFinite(n)) return DEFAULT_CLARITY_SETTINGS.scaleFactor;
-  return Math.min(4, Math.max(1, Math.round(n * 10) / 10));
+function pickScale(n: unknown): ClarityScale {
+  const v = Math.round(Number(n));
+  return CLARITY_SCALES.includes(v as ClarityScale)
+    ? (v as ClarityScale)
+    : DEFAULT_CLARITY_SETTINGS.scaleFactor;
 }
 
 export function normalizeClaritySettings(raw: Partial<ClaritySettings> | null | undefined): ClaritySettings {
-  const src = raw || {};
+  const src = (raw || {}) as Record<string, unknown>;
+  const hasLegacy =
+    "resemblance" in src || "num_inference_steps" in src || "prompt" in src || "negativePrompt" in src || "steps" in src;
+  const rawCreativity = typeof src.creativity === "number" ? src.creativity : DEFAULT_CLARITY_SETTINGS.creativity;
+  const creativity =
+    hasLegacy && Math.abs(rawCreativity) <= 1
+      ? DEFAULT_CLARITY_SETTINGS.creativity
+      : clampCreativity(rawCreativity);
   return {
-    prompt: typeof src.prompt === "string" ? src.prompt : DEFAULT_CLARITY_SETTINGS.prompt,
-    negativePrompt:
-      typeof src.negativePrompt === "string" ? src.negativePrompt : DEFAULT_CLARITY_SETTINGS.negativePrompt,
-    creativity: clampUnit(src.creativity ?? DEFAULT_CLARITY_SETTINGS.creativity, DEFAULT_CLARITY_SETTINGS.creativity),
-    resemblance: clampResemblance(src.resemblance ?? DEFAULT_CLARITY_SETTINGS.resemblance),
-    steps: clampSteps(src.steps ?? DEFAULT_CLARITY_SETTINGS.steps),
-    scaleFactor: clampScale(src.scaleFactor ?? DEFAULT_CLARITY_SETTINGS.scaleFactor),
+    creativity,
+    scaleFactor: pickScale(src.scaleFactor),
+    outputFormat: CLARITY_OUTPUT_FORMATS.includes(src.outputFormat as ClarityOutputFormat)
+      ? (src.outputFormat as ClarityOutputFormat)
+      : DEFAULT_CLARITY_SETTINGS.outputFormat,
     seed: Number.isFinite(src.seed) ? Math.trunc(src.seed as number) : -1,
   };
 }
@@ -109,8 +109,6 @@ async function pollClarityStatus(
   startTime: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  // Deadline er mældur frá NÚNA — ekki frá submittedAt. Annars hefur resume
-  // eftir refresh bara stuttan tíma eftir og lendir strax í LOCAL_TIMEOUT.
   const deadline = Date.now() + 60 * 60 * 1000;
   while (Date.now() < deadline) {
     if (signal?.aborted) throw new Error("Hætt við");
