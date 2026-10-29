@@ -53,15 +53,13 @@ export async function POST(req: NextRequest) {
     return bad(400, "image vantar (data:image/... URL)");
   }
 
-  // image kemur sem "data:image/jpeg;base64,XXX" frá client en worker vill hreinan
-  // base64 streng án prefix (prefixinn er bara MIME-tag fyrir vafrann, ekki fyrir
-  // ComfyUI). Stripum fyrir submit.
-  const base64Body = body.image.includes(",") ? body.image.split(",", 2)[1] : body.image;
-
+  // wlsdml1114/generate_video wants image_base64 WITH the data:image/...;base64,
+  // prefix (sja README request examples). Different workers may differ — if we
+  // swap endpoint, confirm the expected format.
   const input: Record<string, unknown> = {
     prompt,
     negative_prompt: body.negativePrompt || "blurry, low quality, distorted, text overlay, watermark",
-    image_base64: base64Body,
+    image_base64: body.image,
     width: clampInt(body.width, 480, 256, 1280),
     height: clampInt(body.height, 832, 256, 1280),
     length: clampInt(body.length, 81, 25, 129),
