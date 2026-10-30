@@ -108,8 +108,8 @@ export default function SkyjahreyfimyndClient() {
     const storedKling = readStoredKlingSettings();
     setSettings(storedWan);
     setKling(storedKling);
-    setWanSlots(readStoredPromptSlots(WAN_PROMPT_SLOTS_KEY, storedWan.prompt));
-    setKlingSlots(readStoredPromptSlots(KLING_PROMPT_SLOTS_KEY, storedKling.prompt));
+    setWanSlots(readStoredPromptSlots(WAN_PROMPT_SLOTS_KEY, storedWan.prompt, 5));
+    setKlingSlots(readStoredPromptSlots(KLING_PROMPT_SLOTS_KEY, storedKling.prompt, 5));
     setModel(readStoredModel());
     setReady(true);
     void (async () => {
@@ -449,11 +449,12 @@ export default function SkyjahreyfimyndClient() {
             {model === "kling" ? (
               <>
                 <PromptSlots
-                  label="Hvað gerist í myndbandinu? (3 slots — tappaðu á textann til að breyta, + til að velja virkt)"
+                  label="Hvað gerist í myndbandinu? (5 slots — tappaðu á textann til að breyta, + til að velja virkt)"
                   data={klingSlots}
                   onChange={updateKlingSlots}
                   rows={3}
                   placeholder="cinematic motion, subtle camera push-in…"
+                  count={5}
                 />
                 <label>
                   Neikvæð lýsing (má sleppa)
@@ -515,11 +516,12 @@ export default function SkyjahreyfimyndClient() {
             ) : (
               <>
             <PromptSlots
-              label="Hvað gerist í myndbandinu? (3 slots — tappaðu á textann til að breyta, + til að velja virkt)"
+              label="Hvað gerist í myndbandinu? (5 slots — tappaðu á textann til að breyta, + til að velja virkt)"
               data={wanSlots}
               onChange={updateWanSlots}
               rows={3}
               placeholder="cinematic motion, subtle camera push-in…"
+              count={5}
             />
             <label>
               Neikvæð lýsing (má sleppa)

@@ -181,11 +181,7 @@ export default function BreytaClient() {
   function applyBakgrunnurPreset(p: SavedPreset) {
     // Setjum prompt í virka slot-ið; seed og negative í settings-ið.
     const activeIdx = bakgrunnurSlots.active;
-    const nextSlots: [string, string, string] = [
-      bakgrunnurSlots.slots[0],
-      bakgrunnurSlots.slots[1],
-      bakgrunnurSlots.slots[2],
-    ];
+    const nextSlots = [...bakgrunnurSlots.slots];
     nextSlots[activeIdx] = p.prompt;
     updateBakgrunnurSlots({ slots: nextSlots, active: activeIdx });
     updateBackground({
@@ -215,11 +211,7 @@ export default function BreytaClient() {
 
   function applyPrunaPreset(p: SavedPreset) {
     const activeIdx = prunaSlots.active;
-    const nextSlots: [string, string, string] = [
-      prunaSlots.slots[0],
-      prunaSlots.slots[1],
-      prunaSlots.slots[2],
-    ];
+    const nextSlots = [...prunaSlots.slots];
     nextSlots[activeIdx] = p.prompt;
     updatePrunaSlots({ slots: nextSlots, active: activeIdx });
     updatePruna({ seed: p.seed });

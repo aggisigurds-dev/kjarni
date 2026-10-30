@@ -3,37 +3,46 @@
 import { useEffect, useRef, useState } from "react";
 
 export type PromptSlotData = {
-  slots: [string, string, string];
-  active: 0 | 1 | 2;
+  slots: string[];
+  active: number;
 };
 
-export function createDefaultPromptSlots(initial: string): PromptSlotData {
-  return { slots: [initial, "", ""], active: 0 };
+const DEFAULT_COUNT = 3;
+
+export function createDefaultPromptSlots(initial: string, count: number = DEFAULT_COUNT): PromptSlotData {
+  const slots: string[] = Array.from({ length: count }, (_, i) => (i === 0 ? initial : ""));
+  return { slots, active: 0 };
 }
 
 export function normalizePromptSlots(
   raw: unknown,
   fallbackPrompt: string,
+  count: number = DEFAULT_COUNT,
 ): PromptSlotData {
   const src = (raw && typeof raw === "object" ? (raw as Partial<PromptSlotData>) : {}) as Partial<PromptSlotData>;
   const slotsIn = Array.isArray(src.slots) ? src.slots : [];
-  const slots: [string, string, string] = [
-    typeof slotsIn[0] === "string" ? slotsIn[0] : fallbackPrompt,
-    typeof slotsIn[1] === "string" ? slotsIn[1] : "",
-    typeof slotsIn[2] === "string" ? slotsIn[2] : "",
-  ];
-  const active: 0 | 1 | 2 = src.active === 1 ? 1 : src.active === 2 ? 2 : 0;
+  const slots: string[] = Array.from({ length: count }, (_, i) => {
+    const v = slotsIn[i];
+    if (typeof v === "string") return v;
+    return i === 0 ? fallbackPrompt : "";
+  });
+  const activeRaw = typeof src.active === "number" ? src.active : 0;
+  const active = Math.max(0, Math.min(count - 1, Math.floor(activeRaw)));
   return { slots, active };
 }
 
-export function readStoredPromptSlots(storageKey: string, fallbackPrompt: string): PromptSlotData {
-  if (typeof window === "undefined") return createDefaultPromptSlots(fallbackPrompt);
+export function readStoredPromptSlots(
+  storageKey: string,
+  fallbackPrompt: string,
+  count: number = DEFAULT_COUNT,
+): PromptSlotData {
+  if (typeof window === "undefined") return createDefaultPromptSlots(fallbackPrompt, count);
   try {
     const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return createDefaultPromptSlots(fallbackPrompt);
-    return normalizePromptSlots(JSON.parse(raw), fallbackPrompt);
+    if (!raw) return createDefaultPromptSlots(fallbackPrompt, count);
+    return normalizePromptSlots(JSON.parse(raw), fallbackPrompt, count);
   } catch {
-    return createDefaultPromptSlots(fallbackPrompt);
+    return createDefaultPromptSlots(fallbackPrompt, count);
   }
 }
 
@@ -43,9 +52,11 @@ type Props = {
   onChange: (next: PromptSlotData) => void;
   rows?: number;
   placeholder?: string;
+  /** Fjöldi slots — default 3. Hækka í 5 fyrir tól sem þurfa fleiri. */
+  count?: number;
 };
 
-export function PromptSlots({ label, data, onChange, rows = 3, placeholder }: Props) {
+export function PromptSlots({ label, data, onChange, rows = 3, placeholder, count = DEFAULT_COUNT }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -59,20 +70,23 @@ export function PromptSlots({ label, data, onChange, rows = 3, placeholder }: Pr
   }, [editingIndex]);
 
   function setSlot(i: number, value: string) {
-    const next: [string, string, string] = [data.slots[0], data.slots[1], data.slots[2]];
+    const next = [...data.slots];
+    while (next.length < count) next.push("");
     next[i] = value;
     onChange({ ...data, slots: next });
   }
 
-  function setActive(i: 0 | 1 | 2) {
+  function setActive(i: number) {
     onChange({ ...data, active: i });
   }
+
+  const indices = Array.from({ length: count }, (_, i) => i);
 
   return (
     <div className="ac-prompt-slots" aria-label={label}>
       <p className="ac-prompt-slots-label">{label}</p>
-      {([0, 1, 2] as const).map((i) => {
-        const text = data.slots[i];
+      {indices.map((i) => {
+        const text = data.slots[i] ?? "";
         const isActive = data.active === i;
         const isEditing = editingIndex === i;
         return (
