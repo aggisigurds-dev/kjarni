@@ -293,6 +293,10 @@ export function artcraftMyndbandSaumurHref(): string {
   return "/kjarni/artcraft/myndband-saumur";
 }
 
+export function artcraftMyndbandPortretAndlitHref(): string {
+  return "/kjarni/artcraft/myndband-portret-andlit";
+}
+
 export function artcraftUpplyftingHref(): string {
   return "/kjarni/artcraft/upplyfting";
 }
@@ -391,6 +395,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "myndband-andlit", name: "Myndband-andlit", href: artcraftMyndbandAndlitHref(), icon: "🎭", role: "Video face-lock", desc: "Setur eitt andlit á allt myndband frame-fyrir-frame (arabyai-replicate/roop_face_swap). Lagfæra Skýjahreyfimynd-útkomur sem breyttu andlitinu, eða læsa persónu í stuttum stiklu.", uses: ["Skýjahreyfimynd útkoma þar sem andlitið drift-aði — lagfæra", "Rammalásuð persóna í stuttu kynningarmyndbandi", "Face-lock á gömul myndbönd með óskýrum andlitum"] as readonly string[] },
   { id: "myndband-framhald", name: "Myndband-framhald", href: artcraftMyndbandFramhaldHref(), icon: "➕", role: "Video extend", desc: "Teygja myndband með því að taka síðasta frame-ið og nota sem byrjunarmynd á nýja Wan 2.2 klippu. Lýstu hvað eigi að gerast næst.", uses: ["Skýjahreyfimynd 5s klippa teygð í 10s eða lengra", "Framhald á sömu persónu án nýrrar myndatöku", "Ítrað framhald af framhaldi fyrir heila senu"] as readonly string[] },
   { id: "myndband-saumur", name: "Myndbanda-saumur", href: artcraftMyndbandSaumurHref(), icon: "🧵", role: "Video stitch", desc: "Sauma margar video-klippur saman í eina röð í vafranum með ffmpeg.wasm. Dragðu til að endurraða, veldu transition, flyttu út eina lengri klippu.", uses: ["Sameina Skýjahreyfimynd + Myndband-framhald í eina lengri klippu", "Setja saman 3-4 klippur fyrir Facebook-auglýsingu", "Þétta klippu-röð með smá cross-fade á milli"] as readonly string[] },
+  { id: "myndband-portret-andlit", name: "Myndband-portret-andlit", href: artcraftMyndbandPortretAndlitHref(), icon: "🪞", role: "Portrét face-lock", desc: "Cropar video í portret-ferhyrning (axlir og upp), keyrir roop face-swap á crop-svæðinu einu, og setur útkomuna aftur ofan á upprunalegt video. Minnkar vinnutíma og þörf á filter-off (búkur ekki sendur upp).", uses: ["Fastur búkur, nýtt andlit í kynningarmyndbandi", "Face-lock án þess að þurfa filter-off", "Léttari roop-keyrsla á 540p portret vs 1080p fullum ramma"] as readonly string[] },
   { id: "upplyfting", name: "Upplyfting", href: artcraftUpplyftingHref(), icon: "🔍", role: "Upscale", desc: "Faglegt myndupplyfting með Topaz Labs á Replicate — stækkar og skerpir án þess að breyta efni.", uses: ["Lítil mynd af vöru stækkuð í fulla upplausn fyrir vefsíðuna", "Óskýr skönnuð skýrslu-mynd gerð læsileg"] as readonly string[] },
   { id: "breyta", name: "Breyta mynd", href: artcraftBreytaHref(), icon: "🪄", role: "Mynd → mynd", desc: "Þrjú skýja-líkön: pro headshot, nýr bakgrunnur með texta, hraðvirk multi-image edit.", uses: ["Starfsmannamyndir á grafitt bakgrunn", "Vörumynd úr bílskúr → stúdíó-bakgrunnur", "Hraðar tilraunir á sömu mynd fyrir pence"] as readonly string[] },
   { id: "tonsmid", name: "Tónsmíð", href: artcraftTonsmidHref(), icon: "🎵", role: "Texti → lag", desc: "Semur heilt lag úr texta með ElevenLabs Music á Replicate — jinglar, útvarpsauglýsingar, bakgrunnstónlist.", uses: ["Útvarpsjingill fyrir Slökkvitæki", "Bakgrunnstónlist fyrir Facebook-video", "Róandi lag fyrir Jarvis-tilkynningar"] as readonly string[] },
@@ -422,6 +427,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/myndband-andlit") return "myndband-andlit";
   if (path === "/kjarni/artcraft/myndband-framhald") return "myndband-framhald";
   if (path === "/kjarni/artcraft/myndband-saumur") return "myndband-saumur";
+  if (path === "/kjarni/artcraft/myndband-portret-andlit") return "myndband-portret-andlit";
   if (path === "/kjarni/artcraft/upplyfting") return "upplyfting";
   if (path === "/kjarni/artcraft/breyta") return "breyta";
   if (path === "/kjarni/artcraft/tonsmid") return "tonsmid";

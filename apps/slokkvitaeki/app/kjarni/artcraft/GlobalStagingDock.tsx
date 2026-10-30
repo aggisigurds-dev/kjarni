@@ -38,11 +38,13 @@ const IMAGE_DESTINATIONS: Destination[] = [
   { id: "bakgrunnur", label: "Fjarlægja bakgrunn", path: "/kjarni/artcraft/bakgrunnur" },
   { id: "skyjahreyfimynd", label: "Skýjahreyfimynd", path: "/kjarni/artcraft/skyjahreyfimynd" },
   { id: "myndband-andlit-face", label: "Myndband-andlit (andlits-tilvísun)", path: "/kjarni/artcraft/myndband-andlit" },
+  { id: "myndband-portret-andlit-face", label: "Myndband-portret-andlit (andlits-tilvísun)", path: "/kjarni/artcraft/myndband-portret-andlit" },
 ];
 
 const VIDEO_DESTINATIONS: Destination[] = [
   { id: "video-upplyfting", label: "Myndbanda-upplyfting", path: "/kjarni/artcraft/video-upplyfting" },
   { id: "myndband-andlit", label: "Myndband-andlit", path: "/kjarni/artcraft/myndband-andlit" },
+  { id: "myndband-portret-andlit", label: "Myndband-portret-andlit", path: "/kjarni/artcraft/myndband-portret-andlit" },
   { id: "myndband-framhald", label: "Myndband-framhald (teygja)", path: "/kjarni/artcraft/myndband-framhald" },
   { id: "myndband-saumur", label: "Myndbanda-saumur", path: "/kjarni/artcraft/myndband-saumur" },
 ];
