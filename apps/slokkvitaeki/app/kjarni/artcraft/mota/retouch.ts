@@ -370,6 +370,148 @@ export function adjustContrastGlobal(raster: Raster, factor: number): void {
   }
 }
 
+// --- Skin tone adjustments ----------------------------------------------
+// Áætlum "skin likelihood" á hverju pixli (0..1): hvað hue er nálægt
+// húðlit (hue ~0-40°), saturation hóflegur og birta ekki of lág. Þessi
+// weight er svo notaður til að blanda hue/sat shifti aðeins á húðsvæðum
+// — bakgrunnur og föt breytast ekki (eða mjög lítið).
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  return [h, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  h = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60)       { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else              { r = c; g = 0; b = x; }
+  return [
+    Math.max(0, Math.min(255, (r + m) * 255)),
+    Math.max(0, Math.min(255, (g + m) * 255)),
+    Math.max(0, Math.min(255, (b + m) * 255)),
+  ];
+}
+
+/** Skin likelihood 0..1 á pixli — hátt þegar hue er milli ~5° og 35°, sat
+ *  hóflegur, light ekki of dökk eða of björt. */
+function skinWeight(h: number, s: number, l: number): number {
+  const hueDist = Math.min(Math.abs(h - 20), Math.abs(h - 20 + 360), Math.abs(h - 20 - 360));
+  const hueScore = Math.max(0, 1 - hueDist / 30);
+  const satScore = Math.max(0, Math.min(1, s * 2.5)) * (s > 0.6 ? 1 - (s - 0.6) * 1.5 : 1);
+  const lightScore = l > 0.15 && l < 0.9 ? 1 - Math.abs(l - 0.6) * 1.4 : 0;
+  return Math.max(0, Math.min(1, hueScore * Math.max(0.1, satScore) * Math.max(0, lightScore)));
+}
+
+/** Shift skin tone — hueDeg -30..+30 (hlýrra/kaldara), satDelta -0.5..+0.5
+ *  (mettaðra/fölara), lightDelta -0.2..+0.2 (bjartara/dekkra). Áhrif eru
+ *  weighted af skinWeight svo bakgrunnur og föt breytast lítið. */
+export function shiftSkinTone(
+  raster: Raster,
+  hueDeg: number,
+  satDelta: number,
+  lightDelta: number,
+): void {
+  const data = raster.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const w = skinWeight(h, s, l);
+    if (w <= 0.02) continue;
+    const nh = h + hueDeg * w;
+    const ns = Math.max(0, Math.min(1, s + satDelta * w));
+    const nl = Math.max(0, Math.min(1, l + lightDelta * w));
+    const [r, g, b] = hslToRgb(nh, ns, nl);
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+  }
+}
+
+/** Equalize skin tone — minnkar fráviksbreytingar í hue meðal húðpixla.
+ *  Reiknar meðal-hue meðal pixla sem hafa skinWeight > 0.3 og togar þá
+ *  nær því meðaltali (strength 0..1). Gott á roða-bletti, misliti og
+ *  mislýstar húð-svæði. */
+export function equalizeSkinTone(raster: Raster, strength: number): void {
+  const data = raster.data;
+  const amt = Math.max(0, Math.min(1, strength));
+  // Fyrri pössun: safnið meðaltalið (hue + sat) með vectorial sum svo
+  // það meðhöndlar wrap-around (hue 350° og 10° báru hliðarmeðaltal ~0°).
+  let sumX = 0, sumY = 0, sumS = 0, wtot = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const w = skinWeight(h, s, l);
+    if (w < 0.3) continue;
+    const rad = (h * Math.PI) / 180;
+    sumX += Math.cos(rad) * w;
+    sumY += Math.sin(rad) * w;
+    sumS += s * w;
+    wtot += w;
+  }
+  if (wtot < 1) return;
+  const avgHue = ((Math.atan2(sumY, sumX) * 180) / Math.PI + 360) % 360;
+  const avgSat = sumS / wtot;
+  // Önnur pössun: togum hue+sat skinpixla að meðaltali.
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const w = skinWeight(h, s, l);
+    if (w < 0.1) continue;
+    // Shortest-path hue distance
+    let dh = avgHue - h;
+    if (dh > 180) dh -= 360;
+    if (dh < -180) dh += 360;
+    const nh = h + dh * amt * w;
+    const ns = s + (avgSat - s) * amt * w * 0.7;
+    const [r, g, b] = hslToRgb(nh, Math.max(0, Math.min(1, ns)), l);
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+  }
+}
+
+/** Stretch raster lóðrétt um factor — >1 teygjir upp (allur hærri), <1
+ *  þjappar (lágvaxinn). Sýnishorn með bilinear í kringum lóðrétta miðju. */
+export function stretchHeight(raster: Raster, factor: number): void {
+  const f = Math.max(0.6, Math.min(1.6, factor));
+  if (Math.abs(f - 1) < 0.001) return;
+  const w = raster.width;
+  const h = raster.height;
+  const cy = (h - 1) / 2;
+  const src = new Uint8ClampedArray(raster.data);
+  for (let y = 0; y < h; y++) {
+    const sy = cy + (y - cy) / f;
+    const y0 = Math.max(0, Math.min(h - 1, Math.floor(sy)));
+    const y1 = Math.max(0, Math.min(h - 1, Math.ceil(sy)));
+    const fy = sy - y0;
+    for (let x = 0; x < w; x++) {
+      const i0 = (y0 * w + x) * 4;
+      const i1 = (y1 * w + x) * 4;
+      const idx = (y * w + x) * 4;
+      for (let c = 0; c < 4; c++) {
+        raster.data[idx + c] = src[i0 + c] * (1 - fy) + src[i1 + c] * fy;
+      }
+    }
+  }
+}
+
 export function sharpenGlobal(raster: Raster, amount: number): void {
   // amount 0..3 (0 = no change)
   const amt = Math.max(0, Math.min(3, amount));

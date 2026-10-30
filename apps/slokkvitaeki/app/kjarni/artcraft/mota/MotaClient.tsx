@@ -13,6 +13,8 @@ import {
   fitSize,
   liquifyInPlace,
   strokePoints,
+  warpBody,
+  type BodyAmounts,
   type LiquifyMode,
   type Raster,
 } from "../studio/adjust";
@@ -20,7 +22,10 @@ import {
   adjustBrightnessGlobal,
   adjustContrastGlobal,
   applyRetouch,
+  equalizeSkinTone,
   sharpenGlobal,
+  shiftSkinTone,
+  stretchHeight,
   type RetouchMode,
 } from "./retouch";
 
@@ -370,6 +375,29 @@ export default function MotaClient() {
     downloadBlob(URL.createObjectURL(blob), `${sourceName.replace(/\.[^.]+$/, "") || "mynd"}-mota.jpg`);
   }
 
+  function applyGlobal(fn: (r: Raster) => void) {
+    const w = workingRef.current;
+    if (!w) return;
+    pushUndo();
+    fn(w);
+    paint();
+  }
+
+  function applyBodyPreset(body: Partial<BodyAmounts>) {
+    const w = workingRef.current;
+    if (!w) return;
+    pushUndo();
+    const dest = createRaster(w.width, w.height, 0, 255);
+    warpBody(w, dest, {
+      bust: body.bust ?? 0,
+      waist: body.waist ?? 0,
+      hips: body.hips ?? 0,
+      width: body.width ?? 0,
+    });
+    workingRef.current = dest;
+    paint();
+  }
+
   return (
     <StationChrome tool="artcraft">
       <div className="ac-hub">
@@ -609,13 +637,7 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => {
-                    const w = workingRef.current;
-                    if (!w) return;
-                    pushUndo();
-                    adjustBrightnessGlobal(w, 10);
-                    paint();
-                  }}
+                  onClick={() => applyGlobal((w) => adjustBrightnessGlobal(w, 10))}
                   title="Hækka birtu allrar myndarinnar um 10"
                 >
                   Birta +
@@ -623,13 +645,7 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => {
-                    const w = workingRef.current;
-                    if (!w) return;
-                    pushUndo();
-                    adjustBrightnessGlobal(w, -10);
-                    paint();
-                  }}
+                  onClick={() => applyGlobal((w) => adjustBrightnessGlobal(w, -10))}
                   title="Lækka birtu allrar myndarinnar um 10"
                 >
                   Birta −
@@ -637,13 +653,7 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => {
-                    const w = workingRef.current;
-                    if (!w) return;
-                    pushUndo();
-                    adjustContrastGlobal(w, 0.15);
-                    paint();
-                  }}
+                  onClick={() => applyGlobal((w) => adjustContrastGlobal(w, 0.15))}
                   title="Auka kontrast allrar myndarinnar um 15%"
                 >
                   Kontrast +
@@ -651,13 +661,7 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => {
-                    const w = workingRef.current;
-                    if (!w) return;
-                    pushUndo();
-                    adjustContrastGlobal(w, -0.15);
-                    paint();
-                  }}
+                  onClick={() => applyGlobal((w) => adjustContrastGlobal(w, -0.15))}
                   title="Minnka kontrast allrar myndarinnar um 15%"
                 >
                   Kontrast −
@@ -665,16 +669,146 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => {
-                    const w = workingRef.current;
-                    if (!w) return;
-                    pushUndo();
-                    sharpenGlobal(w, 0.5);
-                    paint();
-                  }}
+                  onClick={() => applyGlobal((w) => sharpenGlobal(w, 0.5))}
                   title="Skerpa allrar myndarinnar (unsharp mask)"
                 >
                   Skerpa +
+                </button>
+              </div>
+
+              <div className="ac-row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <span className="ac-hint" style={{ opacity: 0.7, marginRight: 4 }}>Líkami:</span>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => stretchHeight(w, 1.05))}
+                  title="Teygir myndina ~5% lóðrétt — persónan virðist hærri"
+                >
+                  Hærri
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => stretchHeight(w, 0.95))}
+                  title="Þjappar myndinni ~5% lóðrétt — persónan virðist lægri"
+                >
+                  Lægri
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ waist: -0.3 })}
+                  title="Mjókka mitti (dreger inn miðbik)"
+                >
+                  Mitti −
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ waist: 0.25 })}
+                  title="Breikka mitti (fyllir út miðbik)"
+                >
+                  Mitti +
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ hips: -0.25 })}
+                  title="Mjókka mjaðmir"
+                >
+                  Mjaðmir −
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ hips: 0.25 })}
+                  title="Breiða mjaðmir"
+                >
+                  Mjaðmir +
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ bust: 0.25 })}
+                  title="Fylla bringu"
+                >
+                  Bringa +
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ width: -0.15 })}
+                  title="Allur grennri — dregur inn alla breidd um ~15%"
+                >
+                  Allur grennri
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyBodyPreset({ width: 0.15 })}
+                  title="Allur fyllri — breikkar alla breidd um ~15%"
+                >
+                  Allur fyllri
+                </button>
+              </div>
+
+              <div className="ac-row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <span className="ac-hint" style={{ opacity: 0.7, marginRight: 4 }}>Húðlitur:</span>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => shiftSkinTone(w, -8, 0.03, 0))}
+                  title="Hlýrri húðlit — færist í átt að appelsínugulum"
+                >
+                  Hlýrra
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => shiftSkinTone(w, 8, 0, 0))}
+                  title="Kaldari húðlit — færist í átt að bleikum"
+                >
+                  Kaldara
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => shiftSkinTone(w, 0, 0.1, 0))}
+                  title="Mettaðri húðlit (meira líf)"
+                >
+                  Mettaðra
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => shiftSkinTone(w, 0, -0.1, 0))}
+                  title="Fölari húðlit (minna rautt)"
+                >
+                  Fölari
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => shiftSkinTone(w, 0, 0, 0.04))}
+                  title="Bjartari húð"
+                >
+                  Bjartari
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => shiftSkinTone(w, 0, 0, -0.04))}
+                  title="Dekkri húð"
+                >
+                  Dekkri
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => applyGlobal((w) => equalizeSkinTone(w, 0.5))}
+                  title="Jafna húðlit — minnkar roða, mislýst svæði, misliti í andliti og á líkama"
+                >
+                  Jafna húð
                 </button>
               </div>
 
