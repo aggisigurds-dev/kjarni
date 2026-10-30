@@ -187,6 +187,7 @@ export default function SkyjastudioClient() {
   const [brushSize, setBrushSize] = useState(40);
   const [cursor, setCursor] = useState<{ x: number; y: number; size: number } | null>(null);
   const [maskPainted, setMaskPainted] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   brushSizeRef.current = brushSize;
 
@@ -613,22 +614,76 @@ export default function SkyjastudioClient() {
               <p className="ac-hint">
                 Málaðu með bursta yfir svæðið sem á að breyta — rauð slikja sýnir hvað er valið.
               </p>
-              <div className="ac-adjust-stage" ref={stageRef}>
-                <canvas
-                  ref={viewRef}
-                  className="ac-adjust-canvas"
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                  onPointerLeave={onPointerLeave}
-                />
-                {cursor && (
-                  <div
-                    className="ac-brush-cursor"
-                    style={{ left: cursor.x, top: cursor.y, width: cursor.size, height: cursor.size }}
+              <div className="ac-row" style={{ gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, opacity: 0.8, marginRight: 4 }}>Zoom:</span>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => setZoom((z) => Math.max(0.25, Math.round((z - 0.25) * 100) / 100))}
+                  aria-label="Minnka zoom"
+                  style={{ padding: "4px 10px", fontSize: 16, lineHeight: 1, minWidth: 36 }}
+                >
+                  −
+                </button>
+                <span style={{ fontSize: 13, fontWeight: 600, minWidth: 56, textAlign: "center" }}>
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => setZoom((z) => Math.min(4, Math.round((z + 0.25) * 100) / 100))}
+                  aria-label="Auka zoom"
+                  style={{ padding: "4px 10px", fontSize: 16, lineHeight: 1, minWidth: 36 }}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => setZoom(1)}
+                  style={{ padding: "4px 10px", fontSize: 12 }}
+                >
+                  Fit
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => setZoom(2)}
+                  style={{ padding: "4px 10px", fontSize: 12 }}
+                >
+                  2×
+                </button>
+              </div>
+              <div
+                style={{
+                  overflow: zoom > 1 ? "auto" : "visible",
+                  maxHeight: zoom > 1 ? "70vh" : undefined,
+                  border: zoom > 1 ? "1px solid var(--m-border, #333)" : undefined,
+                  borderRadius: zoom > 1 ? 6 : undefined,
+                }}
+              >
+                <div
+                  className="ac-adjust-stage"
+                  ref={stageRef}
+                  style={zoom !== 1 ? { width: `${zoom * 100}%`, maxWidth: "none" } : undefined}
+                >
+                  <canvas
+                    ref={viewRef}
+                    className="ac-adjust-canvas"
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerUp}
+                    onPointerLeave={onPointerLeave}
+                    style={zoom !== 1 ? { width: "100%", height: "auto" } : undefined}
                   />
-                )}
+                  {cursor && (
+                    <div
+                      className="ac-brush-cursor"
+                      style={{ left: cursor.x, top: cursor.y, width: cursor.size, height: cursor.size }}
+                    />
+                  )}
+                </div>
               </div>
               <label className="ac-range">
                 Burstastærð {brushSize}px

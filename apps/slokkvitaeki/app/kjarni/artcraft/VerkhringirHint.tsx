@@ -88,25 +88,25 @@ export default function VerkhringirHint({ tool }: VerkhringirHintProps) {
       role="note"
       aria-label="Næstu skref"
       style={{
-        marginTop: 12,
-        padding: "12px 14px",
-        background: "rgba(74, 222, 128, 0.12)",
-        border: "1px solid rgba(74, 222, 128, 0.45)",
-        borderRadius: 8,
-        fontSize: 13,
-        color: "var(--m-text, #e5e7eb)",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+        marginTop: 14,
+        padding: "14px 16px",
+        background: "rgba(34, 197, 94, 0.18)",
+        border: "2px solid #22c55e",
+        borderRadius: 10,
+        fontSize: 14,
+        color: "#ffffff",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.4), 0 0 0 1px rgba(34, 197, 94, 0.25)",
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 6, display: "flex", alignItems: "center", gap: 6, color: "#4ade80" }}>
-        <span aria-hidden="true" style={{ fontSize: 15 }}>💡</span>
+      <div style={{ fontWeight: 800, marginBottom: 10, display: "flex", alignItems: "center", gap: 8, color: "#86efac", fontSize: 15 }}>
+        <span aria-hidden="true" style={{ fontSize: 18 }}>💡</span>
         Næsta skref — notaðu „Senda í… ▾"
       </div>
       <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
         {suggestions.map((s, i) => (
-          <li key={i} style={{ marginTop: i === 0 ? 0 : 4, lineHeight: 1.5 }}>
+          <li key={i} style={{ marginTop: i === 0 ? 0 : 8, lineHeight: 1.5, color: "#f3f4f6" }}>
             <span style={{ fontWeight: 700, color: "#4ade80" }}>→ {s.label}</span>
-            {s.detail && <span style={{ opacity: 0.85 }}> — {s.detail}</span>}
+            {s.detail && <span style={{ color: "#d1d5db" }}> — {s.detail}</span>}
           </li>
         ))}
       </ul>

@@ -109,16 +109,30 @@ export default function SendTo(props: SendToProps) {
             position: "absolute",
             top: "100%",
             left: 0,
-            marginTop: 4,
-            background: "var(--m-panel, #1a1a1a)",
-            border: "1px solid var(--m-border, #333)",
-            borderRadius: 6,
-            padding: 4,
-            minWidth: 220,
+            marginTop: 6,
+            background: "#0b0b0b",
+            border: "2px solid #22c55e",
+            borderRadius: 8,
+            padding: 6,
+            minWidth: 260,
             zIndex: 10,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(34, 197, 94, 0.2)",
           }}
         >
+          <div
+            style={{
+              padding: "4px 10px 8px",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#4ade80",
+              borderBottom: "1px solid rgba(34, 197, 94, 0.25)",
+              marginBottom: 4,
+            }}
+          >
+            Senda í
+          </div>
           {available.map((d) => (
             <button
               key={d.id}
@@ -130,23 +144,33 @@ export default function SendTo(props: SendToProps) {
                 display: "block",
                 width: "100%",
                 textAlign: "left",
-                padding: "8px 12px",
+                padding: "10px 12px",
                 background: "transparent",
                 border: "none",
-                color: "inherit",
+                color: "#f3f4f6",
                 cursor: "pointer",
-                borderRadius: 4,
-                fontSize: 13,
+                borderRadius: 6,
+                fontSize: 14,
+                fontWeight: 500,
+                lineHeight: 1.3,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(34, 197, 94, 0.22)";
+                e.currentTarget.style.color = "#ffffff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#f3f4f6";
+              }}
             >
-              {busy === d.id ? "⏳ " : "→ "}
+              <span style={{ color: "#4ade80", fontWeight: 700, marginRight: 6 }}>
+                {busy === d.id ? "⏳" : "→"}
+              </span>
               {d.label}
             </button>
           ))}
           {available.length === 0 && (
-            <p style={{ padding: "8px 12px", margin: 0, opacity: 0.7, fontSize: 13 }}>
+            <p style={{ padding: "8px 12px", margin: 0, color: "#9ca3af", fontSize: 13 }}>
               Engin tól taka við {props.mediaType === "video" ? "video" : "mynd"}
             </p>
           )}
