@@ -33,6 +33,8 @@ const DESTINATIONS: Destination[] = [
   // Video destinations
   { id: "video-upplyfting", label: "Myndbanda-upplyfting", path: "/kjarni/artcraft/video-upplyfting", accepts: ["video"] },
   { id: "myndband-andlit-video", label: "Myndband-andlit (sem source video)", path: "/kjarni/artcraft/myndband-andlit", accepts: ["video"] },
+  { id: "myndband-framhald", label: "Myndband-framhald (teygja)", path: "/kjarni/artcraft/myndband-framhald", accepts: ["video"] },
+  { id: "myndband-saumur", label: "Myndbanda-saumur (bæta við röð)", path: "/kjarni/artcraft/myndband-saumur", accepts: ["video"] },
   // Image → andlits-tilvísun fyrir myndband-andlit (sama path, en accepts image)
   { id: "myndband-andlit-face", label: "Myndband-andlit (sem andlits-tilvísun)", path: "/kjarni/artcraft/myndband-andlit", accepts: ["image"] },
 ];

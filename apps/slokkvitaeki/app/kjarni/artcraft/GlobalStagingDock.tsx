@@ -43,6 +43,8 @@ const IMAGE_DESTINATIONS: Destination[] = [
 const VIDEO_DESTINATIONS: Destination[] = [
   { id: "video-upplyfting", label: "Myndbanda-upplyfting", path: "/kjarni/artcraft/video-upplyfting" },
   { id: "myndband-andlit", label: "Myndband-andlit", path: "/kjarni/artcraft/myndband-andlit" },
+  { id: "myndband-framhald", label: "Myndband-framhald (teygja)", path: "/kjarni/artcraft/myndband-framhald" },
+  { id: "myndband-saumur", label: "Myndbanda-saumur", path: "/kjarni/artcraft/myndband-saumur" },
 ];
 
 function formatRelative(ts: number): string {
