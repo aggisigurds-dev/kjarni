@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 
-export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunakerfi" | "rymi" | "veggir";
+export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunakerfi" | "rymi" | "veggir" | "lagnir";
 
 /** Aðgerðir sem hamstikan getur sýnt; WhiteboardApp tengir hverja við sína virkni. */
 export type HamAdgerd =
@@ -125,6 +125,16 @@ export const HAMIR: Hamur[] = [
     heiti: "Veggir",
     stutt: "Veggir",
     lysing: "Aðeins veggirnir: teiknaðu, veldu og eyddu veggjum — „Finna veggi“ stingur upp á veggjum sem þú samþykkir eða hafnar, og nýr veggur smellur á línur teikningarinnar.",
+    adgerdir: [],
+    takn: null,
+  },
+  {
+    // Agnar 30.10.2026: „alveg sér ham … einn takki … öll greiningartólin" — lagnir (loftræsing/vatn/rafmagn) á móti
+    // brunaveggjum Brunayfirlits, talin sem gegnumtök. Tólin búa í hægra spjaldinu (LagnaHamSpjald), ekki á borðinu.
+    id: "lagnir",
+    heiti: "Lagnir og gegnumtök",
+    stutt: "Lagnir",
+    lysing: "Brunayfirlit + lagnablöð (loftræsing, vatn, rafmagn): hvar lögn sker brunavegg, talið eftir stærð.",
     adgerdir: [],
     takn: null,
   },

@@ -22,6 +22,7 @@ import { Textarea } from "../ui/textarea";
 import { LayerList } from "./LayerList";
 import { HamStika } from "./HamStika";
 import { VeggjaHamSpjald } from "./VeggjaRitill";
+import { LagnaHamSpjald } from "./LagnaHamSpjald";
 import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { RoomList } from "./RoomList";
 import { CustomColorSwatch } from "./ColorPicker";
@@ -65,6 +66,8 @@ const HAM_HOPAR: Record<HamurId, LayerGroupId[]> = {
   rymi: ["rými"],
   // Veggir-hamur: tólin í VeggjaHamSpjald — enginn hlutalisti
   veggir: [],
+  // Lagnir-hamur: tólin í LagnaHamSpjald — enginn hlutalisti
+  lagnir: [],
 };
 
 function layerGroupOf(obj: BoardObject): LayerGroupId {
@@ -137,6 +140,7 @@ export function RightPanel({
       ) : null}
       {onHamAdgerd ? <HamStika onAdgerd={onHamAdgerd} /> : null}
       {hamur === "veggir" ? <VeggjaHamSpjald /> : null}
+      {hamur === "lagnir" ? <LagnaHamSpjald /> : null}
       {selected.length ? (
       <div className="border-b border-white/8 px-4 py-3">
         <div className="text-[11px] font-medium tracking-[0.12em] text-[#FE653F]">EIGINLEIKAR</div>
