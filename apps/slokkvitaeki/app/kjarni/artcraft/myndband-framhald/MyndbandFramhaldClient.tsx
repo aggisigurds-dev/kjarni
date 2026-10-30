@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import SendTo from "../SendTo";
+import VerkhringirHint from "../VerkhringirHint";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
@@ -461,10 +462,7 @@ export default function MyndbandFramhaldClient() {
                   />
                 )}
               </div>
-              <p className="ac-hint" style={{ fontSize: 12, opacity: 0.65, marginTop: 10 }}>
-                Næsta skref: senddu bæði upprunalega videoið og framhaldið í Myndbanda-saumur til að
-                sauma þau saman í eina lengri klippu.
-              </p>
+              <VerkhringirHint tool="myndband-framhald" />
             </section>
           )}
         </div>

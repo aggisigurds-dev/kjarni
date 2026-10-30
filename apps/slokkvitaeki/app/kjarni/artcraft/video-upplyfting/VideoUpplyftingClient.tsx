@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import SendTo from "../SendTo";
+import VerkhringirHint from "../VerkhringirHint";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
@@ -396,6 +397,7 @@ export default function VideoUpplyftingClient() {
                   />
                 )}
               </div>
+              <VerkhringirHint tool="video-upplyfting" />
             </section>
           )}
         </div>

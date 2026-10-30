@@ -88,10 +88,17 @@ export default function SendTo(props: SendToProps) {
     <div style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
-        className="ac-btn"
+        className="ac-btn ac-sendto-btn"
         onClick={() => setOpen((o) => !o)}
         disabled={busy !== null}
         aria-expanded={open}
+        style={{
+          background: busy ? undefined : "linear-gradient(180deg, #22c55e, #16a34a)",
+          color: busy ? undefined : "white",
+          borderColor: busy ? undefined : "#15803d",
+          fontWeight: 600,
+          boxShadow: busy ? undefined : "0 2px 6px rgba(34, 197, 94, 0.35)",
+        }}
       >
         {busy ? "Sendi…" : "Senda í… ▾"}
       </button>

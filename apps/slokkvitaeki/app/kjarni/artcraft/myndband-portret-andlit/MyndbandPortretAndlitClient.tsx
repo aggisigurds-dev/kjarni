@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import SendTo from "../SendTo";
+import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
 
@@ -837,6 +838,7 @@ export default function MyndbandPortretAndlitClient() {
                   name={`portret-andlit-${Date.now()}.${resultMime.includes("mp4") ? "mp4" : "webm"}`}
                 />
               </div>
+              <VerkhringirHint tool="myndband-portret-andlit" />
             </section>
           )}
         </div>
