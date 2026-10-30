@@ -242,6 +242,7 @@ export default function TonsmidClient() {
                   value={settings.lengthSeconds}
                   onChange={(e) => updateSettings({ lengthSeconds: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 30s (fullur jingle/útvarpsauglýsing); 10-15s fyrir intro; 60s+ fyrir bakgrunnstónlist</small>
               </label>
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -251,6 +252,7 @@ export default function TonsmidClient() {
                 onChange={(e) => updateSettings({ forceInstrumental: e.target.checked })}
               />
               Aðeins hljóðfæri (engin söngur)
+              <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: AF nema prompt-ið biðji sérstaklega um instrumental; þá ON</small>
             </label>
 
             {error && <p className="ac-error">{error}</p>}

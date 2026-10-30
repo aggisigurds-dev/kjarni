@@ -6,6 +6,8 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftAppHref, artcraftBakgrunnurHref, artcraftHubHref, artcraftToolsHref } from "../apps";
 import { artcraftBakgrunnurWhiteHref } from "../tol";
 import ImageZoom from "../ImageZoom";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
 import { PRODUCTS } from "../../../verslun/products";
 import {
@@ -21,6 +23,7 @@ type Job = {
   name: string;
   sourceUrl: string;
   resultUrl?: string;
+  resultBlob?: Blob;
   status: "wait" | "run" | "ok" | "err";
   error?: string;
 };
@@ -60,7 +63,9 @@ export default function BakgrunnurClient() {
         });
         const resultUrl = URL.createObjectURL(blob);
         setJobs((cur) =>
-          cur.map((row) => (row.id === job.id ? { ...row, status: "ok", resultUrl } : row)),
+          cur.map((row) =>
+            row.id === job.id ? { ...row, status: "ok", resultUrl, resultBlob: blob } : row,
+          ),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : "Gat ekki tekið bakgrunn";
@@ -94,6 +99,13 @@ export default function BakgrunnurClient() {
       },
     ]);
   }
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await addFiles([file]);
+  });
 
   const done = jobs.filter((job) => job.status === "ok" && job.resultUrl);
 
@@ -241,6 +253,15 @@ export default function BakgrunnurClient() {
                         >
                           Sækja PNG
                         </button>
+                        {job.resultBlob && (
+                          <SendTo
+                            blob={job.resultBlob}
+                            mediaType="image"
+                            sourceTool="bakgrunnur"
+                            sourceToolName="Fjarlægja bakgrunn"
+                            name={cutoutFilename(job.name, white)}
+                          />
+                        )}
                         <a className="ac-btn ghost" href={artcraftAppHref("photocraft")}>
                           Opna PhotoCraft
                         </a>

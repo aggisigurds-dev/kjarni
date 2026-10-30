@@ -7,6 +7,8 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import {
   DEFAULT_DYPT_SETTINGS,
   DYPT_ENCODER_LABELS,
@@ -36,6 +38,7 @@ export default function DyptClient() {
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
   const [result, setResult] = useState<string>("");
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; sourceName?: string } | null>(null);
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
@@ -53,10 +56,18 @@ export default function DyptClient() {
         const url = URL.createObjectURL(saved.blobs[0]);
         resultUrlRef.current = url;
         setResult(url);
+        setResultBlob(saved.blobs[0]);
         setSavedMeta({ timestamp: saved.timestamp, sourceName: saved.sourceName });
       }
     })();
   }, []);
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await handleFile(file);
+  });
 
   useEffect(() => {
     return () => {
@@ -109,6 +120,7 @@ export default function DyptClient() {
       const url = URL.createObjectURL(blobs[0]);
       resultUrlRef.current = url;
       setResult(url);
+      setResultBlob(blobs[0]);
       const now = Date.now();
       setSavedMeta({ timestamp: now, sourceName: source.name });
       void saveResult({
@@ -131,6 +143,7 @@ export default function DyptClient() {
     if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
     resultUrlRef.current = "";
     setResult("");
+    setResultBlob(null);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
   }
@@ -281,6 +294,16 @@ export default function DyptClient() {
                 >
                   Sækja dýptarkort
                 </button>
+                {resultBlob && (
+                  <SendTo
+                    blob={resultBlob}
+                    mediaType="image"
+                    sourceTool="dypt"
+                    sourceToolName="Dýpt"
+                    name={`dypt-${source?.name || "mynd"}.png`}
+                    prompt={savedMeta?.sourceName ? `Depth map úr ${savedMeta.sourceName}` : undefined}
+                  />
+                )}
                 <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                   Hreinsa vistað
                 </button>

@@ -298,7 +298,7 @@ export default function InnblasturClient() {
                     </option>
                   ))}
                 </select>
-                <small className="ac-rec">mælt: WebP (gott jafnvægi gæða/stærðar); PNG fyrir lossless, JPG fyrir vef</small>
+                <small className="ac-rec">mælt: PNG (lossless, hámarks gæði — WebP/JPG fyrir vefbirtingu)</small>
               </label>
               <label title="Slembikjarni. Sama tala + sömu stillingar = sama útkoma. Settu -1 fyrir slembna útkomu.">
                 Seed (-1 = slembið)

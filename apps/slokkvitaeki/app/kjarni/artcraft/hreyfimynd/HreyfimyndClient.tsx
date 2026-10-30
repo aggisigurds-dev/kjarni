@@ -361,6 +361,7 @@ export default function HreyfimyndClient() {
                     value={settings.width}
                     onChange={(e) => updateSettings({ width: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 832 (Wan 2.1 native landscape); 480 fyrir portrait með hæð 832</small>
                 </label>
                 <label>
                   Hæð ({settings.height}px)
@@ -372,6 +373,7 @@ export default function HreyfimyndClient() {
                     value={settings.height}
                     onChange={(e) => updateSettings({ height: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 480 (með breidd 832 = landscape); 832 fyrir portrait</small>
                 </label>
                 <label>
                   Lengd ({settings.length} römmum, ~{(settings.length / settings.fps).toFixed(1)}s)
@@ -383,6 +385,7 @@ export default function HreyfimyndClient() {
                     value={settings.length}
                     onChange={(e) => updateSettings({ length: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 81 (~5s á 16fps, hámark fyrir Wan 2.1 I2V); styttra sparar VRAM/tíma</small>
                 </label>
                 <label>
                   Rammar á sekúndu ({settings.fps})
@@ -393,6 +396,7 @@ export default function HreyfimyndClient() {
                     value={settings.fps}
                     onChange={(e) => updateSettings({ fps: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 16 (Wan native); 24 fyrir mýkra playback (styttri video)</small>
                 </label>
                 <label>
                   Skref ({settings.steps})
@@ -403,6 +407,7 @@ export default function HreyfimyndClient() {
                     value={settings.steps}
                     onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 20 (meðalvegur); 30 fyrir nákvæmari; 10 fyrir prufu</small>
                 </label>
                 <label>
                   CFG ({settings.cfg.toFixed(1)})
@@ -414,6 +419,7 @@ export default function HreyfimyndClient() {
                     value={settings.cfg}
                     onChange={(e) => updateSettings({ cfg: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 6 (jafnvægi fyrir Wan 2.1); hátt (10+) = plasticky</small>
                 </label>
                 <label>
                   Shift ({settings.shift.toFixed(1)})
@@ -425,6 +431,7 @@ export default function HreyfimyndClient() {
                     value={settings.shift}
                     onChange={(e) => updateSettings({ shift: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: 8 (Wan 2.1 default fyrir temporal); lækka í 3-5 fyrir hægari hreyfingu</small>
                 </label>
                 <label>
                   Sampler
@@ -438,6 +445,7 @@ export default function HreyfimyndClient() {
                       </option>
                     ))}
                   </select>
+                  <small className="ac-rec">mælt: uni_pc (Wan 2.1 default; mest stöðugt)</small>
                 </label>
                 <label>
                   Scheduler
@@ -451,6 +459,7 @@ export default function HreyfimyndClient() {
                       </option>
                     ))}
                   </select>
+                  <small className="ac-rec">mælt: simple (Wan 2.1 default)</small>
                 </label>
                 <label>
                   Seed ({settings.seed === -1 ? "slembið" : settings.seed})
@@ -459,6 +468,7 @@ export default function HreyfimyndClient() {
                     value={settings.seed}
                     onChange={(e) => updateSettings({ seed: Number(e.target.value) })}
                   />
+                  <small className="ac-rec">mælt: -1 (slembið); fasta tölu til að endurtaka</small>
                 </label>
               </div>
 

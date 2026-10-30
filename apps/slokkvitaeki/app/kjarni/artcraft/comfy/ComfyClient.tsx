@@ -197,6 +197,7 @@ export default function ComfyClient() {
                     Ekkert checkpoint fannst í <code>models/checkpoints</code> hjá ComfyUI.
                   </p>
                 )}
+                <small className="ac-rec">mælt: realistic/portrait checkpoint fyrir fólk; dreamshaper/juggernaut fyrir almennt</small>
               </label>
             )}
           </section>
@@ -233,6 +234,7 @@ export default function ComfyClient() {
                   value={settings.width}
                   onChange={(e) => updateSettings({ width: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 512 fyrir SD1.5; 1024 fyrir SDXL; passa við líkanið</small>
               </label>
               <label>
                 Hæð ({settings.height}px)
@@ -244,6 +246,7 @@ export default function ComfyClient() {
                   value={settings.height}
                   onChange={(e) => updateSettings({ height: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 512 fyrir SD1.5; 1024 fyrir SDXL; sama og breidd</small>
               </label>
               <label>
                 Skref ({settings.steps})
@@ -254,6 +257,7 @@ export default function ComfyClient() {
                   value={settings.steps}
                   onChange={(e) => updateSettings({ steps: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 20 (meðalvegur); 30+ fyrir nákvæmari; 10 fyrir hraðar prufur</small>
               </label>
               <label>
                 CFG ({settings.cfg.toFixed(1)})
@@ -265,6 +269,7 @@ export default function ComfyClient() {
                   value={settings.cfg}
                   onChange={(e) => updateSettings({ cfg: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 7–8 fyrir SD1.5/SDXL; 3–5 fyrir Flux; hátt (10+) = plasticky</small>
               </label>
               <label>
                 Sampler
@@ -275,6 +280,7 @@ export default function ComfyClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: euler (öruggur); dpmpp_2m_sde fyrir meiri gæði</small>
               </label>
               <label>
                 Scheduler
@@ -285,6 +291,7 @@ export default function ComfyClient() {
                     </option>
                   ))}
                 </select>
+                <small className="ac-rec">mælt: normal (default); karras fyrir mýkri útkomu með dpmpp samplerum</small>
               </label>
               <label>
                 Fjöldi ({settings.batchSize})
@@ -295,6 +302,7 @@ export default function ComfyClient() {
                   value={settings.batchSize}
                   onChange={(e) => updateSettings({ batchSize: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: 1 (sparar VRAM); hækkaðu í 2–4 til að bera saman afbrigði</small>
               </label>
               <label>
                 Seed ({settings.seed === -1 ? "slembið" : settings.seed})
@@ -303,6 +311,7 @@ export default function ComfyClient() {
                   value={settings.seed}
                   onChange={(e) => updateSettings({ seed: Number(e.target.value) })}
                 />
+                <small className="ac-rec">mælt: -1 (slembið); fasta tölu til að endurtaka</small>
               </label>
             </div>
 

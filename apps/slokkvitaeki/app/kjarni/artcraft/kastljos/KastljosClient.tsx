@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import ImageZoom from "../ImageZoom";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
 import {
   DEFAULT_SPOTLIGHT_SETTINGS,
@@ -67,6 +69,7 @@ export default function KastljosClient() {
 
   const [settings, setSettings] = useState<SpotlightSettings>(DEFAULT_SPOTLIGHT_SETTINGS);
   const [resultUrl, setResultUrl] = useState("");
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
@@ -82,8 +85,16 @@ export default function KastljosClient() {
     setSourceSize({ width: bitmap.width, height: bitmap.height });
     maskRef.current = null;
     setResultUrl("");
+    setResultBlob(null);
     setError("");
   }
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await addFile(file);
+  });
 
   async function run() {
     if (!sourceBlob) return;
@@ -98,6 +109,7 @@ export default function KastljosClient() {
       }
       setProgress("Reikna birtu…");
       const fixed = await renderSpotlight(sourceBlob, maskRef.current, settings);
+      setResultBlob(fixed);
       setResultUrl(URL.createObjectURL(fixed));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kastljós mistókst.");
@@ -204,7 +216,7 @@ export default function KastljosClient() {
                     </figure>
                   </div>
                   {resultUrl && (
-                    <div className="ac-cut-actions">
+                    <div className="ac-cut-actions ac-row">
                       <button
                         type="button"
                         className="ac-btn"
@@ -212,6 +224,15 @@ export default function KastljosClient() {
                       >
                         Sækja mynd
                       </button>
+                      {resultBlob && (
+                        <SendTo
+                          blob={resultBlob}
+                          mediaType="image"
+                          sourceTool="kastljos"
+                          sourceToolName="Kastljós"
+                          name={`${sourceName.replace(/\.[^.]+$/, "") || "mynd"}-kastljos.jpg`}
+                        />
+                      )}
                     </div>
                   )}
                 </article>

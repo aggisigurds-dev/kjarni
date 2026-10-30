@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
 import {
   cloneRaster,
@@ -14,6 +16,47 @@ import {
   type Raster,
 } from "../studio/adjust";
 import { applyRetouch, type RetouchMode } from "./retouch";
+
+/** Lazy wrapper around SendTo for Móta — the output is a canvas raster, not
+ *  a persistent blob. User clicks "Útbúa til að senda", we rasterToBlob on
+ *  demand, then the SendTo dropdown appears for destination selection. */
+function MotaSendTo({ getBlob, name }: { getBlob: () => Promise<Blob | null>; name?: string }) {
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function prepare() {
+    setBusy(true);
+    setErr("");
+    try {
+      const b = await getBlob();
+      if (!b) throw new Error("Engin mynd");
+      setBlob(b);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Útbúa mistókst");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (blob) {
+    return (
+      <SendTo
+        blob={blob}
+        mediaType="image"
+        sourceTool="mota"
+        sourceToolName="Móta"
+        name={name}
+      />
+    );
+  }
+  return (
+    <>
+      <button type="button" className="ac-btn" onClick={() => void prepare()} disabled={busy}>
+        {busy ? "Útbý…" : "Senda í… ▾"}
+      </button>
+      {err && <span className="ac-error" style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
+    </>
+  );
+}
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const MAX_DIMENSION = 1200;
@@ -160,6 +203,19 @@ export default function MotaClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
     }
+  }
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await addFile(file);
+  });
+
+  async function getExportBlob(): Promise<Blob | null> {
+    const working = workingRef.current;
+    if (!working) return null;
+    return rasterToBlob(working);
   }
 
   function canvasPoint(e: PointerEvent<HTMLCanvasElement>): { x: number; y: number } {
@@ -482,6 +538,10 @@ export default function MotaClient() {
                 <button type="button" className="ac-btn" onClick={() => void download()}>
                   Sækja mynd
                 </button>
+                <MotaSendTo
+                  getBlob={getExportBlob}
+                  name={`${sourceName.replace(/\.[^.]+$/, "") || "mynd"}-mota.jpg`}
+                />
               </div>
             </section>
           )}

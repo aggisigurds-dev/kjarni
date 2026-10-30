@@ -15,6 +15,8 @@ import { enhancePhotoViaCloud } from "./cloud";
 import { enhancePhotoInBrowser } from "./sharpenCanvas";
 import { DEFAULT_SHARPEN_SETTINGS, type SharpenSettings } from "./sharpen";
 import ImageZoom from "../ImageZoom";
+import SendTo from "../SendTo";
+import { useStagedSource } from "../useStagedSource";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
@@ -69,6 +71,7 @@ export default function VidgerdClient() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -76,6 +79,13 @@ export default function VidgerdClient() {
     setServerUrl(readStoredVidgerdUrl());
     setReady(true);
   }, []);
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    addFile(file);
+  });
 
   async function checkServer(url = serverUrl) {
     setStatus("checking");
@@ -96,6 +106,7 @@ export default function VidgerdClient() {
     setSourceUrl(URL.createObjectURL(file));
     setSourceName(file.name);
     setResultUrl("");
+    setResultBlob(null);
     setError("");
   }
 
@@ -112,14 +123,17 @@ export default function VidgerdClient() {
       if (method === "local") {
         const fixed = await enhancePhoto(serverUrl, blob, { face, redeye, texture });
         setResultUrl(URL.createObjectURL(fixed));
+        setResultBlob(fixed);
         setStatus("up");
         window.localStorage.setItem(VIDGERD_URL_KEY, serverUrl);
       } else if (method === "cloud") {
         const fixed = await enhancePhotoViaCloud(blob);
         setResultUrl(URL.createObjectURL(fixed));
+        setResultBlob(fixed);
       } else {
         const fixed = await enhancePhotoInBrowser(blob, sharpen);
         setResultUrl(URL.createObjectURL(fixed));
+        setResultBlob(fixed);
       }
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
@@ -346,6 +360,15 @@ export default function VidgerdClient() {
                       >
                         Sækja mynd
                       </button>
+                      {resultBlob && (
+                        <SendTo
+                          blob={resultBlob}
+                          mediaType="image"
+                          sourceTool="vidgerd"
+                          sourceToolName="Ljósmyndaviðgerð"
+                          name={`${sourceName.replace(/\.[^.]+$/, "")}-lagad.jpg`}
+                        />
+                      )}
                     </div>
                   )}
                 </article>

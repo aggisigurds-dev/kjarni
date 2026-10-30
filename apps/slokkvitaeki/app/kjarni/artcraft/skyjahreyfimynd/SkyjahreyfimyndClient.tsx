@@ -5,6 +5,7 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import { shrinkImageForUpload } from "../replicateImage";
+import { useStagedSource } from "../useStagedSource";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
 import {
   PromptSlots,
@@ -209,6 +210,13 @@ export default function SkyjahreyfimyndClient() {
     window.localStorage.setItem(MODEL_KEY, next);
     setError("");
   }
+
+  useStagedSource(async (blob, item) => {
+    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, {
+      type: blob.type || "image/png",
+    });
+    await addFile(file);
+  });
 
   async function addFile(file: File) {
     setError("");
