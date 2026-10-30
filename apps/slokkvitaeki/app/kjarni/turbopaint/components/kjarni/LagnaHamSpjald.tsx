@@ -268,7 +268,11 @@ function Stilling({ id }: { id: string }) {
         <div className="text-sm font-semibold">Stilla „{st.heiti}“ á brunayfirlitið</div>
         <div className="text-[12px] text-[#FE653F]">{leidbeining}</div>
         <div className="ml-auto flex items-center gap-2 text-[12px]">
-          {talid ? <b className="rounded bg-amber-500/20 px-2 py-0.5 text-amber-300">{talid.length} gegnumtök</b> : null}
+          {talid ? (
+            <b className="rounded bg-amber-500/20 px-2 py-0.5 text-amber-300" title="Ajour skráir stakar lokanir — tvær á hvert gegnumtak (sín hvorum megin við vegg)">
+              {talid.length} gegnumtök · {talid.length * 2} lokanir
+            </b>
+          ) : null}
           {kv != null ? (
             <span className={Math.abs(kv - 0.2) > 0.03 ? "text-red-400" : "text-stone-400"} title="Kvarði yfirlits á blað — 0,200 þegar 1:250 er stillt á 1:50">
               kvarði {kv.toFixed(3)}
@@ -488,12 +492,16 @@ export function LagnaHamSpjald() {
             <div className="mt-1 text-sm text-stone-100">
               <b>{tala(oll.length)}</b> gegnumtök á {blod.filter((b) => b.gegnumtok).length} blöðum
             </div>
+            <div className="text-[11px] text-stone-300" title="Ajour skráir stakar lokanir: tvær á hvert gegnumtak, sín hvorum megin við vegg">
+              = <b>{tala(oll.length * 2)}</b> lokanir í Ajour
+            </div>
             <table className="mt-1.5 w-full text-[11.5px] text-stone-200">
               <tbody>
                 {staerdir.map((x) => (
                   <tr key={x.staerd} className="border-b border-white/5">
                     <td className="py-0.5">{x.staerd}</td>
                     <td className="py-0.5 text-right tabular-nums">{x.fjoldi}</td>
+                    <td className="py-0.5 pl-3 text-right text-stone-400 tabular-nums">{x.fjoldi * 2} lok.</td>
                   </tr>
                 ))}
               </tbody>
