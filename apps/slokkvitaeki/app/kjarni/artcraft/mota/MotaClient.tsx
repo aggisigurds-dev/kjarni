@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
 import {
@@ -405,6 +406,15 @@ export default function MotaClient() {
               <button type="button" className="ac-btn" onClick={() => inputRef.current?.click()}>
                 Velja mynd
               </button>
+              <div style={{ marginTop: 8 }}>
+                <StagingPicker
+                  accepts="image"
+                  onPick={async (blob, item) => {
+                    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                    await addFile(file);
+                  }}
+                />
+              </div>
             </section>
           )}
 

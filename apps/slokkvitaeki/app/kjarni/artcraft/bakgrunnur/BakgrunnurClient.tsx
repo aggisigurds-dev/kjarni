@@ -7,6 +7,8 @@ import { artcraftAppHref, artcraftBakgrunnurHref, artcraftHubHref, artcraftTools
 import { artcraftBakgrunnurWhiteHref } from "../tol";
 import ImageZoom from "../ImageZoom";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
+import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
 import { PRODUCTS } from "../../../verslun/products";
@@ -165,6 +167,15 @@ export default function BakgrunnurClient() {
             >
               Velja vörumyndir
             </button>
+            <div style={{ marginTop: 8 }}>
+              <StagingPicker
+                accepts="image"
+                onPick={async (blob, item) => {
+                  const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                  await addFiles([file]);
+                }}
+              />
+            </div>
             <input
               ref={inputRef}
               type="file"
@@ -270,6 +281,7 @@ export default function BakgrunnurClient() {
                   </article>
                 ))}
               </div>
+              <VerkhringirHint tool="bakgrunnur" />
             </section>
           )}
         </div>

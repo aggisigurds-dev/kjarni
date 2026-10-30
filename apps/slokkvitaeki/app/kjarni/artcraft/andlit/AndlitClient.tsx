@@ -7,6 +7,8 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
+import VerkhringirHint from "../VerkhringirHint";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import { useStagedSource } from "../useStagedSource";
@@ -269,6 +271,15 @@ export default function AndlitClient() {
                     if (f) void handleUpload(f, "face");
                   }}
                 />
+                <div style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                  <StagingPicker
+                    accepts="image"
+                    onPick={async (blob, item) => {
+                      const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                      await handleUpload(file, "face");
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="ac-source-row">
@@ -531,6 +542,7 @@ export default function AndlitClient() {
                   </div>
                 ))}
               </div>
+              <VerkhringirHint tool="andlit" />
               <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                 Hreinsa vistað
               </button>

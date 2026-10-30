@@ -16,6 +16,8 @@ import { enhancePhotoInBrowser } from "./sharpenCanvas";
 import { DEFAULT_SHARPEN_SETTINGS, type SharpenSettings } from "./sharpen";
 import ImageZoom from "../ImageZoom";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
+import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
@@ -257,6 +259,15 @@ export default function VidgerdClient() {
                 e.target.value = "";
               }}
             />
+            <div style={{ marginTop: 8 }}>
+              <StagingPicker
+                accepts="image"
+                onPick={async (blob, item) => {
+                  const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                  addFile(file);
+                }}
+              />
+            </div>
           </section>
 
           {sourceUrl && (
@@ -371,6 +382,7 @@ export default function VidgerdClient() {
                       )}
                     </div>
                   )}
+                  <VerkhringirHint tool="vidgerd" />
                 </article>
               </div>
             </section>

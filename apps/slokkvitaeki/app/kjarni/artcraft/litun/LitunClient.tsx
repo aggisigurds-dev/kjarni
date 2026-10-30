@@ -314,6 +314,7 @@ export default function LitunClient() {
                   Hreinsa vistað
                 </button>
               </div>
+              <VerkhringirHint tool="litun" />
             </section>
           )}
         </div>
