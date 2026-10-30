@@ -14,7 +14,14 @@
 
 import type { Raster } from "../studio/adjust";
 
-export type RetouchMode = "smooth" | "lighten" | "darken" | "heal" | "clone";
+export type RetouchMode =
+  | "smooth"
+  | "lighten"
+  | "darken"
+  | "heal"
+  | "clone"
+  | "contrast"
+  | "sharpen";
 
 /** Soft brush falloff: 1 í miðjunni, 0 á brúninni, cos-shaped en nálgað
  *  með (1 - r/R)^0.75 fyrir eðlilegra heal/smooth. */
@@ -206,6 +213,103 @@ export function cloneRegion(
   }
 }
 
+/** Contrast — s-curve lift innan burstans. Pullar skugga niður og
+ *  highlights upp í kringum 128 miðju með falloff.
+ *  factor er áhrifastyrkur: 0 = engin breyting, 1 = sterkt. */
+export function contrastRegion(
+  raster: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+): void {
+  const w = raster.width;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(raster.height - 1, Math.ceil(cy + radius));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const idx = (y * w + x) * 4;
+      // S-curve lift: factor controls stiffness around 128.
+      const factor = 1 + weight * 0.6; // max ~1.6x contrast per full-strength dab
+      for (let c = 0; c < 3; c++) {
+        const v = raster.data[idx + c];
+        const lifted = (v - 128) * factor + 128;
+        raster.data[idx + c] = Math.max(0, Math.min(255, Math.round(lifted)));
+      }
+    }
+  }
+}
+
+/** Sharpen — unsharp mask innan burstans. Reiknar local blur og bætir
+ *  við muninn margfaldað með amount. Virkar sem clarity/focus. */
+export function sharpenRegion(
+  raster: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+): void {
+  const w = raster.width;
+  const h = raster.height;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(h - 1, Math.ceil(cy + radius));
+  // Afrit af svæðinu áður en við ritum — annars les blur frá nýju gildunum.
+  const src = raster.data.slice(y0 * w * 4, (y1 + 1) * w * 4);
+  const srcOffset = y0 * w * 4;
+  const amount = 1.2; // max multiplier per full-strength dab
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      // 3x3 blur av source
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let n = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const nx = x + kx;
+          const ny = y + ky;
+          if (nx < 0 || nx >= w || ny < y0 || ny > y1) continue;
+          const i = (ny * w + nx) * 4 - srcOffset;
+          sumR += src[i];
+          sumG += src[i + 1];
+          sumB += src[i + 2];
+          n++;
+        }
+      }
+      if (n === 0) continue;
+      const blurR = sumR / n;
+      const blurG = sumG / n;
+      const blurB = sumB / n;
+      const idx = (y * w + x) * 4;
+      const i0 = idx - srcOffset;
+      for (let c = 0; c < 3; c++) {
+        const orig = src[i0 + c];
+        const blur = c === 0 ? blurR : c === 1 ? blurG : blurB;
+        const sharpened = orig + (orig - blur) * amount * weight;
+        raster.data[idx + c] = Math.max(0, Math.min(255, Math.round(sharpened)));
+      }
+    }
+  }
+}
+
 export function applyRetouch(
   raster: Raster,
   cx: number,
@@ -231,5 +335,69 @@ export function applyRetouch(
     case "clone":
       if (clone) cloneRegion(raster, cx, cy, clone.srcX, clone.srcY, radius, strength);
       break;
+    case "contrast":
+      contrastRegion(raster, cx, cy, radius, strength);
+      break;
+    case "sharpen":
+      sharpenRegion(raster, cx, cy, radius, strength);
+      break;
+  }
+}
+
+// Whole-image aðgerðir — nota sömu stærðfræði og brush-ar en á allri myndinni
+// í einni pösun. Kallandinn verður að pushUndo áður.
+
+export function adjustBrightnessGlobal(raster: Raster, delta: number): void {
+  // delta -100..+100
+  const amount = Math.max(-100, Math.min(100, delta));
+  const data = raster.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.max(0, Math.min(255, data[i] + amount));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + amount));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + amount));
+  }
+}
+
+export function adjustContrastGlobal(raster: Raster, factor: number): void {
+  // factor -1..+1 (0 = no change, +1 = ~2x contrast, -1 = flat)
+  const f = Math.max(-1, Math.min(1, factor));
+  const mult = 1 + f;
+  const data = raster.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.max(0, Math.min(255, (data[i] - 128) * mult + 128));
+    data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] - 128) * mult + 128));
+    data[i + 2] = Math.max(0, Math.min(255, (data[i + 2] - 128) * mult + 128));
+  }
+}
+
+export function sharpenGlobal(raster: Raster, amount: number): void {
+  // amount 0..3 (0 = no change)
+  const amt = Math.max(0, Math.min(3, amount));
+  if (amt <= 0) return;
+  const w = raster.width;
+  const h = raster.height;
+  const src = new Uint8ClampedArray(raster.data);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = (y * w + x) * 4;
+      // 3x3 blur
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const i = ((y + ky) * w + (x + kx)) * 4;
+          sumR += src[i];
+          sumG += src[i + 1];
+          sumB += src[i + 2];
+        }
+      }
+      const blurR = sumR / 9;
+      const blurG = sumG / 9;
+      const blurB = sumB / 9;
+      raster.data[idx] = Math.max(0, Math.min(255, src[idx] + (src[idx] - blurR) * amt));
+      raster.data[idx + 1] = Math.max(0, Math.min(255, src[idx + 1] + (src[idx + 1] - blurG) * amt));
+      raster.data[idx + 2] = Math.max(0, Math.min(255, src[idx + 2] + (src[idx + 2] - blurB) * amt));
+    }
   }
 }

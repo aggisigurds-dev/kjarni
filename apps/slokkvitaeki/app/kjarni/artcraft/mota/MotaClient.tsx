@@ -15,7 +15,13 @@ import {
   type LiquifyMode,
   type Raster,
 } from "../studio/adjust";
-import { applyRetouch, type RetouchMode } from "./retouch";
+import {
+  adjustBrightnessGlobal,
+  adjustContrastGlobal,
+  applyRetouch,
+  sharpenGlobal,
+  type RetouchMode,
+} from "./retouch";
 
 /** Lazy wrapper around SendTo for Móta — the output is a canvas raster, not
  *  a persistent blob. User clicks "Útbúa til að senda", we rasterToBlob on
@@ -82,6 +88,8 @@ const RETOUCH_TOOLS: Array<{ id: RetouchMode; label: string; hint: string }> = [
   { id: "clone", label: "Afrita", hint: "Clone Stamp — veldu upptökustað, sléttu yfir annað" },
   { id: "lighten", label: "Lýsa", hint: "Hækkar birtu smám saman (dodge)" },
   { id: "darken", label: "Skyggja", hint: "Lækkar birtu smám saman (burn)" },
+  { id: "sharpen", label: "Skerpa", hint: "Unsharp mask — bætir skýrleika og fókus í burstanum (clarity/focus)" },
+  { id: "contrast", label: "Kontrast", hint: "Dregur skugga niður og highlights upp — eykur kontrastinn í burstanum" },
 ];
 
 function isLiquifyMode(id: AnyMode): id is LiquifyMode {
@@ -167,6 +175,10 @@ export default function MotaClient() {
   const [canUndo, setCanUndo] = useState(false);
   const [error, setError] = useState("");
   const [cursor, setCursor] = useState<{ x: number; y: number; size: number } | null>(null);
+  // Zoom: default 1 = fit. 0.25-4 range. Notandi getur zoomad með +/- tokkum,
+  // ctrl+wheel, eða fit-takkanum. Canvas style width/height skala m.v. zoom —
+  // browser gerir resten.
+  const [zoom, setZoom] = useState(1);
 
   toolRef.current = tool;
   radiusRef.current = radius;
@@ -468,10 +480,67 @@ export default function MotaClient() {
                 </div>
               )}
 
-              <div className="ac-adjust-stage" ref={stageRef}>
+              <div className="ac-row" style={{ alignItems: "center", gap: 8, marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => setZoom((z) => Math.max(0.25, Math.round((z - 0.25) * 100) / 100))}
+                  disabled={zoom <= 0.25}
+                  title="Minnka zoom"
+                >
+                  −
+                </button>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={4}
+                  step={0.05}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  style={{ width: 180 }}
+                  aria-label="Zoom slider"
+                />
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => setZoom((z) => Math.min(4, Math.round((z + 0.25) * 100) / 100))}
+                  disabled={zoom >= 4}
+                  title="Stækka zoom"
+                >
+                  +
+                </button>
+                <span className="ac-hint" style={{ minWidth: 48, textAlign: "center" }}>
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button type="button" className="ac-btn ghost" onClick={() => setZoom(1)} title="Zoom á 100%">
+                  1:1
+                </button>
+                <span className="ac-hint" style={{ opacity: 0.6, fontSize: 11 }}>
+                  Tip: ctrl+scroll til að zoom-a, venjulegt scroll til að panna
+                </span>
+              </div>
+
+              <div
+                className="ac-adjust-stage"
+                ref={stageRef}
+                style={{ overflow: "auto", maxHeight: "70vh", position: "relative" }}
+                onWheel={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                    setZoom((z) => Math.max(0.25, Math.min(4, Math.round((z + delta) * 100) / 100)));
+                  }
+                }}
+              >
                 <canvas
                   ref={viewRef}
                   className="ac-adjust-canvas"
+                  style={{
+                    width: workingRef.current ? `${workingRef.current.width * zoom}px` : undefined,
+                    height: workingRef.current ? `${workingRef.current.height * zoom}px` : undefined,
+                    display: "block",
+                    maxWidth: "none",
+                  }}
                   onPointerDown={onPointerDown}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
@@ -523,6 +592,80 @@ export default function MotaClient() {
                     onChange={(e) => setStrength(Number(e.target.value))}
                   />
                 </label>
+              </div>
+
+              <div className="ac-row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <span className="ac-hint" style={{ opacity: 0.7, marginRight: 4 }}>Allri myndinni:</span>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => {
+                    const w = workingRef.current;
+                    if (!w) return;
+                    pushUndo();
+                    adjustBrightnessGlobal(w, 10);
+                    paint();
+                  }}
+                  title="Hækka birtu allrar myndarinnar um 10"
+                >
+                  Birta +
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => {
+                    const w = workingRef.current;
+                    if (!w) return;
+                    pushUndo();
+                    adjustBrightnessGlobal(w, -10);
+                    paint();
+                  }}
+                  title="Lækka birtu allrar myndarinnar um 10"
+                >
+                  Birta −
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => {
+                    const w = workingRef.current;
+                    if (!w) return;
+                    pushUndo();
+                    adjustContrastGlobal(w, 0.15);
+                    paint();
+                  }}
+                  title="Auka kontrast allrar myndarinnar um 15%"
+                >
+                  Kontrast +
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => {
+                    const w = workingRef.current;
+                    if (!w) return;
+                    pushUndo();
+                    adjustContrastGlobal(w, -0.15);
+                    paint();
+                  }}
+                  title="Minnka kontrast allrar myndarinnar um 15%"
+                >
+                  Kontrast −
+                </button>
+                <button
+                  type="button"
+                  className="ac-btn ghost"
+                  onClick={() => {
+                    const w = workingRef.current;
+                    if (!w) return;
+                    pushUndo();
+                    sharpenGlobal(w, 0.5);
+                    paint();
+                  }}
+                  title="Skerpa allrar myndarinnar (unsharp mask)"
+                >
+                  Skerpa +
+                </button>
               </div>
 
               <div className="ac-row">

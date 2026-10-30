@@ -6,6 +6,8 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
+import VerkhringirHint from "../VerkhringirHint";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
 import { shrinkImageForUpload } from "../replicateImage";
 import { formatEta } from "../replicateProgress";
@@ -324,6 +326,15 @@ export default function UpplyftingClient() {
               <button type="button" className="ac-btn" onClick={() => inputRef.current?.click()}>
                 Velja mynd
               </button>
+              <div style={{ marginTop: 8 }}>
+                <StagingPicker
+                  accepts="image"
+                  onPick={async (blob, item) => {
+                    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                    await addFile(file);
+                  }}
+                />
+              </div>
             </section>
           )}
 
@@ -623,6 +634,7 @@ export default function UpplyftingClient() {
                   Hreinsa vistað
                 </button>
               </div>
+              <VerkhringirHint tool="upplyfting" />
             </section>
           )}
         </div>

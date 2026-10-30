@@ -1867,6 +1867,7 @@ export default function StudioClient() {
                         </option>
                       ))}
                     </select>
+                    <small className="ac-rec">mælt: 1024×1024 fyrir SDXL; 512×512 fyrir SD1.5 líkön</small>
                   </label>
                   <label>
                     Skref
@@ -1877,6 +1878,7 @@ export default function StudioClient() {
                       value={settings.steps}
                       onChange={(e) => patchSettings({ steps: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: 20–30 (meðalvegur); 10 fyrir prufu, 50+ fyrir hámarks nákvæmni</small>
                   </label>
                   <label>
                     CFG
@@ -1888,6 +1890,7 @@ export default function StudioClient() {
                       value={settings.cfgScale}
                       onChange={(e) => patchSettings({ cfgScale: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: 7 (SDXL/SD1.5 default); 3-5 fyrir Flux; hátt (10+) = plasticky</small>
                   </label>
                   <label>
                     Seed (−1 = handahóf)
@@ -1896,6 +1899,7 @@ export default function StudioClient() {
                       value={settings.seed}
                       onChange={(e) => patchSettings({ seed: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: -1 (slembið); fasta tölu til að endurtaka</small>
                   </label>
                   <label>
                     Sampler
@@ -1909,6 +1913,7 @@ export default function StudioClient() {
                         </option>
                       ))}
                     </select>
+                    <small className="ac-rec">mælt: DPM++ 2M Karras (gæði); Euler a fyrir hraðar prufur</small>
                   </label>
                   <label>
                     Fjöldi
@@ -1919,6 +1924,7 @@ export default function StudioClient() {
                       value={settings.batchSize}
                       onChange={(e) => patchSettings({ batchSize: Number(e.target.value) })}
                     />
+                    <small className="ac-rec">mælt: 1 (sparar VRAM); hækkaðu í 2-4 til að bera saman afbrigði</small>
                   </label>
                   <label className={`ac-range ${editing ? "" : "dim"}`}>
                     Denoising {settings.denoisingStrength.toFixed(2)}

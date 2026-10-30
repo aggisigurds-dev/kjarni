@@ -7,6 +7,8 @@ import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
+import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
 import {
   SavedPresets,
@@ -359,6 +361,15 @@ export default function BreytaClient() {
               <button type="button" className="ac-btn" onClick={() => inputRef.current?.click()}>
                 Velja mynd
               </button>
+              <div style={{ marginTop: 8 }}>
+                <StagingPicker
+                  accepts="image"
+                  onPick={async (blob, item) => {
+                    const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                    await addFile(file);
+                  }}
+                />
+              </div>
             </section>
           )}
 
@@ -584,6 +595,7 @@ export default function BreytaClient() {
                           />
                         )}
                       </div>
+                      <VerkhringirHint tool="breyta" />
                     </figcaption>
                   </figure>
                 ))}

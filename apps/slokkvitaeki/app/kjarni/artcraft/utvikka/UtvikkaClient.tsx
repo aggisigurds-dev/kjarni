@@ -8,6 +8,8 @@ import ImageZoom from "../ImageZoom";
 import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import SendTo from "../SendTo";
+import StagingPicker from "../StagingPicker";
+import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
 import {
   computeExtension,
@@ -214,6 +216,15 @@ export default function UtvikkaClient() {
                     if (f) void handleFile(f);
                   }}
                 />
+                <div style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                  <StagingPicker
+                    accepts="image"
+                    onPick={async (blob, item) => {
+                      const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
+                      await handleFile(file);
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="ac-source-row">
@@ -404,6 +415,7 @@ export default function UtvikkaClient() {
                   );
                 })}
               </div>
+              <VerkhringirHint tool="utvikka" />
               <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                 Hreinsa vistað
               </button>
