@@ -182,6 +182,7 @@ export function cloneRegion(
   srcY: number,
   radius: number,
   strength: number,
+  sourceRaster?: Raster,
 ): void {
   const w = raster.width;
   const h = raster.height;
@@ -190,9 +191,13 @@ export function cloneRegion(
   const x1 = Math.min(w - 1, Math.ceil(dstX + radius));
   const y0 = Math.max(0, Math.floor(dstY - radius));
   const y1 = Math.min(h - 1, Math.ceil(dstY + radius));
-  // Afrit af öllum raster áður en við ritum — annars myndi clone-ið lesa
-  // frá nýlega-skrifuðum pixlum þegar src og dst skarast.
-  const src = new Uint8ClampedArray(raster.data);
+  // Þegar src er annar raster (reference-mynd) — notum hann beint, ekkert
+  // afrit þarf. Þegar src er sama raster og dst, verðum við að afrita fyrst
+  // því annars læsi clone-ið frá nýlega-skrifuðum pixlum í skarast svæði.
+  const useExternal = !!sourceRaster;
+  const srcData = useExternal ? sourceRaster!.data : new Uint8ClampedArray(raster.data);
+  const srcW = useExternal ? sourceRaster!.width : w;
+  const srcH = useExternal ? sourceRaster!.height : h;
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       const dx = x - dstX;
@@ -201,14 +206,14 @@ export function cloneRegion(
       if (d2 > r2) continue;
       const sx = Math.round(srcX + dx);
       const sy = Math.round(srcY + dy);
-      if (sx < 0 || sx >= w || sy < 0 || sy >= h) continue;
+      if (sx < 0 || sx >= srcW || sy < 0 || sy >= srcH) continue;
       const weight = brushWeight(Math.sqrt(d2), radius) * strength;
       if (weight <= 0) continue;
-      const srcIdx = (sy * w + sx) * 4;
+      const srcIdx = (sy * srcW + sx) * 4;
       const dstIdx = (y * w + x) * 4;
-      raster.data[dstIdx] = Math.round(raster.data[dstIdx] * (1 - weight) + src[srcIdx] * weight);
-      raster.data[dstIdx + 1] = Math.round(raster.data[dstIdx + 1] * (1 - weight) + src[srcIdx + 1] * weight);
-      raster.data[dstIdx + 2] = Math.round(raster.data[dstIdx + 2] * (1 - weight) + src[srcIdx + 2] * weight);
+      raster.data[dstIdx] = Math.round(raster.data[dstIdx] * (1 - weight) + srcData[srcIdx] * weight);
+      raster.data[dstIdx + 1] = Math.round(raster.data[dstIdx + 1] * (1 - weight) + srcData[srcIdx + 1] * weight);
+      raster.data[dstIdx + 2] = Math.round(raster.data[dstIdx + 2] * (1 - weight) + srcData[srcIdx + 2] * weight);
     }
   }
 }
@@ -317,7 +322,7 @@ export function applyRetouch(
   radius: number,
   strength: number,
   mode: RetouchMode,
-  clone?: { srcX: number; srcY: number },
+  clone?: { srcX: number; srcY: number; srcRaster?: Raster },
 ): void {
   switch (mode) {
     case "smooth":
@@ -333,7 +338,7 @@ export function applyRetouch(
       healRegion(raster, cx, cy, radius, strength);
       break;
     case "clone":
-      if (clone) cloneRegion(raster, cx, cy, clone.srcX, clone.srcY, radius, strength);
+      if (clone) cloneRegion(raster, cx, cy, clone.srcX, clone.srcY, radius, strength, clone.srcRaster);
       break;
     case "contrast":
       contrastRegion(raster, cx, cy, radius, strength);

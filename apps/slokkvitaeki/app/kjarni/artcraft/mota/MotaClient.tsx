@@ -165,11 +165,21 @@ export default function MotaClient() {
   const strengthRef = useRef(0.55);
   // Clone stamp state: anchor er upptökustaður, offset reiknast við fyrsta
   // dab-ið í stroke-i svo src færist með dst á meðan user strjúkur.
+  // refRaster: valfrjáls aukamynd (screenshot/reference) sem er clone-source
+  // í stað target-myndarinnar sjálfrar — nothæft fyrir detail-fix þar sem
+  // notandi vill grof-stimpla pixla úr annarri mynd og láta vélina blanda.
   const cloneAnchorRef = useRef<{ x: number; y: number } | null>(null);
   const cloneOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
   const strokeStartDstRef = useRef<{ x: number; y: number } | null>(null);
+  const refRasterRef = useRef<Raster | null>(null);
+  const refViewRef = useRef<HTMLCanvasElement>(null);
+  const refInputRef = useRef<HTMLInputElement>(null);
   const [pickingSource, setPickingSource] = useState(false);
   const [cloneAnchor, setCloneAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [cloneSourceKind, setCloneSourceKind] = useState<"self" | "reference">("self");
+  const [refName, setRefName] = useState("");
+  const [refReady, setRefReady] = useState(false);
+  const [pickingRefSource, setPickingRefSource] = useState(false);
 
   const [drag, setDrag] = useState(false);
   const [sourceName, setSourceName] = useState("");
@@ -220,6 +230,28 @@ export default function MotaClient() {
       paint();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
+    }
+  }
+
+  async function addRefFile(file: File) {
+    if (!isPhotoFile(file)) return;
+    setError("");
+    try {
+      const img = await loadImage(URL.createObjectURL(file));
+      const raster = rasterFromImage(img);
+      refRasterRef.current = raster;
+      setRefName(file.name);
+      setRefReady(true);
+      // Teikna strax á reference-canvas-inn þegar hann er mounted.
+      requestAnimationFrame(() => {
+        const c = refViewRef.current;
+        if (c) drawRaster(c, raster);
+      });
+      // Nýtt reference ógildir eldra anchor — notandi þarf að velja á ný.
+      cloneAnchorRef.current = null;
+      setCloneAnchor(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki opnað reference-myndina.");
     }
   }
 
@@ -275,10 +307,16 @@ export default function MotaClient() {
         };
       }
       const offset = cloneOffsetRef.current ?? { dx: 0, dy: 0 };
+      // Þegar notandi hefur hlaðið upp reference-mynd og valið anchor þar,
+      // notum við hana sem src í stað target-myndar. Vélin hefur „grof"
+      // stamp þá — og mýkt-faðaði-blöndun kemur sjálfkrafa af brush-weight
+      // (soft falloff) og strength-slider.
+      const extRaster = cloneSourceKind === "reference" ? refRasterRef.current ?? undefined : undefined;
       for (const p of pts) {
         applyRetouch(working, p.x, p.y, radiusRef.current, strengthRef.current, currentTool, {
           srcX: p.x - offset.dx,
           srcY: p.y - offset.dy,
+          srcRaster: extRaster,
         });
       }
     } else {
@@ -497,32 +535,135 @@ export default function MotaClient() {
               </p>
 
               {tool === "clone" && (
-                <div className="ac-row">
-                  <button
-                    type="button"
-                    className={`ac-btn ${pickingSource ? "" : "ghost"}`}
-                    onClick={() => setPickingSource(true)}
-                  >
-                    {cloneAnchor ? "Velja annan upptökustað" : "Velja upptökustað"}
-                  </button>
-                  {cloneAnchor && (
-                    <span className="ac-hint" style={{ marginLeft: 8 }}>
-                      Upptökustaður: ({Math.round(cloneAnchor.x)}, {Math.round(cloneAnchor.y)})
-                    </span>
+                <>
+                  <div className="ac-row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, opacity: 0.8 }}>Upptökustaður úr:</span>
+                    <button
+                      type="button"
+                      className={`ac-btn ghost ${cloneSourceKind === "self" ? "on" : ""}`}
+                      onClick={() => {
+                        setCloneSourceKind("self");
+                        setPickingRefSource(false);
+                      }}
+                      title="Afrita úr sömu mynd"
+                    >
+                      Sama mynd
+                    </button>
+                    <button
+                      type="button"
+                      className={`ac-btn ghost ${cloneSourceKind === "reference" ? "on" : ""}`}
+                      onClick={() => {
+                        setCloneSourceKind("reference");
+                        setPickingSource(false);
+                      }}
+                      title="Afrita úr reference-mynd (screenshot)"
+                    >
+                      Reference-mynd {refReady ? "✓" : "(upphala fyrst)"}
+                    </button>
+                  </div>
+                  <div className="ac-row" style={{ marginTop: 6 }}>
+                    {cloneSourceKind === "self" ? (
+                      <button
+                        type="button"
+                        className={`ac-btn ${pickingSource ? "" : "ghost"}`}
+                        onClick={() => {
+                          setPickingSource(true);
+                          setPickingRefSource(false);
+                        }}
+                      >
+                        {cloneAnchor ? "Velja annan upptökustað" : "Velja upptökustað"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className={`ac-btn ${pickingRefSource ? "" : "ghost"}`}
+                        onClick={() => {
+                          setPickingRefSource(true);
+                          setPickingSource(false);
+                        }}
+                        disabled={!refReady}
+                      >
+                        {cloneAnchor ? "Velja annan punkt í reference" : "Velja upptökustað í reference"}
+                      </button>
+                    )}
+                    {cloneAnchor && (
+                      <span className="ac-hint" style={{ marginLeft: 8 }}>
+                        ({Math.round(cloneAnchor.x)}, {Math.round(cloneAnchor.y)}) {cloneSourceKind === "reference" ? "úr reference" : "úr sömu mynd"}
+                      </span>
+                    )}
+                    {(pickingSource || pickingRefSource) && (
+                      <span className="ac-hint" style={{ marginLeft: 8, color: "var(--m-ember, #c9982f)" }}>
+                        Smelltu þar sem þú vilt afrita FRÁ{pickingRefSource ? " (í reference-mynd)" : ""}.
+                      </span>
+                    )}
+                  </div>
+                  {cloneSourceKind === "reference" && (
+                    <div className="ac-panel" style={{ marginTop: 8, padding: 10, background: "rgba(255,255,255,0.03)", borderRadius: 6 }}>
+                      <div className="ac-row" style={{ gap: 8, alignItems: "center", marginBottom: 6 }}>
+                        <strong style={{ fontSize: 13 }}>Reference-mynd</strong>
+                        <button
+                          type="button"
+                          className="ac-btn ghost"
+                          onClick={() => refInputRef.current?.click()}
+                          style={{ padding: "4px 10px", fontSize: 12 }}
+                        >
+                          {refReady ? "Önnur reference" : "Hlaða upp"}
+                        </button>
+                        {refName && (
+                          <span className="ac-hint" style={{ fontSize: 11, opacity: 0.7 }}>{refName}</span>
+                        )}
+                        <input
+                          ref={refInputRef}
+                          type="file"
+                          accept={PHOTO_ACCEPT}
+                          hidden
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) void addRefFile(file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                      {refReady && (
+                        <>
+                          <p className="ac-hint" style={{ fontSize: 12, margin: "4px 0" }}>
+                            Smelltu í reference-mynd fyrir neðan til að velja upptökustað, dragðu svo yfir aðalmynd til að stimpla.
+                          </p>
+                          <div style={{ overflow: "auto", maxHeight: 360, border: "1px solid var(--m-border, #333)", borderRadius: 4, position: "relative", display: "inline-block" }}>
+                            <canvas
+                              ref={refViewRef}
+                              style={{
+                                display: "block",
+                                cursor: pickingRefSource ? "crosshair" : "default",
+                                maxWidth: "100%",
+                              }}
+                              onPointerDown={(e) => {
+                                if (!pickingRefSource) return;
+                                const canvas = refViewRef.current;
+                                if (!canvas) return;
+                                const rect = canvas.getBoundingClientRect();
+                                const sx = canvas.width / rect.width;
+                                const sy = canvas.height / rect.height;
+                                const x = (e.clientX - rect.left) * sx;
+                                const y = (e.clientY - rect.top) * sy;
+                                cloneAnchorRef.current = { x, y };
+                                setCloneAnchor({ x, y });
+                                setPickingRefSource(false);
+                              }}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
-                  {pickingSource && (
-                    <span className="ac-hint" style={{ marginLeft: 8, color: "var(--m-ember, #c9982f)" }}>
-                      Smelltu þar sem þú vilt afrita FRÁ.
-                    </span>
-                  )}
-                </div>
+                </>
               )}
 
               <div className="ac-row" style={{ alignItems: "center", gap: 8, marginTop: 4 }}>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => setZoom((z) => Math.max(0.25, Math.round((z - 0.25) * 100) / 100))}
+                  onClick={() => setZoom((z) => Math.max(0.25, Math.round((z - 0.1) * 100) / 100))}
                   disabled={zoom <= 0.25}
                   title="Minnka zoom"
                 >
@@ -531,7 +672,7 @@ export default function MotaClient() {
                 <input
                   type="range"
                   min={0.25}
-                  max={4}
+                  max={10}
                   step={0.05}
                   value={zoom}
                   onChange={(e) => setZoom(Number(e.target.value))}
@@ -541,8 +682,8 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => setZoom((z) => Math.min(4, Math.round((z + 0.25) * 100) / 100))}
-                  disabled={zoom >= 4}
+                  onClick={() => setZoom((z) => Math.min(10, Math.round((z + 0.1) * 100) / 100))}
+                  disabled={zoom >= 10}
                   title="Stækka zoom"
                 >
                   +
@@ -553,8 +694,14 @@ export default function MotaClient() {
                 <button type="button" className="ac-btn ghost" onClick={() => setZoom(1)} title="Zoom á 100%">
                   1:1
                 </button>
+                <button type="button" className="ac-btn ghost" onClick={() => setZoom(3)} title="3x zoom fyrir fíngerð">
+                  3×
+                </button>
+                <button type="button" className="ac-btn ghost" onClick={() => setZoom(6)} title="6x zoom fyrir tanna/augna-fix">
+                  6×
+                </button>
                 <span className="ac-hint" style={{ opacity: 0.6, fontSize: 11 }}>
-                  Tip: ctrl+scroll til að zoom-a, venjulegt scroll til að panna
+                  Tip: ctrl+scroll til að zoom-a (0.25×–10×)
                 </span>
               </div>
 
@@ -566,7 +713,7 @@ export default function MotaClient() {
                   if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
                     const delta = e.deltaY < 0 ? 0.1 : -0.1;
-                    setZoom((z) => Math.max(0.25, Math.min(4, Math.round((z + delta) * 100) / 100)));
+                    setZoom((z) => Math.max(0.25, Math.min(10, Math.round((z + delta) * 100) / 100)));
                   }
                 }}
               >
