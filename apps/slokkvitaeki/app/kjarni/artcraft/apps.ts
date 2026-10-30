@@ -277,6 +277,10 @@ export function artcraftSkyjahreyfimyndHref(): string {
   return "/kjarni/artcraft/skyjahreyfimynd";
 }
 
+export function artcraftVideoUpplyftingHref(): string {
+  return "/kjarni/artcraft/video-upplyfting";
+}
+
 export function artcraftUpplyftingHref(): string {
   return "/kjarni/artcraft/upplyfting";
 }
@@ -371,6 +375,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "hreyfimynd", name: "Hreyfimynd", href: artcraftHreyfimyndHref(), icon: "🎞️", role: "Mynd → myndband", desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist.", uses: ["Láta kyrrmynd af starfsfólki hreyfa sig í stuttu kynningarmyndbandi"] as readonly string[] },
   { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Stability SDXL, Juggernaut XL v7 eða Flux Fill á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina", "Portrett með Juggernaut-stíl (minni plastic áferð)"] as readonly string[] },
   { id: "skyjahreyfimynd", name: "Skýjahreyfimynd", href: artcraftSkyjahreyfimyndHref(), icon: "🌥️", role: "Mynd → myndband", desc: "Mynd → myndband með Wan 2.2 á Replicate — opin uppspretta úr Alibaba, ~$0.05 per myndband. Skýja-mótvægi við Hreyfimynd.", uses: ["Láta kyrrmynd af vöru hreyfa sig í stuttu Facebook-videói", "Vekja staðreyndamynd til lífsins án ComfyUI uppsetningar"] as readonly string[] },
+  { id: "video-upplyfting", name: "Myndbanda-upplyfting", href: artcraftVideoUpplyftingHref(), icon: "📼", role: "Video upscale", desc: "Real-ESRGAN video (lucataco/real-esrgan-video) á Replicate — stækkar og skerpir myndbönd upp í FHD, 2K eða 4K. Frame-for-frame upscale með mannsmyndum eða anime-stillingu.", uses: ["Skýjahreyfimynd 480p útkoma stækkuð í FHD", "Gamalt vefmyndband úr 720p í 4K", "Lágupplausnar skjáupptaka endurbætt"] as readonly string[] },
   { id: "upplyfting", name: "Upplyfting", href: artcraftUpplyftingHref(), icon: "🔍", role: "Upscale", desc: "Faglegt myndupplyfting með Topaz Labs á Replicate — stækkar og skerpir án þess að breyta efni.", uses: ["Lítil mynd af vöru stækkuð í fulla upplausn fyrir vefsíðuna", "Óskýr skönnuð skýrslu-mynd gerð læsileg"] as readonly string[] },
   { id: "breyta", name: "Breyta mynd", href: artcraftBreytaHref(), icon: "🪄", role: "Mynd → mynd", desc: "Þrjú skýja-líkön: pro headshot, nýr bakgrunnur með texta, hraðvirk multi-image edit.", uses: ["Starfsmannamyndir á grafitt bakgrunn", "Vörumynd úr bílskúr → stúdíó-bakgrunnur", "Hraðar tilraunir á sömu mynd fyrir pence"] as readonly string[] },
   { id: "tonsmid", name: "Tónsmíð", href: artcraftTonsmidHref(), icon: "🎵", role: "Texti → lag", desc: "Semur heilt lag úr texta með ElevenLabs Music á Replicate — jinglar, útvarpsauglýsingar, bakgrunnstónlist.", uses: ["Útvarpsjingill fyrir Slökkvitæki", "Bakgrunnstónlist fyrir Facebook-video", "Róandi lag fyrir Jarvis-tilkynningar"] as readonly string[] },
@@ -398,6 +403,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/hreyfimynd") return "hreyfimynd";
   if (path === "/kjarni/artcraft/skyjastudio") return "skyjastudio";
   if (path === "/kjarni/artcraft/skyjahreyfimynd") return "skyjahreyfimynd";
+  if (path === "/kjarni/artcraft/video-upplyfting") return "video-upplyfting";
   if (path === "/kjarni/artcraft/upplyfting") return "upplyfting";
   if (path === "/kjarni/artcraft/breyta") return "breyta";
   if (path === "/kjarni/artcraft/tonsmid") return "tonsmid";
