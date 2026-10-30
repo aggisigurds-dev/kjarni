@@ -8,9 +8,14 @@ import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replica
 // preserveFace: Þegar ON chain-ast útkoman gegnum noahgsolomon/face-swap
 // með upprunalega myndinni sem andlits-source. Pixel-perfect andlit,
 // tvöfaldar kostnað og tíma. Sama mynstur og Endurljós.
+//
+// autoUpscale: Þegar ON chain-ast útkoman líka gegnum topazlabs/image-upscale
+// 2x (Standard V2) í lokin — fullgæða mynd án þess að notandi þurfi að
+// skipta um tól. Þetta er pre-upscale pipeline-ið: notandi fær úr Breyta
+// strax mynd sem er bæði face-locked og fullupplausn.
 
-// 120s þegar face-swap keyrir á eftir (pruna <5s + face-swap ~30s + overhead).
-export const maxDuration = 120;
+// 150s þegar bæði face-swap og auto-upscale keyra á eftir.
+export const maxDuration = 150;
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -28,6 +33,7 @@ export async function POST(req: NextRequest) {
     prompt?: string;
     seed?: number;
     preserveFace?: boolean;
+    autoUpscale?: boolean;
     disableSafetyChecker?: boolean;
   };
   try {
@@ -95,6 +101,41 @@ export async function POST(req: NextRequest) {
         if (swapped[0]) faceSwapped.push(swapped[0]);
       }
       if (faceSwapped.length > 0) urls = faceSwapped;
+    }
+
+    // Þriðja skref (optional): auto-upscale með topazlabs/image-upscale 2x
+    // (Standard V2 enhance, enginn face-enhancement því face-swap er núþegar
+    // keyrður). Þetta gefur útkomuna strax í fullgæða.
+    if (body.autoUpscale === true && urls.length > 0) {
+      const upscaled: string[] = [];
+      for (const url of urls) {
+        try {
+          const upOutput = await runReplicate({
+            token,
+            owner: "topazlabs",
+            name: "image-upscale",
+            input: {
+              image: url,
+              enhance_model: "Standard V2",
+              upscale_factor: "2x",
+              face_enhancement: false,
+              face_enhancement_creativity: 0,
+              face_enhancement_strength: 0.8,
+              subject_detection: "None",
+              output_format: "png",
+            },
+            functionStart,
+            budgetMs: 100_000,
+          });
+          const upUrls = outputToUrls(upOutput);
+          if (upUrls[0]) upscaled.push(upUrls[0]);
+        } catch {
+          // Ef upscale mistekst, höldum upprunalegu útkomunni frekar en að
+          // kasta heildinni. Notandi fær pruna-mynd en ekki fullupplausn.
+          upscaled.push(url);
+        }
+      }
+      if (upscaled.length > 0) urls = upscaled;
     }
 
     return NextResponse.json({ images: urls });

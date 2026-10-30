@@ -75,12 +75,16 @@ export type PrunaSettings = {
   // andlitið aftur á útkomuna. Pixel-perfect andlit en tvöfaldar kostnað og
   // tíma. Sama mynstur og Endurljós preserveFace.
   preserveFace: boolean;
+  // Þegar ON keyrir topazlabs/image-upscale 2x í lokin — notandi fær útkomuna
+  // strax í fullgæða án þess að þurfa að skipta um tól. Bætir ~45s í run.
+  autoUpscale: boolean;
   disableSafetyChecker: boolean;
   seed: number;
 };
 export const DEFAULT_PRUNA_SETTINGS: PrunaSettings = {
   prompt: "remove the background and put the subject on a clean white background",
   preserveFace: false,
+  autoUpscale: false,
   disableSafetyChecker: false,
   seed: -1,
 };
@@ -139,6 +143,10 @@ export function normalizePrunaSettings(raw: Partial<PrunaSettings>): PrunaSettin
       typeof src.preserveFace === "boolean"
         ? src.preserveFace
         : DEFAULT_PRUNA_SETTINGS.preserveFace,
+    autoUpscale:
+      typeof src.autoUpscale === "boolean"
+        ? src.autoUpscale
+        : DEFAULT_PRUNA_SETTINGS.autoUpscale,
     disableSafetyChecker:
       typeof src.disableSafetyChecker === "boolean"
         ? src.disableSafetyChecker

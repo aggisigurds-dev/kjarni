@@ -345,6 +345,15 @@ export default function InnblasturClient() {
               Slökkva á safety checker
               <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: Á (filter er oft of varkár); AF ef þú veist að þú vilt enga síu</small>
             </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <input
+                type="checkbox"
+                checked={settings.autoUpscale}
+                onChange={(e) => updateSettings({ autoUpscale: e.target.checked })}
+              />
+              Upplyfta sjálfkrafa 2x í lokin (Topaz, +~45s per útkoma)
+              <small className="ac-rec" style={{ flexBasis: "100%" }}>mælt: ON þegar þú vilt fullupplausn strax — sleppur við að þurfa að fara í Upplyftingu á eftir hvert variation</small>
+            </label>
 
             {error && <p className="ac-error">{error}</p>}
             <div className="ac-row">

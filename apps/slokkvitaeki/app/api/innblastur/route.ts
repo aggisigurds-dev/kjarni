@@ -7,7 +7,7 @@ import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replica
 // afrita þig. Opin uppspretta (Flux Dev + Redux adapter), styður
 // disable_safety_checker.
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 const ASPECT_RATIOS = [
   "match_input_image",
@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     outputFormat?: string;
     outputQuality?: number;
     disableSafetyChecker?: boolean;
+    autoUpscale?: boolean;
   };
   try {
     body = await req.json();
@@ -96,7 +97,43 @@ export async function POST(req: NextRequest) {
       input,
       functionStart,
     });
-    return NextResponse.json({ images: outputToUrls(output) });
+    let urls = outputToUrls(output);
+
+    // Auto-upscale pipeline: ef toggle er ON, keyrir topazlabs/image-upscale
+    // 2x á hverja útkomu og notandi fær fullgæða mynd án þess að þurfa að
+    // fara í Upplyftingu á eftir. Sleppum úr lista ef upscale mistekst (held
+    // upprunalega útgáfunni frekar en að kasta öllu).
+    if (body.autoUpscale === true && urls.length > 0) {
+      const upscaled: string[] = [];
+      for (const url of urls) {
+        try {
+          const upOutput = await runReplicate({
+            token,
+            owner: "topazlabs",
+            name: "image-upscale",
+            input: {
+              image: url,
+              enhance_model: "Standard V2",
+              upscale_factor: "2x",
+              face_enhancement: false,
+              face_enhancement_creativity: 0,
+              face_enhancement_strength: 0.8,
+              subject_detection: "None",
+              output_format: "png",
+            },
+            functionStart,
+            budgetMs: 100_000,
+          });
+          const upUrls = outputToUrls(upOutput);
+          upscaled.push(upUrls[0] ?? url);
+        } catch {
+          upscaled.push(url);
+        }
+      }
+      urls = upscaled;
+    }
+
+    return NextResponse.json({ images: urls });
   } catch (err) {
     const r = badReplicate(err);
     return bad(r.status, r.error);

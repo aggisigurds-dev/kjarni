@@ -423,6 +423,18 @@ export default function EndurljosClient() {
               Varðveita andlit nákvæmlega (face-swap eftir Endurljós, 2x kostnaður)
             </label>
             <label
+              style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+              title="A: Keyrir topazlabs/image-upscale 2x i lokin — notandi fær fullgæða mynd án Upplyftingar. +~45s per output."
+            >
+              <input
+                type="checkbox"
+                checked={settings.autoUpscale}
+                onChange={(e) => updateSettings({ autoUpscale: e.target.checked })}
+              />
+              Upplyfta sjálfkrafa 2x í lokin (Topaz, +~45s per útkoma)
+              <small className="ac-rec" style={{ flexBasis: "100%" }}>mælt: ON þegar þú vilt fullupplausn strax — sleppur við að þurfa að fara í Upplyftingu á eftir</small>
+            </label>
+            <label
               style={{ display: "flex", alignItems: "center", gap: 8 }}
               title="Sleppir NSFW-filter módelsins. Kjarni leyfir nekt — aðeins kynferðislegt myndefni af börnum er bannað."
             >

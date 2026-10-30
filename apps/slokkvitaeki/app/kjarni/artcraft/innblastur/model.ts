@@ -57,6 +57,9 @@ export type InnblasturSettings = {
   outputFormat: OutputFormat;
   outputQuality: number;
   disableSafetyChecker: boolean;
+  // Þegar ON chain-ast útkoman gegnum topazlabs/image-upscale 2x — notandi
+  // fær fullgæða mynd án þess að þurfa að skipta um tól. Bætir ~45s per output.
+  autoUpscale: boolean;
 };
 
 export const DEFAULT_INNBLASTUR_SETTINGS: InnblasturSettings = {
@@ -69,6 +72,7 @@ export const DEFAULT_INNBLASTUR_SETTINGS: InnblasturSettings = {
   outputFormat: "png",
   outputQuality: 95,
   disableSafetyChecker: false,
+  autoUpscale: false,
 };
 
 export const INNBLASTUR_SETTINGS_KEY = "kjarni_private_innblastur_settings";
@@ -96,6 +100,10 @@ export function normalizeInnblasturSettings(
       typeof src.disableSafetyChecker === "boolean"
         ? src.disableSafetyChecker
         : DEFAULT_INNBLASTUR_SETTINGS.disableSafetyChecker,
+    autoUpscale:
+      typeof src.autoUpscale === "boolean"
+        ? src.autoUpscale
+        : DEFAULT_INNBLASTUR_SETTINGS.autoUpscale,
   };
 }
 
@@ -134,6 +142,7 @@ export async function generateInnblastur(
       outputFormat: settings.outputFormat,
       outputQuality: settings.outputQuality,
       disableSafetyChecker: settings.disableSafetyChecker,
+      autoUpscale: settings.autoUpscale,
     }),
   });
   const text = await res.text();

@@ -15,8 +15,8 @@ import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replica
 // flatara ljós; hærra = meiri drama en meiri breyting). `output_quality`
 // hækkar webp-gæðin — default 80 skilar oft smárri skrá.
 
-// 120s þegar face-swap eftirvinnsla er ON — tveir Replicate kall í röð.
-export const maxDuration = 120;
+// 180s þegar face-swap OG auto-upscale pipeline keyra á eftir.
+export const maxDuration = 180;
 
 const LIGHT_SOURCES = ["Left Light", "Right Light", "Top Light", "Bottom Light", "None"] as const;
 type LightSource = (typeof LIGHT_SOURCES)[number];
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
     steps?: number;
     outputFormat?: string;
     outputQuality?: number;
+    autoUpscale?: boolean;
   };
   try {
     body = await req.json();
@@ -170,6 +171,39 @@ export async function POST(req: NextRequest) {
         if (swapped[0]) faceSwapped.push(swapped[0]);
       }
       if (faceSwapped.length > 0) urls = faceSwapped;
+    }
+
+    // Þriðja skref (optional): auto-upscale með topazlabs/image-upscale 2x
+    // (Standard V2) í lokin — notandi fær fullgæða mynd án Upplyftingar.
+    // face_enhancement: false því face-swap sér um andlitið áður.
+    if (body.autoUpscale === true && urls.length > 0) {
+      const upscaled: string[] = [];
+      for (const url of urls) {
+        try {
+          const upOutput = await runReplicate({
+            token,
+            owner: "topazlabs",
+            name: "image-upscale",
+            input: {
+              image: url,
+              enhance_model: "Standard V2",
+              upscale_factor: "2x",
+              face_enhancement: false,
+              face_enhancement_creativity: 0,
+              face_enhancement_strength: 0.8,
+              subject_detection: "None",
+              output_format: "png",
+            },
+            functionStart,
+            budgetMs: 100_000,
+          });
+          const upUrls = outputToUrls(upOutput);
+          upscaled.push(upUrls[0] ?? url);
+        } catch {
+          upscaled.push(url);
+        }
+      }
+      urls = upscaled;
     }
 
     return NextResponse.json({ images: urls });

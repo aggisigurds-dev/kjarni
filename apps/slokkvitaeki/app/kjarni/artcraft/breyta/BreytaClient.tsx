@@ -527,6 +527,15 @@ export default function BreytaClient() {
                   Varðveita andlit nákvæmlega (face-swap eftir pruna, 2x kostnaður)
                   <small className="ac-rec" style={{ flexBasis: "100%" }}>mælt: ON þegar andlit skiptir máli (tvöfaldar kostnað og tíma; keyrir face-swap eftir pruna)</small>
                 </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="checkbox"
+                    checked={pruna.autoUpscale}
+                    onChange={(e) => updatePruna({ autoUpscale: e.target.checked })}
+                  />
+                  Upplyfta sjálfkrafa 2x í lokin (Topaz, +~45s)
+                  <small className="ac-rec" style={{ flexBasis: "100%" }}>mælt: ON þegar þú vilt fullupplausn strax — sleppur við að þurfa að fara í Upplyftingu á eftir</small>
+                </label>
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"

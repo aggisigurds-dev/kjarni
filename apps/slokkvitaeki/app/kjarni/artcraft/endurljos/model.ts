@@ -45,6 +45,9 @@ export type EndurljosSettings = {
   steps: number;
   outputFormat: EndurljosOutputFormat;
   outputQuality: number;
+  // Þegar ON chain-ast útkoman gegnum topazlabs/image-upscale 2x í lokin —
+  // notandi fær fullgæða mynd án Upplyftingar. Bætir ~45s per output.
+  autoUpscale: boolean;
 };
 
 export const DEFAULT_ENDURLJOS_SETTINGS: EndurljosSettings = {
@@ -69,6 +72,7 @@ export const DEFAULT_ENDURLJOS_SETTINGS: EndurljosSettings = {
   steps: 25,
   outputFormat: "png",
   outputQuality: 95,
+  autoUpscale: false,
 };
 
 export const ENDURLJOS_SETTINGS_KEY = "kjarni_private_endurljos_settings";
@@ -119,6 +123,10 @@ export function normalizeEndurljosSettings(
       ? (src.outputFormat as EndurljosOutputFormat)
       : DEFAULT_ENDURLJOS_SETTINGS.outputFormat,
     outputQuality: clampInt(src.outputQuality, DEFAULT_ENDURLJOS_SETTINGS.outputQuality, 1, 100),
+    autoUpscale:
+      typeof src.autoUpscale === "boolean"
+        ? src.autoUpscale
+        : DEFAULT_ENDURLJOS_SETTINGS.autoUpscale,
   };
 }
 
@@ -165,6 +173,7 @@ export async function relightImage(
       steps: settings.steps,
       outputFormat: settings.outputFormat,
       outputQuality: settings.outputQuality,
+      autoUpscale: settings.autoUpscale,
     }),
   });
   const text = await res.text();
