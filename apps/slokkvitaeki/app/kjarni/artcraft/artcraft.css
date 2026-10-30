@@ -157,6 +157,42 @@
   border-color: rgba(201, 152, 47, 0.35);
 }
 
+.ac-staging-dock-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  margin-left: auto;
+  border-radius: 6px;
+  background: var(--m-ember-50, rgba(201, 152, 47, 0.12));
+  border: 1px solid var(--m-ember-30, rgba(201, 152, 47, 0.3));
+  color: var(--m-ink, #102038);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ac-staging-dock-btn:hover {
+  background: var(--m-ember-30, rgba(201, 152, 47, 0.22));
+}
+
+.ac-staging-dock-btn span {
+  font-weight: 600;
+  min-width: 14px;
+  text-align: center;
+}
+
+.stn[data-skin="ragnarok"] .ac-staging-dock-btn {
+  background: rgba(201, 152, 47, 0.08);
+  border-color: rgba(201, 152, 47, 0.3);
+  color: var(--rg-text-gold, #ffd98a);
+}
+
+.stn[data-skin="ragnarok"] .ac-staging-dock-btn:hover {
+  background: rgba(201, 152, 47, 0.18);
+}
+
 .stn[data-skin="ragnarok"] .ac-dock-more-panel a {
   color: var(--rg-text-dim, #8a7350);
 }

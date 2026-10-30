@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ARTCRAFT_INTERFACES, artcraftInterfaceFromPath, type ArtcraftInterfaceId } from "./apps";
+import GlobalStagingDock from "./GlobalStagingDock";
 
 // Mest notuðu Kjarni-tólin birtast beint í fliparöðinni. Hin
 // (installed CraftApps, local-first/less-used og Leiðarvísir) fara í
@@ -90,6 +91,7 @@ export function ArtCraftDock() {
           ))}
         </div>
       </details>
+      <GlobalStagingDock />
     </nav>
   );
 }
