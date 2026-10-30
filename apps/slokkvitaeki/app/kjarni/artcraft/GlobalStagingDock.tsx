@@ -37,6 +37,12 @@ const IMAGE_DESTINATIONS: Destination[] = [
   { id: "vidgerd", label: "Ljósmyndaviðgerð", path: "/kjarni/artcraft/vidgerd" },
   { id: "bakgrunnur", label: "Fjarlægja bakgrunn", path: "/kjarni/artcraft/bakgrunnur" },
   { id: "skyjahreyfimynd", label: "Skýjahreyfimynd", path: "/kjarni/artcraft/skyjahreyfimynd" },
+  { id: "myndband-andlit-face", label: "Myndband-andlit (andlits-tilvísun)", path: "/kjarni/artcraft/myndband-andlit" },
+];
+
+const VIDEO_DESTINATIONS: Destination[] = [
+  { id: "video-upplyfting", label: "Myndbanda-upplyfting", path: "/kjarni/artcraft/video-upplyfting" },
+  { id: "myndband-andlit", label: "Myndband-andlit", path: "/kjarni/artcraft/myndband-andlit" },
 ];
 
 function formatRelative(ts: number): string {
@@ -247,37 +253,38 @@ export default function GlobalStagingDock() {
                     <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 8 }}>
                       fyrir {formatRelative(item.createdAt)} síðan
                     </div>
-                    {item.mediaType === "image" ? (
-                      <>
-                        <button
-                          type="button"
-                          className="ac-btn"
-                          onClick={() => setOpenMenu((m) => (m === item.id ? null : item.id))}
-                          style={{ fontSize: 12, width: "100%" }}
-                          aria-expanded={openMenu === item.id}
+                    <>
+                      <button
+                        type="button"
+                        className="ac-btn"
+                        onClick={() => setOpenMenu((m) => (m === item.id ? null : item.id))}
+                        style={{ fontSize: 12, width: "100%" }}
+                        aria-expanded={openMenu === item.id}
+                      >
+                        Opna í… ▾
+                      </button>
+                      {openMenu === item.id && (
+                        <div
+                          role="menu"
+                          style={{
+                            position: "absolute",
+                            top: "100%",
+                            left: 10,
+                            right: 10,
+                            marginTop: 4,
+                            background: "var(--m-panel, #1a1a1a)",
+                            border: "1px solid var(--m-border, #333)",
+                            borderRadius: 6,
+                            padding: 4,
+                            zIndex: 20,
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+                            maxHeight: 300,
+                            overflowY: "auto",
+                          }}
                         >
-                          Opna í… ▾
-                        </button>
-                        {openMenu === item.id && (
-                          <div
-                            role="menu"
-                            style={{
-                              position: "absolute",
-                              top: "100%",
-                              left: 10,
-                              right: 10,
-                              marginTop: 4,
-                              background: "var(--m-panel, #1a1a1a)",
-                              border: "1px solid var(--m-border, #333)",
-                              borderRadius: 6,
-                              padding: 4,
-                              zIndex: 20,
-                              boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
-                              maxHeight: 300,
-                              overflowY: "auto",
-                            }}
-                          >
-                            {IMAGE_DESTINATIONS.filter((d) => d.id !== item.sourceTool).map((d) => (
+                          {(item.mediaType === "image" ? IMAGE_DESTINATIONS : VIDEO_DESTINATIONS)
+                            .filter((d) => d.id !== item.sourceTool)
+                            .map((d) => (
                               <button
                                 key={d.id}
                                 type="button"
@@ -301,12 +308,9 @@ export default function GlobalStagingDock() {
                                 → {d.label}
                               </button>
                             ))}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p style={{ fontSize: 11, opacity: 0.6, margin: 0 }}>Myndband — niðurhal eingöngu</p>
-                    )}
+                        </div>
+                      )}
+                    </>
                   </div>
                 </div>
               ))}

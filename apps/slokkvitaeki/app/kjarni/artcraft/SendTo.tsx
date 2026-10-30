@@ -16,6 +16,7 @@ type Destination = {
 };
 
 const DESTINATIONS: Destination[] = [
+  // Image destinations
   { id: "upplyfting", label: "Upplyfting", path: "/kjarni/artcraft/upplyfting", accepts: ["image"] },
   { id: "endurljos", label: "Endurljós", path: "/kjarni/artcraft/endurljos", accepts: ["image"] },
   { id: "breyta", label: "Breyta mynd", path: "/kjarni/artcraft/breyta", accepts: ["image"] },
@@ -29,6 +30,11 @@ const DESTINATIONS: Destination[] = [
   { id: "vidgerd", label: "Ljósmyndaviðgerð", path: "/kjarni/artcraft/vidgerd", accepts: ["image"] },
   { id: "bakgrunnur", label: "Fjarlægja bakgrunn", path: "/kjarni/artcraft/bakgrunnur", accepts: ["image"] },
   { id: "skyjahreyfimynd", label: "Skýjahreyfimynd (í video)", path: "/kjarni/artcraft/skyjahreyfimynd", accepts: ["image"] },
+  // Video destinations
+  { id: "video-upplyfting", label: "Myndbanda-upplyfting", path: "/kjarni/artcraft/video-upplyfting", accepts: ["video"] },
+  { id: "myndband-andlit-video", label: "Myndband-andlit (sem source video)", path: "/kjarni/artcraft/myndband-andlit", accepts: ["video"] },
+  // Image → andlits-tilvísun fyrir myndband-andlit (sama path, en accepts image)
+  { id: "myndband-andlit-face", label: "Myndband-andlit (sem andlits-tilvísun)", path: "/kjarni/artcraft/myndband-andlit", accepts: ["image"] },
 ];
 
 export type SendToProps = {
