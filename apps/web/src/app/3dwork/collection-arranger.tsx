@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Check, ChevronDown, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, Scissors, X } from 'lucide-react';
+import { Check, ChevronDown, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, Ruler, Scissors, X } from 'lucide-react';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { toast } from 'sonner';
 import { tidyTurn, type ArrangeChange, type Place } from '@/lib/3dwork/favorites';
@@ -97,6 +97,11 @@ export function CollectionArranger({
   const [painted, setPainted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [readout, setReadout] = useState<Place | null>(null);
+  // Measure mode: overlay lengths/widths on each part and the whole arrangement.
+  const [measure, setMeasure] = useState(false);
+  const measureRef = useRef(false);
+  measureRef.current = measure;
+  const measSvgRef = useRef<SVGSVGElement | null>(null);
 
   const put = useCallback((id: string, place: Place) => {
     const item = items.current.get(id);
@@ -163,6 +168,7 @@ export function CollectionArranger({
       frame = requestAnimationFrame(() => {
         frame = 0;
         renderer.render(scene, camera);
+        renderMeasure();
       });
     };
     const frustum = () => {
@@ -190,6 +196,58 @@ export function CollectionArranger({
       const centre = all.getCenter(new THREE.Vector3());
       camera.position.set(centre.x, centre.y, 2000);
       frustum();
+    };
+    // Measure mode: an SVG overlay with each part's length×width (world AABB, mm)
+    // and the whole arrangement's total length and height. Redrawn every frame so
+    // it tracks pan, zoom and dragging.
+    const renderMeasure = () => {
+      const svg = measSvgRef.current;
+      if (!svg) return;
+      if (!measureRef.current) {
+        if (svg.childNodes.length) svg.replaceChildren();
+        return;
+      }
+      const W = host.clientWidth;
+      const H = host.clientHeight;
+      const px = (wx: number) => (wx - camera.position.x) * pxPerMm + W / 2;
+      const py = (wy: number) => (camera.position.y - wy) * pxPerMm + H / 2;
+      const box = new THREE.Box3();
+      const all = new THREE.Box3();
+      let s = '';
+      for (const item of items.current.values()) {
+        if (!item.mesh.visible) continue;
+        box.setFromObject(item.mesh);
+        if (box.isEmpty()) continue;
+        all.union(box);
+        const x0 = px(box.min.x);
+        const x1 = px(box.max.x);
+        const y0 = py(box.max.y);
+        const y1 = py(box.min.y);
+        const len = Math.round(box.max.x - box.min.x);
+        const hgt = Math.round(box.max.y - box.min.y);
+        s += `<rect x="${x0.toFixed(1)}" y="${y0.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(y1 - y0).toFixed(1)}" fill="none" stroke="#0ea5e9" stroke-width="1" stroke-dasharray="4 3" opacity="0.65"/>`;
+        s += `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${((y0 + y1) / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace,monospace" font-size="11" fill="#0c4a6e" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${len}×${hgt}</text>`;
+      }
+      if (!all.isEmpty()) {
+        const ax0 = px(all.min.x);
+        const ax1 = px(all.max.x);
+        const ay0 = py(all.max.y);
+        const ay1 = py(all.min.y);
+        const totalL = Math.round(all.max.x - all.min.x);
+        const totalH = Math.round(all.max.y - all.min.y);
+        const by = ay1 + 24;
+        s += `<line x1="${ax0.toFixed(1)}" y1="${by}" x2="${ax1.toFixed(1)}" y2="${by}" stroke="#ef4444" stroke-width="1.5"/>`;
+        s += `<line x1="${ax0.toFixed(1)}" y1="${by - 5}" x2="${ax0.toFixed(1)}" y2="${by + 5}" stroke="#ef4444" stroke-width="1.5"/>`;
+        s += `<line x1="${ax1.toFixed(1)}" y1="${by - 5}" x2="${ax1.toFixed(1)}" y2="${by + 5}" stroke="#ef4444" stroke-width="1.5"/>`;
+        s += `<text x="${((ax0 + ax1) / 2).toFixed(1)}" y="${by + 16}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="12" fill="#b91c1c" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">Heild ${totalL} mm</text>`;
+        const lx = ax0 - 24;
+        const my = (ay0 + ay1) / 2;
+        s += `<line x1="${lx.toFixed(1)}" y1="${ay0.toFixed(1)}" x2="${lx.toFixed(1)}" y2="${ay1.toFixed(1)}" stroke="#ef4444" stroke-width="1.5"/>`;
+        s += `<line x1="${(lx - 5).toFixed(1)}" y1="${ay0.toFixed(1)}" x2="${(lx + 5).toFixed(1)}" y2="${ay0.toFixed(1)}" stroke="#ef4444" stroke-width="1.5"/>`;
+        s += `<line x1="${(lx - 5).toFixed(1)}" y1="${ay1.toFixed(1)}" x2="${(lx + 5).toFixed(1)}" y2="${ay1.toFixed(1)}" stroke="#ef4444" stroke-width="1.5"/>`;
+        s += `<text x="${(lx - 6).toFixed(1)}" y="${my.toFixed(1)}" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 ${(lx - 6).toFixed(1)} ${my.toFixed(1)})" font-family="ui-monospace,monospace" font-size="12" fill="#b91c1c" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${totalH} mm</text>`;
+      }
+      svg.innerHTML = s;
     };
     view.current = { renderer, camera, scene, draw, fit };
     const observer = new ResizeObserver(frustum);
@@ -381,11 +439,22 @@ export function CollectionArranger({
     view.current?.draw();
   }, [selectedId, put]);
 
+  // Toggling measure mode redraws the overlay right away (otherwise it waits for a pan/zoom).
+  useEffect(() => {
+    view.current?.draw();
+  }, [measure]);
+
   // Arrow keys nudge the picked part a millimetre (ten with Shift); Escape lets go of it.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.key.toLowerCase() === 'm') {
+        event.preventDefault();
+        setMeasure((value) => !value);
+        return;
+      }
       const id = selectedRef.current;
-      if (!id || event.target instanceof HTMLInputElement) return;
+      if (!id) return;
       if (event.key === 'Escape') {
         setSelectedId(null);
         setReadout(null);
@@ -582,6 +651,16 @@ export function CollectionArranger({
         <span className="min-w-0 flex-1 truncate text-sm font-bold">Raða — {title}</span>
         <button
           type="button"
+          className={`${ACTION_GHOST} inline-flex items-center gap-1 ${measure ? 'ring-2 ring-sky-400' : ''}`}
+          onClick={() => setMeasure((value) => !value)}
+          aria-pressed={measure}
+          title="Mæla (M) — sýna lengd og breidd á hverjum hlut og á heildinni"
+        >
+          <Ruler className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Mæla</span>
+        </button>
+        <button
+          type="button"
           className={`${ACTION_GHOST} inline-flex items-center gap-1`}
           onClick={toAuto}
           disabled={Boolean(progress) || saving}
@@ -607,6 +686,7 @@ export function CollectionArranger({
 
       <div className="relative min-h-0 flex-1 bg-gradient-to-b from-slate-50 to-slate-100">
         <div ref={box} className="absolute inset-0" />
+        <svg ref={measSvgRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
         {progress && (
           <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded bg-white/90 px-2 py-1 text-[0.7rem] text-slate-700 shadow">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
