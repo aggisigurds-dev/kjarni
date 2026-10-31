@@ -77,6 +77,104 @@ type Clip = {
   timestamp: number;
 };
 
+/** Soðja fleiri myndbands-blobs saman í eitt með því að spila þá í röð
+ * inn á canvas og taka upp í gegnum MediaRecorder. Takmarkanir: tekur
+ * raun-tíma (10s af clips = 10s af upptöku), kóðar á nýtt (örlítill
+ * gæðatap vs. bitstream-copy sem er flóknara). Reynir MP4/H.264 fyrst,
+ * fellur í WebM þegar vafrinn styður ekki MP4 (t.d. Firefox).
+ *
+ * `onProgress` lætur vita hvaða bút við erum að taka upp. */
+async function stitchClips(
+  clips: Array<{ url: string; blob: Blob }>,
+  onProgress?: (current: number, total: number) => void,
+): Promise<{ blob: Blob; mimeType: string }> {
+  if (clips.length === 0) throw new Error("Engir bútar til að soðja.");
+
+  // Lesum stærð úr fyrsta bút — allir bútar í keðjunni ættu að hafa
+  // sömu stærð (sama líkan, sama hlutfall).
+  const probe = document.createElement("video");
+  probe.src = clips[0].url;
+  probe.muted = true;
+  probe.playsInline = true;
+  await new Promise<void>((resolve, reject) => {
+    probe.onloadedmetadata = () => resolve();
+    probe.onerror = () => reject(new Error("Gat ekki lesið fyrsta bút."));
+  });
+  const width = probe.videoWidth || 1024;
+  const height = probe.videoHeight || 1024;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D context óaðgengilegur.");
+  const stream = canvas.captureStream(30);
+
+  const candidateTypes = [
+    "video/mp4;codecs=avc1.42E01E",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+  const mimeType =
+    candidateTypes.find((t) => (window as unknown as { MediaRecorder: typeof MediaRecorder }).MediaRecorder.isTypeSupported(t)) ||
+    "video/webm";
+
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+  recorder.start(500);
+
+  for (let i = 0; i < clips.length; i++) {
+    onProgress?.(i + 1, clips.length);
+    const clip = clips[i];
+    const video = document.createElement("video");
+    video.src = clip.url;
+    video.muted = true;
+    video.playsInline = true;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error(`Bútur ${i + 1} hleðst ekki.`));
+    });
+    try {
+      await video.play();
+    } catch (err) {
+      // Sumir vafrar henda á autoplay — reyna aftur eftir user gesture
+      // ætti ekki að gerast því þessi fall er alltaf triggered af click.
+      throw err;
+    }
+    let rafId = 0;
+    await new Promise<void>((resolve) => {
+      const draw = () => {
+        ctx.drawImage(video, 0, 0, width, height);
+        if (video.ended || video.paused || video.currentTime >= video.duration - 0.02) {
+          cancelAnimationFrame(rafId);
+          resolve();
+          return;
+        }
+        rafId = requestAnimationFrame(draw);
+      };
+      video.onended = () => {
+        cancelAnimationFrame(rafId);
+        resolve();
+      };
+      draw();
+    });
+    video.pause();
+    video.src = "";
+  }
+
+  recorder.stop();
+  await new Promise<void>((resolve) => {
+    recorder.onstop = () => resolve();
+  });
+
+  const blob = new Blob(chunks, { type: mimeType });
+  return { blob, mimeType };
+}
+
 /** Tekur síðasta ramma úr myndbands-blob og skilar sem data-URL (jpeg).
  * Notar off-DOM video + canvas; vafrinn þarf að hafa afkóðað myndbandið
  * (sem er alltaf tilfellið þegar við köllum þetta — blobinn er nýbúinn
@@ -140,8 +238,12 @@ export default function SkyjahreyfimyndClient() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [pendingClip, setPendingClip] = useState<Clip | null>(null);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string } | null>(null);
+  const [mergedClip, setMergedClip] = useState<{ url: string; blob: Blob; mimeType: string; sourceCount: number } | null>(null);
+  const [stitching, setStitching] = useState(false);
+  const [stitchStatus, setStitchStatus] = useState<{ current: number; total: number } | null>(null);
   const clipsRef = useRef<Clip[]>([]);
   const pendingRef = useRef<Clip | null>(null);
+  const mergedRef = useRef<{ url: string } | null>(null);
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +255,9 @@ export default function SkyjahreyfimyndClient() {
   useEffect(() => {
     pendingRef.current = pendingClip;
   }, [pendingClip]);
+  useEffect(() => {
+    mergedRef.current = mergedClip ? { url: mergedClip.url } : null;
+  }, [mergedClip]);
 
   useEffect(() => {
     const storedWan = readStoredWanSettings();
@@ -242,6 +347,7 @@ export default function SkyjahreyfimyndClient() {
     return () => {
       clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
       if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+      if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
     };
   }, []);
@@ -298,11 +404,35 @@ export default function SkyjahreyfimyndClient() {
       // hvaðan framhald á að koma.
       clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
       if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+      if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
       setClips([]);
       setPendingClip(null);
+      setMergedClip(null);
       setSavedMeta(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
+    }
+  }
+
+  async function handleStitch() {
+    const current = clipsRef.current;
+    if (current.length < 2) return;
+    setStitching(true);
+    setError("");
+    setStitchStatus({ current: 0, total: current.length });
+    try {
+      if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
+      setMergedClip(null);
+      const { blob, mimeType } = await stitchClips(current, (c, t) =>
+        setStitchStatus({ current: c, total: t }),
+      );
+      const url = URL.createObjectURL(blob);
+      setMergedClip({ url, blob, mimeType, sourceCount: current.length });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Soðja saman mistókst.");
+    } finally {
+      setStitching(false);
+      setStitchStatus(null);
     }
   }
 
@@ -395,8 +525,10 @@ export default function SkyjahreyfimyndClient() {
         // Fyrsti clip → hreinsa fyrri keðju og vista
         clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
         if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+        if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
         setClips([newClip]);
         setPendingClip(null);
+        setMergedClip(null);
         setSavedMeta({ timestamp: now, prompt: activePrompt });
         void saveResult({
           key: SAVED_KEY,
@@ -426,6 +558,9 @@ export default function SkyjahreyfimyndClient() {
     const nextClips = [...clips, pending];
     setClips(nextClips);
     setPendingClip(null);
+    // Nýr bútur í keðju → gamla soðningin á ekki við lengur.
+    if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
+    setMergedClip(null);
     setSavedMeta({ timestamp: pending.timestamp, prompt: pending.prompt });
     void saveResult({
       key: SAVED_KEY,
@@ -448,8 +583,10 @@ export default function SkyjahreyfimyndClient() {
   async function clearSavedResults() {
     clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
     if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+    if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
     setClips([]);
     setPendingClip(null);
+    setMergedClip(null);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
   }
@@ -563,8 +700,10 @@ export default function SkyjahreyfimyndClient() {
                     setSource(null);
                     clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
                     if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+                    if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
                     setClips([]);
                     setPendingClip(null);
+                    setMergedClip(null);
                     setSavedMeta(null);
                   }}
                 >
@@ -823,8 +962,10 @@ export default function SkyjahreyfimyndClient() {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 220 }}>
-                    <strong style={{ fontSize: 14 }}>Framlengja?</strong>
-                    <p className="ac-hint" style={{ margin: "4px 0 0" }}>
+                    <strong style={{ fontSize: 15, color: "#ffffff", display: "block", marginBottom: 4 }}>
+                      Framlengja?
+                    </strong>
+                    <p className="ac-hint" style={{ margin: 0, color: "#e5e7eb" }}>
                       Vélin tekur síðasta ramma úr bút {clips.length} og býr til næsta bút með virka
                       prompt-inu. Þú getur breytt prompt-inu áður en þú ýtir.
                     </p>
@@ -849,8 +990,10 @@ export default function SkyjahreyfimyndClient() {
                     borderRadius: 10,
                   }}
                 >
-                  <p className="ac-hint" style={{ marginTop: 0 }}>
-                    <strong>Nýr bútur tilbúinn ({clips.length + 1}. í röð)</strong>
+                  <p style={{ marginTop: 0, color: "#e5e7eb", fontSize: 13 }}>
+                    <strong style={{ color: "#ffffff", fontSize: 15 }}>
+                      Nýr bútur tilbúinn ({clips.length + 1}. í röð)
+                    </strong>
                     {pendingClip.prompt
                       ? ` · „${pendingClip.prompt.slice(0, 100)}${pendingClip.prompt.length > 100 ? "…" : ""}"`
                       : ""}
@@ -882,6 +1025,74 @@ export default function SkyjahreyfimyndClient() {
                       Henda
                     </button>
                   </div>
+                </div>
+              )}
+
+              {clips.length >= 2 && !pendingClip && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: 14,
+                    background: "rgba(234, 179, 8, 0.10)",
+                    border: "2px solid rgba(234, 179, 8, 0.6)",
+                    borderRadius: 10,
+                  }}
+                >
+                  <div
+                    className="ac-row"
+                    style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      <strong style={{ fontSize: 15, color: "#ffffff", display: "block", marginBottom: 4 }}>
+                        Soðja bútana saman í eitt
+                      </strong>
+                      <p style={{ margin: 0, color: "#e5e7eb", fontSize: 13 }}>
+                        Spilar alla {clips.length} bútana í röð inn á canvas og tekur upp í eitt
+                        myndband. Tekur raun-tíma (um það bil samanlagðan lengd bútanna). Útkoman er
+                        MP4 í Chrome/Safari, annars WebM.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ac-btn"
+                      onClick={() => void handleStitch()}
+                      disabled={stitching || busy}
+                    >
+                      {stitching
+                        ? stitchStatus
+                          ? `Tek upp bút ${stitchStatus.current}/${stitchStatus.total}…`
+                          : "Soðja saman…"
+                        : mergedClip
+                          ? "Soðja aftur"
+                          : "Soðja saman"}
+                    </button>
+                  </div>
+                  {mergedClip && !stitching && (
+                    <div style={{ marginTop: 12 }}>
+                      <p style={{ margin: "0 0 8px", color: "#e5e7eb", fontSize: 13 }}>
+                        Soðið úr {mergedClip.sourceCount} bútum · {mergedClip.mimeType}
+                      </p>
+                      <video
+                        src={mergedClip.url}
+                        controls
+                        loop
+                        muted
+                        style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+                      />
+                      <div className="ac-row" style={{ marginTop: 8 }}>
+                        <button
+                          type="button"
+                          className="ac-btn"
+                          onClick={() => {
+                            const ext = mergedClip.mimeType.includes("mp4") ? "mp4" : "webm";
+                            downloadBlob(mergedClip.url, `skyjahreyfimynd-${baseName}-sodid.${ext}`);
+                          }}
+                        >
+                          Sækja soðið myndband
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
