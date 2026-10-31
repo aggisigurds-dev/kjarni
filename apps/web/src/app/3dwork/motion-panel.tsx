@@ -50,6 +50,9 @@ export interface MotionPanelProps {
   shot: ShotParams;
   setShot: (patch: Partial<ShotParams>) => void;
   onOpenHammer: () => void;
+  /** Seed every tunable with a saved marker's numbers in one tap. */
+  onLoadMarker?: () => void;
+  markerName?: string;
 }
 
 function Slider({
@@ -119,6 +122,8 @@ export function MotionPanel({
   shot,
   setShot,
   onOpenHammer,
+  onLoadMarker,
+  markerName,
 }: MotionPanelProps) {
   const tagged = parts.filter((p) => p.role).length;
   const muzzleTone =
@@ -268,7 +273,19 @@ export function MotionPanel({
 
         {/* Tunables */}
         <section className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-          <span className={`${LABEL} block`}>Stillingar</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className={LABEL}>Stillingar</span>
+            {onLoadMarker ? (
+              <button
+                type="button"
+                onClick={onLoadMarker}
+                className="rounded border border-amber-300 bg-amber-100 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wide text-amber-900 hover:bg-amber-200"
+                title="Setja öll gildi á þennan marker (hamar, gorm, þrýsting, háls, kúlu)"
+              >
+                Hlaða: {markerName ?? 'minn marker'}
+              </button>
+            ) : null}
+          </div>
           <Slider label="Slaglengd" suffix="mm" min={5} max={80} step={1} value={Math.round(strokeMm)} onChange={setStroke} />
           <Slider label="Gormalengd (frí)" suffix="mm" min={40} max={200} step={1} value={Math.round(input.freeLengthMm)} onChange={(v) => setInput({ freeLengthMm: v })} />
           <Slider label="Vírþykkt" suffix="mm" min={0.6} max={3.5} step={0.05} value={coil.wireMm} onChange={(v) => setCoil({ wireMm: v })} />

@@ -464,6 +464,27 @@ export function Workbench({
   const [motionCoil, setMotionCoil] = useState<SpringCoil>({ wireMm: 1.6, meanDiameterMm: 12, activeCoils: 18 });
   const [motionClash, setMotionClash] = useState<string[]>([]);
   const [motionShot, setMotionShot] = useState<ShotParams>(DEFAULT_SHOT);
+  // One tap seeds the test-run with Aggi's Iron wolf numbers (⌀28 body, 274 g
+  // hammer, ⌀15/1,5 spring, 70 mm stroke, CO2 57 bar, ⌀6 valve seat, ⌀25
+  // blowback face), overriding whatever the sliders (or localStorage) held.
+  const loadIronWolf = useCallback(() => {
+    setMotionInput({
+      hammerMassG: 274,
+      springRateNmm: 0.85,
+      freeLengthMm: 140,
+      strikeLengthMm: 120,
+      cockedLengthMm: 50,
+      dragN: 4,
+      pressureBar: 57,
+      valveSealMm: 6,
+      valvePreloadN: 15,
+      valveLiftMm: 2.5,
+      contactMs: 1,
+      hammerFaceMm: 25,
+    });
+    setMotionCoil({ wireMm: 1.5, meanDiameterMm: 13.5, activeCoils: 25 });
+    setMotionShot({ boreMm: 17.3, barrelMm: 130, effPct: 12, throatMm: 6, ballG: 3.2, airThrough: true });
+  }, []);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -7425,6 +7446,8 @@ export function Workbench({
               shot={motionShot}
               setShot={(patch) => setMotionShot((cur) => ({ ...cur, ...patch }))}
               onOpenHammer={() => setShowHammer(true)}
+              onLoadMarker={loadIronWolf}
+              markerName="Iron wolf"
             />
           )}
 
