@@ -70,17 +70,59 @@ function downloadBlob(url: string, name: string) {
   a.click();
 }
 
+type Clip = {
+  url: string;
+  blob: Blob;
+  prompt: string;
+  timestamp: number;
+};
+
+/** Tekur síðasta ramma úr myndbands-blob og skilar sem data-URL (jpeg).
+ * Notar off-DOM video + canvas; vafrinn þarf að hafa afkóðað myndbandið
+ * (sem er alltaf tilfellið þegar við köllum þetta — blobinn er nýbúinn
+ * að spila í result-panel-inu). Við seek-um aðeins fyrir enda til að
+ * sleppa við svartan "end of stream" ramma í sumum codec-um. */
+async function extractLastFrameDataUrl(blob: Blob): Promise<string> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const video = document.createElement("video");
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Gat ekki hlaðið myndband fyrir rammatöku."));
+    });
+    const seekTo = Math.max(0, (isFinite(video.duration) ? video.duration : 0) - 0.08);
+    await new Promise<void>((resolve, reject) => {
+      video.onseeked = () => resolve();
+      video.onerror = () => reject(new Error("Rammataka mistókst."));
+      video.currentTime = seekTo;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1024;
+    canvas.height = video.videoHeight || 1024;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context óaðgengilegur.");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.92);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export default function SkyjahreyfimyndClient() {
   const [ready, setReady] = useState(false);
   const [model, setModel] = useState<VideoModel>("wan");
   const [settings, setSettings] = useState<WanSettings>(DEFAULT_WAN_SETTINGS);
   const [kling, setKling] = useState<KlingSettings>(DEFAULT_KLING_SETTINGS);
   const [wanSlots, setWanSlots] = useState<PromptSlotData>({
-    slots: [DEFAULT_WAN_SETTINGS.prompt, "", ""],
+    slots: [DEFAULT_WAN_SETTINGS.prompt, "", "", "", ""],
     active: 0,
   });
   const [klingSlots, setKlingSlots] = useState<PromptSlotData>({
-    slots: [DEFAULT_KLING_SETTINGS.prompt, "", ""],
+    slots: [DEFAULT_KLING_SETTINGS.prompt, "", "", "", ""],
     active: 0,
   });
   const [busy, setBusy] = useState(false);
@@ -95,13 +137,22 @@ export default function SkyjahreyfimyndClient() {
   } | null>(null);
   const [error, setError] = useState("");
   const [source, setSource] = useState<{ url: string; name: string } | null>(null);
-  const [result, setResult] = useState<string>("");
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [pendingClip, setPendingClip] = useState<Clip | null>(null);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; prompt?: string } | null>(null);
-  const resultUrlRef = useRef<string>("");
+  const clipsRef = useRef<Clip[]>([]);
+  const pendingRef = useRef<Clip | null>(null);
   const sourceUrlRef = useRef<string>("");
   const sourceDataUrlRef = useRef<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+
+  useEffect(() => {
+    clipsRef.current = clips;
+  }, [clips]);
+  useEffect(() => {
+    pendingRef.current = pendingClip;
+  }, [pendingClip]);
 
   useEffect(() => {
     const storedWan = readStoredWanSettings();
@@ -114,16 +165,21 @@ export default function SkyjahreyfimyndClient() {
     setReady(true);
     void (async () => {
       const saved = await loadResult(SAVED_KEY);
+      let loadedClips: Clip[] = [];
       if (saved) {
-        if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
-        const url = URL.createObjectURL(saved.blobs[0]);
-        resultUrlRef.current = url;
-        setResult(url);
+        loadedClips = saved.blobs.map((blob, i) => ({
+          url: URL.createObjectURL(blob),
+          blob,
+          prompt: saved.prompt ?? "",
+          timestamp: saved.timestamp - (saved.blobs.length - 1 - i) * 1000,
+        }));
+        setClips(loadedClips);
         setSavedMeta({ timestamp: saved.timestamp, prompt: saved.prompt });
       }
       // Resuma pending prediction ef eitthvað var í vinnslu þegar user
-      // skipti um tab eða endurræsti vafra. Resume-ar með sama líkani og
-      // var sent inn (geymt í pending.mode).
+      // skipti um tab eða endurræsti vafra. isExtension-fáninn segir okkur
+      // hvort útkoman eigi að fara í pendingClip (framlenging) eða verða
+      // nýr fyrsti clip.
       const pending = await loadPending(SAVED_KEY);
       if (pending) {
         setBusy(true);
@@ -143,26 +199,35 @@ export default function SkyjahreyfimyndClient() {
                 logTail: p.logTail,
               }),
           });
-          if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
           const url = URL.createObjectURL(blob);
-          resultUrlRef.current = url;
-          setResult(url);
           const now = Date.now();
-          setSavedMeta({ timestamp: now, prompt: pending.prompt });
-          void saveResult({
-            key: SAVED_KEY,
+          const newClip: Clip = {
+            url,
+            blob,
+            prompt: pending.prompt ?? "",
             timestamp: now,
-            mediaType: "video",
-            blobs: [blob],
-            prompt: pending.prompt,
-          });
+          };
+          if (pending.isExtension && loadedClips.length > 0) {
+            setPendingClip(newClip);
+          } else {
+            // Fyrsti clip (eða resume án pre-existing chain) → leysir af
+            // chain-inn og vistar.
+            loadedClips.forEach((c) => URL.revokeObjectURL(c.url));
+            setClips([newClip]);
+            setSavedMeta({ timestamp: now, prompt: pending.prompt });
+            void saveResult({
+              key: SAVED_KEY,
+              timestamp: now,
+              mediaType: "video",
+              blobs: [blob],
+              prompt: pending.prompt,
+              mode: pending.mode,
+              sourceName: pending.sourceName,
+            });
+          }
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Resume mistókst";
           setError(msg.replace(/^LOCAL_TIMEOUT:\s*/, ""));
-          // Hreinsa pending AÐEINS ef Replicate confirmaði failure/canceled
-          // (meaning: ekki LOCAL_TIMEOUT og ekki transient network error).
-          // Transient errors og page-reloads þurfa pending til að geta reynt
-          // aftur næst þegar user hleður síðunni.
           const isRecoverable = msg.startsWith("LOCAL_TIMEOUT:") || /^(Failed to fetch|NetworkError|TypeError:)/i.test(msg);
           if (!isRecoverable) await clearPending(SAVED_KEY);
         } finally {
@@ -175,7 +240,8 @@ export default function SkyjahreyfimyndClient() {
 
   useEffect(() => {
     return () => {
-      if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
+      clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
+      if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
     };
   }, []);
@@ -222,27 +288,49 @@ export default function SkyjahreyfimyndClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      // Wan 2.2 i2v notar lágupplausn uppfletti; 1024px passar fínt
-      // og heldur okkur örugglega undir Vercel's 4.5MB body-mörkum.
       const shrunk = await shrinkImageForUpload(file, { maxDim: 1024 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
       sourceDataUrlRef.current = shrunk.dataUrl;
       setSource({ url, name: file.name });
-      if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
-      resultUrlRef.current = "";
-      setResult("");
+      // Nýr upphafur → hreinsum fyrri keðju svo það sé enginn vafi um
+      // hvaðan framhald á að koma.
+      clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
+      if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+      setClips([]);
+      setPendingClip(null);
+      setSavedMeta(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
     }
   }
 
-  async function run() {
-    if (!source) {
-      setError("Hladdu upp mynd fyrst.");
-      return;
+  async function run(options?: { extendFrom?: Clip }) {
+    const extendFrom = options?.extendFrom;
+    const isExtension = !!extendFrom;
+
+    let sourceDataUrl: string;
+    let sourceName: string;
+    if (isExtension) {
+      try {
+        setProgress({ status: "sæki síðasta ramma…", elapsed: 0 });
+        sourceDataUrl = await extractLastFrameDataUrl(extendFrom.blob);
+        sourceName = `framhald-${clipsRef.current.length}`;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gat ekki tekið síðasta ramma.");
+        setProgress(null);
+        return;
+      }
+    } else {
+      if (!source) {
+        setError("Hladdu upp mynd fyrst.");
+        return;
+      }
+      sourceDataUrl = sourceDataUrlRef.current;
+      sourceName = source.name;
     }
+
     setBusy(true);
     setError("");
     setProgress({ status: "starting", elapsed: 0 });
@@ -280,36 +368,46 @@ export default function SkyjahreyfimyndClient() {
         predictionId: id,
         submittedAt: Date.now(),
         prompt: activePrompt,
-        mode: model, // notum þetta í resume til að velja rétta pollara
-        sourceName: source.name,
+        mode: model,
+        sourceName,
+        isExtension,
       });
     };
     try {
       const blob =
         model === "kling"
-          ? await generateKlingVideo(klingWithPrompt, sourceDataUrlRef.current, {
+          ? await generateKlingVideo(klingWithPrompt, sourceDataUrl, {
               onStatus: statusCallback,
               onPredictionId,
             })
-          : await generateWanVideo(wanWithPrompt, sourceDataUrlRef.current, {
+          : await generateWanVideo(wanWithPrompt, sourceDataUrl, {
               onStatus: statusCallback,
               onPredictionId,
             });
-      if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       const url = URL.createObjectURL(blob);
-      resultUrlRef.current = url;
-      setResult(url);
       const now = Date.now();
-      setSavedMeta({ timestamp: now, prompt: activePrompt });
-      void saveResult({
-        key: SAVED_KEY,
-        timestamp: now,
-        mediaType: "video",
-        blobs: [blob],
-        prompt: activePrompt,
-        mode: model,
-        sourceName: source.name,
-      });
+      const newClip: Clip = { url, blob, prompt: activePrompt, timestamp: now };
+      if (isExtension) {
+        // Framhald → bíður eftir samþykki notanda
+        if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+        setPendingClip(newClip);
+      } else {
+        // Fyrsti clip → hreinsa fyrri keðju og vista
+        clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
+        if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+        setClips([newClip]);
+        setPendingClip(null);
+        setSavedMeta({ timestamp: now, prompt: activePrompt });
+        void saveResult({
+          key: SAVED_KEY,
+          timestamp: now,
+          mediaType: "video",
+          blobs: [blob],
+          prompt: activePrompt,
+          mode: model,
+          sourceName,
+        });
+      }
       await clearPending(SAVED_KEY);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Skýjahreyfimynd mistókst.";
@@ -322,13 +420,42 @@ export default function SkyjahreyfimyndClient() {
     }
   }
 
+  function acceptPending() {
+    const pending = pendingClip;
+    if (!pending) return;
+    const nextClips = [...clips, pending];
+    setClips(nextClips);
+    setPendingClip(null);
+    setSavedMeta({ timestamp: pending.timestamp, prompt: pending.prompt });
+    void saveResult({
+      key: SAVED_KEY,
+      timestamp: pending.timestamp,
+      mediaType: "video",
+      blobs: nextClips.map((c) => c.blob),
+      prompt: pending.prompt,
+      mode: model,
+      sourceName: source?.name,
+    });
+  }
+
+  function discardPending() {
+    const pending = pendingClip;
+    if (!pending) return;
+    URL.revokeObjectURL(pending.url);
+    setPendingClip(null);
+  }
+
   async function clearSavedResults() {
-    if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
-    resultUrlRef.current = "";
-    setResult("");
+    clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
+    if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+    setClips([]);
+    setPendingClip(null);
     setSavedMeta(null);
     await clearResult(SAVED_KEY);
   }
+
+  const lastClip = clips.length > 0 ? clips[clips.length - 1] : null;
+  const baseName = source?.name?.replace(/\.[^.]+$/, "") || "myndband";
 
   if (!ready) {
     return (
@@ -353,8 +480,9 @@ export default function SkyjahreyfimyndClient() {
           <h1>Skýjahreyfimynd</h1>
           <p className="ac-lead">
             Mynd → myndband í skýinu (Replicate). Veldu Wan 2.2 fyrir hratt og ódýrt, eða Kling 2.1
-            fyrir cinematic gæði. Vilt þú frekar ókeypis og staðbundið: sjá Hreyfimynd (Wan 2.1
-            gegnum þitt eigið ComfyUI).
+            fyrir cinematic gæði. Þegar fyrsti bútur er tilbúinn geturðu framlengt hann — vélin tekur
+            síðasta ramma og býr til næsta bút í beinu framhaldi. Eftir hverja framlengingu velurðu
+            hvort hún sé nothæf eða hvort reyna aftur.
           </p>
 
           <section className="ac-panel">
@@ -433,9 +561,11 @@ export default function SkyjahreyfimyndClient() {
                     sourceUrlRef.current = "";
                     sourceDataUrlRef.current = "";
                     setSource(null);
-                    if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
-                    resultUrlRef.current = "";
-                    setResult("");
+                    clipsRef.current.forEach((c) => URL.revokeObjectURL(c.url));
+                    if (pendingRef.current) URL.revokeObjectURL(pendingRef.current.url);
+                    setClips([]);
+                    setPendingClip(null);
+                    setSavedMeta(null);
                   }}
                 >
                   Ný mynd
@@ -629,28 +759,133 @@ export default function SkyjahreyfimyndClient() {
               </>
             )}
             <button type="button" className="ac-btn" onClick={() => void run()} disabled={busy || !source}>
-              {busy ? "Teikna myndband…" : "Teikna myndband"}
+              {busy ? "Teikna myndband…" : clips.length > 0 ? "Byrja upp á nýtt" : "Teikna myndband"}
             </button>
           </section>
 
-          {result && (
+          {clips.length > 0 && (
             <section className="ac-panel">
-              <h2>Útkoma</h2>
+              <h2>Útkoma{clips.length > 1 ? ` (${clips.length} bútar)` : ""}</h2>
               {savedMeta && (
                 <p className="ac-hint">
                   Vistað {formatSavedTime(savedMeta.timestamp)}
                   {savedMeta.prompt ? ` · „${savedMeta.prompt.slice(0, 80)}${savedMeta.prompt.length > 80 ? "…" : ""}"` : ""}
                 </p>
               )}
-              <video src={result} controls autoPlay loop muted style={{ maxWidth: "100%", borderRadius: 8 }} />
-              <div className="ac-row">
-                <button
-                  type="button"
-                  className="ac-btn ghost"
-                  onClick={() => downloadBlob(result, `skyjahreyfimynd-${source?.name?.replace(/\.[^.]+$/, "") || "myndband"}.mp4`)}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {clips.map((clip, i) => (
+                  <div
+                    key={clip.url}
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 10,
+                      padding: 12,
+                      background: "rgba(255,255,255,0.02)",
+                    }}
+                  >
+                    <p className="ac-hint" style={{ marginTop: 0 }}>
+                      <strong>Bútur {i + 1}</strong>
+                      {clip.prompt ? ` · „${clip.prompt.slice(0, 100)}${clip.prompt.length > 100 ? "…" : ""}"` : ""}
+                    </p>
+                    <video
+                      src={clip.url}
+                      controls
+                      loop
+                      muted
+                      style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+                    />
+                    <div className="ac-row" style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="ac-btn ghost"
+                        onClick={() =>
+                          downloadBlob(clip.url, `skyjahreyfimynd-${baseName}-${String(i + 1).padStart(2, "0")}.mp4`)
+                        }
+                      >
+                        Sækja bút {i + 1}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {!pendingClip && lastClip && !busy && (
+                <div
+                  className="ac-row"
+                  style={{
+                    marginTop: 14,
+                    padding: 14,
+                    background: "rgba(34, 197, 94, 0.10)",
+                    border: "2px solid rgba(34, 197, 94, 0.6)",
+                    borderRadius: 10,
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
                 >
-                  Sækja myndband
-                </button>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <strong style={{ fontSize: 14 }}>Framlengja?</strong>
+                    <p className="ac-hint" style={{ margin: "4px 0 0" }}>
+                      Vélin tekur síðasta ramma úr bút {clips.length} og býr til næsta bút með virka
+                      prompt-inu. Þú getur breytt prompt-inu áður en þú ýtir.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="ac-btn"
+                    onClick={() => void run({ extendFrom: lastClip })}
+                  >
+                    Framlengja bút {clips.length}
+                  </button>
+                </div>
+              )}
+
+              {pendingClip && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: 14,
+                    background: "rgba(99, 102, 241, 0.12)",
+                    border: "2px solid rgba(99, 102, 241, 0.7)",
+                    borderRadius: 10,
+                  }}
+                >
+                  <p className="ac-hint" style={{ marginTop: 0 }}>
+                    <strong>Nýr bútur tilbúinn ({clips.length + 1}. í röð)</strong>
+                    {pendingClip.prompt
+                      ? ` · „${pendingClip.prompt.slice(0, 100)}${pendingClip.prompt.length > 100 ? "…" : ""}"`
+                      : ""}
+                  </p>
+                  <video
+                    src={pendingClip.url}
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                    style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+                  />
+                  <div className="ac-row" style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}>
+                    <button type="button" className="ac-btn" onClick={acceptPending}>
+                      Nota þennan bút
+                    </button>
+                    <button
+                      type="button"
+                      className="ac-btn ghost"
+                      onClick={() => {
+                        discardPending();
+                        if (lastClip) void run({ extendFrom: lastClip });
+                      }}
+                      disabled={busy || !lastClip}
+                    >
+                      Reyna aftur
+                    </button>
+                    <button type="button" className="ac-btn ghost" onClick={discardPending}>
+                      Henda
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="ac-row" style={{ marginTop: 14 }}>
                 <button type="button" className="ac-btn ghost" onClick={() => void clearSavedResults()}>
                   Hreinsa vistað
                 </button>

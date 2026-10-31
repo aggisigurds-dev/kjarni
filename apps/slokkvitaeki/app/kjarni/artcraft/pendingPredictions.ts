@@ -25,6 +25,8 @@ export type PendingPrediction = {
   prompt?: string;
   mode?: string;
   sourceName?: string;
+  /** True ef þessi predicton er framhald af fyrri clip (Skýjahreyfimynd). */
+  isExtension?: boolean;
 };
 
 const PREFIX = "kjarni_pending_";
