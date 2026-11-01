@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Check, ChevronDown, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, Ruler, Scissors, X } from 'lucide-react';
+import { Check, ChevronDown, Crosshair, Eye, EyeOff, FlipHorizontal2, Layers, Loader2, Rotate3d, RotateCcw, RotateCw, Ruler, Scissors, X } from 'lucide-react';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { toast } from 'sonner';
 import { tidyTurn, type ArrangeChange, type Place } from '@/lib/3dwork/favorites';
@@ -102,6 +102,18 @@ export function CollectionArranger({
   const measureRef = useRef(false);
   measureRef.current = measure;
   const measSvgRef = useRef<SVGSVGElement | null>(null);
+  // Parts the user moved/turned this session — left where they are when auto-centre is toggled.
+  const touched = useRef(new Set<string>());
+  // Auto-centre new/unplaced parts onto the AR-15 line (on) or drop them in a side tray (off, default).
+  const [autoCenter, setAutoCenter] = useState(() => {
+    try {
+      return localStorage.getItem('kjarni3d_arrange_autocenter') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const autoCenterRef = useRef(autoCenter);
+  autoCenterRef.current = autoCenter;
 
   const put = useCallback((id: string, place: Place) => {
     const item = items.current.get(id);
@@ -316,6 +328,7 @@ export function CollectionArranger({
         const at = worldAt(event.clientX, event.clientY);
         const place = { ...places.current.get(drag.id), x: Math.round(at.x + drag.dx), y: Math.round(at.y + drag.dy) };
         put(drag.id, place);
+        touched.current.add(drag.id);
         setReadout(place);
         setMoved(true);
         setAuto(false);
@@ -392,7 +405,8 @@ export function CollectionArranger({
       if (cancelled) return;
       const ready = parts.filter((part) => items.current.has(part.id));
       const start = sideLayout(
-        ready.map((part) => ({ bounds: items.current.get(part.id)!.bounds, category: part.category, name: part.name, place: part.place }))
+        ready.map((part) => ({ bounds: items.current.get(part.id)!.bounds, category: part.category, name: part.name, place: part.place })),
+        { trayAll: !autoCenterRef.current }
       );
       ready.forEach((part, index) => put(part.id, start[index]));
       setProgress(null);
@@ -475,6 +489,7 @@ export function CollectionArranger({
       const place = places.current.get(id) ?? { x: 0, y: 0 };
       const next = { ...place, x: place.x + delta[0], y: place.y + delta[1] };
       put(id, next);
+      touched.current.add(id);
       setReadout(next);
       setMoved(true);
       setAuto(false);
@@ -493,6 +508,7 @@ export function CollectionArranger({
     const q = tidyTurn(next.toArray());
     const turned: Place = q ? { x: place.x, y: place.y, q } : { x: place.x, y: place.y };
     put(id, turned);
+    touched.current.add(id);
     setReadout(turned);
     setMoved(true);
     setAuto(false);
@@ -560,6 +576,33 @@ export function CollectionArranger({
     setMoved(false);
     setReadout(selectedId ? places.current.get(selectedId) ?? null : null);
     view.current?.fit();
+  };
+
+  // Re-place the parts the user has not touched: onto the AR-15 line (centre) or out to the side tray.
+  const relayout = (center: boolean) => {
+    const ready = parts.filter((part) => items.current.has(part.id));
+    const input = ready.map((part) => ({
+      bounds: items.current.get(part.id)!.bounds,
+      category: part.category,
+      name: part.name,
+      place: touched.current.has(part.id) ? places.current.get(part.id) : part.place,
+    }));
+    const start = sideLayout(input, { trayAll: !center });
+    ready.forEach((part, index) => {
+      if (!touched.current.has(part.id) && !part.place) put(part.id, start[index]);
+    });
+    view.current?.fit();
+  };
+
+  const toggleAutoCenter = () => {
+    const next = !autoCenter;
+    setAutoCenter(next);
+    try {
+      localStorage.setItem('kjarni3d_arrange_autocenter', next ? '1' : '0');
+    } catch {
+      // storage off — the choice just does not stick between sessions
+    }
+    relayout(next);
   };
 
   const dirty = moved || auto || painted || layered;
@@ -661,10 +704,21 @@ export function CollectionArranger({
         </button>
         <button
           type="button"
+          className={`${ACTION_GHOST} inline-flex items-center gap-1 ${autoCenter ? 'ring-2 ring-sky-400' : ''}`}
+          onClick={toggleAutoCenter}
+          aria-pressed={autoCenter}
+          disabled={Boolean(progress) || saving}
+          title="Miðja sjálfkrafa — kveikt: nýir partar fara á miðju-röðina. Slökkt (sjálfgefið): þeir fara í bakka til hliðar, svo þú dregur þá á sinn stað (t.d. takkar og skrúfur á hliðunum)"
+        >
+          <Crosshair className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Miðja</span>
+        </button>
+        <button
+          type="button"
           className={`${ACTION_GHOST} inline-flex items-center gap-1`}
           onClick={toAuto}
           disabled={Boolean(progress) || saving}
-          title="Sjálfvirkt — allt aftur í AR-15-uppröðunina"
+          title="Sjálfvirkt — senda allt á miðju (AR-15-uppröðunina)"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Sjálfvirkt</span>

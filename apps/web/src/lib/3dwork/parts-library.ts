@@ -385,10 +385,17 @@ const SIDE_COLUMN_MM = BOARD_HEIGHT_MM + 100;
  * the loose ones — the tray, in 3D, which would all land on one spot seen from
  * the side — stand on the table to the right of the rest, in columns.
  */
-export function sideLayout(items: readonly Placed[]): { x: number; y: number }[] {
+export function sideLayout(
+  items: readonly Placed[],
+  opts?: { trayAll?: boolean }
+): { x: number; y: number }[] {
   const auto = assemblyLayout(items);
   const out = items.map((item, index) => (item.place ? { ...item.place } : { x: auto[index].x, y: auto[index].y }));
-  const loose = items.map((_, index) => index).filter((index) => !items[index].place && auto[index].z > 1);
+  // Loose = parts with no saved place that go to the side tray: the off-centre ones always,
+  // and — when trayAll — every unplaced part, so new parts do not jump onto the centre line.
+  const loose = items
+    .map((_, index) => index)
+    .filter((index) => !items[index].place && (opts?.trayAll || auto[index].z > 1));
   if (loose.length === 0) return out;
   let right = -Infinity;
   items.forEach((item, index) => {
