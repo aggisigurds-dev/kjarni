@@ -108,6 +108,8 @@ interface BoardStore {
   setSymbolOpacity: (v: number) => void;
   toggleLayerVisible: (id: string) => void;
   toggleLayerLocked: (id: string) => void;
+  /** „Sýna aðeins þetta lag": felur öll önnur lög; kallað aftur sýnir öll lög. */
+  toggleSoloLayer: (id: string) => void;
   startFirewall: () => void;
   setSelected: (ids: string[]) => void;
   replaceBoard: (data: {
@@ -328,6 +330,18 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         return !obj || objectLayerId(obj) !== id;
       });
     }
+    set({ layers, selectedIds });
+  },
+  toggleSoloLayer: (id) => {
+    const cur = get().layers;
+    const aloneNow = cur.every((l) => (l.id === id ? l.visible : !l.visible));
+    const layers = cur.map((l) => ({ ...l, visible: aloneNow ? true : l.id === id }));
+    const selectedIds = aloneNow
+      ? get().selectedIds
+      : get().selectedIds.filter((sid) => {
+          const obj = get().objects.find((o) => o.id === sid);
+          return !obj || objectLayerId(obj) === id;
+        });
     set({ layers, selectedIds });
   },
   toggleLayerLocked: (id) => {

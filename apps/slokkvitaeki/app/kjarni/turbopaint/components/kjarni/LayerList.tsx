@@ -16,6 +16,7 @@ export function LayerList() {
   const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
   const toggleLayerVisible = useBoardStore((s) => s.toggleLayerVisible);
   const toggleLayerLocked = useBoardStore((s) => s.toggleLayerLocked);
+  const toggleSoloLayer = useBoardStore((s) => s.toggleSoloLayer);
   const pipesOpen = useBoardStore((s) => s.pipesOpen);
   const setPipesOpen = useBoardStore((s) => s.setPipesOpen);
 
@@ -23,13 +24,17 @@ export function LayerList() {
   // fyrsta teikning vafrans á við þjóninn.
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(PIPES_OPEN_KEY) === "1") setPipesOpen(true);
+      // Lagnirnar eru opnar nema notandinn hafi lokað þeim sjálfur — lokaðar færist teiknunin á Almennt og
+      // lagaveljarinn hverfur, svo ný lög (t.d. Gegnumtök loft) virtust „ekki virka".
+      if (window.localStorage.getItem(PIPES_OPEN_KEY) !== "0") setPipesOpen(true);
     } catch {
       /* privat gluggi — sjálfgefið lokað */
     }
   }, [setPipesOpen]);
 
   const counts = countByLayer(objects);
+  const activeLayer = layers.find((l) => l.id === activeLayerId);
+  const onlyActiveVisible = layers.every((l) => (l.id === activeLayerId ? l.visible : !l.visible));
   const drawing = layers.filter((l) => l.kind !== "piping");
   const piping = layers.filter((l) => l.kind === "piping");
   const pipingCount = piping.reduce((n, l) => n + (counts.get(l.id) ?? 0), 0);
@@ -51,6 +56,20 @@ export function LayerList() {
         Lagnir liggja ofan á teikningunni — feldu Teikning til að sjá bara veggi og lagnir, eða hafðu
         skönnunina sýnilega. Nýjar strokur lenda á virka laginu.
       </p>
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs">
+        <span className="size-3 shrink-0 rounded-full ring-1 ring-white/30" style={{ background: activeLayer?.color }} />
+        <span className="min-w-0 flex-1 truncate text-white">
+          <span className="text-stone-500">Teiknar á: </span>
+          {activeLayer?.name ?? "—"}
+        </span>
+        <button
+          type="button"
+          onClick={() => toggleSoloLayer(activeLayerId)}
+          className="shrink-0 rounded border border-white/15 px-1.5 py-0.5 text-[11px] text-stone-300 hover:bg-white/10 hover:text-white"
+        >
+          {onlyActiveVisible ? "Sýna öll lög" : "Sýna aðeins þetta"}
+        </button>
+      </div>
       <div className="space-y-0.5">
         {drawing.map((layer) => (
           <LayerRow

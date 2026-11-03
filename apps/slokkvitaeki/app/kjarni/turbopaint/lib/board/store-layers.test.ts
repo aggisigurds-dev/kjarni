@@ -125,3 +125,15 @@ test("addObjects stamps gegnumtök where a pipe crosses a wall", () => {
   assert.equal(marks[0].layerId, "kalt");
 });
 
+
+test("toggleSoloLayer shows only one layer, and a second call shows all again", () => {
+  emptyBoard();
+  const st = () => useBoardStore.getState();
+  st().toggleSoloLayer("loftræsting");
+  assert.deepEqual(
+    st().layers.filter((l) => l.visible).map((l) => l.id),
+    ["loftræsting"]
+  );
+  st().toggleSoloLayer("loftræsting");
+  assert.ok(st().layers.every((l) => l.visible));
+});
