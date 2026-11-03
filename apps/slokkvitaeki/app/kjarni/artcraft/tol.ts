@@ -172,6 +172,16 @@ export const AUTO_TOOLS = [
     category: "edit" as ToolCategory,
   },
   {
+    id: "svidsmynd",
+    name: "Sviðsmynd",
+    role: "Vörumyndir",
+    desc: "Photoroom-stíll: lýstu nýju umhverfi, AI setur vöruna í senuna (bria/generate-background á Replicate) — engin gríma, enginn bursti.",
+    icon: "🏞️",
+    href: "/kjarni/artcraft/svidsmynd",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "kastljos",
     name: "Kastljós",
     role: "Birta",
