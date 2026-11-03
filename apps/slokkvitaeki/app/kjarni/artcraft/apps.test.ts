@@ -65,6 +65,8 @@ test("kjarni can open every ArtCraft interface from one list", () => {
       "tol",
       "bakgrunnur",
       "svidsmynd",
+      "fjarlaegjahlut",
+      "andlitsfegrun",
       "studio",
       "kastljos",
       "vidgerd",
