@@ -202,6 +202,16 @@ export const AUTO_TOOLS = [
     category: "edit" as ToolCategory,
   },
   {
+    id: "himinn",
+    name: "Himinn",
+    role: "Himinn",
+    desc: "Málaðu yfir himininn, lýstu nýjum — AI setur hann inn, restin óbreytt (bria/genfill á Replicate).",
+    icon: "🌅",
+    href: "/kjarni/artcraft/himinn",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "kastljos",
     name: "Kastljós",
     role: "Birta",

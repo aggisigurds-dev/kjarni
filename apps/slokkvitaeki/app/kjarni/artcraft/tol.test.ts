@@ -25,6 +25,7 @@ test("auto tools live on their own Kjarni page", () => {
       "svidsmynd",
       "fjarlaegjahlut",
       "andlitsfegrun",
+      "himinn",
       "kastljos",
       "mota",
       "vidgerd",

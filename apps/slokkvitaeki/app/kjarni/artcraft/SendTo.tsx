@@ -32,6 +32,7 @@ const DESTINATIONS: Destination[] = [
   { id: "svidsmynd", label: "Sviðsmynd", path: "/kjarni/artcraft/svidsmynd", accepts: ["image"] },
   { id: "fjarlaegjahlut", label: "Fjarlægja hlut", path: "/kjarni/artcraft/fjarlaegjahlut", accepts: ["image"] },
   { id: "andlitsfegrun", label: "Andlitsfegrun", path: "/kjarni/artcraft/andlitsfegrun", accepts: ["image"] },
+  { id: "himinn", label: "Himinn", path: "/kjarni/artcraft/himinn", accepts: ["image"] },
   { id: "skyjahreyfimynd", label: "Skýjahreyfimynd (í video)", path: "/kjarni/artcraft/skyjahreyfimynd", accepts: ["image"] },
   // Video destinations
   { id: "video-upplyfting", label: "Myndbanda-upplyfting", path: "/kjarni/artcraft/video-upplyfting", accepts: ["video"] },
