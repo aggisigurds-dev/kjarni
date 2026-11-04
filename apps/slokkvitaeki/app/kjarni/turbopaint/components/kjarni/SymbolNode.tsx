@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Circle, Group, Image as KonvaImage, Line, Rect, Shape, Text as KonvaText } from "react-konva";
-import { teiknaLykil } from "../../lib/board/merkjasafn";
+import { afskraRaunMyndir, teiknaLykil } from "../../lib/board/merkjasafn";
 import { getSymbol, symbolPaint } from "../../lib/board/symbols";
 import { subscribeSymbolSettings, symbolOverride } from "../../lib/board/symbol-settings";
 
@@ -306,6 +306,8 @@ export function SymbolNode({
   // Endurteiknar þegar stillingarnar berast/breytast (líka úr öðru tæki).
   const [, bump] = useState(0);
   useEffect(() => subscribeSymbolSettings(() => bump((n) => n + 1)), []);
+  // Raunsæ mynd tákns hlóðst — teikna aftur (platan stóð á meðan)
+  useEffect(() => afskraRaunMyndir(() => bump((n) => n + 1)), []);
   const ov = symbolOverride(symbolId);
   const customImg = useSymbolImage(def.teikn ? undefined : ov.imageUrl);
   if (def.teikn) {

@@ -137,6 +137,7 @@ export const LITIR: Record<string, Litur> = {
   bjalla: { bg: "#e11d2e", fg: "#fff" },
   segull: { bg: "#e11d2e", fg: "#fff" },
   hitaskynjari: { bg: "#e11d2e", fg: "#fff" },
+  handbodi: { bg: "#f57c00", fg: "#fff" },
   bjorgunarop: { bg: "#15803d", fg: "#fff" },
   annad: { bg: "#e11d2e", fg: "#fff" },
 };
@@ -224,6 +225,8 @@ export function liturLykils(lykill: string, color?: string | null): Litur {
 }
 
 export function glyffLykils(lykill: string): Glyff {
+  // handbodi er í LITIR Teikningar en ekki SJALF — platan hans ber hnappinn
+  if (lykill === "handbodi") return "alarm";
   return SJALF[lykill] || "extinguisher";
 }
 
@@ -482,7 +485,84 @@ export function teiknaTakn(
   ctx.restore();
 }
 
-/** Tákn úr safninu teiknað eftir lykli (með lit merkisins ef það ber eigin `color`). */
+/* ── Raunsæ tákn og skilti (Agnar 04.11.2026: „raunverulegu táknin inn, í staðinn fyrir þessi gömlu · og raunverulegar
+ * skiltamerkingar") ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * Sömu myndir og Teikning-glugginn notar (slokkvitaeki: img/taeki, 434 RAUN + 474/485): slökkvitæki með áletrun, slöngukefli,
+ * hvítir skynjarar, bjalla, segull og gljáandi skilti (ÚT, handboði, rafmagn). Afritaðar í public/turbopaint/taeki.
+ * Á meðan mynd hleðst (eða vanti hana) teiknast gamla málmplatan — aldrei tómur reitur. Tákn án myndar (SLT/BRSL-skilti,
+ * annað) halda plötunni. */
+export const RAUN_SLOD = "/turbopaint/taeki/";
+/** lykill merkjasafnsins → skráarnafn myndar (án .png) */
+export const RAUN_MYND: Record<string, string> = {
+  lettvatn: "l",
+  duft: "duft",
+  co2: "co2",
+  slanga: "slanga_rod",
+  hose: "slanga_rod",
+  reykskynjari: "reykskynjari",
+  hitaskynjari: "hitaskynjari",
+  bjalla: "bjalla",
+  segull: "segull",
+  handbodi: "skilti_bjalla",
+  ut: "skilti_ut",
+  neydarutgangur: "skilti_ut",
+  bjorgunarop: "skilti_ut",
+  rafmagn: "skilti_rafmagn",
+};
+/** Skilti eru ferköntuð (128 × 128) — fylla sama reit og platan; tæki eru há/breið og fá 1,15 × reitinn eins og í Teikningu. */
+const RAUN_SKILTI = new Set(["skilti_bjalla", "skilti_ut", "skilti_rafmagn"]);
+
+const raunMyndir = new Map<string, HTMLImageElement>();
+const raunHlustendur = new Set<() => void>();
+
+function raunMynd(n: string): HTMLImageElement | null {
+  if (typeof window === "undefined" || typeof window.Image === "undefined") return null;
+  let i = raunMyndir.get(n);
+  if (!i) {
+    i = new window.Image();
+    i.onload = () => {
+      for (const f of raunHlustendur) f();
+    };
+    i.src = RAUN_SLOD + n + ".png";
+    raunMyndir.set(n, i);
+  }
+  return i.complete && i.naturalWidth ? i : null;
+}
+
+/** Kallað þegar mynd tákns hefur hlaðist — teikning skal endurtaka. Skilar afskráningu. */
+export function afskraRaunMyndir(f: () => void): () => void {
+  raunHlustendur.add(f);
+  return () => {
+    raunHlustendur.delete(f);
+  };
+}
+
+/** Raunsæ mynd tákns miðjuð á (x, y); false ef lykillinn á enga mynd eða hún er ekki hlaðin enn. */
+export function teiknaRaun(ctx: CanvasRenderingContext2D, lykill: string, x: number, y: number, size: number): boolean {
+  const n = RAUN_MYND[lykill];
+  if (!n) return false;
+  const i = raunMynd(n);
+  if (!i) return false;
+  const kassi = RAUN_SKILTI.has(n) ? size : size * 1.15;
+  const k = kassi / Math.max(i.naturalWidth, i.naturalHeight);
+  const w = i.naturalWidth * k, h = i.naturalHeight * k;
+  let m = 1;
+  try {
+    const t = ctx.getTransform();
+    m = Math.hypot(t.a, t.b) || 1;
+  } catch {
+    m = 1;
+  }
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,.55)";
+  ctx.shadowBlur = Math.max(3, size * 0.22) * m;
+  ctx.shadowOffsetY = Math.max(1, size * 0.06) * m;
+  ctx.drawImage(i, x - w / 2, y - h / 2, w, h);
+  ctx.restore();
+  return true;
+}
+
+/** Tákn úr safninu teiknað eftir lykli (með lit merkisins ef það ber eigin `color`). Raunsæja myndin gengur fyrir; platan er varaleið. */
 export function teiknaLykil(
   ctx: CanvasRenderingContext2D,
   lykill: string,
@@ -492,6 +572,7 @@ export function teiknaLykil(
   rot?: number,
   color?: string | null
 ) {
+  if (teiknaRaun(ctx, lykill, x, y, size)) return;
   const f = faerslaLykils(lykill);
   const litur = color ? liturLykils(lykill, color) : f ? f.litur : liturLykils(lykill);
   teiknaTakn(ctx, glyffLykils(lykill), litur, x, y, size, rot);
