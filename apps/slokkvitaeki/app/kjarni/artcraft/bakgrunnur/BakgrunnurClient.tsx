@@ -17,8 +17,10 @@ import {
   cutoutFilename,
   isProductImageFile,
   isWhiteBackground,
+  placeOnWhite,
   processProductImage,
 } from "./cut";
+import { cutProductBackgroundViaCloud } from "./cloud";
 
 type Job = {
   id: string;
@@ -29,6 +31,21 @@ type Job = {
   status: "wait" | "run" | "ok" | "err";
   error?: string;
 };
+
+type Method = "browser" | "cloud";
+
+const METHODS: Array<{ id: Method; label: string; hint: string }> = [
+  {
+    id: "browser",
+    label: "Í vafra",
+    hint: "Ekkert að setja upp, ókeypis, myndin fer aldrei neitt — gott fyrir flestar vörumyndir.",
+  },
+  {
+    id: "cloud",
+    label: "Skýjaþjónusta",
+    hint: "Nákvæmari klipping (851-labs/background-remover á Replicate), gott á flóknar brúnir — en kostar smá upphæð per mynd og myndin fer út af vélinni.",
+  },
+];
 
 const SAMPLES = PRODUCTS.filter((p) => p.img).slice(0, 4);
 
@@ -46,6 +63,7 @@ export default function BakgrunnurClient() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [drag, setDrag] = useState(false);
+  const [method, setMethod] = useState<Method>("browser");
 
   async function runJobs(next: Job[]) {
     if (next.length === 0) return;
@@ -55,14 +73,20 @@ export default function BakgrunnurClient() {
       setJobs((cur) => cur.map((row) => (row.id === job.id ? { ...row, status: "run" } : row)));
       setProgress(white ? `Set ${job.name} á hvítt…` : `Tek bakgrunn af ${job.name}…`);
       try {
-        const blob = await processProductImage(job.sourceUrl, {
-          white,
-          onProgress: (info) => {
-            if (info.total > 0) {
-              setProgress(`Hleð líkani ${Math.round((info.current / info.total) * 100)}%`);
-            }
-          },
-        });
+        const blob =
+          method === "cloud"
+            ? await (async () => {
+                const cutout = await cutProductBackgroundViaCloud(job.sourceUrl);
+                return white ? placeOnWhite(cutout) : cutout;
+              })()
+            : await processProductImage(job.sourceUrl, {
+                white,
+                onProgress: (info) => {
+                  if (info.total > 0) {
+                    setProgress(`Hleð líkani ${Math.round((info.current / info.total) * 100)}%`);
+                  }
+                },
+              });
         const resultUrl = URL.createObjectURL(blob);
         setJobs((cur) =>
           cur.map((row) =>
@@ -144,6 +168,31 @@ export default function BakgrunnurClient() {
               Á hvítu
             </a>
           </div>
+
+          <section className="ac-panel">
+            <h2>Aðferð</h2>
+            <div className="ac-modes" role="radiogroup">
+              {METHODS.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={method === m.id}
+                  className={method === m.id ? "on" : undefined}
+                  disabled={busy}
+                  onClick={() => setMethod(m.id)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="ac-hint">{METHODS.find((m) => m.id === method)?.hint}</p>
+            {method === "cloud" && (
+              <p className="ac-hint">
+                Þarf <code>REPLICATE_API_TOKEN</code> stillt sem umhverfisbreytu á þjóninum.
+              </p>
+            )}
+          </section>
 
           <section
             className={`ac-drop ${drag ? "on" : ""}`}

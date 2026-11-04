@@ -9,7 +9,7 @@ import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../Prom
 import SendTo from "../SendTo";
 import StagingPicker from "../StagingPicker";
 import VerkhringirHint from "../VerkhringirHint";
-import { shrinkImageForUpload } from "../replicateImage";
+import { uploadForReplicate } from "../uploadToStorage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import { useStagedSource } from "../useStagedSource";
 import {
@@ -35,6 +35,15 @@ function downloadBlob(url: string, name: string) {
   a.href = url;
   a.download = name;
   a.click();
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
+    img.src = src;
+  });
 }
 
 export default function EndurljosClient() {
@@ -105,13 +114,12 @@ export default function EndurljosClient() {
   async function handleFile(file: File) {
     setError("");
     try {
-      const shrunk = await shrinkImageForUpload(file, { maxDim: 1536, mime: "image/jpeg", quality: 0.92 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
-      const blob = await (await fetch(shrunk.dataUrl)).blob();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = shrunk.dataUrl;
-      setSource({ url, name: file.name, width: shrunk.width, height: shrunk.height });
+      const img = await loadImage(url);
+      sourceDataUrlRef.current = await uploadForReplicate(file, "reference-images");
+      setSource({ url, name: file.name, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
     }

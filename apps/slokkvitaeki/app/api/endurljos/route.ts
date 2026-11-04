@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Endurljós — zsxkib/ic-light á Replicate (foreground only)
 // og zsxkib/ic-light-background (foreground + background preserved).
@@ -76,8 +77,8 @@ export async function POST(req: NextRequest) {
 
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
 
   // Veldu módel: ef preserveBackground er true notum við ic-light-background
@@ -85,9 +86,9 @@ export async function POST(req: NextRequest) {
   // Annars venjulegt foreground-only ic-light.
   const useBackgroundModel =
     body.preserveBackground === true ||
-    (typeof body.backgroundImage === "string" && body.backgroundImage.startsWith("data:image/"));
+    (typeof body.backgroundImage === "string" && isOwnStorageUrl(body.backgroundImage));
   const backgroundImageData =
-    typeof body.backgroundImage === "string" && body.backgroundImage.startsWith("data:image/")
+    typeof body.backgroundImage === "string" && isOwnStorageUrl(body.backgroundImage)
       ? body.backgroundImage
       : body.image; // ef preserveBackground án uppsettrar bg: notum upprunalegu myndina
 

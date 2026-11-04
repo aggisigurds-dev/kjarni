@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Skýjahreyfimynd — mynd → myndband með Wan 2.2 i2v á Replicate.
 // Þetta líkan er sagt „~30s per generation" á vefnum en með cold start getur
@@ -48,8 +49,8 @@ export async function POST(req: NextRequest) {
 
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
 
   const input: Record<string, unknown> = {

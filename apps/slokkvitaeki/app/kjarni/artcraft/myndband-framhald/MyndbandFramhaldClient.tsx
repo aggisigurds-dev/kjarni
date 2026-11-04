@@ -7,6 +7,7 @@ import SendTo from "../SendTo";
 import VerkhringirHint from "../VerkhringirHint";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
+import { uploadForReplicate } from "../uploadToStorage";
 import "../artcraft.css";
 
 /** Myndband-framhald — teygja myndband með því að sækja síðasta frame-ið og
@@ -57,8 +58,8 @@ async function fetchVideoBlob(url: string): Promise<Blob> {
   return res.blob();
 }
 
-/** Sækir síðasta frame-ið úr video blob sem data URL. */
-async function extractLastFrame(blob: Blob): Promise<{ dataUrl: string; width: number; height: number; duration: number }> {
+/** Sækir síðasta frame-ið úr video blob sem PNG-blob. */
+async function extractLastFrame(blob: Blob): Promise<{ frameBlob: Blob; width: number; height: number; duration: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
     const video = document.createElement("video");
@@ -90,14 +91,19 @@ async function extractLastFrame(blob: Blob): Promise<{ dataUrl: string; width: n
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("Canvas 2D ekki stuttur");
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/png");
-        cleanup();
-        resolve({
-          dataUrl,
-          width: video.videoWidth,
-          height: video.videoHeight,
-          duration: video.duration,
-        });
+        canvas.toBlob((frameBlob) => {
+          cleanup();
+          if (!frameBlob) {
+            reject(new Error("Gat ekki vistað ramma"));
+            return;
+          }
+          resolve({
+            frameBlob,
+            width: video.videoWidth,
+            height: video.videoHeight,
+            duration: video.duration,
+          });
+        }, "image/png");
       } catch (err) {
         cleanup();
         reject(err instanceof Error ? err : new Error("Óvænt villa við frame-extract"));
@@ -161,7 +167,8 @@ export default function MyndbandFramhaldClient() {
     try {
       setStatus("Sæki síðasta frame…");
       const extracted = await extractLastFrame(file);
-      setLastFrame(extracted.dataUrl);
+      const frameUrl = await uploadForReplicate(extracted.frameBlob, "reference-images");
+      setLastFrame(frameUrl);
       setFrameInfo({ width: extracted.width, height: extracted.height, duration: extracted.duration });
       setAspectRatio(matchAspectRatio(extracted.width, extracted.height));
       setStatus("");

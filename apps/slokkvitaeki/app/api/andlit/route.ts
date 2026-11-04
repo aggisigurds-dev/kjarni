@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Andlit — zsxkib/instant-id á Replicate
 // (https://replicate.com/zsxkib/instant-id). Learn-free face identity:
@@ -70,8 +71,8 @@ export async function POST(req: NextRequest) {
 
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
-  if (typeof body.faceImage !== "string" || !body.faceImage.startsWith("data:image/")) {
-    return bad(400, "faceImage vantar (data:image/... URL)");
+  if (typeof body.faceImage !== "string" || !isOwnStorageUrl(body.faceImage)) {
+    return bad(400, "faceImage vantar");
   }
 
   const sdxlWeights: SdxlWeights = SDXL_WEIGHTS.includes(body.sdxlWeights as SdxlWeights)
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     output_format: "webp",
     output_quality: 90,
   };
-  if (typeof body.poseImage === "string" && body.poseImage.startsWith("data:image/")) {
+  if (typeof body.poseImage === "string" && isOwnStorageUrl(body.poseImage)) {
     input.pose_image = body.poseImage;
   }
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);

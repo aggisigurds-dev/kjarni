@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Upplyfting -> Clarity -- philz1337x/clarity-pro-upscaler a Replicate.
 //
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
 
   const scale = SCALES.includes(Math.round(body.scaleFactor as number))

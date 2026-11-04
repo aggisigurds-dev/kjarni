@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
-import { shrinkImageForUpload } from "../replicateImage";
+import { uploadForReplicate } from "../uploadToStorage";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
@@ -175,12 +175,12 @@ async function stitchClips(
   return { blob, mimeType };
 }
 
-/** Tekur síðasta ramma úr myndbands-blob og skilar sem data-URL (jpeg).
- * Notar off-DOM video + canvas; vafrinn þarf að hafa afkóðað myndbandið
- * (sem er alltaf tilfellið þegar við köllum þetta — blobinn er nýbúinn
- * að spila í result-panel-inu). Við seek-um aðeins fyrir enda til að
- * sleppa við svartan "end of stream" ramma í sumum codec-um. */
-async function extractLastFrameDataUrl(blob: Blob): Promise<string> {
+/** Tekur síðasta ramma úr myndbands-blob og skilar sem JPEG-blob. Notar
+ * off-DOM video + canvas; vafrinn þarf að hafa afkóðað myndbandið (sem er
+ * alltaf tilfellið þegar við köllum þetta — blobinn er nýbúinn að spila í
+ * result-panel-inu). Við seek-um aðeins fyrir enda til að sleppa við
+ * svartan "end of stream" ramma í sumum codec-um. */
+async function extractLastFrameBlob(blob: Blob): Promise<Blob> {
   const url = URL.createObjectURL(blob);
   try {
     const video = document.createElement("video");
@@ -204,7 +204,9 @@ async function extractLastFrameDataUrl(blob: Blob): Promise<string> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas 2D context óaðgengilegur.");
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.92);
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað ramma"))), "image/jpeg", 0.92);
+    });
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -394,11 +396,10 @@ export default function SkyjahreyfimyndClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      const shrunk = await shrinkImageForUpload(file, { maxDim: 1024 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = shrunk.dataUrl;
+      sourceDataUrlRef.current = await uploadForReplicate(file, "reference-images");
       setSource({ url, name: file.name });
       // Nýr upphafur → hreinsum fyrri keðju svo það sé enginn vafi um
       // hvaðan framhald á að koma.
@@ -445,7 +446,8 @@ export default function SkyjahreyfimyndClient() {
     if (isExtension) {
       try {
         setProgress({ status: "sæki síðasta ramma…", elapsed: 0 });
-        sourceDataUrl = await extractLastFrameDataUrl(extendFrom.blob);
+        const lastFrame = await extractLastFrameBlob(extendFrom.blob);
+        sourceDataUrl = await uploadForReplicate(lastFrame, "reference-images");
         sourceName = `framhald-${clipsRef.current.length}`;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Gat ekki tekið síðasta ramma.");

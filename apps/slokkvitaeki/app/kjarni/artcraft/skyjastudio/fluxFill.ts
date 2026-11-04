@@ -6,7 +6,17 @@
  * það sem er undir, þar sem SDXL á það til að misskilja lýsinguna.
  *
  * Input/output schema sótt beint af Replicate (GET /v1/models/
- * black-forest-labs/flux-fill-dev), ekki giskað — sama agi og sdxl.ts. */
+ * black-forest-labs/flux-fill-dev), ekki giskað — sama agi og sdxl.ts.
+ *
+ * Flux Fill hefur ENGA width/height-breytu — úttakið fylgir sjálfkrafa
+ * upplausn inntaksmyndarinnar. Það er því eina líkanið af þessum þremur
+ * sem fær raunverulega ávinning af upprunalegu, óniðurkvörðuðu myndinni
+ * (sjá SkyjastudioClient.tsx — isFlux greinin notar originalFileRef, ekki
+ * MAX_SOURCE_DIMENSION-takmörkuðu burstamyndina sem SDXL/Juggernaut nota,
+ * því þeirra width/height er hvort eð er klemmt við þeirra eigið
+ * myndgerðar-hámark óháð inntaksstærð). */
+
+import { uploadForReplicate } from "../uploadToStorage";
 
 export type FluxFillSettings = {
   prompt: string;
@@ -84,8 +94,8 @@ async function fetchImageBlob(url: string): Promise<Blob> {
 }
 
 export type FluxFillInpaintExtra = {
-  imageDataUrl: string;
-  maskDataUrl: string;
+  image: Blob;
+  mask: Blob;
 };
 
 export async function generateFluxFillImage(
@@ -93,10 +103,14 @@ export async function generateFluxFillImage(
   inpaint: FluxFillInpaintExtra,
 ): Promise<Blob[]> {
   if (!settings.prompt.trim()) throw new Error("Skrifaðu prompt fyrst.");
+  const [imageUrl, maskUrl] = await Promise.all([
+    uploadForReplicate(inpaint.image, "reference-images"),
+    uploadForReplicate(inpaint.mask, "mask-images"),
+  ]);
   const res = await fetch("/api/skyjastudio/flux-fill", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...settings, image: inpaint.imageDataUrl, mask: inpaint.maskDataUrl }),
+    body: JSON.stringify({ ...settings, image: imageUrl, mask: maskUrl }),
   });
   const text = await res.text();
   if (!res.ok) {

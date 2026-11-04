@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Breyta → Hraðbreyta — prunaai/p-image-edit á Replicate
 // (https://replicate.com/prunaai/p-image-edit). Multi-image edit undir
@@ -44,8 +45,8 @@ export async function POST(req: NextRequest) {
 
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
 
   // prunaai/p-image-edit tekur `images` (array af uri) ekki `image`

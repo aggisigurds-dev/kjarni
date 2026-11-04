@@ -9,7 +9,7 @@ import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../Prom
 import SendTo from "../SendTo";
 import StagingPicker from "../StagingPicker";
 import VerkhringirHint from "../VerkhringirHint";
-import { shrinkImageForUpload } from "../replicateImage";
+import { uploadForReplicate } from "../uploadToStorage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import { useStagedSource } from "../useStagedSource";
 import {
@@ -44,6 +44,15 @@ function downloadBlob(url: string, name: string) {
   a.href = url;
   a.download = name;
   a.click();
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
+    img.src = src;
+  });
 }
 
 export default function AndlitClient() {
@@ -120,19 +129,15 @@ export default function AndlitClient() {
   ): Promise<void> {
     setError("");
     try {
-      const shrunk = await shrinkImageForUpload(file, {
-        maxDim: 1024,
-        mime: "image/jpeg",
-        quality: 0.92,
-      });
-      const blob = await (await fetch(shrunk.dataUrl)).blob();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(file);
+      const img = await loadImage(url);
+      const dataUrl = await uploadForReplicate(file, "reference-images");
       const uploaded: Uploaded = {
         url,
-        dataUrl: shrunk.dataUrl,
+        dataUrl,
         name: file.name,
-        width: shrunk.width,
-        height: shrunk.height,
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
       };
       if (kind === "face") {
         if (faceUrlRef.current) URL.revokeObjectURL(faceUrlRef.current);

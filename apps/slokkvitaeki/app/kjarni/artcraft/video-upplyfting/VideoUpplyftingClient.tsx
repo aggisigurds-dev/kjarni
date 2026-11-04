@@ -7,6 +7,7 @@ import SendTo from "../SendTo";
 import VerkhringirHint from "../VerkhringirHint";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
+import { uploadForReplicate } from "../uploadToStorage";
 import "../artcraft.css";
 
 /** Myndbanda-upplyfting — lucataco/real-esrgan-video á Replicate. Frame-for-
@@ -21,7 +22,9 @@ import "../artcraft.css";
  */
 
 const VIDEO_ACCEPT = "video/mp4,video/webm,video/quicktime";
-const MAX_VIDEO_BYTES = 10 * 1024 * 1024; // 10MB — fjölgun kallar á beina upload á Replicate files API
+// 20MB — Supabase Storage bucket's own file_size_limit (video upload gegnum
+// ../uploadToStorage.ts, ekki lengur gegnum Vercel's 4.5MB body-þak).
+const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 
 const MODELS = [
   {
@@ -59,15 +62,6 @@ type StatusResponse =
   | { status: "failed" | "canceled"; error?: string }
   | { status: string }
   | { error: string };
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
-    r.onerror = () => reject(r.error || new Error("Gat ekki lesið video"));
-    r.readAsDataURL(blob);
-  });
-}
 
 async function fetchVideoBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
@@ -185,12 +179,12 @@ export default function VideoUpplyftingClient() {
     setResultUrl("");
     setResultBlob(null);
     try {
-      const dataUrl = await blobToDataUrl(sourceFile);
+      const videoUrl = await uploadForReplicate(sourceFile, "reference-images");
       setStatus("Sendi á Replicate…");
       const res = await fetch("/api/video-upplyfting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video: dataUrl, model, resolution }),
+        body: JSON.stringify({ videoUrl, model, resolution }),
       });
       const data = (await res.json()) as SubmitResponse;
       if (!res.ok || "error" in data) {

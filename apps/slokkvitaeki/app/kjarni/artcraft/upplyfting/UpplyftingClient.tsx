@@ -9,7 +9,7 @@ import SendTo from "../SendTo";
 import StagingPicker from "../StagingPicker";
 import VerkhringirHint from "../VerkhringirHint";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
-import { shrinkImageForUpload } from "../replicateImage";
+import { uploadForReplicate } from "../uploadToStorage";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import { useStagedSource } from "../useStagedSource";
@@ -52,6 +52,47 @@ function readStoredMode(): UpscaleMode {
 }
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
+    img.src = src;
+  });
+}
+
+// Topaz/Clarity eru upscalerar svo inntakið á að vera eins hátt upplaust og
+// hægt er — EN Replicate's eigin inntaks-fetch fyrir topazlabs/image-upscale
+// mistekst með "upstream request failed" langt yfir þessu marki, staðfest
+// beint með endurteknum köllum (ekki giskað): 3500px/8.2MP tókst í hvert sinn,
+// 4000px/10.7MP mistókst alltaf (bæði við mismunandi skráarstærðir, svo þetta
+// er upplausnar-mark hjá Replicate/Topaz, ekki transport-þakið sem þessi PR
+// annars fjarlægir). 3200px heldur öruggu bili undir þeim mörkum.
+const MAX_UPSCALE_INPUT_DIM = 3200;
+
+async function clampForUpscaleInput(
+  img: HTMLImageElement,
+  file: File,
+): Promise<{ blob: Blob; width: number; height: number }> {
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  const longest = Math.max(w, h);
+  if (longest <= MAX_UPSCALE_INPUT_DIM) return { blob: file, width: w, height: h };
+  const scale = MAX_UPSCALE_INPUT_DIM / longest;
+  const tw = Math.round(w * scale);
+  const th = Math.round(h * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { blob: file, width: w, height: h };
+  ctx.drawImage(img, 0, 0, tw, th);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað mynd"))), "image/jpeg", 0.95);
+  });
+  return { blob, width: tw, height: th };
+}
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -189,15 +230,20 @@ export default function UpplyftingClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      // Topaz skilar hámarksgæðum þegar uppflettingin er há; við þurfum samt
-      // að halda okkur undir Vercel's 4.5MB — leyfum 2048px hámarks hlið og
-      // JPEG q=0.95 til að forðast óþarfa tap á áferð áður en Topaz sér hana.
-      const shrunk = await shrinkImageForUpload(file, { maxDim: 2048, mime: "image/jpeg", quality: 0.95 });
+      // Upscaler-tól eins og Topaz/Clarity fá raunverulegan ávinning af
+      // hárri upprunaupplausn sem inntaki (öfugt við að skala niður fyrst
+      // og "upscale-a" þá þjappaða útgáfu) — image/mask-uploadið fer nú í
+      // gegnum Supabase Storage (sjá ../uploadToStorage.ts) í stað þess að
+      // niðurskala í data: URL fyrir Vercel's 4.5MB þak. clampForUpscaleInput
+      // skalar bara niður fyrir OFAN Replicate's eigin staðfesta mark (sjá
+      // skýringu við MAX_UPSCALE_INPUT_DIM) — langt yfir gamla 2048px þakinu.
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = shrunk.dataUrl;
-      setSource({ url, name: file.name, width: shrunk.width, height: shrunk.height });
+      const img = await loadImage(url);
+      const clamped = await clampForUpscaleInput(img, file);
+      sourceDataUrlRef.current = await uploadForReplicate(clamped.blob, "reference-images");
+      setSource({ url, name: file.name, width: clamped.width, height: clamped.height });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       resultUrlRef.current = "";
       setResult("");

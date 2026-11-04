@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Skýjastúdíó — inpaint-valkostur með black-forest-labs/flux-fill-dev á
 // Replicate (https://replicate.com/black-forest-labs/flux-fill-dev), til
@@ -107,8 +108,8 @@ export async function POST(req: NextRequest) {
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
 
-  const hasImage = typeof body.image === "string" && body.image.startsWith("data:image/");
-  const hasMask = typeof body.mask === "string" && body.mask.startsWith("data:image/");
+  const hasImage = typeof body.image === "string" && isOwnStorageUrl(body.image);
+  const hasMask = typeof body.mask === "string" && isOwnStorageUrl(body.mask);
   if (!hasImage || !hasMask) return bad(400, "image og mask vantar — Flux Fill er eingöngu fyrir inpaint");
 
   const input: Record<string, unknown> = {

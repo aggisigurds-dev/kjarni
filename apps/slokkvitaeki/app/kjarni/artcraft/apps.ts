@@ -341,6 +341,22 @@ export function artcraftLeidarvisirHref(): string {
   return "/kjarni/artcraft/leidarvisir";
 }
 
+export function artcraftSvidsmyndHref(): string {
+  return "/kjarni/artcraft/svidsmynd";
+}
+
+export function artcraftFjarlaegjaHlutHref(): string {
+  return "/kjarni/artcraft/fjarlaegjahlut";
+}
+
+export function artcraftAndlitsfegrunHref(): string {
+  return "/kjarni/artcraft/andlitsfegrun";
+}
+
+export function artcraftHiminnHref(): string {
+  return "/kjarni/artcraft/himinn";
+}
+
 export function artcraftAppHref(id: ArtcraftAppId): string {
   return `/kjarni/artcraft/${id}`;
 }
@@ -383,6 +399,10 @@ export const ARTCRAFT_INTERFACES = [
   })),
   { id: "tol", name: "Tól", href: artcraftToolsHref(), icon: "⚡", role: "Sjálfvirkt", desc: "Fjarlægja bakgrunn, setja vöru á hvítt, eða opna Einkastúdíóið — eitt smell, ekkert að stilla.", uses: ["Eitt smell: bakgrunnur burt, vara á hvítt", "Opnar Einkastúdíó beint"] as readonly string[] },
   { id: "bakgrunnur", name: "Bakgrunnur", href: artcraftBakgrunnurHref(), icon: "✂️", role: "Vörumyndir", desc: "Fjarlægðu vegg, borð og skugga af vörumynd — tilbúin mynd á sekúndum, engin uppsetning.", uses: ["Vörumyndir fyrir vefverslun á hvítum grunni", "Hreinsa vegg og skugga af tilboðsmynd", "Myndir fyrir Facebook-auglýsingar"] as readonly string[] },
+  { id: "svidsmynd", name: "Sviðsmynd", href: artcraftSvidsmyndHref(), icon: "🏞️", role: "Vörumyndir", desc: "Photoroom-stíll: lýstu nýju umhverfi í texta, AI býr til senu í kringum vöruna (bria/generate-background á Replicate) — engin gríma, enginn bursti.", uses: ["Vara úr bílskúr → marmaraborð í stúdíóljósi", "Sama vara í mörgum senum fyrir vefverslun", "Facebook-auglýsing með viðeigandi umhverfi"] as readonly string[] },
+  { id: "fjarlaegjahlut", name: "Fjarlægja hlut", href: artcraftFjarlaegjaHlutHref(), icon: "🧽", role: "Lækningabursti", desc: "PhotoDirector/Snapseed-stíll: málaðu yfir óæskilegan hlut, AI fjarlægir hann og endurgerir bakgrunninn (bria/eraser á Replicate).", uses: ["Fólk í bakgrunni fjarlægt af vörumynd", "Kapall eða skilti burt úr auglýsingamynd", "Vatnsmerki fjarlægt af keyptri mynd"] as readonly string[] },
+  { id: "andlitsfegrun", name: "Andlitsfegrun", href: artcraftAndlitsfegrunHref(), icon: "💆", role: "Portrett", desc: "Airbrush/YouCam-stíll: jöfn húð, bletti burt, hvítari tennur — náttúrulegt retouch, ekki plastic-skin (prunaai/p-image-edit á Replicate).", uses: ["Starfsmannamynd fyrir vefsíðu fegruð", "Portrett fyrir fréttabréf", "Fljótleg lagfæring fyrir samfélagsmiðla"] as readonly string[] },
+  { id: "himinn", name: "Himinn", href: artcraftHiminnHref(), icon: "🌅", role: "Himinn", desc: "PhotoDirector-stíll: málaðu yfir himininn, lýstu nýjum í texta — AI setur hann inn (bria/genfill á Replicate), restin óbreytt.", uses: ["Grár himinn → dramatískt sólarlag á auglýsingamynd", "Himinn skipt út á útimynd fyrir Facebook-auglýsingu", "Stjörnubjört nótt á kvöldmynd af húsnæði"] as readonly string[] },
   { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓", role: "Staðbundið líkan", desc: "Texti → mynd á þinni vél (Automatic1111/Forge/SD.Next). Ekkert fer í skýið, engin ritskoðun.", uses: ["Mynd úr texta án skýs — allt helst á vélinni"] as readonly string[] },
   { id: "kastljos", name: "Kastljós", href: artcraftKastljosHref(), icon: "🔦", role: "Birta", desc: "Finnur persónuna og stillir birtu sitt í hvoru lagi á henni og bakgrunninum — hverja hlið sér.", uses: ["Dekkja bakgrunn á vörumynd án þess að snerta vöruna", "Bjarta persónuna frá einni hlið í hóps-mynd"] as readonly string[] },
   { id: "vidgerd", name: "Ljósmyndaviðgerð", href: artcraftVidgerdHref(), icon: "🩹", role: "Andlit & áferð", desc: "Laga óskýr andlit, rauð augu og áferð — staðbundinn netþjónn, skýjaþjónusta eða í vafra.", uses: ["Laga gamla, óskýra fjölskyldumynd", "Skerpa starfsmannamynd fyrir vefsíðu"] as readonly string[] },
@@ -415,6 +435,10 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft") return "hub";
   if (path === "/kjarni/artcraft/tol") return "tol";
   if (path === "/kjarni/artcraft/bakgrunnur") return "bakgrunnur";
+  if (path === "/kjarni/artcraft/svidsmynd") return "svidsmynd";
+  if (path === "/kjarni/artcraft/fjarlaegjahlut") return "fjarlaegjahlut";
+  if (path === "/kjarni/artcraft/andlitsfegrun") return "andlitsfegrun";
+  if (path === "/kjarni/artcraft/himinn") return "himinn";
   if (path === "/kjarni/artcraft/studio") return "studio";
   if (path === "/kjarni/artcraft/kastljos") return "kastljos";
   if (path === "/kjarni/artcraft/vidgerd") return "vidgerd";

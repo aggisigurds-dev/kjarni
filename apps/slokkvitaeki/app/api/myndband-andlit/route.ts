@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Myndband-andlit — arabyai-replicate/roop_face_swap á Replicate
 // (https://replicate.com/arabyai-replicate/roop_face_swap). Tekur video og
@@ -30,9 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    video?: string;
     videoUrl?: string;
-    faceImage?: string;
     faceImageUrl?: string;
   };
   try {
@@ -41,21 +40,12 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  const videoInput =
-    typeof body.video === "string" && body.video.startsWith("data:video/")
-      ? body.video
-      : typeof body.videoUrl === "string" && /^https?:\/\//i.test(body.videoUrl)
-        ? body.videoUrl
-        : null;
-  if (!videoInput) return bad(400, "video vantar (data:video/... eða https://...)");
+  const videoInput = typeof body.videoUrl === "string" && isOwnStorageUrl(body.videoUrl) ? body.videoUrl : null;
+  if (!videoInput) return bad(400, "video vantar");
 
   const faceInput =
-    typeof body.faceImage === "string" && body.faceImage.startsWith("data:image/")
-      ? body.faceImage
-      : typeof body.faceImageUrl === "string" && /^https?:\/\//i.test(body.faceImageUrl)
-        ? body.faceImageUrl
-        : null;
-  if (!faceInput) return bad(400, "faceImage vantar (data:image/... eða https://...)");
+    typeof body.faceImageUrl === "string" && isOwnStorageUrl(body.faceImageUrl) ? body.faceImageUrl : null;
+  if (!faceInput) return bad(400, "faceImage vantar");
 
   try {
     const prediction = await submitReplicate({

@@ -30,8 +30,9 @@ import {
   readStoredJuggernautSettings,
   type JuggernautSettings,
 } from "./juggernaut";
-import { cloneRaster, createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
+import { createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
 import { compositeMaskOverlay, maskCoverage, paintCircle } from "./maskPaint";
+import { upscaleMaskToBlob } from "../maskUpscale";
 import ImageZoom from "../ImageZoom";
 import { PromptSlots, readStoredPromptSlots, type PromptSlotData } from "../PromptSlots";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
@@ -40,7 +41,14 @@ const SAVED_RESULT_KEY = "skyjastudio";
 const SKYJASTUDIO_PROMPT_SLOTS_KEY = "kjarni_private_skyjastudio_prompt_slots";
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
-const MAX_SOURCE_DIMENSION = 1024;
+// SDXL/Juggernaut clamp their own generation width/height to 1536 (see
+// clampSdxlSize/clampJuggernautSize) regardless of input size — this used
+// to be capped much lower (1024) purely to keep the inline-base64 request
+// under Vercel's 4.5MB function body limit. Now that the image/mask upload
+// separately via Supabase Storage (see ../uploadToStorage.ts), the canvas
+// can paint at the models' own real ceiling instead of an artificially
+// lower one.
+const MAX_SOURCE_DIMENSION = 1536;
 
 type Mode = "txt2img" | "img2img" | "inpaint";
 
@@ -135,10 +143,12 @@ function drawRaster(canvas: HTMLCanvasElement, raster: Raster) {
   ctx.putImageData(new ImageData(new Uint8ClampedArray(raster.data), raster.width, raster.height), 0, 0);
 }
 
-function rasterToDataUrl(raster: Raster, mime: string, quality?: number): string {
+function rasterToBlob(raster: Raster, mime: string, quality?: number): Promise<Blob> {
   const canvas = document.createElement("canvas");
   drawRaster(canvas, raster);
-  return canvas.toDataURL(mime, quality);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Gat ekki vistað mynd"))), mime, quality);
+  });
 }
 
 function downloadBlob(url: string, name: string) {
@@ -179,6 +189,7 @@ export default function SkyjastudioClient() {
   const stageRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<Raster | null>(null);
   const maskRef = useRef<Raster | null>(null);
+  const originalFileRef = useRef<File | null>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
   const brushSizeRef = useRef(40);
@@ -280,6 +291,7 @@ export default function SkyjastudioClient() {
       const raster = rasterFromImage(img);
       sourceRef.current = raster;
       maskRef.current = createRaster(raster.width, raster.height, 0);
+      originalFileRef.current = file;
       setMaskPainted(false);
       setHasImage(true);
       setResults([]);
@@ -367,6 +379,7 @@ export default function SkyjastudioClient() {
   function newImage() {
     sourceRef.current = null;
     maskRef.current = null;
+    originalFileRef.current = null;
     setHasImage(false);
     setMaskPainted(false);
   }
@@ -403,30 +416,46 @@ export default function SkyjastudioClient() {
     try {
       let blobs: Blob[];
       if (mode === "inpaint" && sourceRef.current && maskRef.current) {
-        const inpaintExtra = {
-          imageDataUrl: rasterToDataUrl(sourceRef.current, "image/jpeg", 0.92),
-          maskDataUrl: rasterToDataUrl(maskRef.current, "image/png"),
-        };
         if (isFlux) {
-          blobs = await generateFluxFillImage(fluxForRun, inpaintExtra);
+          // Flux Fill has no width/height — output follows the input
+          // image's own resolution, so (unlike SDXL/Juggernaut below) it's
+          // worth sending the TRUE original file here, not the painting
+          // canvas's capped raster. The mask has to be upscaled to match.
+          const originalFile = originalFileRef.current;
+          if (!originalFile) throw new Error("Hladdu upp mynd fyrst.");
+          const img = await loadImage(URL.createObjectURL(originalFile));
+          const maskBlob = await upscaleMaskToBlob(
+            maskRef.current,
+            img.naturalWidth || img.width,
+            img.naturalHeight || img.height,
+          );
+          blobs = await generateFluxFillImage(fluxForRun, { image: originalFile, mask: maskBlob });
         } else if (isJuggernaut) {
           const sizedJugg = { ...juggForRun, width: sourceRef.current.width, height: sourceRef.current.height };
-          blobs = await generateJuggernautImage(sizedJugg, inpaintExtra);
+          const [imageBlob, maskBlob] = await Promise.all([
+            rasterToBlob(sourceRef.current, "image/jpeg", 0.92),
+            rasterToBlob(maskRef.current, "image/png"),
+          ]);
+          blobs = await generateJuggernautImage(sizedJugg, { image: imageBlob, mask: maskBlob });
         } else {
           const sizedSettings = { ...sdxlForRun, width: sourceRef.current.width, height: sourceRef.current.height };
-          blobs = await generateSdxlImage(sizedSettings, inpaintExtra);
+          const [imageBlob, maskBlob] = await Promise.all([
+            rasterToBlob(sourceRef.current, "image/jpeg", 0.92),
+            rasterToBlob(maskRef.current, "image/png"),
+          ]);
+          blobs = await generateSdxlImage(sizedSettings, { image: imageBlob, mask: maskBlob });
         }
       } else if (mode === "img2img" && sourceRef.current) {
         // Img2img: image uten mask — SDXL/Juggernaut routes meðhöndla það
         // sjálfkrafa (sjá hasMask check); Flux Fill er inpaint-only svo það
         // fellur niður í SDXL í effectiveInpaintModel.
-        const extra = { imageDataUrl: rasterToDataUrl(sourceRef.current, "image/jpeg", 0.92) };
+        const imageBlob = await rasterToBlob(sourceRef.current, "image/jpeg", 0.92);
         if (isJuggernaut) {
           const sizedJugg = { ...juggForRun, width: sourceRef.current.width, height: sourceRef.current.height };
-          blobs = await generateJuggernautImage(sizedJugg, extra);
+          blobs = await generateJuggernautImage(sizedJugg, { image: imageBlob });
         } else {
           const sizedSettings = { ...sdxlForRun, width: sourceRef.current.width, height: sourceRef.current.height };
-          blobs = await generateSdxlImage(sizedSettings, extra);
+          blobs = await generateSdxlImage(sizedSettings, { image: imageBlob });
         }
       } else if (isJuggernaut) {
         blobs = await generateJuggernautImage(juggForRun);

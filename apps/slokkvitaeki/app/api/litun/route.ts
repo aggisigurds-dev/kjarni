@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Litun — piddnad/ddcolor á Replicate
 // (https://replicate.com/piddnad/ddcolor). Dual-decoder colorization —
@@ -32,8 +33,8 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
   const modelSize: ModelSize = MODEL_SIZES.includes(body.modelSize as ModelSize)
     ? (body.modelSize as ModelSize)

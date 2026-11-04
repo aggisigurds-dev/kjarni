@@ -1,42 +1,21 @@
 /** Cloud (Replicate-backed) path for Ljósmyndaviðgerð — no local server to
  * run, but the photo leaves this machine and each call costs a small fee.
- * Resizes/compresses client-side to a data URL so the server route never
- * needs to touch an uploads API — just forwards the data URL straight to
- * Replicate's GFPGAN model (see app/api/vidgerd/replicate/route.ts). */
+ * Uploads the ORIGINAL photo straight to Supabase Storage (see
+ * ../uploadToStorage.ts) and sends Replicate's GFPGAN model that URL — no
+ * client-side resizing. Previously this downscaled to ~1400px and inlined
+ * the result as base64 in the request JSON, purely to fit under Vercel's
+ * hard 4.5MB function body limit; that's what was capping every output's
+ * resolution regardless of what GFPGAN itself could do (see
+ * https://vercel.com/docs/errors/function_payload_too_large). */
 
-const MAX_CLOUD_DIMENSION = 1400;
-const CLOUD_JPEG_QUALITY = 0.85;
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
-    img.src = src;
-  });
-}
-
-async function toResizedDataUrl(file: Blob): Promise<string> {
-  const img = await loadImage(URL.createObjectURL(file));
-  const longest = Math.max(img.naturalWidth, img.naturalHeight);
-  const scale = longest > MAX_CLOUD_DIMENSION ? MAX_CLOUD_DIMENSION / longest : 1;
-  const width = Math.max(1, Math.round(img.naturalWidth * scale));
-  const height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Gat ekki teiknað á striga");
-  ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", CLOUD_JPEG_QUALITY);
-}
+import { uploadForReplicate } from "../uploadToStorage";
 
 export async function enhancePhotoViaCloud(file: Blob): Promise<Blob> {
-  const imageDataUrl = await toResizedDataUrl(file);
+  const imageUrl = await uploadForReplicate(file, "reference-images");
   const res = await fetch("/api/vidgerd/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageDataUrl }),
+    body: JSON.stringify({ imageUrl }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
