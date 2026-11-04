@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Skýjastúdíó — þriðja líkanið við hliðina á stability-ai/sdxl og
 // black-forest-labs/flux-fill-dev: asiryan/juggernaut-xl-v7
@@ -80,8 +81,8 @@ export async function POST(req: NextRequest) {
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar");
 
-  const hasImage = typeof body.image === "string" && body.image.startsWith("data:image/");
-  const hasMask = typeof body.mask === "string" && body.mask.startsWith("data:image/");
+  const hasImage = typeof body.image === "string" && isOwnStorageUrl(body.image);
+  const hasMask = typeof body.mask === "string" && isOwnStorageUrl(body.mask);
   if (hasMask && !hasImage) return bad(400, "mask krefst image (inpaint þarf bæði)");
 
   const input: Record<string, unknown> = {

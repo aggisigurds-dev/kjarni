@@ -11,6 +11,8 @@
  * sdxl), ekki giskað — sjá líka app/api/skyjastudio/replicate/route.ts sem
  * talar við raunverulega Replicate API-ið. */
 
+import { uploadForReplicate } from "../uploadToStorage";
+
 export const SDXL_SCHEDULERS = [
   "DDIM",
   "DPMSolverMultistep",
@@ -133,20 +135,25 @@ async function fetchImageBlob(url: string): Promise<Blob> {
 }
 
 export type InpaintExtra = {
-  imageDataUrl: string;
+  image: Blob;
   /** Optional: ef sleppt, þá er þetta img2img (image uten mask). */
-  maskDataUrl?: string;
+  mask?: Blob;
 };
 
 export async function generateSdxlImage(settings: SdxlSettings, inpaint?: InpaintExtra): Promise<Blob[]> {
   if (!settings.prompt.trim()) throw new Error("Skrifaðu prompt fyrst.");
+  let extra: { image?: string; mask?: string } = {};
+  if (inpaint) {
+    const [imageUrl, maskUrl] = await Promise.all([
+      uploadForReplicate(inpaint.image, "reference-images"),
+      inpaint.mask ? uploadForReplicate(inpaint.mask, "mask-images") : Promise.resolve(undefined),
+    ]);
+    extra = { image: imageUrl, mask: maskUrl };
+  }
   const res = await fetch("/api/skyjastudio/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...settings,
-      ...(inpaint ? { image: inpaint.imageDataUrl, mask: inpaint.maskDataUrl } : {}),
-    }),
+    body: JSON.stringify({ ...settings, ...extra }),
   });
   const text = await res.text();
   if (!res.ok) {
