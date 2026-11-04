@@ -23,7 +23,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
+import { GREININGAR_ADGERDIR, HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import { DRAEGI_LYKILL } from "../../lib/board/slt-brsl";
 
 export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
@@ -70,6 +70,8 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const setHamur = useHamur((s) => s.setHamur);
   useEffect(() => hladaHam(), []);
   const h = getHamur(hamur);
+  // Greiningartólin eru í efstu stikunni / Greining-flipanum — hér aðeins teikni- og breytitól hamsins.
+  const adgerdir = h.adgerdir.filter((a) => !GREININGAR_ADGERDIR.includes(a));
   // „Sýna drægi slangna (165.BR1)" — sjálfgefið AF (Agnar 07.10.2026: „og taka þennan rauða hring")
   const [draegi, setDraegi] = useState(false);
   useEffect(() => {
@@ -99,9 +101,9 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
           </button>
         ))}
       </div>
-      {h.adgerdir.length ? (
+      {adgerdir.length ? (
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {h.adgerdir.map((a) => {
+        {adgerdir.map((a) => {
           const d = ADGERDIR[a];
           return (
             <button

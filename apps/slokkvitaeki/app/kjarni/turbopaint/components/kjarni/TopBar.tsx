@@ -2,8 +2,13 @@
 
 import { toast } from "sonner";
 import {
+  Box,
+  BrickWall,
   Cloud,
   Download,
+  DoorOpen,
+  Flame,
+  ScanText,
   Link2,
   Grid3x3,
   HelpCircle,
@@ -18,6 +23,10 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
+import { GreiningTolSpjald } from "./GreiningTolSpjald";
+import { finnaHurdirTillogur } from "./VeggjaRitill";
+import { useErSimi } from "../../lib/board/simi";
+import type { SkrefId } from "../../lib/board/sjalfvirkt-stada";
 import Link from "next/link";
 import { boardBounds, cameraFit } from "../../lib/board/geometry";
 import { IMPORT_FILE_ACCEPT, IMPORT_SIZE_HINT } from "../../lib/board/import-limits";
@@ -37,7 +46,7 @@ import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
 import { HeimilisfangLeit } from "./HeimilisfangLeit";
 import { ADGERDIR } from "./HamStika";
-import { HAMIR, getHamur, useHamur, type HamAdgerd } from "../../lib/board/hamir";
+import { GREININGAR_ADGERDIR, HAMIR, getHamur, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +81,7 @@ export function TopBar({
   onImportUrl,
   onVeljaTeikningu,
   onOpenLayers,
+  greining,
   viewSize,
 }: {
   onImport: (files: File[]) => void;
@@ -89,8 +99,11 @@ export function TopBar({
   onVeljaTeikningu?: (infoUrl: string) => void;
   /** Opna lög/eiginleika á síma — panellinn er falinn undir lg. */
   onOpenLayers?: () => void;
+  /** Greining-flipinn í stikunni (skjáborð): aðeins þegar teikning er á borðinu. */
+  greining?: { onAdgerd: (a: HamAdgerd) => void; keyraCombo: (valin: SkrefId[]) => void; uttekt: boolean } | null;
   viewSize: { width: number; height: number };
 }) {
+  const simi = useErSimi();
   const fileRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const name = useBoardStore((s) => s.name);
@@ -272,18 +285,6 @@ export function TopBar({
           <ZoomIn className="size-4" />
         </IconBtn>
       </div>
-      <select
-        value={quality}
-        onChange={(e) =>
-          useBoardStore.getState().setImportQuality(e.target.value as typeof quality)
-        }
-        className="hidden rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-stone-300 2xl:block"
-        title="Innflutningsgæði. Stórar síður eru klemmdar í 40 MP (~160 MB) svo vafrinn fari ekki úr minni."
-      >
-        <option value="fast">Flýti · 3.2k</option>
-        <option value="standard">Staðall · 7.2k</option>
-        <option value="print">Há gæði · 12.5k</option>
-      </select>
       <input
         id="tp-import-input"
         ref={fileRef}
@@ -318,7 +319,31 @@ export function TopBar({
         <Link2 className="size-4" />
         <span className="hidden xl:inline">Af slóð</span>
       </Button>
-      {/* E-30/E-60, Gegnumtök, Hreinsa, Veggir og 3D búa í hamstikunni (HamStika) — hver í sínum ham. */}
+      {/* Greining: einn samanbrotinn flipi með öllum greiningartólunum (Agnar 04.11.2026: „setja greiningartakkana í top panel stikuna“).
+          Á síma stendur hann á borðinu efst til hægri (WhiteboardApp) — stikan er of þröng. */}
+      {greining && !simi ? (
+        <>
+          {/* Greiningartakkarnir beint í stikunni (≥ 2xl; á þrengri skjá er allt í „Greining“ flipanum hér við hliðina). */}
+          <div className="hidden items-center gap-0.5 2xl:flex" role="toolbar" aria-label="Greiningartól" data-greining-stika>
+            {(
+              [
+                { id: "veggir", texti: "Veggir", titill: "Greina veggi: vigur-PDF lesið beint, skönnun greind af veggjavélinni eða í vafranum", takn: <BrickWall className="size-4" />, keyra: () => greining.onAdgerd("veggir") },
+                { id: "hurdir", texti: "Hurðir", titill: "Finna hurðir: hurðabogar og op í veggjum sem tillögur", takn: <DoorOpen className="size-4" />, keyra: () => void finnaHurdirTillogur() },
+                { id: "ei", texti: "EI", titill: "Lesa EI-merkingar teikningarinnar og lita eldveggina", takn: <Flame className="size-4 text-[#FE653F]" />, keyra: () => greining.onAdgerd("ei") },
+                { id: "taeki", texti: "Búnaður", titill: "Búnaður af teikningu: SLT, BRSL, reykskynjarar, segullokar, BO, ÚT", takn: <ScanText className="size-4" />, keyra: () => greining.onAdgerd("slt-brsl") },
+                { id: "3d", texti: "3D", titill: "Húsið í þrívídd úr veggjum og tækjum allra hæða", takn: <Box className="size-4" />, keyra: () => greining.onAdgerd("thrividd") },
+              ] as const
+            ).map((t) => (
+              <Button key={t.id} size="sm" variant="ghost" className="text-stone-200 hover:bg-white/10 hover:text-white" title={t.titill} data-greining-stika-takki={t.id} onClick={t.keyra}>
+                {t.takn}
+                {t.texti}
+              </Button>
+            ))}
+          </div>
+          <GreiningTolSpjald onAdgerd={greining.onAdgerd} keyraCombo={greining.keyraCombo} uttekt={greining.uttekt} />
+        </>
+      ) : null}
+      {/* E-30/E-60, Gegnumtök, Hreinsa, Veggir og 3D búa í hamstikunni (HamStika) og í Greining-flipanum. */}
       <Button
         size="sm"
         className="hidden bg-[#FE653F] text-white hover:bg-[#E8553F] sm:inline-flex"
@@ -347,7 +372,7 @@ export function TopBar({
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator className="lg:hidden" />
-          {getHamur(hamur).adgerdir.map((a) => (
+          {getHamur(hamur).adgerdir.filter((a) => !GREININGAR_ADGERDIR.includes(a)).map((a) => (
             <DropdownMenuItem key={a} className="lg:hidden" onClick={() => onHamAdgerd?.(a)}>
               {ADGERDIR[a].texti}
             </DropdownMenuItem>
@@ -409,22 +434,24 @@ export function TopBar({
           <DropdownMenuSeparator className="2xl:hidden" />
           <DropdownMenuItem onClick={() => void resetBoard()}>Sækja dæmiborð</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onOpenSample?.()}>Opna gólfplön (PDF)</DropdownMenuItem>
-          {/* Á síma eru þessar tvær aðgerðir hamsins efst í valmyndinni — ekki tvítaka. */}
-          <DropdownMenuItem className="max-lg:hidden" onClick={() => onMarkFirewalls?.()}>
-            Merkja eldveggi (EI-30 / EI-60)
-          </DropdownMenuItem>
-          <DropdownMenuItem className="max-lg:hidden" onClick={() => onHamAdgerd?.("slt-brsl")}>
-            Búnaður af teikningu (SLT / BRSL, reykskynjarar, segullokar, BO, ÚT)
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="max-lg:hidden"
-            onClick={() => {
-              const n = useBoardStore.getState().refreshCrossings();
-              toast.message(n ? `Gegnumtök: ${n} krossar vegg` : "Engin lagnir krossa vegg");
-            }}
-          >
-            Gegnumtök — krossar vegg
-          </DropdownMenuItem>
+          {/* Greiningartólin (EI, búnaður, gegnumtök …) eru í Greining-flipanum. Innflutningsgæðin búa hér (Agnar 04.11.2026). */}
+          <DropdownMenuSeparator />
+          <div className="px-2 py-1 text-[10px] font-semibold tracking-wide text-stone-500 uppercase" title="Stórar síður eru klemmdar í 40 MP (~160 MB) svo vafrinn fari ekki úr minni.">
+            Innflutningsgæði
+          </div>
+          {(
+            [
+              ["fast", "Flýti · 3.2k"],
+              ["standard", "Staðall · 7.2k"],
+              ["print", "Há gæði · 12.5k"],
+            ] as const
+          ).map(([id, texti]) => (
+            <DropdownMenuItem key={id} onClick={() => useBoardStore.getState().setImportQuality(id)}>
+              {quality === id ? "● " : "○ "}
+              {texti}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => void clearBoard()}>Tómt borð</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onHelp}>Flýtilyklar</DropdownMenuItem>

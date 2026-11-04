@@ -1987,6 +1987,7 @@ export function WhiteboardApp() {
         on3d={() => setThrividd(true)}
         onHamAdgerd={hamAdgerd}
         onOpenLayers={() => setPanelOpen(true)}
+        greining={hefurMyndGr ? { onAdgerd: hamAdgerd, keyraCombo: keyraGreiningu, uttekt: !!tengdMynd?.uttekt } : null}
         viewSize={size}
       />
       <VeggjaYfirlit />
@@ -2127,7 +2128,7 @@ export function WhiteboardApp() {
               {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir og greiningartólin efst til hægri undir „Vista" — ekki fyrir á borðinu */}
               {simi && tengdMynd?.uttekt ? <HamValSimi /> : null}
               {/* Greining: einn samanbrotinn flipi með öllum greiningartólunum — combo (valdir hópar í röð) eða stök tól */}
-              {hefurMyndGr ? <GreiningTolSpjald onAdgerd={hamAdgerd} keyraCombo={keyraGreiningu} uttekt={!!tengdMynd?.uttekt} /> : null}
+              {simi && hefurMyndGr ? <GreiningTolSpjald onAdgerd={hamAdgerd} keyraCombo={keyraGreiningu} uttekt={!!tengdMynd?.uttekt} /> : null}
               {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
                 <div className="pointer-events-auto" data-magntafla>
                   <CountTable />

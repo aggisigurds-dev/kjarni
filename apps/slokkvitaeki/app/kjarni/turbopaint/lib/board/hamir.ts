@@ -29,6 +29,9 @@ export type HamAdgerd =
   | "gatreitur"
   | "croppa-oft";
 
+/** Greiningaraðgerðir: búa í efstu stikunni og Greining-flipanum (Agnar 04.11.2026: „setja greiningartakkana í top panel stikuna“) — ekki í hamstikunni. */
+export const GREININGAR_ADGERDIR: HamAdgerd[] = ["veggir", "ei", "slt-brsl", "thrividd", "gegnumtok"];
+
 export interface Hamur {
   id: HamurId;
   heiti: string;
