@@ -95,7 +95,7 @@ export function LayerList() {
         >
           {gegnumtakOn ? "Hætta" : "Setja gegnumtak"}
         </button>
-        <label className="flex min-w-0 flex-1 items-center justify-end gap-1 text-stone-400">
+        <label className="flex min-w-0 flex-1 items-center justify-end gap-1 text-stone-400" title="Þvermál lagnar í mm">
           <input
             type="number"
             min={10}
@@ -103,9 +103,9 @@ export function LayerList() {
             step={50}
             value={gegnumtakMm}
             onChange={(e) => setGegnumtakMm(Number(e.target.value))}
-            className="w-16 rounded border border-white/15 bg-transparent px-1 py-0.5 text-right tabular-nums text-white"
+            className="w-14 rounded border border-white/15 bg-transparent px-1 py-0.5 text-right tabular-nums text-white"
           />
-          mm
+          <span className="shrink-0">mm</span>
         </label>
       </div>
       <div className="space-y-0.5">
