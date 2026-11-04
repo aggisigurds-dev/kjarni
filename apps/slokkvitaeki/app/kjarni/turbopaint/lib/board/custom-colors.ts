@@ -69,6 +69,29 @@ export function rememberCustomColor(value: string): void {
   for (const listener of listeners) listener();
 }
 
+function skrifa(next: string[]): void {
+  try {
+    window.localStorage.setItem(CUSTOM_COLORS_KEY, JSON.stringify(next));
+  } catch {
+    /* private mode */
+  }
+  cachedRaw = undefined;
+  read();
+  for (const listener of listeners) listener();
+}
+
+/** Einn sérsniðinn litur fjarlægður úr stikunni (hægri smellur / löng snerting á sýnishorninu). */
+export function forgetCustomColor(value: string): void {
+  const hex = normalizeHex(value);
+  if (!hex) return;
+  skrifa(read().filter((c) => c !== hex));
+}
+
+/** Allir sérsniðnir litir burt (hnappurinn „×" við litina). */
+export function clearCustomColors(): void {
+  skrifa([]);
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => {

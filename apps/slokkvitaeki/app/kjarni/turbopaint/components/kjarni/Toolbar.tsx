@@ -26,7 +26,7 @@ import {
 import { getSymbol, symbolColors } from "../../lib/board/symbols";
 import { SYMBOL_OPACITY_KEY, useBoardStore } from "../../lib/board/store";
 import { CustomColorSwatch } from "./ColorPicker";
-import { useCustomColors } from "../../lib/board/custom-colors";
+import { clearCustomColors, forgetCustomColor, useCustomColors } from "../../lib/board/custom-colors";
 import {
   getStampSize,
   setStampSize,
@@ -385,6 +385,12 @@ export function StyleStrip() {
         <button
           key={color}
           type="button"
+          title={customColors.includes(color.toLowerCase()) ? "Hægri smellur eða löng snerting fjarlægir þennan lit" : undefined}
+          onContextMenu={(e) => {
+            if (!customColors.includes(color.toLowerCase())) return;
+            e.preventDefault();
+            forgetCustomColor(color);
+          }}
           onClick={() => {
             setStyle({ stroke: color });
             applyToSelection({ stroke: color });
@@ -396,6 +402,18 @@ export function StyleStrip() {
           style={{ background: color }}
         />
       ))}
+      {customColors.length ? (
+        <button
+          type="button"
+          data-hreinsa-liti
+          title="Fjarlægja alla sérsniðna liti úr stikunni"
+          aria-label="Fjarlægja sérsniðna liti"
+          onClick={clearCustomColors}
+          className="grid size-5 place-items-center rounded-full border border-white/20 text-[11px] leading-none text-stone-300 hover:bg-white/10"
+        >
+          ×
+        </button>
+      ) : null}
       <CustomColorSwatch
         value={style.stroke}
         className="size-5"
