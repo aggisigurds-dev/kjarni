@@ -9,7 +9,7 @@ import SendTo from "../SendTo";
 import StagingPicker from "../StagingPicker";
 import VerkhringirHint from "../VerkhringirHint";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
-import { shrinkImageForUpload } from "../replicateImage";
+import { uploadForReplicate } from "../uploadToStorage";
 import { formatEta } from "../replicateProgress";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import { useStagedSource } from "../useStagedSource";
@@ -52,6 +52,15 @@ function readStoredMode(): UpscaleMode {
 }
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
+    img.src = src;
+  });
+}
 
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
@@ -189,15 +198,17 @@ export default function UpplyftingClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      // Topaz skilar hámarksgæðum þegar uppflettingin er há; við þurfum samt
-      // að halda okkur undir Vercel's 4.5MB — leyfum 2048px hámarks hlið og
-      // JPEG q=0.95 til að forðast óþarfa tap á áferð áður en Topaz sér hana.
-      const shrunk = await shrinkImageForUpload(file, { maxDim: 2048, mime: "image/jpeg", quality: 0.95 });
+      // Upscaler-tól eins og Topaz/Clarity fá raunverulegan ávinning af
+      // fullri upprunaupplausn sem inntaki (öfugt við að skala niður fyrst
+      // og "upscale-a" þá þjappaða útgáfu) — image/mask-uploadið fer nú í
+      // gegnum Supabase Storage (sjá ../uploadToStorage.ts) í stað þess að
+      // niðurskala í data: URL fyrir Vercel's 4.5MB þak.
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = shrunk.dataUrl;
-      setSource({ url, name: file.name, width: shrunk.width, height: shrunk.height });
+      const img = await loadImage(url);
+      sourceDataUrlRef.current = await uploadForReplicate(file, "reference-images");
+      setSource({ url, name: file.name, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
       if (resultUrlRef.current) URL.revokeObjectURL(resultUrlRef.current);
       resultUrlRef.current = "";
       setResult("");

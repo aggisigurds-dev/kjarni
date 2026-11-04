@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Innblástur — black-forest-labs/flux-redux-dev á Replicate
 // (https://replicate.com/black-forest-labs/flux-redux-dev). Innblástursmynd →
@@ -64,8 +65,8 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  if (typeof body.reduxImage !== "string" || !body.reduxImage.startsWith("data:image/")) {
-    return bad(400, "innblástursmynd vantar (data:image/... URL)");
+  if (typeof body.reduxImage !== "string" || !isOwnStorageUrl(body.reduxImage)) {
+    return bad(400, "innblástursmynd vantar");
   }
 
   const aspectRatio: AspectRatio = ASPECT_RATIOS.includes(body.aspectRatio as AspectRatio)

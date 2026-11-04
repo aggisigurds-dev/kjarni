@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Upplyfting — faglegt myndupplyfting með topazlabs/image-upscale á Replicate
 // (https://replicate.com/topazlabs/image-upscale). Priced per output
@@ -46,8 +47,8 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
 
   const input: Record<string, unknown> = {

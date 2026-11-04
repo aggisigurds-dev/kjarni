@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, submitReplicate } from "@/app/api/_lib/replicateAsync";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Video Upplyfting — lucataco/real-esrgan-video á Replicate
 // (https://replicate.com/lucataco/real-esrgan-video). Frame-for-frame
@@ -26,7 +27,6 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    video?: string;
     videoUrl?: string;
     model?: string;
     resolution?: string;
@@ -37,16 +37,9 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  // Replicate `video_path` tekur bæði opinbert URL og data: URI. Við leyfum
-  // bæði — client sendir data: URI úr Blob eða URL úr Skýjahreyfimynd útkomu.
-  const videoInput =
-    typeof body.video === "string" && body.video.startsWith("data:video/")
-      ? body.video
-      : typeof body.videoUrl === "string" && /^https?:\/\//i.test(body.videoUrl)
-        ? body.videoUrl
-        : null;
+  const videoInput = typeof body.videoUrl === "string" && isOwnStorageUrl(body.videoUrl) ? body.videoUrl : null;
   if (!videoInput) {
-    return bad(400, "video vantar (data:video/... URL eða https://... URL)");
+    return bad(400, "video vantar");
   }
 
   const input: Record<string, unknown> = {

@@ -1,8 +1,17 @@
+import { uploadForReplicate } from "../uploadToStorage";
+
 /** Útvíkka — black-forest-labs/flux-fill-dev á Replicate.
  *
  * Outpaint með Flux Fill. Vafrinn byggir sjálfur útvíkkaða mynd + mask
- * (svart = varðveita, hvítt = outpaint), server callar flux-fill-dev
- * með bæði input og mask. Styður disable_safety_checker. */
+ * (svart = varðveita, hvítt = outpaint), hleður þeim upp í Supabase Storage
+ * (sjá ../uploadToStorage.ts) og server callar flux-fill-dev með slóðunum í
+ * stað þess að base64-kóða þær beint inn í JSON-beiðnina. Styður
+ * disable_safety_checker.
+ *
+ * ATH: 2048px þakið í fluxDims() er EKKI bara transport-takmörkun (gamla
+ * Vercel 4.5MB ástæðan er farin núna) — það er líka hugsað sem VRAM/kostnaðar-
+ * þak á Replicate fyrir mjög stóra útvíkkaða striga, sem er óverifíeruð en
+ * ekki afsönnuð, svo það er látið óbreytt hér (ekki giskað á hærra þak). */
 
 export const UTVIKKA_DIRECTIONS = [
   "all",
@@ -155,14 +164,20 @@ function fluxDims(width: number, height: number): { w: number; h: number; scale:
   return { w: Math.max(16, w), h: Math.max(16, h), scale };
 }
 
-/** Byggir útvíkkaða mynd + mask í vafranum. Image fær upprunalegu myndina
- *  á sínum stað og gráan bakgrunn utan um (það hunsað af mask). Mask er svart
- *  þar sem upprunaleg mynd var, hvítt alls staðar annars. */
+function canvasToBlob(canvas: HTMLCanvasElement, mime: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Gat ekki vistað mynd"))), mime);
+  });
+}
+
+/** Byggir útvíkkaða mynd + mask í vafranum og hleður þeim upp. Image fær
+ *  upprunalegu myndina á sínum stað og gráan bakgrunn utan um (það hunsað af
+ *  mask). Mask er svart þar sem upprunaleg mynd var, hvítt alls staðar annars. */
 export async function buildOutpaintCanvases(
   sourceImageUrl: string,
   direction: UtvikkaDirection,
   amount: number,
-): Promise<{ imageDataUrl: string; maskDataUrl: string; width: number; height: number }> {
+): Promise<{ imageUrl: string; maskUrl: string; width: number; height: number }> {
   const img = new Image();
   img.src = sourceImageUrl;
   await new Promise<void>((resolve, reject) => {
@@ -195,12 +210,16 @@ export async function buildOutpaintCanvases(
   mctx.fillStyle = "#000000";
   mctx.fillRect(dx, dy, dw, dh);
 
-  return {
-    imageDataUrl: imageCanvas.toDataURL("image/png"),
-    maskDataUrl: maskCanvas.toDataURL("image/png"),
-    width: targetW,
-    height: targetH,
-  };
+  const [imageBlob, maskBlob] = await Promise.all([
+    canvasToBlob(imageCanvas, "image/png"),
+    canvasToBlob(maskCanvas, "image/png"),
+  ]);
+  const [imageUrl, maskUrl] = await Promise.all([
+    uploadForReplicate(imageBlob, "reference-images"),
+    uploadForReplicate(maskBlob, "mask-images"),
+  ]);
+
+  return { imageUrl, maskUrl, width: targetW, height: targetH };
 }
 
 async function fetchImageBlob(url: string): Promise<Blob> {
@@ -218,8 +237,8 @@ export async function outpaintImage(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      image: built.imageDataUrl,
-      mask: built.maskDataUrl,
+      image: built.imageUrl,
+      mask: built.maskUrl,
       prompt: settings.prompt,
       steps: settings.steps,
       guidance: settings.guidance,

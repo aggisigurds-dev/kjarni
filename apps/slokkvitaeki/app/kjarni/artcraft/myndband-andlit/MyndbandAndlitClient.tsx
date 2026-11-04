@@ -7,6 +7,7 @@ import SendTo from "../SendTo";
 import VerkhringirHint from "../VerkhringirHint";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
+import { uploadForReplicate } from "../uploadToStorage";
 import "../artcraft.css";
 
 /** Myndband-andlit — arabyai-replicate/roop_face_swap á Replicate.
@@ -32,15 +33,6 @@ type StatusResponse =
   | { status: "failed" | "canceled"; error?: string }
   | { status: string }
   | { error: string };
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
-    r.onerror = () => reject(r.error || new Error("Gat ekki lesið skrá"));
-    r.readAsDataURL(blob);
-  });
-}
 
 async function fetchVideoBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
@@ -182,15 +174,15 @@ export default function MyndbandAndlitClient() {
     setResultUrl("");
     setResultBlob(null);
     try {
-      const [videoData, faceData] = await Promise.all([
-        blobToDataUrl(videoFile),
-        blobToDataUrl(faceFile),
+      const [videoUrl, faceImageUrl] = await Promise.all([
+        uploadForReplicate(videoFile, "reference-images"),
+        uploadForReplicate(faceFile, "reference-images"),
       ]);
       setStatus("Sendi á Replicate…");
       const res = await fetch("/api/myndband-andlit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video: videoData, faceImage: faceData }),
+        body: JSON.stringify({ videoUrl, faceImageUrl }),
       });
       const data = (await res.json()) as SubmitResponse;
       if (!res.ok || "error" in data) {

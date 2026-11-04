@@ -17,7 +17,7 @@ import {
   writeStoredPresets,
   type SavedPreset,
 } from "../SavedPresets";
-import { shrinkImageForUpload } from "../replicateImage";
+import { uploadForReplicate } from "../uploadToStorage";
 import {
   BREYTA_MODE_KEY,
   BREYTA_MODE_LABELS,
@@ -220,13 +220,10 @@ export default function BreytaClient() {
   async function addFile(file: File) {
     setError("");
     try {
-      // Headshot/Background/Pruna vinna vel við 1024px — passar undir
-      // Vercel's 4.5MB body-mörk líka á stórum síma-ljósmyndum.
-      const shrunk = await shrinkImageForUpload(file, { maxDim: 1024 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
       const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
-      sourceDataUrlRef.current = shrunk.dataUrl;
+      sourceDataUrlRef.current = await uploadForReplicate(file, "reference-images");
       setSource({ url, name: file.name });
       for (const old of resultUrlsRef.current) URL.revokeObjectURL(old);
       resultUrlsRef.current = [];

@@ -5,7 +5,6 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import ImageZoom from "../ImageZoom";
-import { shrinkImageForUpload } from "../replicateImage";
 import { clearResult, formatSavedTime, loadResult, saveResult } from "../savedResults";
 import SendTo from "../SendTo";
 import StagingPicker from "../StagingPicker";
@@ -36,12 +35,21 @@ function downloadBlob(url: string, name: string) {
   a.click();
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
+    img.src = src;
+  });
+}
+
 export default function UtvikkaClient() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<UtvikkaSettings>(DEFAULT_UTVIKKA_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [source, setSource] = useState<{ url: string; dataUrl: string; name: string; width: number; height: number } | null>(null);
+  const [source, setSource] = useState<{ url: string; name: string; width: number; height: number } | null>(null);
   const [results, setResults] = useState<string[]>([]);
   const [resultDims, setResultDims] = useState<{ width: number; height: number } | null>(null);
   const [savedMeta, setSavedMeta] = useState<{ timestamp: number; sourceName?: string } | null>(null);
@@ -92,17 +100,15 @@ export default function UtvikkaClient() {
   async function handleFile(file: File) {
     setError("");
     try {
-      const shrunk = await shrinkImageForUpload(file, { maxDim: 1024, mime: "image/png", quality: 0.95 });
       if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
-      const blob = await (await fetch(shrunk.dataUrl)).blob();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(file);
       sourceUrlRef.current = url;
+      const img = await loadImage(url);
       setSource({
         url,
-        dataUrl: shrunk.dataUrl,
         name: file.name,
-        width: shrunk.width,
-        height: shrunk.height,
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
@@ -124,7 +130,7 @@ export default function UtvikkaClient() {
     setBusy(true);
     setError("");
     try {
-      const { blobs, width, height } = await outpaintImage(settings, source.dataUrl);
+      const { blobs, width, height } = await outpaintImage(settings, source.url);
       const urls = blobs.map((b) => URL.createObjectURL(b));
       resultUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
       resultUrlsRef.current = urls;

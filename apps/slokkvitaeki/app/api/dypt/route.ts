@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
 
 // Dýpt — cjwbw/depth-anything á Replicate
 // (https://replicate.com/cjwbw/depth-anything). Depth Anything V1 (Apache-2.0,
@@ -33,8 +34,8 @@ export async function POST(req: NextRequest) {
     return bad(400, "Ógilt JSON");
   }
 
-  if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
-    return bad(400, "image vantar (data:image/... URL)");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
   }
   const encoder: Encoder = ENCODERS.includes(body.encoder as Encoder)
     ? (body.encoder as Encoder)

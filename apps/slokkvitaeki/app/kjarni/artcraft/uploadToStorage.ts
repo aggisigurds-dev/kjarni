@@ -38,6 +38,9 @@ function extensionFor(blob: Blob): string {
   const type = blob.type.toLowerCase();
   if (type.includes("png")) return "png";
   if (type.includes("webp")) return "webp";
+  if (type.includes("quicktime")) return "mov";
+  if (type.includes("webm")) return "webm";
+  if (type.includes("mp4")) return "mp4";
   return "jpg";
 }
 

@@ -6,6 +6,7 @@ import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import SendTo from "../SendTo";
 import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
+import { uploadForReplicate } from "../uploadToStorage";
 import "../artcraft.css";
 
 /** Myndband-portret-andlit — portrait-crop + face-swap + composite back.
@@ -56,15 +57,6 @@ type StatusResponse =
   | { status: "failed" | "canceled"; error?: string }
   | { status: string }
   | { error: string };
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
-    r.onerror = () => reject(r.error || new Error("Gat ekki lesið skrá"));
-    r.readAsDataURL(blob);
-  });
-}
 
 async function fetchVideoBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
@@ -482,13 +474,15 @@ export default function MyndbandPortretAndlitClient() {
       setStage("uploading");
       setProgressNote("Set í roop face-swap…");
       setProgress(26);
-      const croppedDataUrl = await blobToDataUrl(croppedBlob);
-      const faceDataUrl = await blobToDataUrl(faceFile);
+      const [videoUrl, faceImageUrl] = await Promise.all([
+        uploadForReplicate(croppedBlob, "reference-images"),
+        uploadForReplicate(faceFile, "reference-images"),
+      ]);
 
       const submitRes = await fetch("/api/myndband-andlit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ video: croppedDataUrl, faceImage: faceDataUrl }),
+        body: JSON.stringify({ videoUrl, faceImageUrl }),
       });
       const submitJson = (await submitRes.json()) as SubmitResponse;
       if (!submitRes.ok || "error" in submitJson) {
