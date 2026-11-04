@@ -307,9 +307,6 @@ export function TopBar({
         <Upload className="size-4" />
         <span className="hidden sm:inline">Flytja inn</span>
       </Button>
-      <span className="hidden max-w-[10.5rem] text-[10px] leading-tight text-stone-500 2xl:inline">
-        Í vafranum · engin 20 MB hömlun
-      </span>
       {/* Á síma búa þessir þrír í ⟳ valmyndinni — annars kremja þeir nafnareitinn. */}
       <Button
         size="sm"

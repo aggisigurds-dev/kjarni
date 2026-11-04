@@ -1731,7 +1731,6 @@ export function VeggjaHamSpjald() {
   const adeinsVeggir = useVeggjaRitill((s) => s.adeinsVeggir);
   const smellaLinu = useVeggjaRitill((s) => s.smellaLinu);
   const tillogur = useVeggjaRitill((s) => s.tillogur?.veggir.length ?? 0);
-  const greinir = useVeggjaRitill((s) => !!s.greining);
   const objects = useBoardStore((s) => s.objects);
   const talning = veggjaTalning(objects);
   const kannAfturkalla = useBoardStore((s) => s.past.length > 0);
@@ -1768,16 +1767,6 @@ export function VeggjaHamSpjald() {
     const b = useBoardStore.getState();
     setjaThykkt(ids, cmIDila(cm, ritillDilarAMetra(b.objects, b.pixelsPerMeter)));
     toast.message(`${ids.length} ${ids.length === 1 ? "veggur" : "veggir"} → ${cm} cm · ⌘Z afturkallar`, { duration: 1500 });
-  };
-  const finna = finnaVeggiTillogur;
-  const [leitarHurdir, setLeitarHurdir] = useState(false);
-  const finnaHurdir = async () => {
-    setLeitarHurdir(true);
-    try {
-      await finnaHurdirTillogur();
-    } finally {
-      setLeitarHurdir(false);
-    }
   };
   const tolTakki = (t: RitilTol, texti: string, takn: ReactNode, titill: string) => (
     <button
@@ -1881,28 +1870,9 @@ export function VeggjaHamSpjald() {
         <Magnet className="size-3.5 text-teal-300" />
         Smella á línu teikningarinnar
       </label>
-      <button
-        type="button"
-        data-veggir-finna
-        disabled={greinir}
-        onClick={finna}
-        title="Greina veggi teikningarinnar — birtast sem tillögur (punktalínur): smelltu til að samþykkja, Shift+smellur hafnar"
-        className={`${btn} mt-1.5 w-full justify-center bg-teal-700/60 ring-1 ring-teal-400/40 hover:bg-teal-700/80 disabled:opacity-50`}
-      >
-        <ScanSearch className="size-3.5" />
-        {greinir ? "Greini…" : "Finna veggi (tillögur)"}
-      </button>
-      <button
-        type="button"
-        data-veggir-finna-hurdir
-        disabled={leitarHurdir || greinir}
-        onClick={() => void finnaHurdir()}
-        title="Finna hurðir: hurðabogar (fjórðungshringur frá hjör) og op í veggjum — birtast sem rauðar tillögur; samþykkt hurð klippir vegginn undir sér"
-        className={`${btn} mt-1 w-full justify-center bg-red-900/50 ring-1 ring-red-400/40 hover:bg-red-900/70 disabled:opacity-50`}
-      >
-        <DoorOpen className="size-3.5" />
-        {leitarHurdir ? "Leita að hurðum…" : "Finna hurðir (tillögur)"}
-      </button>
+      <div className="mt-1.5 text-[10.5px] leading-snug text-white/45" data-veggir-greining-visun>
+        Finna veggi, Finna hurðir og Lesa EI eru í <b className="text-white/70">Greining</b>-flipanum efst til hægri.
+      </div>
       {tillogur ? (
         <div data-veggir-tillogur={tillogur} className="mt-1.5 rounded-md bg-teal-900/30 p-1.5 ring-1 ring-teal-400/25">
           <div className="text-[11px] leading-snug text-teal-100/90">
