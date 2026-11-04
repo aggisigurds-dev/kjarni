@@ -132,7 +132,7 @@ import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { HamRofiSimi, VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika, VeggjaTolSimaHnappar } from "./VeggjaStika";
+import { HamValSimi, VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika, VeggjaTolSimaHnappar } from "./VeggjaStika";
 import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
 import { useErSimi } from "../../lib/board/simi";
 import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
@@ -2106,7 +2106,7 @@ export function WhiteboardApp() {
                 </button>
               ) : null}
               {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir og greiningartólin efst til hægri undir „Vista" — ekki fyrir á borðinu */}
-              {simi && tengdMynd?.uttekt ? <HamRofiSimi /> : null}
+              {simi && tengdMynd?.uttekt ? <HamValSimi /> : null}
               {simi && VEGGJA_HAMIR.includes(hamur) ? <VeggjaTolSimaHnappar onAdgerd={hamAdgerd} /> : null}
               {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
                 <div className="pointer-events-auto" data-magntafla>
@@ -2141,7 +2141,7 @@ export function WhiteboardApp() {
               <VeggjaStika />
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
-              <RitilThettStika />
+              <RitilThettStika auka={simi && VEGGJA_HAMIR.includes(hamur) ? { onAdgerd: hamAdgerd } : undefined} />
               {simi && VEGGJA_HAMIR.includes(hamur) ? null : <SymbolTray />}
               {simi && VEGGJA_HAMIR.includes(hamur) ? <VeggjaTegundSimaStika /> : <StyleStrip />}
             </div>

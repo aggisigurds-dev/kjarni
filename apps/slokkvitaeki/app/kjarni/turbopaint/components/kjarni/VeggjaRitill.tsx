@@ -37,7 +37,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { useHamur, type HamurId } from "../../lib/board/hamir";
+import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
+import { BoxSelect as BoxSelectTakn, BrickWall as BrickWallTakn, Brush as BrushTakn, DoorOpen as DoorOpenTakn, Flame as FlameTakn, Magnet as MagnetTakn, ScanSearch as ScanSearchTakn } from "lucide-react";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
 import { useBoardStore } from "../../lib/board/store";
@@ -1408,13 +1409,15 @@ function RitilSpjald() {
  * á borðinu (þumalfjarlægð í síma) í stað gluggans. Sömu aðgerðir og í glugganum — Eyða = „Eyða" neðst í glugganum (valdir
  * veggir), Afturkalla = sama saga og ⌘Z. „Meira" opnar allan gluggann aftur. Birtist í WhiteboardApp ofan við táknaborðið
  * svo hún skarist aldrei við það. */
-export function RitilThettStika() {
+export function RitilThettStika({ auka }: { auka?: { onAdgerd: (a: HamAdgerd) => void } } = {}) {
   const virkur = useVeggjaRitill((s) => s.virkur);
   const thett = useVeggjaRitill((s) => s.thett);
   const tol = useVeggjaRitill((s) => s.tol);
   const tegund = useVeggjaRitill((s) => s.tegund);
   const kannAfturkalla = useBoardStore((s) => s.past.length > 0);
   const tillogur = useVeggjaRitill((s) => s.tillogur?.veggir.length ?? 0);
+  const lita = useVeggjaSyn((s) => s.lita);
+  const smellaLinu = useVeggjaRitill((s) => s.smellaLinu);
   const valdir = useBoardStore((s) => {
     if (!s.selectedIds.length) return 0;
     const sel = new Set(s.selectedIds);
@@ -1444,7 +1447,7 @@ export function RitilThettStika() {
       role="toolbar"
       aria-label="Veggjaritill — þéttur"
       data-ritill-thett
-      className="pointer-events-auto flex items-stretch gap-0.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl shadow-black/40"
+      className={`pointer-events-auto flex items-stretch gap-0.5 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl shadow-black/40${auka ? " max-w-[calc(100vw-1rem)] overflow-x-auto" : ""}`}
     >
       <button
         type="button"
@@ -1524,7 +1527,46 @@ export function RitilThettStika() {
           </button>
         </>
       ) : null}
-      <span className="mx-0.5 my-1.5 w-px bg-white/12" aria-hidden />
+      {auka ? (
+        // Sími, veggjahamur (Agnar 04.11.2026: „setja nokkrar auka stillingar neðst … 2 skipulagðar línur"): sömu tól og
+        // hægra spjaldið — Finna veggi/hurðir, Lesa EI, Greina veggi, Strokleður, Lita veggi, Smella á línu, Eyða í kassa.
+        <>
+          <span className="mx-0.5 my-1.5 w-px shrink-0 bg-white/12" aria-hidden />
+          <button type="button" data-thett="finna-veggi" title="Finna veggi: veggjavélin stingur upp á veggjum (punktalínur) — samþykktu eða hafnaðu" onClick={finnaVeggiTillogur} className={`${takki} shrink-0 hover:bg-white/10`}>
+            <ScanSearchTakn className="size-4 text-teal-300" />
+            Finna veggi
+          </button>
+          <button type="button" data-thett="finna-hurdir" title="Finna hurðir: hurðabogar og op í veggjum sem tillögur" onClick={() => void finnaHurdirTillogur()} className={`${takki} shrink-0 hover:bg-white/10`}>
+            <DoorOpenTakn className="size-4 text-[#ef5350]" />
+            Finna hurðir
+          </button>
+          <button type="button" data-thett="lesa-ei" title="Lesa EI-merkingar teikningarinnar og merkja eldveggina" onClick={() => auka.onAdgerd("ei")} className={`${takki} shrink-0 hover:bg-white/10`}>
+            <FlameTakn className="size-4 text-[#FE653F]" />
+            Lesa EI
+          </button>
+          <button type="button" data-thett="greina-veggi" title="Greina veggi — úr vigur-PDF þegar það er til, annars úr myndinni" onClick={() => auka.onAdgerd("veggir")} className={`${takki} shrink-0 hover:bg-white/10`}>
+            <BrickWallTakn className="size-4" />
+            Greina veggi
+          </button>
+          <button type="button" data-thett="strokledur" title="Strokleður: strjúktu yfir það sem á að hverfa af teikningunni" onClick={() => auka.onAdgerd("strokledur")} className={`${takki} shrink-0 hover:bg-white/10`}>
+            <BrushTakn className="size-4" />
+            Strokleður
+          </button>
+          <button type="button" data-thett="eyda-kassi" aria-pressed={tol === "eyda-kassi"} title={TOL_HEITI["eyda-kassi"].titill} onClick={() => r.setTol(tol === "eyda-kassi" ? "velja" : "eyda-kassi")} className={`${takki} shrink-0 ${tol === "eyda-kassi" ? valid : "hover:bg-white/10"}`}>
+            <BoxSelectTakn className="size-4" />
+            Eyða í kassa
+          </button>
+          <button type="button" role="switch" aria-checked={lita} data-thett="lita" title="Lita veggi: allir veggir í skærum lit eftir tegund — aðeins sýn" onClick={() => useVeggjaSyn.getState().vixla()} className={`${takki} shrink-0 ${lita ? "bg-[#8b2cff] text-white" : "hover:bg-white/10"}`}>
+            <span className="inline-block size-3.5 rounded-full border border-white/60" style={{ background: SKAERIR_VEGGLITIR.veggur }} />
+            Lita veggi
+          </button>
+          <button type="button" role="switch" aria-checked={smellaLinu} data-thett="smella" title="Smella á línu teikningarinnar þegar veggur er teiknaður" onClick={() => r.setSmellaLinu(!smellaLinu)} className={`${takki} shrink-0 ${smellaLinu ? "bg-white/15 text-white" : "hover:bg-white/10"}`}>
+            <MagnetTakn className="size-4" />
+            Smella
+          </button>
+        </>
+      ) : null}
+      <span className="mx-0.5 my-1.5 w-px shrink-0 bg-white/12" aria-hidden />
       <button
         type="button"
         data-thett="meira"
@@ -1637,6 +1679,66 @@ function teikningIdTilGreiningar(): string | null {
 /** Veggir-hamur (Agnar 10.10.2026: „annan ham þarna sem er bara veggir, og aðstoð við að reyna að finna veggina"):
  * hægra spjaldið sýnir AÐEINS veggjatólin — sömu aðgerðir og veggjaritillinn (ein útgáfa af hverri). Þykktin gildir um
  * nýja OG valda veggi. „Finna veggi" setur greininguna fram sem tillögur (punktalínur) sem eru samþykktar eða hafnaðar. */
+/** „Finna veggi (tillögur)": greiningargluggi veggjavélarinnar á teikningu borðsins — úr hægra spjaldinu og þéttu stikunni í síma. */
+export function finnaVeggiTillogur() {
+  const id = teikningIdTilGreiningar();
+  if (!id) return;
+  const r = useVeggjaRitill.getState();
+  if (!r.virkur) r.kveikja("velja");
+  r.opnaGreiningu(id, true);
+}
+
+/** „Finna hurðir (tillögur)": hurðabogar og op í veggjum → rauðar tillögur (sama og í hægra spjaldinu, líka úr þéttu stikunni). */
+export async function finnaHurdirTillogur(): Promise<void> {
+    const id = teikningIdTilGreiningar();
+    if (!id) return;
+    const st = useBoardStore.getState();
+    const plan = st.objects.find((o): o is ImageObject => o.id === id && o.type === "image");
+    const dpm = ritillDilarAMetra(st.objects, st.pixelsPerMeter);
+    if (!plan || !dpm) {
+      toast.error("Kvarði teikningarinnar er óþekktur — settu kvarðann (K) fyrst");
+      return;
+    }
+    if (!useVeggjaRitill.getState().virkur) useVeggjaRitill.getState().kveikja("velja");
+    try {
+      const tl = useVeggjaRitill.getState().tillogur;
+      const tlHer = tl && tl.planId === id ? tl.veggir : [];
+      // veggir borðsins OG veggjatillögur sem bíða (Finna veggi → Finna hurðir áður en samþykkt er)
+      const allar: HLina[] = [
+        ...ritillVeggir().map((o) => ({ p: heimsPunktar(o), t: o.strokeWidth, ...(o.veggTegund ? { tegund: o.veggTegund } : {}) })),
+        ...tlHer.filter((v) => v.tegund !== "hurd"),
+      ];
+      const erV = (l: HLina) => !l.tegund || l.tegund === "veggur" || l.tegund === "ei60" || l.tegund === "ei30";
+      const veggir = allar.filter(erV), adrar = allar.filter((l) => !erV(l));
+      let kassi: { x0: number; y0: number; x1: number; y1: number } | null = null;
+      for (const l of veggir)
+        for (let i = 0; i + 1 < l.p.length; i += 2)
+          kassi = kassi
+            ? { x0: Math.min(kassi.x0, l.p[i]), y0: Math.min(kassi.y0, l.p[i + 1]), x1: Math.max(kassi.x1, l.p[i]), y1: Math.max(kassi.y1, l.p[i + 1]) }
+            : { x0: l.p[i], y0: l.p[i + 1], x1: l.p[i], y1: l.p[i + 1] };
+      if (kassi) kassi = { x0: kassi.x0 - 2 * dpm, y0: kassi.y0 - 2 * dpm, x1: kassi.x1 + 2 * dpm, y1: kassi.y1 + 2 * dpm };
+      const nid = await hurdirTeikningar(plan, veggir, adrar, dpm, { kassi });
+      console.info(`[hurðir] ${nid.bogar} bogar · ${nid.urBilum} úr bilum · ${nid.urBogum} úr bogum · ${nid.ms} ms`);
+      if (!nid.hurdir.length) {
+        toast.message(veggir.length ? `Engar hurðir fundust (${nid.bogar} hurðabogar)` : "Engar hurðir fundust — finndu eða teiknaðu veggina fyrst", { duration: 2500 });
+        return;
+      }
+      const nu = useVeggjaRitill.getState().tillogur;
+      const fyrri = nu && nu.planId === id ? nu.veggir.filter((v) => v.tegund !== "hurd") : [];
+      useVeggjaRitill.getState().setTillogur({
+        planId: id,
+        lota: nu && nu.planId === id ? nu.lota : nyGreiningarLota(),
+        veggir: [...fyrri, ...nid.hurdir.map((h) => ({ p: h.p, t: h.t, tegund: "hurd" as const }))],
+      });
+      toast.success(
+        `${nid.hurdir.length} hurðir (${nid.urBogum} úr hurðabogum, ${nid.urBilum} úr bilum) — rauðar punktalínur: smellur samþykkir, Shift+smellur hafnar`,
+        { duration: 4000 }
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Hurðagreining mistókst");
+    }
+}
+
 export function VeggjaHamSpjald() {
   const virkur = useVeggjaRitill((s) => s.virkur);
   const tol = useVeggjaRitill((s) => s.tol);
@@ -1683,61 +1785,12 @@ export function VeggjaHamSpjald() {
     setjaThykkt(ids, cmIDila(cm, ritillDilarAMetra(b.objects, b.pixelsPerMeter)));
     toast.message(`${ids.length} ${ids.length === 1 ? "veggur" : "veggir"} → ${cm} cm · ⌘Z afturkallar`, { duration: 1500 });
   };
-  const finna = () => {
-    const id = teikningIdTilGreiningar();
-    if (!id) return;
-    if (!useVeggjaRitill.getState().virkur) r.kveikja("velja");
-    r.opnaGreiningu(id, true);
-  };
+  const finna = finnaVeggiTillogur;
   const [leitarHurdir, setLeitarHurdir] = useState(false);
   const finnaHurdir = async () => {
-    const id = teikningIdTilGreiningar();
-    if (!id) return;
-    const st = useBoardStore.getState();
-    const plan = st.objects.find((o): o is ImageObject => o.id === id && o.type === "image");
-    const dpm = ritillDilarAMetra(st.objects, st.pixelsPerMeter);
-    if (!plan || !dpm) {
-      toast.error("Kvarði teikningarinnar er óþekktur — settu kvarðann (K) fyrst");
-      return;
-    }
-    if (!useVeggjaRitill.getState().virkur) r.kveikja("velja");
     setLeitarHurdir(true);
     try {
-      const tl = useVeggjaRitill.getState().tillogur;
-      const tlHer = tl && tl.planId === id ? tl.veggir : [];
-      // veggir borðsins OG veggjatillögur sem bíða (Finna veggi → Finna hurðir áður en samþykkt er)
-      const allar: HLina[] = [
-        ...ritillVeggir().map((o) => ({ p: heimsPunktar(o), t: o.strokeWidth, ...(o.veggTegund ? { tegund: o.veggTegund } : {}) })),
-        ...tlHer.filter((v) => v.tegund !== "hurd"),
-      ];
-      const erV = (l: HLina) => !l.tegund || l.tegund === "veggur" || l.tegund === "ei60" || l.tegund === "ei30";
-      const veggir = allar.filter(erV), adrar = allar.filter((l) => !erV(l));
-      let kassi: { x0: number; y0: number; x1: number; y1: number } | null = null;
-      for (const l of veggir)
-        for (let i = 0; i + 1 < l.p.length; i += 2)
-          kassi = kassi
-            ? { x0: Math.min(kassi.x0, l.p[i]), y0: Math.min(kassi.y0, l.p[i + 1]), x1: Math.max(kassi.x1, l.p[i]), y1: Math.max(kassi.y1, l.p[i + 1]) }
-            : { x0: l.p[i], y0: l.p[i + 1], x1: l.p[i], y1: l.p[i + 1] };
-      if (kassi) kassi = { x0: kassi.x0 - 2 * dpm, y0: kassi.y0 - 2 * dpm, x1: kassi.x1 + 2 * dpm, y1: kassi.y1 + 2 * dpm };
-      const nid = await hurdirTeikningar(plan, veggir, adrar, dpm, { kassi });
-      console.info(`[hurðir] ${nid.bogar} bogar · ${nid.urBilum} úr bilum · ${nid.urBogum} úr bogum · ${nid.ms} ms`);
-      if (!nid.hurdir.length) {
-        toast.message(veggir.length ? `Engar hurðir fundust (${nid.bogar} hurðabogar)` : "Engar hurðir fundust — finndu eða teiknaðu veggina fyrst", { duration: 2500 });
-        return;
-      }
-      const nu = useVeggjaRitill.getState().tillogur;
-      const fyrri = nu && nu.planId === id ? nu.veggir.filter((v) => v.tegund !== "hurd") : [];
-      useVeggjaRitill.getState().setTillogur({
-        planId: id,
-        lota: nu && nu.planId === id ? nu.lota : nyGreiningarLota(),
-        veggir: [...fyrri, ...nid.hurdir.map((h) => ({ p: h.p, t: h.t, tegund: "hurd" as const }))],
-      });
-      toast.success(
-        `${nid.hurdir.length} hurðir (${nid.urBogum} úr hurðabogum, ${nid.urBilum} úr bilum) — rauðar punktalínur: smellur samþykkir, Shift+smellur hafnar`,
-        { duration: 4000 }
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Hurðagreining mistókst");
+      await finnaHurdirTillogur();
     } finally {
       setLeitarHurdir(false);
     }
