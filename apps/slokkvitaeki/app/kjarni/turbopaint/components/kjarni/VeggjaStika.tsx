@@ -9,10 +9,9 @@ import { AppWindow, BrickWall, DoorOpen, Fence, Flame, Link2, Merge, MoveHorizon
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isDrawnLocked, isDrawnVisible } from "../../lib/board/layers";
-import { HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
+import { HAMIR, useHamur, type HamurId } from "../../lib/board/hamir";
 import { ChevronDown } from "lucide-react";
 import { useEffect } from "react";
-import { ADGERDIR } from "./HamStika";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
 import type { BoardObject, LineObject } from "../../lib/board/types";
@@ -353,31 +352,6 @@ export function VeggjaTegundSimaStika() {
           </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/** Greiningartólin fyrir veggi í síma — efst til hægri undir „Vista" (Agnar: „færa veggjatækjatakkann burtu. Er fyrir.
- * Setja kannski efst til hægri. Með 3D, greina veggi og lesa EI"). Tengja/Sameina/Hurð í bil eru í „Meira" (ritillinn). */
-export function VeggjaTolSimaHnappar({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
-  const hamur = useHamur((s) => s.hamur);
-  if (!SIMA_VEGGJA_HAMIR.includes(hamur)) return null;
-  // Greina veggi / Lesa EI fóru í þéttu stikuna neðst (3. umferð) — hér er aðeins 3D, sýnin.
-  const tol: { id: HamAdgerd; texti: string }[] = [{ id: "thrividd", texti: "3D" }];
-  return (
-    <div role="toolbar" aria-label="Veggjatól" data-veggja-tol-simi className="pointer-events-auto flex flex-col items-end gap-1">
-      {tol.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          title={ADGERDIR[t.id].titill}
-          onClick={() => onAdgerd(t.id)}
-          className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-3 pl-2.5 text-[12px] font-semibold whitespace-nowrap text-stone-100 shadow-xl shadow-black/40 active:translate-y-px"
-        >
-          {ADGERDIR[t.id].takn}
-          {t.texti}
-        </button>
-      ))}
     </div>
   );
 }

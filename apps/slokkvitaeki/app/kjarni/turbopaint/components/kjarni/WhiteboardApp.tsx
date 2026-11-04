@@ -132,12 +132,13 @@ import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { HamValSimi, SIMA_VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika, VeggjaTolSimaHnappar } from "./VeggjaStika";
+import { GreiningTolSpjald } from "./GreiningTolSpjald";
+import { HamValSimi, SIMA_VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika } from "./VeggjaStika";
 import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
 import { useErSimi } from "../../lib/board/simi";
 import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
 import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
-import { useSjalfvirkt } from "../../lib/board/sjalfvirkt-stada";
+import { useSjalfvirkt, type SkrefId } from "../../lib/board/sjalfvirkt-stada";
 import { teiknaEldvegg, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { teikningTilGreiningar } from "../../lib/board/greining-teikning";
 import { Button } from "../ui/button";
@@ -1258,6 +1259,24 @@ export function WhiteboardApp() {
   // skrifar merkin til baka í sömu röð.
   const [uttektVistar, setUttektVistar] = useState(false);
   const tengdMynd = useBoardStore((st) => finnaTengduMynd(st.objects));
+  const hefurMyndGr = useBoardStore((st) => st.objects.some((o) => o.type === "image"));
+  // „Keyra valin" í Greining-flipanum: sjálfvirka verkferlið á opnu úttektarhæðinni, aðeins valdir hópar (veggir · ei · taeki).
+  const keyraGreiningu = useCallback((valin: SkrefId[]) => {
+    const m = finnaTengduMynd(useBoardStore.getState().objects);
+    if (!m) {
+      toast.error("Opnaðu hæð úr úttekt fyrst — combo vistar til baka á hæðina");
+      return;
+    }
+    void keyraSjalfvirkt(m.id, {
+      valin,
+      vista: (o) => vistaRef.current(o),
+      gaedi: gaediRef.current,
+      ramma: (r) => {
+        const v = shellRef.current;
+        if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
+      },
+    });
+  }, []);
   // „Croppa oft": hlutar blaðs á borðinu og hve margir eru tengdir hæð.
   const hlutarABordi = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti).length);
   const tengdirHlutar = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti && o.uttekt).length);
@@ -2107,7 +2126,8 @@ export function WhiteboardApp() {
               ) : null}
               {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir og greiningartólin efst til hægri undir „Vista" — ekki fyrir á borðinu */}
               {simi && tengdMynd?.uttekt ? <HamValSimi /> : null}
-              {simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? <VeggjaTolSimaHnappar onAdgerd={hamAdgerd} /> : null}
+              {/* Greining: einn samanbrotinn flipi með öllum greiningartólunum — combo (valdir hópar í röð) eða stök tól */}
+              {hefurMyndGr ? <GreiningTolSpjald onAdgerd={hamAdgerd} keyraCombo={keyraGreiningu} uttekt={!!tengdMynd?.uttekt} /> : null}
               {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
                 <div className="pointer-events-auto" data-magntafla>
                   <CountTable />

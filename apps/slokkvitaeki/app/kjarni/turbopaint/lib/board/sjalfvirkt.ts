@@ -75,6 +75,8 @@ export interface SjalfvirktDeps {
   gaedi: GaediLysing | null;
   /** Rammar myndavélina á svæði (borðhnit). */
   ramma?: (r: { x: number; y: number; width: number; height: number }) => void;
+  /** Hvaða hópar keyra (04.11.2026, „stakt eða combo"): "veggir" = skurður + veggir + hreinsun + hurðir, "ei", "taeki". Vantar = allt. Gæðaskrefið keyrir alltaf. */
+  valin?: SkrefId[];
 }
 
 /** Lengsta bið eftir textalestri teikningarinnar (OCR) — eftir það heldur ferlið áfram án EI og tækja. */
@@ -567,6 +569,11 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   if (stodvad()) return stoppa();
 
   // ── b) skera að byggingu ──
+  const SLEPPT = "Sleppt, ekki valið";
+  const valid = (id: SkrefId) => !deps.valin || deps.valin.includes(id);
+  const veggjaHopur = valid("veggir");
+  let hrar: HLina[] = [];
+  let leid = "";
   hefja("skurdur");
   let skurdurFundinn = false;
   let heilBladVeggir: HLina[] | null = null; // myndgreining alls blaðsins (skönnun) — nýtt aftur í c)
@@ -574,7 +581,9 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   try {
     const skH = gilturSkurdur(t.skurdur ?? null);
     const heilt = !skH || skH.w * skH.h >= 0.9 * frum.b * frum.h;
-    if (t.myndSkurdur) {
+    if (!veggjaHopur) {
+      ljuka("skurdur", SLEPPT, "sleppt");
+    } else if (t.myndSkurdur) {
       ljuka("skurdur", "Teikningin er skorinn hluti blaðs — skurðurinn heldur sér", "sleppt");
     } else if (handLeidrett) {
       // Leiðrétt hæð: nýr skurður gæti klippt veggi Agnars í 3D (383 klippaButa) — hann er aldrei snertur.
@@ -618,9 +627,10 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
 
   // ── c) veggir ──
   hefja("veggir");
-  let hrar: HLina[] = [];
-  let leid = "";
   try {
+    if (!veggjaHopur) {
+      ljuka("veggir", SLEPPT, "sleppt");
+    } else {
     const p = mynd()!;
     const tt = p.uttekt!;
     if (vigur && sida) {
@@ -665,6 +675,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         ljuka("veggir", `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} → myndgreining í vafranum: ${hrar.length - gl} veggir · ${gl} gler`, "lokid");
       }
     }
+    }
   } catch (err) {
     villa("veggir", err, "engir nýir veggir");
   }
@@ -694,21 +705,24 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   // Hurðarop úr Búnaðargreiningu (vigur-PDF: hurðabogar með staðfestu blaði) bætast við bogana sem lesnir eru af myndinni
   let aukaBogar: Bogi[] = [];
   try {
-    const vh = await saekjaVegghjalp(mynd()!);
+    const vh = veggjaHopur ? await saekjaVegghjalp(mynd()!) : null;
     if (vh) aukaBogar = hurdirBogarUrVegghjalpi(vh, mynd()!);
   } catch (err) {
     console.warn("[sjálfvirkt] vegghjálp (hurðarop) náðist ekki", err);
   }
-  const vu = await vinnaLinur(mynd, hrar, fastarH, dpm, leid === "vigur", vik, talning, { hefja, ljuka, villa, stodvad, aukaBogar });
+  const vu: Awaited<ReturnType<typeof vinnaLinur>> = veggjaHopur
+    ? await vinnaLinur(mynd, hrar, fastarH, dpm, leid === "vigur", vik, talning, { hefja, ljuka, villa, stodvad, aukaBogar })
+    : { hreinar: [], hurdir: [], kandidatar: [], lokaNy: [] };
+  if (!veggjaHopur) for (const id of ["hreinsun", "hurdir"] as SkrefId[]) ljuka(id, SLEPPT, "sleppt");
   const { hreinar, hurdir, kandidatar, lokaNy } = vu;
   if (stodvad()) return stoppa();
 
   // Á borðið (ein færsla — sögufærslan var tekin í upphafi): veggir sem skipt er út fara, nýjar línur koma.
   const nyjarObj = lokaNy.map((l) => nyrVeggur(l.p, { id: newId(), thykkt: l.t, tegund: l.tegund ?? "veggur", parentId: planId, greining: lota }));
   // Greiningin skilaði engu (brást): veggirnir sem fyrir eru standa — aldrei skipt út fyrir ekkert.
-  const ekkertGreint = !lokaNy.some(erVeggTeg);
+  const ekkertGreint = veggjaHopur && !lokaNy.some(erVeggTeg);
   if (ekkertGreint) skiptaIds.clear();
-  useBoardStore.setState({ objects: replaceCrossingMarks([...bord().objects.filter((o) => !skiptaIds.has(o.id)), ...nyjarObj]), selectedIds: [] });
+  if (veggjaHopur) useBoardStore.setState({ objects: replaceCrossingMarks([...bord().objects.filter((o) => !skiptaIds.has(o.id)), ...nyjarObj]), selectedIds: [] });
 
   // ── f) EI — textinn lesinn einu sinni (EI + SLT/BRSL) ──
   // Prófanir: localStorage `tp_sjalfvirkt_sleppa` = "ocr" sleppir textalestrinum (EI + SLT/BRSL) — stilling vikmarka á sekúndum.
@@ -718,14 +732,21 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   } catch {
     sleppaOcr = false;
   }
-  hefja("ei", "Les texta teikningarinnar (OCR)…");
+  const eiVal = valid("ei"), taekiVal = valid("taeki");
+  hefja("ei", eiVal || taekiVal ? "Les texta teikningarinnar (OCR)…" : "");
   let texti: Awaited<ReturnType<typeof lesaTextaTeikningar>> | null = null;
   let eldveggir = 0;
   try {
+    if (!eiVal && !taekiVal) {
+      ljuka("ei", SLEPPT, "sleppt");
+    } else {
     if (sleppaOcr) throw new Error("textalestri sleppt (tp_sjalfvirkt_sleppa = ocr)");
     // Textalesturinn (Tesseract) getur hangið (minnisleysi drap vinnuþráðinn — mælt 08.10.2026): tímaþak, og Stöðva virkar.
     texti = await medThaki(lesaTextaTeikningar(mynd()!, { medBlek: true, lodrett: true, onProgress: (msg, pr) => S().setja("ei", { texti: msg, pros: pr }) }), OCR_THAK_MS, stodvad, "textalesturinn");
     if (stodvad()) return stoppa();
+    if (!eiVal) {
+      ljuka("ei", SLEPPT, "sleppt");
+    } else {
     const ei = await eiUrTexta(mynd()!, texti);
     const midar = ei.midar.filter((x) => !x.reyk);
     if (!midar.length) ljuka("ei", ei.hits.length ? `${ei.hits.length} EI-merki, öll reykþéttar hurðir (EI-CS) — engir eldveggir` : "Engin EI-30 / EI-60 merki á teikningunni");
@@ -740,6 +761,8 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
       talning.ei = { merki: ei.hits.length, eldveggir: b.eldveggir, breyttir: b.breyttir, lausir: b.festing.lausir.length };
       ljuka("ei", `${b.eldveggir} eldveggir á veggjum úr ${ei.hits.length} EI-merkjum` + (b.festing.lausir.length ? ` · ${b.festing.lausir.length} merki fundu engan vegg` : ""));
     }
+    }
+    }
   } catch (err) {
     villa("ei", err, "engir eldveggir");
   }
@@ -749,6 +772,9 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   hefja("taeki");
   let taekiFj = 0;
   try {
+    if (!taekiVal) {
+      ljuka("taeki", SLEPPT, "sleppt");
+    } else {
     if (!texti) throw new Error("textinn var ekki lesinn");
     const { teikning } = await medThaki(sltBrslUrTexta(mynd()!, texti, (msg, pr) => S().setja("taeki", { texti: msg, pros: pr })), 3 * 60_000, stodvad, "endurlestur slöngukefla");
     let taeki = gogn?.taeki ?? null;
@@ -780,6 +806,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
             .join(" · ")
         : "Engin SLT / BRSL, búnaður né skilti á teikningunni"
     );
+    }
   } catch (err) {
     villa("taeki", err, "engin tæki sett");
   }
