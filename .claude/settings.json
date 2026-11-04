@@ -1,3 +1,8 @@
 {
-  "enableAllProjectMcpServers": true
+  "enableAllProjectMcpServers": true,
+  "hooks": {
+    "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "node ../brunaholf/tools/router.cjs", "timeout": 5 } ] } ],
+    "Stop":             [ { "hooks": [ { "type": "command", "command": "node ../brunaholf/tools/lotu-lok.cjs", "timeout": 10 } ] } ],
+    "SessionStart":     [ { "hooks": [ { "type": "command", "command": "node ../brunaholf/tools/lotu-byrjun.cjs", "timeout": 5 } ] } ]
+  }
 }
