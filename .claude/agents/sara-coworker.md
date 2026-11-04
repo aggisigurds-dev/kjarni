@@ -281,3 +281,10 @@ Lærdómur: **mæla á hráu skjali áður en „nákvæm" er sagt** og **lesa i
 - „✓ Klára heimsókn“ býr til nýja sölu í hvert sinn; vörnin er sýnileg merking að skýrsla og reikningur ársins séu til og blokkandi gluggi þar sem annar reikningur krefst þess að skrifa „NÝR“ og ástæðu í `krafa_note` (tvígreiddur reikningur Stóragerðis 20). (líklega) [lota 2b47ca79]
 - Kennitala sem stendur á vinnublaði við hliðina á húsnúmeri þarf EKKI að eiga við þá línu — flettu henni upp (`/api/kt-lookup`) áður en hún er notuð. [C#494]
 - Pörun skýrslu og reiknings byggist á magni hvers tækis eftir tegund, mánuði og ári, óháð nöfnum og heimilisföngum; eldri skjöl eru ekki alltaf marktæk (06.10.2026). (líklega) [lota e9205308]
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

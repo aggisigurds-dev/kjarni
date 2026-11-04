@@ -611,3 +611,14 @@ umferðum undir límdu stikuna. Teiknað EINU SINNI þegar öll gögn eru komin.
 - Að samþykkja vinnublað skrifar AÐEINS stöðu og býr ekki til sölu (368): þrjú vinnublöð samþykkt 13.09.2026 áttu enga sölu; vörðurinn er `tools/audit-vinnublad-an-solu.cjs`. [C#600]
 - AppSettings: ræsikóði má aldrei SKRIFA í app_settings út frá AppSettings.get() eða localStorage (fyrstu sekúndurnar er það skyndiminni, allt að 30 daga gamalt) — 05.10.2026 fór app_profiles_json úr 1204 í 608 stafi og allir fengu defaults; og AppSettings.save sameinar djúpt: fylki eru skrifuð yfir og lykla er ekki hægt að eyða — settu 0, false eða vörð í staðinn. [C#751, C#750, C#408; lota 17c4cd7a (líklega)]
 - Fyrirtækið er lokað um helgar — í vikudagskrá (patch 303) birtast laugardagur og sunnudagur sem hálfir dálkar ofan á hvor öðrum. [lota fe668f62, 06.08.2026]
+
+- **02.11.2026** — Vasinn (491, síðulykill 'vasinn') er á Þjónustuborðs-appinu (á eftir Erindum) og FREMST á notenda-búna appinu Firestarters (xfirestarters) frá 01–02.11.2026 — bæði í vistaða síðuvalinu á þjóninum (app_settings.app_profiles_json) og sem varaleið í pagesFor() í 261 (merki __vasinn491 / __vasinn491fs). Fyrsta síða notenda-búins apps er heimasíða þess (home: '').
+
+- **03.11.2026** — 03.11.2026 útlitsúttekt (docs/UTLITSUTTEKT-20261103.md): 333 siduLykill leysir hash sem er nav-lykill (#brunayfirlit → view-brunakerfi-yfirlit) í sýn — annars festist vistað zoom (0,3) á öllum flipum; 346 vakta() kippir ekki aftur í Mælaborð eftir ferð burt; 368 .modgrid column-gap:0 í mjóum reit + Hamur-stika skrunast í body.appmode; 219 Bílstjóri standalone (data-app=bilstjori) án haus/botnstiku-bils; 401 💬 telst í appi (appmode) þó innerWidth sé 980; index.html titill fyrir verkstjorar/skyrslustod/threedwork. Mælt í hermdum síma (375) — raunsími ÓMÆLT.
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

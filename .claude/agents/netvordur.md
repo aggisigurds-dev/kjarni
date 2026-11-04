@@ -93,3 +93,12 @@ Kveddu skýrt upp annað hvort:
 - Hálfkláruð breyting í sameiginlega vinnutrénu getur farið í loftið án `[deploy]`: auto-sync (15 mín) committar „wip … [skip ci]“ og `deploy.yml` cron (06:10) getur seinkað um klukkustundir og birt wip-haus; hvert millistig á vörðum leið þarf að vera óvirkt/öruggt eða unnið í sér-worktree. [C#421, C#579]
 - Yfirreglur Agnars 30.08.2026 sem netið á að verja: kláruð úttekt með reikningi er „ritað í stein“ (ekkert í kerfinu má snerta hana nema Agnar breyti sjálfur), engar ósýnilegar breytingar í skrift, og „eytt er eytt“ (ekki limbó-staða). [lota 2b47ca79]
 - Í worktrees verða skrár CRLF eftir `git merge`/`checkout` (`autocrlf=true`) og `audit-uttekt-afslattarhopur` verður þá falskt rautt — skrifaðu CRLF-skrár aftur í LF fyrir audit. (líklega) [lota 6db7868a, 15.10]
+
+- **03.11.2026** — 03.11.2026 — 121-pickup-checkout: sölu-afslátturinn reiknast nú í afslSolu(sale, brúttó) í BÆÐI calcTotals og finalizePickup — heil prósenta (origPctClean-lestur ±0,06) = kr-talan + sama % af breytingunni (viðbót af verkstæði / + Bæta við / ónýt tæki ekki afhent); óbreytt upphæð = kr-talan nákvæmlega; föst kr óbreytt. Eydd tæki (status 'eytt') eru ekki lengur í allUnits (R-001248 taldi 7 í stað 6). kt-vistunarleiðirnar ósnertar. Prófað: hleruð skrif, Klára → solur 37.000/9.250.
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

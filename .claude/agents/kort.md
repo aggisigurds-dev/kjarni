@@ -113,3 +113,10 @@ git push er eina deploy-leiðin.
 - Teikningaleit (heimilisfang → Landeignaskrá HMS → FotoWeb/map.is) á EKKI heima hér — sjá `elon-musk` (tímabundinn eigandi Teikninga-aðgerðarinnar). Djúptengill: `/kjarni/turbopaint?leit=<heimilisfang>`. [C#547][C#569]
 - Í Þjónustugátt/Eignagátt (ekki appinu) eru OSM-kortaflísar bannaðar: nota Esri `World_Street_Map` flísar (`server.arcgisonline.com/.../World_Street_Map/MapServer/tile/{z}/{y}/{x}`) (líklega). [lota 6975db46]
 - Kjarni-kort: Agnar vill fjarlægja bláu slikjuna á kortum í Kjarni, ekki breyta bláa litnum á vefsíðunum sjálfum — óljóst hvað „it" er; staðfestu áður en breytt er (líklega). [lota 6f49d5d4]
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

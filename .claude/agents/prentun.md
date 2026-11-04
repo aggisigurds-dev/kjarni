@@ -119,3 +119,10 @@ Og `QR.svg()` í `js/utils.js:107` er **FALSKUR QR** (hash+LCG random-fylling,
 - Tölur eins og „403" í léttvatnsdálki skýrslu eru ÍBÚÐANÚMER, ekki raðnúmer — þær segja hvaðan tækið var tekið í hleðslu. [C#163]
 - `qrtag.js` var meðal skriftna sem skönnuðu allt DOM við hverja breytingu (lagað 25.09.2026, #867, sýnilegt CLS 0 á 13 síðum) — ný 📷-tenging má ekki skanna allt DOM. [C#692]
 - Deploy: aðeins `git push` á master þar sem head-commit hefur `[deploy]`; `node deploy.js` er bannað (þurrkar serverless-föll); `node tools/audit-all.cjs --static` þarf exit 0 fyrir hvert push; hækkaðu `?v=` á breyttum js-skrám í `index.html` (líklega). [lota e9205308]
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

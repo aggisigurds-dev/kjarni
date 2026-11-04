@@ -90,3 +90,10 @@ Wiring eins og 236/232: nýr view-div, klónaður hliðarstiku-hnappur frá Bake
 - „Sala á kúnnann eftir að málið varð til“ er EKKI sönnun um að mál sé afgreitt (búðarsala ≠ úttekt) — analyzerar mega ekki fullyrða „búið“ af seinni sölu einni saman (Agnar: „ég þori ekkert að loka neinu, svo mikið af false facts“). [C#425]
 - Bakfærðir reikningar (kredit í appi eða CANCELLED í Payday) telja ekki þegar reiknað er hvort reikningur sé til á stað; reikningur telst aðeins á sama stað (`solur.customer_id`). [C#581]
 - `uttaeki.status` er eitt af: active, i_vinnslu, geymsla, urelt, onytt. [lota 7576079c (líklega)]
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

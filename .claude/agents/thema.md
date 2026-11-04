@@ -160,3 +160,10 @@ dark→grey page band, metallic 3D stat cards, filled pills, dark-header data ta
 - Þegar Agnar samþykkir mockup eða útlitsbreytingu: smíðaðu NÁKVÆMLEGA það og láttu allt annað haldast óbreytt (allar tengingar tengdar, aðeins útlitið breytist). [lotur 14b698a2, 6db7868a]
 - Ragnarök / „Golden Jarvis“ er útlitsstefna fyrir Jarvis-síðuna og 3dwork (kjarni, `apps/web/src/app/3dwork/ragnarok/theme.css`): dökkgulir tónar víkja fyrir „real gold metal“ eða brúnum tónum með smá grófleika og 3D-preview svæði eru ljós. [lota a8586ee5, 17.–18.10.2026]
 - Á kortum í Kjarni vill Agnar fjarlægja bláu slikjuna — ekki breyta bláa litnum á vefsíðunum sjálfum; óljóst hvað „it“ var, staðfestu áður en breytt er. [lota 6f49d5d4, 25.10.2026 (líklega)]
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

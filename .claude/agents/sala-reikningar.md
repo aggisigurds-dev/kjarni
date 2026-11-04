@@ -463,3 +463,10 @@ stubbuð. Kröfu yfirlit: `ctx.route` á `/rest/v1/solur?…greitt_med=eq.reikni
 - **26.10.2026** — Sérkjör (26.10.2026, commits 7958a41d, b27e062f, c0aaa44f): samningsafsláttur getur verið FLATUR (pct) af lifandi verðskrá, ekki eitt verð per vöru — Sérkjör-spjaldið laug um verðið þegar afslátturinn er flatur og segir nú prósentuna. Athuga þegar afsláttarhópar eru lesnir.
 
 - **26.10.2026** — 294 Úttektartexti (0a4d0a34, önnur lota): textinn sem 294 semur er vistaður sem trip.notesAuto. Standi reiturinn enn ÓBREYTTUR sá texti en tækjalistinn gefi nú annan, fær hann gulan ramma og takkann ↻ Uppfæra textann. Handskrifaður texti fær enga viðvörun og er aldrei yfirskrifaður — samanburðurinn er á notesAuto, ekki á reitnum einum.
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.
