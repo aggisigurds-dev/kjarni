@@ -811,6 +811,51 @@ export function BoardCanvas({
       return;
     }
 
+    if (currentTool === "gegnumtak") {
+      // Sama snið og innlestu merkin (Loftgegnumtak …, 20 px græn) svo talningin haldist ein.
+      // Tólið helst virkt til að setja mörg í röð — Esc eða annað tól hættir.
+      const { gegnumtakMm: mm, addObjects } = useBoardStore.getState();
+      const s = 20;
+      addObjects([
+        {
+          id: newId(),
+          type: "ellipse",
+          x: world.x - s / 2,
+          y: world.y - s / 2,
+          width: s,
+          height: s,
+          fill: "#16a34a99",
+          stroke: "#14532d",
+          strokeWidth: 2,
+          rotation: 0,
+          opacity: 1,
+          locked: false,
+          hidden: false,
+          name: `Loftgegnumtak ${mm} mm (handvirkt)`,
+          layerId: "loftræsting",
+        },
+        {
+          id: newId(),
+          type: "text",
+          x: world.x + s / 2 + 2,
+          y: world.y - 7,
+          text: String(mm),
+          fontSize: 12,
+          fill: "#14532d",
+          width: 40,
+          fontStyle: "bold",
+          align: "left",
+          rotation: 0,
+          opacity: 1,
+          locked: false,
+          hidden: false,
+          name: `Loftmál ${mm}`,
+          layerId: "loftmal",
+        },
+      ]);
+      return;
+    }
+
     if (currentTool === "text") {
       const { style: st, addObjects } = useBoardStore.getState();
       const id = newId();
