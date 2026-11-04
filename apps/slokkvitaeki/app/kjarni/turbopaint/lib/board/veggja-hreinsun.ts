@@ -637,7 +637,14 @@ export function husUtlina(linur: HLina[], dpm: number, lokunM = SJALFGEFIN_VIKMO
   for (let i = 0; i < W * H; i++) if (merki[i] === best && !veggur[i]) rymi++;
   const kassiFlat = (k.x1 - k.x0 + 1) * (k.y1 - k.y0 + 1);
   const lokud = rymi >= kassiFlat * 0.25;
-  const kassi: Rammi = { x0: x0 + k.x0 * reitur, y0: y0 + k.y0 * reitur, x1: x0 + (k.x1 + 1) * reitur, y1: y0 + (k.y1 + 1) * reitur };
+  let kassi: Rammi = { x0: x0 + k.x0 * reitur, y0: y0 + k.y0 * reitur, x1: x0 + (k.x1 + 1) * reitur, y1: y0 + (k.y1 + 1) * reitur };
+  // Útlínan lokaðist ekki (óþétt skönnun, op án hurðar): stærsta „lokaða“ svæðið er þá oft aðeins eitt herbergi — kassinn utan um
+  // það henti 80 af 110 veggjum á Breiðhöfða 13 (2018-skönnun, 04.11.2026: 87 fjarlægð, 42 eftir). Varaleiðin er því kassi
+  // hússins úr veggjaklösunum (husKassi) — hann nær yfir húsið allt og heldur öllu nema lóðarmörkum og titilreit.
+  if (!lokud) {
+    const hk = husKassi(linur, dpm, { spassia: 0.02 });
+    if (hk) kassi = { x0: Math.min(kassi.x0, hk.x0), y0: Math.min(kassi.y0, hk.y0), x1: Math.max(kassi.x1, hk.x1), y1: Math.max(kassi.y1, hk.y1) };
+  }
   const inni = (x: number, y: number) => {
     const cx = Math.floor((x - x0) / reitur), cy = Math.floor((y - y0) / reitur);
     if (cx < 0 || cy < 0 || cx >= W || cy >= H) return false;
