@@ -132,7 +132,7 @@ import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { HamRofiSimi, VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika, VeggjaTolSimaStika } from "./VeggjaStika";
+import { HamRofiSimi, VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika, VeggjaTolSimaHnappar } from "./VeggjaStika";
 import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
 import { useErSimi } from "../../lib/board/simi";
 import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
@@ -2105,6 +2105,9 @@ export function WhiteboardApp() {
                   )}
                 </button>
               ) : null}
+              {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir og greiningartólin efst til hægri undir „Vista" — ekki fyrir á borðinu */}
+              {simi && tengdMynd?.uttekt ? <HamRofiSimi /> : null}
+              {simi && VEGGJA_HAMIR.includes(hamur) ? <VeggjaTolSimaHnappar onAdgerd={hamAdgerd} /> : null}
               {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
                 <div className="pointer-events-auto" data-magntafla>
                   <CountTable />
@@ -2129,8 +2132,6 @@ export function WhiteboardApp() {
                 tengdMynd?.uttekt || (simi && vistaSyn) ? "top-16" : "top-3"
               }`}
             >
-              {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir efst; í veggjaham verða neðri stikurnar veggjatól + tegund/þykkt */}
-              {simi && tengdMynd?.uttekt ? <HamRofiSimi /> : null}
               <SelectionBar
                 onExportSelection={() => {
                   setExportTarget("selection");
@@ -2141,7 +2142,7 @@ export function WhiteboardApp() {
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               <RitilThettStika />
-              {simi && VEGGJA_HAMIR.includes(hamur) ? <VeggjaTolSimaStika onAdgerd={hamAdgerd} /> : <SymbolTray />}
+              {simi && VEGGJA_HAMIR.includes(hamur) ? null : <SymbolTray />}
               {simi && VEGGJA_HAMIR.includes(hamur) ? <VeggjaTegundSimaStika /> : <StyleStrip />}
             </div>
           </div>
