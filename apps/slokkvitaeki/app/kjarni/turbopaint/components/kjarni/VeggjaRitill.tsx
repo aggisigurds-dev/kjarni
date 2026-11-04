@@ -56,6 +56,9 @@ import {
   metraTexti,
   rettHyrningur,
   smella,
+  snuaStiga,
+  stigaEndar,
+  stigiUrKassa,
   talningTexti,
   tengdirEndar,
   THYKKTIR_CM,
@@ -234,6 +237,8 @@ type Drag =
   | { kind: "pan"; sx: number; sy: number; cx: number; cy: number }
   | { kind: "kassi"; A: P; B: P; eyda: boolean; baeta: boolean; sx: number; sy: number; tillaga?: "samthykkja" | "hafna" | "forsk" }
   | { kind: "rettur"; A: P; B: P }
+  // Agnar 04.11.2026: stigi = dreginn kassi, „+" endinn (þar sem dregið er til) er upp
+  | { kind: "stigi"; A: P; B: P }
   // Agnar 07.10.2026: „hún dregst þegar ég held inni vinstri músartakkanum og stoppar þegar ég sleppi" — einn veggur á drátt
   | { kind: "teikna-drag"; sx: number; sy: number }
   | { kind: "endi"; id: string; hlid: 0 | 1; fylgja: { id: string; hlid: 0 | 1 }[]; akkeri: P; byrjad: boolean; sx: number; sy: number }
@@ -274,6 +279,12 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     return idx.length;
   };
   const lasVirkur = () => useVeggjaRitill.getState().hornalas !== shift.current;
+  const snuaStigum = (ids: string[]) => {
+    const b = useBoardStore.getState();
+    b.commitHistory();
+    b.updateObjects(ids, (o) => (o.type === "polyline" || o.type === "line" ? snuaStiga(o) : o), false);
+    teiknaNu();
+  };
 
   const tilHeims = useCallback((cx: number, cy: number): P => {
     const r = wrapRef.current?.getBoundingClientRect();
@@ -388,6 +399,22 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       }
     }
 
+    const stigaMerki = (P0: P, texti: string, lit: string) => {
+      ctx.beginPath();
+      ctx.arc(sx(P0[0]), sy(P0[1]), 11, 0, Math.PI * 2);
+      ctx.fillStyle = lit;
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = "700 16px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(texti, sx(P0[0]), sy(P0[1]) + 0.5);
+      ctx.textAlign = "start";
+      ctx.textBaseline = "alphabetic";
+    };
     const merki = (texti: string, x: number, y: number) => {
       ctx.font = "600 12px system-ui, sans-serif";
       const w = ctx.measureText(texti).width + 12;
@@ -437,6 +464,28 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       ctx.stroke();
       ctx.globalAlpha = 1;
       merki(`${metraTexti(x1 - x0, dpm)} × ${metraTexti(y1 - y0, dpm)}`, sx(x1) + 10, sy(y1) + 6);
+    }
+    if (d?.kind === "stigi") {
+      const lodrett = Math.abs(d.B[1] - d.A[1]) > Math.abs(d.B[0] - d.A[0]);
+      const x0 = Math.min(d.A[0], d.B[0]), x1 = Math.max(d.A[0], d.B[0]), y0 = Math.min(d.A[1], d.B[1]), y1 = Math.max(d.A[1], d.B[1]);
+      ctx.fillStyle = "rgba(109,40,217,0.18)";
+      ctx.fillRect(sx(x0), sy(y0), (x1 - x0) * k.scale, (y1 - y0) * k.scale);
+      ctx.strokeStyle = "rgba(109,40,217,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx(x0), sy(y0), (x1 - x0) * k.scale, (y1 - y0) * k.scale);
+      const cx = (d.A[0] + d.B[0]) / 2, cy = (d.A[1] + d.B[1]) / 2;
+      const nidur: P = lodrett ? [cx, d.A[1]] : [d.A[0], cy];
+      const upp: P = lodrett ? [cx, d.B[1]] : [d.B[0], cy];
+      stigaMerki(nidur, "−", "#64748b");
+      stigaMerki(upp, "+", "#6d28d9");
+      merki(`${metraTexti(lodrett ? y1 - y0 : x1 - x0, dpm)} × ${metraTexti(lodrett ? x1 - x0 : y1 - y0, dpm)} · + er upp`, sx(x1) + 10, sy(y1) + 6);
+    }
+    // valinn stigi: „+" og „−" á endunum — smelltu á merki til að snúa stiganum
+    for (const o of valdir) {
+      if (o.veggTegund !== "stigi") continue;
+      const e = stigaEndar(o);
+      stigaMerki(e.nidur, "−", "#64748b");
+      stigaMerki(e.upp, "+", "#6d28d9");
     }
     if (d?.kind === "kassi") {
       const inni = d.B[0] >= d.A[0];
@@ -792,12 +841,32 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         return;
       }
     }
+    // Stigi valinn: smellur á „+"/„−" merkið snýr honum (upp ↔ niður)
+    {
+      const sel = useBoardStore.getState().selectedIds;
+      if (sel.length === 1) {
+        const o = V.find((v) => v.id === sel[0]);
+        if (o && o.veggTegund === "stigi") {
+          const en = stigaEndar(o);
+          const nalaegt = Math.min(Math.hypot(X[0] - en.upp[0], X[1] - en.upp[1]), Math.hypot(X[0] - en.nidur[0], X[1] - en.nidur[1])) * cam().scale;
+          if (nalaegt <= 14) {
+            snuaStigum([o.id]);
+            return;
+          }
+        }
+      }
+    }
     switch (r.tol) {
       case "samthykkja-kassi":
       case "hafna-kassi":
         drag.current = { kind: "kassi", A: X, B: X, eyda: false, baeta: false, sx: e.clientX, sy: e.clientY, tillaga: r.tol === "hafna-kassi" ? "hafna" : "samthykkja" };
         break;
       case "teikna": {
+        if (r.tegund === "stigi" && kedja.current.length === 0) {
+          const s0 = smella(X, V, { vik: vik() }).P;
+          drag.current = { kind: "stigi", A: s0, B: s0 };
+          break;
+        }
         const s = smellaHer(X);
         const iKedju = kedja.current.length > 0;
         baetaVidKedju(s.P);
@@ -956,6 +1025,9 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       case "rettur":
         d.B = smella(X, V, { vik: vik() }).P;
         break;
+      case "stigi":
+        d.B = smella(X, V, { vik: vik() }).P;
+        break;
       case "endi": {
         if (!d.byrjad) {
           if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return;
@@ -1072,6 +1144,18 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
         ljukaKedju();
         toast.message("Veggur · haltu inni og dragðu næsta · ⌘Z afturkallar", { duration: 1500 });
         return;
+      }
+    } else if (d.kind === "stigi") {
+      const k = cam().scale;
+      if (Math.hypot(d.B[0] - d.A[0], d.B[1] - d.A[1]) * k >= 10) {
+        const r = useVeggjaRitill.getState();
+        const dpmS = ritillDilarAMetra(b.objects, b.pixelsPerMeter);
+        const mid: P = [(d.A[0] + d.B[0]) / 2, (d.A[1] + d.B[1]) / 2];
+        const S = stigiUrKassa(d.A, d.B, { thykkt: cmIDila(r.thykktCm, dpmS), parentId: foreldriFyrir(mid, b.objects) }, dpmS ? 0.3 * dpmS : 12 / k, newId);
+        if (S) {
+          skiptaUt([], [S], [S.id]);
+          toast.message("Stigi · + er upp, smelltu á + eða − til að snúa honum · ⌘Z afturkallar", { duration: 2600 });
+        }
       }
     } else if (d.kind === "rettur") {
       const k = cam().scale;
@@ -1741,6 +1825,7 @@ export function VeggjaHamSpjald() {
     for (const o of s.objects) if (sel.has(o.id) && erVeggur(o)) n++;
     return n;
   });
+  const stigarValdir = useBoardStore((s) => s.objects.filter((o) => s.selectedIds.includes(o.id) && o.type === "polyline" && (o as LineObject).veggTegund === "stigi").length);
   const r = useVeggjaRitill.getState();
   const teiknar = virkur && tol === "teikna";
 
@@ -1808,7 +1893,25 @@ export function VeggjaHamSpjald() {
         {teiknaTakki("gler", "+ Gler", litur("gler"), "Haltu inni og dragðu línu yfir gluggann / glervegginn — slepptu til að ljúka")}
         {teiknaTakki("ei60", "Eldveggur EI-60", <Flame className="size-3.5 text-[#d32f2f]" />, "Haltu inni og dragðu — eldveggur EI-60 (rauður). Núverandi vegg: veldu hann og ýttu á 4.")}
         {teiknaTakki("ei30", "EI-30", <Flame className="size-3.5 text-[#ef5350]" />, "Haltu inni og dragðu — eldveggur EI-30 (ljósrauður). Núverandi vegg: veldu hann og ýttu á 5.")}
-        {teiknaTakki("stigi", "+ Stigi", litur("stigi"), "Haltu inni og dragðu eftir stiganum (frá neðsta þrepi upp á efsta) — birtist sem þrepastigi í 3D (7).")}
+        {teiknaTakki("stigi", "+ Stigi", litur("stigi"), "Dragðu kassa yfir stigann: langhliðin er leggurinn, stutta hliðin breiddin. + (fjólublátt) er endinn sem hann fer UPP til — dragðu til efri enda. Smelltu á + eða − á völdum stiga til að snúa honum. Birtist sem þrepastigi í 3D (7).")}
+        {stigarValdir ? (
+          <button
+            type="button"
+            data-veggir-snua-stiga
+            title="Snúa völdum stiga: + (upp) og − (niður) víxlast"
+            onClick={() => {
+              const b = useBoardStore.getState();
+              const ids = b.objects.filter((o) => b.selectedIds.includes(o.id) && o.type === "polyline" && (o as LineObject).veggTegund === "stigi").map((o) => o.id);
+              if (!ids.length) return;
+              b.commitHistory();
+              b.updateObjects(ids, (o) => (o.type === "polyline" ? snuaStiga(o as LineObject) : o), false);
+            }}
+            className={`${btn} ${ovirkt}`}
+          >
+            <span className="font-bold text-[#a78bfa]">±</span>
+            Snúa stiga
+          </button>
+        ) : null}
         <button type="button" data-veggir-eyda title="Eyða völdum veggjum (Delete)" onClick={eyda} className={`${btn} ${ovirkt} ${valdir ? "" : "opacity-60"}`}>
           <Trash2 className="size-3.5 text-[#FE653F]" />
           {valdir > 1 ? `Eyða ${valdir}` : "Eyða"}

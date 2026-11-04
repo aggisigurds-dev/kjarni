@@ -294,6 +294,36 @@ export function rettHyrningur(A: P, B: P, st: Omit<NyrVeggurStillingar, "id">, n
   return hlidar.map((p) => nyrVeggur(p, { ...st, id: nyttId() }));
 }
 
+// ── stigi úr kassa ───────────────────────────────────────────────────────────────────────────────────────────
+
+/** Stigi úr dregnum kassa A→B (Agnar 04.11.2026: „best með stigann að draga kassa … + þýðir að hann fari upp þeim megin").
+ * Langás kassans er stefna leggsins, stutta hliðin er breiddin (þykkt línunnar — 3D-stiginn les hana sem breidd ef hún
+ * er ≥ 0,55 m), og „+" (upp) er endinn þar sem dregið er TIL. Mjórri kassi en `lagmarkBreidd` verður þunn lína A→B
+ * (skástigi) með þykkt `st.thykkt`. Línan er frá neðsta þrepi (fyrsti punktur) upp á efsta (síðasti). */
+export function stigiUrKassa(A: P, B: P, st: Omit<NyrVeggurStillingar, "id" | "tegund">, lagmarkBreidd: number, nyttId: () => string): LineObject | null {
+  const dx = B[0] - A[0], dy = B[1] - A[1];
+  if (Math.hypot(dx, dy) < 1e-6) return null;
+  const lodrett = Math.abs(dy) > Math.abs(dx);
+  const breidd = lodrett ? Math.abs(dx) : Math.abs(dy);
+  if (breidd < lagmarkBreidd) return nyrVeggur([A[0], A[1], B[0], B[1]], { ...st, tegund: "stigi", id: nyttId() });
+  const heims = lodrett ? [(A[0] + B[0]) / 2, A[1], (A[0] + B[0]) / 2, B[1]] : [A[0], (A[1] + B[1]) / 2, B[0], (A[1] + B[1]) / 2];
+  return nyrVeggur(heims, { ...st, tegund: "stigi", thykkt: breidd, id: nyttId() });
+}
+
+/** Stiganum snúið: upp og niður víxlast (punktarnir í öfugri röð). */
+export function snuaStiga(o: LineObject): LineObject {
+  const p = o.points;
+  const ut: number[] = [];
+  for (let i = p.length - 2; i >= 0; i -= 2) ut.push(p[i], p[i + 1]);
+  return { ...o, points: ut };
+}
+
+/** Endar stiga í heimshnitum: `upp` = „+" (efsta þrep), `nidur` = „−" (neðsta). */
+export function stigaEndar(o: LineObject): { upp: P; nidur: P } {
+  const p = heimsPunktar(o);
+  return { nidur: [p[0], p[1]], upp: [p[p.length - 2], p[p.length - 1]] };
+}
+
 // ── breytingar á einum vegg ───────────────────────────────────────────────────────────────────────────────
 
 /** Klýfur vegg við punktinn næst X: tveir veggir sem mætast þar (sama tegund og þykkt). null ef punkturinn er við
