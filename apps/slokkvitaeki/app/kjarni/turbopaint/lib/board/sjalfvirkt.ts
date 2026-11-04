@@ -35,7 +35,7 @@ import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
 import { flokkaYfirlit, klemmaGreindaThykkt, erNotanlegtVigurPdf, ptIBord, skurdurIPt, sjalfvirkirPdfVeggirPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
-import { greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
+import { greinaThunnaVeggi, greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
 import { beitaSltBrsl } from "./slt-brsl-bord";
 import { sltBrslUrTexta } from "./slt-brsl-lestur";
 import { TEGUND_HEITI } from "./sjalftenging";
@@ -353,6 +353,7 @@ export async function vinnaLinur(
     k.ljuka?.(
       "hreinsun",
       `${tl.sameinadir} sameinaðir · ${tl.smellt} smellt · ${tl.lengdir} lengdir · ${tl.rettir} réttir · ${tl.stakir} stakir fjarlægðir` +
+      (tl.hillur ? ` · ${tl.hillur} hillur (frístandandi langar línur) fjarlægðar` : "") +
         (tl.strikPunkt ? ` · ${tl.strikPunkt} strik-punkt` : "") +
         ` (${hrar.length} → ${hreinar.length})`
     );
@@ -650,6 +651,16 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         const mx = (l.p[0] + l.p[l.p.length - 2]) / 2, my = (l.p[1] + l.p[l.p.length - 1]) / 2;
         return mx >= skB.x && my >= skB.y && mx <= skB.x + skB.width && my <= skB.y + skB.height;
       };
+      // Þunnir veggir (tvöföld hárfín lína) sem veggjavélin sér ekki — sama mynd, fínni kvarði. Bregðist þetta heldur ferlið áfram.
+      let thunnir: HLina[] = [];
+      try {
+        S().setja("veggir", { texti: "Leita að þunnum veggjum (tvöföld hárfín lína)…" });
+        thunnir = klemmaGreindaThykkt(await greinaThunnaVeggi(p, dpm), dpm).filter(innan);
+        talning.thunnir = thunnir.length;
+      } catch (err) {
+        console.warn("[sjálfvirkt] þunnir veggir", err);
+      }
+      const thunnirTexti = thunnir.length ? ` · ${thunnir.length} þunnir veggir (fínt strik)` : "";
       const vafri: Promise<HLina[]> = heilBladVeggir
         ? Promise.resolve(heilBladVeggir.filter(innan))
         : greinaVeggiSkonnunar(p, undefined, dpm).then((gr) => klemmaGreindaThykkt(gr.veggir, dpm));
@@ -664,15 +675,15 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
       const vel: VelUt = leidVal === "vafri" ? { villa: "sleppt (tp_sjalfvirkt_leid = vafri)" } : await keyraVeggjavel(planId, (haed?.image_url as string | null) ?? null, (texti, pros) => S().setja("veggir", { texti, pros }), stodvad);
       if (stodvad()) return stoppa();
       if ("veggir" in vel && vel.veggir.length) {
-        hrar = klemmaGreindaThykkt(vel.veggir.filter(innan), dpm);
+        hrar = [...klemmaGreindaThykkt(vel.veggir.filter(innan), dpm), ...thunnir];
         leid = vel.fyrri ? "veggjavel-fyrri" : "veggjavel";
-        ljuka("veggir", vel.texti);
+        ljuka("veggir", vel.texti + thunnirTexti);
       } else {
         S().setja("veggir", { texti: `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} — greini í vafranum…` });
-        hrar = await vafri;
+        hrar = [...(await vafri), ...thunnir];
         leid = "vafri";
         const gl = hrar.filter((v) => v.tegund === "gler").length;
-        ljuka("veggir", `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} → myndgreining í vafranum: ${hrar.length - gl} veggir · ${gl} gler`, "lokid");
+        ljuka("veggir", `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} → myndgreining í vafranum: ${hrar.length - gl} veggir · ${gl} gler${thunnirTexti}`, "lokid");
       }
     }
     }

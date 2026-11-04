@@ -9,6 +9,7 @@
 //   4. smella       endapunktar ≤ smellaM frá öðrum enda (horn) eða frá hlið annars veggjar (T) mætast
 //   5. lengja       laus endi lengist að næsta vegg (horn / T / samlína) ef hann er < lengjaM frá
 //   6. stakir       bútar < stakurM sem tengjast engu í hvorugum enda fara
+//   6b. hillur      langir bútar (≥ hillurM) sem tengjast engu í hvorugum enda: hillurekkar og aðrar raðir, ekki veggir
 //   7. utan húss    (husUtlina — eftir hurðagreiningu, svo hurðargöt loki útlínunni) allt utan útlínu hússins fer
 //
 // FASTAR LÍNUR (`fastar`): veggir sem Agnar teiknaði / leiðrétti sjálfur. Hreinsunin breytir þeim ALDREI — nýju línurnar
@@ -46,6 +47,10 @@ export interface Vikmork {
    * Mælt 08.10.2026: 1,0 m gaf einni lagfæringu færra á Álfaborg 2. hæð (báðar leiðir) en 4 fleiri á vigur-PDF
    * Fiskislóðar — þess vegna aðeins á skönnunum. Sjálfgefið 1,0 m. */
   stakurSkonnunM: number;
+  /** Langir bútar sem tengjast engu í hvorugum enda og eru ≥ þetta fara: hillurekkar í lager (miðlína rekka greinist sem
+   * 30 m „veggur"). Veggur sem endar hvergi í öðrum vegg er ekki veggur. 0 = slökkt. Mælt 04.11.2026 á Nesdekk Breiðhöfða 13 1. hæð:
+   * 6 langar línur, 28–35 m, allar frístandandi. Sjálfgefið 6 m. */
+  hillurM: number;
   /** Op í útlínu hússins sem lokast þegar „utan húss" er metið (hurðargöt sem fundust ekki). Sjálfgefið 1,30 m. */
   lokunM: number;
   /** Strik-punkt-línur: a.m.k. `butar` samlínu bútar með reglulegu bili [bilMinM, bilMaxM] sem spanna ≥ spannM. */
@@ -76,6 +81,7 @@ export const SJALFGEFIN_VIKMORK: Vikmork = {
   lengjaM: 0.4,
   stakurM: 0.5,
   stakurSkonnunM: 1,
+  hillurM: 6,
   lokunM: 1.3,
   strikPunkt: { butar: 4, bilMinM: 0.03, bilMaxM: 0.65, spannM: 3 },
   hurd: { minM: 0.7, maxM: 1.3, bogiMinM: 0.6, bogiMaxM: 1.3, bilahurdM: 2.4, bilahurdMaxM: 6, glerMinM: 0.3, glerMaxM: 8, glerUrBili: 0, bKrefstBoga: 1 },
@@ -121,14 +127,16 @@ export interface HreinsunTalning {
   lengdir: number;
   /** Stakir stuttir bútar fjarlægðir. */
   stakir: number;
+  /** Langir frístandandi bútar (hillurekkar) fjarlægðir. */
+  hillur: number;
 }
 
 export interface Fjarlaegd {
   p: number[];
-  astaeda: "strikpunkt" | "stakur" | "utan";
+  astaeda: "strikpunkt" | "stakur" | "hilla" | "utan";
 }
 
-const tomTalning = (): HreinsunTalning => ({ strikPunkt: 0, rettir: 0, sameinadir: 0, smellt: 0, lengdir: 0, stakir: 0 });
+const tomTalning = (): HreinsunTalning => ({ strikPunkt: 0, rettir: 0, sameinadir: 0, smellt: 0, lengdir: 0, stakir: 0, hillur: 0 });
 
 // ── grunnur ────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -435,6 +443,23 @@ function endiTengdur(x: number, y: number, t: number, sjalfur: number, allar: HL
   return false;
 }
 
+/** Vísar langra búta (≥ lagmark) sem tengjast engu í hvorugum enda — hvort sem þeir skera aðra línu eða ekki (rekki með
+ * þverstrikum sker aðrar línur en er samt enginn veggur). Aðeins veggir, ekki gler/hurðir/svalir/stigar. */
+export function hillurButar(butar: HLina[], fastar: HLina[], lagmark: number, bil: number): Set<number> {
+  const allar = [...butar, ...fastar];
+  const ut = new Set<number>();
+  if (!(lagmark > 0)) return ut;
+  butar.forEach((b, i) => {
+    if (b.tegund === "gler" || b.tegund === "hurd" || b.tegund === "svalir" || b.tegund === "stigi") return;
+    if (lengdLinu(b.p) < lagmark) return;
+    const n = b.p.length;
+    if (endiTengdur(b.p[0], b.p[1], b.t, i, allar, bil)) return;
+    if (endiTengdur(b.p[n - 2], b.p[n - 1], b.t, i, allar, bil)) return;
+    ut.add(i);
+  });
+  return ut;
+}
+
 /** Vísar stuttra búta (< lagmark) sem tengjast engu í hvorugum enda og skera enga aðra línu. `fastar` telja sem tengi. */
 export function stakirButar(butar: HLina[], fastar: HLina[], lagmark: number, bil: number): Set<number> {
   const allar = [...butar, ...fastar];
@@ -508,6 +533,13 @@ export function hreinsaVeggi(nyjar: HLina[], fastar: HLina[], dpm: number, vik: 
     butar.forEach((b, i) => st.has(i) && fjarlaegdar.push({ p: b.p, astaeda: "stakur" }));
     butar = butar.filter((_, i) => !st.has(i));
     talning.stakir += st.size;
+  }
+  // 6b. hillur: langir bútar sem enda hvergi í vegg (einn skammtur — rekkar tengjast ekki hver öðrum)
+  const hi = hillurButar(butar, fastar, m(vik.hillurM), m(0.15));
+  if (hi.size) {
+    butar.forEach((b, i) => hi.has(i) && fjarlaegdar.push({ p: b.p, astaeda: "hilla" }));
+    butar = butar.filter((_, i) => !hi.has(i));
+    talning.hillur = hi.size;
   }
   butar = butar.filter((b) => lengdLinu(b.p) > m(0.02));
   return { linur: butar, talning, fjarlaegdar };
