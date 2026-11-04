@@ -5,7 +5,7 @@
 
 import { AlertTriangle, Check, CircleDashed, Loader2, Minus, Square, Wand2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSjalfvirkt, type SkrefStada } from "../../lib/board/sjalfvirkt-stada";
+import { SKREF_SKYRING, useSjalfvirkt, type SkrefStada } from "../../lib/board/sjalfvirkt-stada";
 
 const klukka = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -65,6 +65,10 @@ export function SjalfvirktSpjald() {
             {k.texti ? (
               <div className={`mt-0.5 pl-5 text-[11.5px] leading-snug ${k.stada === "villa" ? "text-amber-200" : "text-white/70"}`}>{k.texti}</div>
             ) : null}
+            <details className="mt-0.5 pl-5 text-[10.5px] text-white/40">
+              <summary className="cursor-pointer select-none">Hvernig?</summary>
+              <div className="mt-0.5 leading-snug text-white/60">{SKREF_SKYRING[k.id]}</div>
+            </details>
             {k.stada === "keyrir" && k.pros != null ? (
               <div className="mt-1 ml-5 h-1 overflow-hidden rounded bg-white/10">
                 <div className="h-full rounded bg-[#FE653F] transition-[width] duration-500" style={{ width: `${Math.max(3, Math.min(100, k.pros))}%` }} />

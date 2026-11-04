@@ -29,6 +29,18 @@ export const SKREF_HEITI: Record<SkrefId, string> = {
   vista: "Vista í úttekt",
 };
 
+/** Skýring á hverju skrefi: hvaða vél vinnur og hvers vegna — sýnd í spjaldinu („Hvernig?") og í Greining-flipanum. */
+export const SKREF_SKYRING: Record<SkrefId, string> = {
+  gaedi: "Teikningin er sótt í bestu gæðum sem skjalasafnið á: TIF-frumrit (300 dpi), vigur-PDF eða skönnuð PDF. Bara lítil JPEG-mynd? Þá verður allt eftir á ónákvæmara og skrefið segir það.",
+  skurdur: "Húsið er fundið sem stærsti veggjaklasinn og blaðið skorið að því með 2,5 % spássíu. Skurður sem þú hefur gert sjálfur eða hæð sem þú hefur leiðrétt er aldrei snert.",
+  veggir: "Vigur-PDF: línur teikningarinnar eru lesnar beint og flokkaðar í veggi og gler. Það er nákvæmast. Skönnun: veggjavélin (U-Net á skrifstofutölvunni, nokkrar mínútur) og myndgreining í vafranum til vara.",
+  hreinsun: "Strik og punktar eytt, línur réttar, samlínu bútar sameinaðir, veggir smelltir saman og stakir bútar fjarlægðir. Veggir sem þú hefur leiðrétt eru fastir.",
+  hurdir: "Hurðir fundnar á tvo vegu: bil í veggjum sem eru 0,7 til 1,3 m, og hurðabogar (fjórðungshringur frá hjör). Gluggar verða gler. Hurð sker vegginn undir sér.",
+  ei: "Texti teikningarinnar er lesinn einu sinni með OCR. EI-30 og EI-60 merkin eru fest á næsta vegg sem eldveggur og brunahólfin reiknuð út frá þeim. EI-CS (reykþétt) telst ekki eldveggur.",
+  taeki: "SLT og BRSL eru lesin úr sama texta og sett á táknin, ásamt búnaði í römmum (R, S, H, B) og skiltum. Tæki sem eru skráð hjá staðnum tengjast táknunum í stað þess að verða ný.",
+  vista: "Óleiðrétt hæð vistast sjálfkrafa. Hæð sem þú hefur leiðrétt vistast aðeins ef þú velur „Bæta við nýju“. Allt verkferlið er eitt Afturkalla-skref.",
+};
+
 export type Spurning = { texti: string; skyring: string; svara: (s: "baeta" | "haetta") => void };
 
 /** Línur í dílum frummyndar (sama kerfi og veggjaLinur) — fyrir mælingar á móti leiðréttingum Agnars. */

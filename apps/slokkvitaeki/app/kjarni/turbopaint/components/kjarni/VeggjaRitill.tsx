@@ -38,7 +38,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { BoxSelect as BoxSelectTakn, BrickWall as BrickWallTakn, Brush as BrushTakn, DoorOpen as DoorOpenTakn, Flame as FlameTakn, Magnet as MagnetTakn, ScanSearch as ScanSearchTakn } from "lucide-react";
+import { BoxSelect as BoxSelectTakn, Brush as BrushTakn, Magnet as MagnetTakn } from "lucide-react";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
 import { useBoardStore } from "../../lib/board/store";
@@ -1529,25 +1529,9 @@ export function RitilThettStika({ auka }: { auka?: { onAdgerd: (a: HamAdgerd) =>
       ) : null}
       {auka ? (
         // Sími, veggjahamur (Agnar 04.11.2026: „setja nokkrar auka stillingar neðst … 2 skipulagðar línur"): sömu tól og
-        // hægra spjaldið — Finna veggi/hurðir, Lesa EI, Greina veggi, Strokleður, Lita veggi, Smella á línu, Eyða í kassa.
+        // hægra spjaldið — Strokleður, Eyða í kassa, Lita veggi, Smella á línu. Greiningartólin eru í Greining-flipanum (efst til hægri).
         <>
           <span className="mx-0.5 my-1.5 w-px shrink-0 bg-white/12" aria-hidden />
-          <button type="button" data-thett="finna-veggi" title="Finna veggi: veggjavélin stingur upp á veggjum (punktalínur) — samþykktu eða hafnaðu" onClick={finnaVeggiTillogur} className={`${takki} shrink-0 hover:bg-white/10`}>
-            <ScanSearchTakn className="size-4 text-teal-300" />
-            Finna veggi
-          </button>
-          <button type="button" data-thett="finna-hurdir" title="Finna hurðir: hurðabogar og op í veggjum sem tillögur" onClick={() => void finnaHurdirTillogur()} className={`${takki} shrink-0 hover:bg-white/10`}>
-            <DoorOpenTakn className="size-4 text-[#ef5350]" />
-            Finna hurðir
-          </button>
-          <button type="button" data-thett="lesa-ei" title="Lesa EI-merkingar teikningarinnar og merkja eldveggina" onClick={() => auka.onAdgerd("ei")} className={`${takki} shrink-0 hover:bg-white/10`}>
-            <FlameTakn className="size-4 text-[#FE653F]" />
-            Lesa EI
-          </button>
-          <button type="button" data-thett="greina-veggi" title="Greina veggi — úr vigur-PDF þegar það er til, annars úr myndinni" onClick={() => auka.onAdgerd("veggir")} className={`${takki} shrink-0 hover:bg-white/10`}>
-            <BrickWallTakn className="size-4" />
-            Greina veggi
-          </button>
           <button type="button" data-thett="strokledur" title="Strokleður: strjúktu yfir það sem á að hverfa af teikningunni" onClick={() => auka.onAdgerd("strokledur")} className={`${takki} shrink-0 hover:bg-white/10`}>
             <BrushTakn className="size-4" />
             Strokleður
