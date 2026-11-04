@@ -1,7 +1,13 @@
 /** Sviðsmynd — settings/clamp/normalize + client fetch for the AI-backdrop
  * generator (bria/generate-background on Replicate). Mirrors the
  * conventions already used by skyjastudio/sdxl.ts and breyta/models.ts.
- * No manual masking needed — the model finds the subject on its own. */
+ * No manual masking needed — the model finds the subject on its own.
+ *
+ * Uploads the ORIGINAL photo straight to Supabase Storage (see
+ * ../uploadToStorage.ts) instead of downscaling it client-side — see
+ * app/api/svidsmynd/replicate/route.ts for why. */
+
+import { uploadForReplicate } from "../uploadToStorage";
 
 export type SceneSettings = {
   prompt: string;
@@ -53,42 +59,16 @@ export function readStoredSceneSettings(): SceneSettings {
   }
 }
 
-const MAX_UPLOAD_DIMENSION = 1800;
-const UPLOAD_JPEG_QUALITY = 0.9;
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
-    img.src = src;
-  });
-}
-
-export async function toResizedDataUrl(source: Blob | string): Promise<string> {
-  const url = typeof source === "string" ? source : URL.createObjectURL(source);
-  const img = await loadImage(url);
-  const longest = Math.max(img.naturalWidth, img.naturalHeight);
-  const scale = longest > MAX_UPLOAD_DIMENSION ? MAX_UPLOAD_DIMENSION / longest : 1;
-  const width = Math.max(1, Math.round(img.naturalWidth * scale));
-  const height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Gat ekki teiknað á striga");
-  ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", UPLOAD_JPEG_QUALITY);
-}
-
 async function fetchImageBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Gat ekki sótt mynd af Replicate (${res.status})`);
   return res.blob();
 }
 
-export async function generateScene(settings: SceneSettings, imageDataUrl: string): Promise<Blob[]> {
+export async function generateScene(settings: SceneSettings, source: Blob | string): Promise<Blob[]> {
   if (!settings.prompt.trim()) throw new Error("Lýstu umhverfinu fyrst.");
+  const blob = typeof source === "string" ? await (await fetch(source)).blob() : source;
+  const imageUrl = await uploadForReplicate(blob, "reference-images");
   const res = await fetch("/api/svidsmynd/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -96,7 +76,7 @@ export async function generateScene(settings: SceneSettings, imageDataUrl: strin
       prompt: settings.prompt,
       negativePrompt: settings.negativePrompt,
       seed: settings.seed,
-      imageDataUrl,
+      imageUrl,
     }),
   });
   const text = await res.text();

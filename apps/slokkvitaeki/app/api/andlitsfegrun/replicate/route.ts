@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Andlitsfegrun — sjálfstætt ArtCraft-tól sem gerir það sem Airbrush/
 // YouCam Perfect gera: jöfn húð, fjarlægja bletti, hvítari tennur, minnka
@@ -28,7 +29,6 @@ export const maxDuration = 60;
 const REPLICATE_API = "https://api.replicate.com/v1";
 const MODEL_OWNER = "prunaai";
 const MODEL_NAME = "p-image-edit";
-const MAX_DATA_URL_LENGTH = 8 * 1024 * 1024; // grófur hemill — vafrinn minnkar myndina áður en hún er send
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
   }
 
-  let body: { imageDataUrl?: string; prompt?: string; seed?: number };
+  let body: { imageUrl?: string; prompt?: string; seed?: number };
   try {
     body = await req.json();
   } catch {
@@ -85,16 +85,13 @@ export async function POST(req: NextRequest) {
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar — veldu að minnsta kosti eina lagfæringu");
 
-  const imageDataUrl = body.imageDataUrl;
-  if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    return bad(400, "imageDataUrl vantar eða er ekki data-URL mynd");
-  }
-  if (imageDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return bad(413, "Myndin er of stór fyrir skýjaleiðina — reyndu minni mynd.");
+  const imageUrl = body.imageUrl;
+  if (!imageUrl || !isOwnStorageUrl(imageUrl)) {
+    return bad(400, "imageUrl vantar eða er ekki frá okkar eigin geymslu");
   }
 
   const input: Record<string, unknown> = {
-    images: [imageDataUrl],
+    images: [imageUrl],
     prompt,
     turbo: false,
   };

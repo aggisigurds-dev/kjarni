@@ -14,7 +14,6 @@ import {
   RETOUCH_OPTIONS,
   generateRetouch,
   readStoredRetouchSettings,
-  toResizedDataUrl,
   type RetouchSettings,
 } from "./retouch";
 
@@ -78,8 +77,7 @@ export default function AndlitsfegrunClient() {
     setBusy(true);
     setError("");
     try {
-      const imageDataUrl = await toResizedDataUrl(sourceUrl);
-      const blob = await generateRetouch(settings, imageDataUrl);
+      const blob = await generateRetouch(settings, sourceUrl);
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
     } catch (err) {

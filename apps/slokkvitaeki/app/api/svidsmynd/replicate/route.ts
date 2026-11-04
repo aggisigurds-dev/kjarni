@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Sviðsmynd — sjálfstætt ArtCraft-tól sem gerir það sem Photoroom gerir:
 // tekur vörumynd og lætur AI búa til nýtt umhverfi/senu í kringum vöruna
@@ -27,7 +28,6 @@ export const maxDuration = 60;
 const REPLICATE_API = "https://api.replicate.com/v1";
 const MODEL_OWNER = "bria";
 const MODEL_NAME = "generate-background";
-const MAX_DATA_URL_LENGTH = 8 * 1024 * 1024; // grófur hemill — vafrinn minnkar myndina áður en hún er send
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    imageDataUrl?: string;
+    imageUrl?: string;
     prompt?: string;
     negativePrompt?: string;
     seed?: number;
@@ -89,16 +89,13 @@ export async function POST(req: NextRequest) {
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar — lýstu umhverfinu sem á að búa til");
 
-  const imageDataUrl = body.imageDataUrl;
-  if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    return bad(400, "imageDataUrl vantar eða er ekki data-URL mynd");
-  }
-  if (imageDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return bad(413, "Myndin er of stór fyrir skýjaleiðina — reyndu minni mynd.");
+  const imageUrl = body.imageUrl;
+  if (!imageUrl || !isOwnStorageUrl(imageUrl)) {
+    return bad(400, "imageUrl vantar eða er ekki frá okkar eigin geymslu");
   }
 
   const input: Record<string, unknown> = {
-    image: imageDataUrl,
+    image: imageUrl,
     bg_prompt: prompt,
   };
   if (body.negativePrompt?.trim()) input.negative_prompt = body.negativePrompt.trim();

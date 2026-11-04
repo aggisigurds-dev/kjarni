@@ -15,7 +15,6 @@ import {
   SCENE_PRESETS,
   generateScene,
   readStoredSceneSettings,
-  toResizedDataUrl,
   type SceneSettings,
 } from "./scene";
 
@@ -84,8 +83,7 @@ export default function SvidsmyndClient() {
     setBusy(true);
     setError("");
     try {
-      const imageDataUrl = await toResizedDataUrl(sourceUrl);
-      const results = await generateScene(settings, imageDataUrl);
+      const results = await generateScene(settings, sourceUrl);
       const blob = results[0];
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));

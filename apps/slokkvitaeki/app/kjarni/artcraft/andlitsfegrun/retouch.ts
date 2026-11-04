@@ -10,7 +10,13 @@
  * and natural texture (not the "plastic skin" over-smoothing failure mode
  * common in automated retouch tools), removed blemishes/dark circles, and
  * left face shape, hair, eyes, lighting and background byte-for-byte
- * identical in composition. */
+ * identical in composition.
+ *
+ * Uploads the ORIGINAL photo straight to Supabase Storage (see
+ * ../uploadToStorage.ts) instead of downscaling it client-side — see
+ * app/api/andlitsfegrun/replicate/route.ts for why. */
+
+import { uploadForReplicate } from "../uploadToStorage";
 
 export type RetouchSettings = {
   skinSmooth: boolean;
@@ -87,47 +93,21 @@ export function readStoredRetouchSettings(): RetouchSettings {
   }
 }
 
-const MAX_UPLOAD_DIMENSION = 1600;
-const UPLOAD_JPEG_QUALITY = 0.92;
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Gat ekki opnað myndina"));
-    img.src = src;
-  });
-}
-
-export async function toResizedDataUrl(source: Blob | string): Promise<string> {
-  const url = typeof source === "string" ? source : URL.createObjectURL(source);
-  const img = await loadImage(url);
-  const longest = Math.max(img.naturalWidth, img.naturalHeight);
-  const scale = longest > MAX_UPLOAD_DIMENSION ? MAX_UPLOAD_DIMENSION / longest : 1;
-  const width = Math.max(1, Math.round(img.naturalWidth * scale));
-  const height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Gat ekki teiknað á striga");
-  ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", UPLOAD_JPEG_QUALITY);
-}
-
 async function fetchImageBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Gat ekki sótt mynd af Replicate (${res.status})`);
   return res.blob();
 }
 
-export async function generateRetouch(settings: RetouchSettings, imageDataUrl: string): Promise<Blob> {
+export async function generateRetouch(settings: RetouchSettings, source: Blob | string): Promise<Blob> {
   const prompt = buildRetouchPrompt(settings);
   if (!prompt) throw new Error("Veldu að minnsta kosti eina lagfæringu.");
+  const blob = typeof source === "string" ? await (await fetch(source)).blob() : source;
+  const imageUrl = await uploadForReplicate(blob, "reference-images");
   const res = await fetch("/api/andlitsfegrun/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, imageDataUrl }),
+    body: JSON.stringify({ prompt, imageUrl }),
   });
   const text = await res.text();
   if (!res.ok) {

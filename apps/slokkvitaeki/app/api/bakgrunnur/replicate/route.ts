@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Bakgrunnur — skýjaleið með 851-labs/background-remover á Replicate
 // (https://replicate.com/851-labs/background-remover), til hliðar við
@@ -25,7 +26,6 @@ export const maxDuration = 60;
 const REPLICATE_API = "https://api.replicate.com/v1";
 const MODEL_OWNER = "851-labs";
 const MODEL_NAME = "background-remover";
-const MAX_DATA_URL_LENGTH = 8 * 1024 * 1024; // grófur hemill — vafrinn minnkar myndina áður en hún er send
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -72,19 +72,16 @@ export async function POST(req: NextRequest) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
   }
 
-  let body: { imageDataUrl?: string };
+  let body: { imageUrl?: string };
   try {
     body = await req.json();
   } catch {
     return bad(400, "Ógilt JSON");
   }
 
-  const imageDataUrl = body.imageDataUrl;
-  if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    return bad(400, "imageDataUrl vantar eða er ekki data-URL mynd");
-  }
-  if (imageDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return bad(413, "Myndin er of stór fyrir skýjaleiðina — reyndu minni mynd eða vafra-leiðina.");
+  const imageUrl = body.imageUrl;
+  if (!imageUrl || !isOwnStorageUrl(imageUrl)) {
+    return bad(400, "imageUrl vantar eða er ekki frá okkar eigin geymslu");
   }
 
   try {
@@ -106,7 +103,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         version,
         input: {
-          image: imageDataUrl,
+          image: imageUrl,
           background_type: "rgba",
           format: "png",
         },
