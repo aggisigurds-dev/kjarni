@@ -30,8 +30,8 @@ test("device types map to the Teikning catalogue symbols (same rule as 434 fjold
   assert.equal(symbolFyrirTegund("Brunaslanga"), "teikn:slanga");
   assert.equal(symbolFyrirTegund("CO₂"), "teikn:co2");
   assert.equal(symbolFyrirTegund("Slönguskápur"), "teikn:slanga");
-  // Teikning-glugginn les þessar sem „annað" — TurboPaint sýnir þær eins (sjá merkjasafn.test.ts)
-  assert.equal(symbolFyrirTegund("Reykskynjari"), "teikn:annad");
+  // Brunakerfisbúnaður er tæki með eigið tákn (434 fjold, 15.10.2026) — sjá merkjasafn.test.ts
+  assert.equal(symbolFyrirTegund("Reykskynjari"), "teikn:reykskynjari");
   assert.equal(symbolFyrirTegund("Óþekkt"), "teikn:annad");
   assert.equal(symbolFyrirTegund(null), "teikn:annad");
 });

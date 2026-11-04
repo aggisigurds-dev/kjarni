@@ -131,10 +131,13 @@ test("tækjategundir: sama regla og Teikning (434 fjold), nöfn og stuttheiti Te
   assert.equal(symbolFyrirTegund("CO₂ 5kg"), "teikn:co2");
   assert.equal(symbolFyrirTegund("Slönguskápur"), "teikn:slanga");
   // Það sem Teikning-glugginn les sem „annað" er líka annað hér — svo sama tækið líti eins út í báðum.
-  for (const t of ["Reykskynjari", "Eldvarnarteppi", "Óþekkt"]) {
+  for (const t of ["Eldvarnarteppi", "Óþekkt"]) {
     assert.equal(fjold(t), "annad", t);
     assert.equal(symbolFyrirTegund(t), "teikn:annad", t);
   }
+  // 15.10.2026: brunakerfisbúnaður er líka tæki (434 fjold) — reykskynjari fær sitt tákn, ekki „annað"
+  assert.equal(fjold("Reykskynjari"), "reykskynjari");
+  assert.equal(symbolFyrirTegund("Reykskynjari"), "teikn:reykskynjari");
   assert.deepEqual(
     MERKJASAFN.filter((f) => f.flokkur === "taeki").map((f) => [f.nafn, f.stutt]),
     [["Léttvatn", "LÉ"], ["Duft", "DF"], ["CO₂", "CO"], ["Slanga", "SL"], ["Annað tæki", "TÆ"]]
