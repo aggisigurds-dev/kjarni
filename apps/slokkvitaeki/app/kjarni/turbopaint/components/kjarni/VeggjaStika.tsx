@@ -229,7 +229,9 @@ export function tengjaValdaVeggi() {
 }
 
 /** Veggjategundirnar + þykkt neðst í síma — í stað lita- og stærðarstikunnar (StyleStrip) í veggjaham
- * (Agnar: „neðsta litalínan séu tegundir af veggjum, og stærðarstikan þar við hliðina sé veggjaþykkt"). */
+ * (Agnar: „neðsta litalínan séu tegundir af veggjum, og stærðarstikan þar við hliðina sé veggjaþykkt" · seinni umferð:
+ * „setja veggjastærðir í bara eina tölu og box sem opnast upp til að breyta … litlar merkingar í litaveggjapunktana"). */
+const STUTT: Record<VeggTegund, string> = { veggur: "V", gler: "G", hurd: "H", ei60: "EI60", ei30: "EI30", svalir: "Sv", stigi: "St" };
 export function VeggjaTegundSimaStika() {
   const hamur = useHamur((s) => s.hamur);
   const selectedIds = useBoardStore((s) => s.selectedIds);
@@ -238,6 +240,7 @@ export function VeggjaTegundSimaStika() {
   const pixelsPerMeter = useBoardStore((s) => s.pixelsPerMeter);
   const nyTegund = useVeggjaRitill((s) => s.tegund);
   const nyThykkt = useVeggjaRitill((s) => s.thykktCm);
+  const [thykktOpin, setThykktOpin] = useState(false);
   if (!VEGGJA_HAMIR.includes(hamur)) return null;
   const veggir = valdirVeggir(objects, selectedIds).filter((o) => !isDrawnLocked(o, layers));
   const tegundir = new Set(veggir.map(veggTegundAf));
@@ -261,6 +264,7 @@ export function VeggjaTegundSimaStika() {
     r.setTegund(tegund);
   };
   const veljaThykkt = (cm: number) => {
+    setThykktOpin(false);
     if (veggir.length) {
       setjaThykkt(
         veggir.map((o) => o.id),
@@ -276,90 +280,99 @@ export function VeggjaTegundSimaStika() {
       role="toolbar"
       aria-label="Veggjategund og þykkt"
       data-veggja-simastika
-      className="pointer-events-auto flex max-w-[calc(100vw-1rem)] items-center gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-2 py-1.5 shadow-2xl shadow-black/40"
+      className="pointer-events-auto relative flex max-w-[calc(100vw-1rem)] items-center gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-2 py-1.5 shadow-2xl shadow-black/40"
     >
-      <span className="text-[10px] whitespace-nowrap text-white/45">{veggir.length ? `${veggir.length} valdir` : "nýir"}</span>
-      {TEGUNDIR.map((t) => (
+      <span className="shrink-0 text-[10px] whitespace-nowrap text-white/45">{veggir.length ? `${veggir.length} valdir` : "nýir"}</span>
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+        {TEGUNDIR.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            title={veggir.length ? `Gera valda veggi að: ${t.texti}` : `Nýir veggir verða: ${t.texti}`}
+            aria-label={t.texti}
+            aria-pressed={merkt === t.id}
+            data-sima-tegund={t.id}
+            onClick={() => velja(t.id)}
+            className={`flex size-8 shrink-0 items-center justify-center rounded-full transition active:translate-y-px ${
+              merkt === t.id ? "ring-2 ring-white ring-offset-2 ring-offset-[#1a1d2e]" : "ring-1 ring-white/25"
+            }`}
+            style={{ background: lit(t.id) }}
+          >
+            <span className="text-[9px] leading-none font-bold" style={{ color: t.id === "veggur" ? "#1c1917" : "#fff" }}>
+              {STUTT[t.id]}
+            </span>
+          </button>
+        ))}
+      </div>
+      <span className="mx-0.5 h-5 w-px shrink-0 bg-white/15" />
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          title={veggir.length ? "Þykkt valinna veggja — smelltu til að breyta" : "Þykkt nýrra veggja — smelltu til að breyta"}
+          aria-expanded={thykktOpin}
+          aria-haspopup="listbox"
+          data-sima-thykkt
+          onClick={() => setThykktOpin(!thykktOpin)}
+          className="rounded-lg bg-white/12 px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap text-white transition active:translate-y-px"
+        >
+          {merktThykkt != null ? `${merktThykkt} cm` : "— cm"}
+        </button>
+        {thykktOpin ? (
+          <div
+            role="listbox"
+            aria-label="Veggjaþykkt"
+            className="absolute right-0 bottom-full z-30 mb-1.5 flex flex-col gap-0.5 rounded-xl border border-white/10 bg-[#1a1d2e] p-1 shadow-2xl shadow-black/50"
+          >
+            {THYKKTIR_CM.map((cm) => (
+              <button
+                key={cm}
+                type="button"
+                role="option"
+                aria-selected={merktThykkt === cm}
+                onClick={() => veljaThykkt(cm)}
+                className={`rounded-lg px-3 py-1.5 text-left text-[12px] font-semibold whitespace-nowrap ${
+                  merktThykkt === cm ? "bg-[#FE653F] text-white" : "text-stone-200 hover:bg-white/10"
+                }`}
+              >
+                {cm} cm
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Greiningartólin fyrir veggi í síma — efst til hægri undir „Vista" (Agnar: „færa veggjatækjatakkann burtu. Er fyrir.
+ * Setja kannski efst til hægri. Með 3D, greina veggi og lesa EI"). Tengja/Sameina/Hurð í bil eru í „Meira" (ritillinn). */
+export function VeggjaTolSimaHnappar({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
+  const hamur = useHamur((s) => s.hamur);
+  if (!VEGGJA_HAMIR.includes(hamur)) return null;
+  const tol: { id: HamAdgerd; texti: string }[] = [
+    { id: "veggir", texti: "Greina veggi" },
+    { id: "ei", texti: "Lesa EI" },
+    { id: "thrividd", texti: "3D" },
+  ];
+  return (
+    <div role="toolbar" aria-label="Veggjatól" data-veggja-tol-simi className="pointer-events-auto flex flex-col items-end gap-1">
+      {tol.map((t) => (
         <button
           key={t.id}
           type="button"
-          title={veggir.length ? `Gera valda veggi að: ${t.texti}` : `Nýir veggir verða: ${t.texti}`}
-          aria-label={t.texti}
-          aria-pressed={merkt === t.id}
-          data-sima-tegund={t.id}
-          onClick={() => velja(t.id)}
-          className={`flex size-8 shrink-0 items-center justify-center rounded-full transition active:translate-y-px ${
-            merkt === t.id ? "ring-2 ring-white ring-offset-2 ring-offset-[#1a1d2e]" : "ring-1 ring-white/25"
-          }`}
-          style={{ background: lit(t.id) }}
+          title={ADGERDIR[t.id].titill}
+          onClick={() => onAdgerd(t.id)}
+          className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-3 pl-2.5 text-[12px] font-semibold whitespace-nowrap text-stone-100 shadow-xl shadow-black/40 active:translate-y-px"
         >
-          <span className="sr-only">{t.texti}</span>
-        </button>
-      ))}
-      <span className="mx-1 h-5 w-px shrink-0 bg-white/15" />
-      {THYKKTIR_CM.map((cm) => (
-        <button
-          key={cm}
-          type="button"
-          title={veggir.length ? `Setja ${cm} cm á valda veggi` : `Nýir veggir ${cm} cm`}
-          aria-pressed={merktThykkt === cm}
-          onClick={() => veljaThykkt(cm)}
-          className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition active:translate-y-px ${
-            merktThykkt === cm ? "bg-white/20 text-white" : "text-stone-300 hover:bg-white/10"
-          }`}
-        >
-          {cm} cm
+          {ADGERDIR[t.id].takn}
+          {t.texti}
         </button>
       ))}
     </div>
   );
 }
 
-/** Greiningar- og veggjatólin neðst í síma — í stað táknaborðsins í veggjaham (Agnar: „gera greiningartólin fyrir
- * veggina sýnilegri"). Aðgerðirnar fara sömu leið og hamstikan (hamAdgerd í WhiteboardApp). */
-export function VeggjaTolSimaStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
-  const hamur = useHamur((s) => s.hamur);
-  const valdir = useBoardStore((s) => {
-    if (!s.selectedIds.length) return 0;
-    const sel = new Set(s.selectedIds);
-    let n = 0;
-    for (const o of s.objects) if (sel.has(o.id) && erVeggur(o)) n++;
-    return n;
-  });
-  if (!VEGGJA_HAMIR.includes(hamur)) return null;
-  const takki =
-    "flex min-w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1 text-[10px] leading-none font-medium whitespace-nowrap text-stone-100 transition hover:bg-white/10 active:translate-y-px";
-  const tol: { id: string; texti: string; titill: string; takn: ReactNode; a: () => void }[] = [
-    { id: "veggir", texti: "Greina veggi", titill: ADGERDIR.veggir.titill, takn: ADGERDIR.veggir.takn, a: () => onAdgerd("veggir") },
-    { id: "ei", texti: "Lesa EI", titill: ADGERDIR.ei.titill, takn: ADGERDIR.ei.takn, a: () => onAdgerd("ei") },
-    { id: "tengja", texti: "Tengja", titill: "Tengja lausa enda valinna veggja — Afturkalla skilar", takn: <Link2 className="size-3.5" />, a: tengjaValdaVeggi },
-    { id: "sameina", texti: "Sameina", titill: "Sameina valda samlínu veggi í einn", takn: <Merge className="size-3.5" />, a: sameinaValda },
-    { id: "hurd", texti: "Hurð í bil", titill: "Hurð í opið milli tveggja valinna samlínu veggja", takn: <DoorOpen className="size-3.5 text-[#b45309]" />, a: hurdIBilValda },
-    { id: "thrividd", texti: "3D", titill: ADGERDIR.thrividd.titill, takn: ADGERDIR.thrividd.takn, a: () => onAdgerd("thrividd") },
-  ];
-  return (
-    <div
-      role="toolbar"
-      aria-label="Veggjatól"
-      data-veggja-tol-simi
-      className="pointer-events-auto flex max-w-[calc(100vw-1rem)] items-stretch gap-0.5 overflow-x-auto rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1 shadow-2xl shadow-black/40"
-    >
-      {tol.map((t) => {
-        const tharfTvo = t.id === "sameina" || t.id === "hurd";
-        const tharfEinn = t.id === "tengja";
-        const ovirkt = (tharfTvo && valdir < 2) || (tharfEinn && valdir < 1);
-        return (
-          <button key={t.id} type="button" title={t.titill} disabled={ovirkt} onClick={t.a} className={`${takki} disabled:opacity-40`}>
-            {t.takn}
-            {t.texti}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Hamrofi í síma, efst á borðinu: Tæki (táknaborðið) ↔ Veggir (þétti ritillinn + tegundastikan). */
+/** Hamrofi í síma, efst til hægri undir „Vista": Tæki (táknaborðið) ↔ Veggir (þétti ritillinn + tegundastikan). */
 export function HamRofiSimi() {
   const hamur = useHamur((s) => s.hamur);
   const setHamur = useHamur((s) => s.setHamur);
