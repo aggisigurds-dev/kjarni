@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   hreinsaVeggi,
@@ -147,6 +148,19 @@ test("utan húss: lóðarmörk og nágrannahús utan útlínunnar fara; innveggi
   assert.equal(u.lokud, true);
   const burt = utanHuss([...hus, ...ruslid], u);
   assert.deepEqual([...burt].sort(), [6, 7, 8]);
+});
+
+test("utan húss: raungögn veggjavélarinnar (Breiðhöfði 13, 2018-skönnun) — útlínan lokast ekki, en húsið helst: færri en 10 línur fara", () => {
+  // 127 línur sem veggjavélin skilaði 04.11.2026; kvarðinn 49,4 dílar/m (blaðstærð 1:100). Áður fóru 80 af 110 línum út (492 m),
+  // því varaleiðin var kassinn utan um minnsta lokaða herbergið.
+  const raun = JSON.parse(readFileSync(new URL("./fixtures/veggjavel-breidhofdi-13-2018.json", import.meta.url), "utf8")) as { linur: { p: number[]; t: number; tegund?: HLina["tegund"] }[] };
+  const dpm = 49.4;
+  const vik = { ...SJALFGEFIN_VIKMORK, stakurM: Math.max(SJALFGEFIN_VIKMORK.stakurM, SJALFGEFIN_VIKMORK.stakurSkonnunM) };
+  const hreint = hreinsaVeggi(raun.linur as HLina[], [], dpm, vik).linur;
+  const u = husUtlina(hreint, dpm, vik.lokunM);
+  assert.equal(u.lokud, false);
+  const burt = utanHuss(hreint, u);
+  assert.ok(burt.size < 10, "fjarlægðar línur: " + burt.size + " af " + hreint.length);
 });
 
 test("húskassi: stærsti veggjaklasinn + 2,5 % spássía; titilreitur (þunnar línur) utan hans", () => {
