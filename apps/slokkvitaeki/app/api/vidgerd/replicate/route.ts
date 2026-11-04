@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Skýjaleið fyrir Ljósmyndaviðgerð: kallar tencentarc/gfpgan á Replicate
 // (https://replicate.com/tencentarc/gfpgan) í stað staðbundins netþjóns —
 // engin uppsetning hjá notanda, en kostar smá upphæð per mynd og myndin
 // fer út af vélinni. Þarf REPLICATE_API_TOKEN sem umhverfisbreytu
 // (Vercel Settings → Environment Variables).
+//
+// Myndin kemur sem slóð í Supabase Storage (vafrinn hleður henni þangað
+// beint, sjá app/kjarni/artcraft/uploadToStorage.ts), ekki base64 lengur —
+// Vercel Functions hafna beiðnum yfir 4.5MB (sjá
+// https://vercel.com/docs/errors/function_payload_too_large), svo
+// base64-inlining krafðist þess að myndin væri minnkuð niður fyrst og
+// setti þannig þak á gæðin óháð því sem GFPGAN sjálft ræður við.
 //
 // Flæði (öll köll staðfest gegn https://replicate.com/docs/reference/http):
 //   1) GET  /v1/models/tencentarc/gfpgan        → latest_version.id
@@ -18,7 +26,6 @@ export const maxDuration = 60;
 const REPLICATE_API = "https://api.replicate.com/v1";
 const MODEL_OWNER = "tencentarc";
 const MODEL_NAME = "gfpgan";
-const MAX_DATA_URL_LENGTH = 8 * 1024 * 1024; // grófur hemill — vafrinn minnkar myndina áður en hún er send
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -65,19 +72,16 @@ export async function POST(req: NextRequest) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
   }
 
-  let body: { imageDataUrl?: string; scale?: number; version?: "v1.3" | "v1.4" };
+  let body: { imageUrl?: string; scale?: number; version?: "v1.3" | "v1.4" };
   try {
     body = await req.json();
   } catch {
     return bad(400, "Ógilt JSON");
   }
 
-  const imageDataUrl = body.imageDataUrl;
-  if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    return bad(400, "imageDataUrl vantar eða er ekki data-URL mynd");
-  }
-  if (imageDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return bad(413, "Myndin er of stór fyrir skýjaleiðina — reyndu minni mynd eða staðbundna netþjóninn.");
+  const imageUrl = body.imageUrl;
+  if (!imageUrl || !isOwnStorageUrl(imageUrl)) {
+    return bad(400, "imageUrl vantar eða er ekki frá okkar eigin geymslu");
   }
 
   try {
@@ -99,7 +103,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         version,
         input: {
-          img: imageDataUrl,
+          img: imageUrl,
           version: body.version ?? "v1.4",
           scale: body.scale ?? 2,
         },
