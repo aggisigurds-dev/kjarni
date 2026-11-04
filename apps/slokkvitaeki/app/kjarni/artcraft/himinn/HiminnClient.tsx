@@ -9,8 +9,9 @@ import StagingPicker from "../StagingPicker";
 import VerkhringirHint from "../VerkhringirHint";
 import { useStagedSource } from "../useStagedSource";
 import "../artcraft.css";
-import { cloneRaster, createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
+import { createRaster, fitSize, strokePoints, type Raster } from "../studio/adjust";
 import { compositeMaskOverlay, maskCoverage, paintCircle } from "../skyjastudio/maskPaint";
+import { upscaleMaskToBlob } from "../maskUpscale";
 import {
   DEFAULT_SKY_SETTINGS,
   SKY_PRESETS,
@@ -56,12 +57,6 @@ function drawRaster(canvas: HTMLCanvasElement, raster: Raster) {
   ctx.putImageData(new ImageData(new Uint8ClampedArray(raster.data), raster.width, raster.height), 0, 0);
 }
 
-function rasterToDataUrl(raster: Raster, mime: string, quality?: number): string {
-  const canvas = document.createElement("canvas");
-  drawRaster(canvas, raster);
-  return canvas.toDataURL(mime, quality);
-}
-
 function downloadBlob(url: string, name: string) {
   const a = document.createElement("a");
   a.href = url;
@@ -75,6 +70,7 @@ export default function HiminnClient() {
   const stageRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<Raster | null>(null);
   const maskRef = useRef<Raster | null>(null);
+  const originalFileRef = useRef<File | null>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
   const brushSizeRef = useRef(60);
@@ -123,6 +119,7 @@ export default function HiminnClient() {
       const raster = rasterFromImage(img);
       sourceRef.current = raster;
       maskRef.current = createRaster(raster.width, raster.height, 0);
+      originalFileRef.current = file;
       setSourceName(file.name);
       setMaskPainted(false);
       setHasImage(true);
@@ -211,6 +208,7 @@ export default function HiminnClient() {
   function newImage() {
     sourceRef.current = null;
     maskRef.current = null;
+    originalFileRef.current = null;
     setHasImage(false);
     setMaskPainted(false);
     setResultUrl("");
@@ -219,9 +217,9 @@ export default function HiminnClient() {
   }
 
   async function run() {
-    const source = sourceRef.current;
     const mask = maskRef.current;
-    if (!source || !mask) return;
+    const originalFile = originalFileRef.current;
+    if (!mask || !originalFile) return;
     if (!maskPainted) {
       setError("Málaðu fyrst yfir himininn.");
       return;
@@ -233,9 +231,13 @@ export default function HiminnClient() {
     setBusy(true);
     setError("");
     try {
-      const imageDataUrl = rasterToDataUrl(cloneRaster(source), "image/jpeg", 0.92);
-      const maskDataUrl = rasterToDataUrl(mask, "image/png");
-      const results = await generateSky(settings, { imageDataUrl, maskDataUrl });
+      // The brush canvas is capped at MAX_SOURCE_DIMENSION for painting
+      // performance, but the original file now uploads at full resolution
+      // (see ../uploadToStorage.ts) — the mask has to be scaled back up to
+      // match it before both go to Replicate.
+      const img = await loadImage(URL.createObjectURL(originalFile));
+      const maskBlob = await upscaleMaskToBlob(mask, img.naturalWidth || img.width, img.naturalHeight || img.height);
+      const results = await generateSky(settings, { image: originalFile, mask: maskBlob });
       const blob = results[0];
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));

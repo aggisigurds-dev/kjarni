@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Fjarlægja hlut — sjálfstætt ArtCraft-tól sem gerir það sem PhotoDirector/
 // Snapseed's "lækningabursti" / Picsart's object-removal gera: máluðu yfir
@@ -24,7 +25,6 @@ export const maxDuration = 60;
 const REPLICATE_API = "https://api.replicate.com/v1";
 const MODEL_OWNER = "bria";
 const MODEL_NAME = "eraser";
-const MAX_DATA_URL_LENGTH = 8 * 1024 * 1024; // grófur hemill — vafrinn minnkar myndina áður en hún er send
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -71,23 +71,20 @@ export async function POST(req: NextRequest) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
   }
 
-  let body: { imageDataUrl?: string; maskDataUrl?: string };
+  let body: { imageUrl?: string; maskUrl?: string };
   try {
     body = await req.json();
   } catch {
     return bad(400, "Ógilt JSON");
   }
 
-  const imageDataUrl = body.imageDataUrl;
-  if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    return bad(400, "imageDataUrl vantar eða er ekki data-URL mynd");
+  const imageUrl = body.imageUrl;
+  if (!imageUrl || !isOwnStorageUrl(imageUrl)) {
+    return bad(400, "imageUrl vantar eða er ekki frá okkar eigin geymslu");
   }
-  const maskDataUrl = body.maskDataUrl;
-  if (!maskDataUrl || !maskDataUrl.startsWith("data:image/")) {
-    return bad(400, "maskDataUrl vantar — málaðu yfir hlutinn sem á að fjarlægja fyrst");
-  }
-  if (imageDataUrl.length > MAX_DATA_URL_LENGTH || maskDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return bad(413, "Myndin er of stór fyrir skýjaleiðina — reyndu minni mynd.");
+  const maskUrl = body.maskUrl;
+  if (!maskUrl || !isOwnStorageUrl(maskUrl)) {
+    return bad(400, "maskUrl vantar — málaðu yfir hlutinn sem á að fjarlægja fyrst");
   }
 
   try {
@@ -109,8 +106,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         version,
         input: {
-          image: imageDataUrl,
-          mask: maskDataUrl,
+          image: imageUrl,
+          mask: maskUrl,
           preserve_alpha: false,
         },
       }),

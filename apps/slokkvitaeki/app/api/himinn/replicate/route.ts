@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOwnStorageUrl } from "../../_lib/storageUrl";
 
 // Himinn — sjálfstætt ArtCraft-tól sem gerir það sem PhotoDirector's AI
 // Sky Replacement gerir: málaðu yfir himininn, lýstu nýjum himni í texta,
@@ -30,7 +31,6 @@ export const maxDuration = 60;
 const REPLICATE_API = "https://api.replicate.com/v1";
 const MODEL_OWNER = "bria";
 const MODEL_NAME = "genfill";
-const MAX_DATA_URL_LENGTH = 8 * 1024 * 1024; // grófur hemill — vafrinn minnkar myndina áður en hún er send
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
   }
 
-  let body: { imageDataUrl?: string; maskDataUrl?: string; prompt?: string; negativePrompt?: string; seed?: number };
+  let body: { imageUrl?: string; maskUrl?: string; prompt?: string; negativePrompt?: string; seed?: number };
   try {
     body = await req.json();
   } catch {
@@ -87,21 +87,18 @@ export async function POST(req: NextRequest) {
   const prompt = body.prompt?.trim();
   if (!prompt) return bad(400, "prompt vantar — lýstu himninum sem á að setja inn");
 
-  const imageDataUrl = body.imageDataUrl;
-  if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    return bad(400, "imageDataUrl vantar eða er ekki data-URL mynd");
+  const imageUrl = body.imageUrl;
+  if (!imageUrl || !isOwnStorageUrl(imageUrl)) {
+    return bad(400, "imageUrl vantar eða er ekki frá okkar eigin geymslu");
   }
-  const maskDataUrl = body.maskDataUrl;
-  if (!maskDataUrl || !maskDataUrl.startsWith("data:image/")) {
-    return bad(400, "maskDataUrl vantar — málaðu yfir himininn fyrst");
-  }
-  if (imageDataUrl.length > MAX_DATA_URL_LENGTH || maskDataUrl.length > MAX_DATA_URL_LENGTH) {
-    return bad(413, "Myndin er of stór fyrir skýjaleiðina — reyndu minni mynd.");
+  const maskUrl = body.maskUrl;
+  if (!maskUrl || !isOwnStorageUrl(maskUrl)) {
+    return bad(400, "maskUrl vantar — málaðu yfir himininn fyrst");
   }
 
   const input: Record<string, unknown> = {
-    image: imageDataUrl,
-    mask: maskDataUrl,
+    image: imageUrl,
+    mask: maskUrl,
     prompt,
     preserve_alpha: false,
     num_results: 1,

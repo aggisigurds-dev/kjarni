@@ -1,6 +1,10 @@
 /** Fjarlægja hlut — client fetch for the object-removal model (bria/eraser
  * on Replicate). No settings to speak of: image + painted mask in, cleaned
- * image out. Mirrors the conventions used by svidsmynd/scene.ts. */
+ * image out. Uploads both straight to Supabase Storage (see
+ * ../uploadToStorage.ts) instead of downscaling/base64-encoding them — see
+ * app/api/fjarlaegjahlut/replicate/route.ts for why. */
+
+import { uploadForReplicate } from "../uploadToStorage";
 
 async function fetchImageBlob(url: string): Promise<Blob> {
   const res = await fetch(url);
@@ -8,11 +12,15 @@ async function fetchImageBlob(url: string): Promise<Blob> {
   return res.blob();
 }
 
-export async function eraseObject(imageDataUrl: string, maskDataUrl: string): Promise<Blob> {
+export async function eraseObject(image: Blob, mask: Blob): Promise<Blob> {
+  const [imageUrl, maskUrl] = await Promise.all([
+    uploadForReplicate(image, "reference-images"),
+    uploadForReplicate(mask, "mask-images"),
+  ]);
   const res = await fetch("/api/fjarlaegjahlut/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageDataUrl, maskDataUrl }),
+    body: JSON.stringify({ imageUrl, maskUrl }),
   });
   const text = await res.text();
   if (!res.ok) {

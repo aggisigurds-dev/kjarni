@@ -1,7 +1,13 @@
 /** Himinn — settings/presets + client fetch for sky replacement
  * (bria/genfill on Replicate, masked inpaint). Mirrors svidsmynd/scene.ts
  * conventions; unlike Sviðsmynd this DOES need a mask (the user paints the
- * sky region) since genfill has no automatic "find the sky" step. */
+ * sky region) since genfill has no automatic "find the sky" step.
+ *
+ * Uploads the photo and mask straight to Supabase Storage (see
+ * ../uploadToStorage.ts) instead of downscaling/base64-encoding them — see
+ * app/api/himinn/replicate/route.ts for why. */
+
+import { uploadForReplicate } from "../uploadToStorage";
 
 export type SkySettings = {
   prompt: string;
@@ -58,9 +64,13 @@ async function fetchImageBlob(url: string): Promise<Blob> {
 
 export async function generateSky(
   settings: SkySettings,
-  photo: { imageDataUrl: string; maskDataUrl: string },
+  photo: { image: Blob; mask: Blob },
 ): Promise<Blob[]> {
   if (!settings.prompt.trim()) throw new Error("Lýstu himninum fyrst, eða veldu forstillingu.");
+  const [imageUrl, maskUrl] = await Promise.all([
+    uploadForReplicate(photo.image, "reference-images"),
+    uploadForReplicate(photo.mask, "mask-images"),
+  ]);
   const res = await fetch("/api/himinn/replicate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -68,8 +78,8 @@ export async function generateSky(
       prompt: settings.prompt,
       negativePrompt: settings.negativePrompt,
       seed: settings.seed,
-      imageDataUrl: photo.imageDataUrl,
-      maskDataUrl: photo.maskDataUrl,
+      imageUrl,
+      maskUrl,
     }),
   });
   const text = await res.text();
