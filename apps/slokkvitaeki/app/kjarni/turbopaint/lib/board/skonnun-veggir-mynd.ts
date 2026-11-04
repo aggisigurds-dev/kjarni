@@ -10,6 +10,7 @@ import {
   type SkonnunarVeggir,
   type Talning,
 } from "./skonnun-veggir";
+import { finnaThunnaVeggi } from "./thunnir-veggir";
 import type { VeggTegund } from "./teikning-veggir";
 import type { ImageObject } from "./types";
 import { anda } from "./anda";
@@ -100,6 +101,32 @@ function keyra(gra: Uint8Array, W: number, H: number, kvardi: number, fb: number
     };
     verk.postMessage({ id: 1, gra, W, H, kvardi, fb, fh, dilarAMetra });
   });
+}
+
+/** Þunnir veggir (tvöföld hárfín lína sem rennur saman í ~0,15 m rák á skönnuninni) á skannaðri teikningu — borðhnit.
+ * Mynd svæðisins er greind í ~50 dílum á metra (ekki 2800 dílum á blaðið eins og veggjagreiningin: þar hverfur rákin).
+ * Finnur líka málsetningarlínur og rekkabrúnir — hreinsunin og „utan húss" fella þær sem tengjast ekki húsinu. */
+export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Promise<{ p: number[]; t: number; tegund?: VeggTegund }[]> {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob || !(dpmBord > 0) || !(plan.width > 0)) return [];
+  const bmp = await createImageBitmap(blob);
+  const g0 = greiningarSvaedi(plan, { w: bmp.width, h: bmp.height });
+  const dpmFrum = dpmBord * (g0.myndSvaedi.w / plan.width);
+  // ≤ 50 dílar á metra og ≤ 40 MP (grá + dökk-gríma + umsnúin gríma ≈ 3 × W·H bæti)
+  let k = Math.min(1, 50 / dpmFrum);
+  const mp = g0.sk.w * g0.sk.h * k * k;
+  if (mp > 40e6) k *= Math.sqrt(40e6 / mp);
+  const g = { ...g0, kvardi: k, W: Math.max(1, Math.round(g0.sk.w * k)), H: Math.max(1, Math.round(g0.sk.h * k)) };
+  let gra: Uint8Array;
+  try {
+    gra = await vinnumynd(bmp, g);
+  } finally {
+    bmp.close();
+  }
+  await andaUI();
+  const th = finnaThunnaVeggi(gra, g.W, g.H, { dpm: dpmFrum * k });
+  const frum = th.map((v) => [v[0] / k, v[1] / k, v[2] / k, v[3] / k, v[4] / k] as number[]);
+  return butarIBord(frum, g, plan);
 }
 
 /** Veggir skannaðrar teikningar (sama greining og Teikning-glugginn) í borðhnitum. Gler fylgir sem tegundin „gler";

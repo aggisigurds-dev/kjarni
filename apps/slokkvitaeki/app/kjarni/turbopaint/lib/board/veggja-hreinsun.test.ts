@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  hillurButar,
   hreinsaVeggi,
   husKassi,
   husUtlina,
@@ -125,7 +126,7 @@ test("hreinsun: fastar línur (Agnars) hreyfast aldrei — nýr veggur smellist 
 });
 
 test("hreinsun: skáveggur (20°) heldur stefnu, næstum lóðréttur réttist, 2 cm brotalína verður bútar", () => {
-  const r = hreinsaVeggi([L(0, 0, 940, 342), L(2000, 0, 2030, 800), { p: [3000, 0, 3000, 400, 3400, 400], t: 15 }], [], DPM);
+  const r = hreinsaVeggi([L(0, 0, 940, 342), L(2000, 0, 2030, 800), { p: [3000, 0, 3000, 400, 3400, 400], t: 15 }], [], DPM, { ...SJALFGEFIN_VIKMORK, hillurM: 0 }); // hillusían slökkt: línurnar eru frístandandi
   const ska = r.linur.find((l) => l.p[0] < 100)!;
   assert.ok(Math.abs(Math.atan2(ska.p[3] - ska.p[1], ska.p[2] - ska.p[0]) * (180 / Math.PI) - 20) < 0.1);
   const rettur = r.linur.find((l) => l.p[0] > 1900 && l.p[0] < 2100)!;
@@ -169,4 +170,25 @@ test("húskassi: stærsti veggjaklasinn + 2,5 % spássía; titilreitur (þunnar 
   const k = husKassi([...hus, ...titill], DPM)!;
   assert.ok(k);
   assert.ok(Math.abs(k.x0 - -75) < 1 && Math.abs(k.x1 - 3075) < 1 && Math.abs(k.y0 - -75) < 1 && Math.abs(k.y1 - 2075) < 1, JSON.stringify(k));
+});
+
+test("hillur: langar frístandandi línur (rekkar) fara, veggir sem tengjast standa", () => {
+  const dpm = 49.4;
+  const hus = ferningur(0, 0, 2000, 1500, 12); // 40 x 30 m hús
+  const rekkar = [L(500, 100, 500, 1400, 4), L(900, 100, 900, 1400, 4), L(1300, 100, 1300, 1400, 4), L(900, 700, 960, 700, 4)];
+  const r = hreinsaVeggi([...hus, ...rekkar], [], dpm);
+  assert.equal(r.talning.hillur, 3);
+  assert.ok(r.linur.every((l) => !(l.p[0] === l.p[2] && l.p[0] >= 500 && l.p[0] <= 1300)), "enginn rekki eftir");
+  const lag = hreinsaVeggi([...hus, ...rekkar], [], dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 });
+  assert.equal(lag.talning.hillur, 0);
+});
+
+test("hillur: raungögn Breiðhöfða 13 (2018-skönnun) — engin frístandandi lína ≥ 6 m eftir hreinsun, ytri veggur hússins stendur", () => {
+  const raun = JSON.parse(readFileSync(new URL("./fixtures/veggjavel-breidhofdi-13-2018.json", import.meta.url), "utf8")) as { linur: HLina[] };
+  const dpm = 49.4;
+  const vik = { ...SJALFGEFIN_VIKMORK, stakurM: Math.max(SJALFGEFIN_VIKMORK.stakurM, SJALFGEFIN_VIKMORK.stakurSkonnunM) };
+  const r = hreinsaVeggi(raun.linur, [], dpm, vik);
+  assert.ok(r.talning.hillur >= 6, "hillur fjarlægðar: " + r.talning.hillur);
+  assert.equal(hillurButar(r.linur, [], 6 * dpm, 0.15 * dpm).size, 0);
+  assert.ok(r.linur.length >= 80, "of fáar línur eftir: " + r.linur.length);
 });
