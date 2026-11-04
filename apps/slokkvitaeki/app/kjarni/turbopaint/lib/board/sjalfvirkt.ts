@@ -815,9 +815,14 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   // ── h) yfirlit og vistun ──
   const nyV = lokaNy.filter(erVeggTeg).length, nyG = lokaNy.filter((l) => l.tegund === "gler").length;
   const ht = talning.hreinsun as { sameinadir: number; stakir: number } | undefined;
+  // Aðeins valdir hópar eru taldir (annað var „Sleppt, ekki valið"): „Fann 0 veggi“ um hóp sem var ekki keyrður væri rangt.
+  const hlutar: string[] = [];
+  if (veggjaHopur) hlutar.push(`${nyV} veggi`, `${hurdir.length} hurðir`, `${nyG} gler`);
+  if (eiVal) hlutar.push(`${eldveggir} eldveggi`);
+  if (taekiVal) hlutar.push(`${taekiFj} tæki`);
   const yfirlit =
-    `Fann ${nyV} veggi, ${hurdir.length} hurðir, ${nyG} gler, ${eldveggir} eldveggi, ${taekiFj} tæki. ` +
-    `Hreinsun: ${ht?.sameinadir ?? 0} sameinaðir, ${ht?.stakir ?? 0} stakir fjarlægðir.` +
+    `Fann ${hlutar.join(", ") || "ekkert (engir hópar valdir)"}. ` +
+    (veggjaHopur ? `Hreinsun: ${ht?.sameinadir ?? 0} sameinaðir, ${ht?.stakir ?? 0} stakir fjarlægðir.` : "") +
     (fastarH.length ? ` ${fastarH.length} veggir Agnars óbreyttir.` : "");
   S().set({ yfirlit });
   // Mælingin (dílar frummyndar) — prófanir bera hana saman við leiðréttingar Agnars.
