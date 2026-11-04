@@ -1,0 +1,1614 @@
+{
+ "utgafa": 1,
+ "vefur": "kjarni",
+ "vefagent": "kjarni-vefur",
+ "uppfaert": "2026-11-04",
+ "_skyring": "Síðukort Kjarna (apps/slokkvitaeki → kjarni.vercel.app, apps/web → kjarni-3dwork.vercel.app). eigandi = agent sem ber ábyrgð; forskeyti sl:/bh: = agent sem býr í slokkvitaeki/brunaholf, skill: = skill. Án forskeytis = frumrit í kjarna/.claude/agents. Ný leið = ný færsla með eiganda í sama commit. Uppruni: tools/sidukort-fraedi.cjs-drög + greining 09-kjarni.md (Agentakerfið 2.0, fasi 2, 04.11.2026).",
+ "svaedi": [
+  {
+   "id": "apps/database",
+   "titill": "Supabase local stack — schemas (init, marks, skraning, turbopaint, work3d)",
+   "skilgreind": [
+    "apps/database/supabase/schemas/"
+   ],
+   "eigandi": "skill:supabase-schema-migrations",
+   "undiragentar": [
+    "kjarni-vefur",
+    "oryggi"
+   ],
+   "kveikjuord": [
+    "schema",
+    "migration",
+    "supabase db diff"
+   ]
+  }
+ ],
+ "sidur": [
+  {
+   "id": "slokkvitaeki:/[slug]",
+   "titill": "Síðuritils-síða",
+   "tegund": "sida",
+   "leid": "/[slug]",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/[slug]/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [
+    "síðuritill",
+    "um-okkur"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/andlit (api)",
+   "titill": "InstantID",
+   "tegund": "api",
+   "leid": "/api/andlit",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/andlit/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/breyta/background (api)",
+   "titill": "Nýr bakgrunnur",
+   "tegund": "api",
+   "leid": "/api/breyta/background",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/breyta/background/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/breyta/headshot (api)",
+   "titill": "Pro headshot",
+   "tegund": "api",
+   "leid": "/api/breyta/headshot",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/breyta/headshot/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/breyta/pruna (api)",
+   "titill": "Hraðbreyta (pruna)",
+   "tegund": "api",
+   "leid": "/api/breyta/pruna",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/breyta/pruna/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/dypt (api)",
+   "titill": "Depth Anything",
+   "tegund": "api",
+   "leid": "/api/dypt",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/dypt/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/endurljos (api)",
+   "titill": "IC-Light",
+   "tegund": "api",
+   "leid": "/api/endurljos",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/endurljos/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/innblastur (api)",
+   "titill": "Flux Redux",
+   "tegund": "api",
+   "leid": "/api/innblastur",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/innblastur/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/litun (api)",
+   "titill": "DDColor",
+   "tegund": "api",
+   "leid": "/api/litun",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/litun/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/myndband-andlit (api)",
+   "titill": "roop face-swap ræsa",
+   "tegund": "api",
+   "leid": "/api/myndband-andlit",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/myndband-andlit/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/myndband-andlit/status (api)",
+   "titill": "roop face-swap staða",
+   "tegund": "api",
+   "leid": "/api/myndband-andlit/status",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/myndband-andlit/status/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjahreyfimynd/kling (api)",
+   "titill": "Kling ræsa",
+   "tegund": "api",
+   "leid": "/api/skyjahreyfimynd/kling",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjahreyfimynd/kling/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjahreyfimynd/kling/status (api)",
+   "titill": "Kling staða",
+   "tegund": "api",
+   "leid": "/api/skyjahreyfimynd/kling/status",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjahreyfimynd/kling/status/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjahreyfimynd (api)",
+   "titill": "Wan 2.2 ræsa",
+   "tegund": "api",
+   "leid": "/api/skyjahreyfimynd",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjahreyfimynd/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjahreyfimynd/status (api)",
+   "titill": "Wan 2.2 staða",
+   "tegund": "api",
+   "leid": "/api/skyjahreyfimynd/status",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjahreyfimynd/status/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjastudio/flux-fill (api)",
+   "titill": "Skýjastúdíó Flux Fill",
+   "tegund": "api",
+   "leid": "/api/skyjastudio/flux-fill",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjastudio/flux-fill/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjastudio/juggernaut (api)",
+   "titill": "Skýjastúdíó Juggernaut",
+   "tegund": "api",
+   "leid": "/api/skyjastudio/juggernaut",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjastudio/juggernaut/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/skyjastudio/replicate (api)",
+   "titill": "Skýjastúdíó SDXL",
+   "tegund": "api",
+   "leid": "/api/skyjastudio/replicate",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/skyjastudio/replicate/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/tonsmid (api)",
+   "titill": "ElevenLabs Music ræsa",
+   "tegund": "api",
+   "leid": "/api/tonsmid",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/tonsmid/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/tonsmid/status (api)",
+   "titill": "ElevenLabs Music staða",
+   "tegund": "api",
+   "leid": "/api/tonsmid/status",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/tonsmid/status/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/turbopaint/fetch-plan (api)",
+   "titill": "Sækja teikningu (fetch-plan)",
+   "tegund": "api",
+   "leid": "/api/turbopaint/fetch-plan",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/turbopaint/fetch-plan/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "sl:arnold",
+   "undiragentar": [
+    "elon-musk"
+   ],
+   "kveikjuord": [
+    "sækja teikningu"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/turbopaint/teikningar (api)",
+   "titill": "Teikningaleit",
+   "tegund": "api",
+   "leid": "/api/turbopaint/teikningar",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/turbopaint/teikningar/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "sl:arnold",
+   "undiragentar": [
+    "elon-musk"
+   ],
+   "kveikjuord": [
+    "teikningaleit"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/upplyfting/clarity (api)",
+   "titill": "Clarity ræsa",
+   "tegund": "api",
+   "leid": "/api/upplyfting/clarity",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/upplyfting/clarity/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/upplyfting/clarity/status (api)",
+   "titill": "Clarity staða",
+   "tegund": "api",
+   "leid": "/api/upplyfting/clarity/status",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/upplyfting/clarity/status/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/upplyfting (api)",
+   "titill": "Topaz upplyfting",
+   "tegund": "api",
+   "leid": "/api/upplyfting",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/upplyfting/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/utvikka (api)",
+   "titill": "Flux Fill outpaint",
+   "tegund": "api",
+   "leid": "/api/utvikka",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/utvikka/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/video-upplyfting (api)",
+   "titill": "Real-ESRGAN video ræsa",
+   "tegund": "api",
+   "leid": "/api/video-upplyfting",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/video-upplyfting/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/video-upplyfting/status (api)",
+   "titill": "Real-ESRGAN video staða",
+   "tegund": "api",
+   "leid": "/api/video-upplyfting/status",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/video-upplyfting/status/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/api/vidgerd/replicate (api)",
+   "titill": "Viðgerð (Replicate)",
+   "tegund": "api",
+   "leid": "/api/vidgerd/replicate",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/api/vidgerd/replicate/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/bord",
+   "titill": "Borð — stjórnborð",
+   "tegund": "sida",
+   "leid": "/bord",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/bord/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "sl:bord-flettur",
+   "undiragentar": [
+    "kjarni-vefur"
+   ],
+   "kveikjuord": [
+    "borð",
+    "spjöld"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/borgarferdir",
+   "titill": "Borgarferðir — Manchester · Glasgow",
+   "tegund": "sida",
+   "leid": "/borgarferdir",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/borgarferdir/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [
+    "borgarferðir"
+   ],
+   "app": "slokkvitaeki",
+   "stada": "personulegt"
+  },
+  {
+   "id": "slokkvitaeki:/draft",
+   "titill": "Prufusvæði — blokkir, þemu & skikt",
+   "tegund": "sida",
+   "leid": "/draft",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/draft/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "joker"
+   ],
+   "kveikjuord": [
+    "prufusvæði"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kerfi",
+   "titill": "Kerfi — þjónustukerfi",
+   "tegund": "sida",
+   "leid": "/kerfi",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kerfi/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "sl:bord-flettur",
+   "undiragentar": [
+    "kjarni-vefur",
+    "kort"
+   ],
+   "kveikjuord": [
+    "þjónustukerfi"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/[app]",
+   "titill": "<forrit> — Kjarni (13: photocraft…gridcraft)",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/[app]",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/[app]/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "PhotoCraft",
+    "PdfCraft",
+    "CADCraft"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/andlit",
+   "titill": "Andlit",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/andlit",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/andlit/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Andlit",
+    "InstantID"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/bakgrunnur",
+   "titill": "Bakgrunnur / Á hvítan bakgrunn",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/bakgrunnur",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/bakgrunnur/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "vörumynd",
+    "hvítur bakgrunnur"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/breyta",
+   "titill": "Breyta mynd",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/breyta",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/breyta/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Breyta mynd",
+    "headshot"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/comfy",
+   "titill": "ComfyUI",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/comfy",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/comfy/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "ComfyUI"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/dypt",
+   "titill": "Dýpt",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/dypt",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/dypt/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Dýpt",
+    "dýptarkort"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/endurljos",
+   "titill": "Endurljós",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/endurljos",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/endurljos/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Endurljós",
+    "IC-Light"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/hreyfimynd",
+   "titill": "Hreyfimynd",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/hreyfimynd",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/hreyfimynd/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Hreyfimynd",
+    "Wan 2.1"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/innblastur",
+   "titill": "Innblástur",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/innblastur",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/innblastur/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Innblástur",
+    "Flux Redux"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/kastljos",
+   "titill": "Kastljós",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/kastljos",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/kastljos/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Kastljós",
+    "birta"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/leidarvisir",
+   "titill": "Leiðarvísir — ArtCraft",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/leidarvisir",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/leidarvisir/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Leiðarvísir"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/litun",
+   "titill": "Litun",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/litun",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/litun/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Litun",
+    "svart/hvítt"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/mota",
+   "titill": "Móta",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/mota",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/mota/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Móta"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/myndband-andlit",
+   "titill": "Myndband-andlit",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/myndband-andlit",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/myndband-andlit/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Myndband-andlit",
+    "face-lock"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/myndband-framhald",
+   "titill": "Myndband-framhald",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/myndband-framhald",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/myndband-framhald/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Myndband-framhald",
+    "teygja myndband"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/myndband-portret-andlit",
+   "titill": "Myndband-portret-andlit",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/myndband-portret-andlit",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/myndband-portret-andlit/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "portret-andlit"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/myndband-saumur",
+   "titill": "Myndbanda-saumur",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/myndband-saumur",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/myndband-saumur/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Myndbanda-saumur"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft",
+   "titill": "ArtCraft — yfirlit",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "ArtCraft"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/skyjahreyfimynd",
+   "titill": "Skýjahreyfimynd",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/skyjahreyfimynd",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/skyjahreyfimynd/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Skýjahreyfimynd",
+    "Wan 2.2",
+    "Kling"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/skyjastudio",
+   "titill": "Skýjastúdíó",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/skyjastudio",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/skyjastudio/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Skýjastúdíó",
+    "SDXL",
+    "Juggernaut"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/studio",
+   "titill": "Einkastúdíó",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/studio",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/studio/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Einkastúdíó",
+    "Forge"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/tol",
+   "titill": "Sjálfvirk tól",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/tol",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/tol/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Autogenerator",
+    "Tól"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/tonsmid",
+   "titill": "Tónsmíð",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/tonsmid",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/tonsmid/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Tónsmíð",
+    "jingill"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/upplyfting",
+   "titill": "Upplyfting",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/upplyfting",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/upplyfting/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Upplyfting",
+    "Topaz",
+    "Clarity"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/utvikka",
+   "titill": "Útvíkka",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/utvikka",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/utvikka/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Útvíkka",
+    "outpaint"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/video-upplyfting",
+   "titill": "Myndbanda-upplyfting",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/video-upplyfting",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/video-upplyfting/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Myndbanda-upplyfting",
+    "4K"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/vidgerd",
+   "titill": "Ljósmyndaviðgerð",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/vidgerd",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/vidgerd/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Ljósmyndaviðgerð",
+    "óskýrt andlit"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/vinnslur",
+   "titill": "Verkbók",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/vinnslur",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/vinnslur/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Verkbók",
+    "vinnslur"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni",
+   "titill": "Kjarni — Stjórnstöð",
+   "tegund": "sida",
+   "leid": "/kjarni",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "joker",
+    "thema"
+   ],
+   "kveikjuord": [
+    "Stjórnstöð",
+    "Ragnarök"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning/flokkar",
+   "titill": "Skráning — flokkar, gátlisti og starfsmenn",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/flokkar",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/flokkar/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur",
+    "bokari"
+   ],
+   "kveikjuord": [
+    "gátlisti",
+    "Gat Ø",
+    "stærðarflokkar"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning/greining",
+   "titill": "Skráning — greining",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/greining",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/greining/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur"
+   ],
+   "kveikjuord": [
+    "Greining",
+    "Power BI"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning",
+   "titill": "Skráning — Kjarni",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur",
+    "bokari"
+   ],
+   "kveikjuord": [
+    "Skráning & QA",
+    "verk"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning/prenta",
+   "titill": "Skráning — prenta teikningu",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/prenta",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/prenta/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur"
+   ],
+   "kveikjuord": [
+    "Hæðarskýrsla"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning/verk",
+   "titill": "Skráning — byggingar og teikningar",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/verk",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/verk/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur"
+   ],
+   "kveikjuord": [
+    "bygging",
+    "grunnmynd"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning/vinna",
+   "titill": "Skráning — vinna",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/vinna",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/vinna/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur"
+   ],
+   "kveikjuord": [
+    "Vinnuútgáfa",
+    "pinni",
+    "merkja lokið"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/skraning/yfirsyn",
+   "titill": "Skráning — yfirsýn",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/yfirsyn",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/yfirsyn/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur"
+   ],
+   "kveikjuord": [
+    "Yfirsýn",
+    "afköst"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/turbopaint",
+   "titill": "TurboPaint — Kjarni",
+   "tegund": "sida",
+   "leid": "/kjarni/turbopaint",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/turbopaint/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "sl:arnold",
+   "undiragentar": [
+    "elon-musk",
+    "joker",
+    "jarvis"
+   ],
+   "kveikjuord": [
+    "TurboPaint",
+    "gólfplan",
+    "veggjaritill",
+    "Lagna-hamur"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/marks",
+   "titill": "Marks (tilvísun)",
+   "tegund": "sida",
+   "leid": "/marks",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/marks/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "slokkvitaeki",
+   "stada": "dauð leið (next.config redirect skyggir)"
+  },
+  {
+   "id": "slokkvitaeki:/",
+   "titill": "Brunavarnir í öruggum höndum",
+   "tegund": "sida",
+   "leid": "/",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "joker"
+   ],
+   "kveikjuord": [
+    "forsíða",
+    "fyrirspurn"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/s/[slug]",
+   "titill": "Nýr vefur",
+   "tegund": "sida",
+   "leid": "/s/[slug]",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/s/[slug]/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [
+    "nýr vefur"
+   ],
+   "app": "slokkvitaeki",
+   "stada": "stubbur"
+  },
+  {
+   "id": "slokkvitaeki:/skjalarinn",
+   "titill": "Skjalarinn — skjöl · pdf · lestur",
+   "tegund": "sida",
+   "leid": "/skjalarinn",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/skjalarinn/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "bh:skjol",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Skjalarinn",
+    "PDF-vinnslustöð"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/stjorn",
+   "titill": "Stjórnborð — Brunahólf Slökkvitæki",
+   "tegund": "sida",
+   "leid": "/stjorn",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/stjorn/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "sl:bord-flettur",
+   "undiragentar": [
+    "kjarni-vefur"
+   ],
+   "kveikjuord": [
+    "stjórnborð",
+    "tilkynningaborði",
+    "Meta Pixel"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/verslun",
+   "titill": "Verslun — Slökkvitæki ehf",
+   "tegund": "sida",
+   "leid": "/verslun",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/verslun/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "sala-reikningar"
+   ],
+   "kveikjuord": [
+    "verslun",
+    "vefverslun",
+    "karfa"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "web:/dashboard/new",
+   "titill": "Dashboard new (sniðmát)",
+   "tegund": "sida",
+   "leid": "/dashboard/new",
+   "skilgreind": [
+    "apps/web/src/app/(app-pages)/dashboard/new/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/dashboard",
+   "titill": "Dashboard (sniðmát)",
+   "tegund": "sida",
+   "leid": "/dashboard",
+   "skilgreind": [
+    "apps/web/src/app/(app-pages)/dashboard/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/private-item/[privateItemId]",
+   "titill": "Private Item (sniðmát)",
+   "tegund": "sida",
+   "leid": "/private-item/[privateItemId]",
+   "skilgreind": [
+    "apps/web/src/app/(app-pages)/private-item/[privateItemId]/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/private-items",
+   "titill": "Private Items (sniðmát)",
+   "tegund": "sida",
+   "leid": "/private-items",
+   "skilgreind": [
+    "apps/web/src/app/(app-pages)/private-items/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/auth/auth-code-error",
+   "titill": "Auth code error (sniðmát)",
+   "tegund": "sida",
+   "leid": "/auth/auth-code-error",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/auth/auth-code-error/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/auth/callback (api)",
+   "titill": "Auth callback (sniðmát)",
+   "tegund": "api",
+   "leid": "/auth/callback",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/auth/callback/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/auth/confirm (api)",
+   "titill": "Auth confirm (sniðmát)",
+   "tegund": "api",
+   "leid": "/auth/confirm",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/auth/confirm/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/forgot-password",
+   "titill": "Forgot password (sniðmát)",
+   "tegund": "sida",
+   "leid": "/forgot-password",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/forgot-password/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/login",
+   "titill": "Login (sniðmát)",
+   "tegund": "sida",
+   "leid": "/login",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/login/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "oryggi"
+   ],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/sign-up",
+   "titill": "Sign up (sniðmát)",
+   "tegund": "sida",
+   "leid": "/sign-up",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/sign-up/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "oryggi"
+   ],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/update-password",
+   "titill": "Update password (sniðmát)",
+   "tegund": "sida",
+   "leid": "/update-password",
+   "skilgreind": [
+    "apps/web/src/app/(auth-pages)/update-password/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/about",
+   "titill": "About (sniðmát)",
+   "tegund": "sida",
+   "leid": "/about",
+   "skilgreind": [
+    "apps/web/src/app/(external-pages)/about/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/borgarferdir",
+   "titill": "City trips from Keflavík",
+   "tegund": "sida",
+   "leid": "/borgarferdir",
+   "skilgreind": [
+    "apps/web/src/app/(external-pages)/borgarferdir/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "personulegt, tvitekid"
+  },
+  {
+   "id": "web:/",
+   "titill": "Nextbase-sniðmát",
+   "tegund": "sida",
+   "leid": "/",
+   "skilgreind": [
+    "apps/web/src/app/(external-pages)/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web",
+   "stada": "ekki i notkun"
+  },
+  {
+   "id": "web:/3dwork",
+   "titill": "3dwork — STL bench",
+   "tegund": "sida",
+   "leid": "/3dwork",
+   "skilgreind": [
+    "apps/web/src/app/3dwork/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skill:3dJoker",
+   "undiragentar": [],
+   "kveikjuord": [
+    "3dwork",
+    "STL",
+    "Raða"
+   ],
+   "app": "web"
+  },
+  {
+   "id": "web:/api/3dwork/github/geometry/[id] (api)",
+   "titill": "3dwork geometry",
+   "tegund": "api",
+   "leid": "/api/3dwork/github/geometry/[id]",
+   "skilgreind": [
+    "apps/web/src/app/api/3dwork/github/geometry/[id]/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "skill:3dJoker",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web"
+  },
+  {
+   "id": "web:/api/3dwork/github/projects/[id] (api)",
+   "titill": "3dwork eitt verkefni",
+   "tegund": "api",
+   "leid": "/api/3dwork/github/projects/[id]",
+   "skilgreind": [
+    "apps/web/src/app/api/3dwork/github/projects/[id]/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "skill:3dJoker",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web"
+  },
+  {
+   "id": "web:/api/3dwork/github/projects (api)",
+   "titill": "3dwork verkefni",
+   "tegund": "api",
+   "leid": "/api/3dwork/github/projects",
+   "skilgreind": [
+    "apps/web/src/app/api/3dwork/github/projects/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "skill:3dJoker",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web"
+  },
+  {
+   "id": "web:/api/3dwork/github (api)",
+   "titill": "3dwork GitHub-sync",
+   "tegund": "api",
+   "leid": "/api/3dwork/github",
+   "skilgreind": [
+    "apps/web/src/app/api/3dwork/github/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "skill:3dJoker",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web"
+  },
+  {
+   "id": "web:/api/marks/preview (api)",
+   "titill": "Marks hlekkjaforskoðun",
+   "tegund": "api",
+   "leid": "/api/marks/preview",
+   "skilgreind": [
+    "apps/web/src/app/api/marks/preview/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [],
+   "app": "web"
+  },
+  {
+   "id": "web:/marks/[boardId]",
+   "titill": "Marks — site",
+   "tegund": "sida",
+   "leid": "/marks/[boardId]",
+   "skilgreind": [
+    "apps/web/src/app/marks/[boardId]/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Marks-borð"
+   ],
+   "app": "web"
+  },
+  {
+   "id": "web:/marks",
+   "titill": "Marks — kjarni bookmarks",
+   "tegund": "sida",
+   "leid": "/marks",
+   "skilgreind": [
+    "apps/web/src/app/marks/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Marks",
+    "bókamerki"
+   ],
+   "app": "web"
+  }
+ ]
+}

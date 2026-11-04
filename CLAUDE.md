@@ -77,3 +77,19 @@ skrána beint. **Ekki afrita innihald þeirra hingað** — ein staðreynd á ei
   ⚠️ RLS-staðan þar er opin (sjá `oryggi`) — kjarni-öpp eiga að gera betur frá
   fyrsta degi: RLS + policies fylgja hverri nýrri töflu (sbr. AGENTS.md
   schema-vinnuflæðið).
+
+## Agent-afrit (tools/sync-agents.cjs — 04.11.2026)
+
+- Skrárnar í `.claude/agents/` sem byrja (strax eftir frontmatter) á
+  `> ⚠️ **Afrit** — frumrit í C:\projects\<repo>\.claude\agents\<nafn>.md …` eru **afrit, ekki
+  frumrit**. Breyttu þeim ALDREI hér — breyttu frumritinu í brunaholf/slokkvitaeki og samstilltu.
+- `node tools/sync-agents.cjs --check` — sýnir rek per skrá (`ok | úrelt | vantar | munaðarlaust`),
+  exit 1 ef eitthvað hefur rekið. Keyrðu áður en þú treystir afriti.
+- `node tools/sync-agents.cjs --sync` — afritar frumritin hingað og setur afrit-merkið.
+  `--hreinsa` eyðir munaðarlausum afritum (t.d. `hype`, sameinað í `jarvis` 23.10 — eytt 04.11).
+- Heimild per agent: `C:\projects\brunaholf\data\agents-registry.json` (`heimili`), annars
+  brunaholf ef skráin er til þar, annars slokkvitaeki. Taflan „HVER KANN HVAÐ" hér að ofan er
+  eldri en þetta — afritin eru nú 25 (rambo, rukkari, elon-musk, netvordur, samthykktir bættust við).
+- **Kjarna-frumrit** (engin afrit-merki, búa HÉR): `kjarni-vefur` 🕶️ (skelin, Vercel, Stjórnstöð,
+  Tólaskrá), `artcraft` 🎨 (`/kjarni/artcraft` + API), `skraning` 📚 (`/kjarni/skraning`, skr_*).
+  Síðukortið `.claude/sidukort.json` segir hver á hverja leið.

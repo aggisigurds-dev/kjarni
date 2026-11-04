@@ -1,10 +1,13 @@
 ---
 name: thema
-description: theme.css hönnunarkerfið + per-page skeletons (endursköpun síðna í Brunastál-stíl). Notaðu þegar síða er endurhönnuð eða skinnuð.
+description: theme.css hönnunarkerfið (Brunastál) og per-page skeletons — endursköpun og skinnun síðna. Þemað er FROSIÐ síðan 17.08.2026; byrjaðu ekki á samræmingu óumbeðið. Notaðu þegar síða er skinnuð eða endurhönnuð, litur eða takki er rangur, eða spurt er um liti og hönnunarkerfið; kallaðu á hann sjálfur þegar litir, málmáferð eða þemaárekstur (patch 245) kemur við sögu. Kveikjuorð: þema, skinna, Brunastál, theme.css, litur á takka, of mikið appelsínugult, dökkblár málmur, málmhnappur, LITASKRA, hönnunarkerfi.
 tools: Bash, Read, Grep, Glob, Edit
 ---
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\thema.md (samstillt 2026-11-04). Breyttu þar.
 
-> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/thema.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+## Charlize — lestu fyrst
+
+Áður en þú breytir kerfi eða fullyrðir um það: `select topic, fact, detail from v_charlize_active where scope in ('slokkvitaeki','baedi','brunaholf') and topic in ('thema','vidmot','ui','simi','variant') order by created_at desc;` Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 Þú kannt **þemað** — class-based theme.css, scoped undir `.thm`. GILDRA: patch 245 (Brunastál) berst við theme.css (whitear `[class*=-card]`) — þarf hærri sérhæfni.
 
@@ -136,3 +139,24 @@ dark→grey page band, metallic 3D stat cards, filled pills, dark-header data ta
   Þjónustu) is hibernated — script tag commented out like 152. The proper
   theme.css conversion still proceeds page by page as above.
 
+## Lærdómur
+
+- **30.09.2026** — ÞEMAÐ MÁLAR ALLA <button> SEM MÁLMHNAPP, með !important og valgrein sem e.matches() ræður ekki við — ég leitaði að henni í öllum stílblöðum og fann hana ekki. Innlínustíll TAPAR fyrir henni: GÓ-punkturinn (418) hafði réttan background í style-attribute en birtist sem málmhnappur með svörtum ramma. Lausn: !important á hverja sjónræna yfirlýsingu í innlínunni, background-image:none þar með, annars stendur hallinn eftir ofan á litnum. Undantekning: sé málmurinn ÆSKILEGUR (ósett staða) skaltu einfaldlega sleppa öllum background-override og láta þemað ráða. (js/patches/418-go-merki.js)
+
+- **16.10.2026** — Uppgjör lota 16.10.2026: frosna .thm-þemað fékk aldrei júlí-contrast-lagfæringuna — 474 × #94a3b8 á ljósum grunni; lagað 23.08.2026 í lotu 1 með #5b6472 (5,98:1). Hönnunarkerfis-athugasemdir 23.09 (óleystar, ákvörðun Agnars): .btn ~35 px < 40–44 px snertireglu; contrast-göt dofin R-000-núll 2,2:1, núll í legend 3,8:1, Móttekin-titill 3,3:1, Léttvatn/Froða-rendur 2,0/2,3:1, 230 fókushringur ~2,8:1; smáletur <11 px í síma (Hreyfingarlisti 8,5 px, Ársskoðun-merki 8 px) skilið eftir — „klíp-zoom leysir lesturinn".
+
+- **16.10.2026** — 16.10.2026: Agnar 10.09 „þetta eru leyfar a thema stillingu … eins og zombie … brunaholf sidan hefur sloppid" / „lattu bara tölvu desktop litina ráða öllu og með fasta liti" → brunaholf js/theme.js var FRYST á ljóst 10.09 (setTheme á engan kallanda); 8 hub-síður með raunverulegt dökkt (index, verkefnalisti, fjarmalyfirlit, brunakerfi, eydublod, multitool, pdftools, skraalisti) pinnaðar only light — bíður ákvörðunar. project_brunaholf_theme sagði „light/dark/auto" — leiðrétt 16.10.
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+
+- Brunastál ræður öllum útlitsbreytingum í Slökkvitæki-appinu (líklega): engin emoji, engir bláir takkar, málmhausar með hnoðum, stálplata og silfur/málm-takkar. [lota 6db7868a, 05.10.2026]
+- Þjónustuskiptirinn er samþykktur (02.10.2026): Slökkvitæki dökkblár málmur og Brunakerfi dökkrauður, hvort alltaf í sínum lit, með bjartara LED og baklýsingu þegar valið; Verkstæði á að vera dökk málm-blátt. [lota 6db7868a]
+- Flokkar í Vörur og þjónusta hafa málmliti: slökkvitæki dökkblár, brunakerfi dökkrauður, slökkvikerfi dökk ljósblár, verkstæði grafít-grár, vinnuliðir dökkgull og ný vara dökkgrænn. [lota 731f63e0, 14.10.2026]
+- Brunahólf-þemað (vefverslun) er sérstakt hönnunarkerfi frá Brunastál: of mikið appelsínugult/gull á tökkum var hafnað og „setja í körfu“ á að vera dökkblátt. [lota 6db7868a, 12.10.2026]
+- Þjónustugáttin og Brunahólfs-síður (Drive-leit, Póstleit) eiga að vera í Boss-þema: gull, hvítt, base. [lota c5897be7, 14.10.2026]
+- Litaregla: „Á dagskrá“ er himinblátt (gult = sleppt), „Eftir að rukka“ er svartleitt málmmerki og grátt á gráu er bannað — texti þarf skýran kontrast. [lotur 66624710, 7957a4ea, 9b70f49c, fe668f62]
+- Grái ólesanlegi textinn í Brunastáli var átta CSS-reglur sem gefa ljósgráan tón ætlaðan hvítu spjaldi, ekki ein villa — finndu allar áður en þú segir „lagað“. [C#655]
+- Patch 245 þvingar `height:42px` + `padding:0 14px` á ÖLL `.view input/select` með `!important` — sérhver lítill inline-reitur þarf eigin `!important`-reglu með hærri sértækni (löguð fórnarlömb 07.08.2026: karfa-magnreitur, kr/stk- og %-reitir). [C#65]
+- Þegar Agnar samþykkir mockup eða útlitsbreytingu: smíðaðu NÁKVÆMLEGA það og láttu allt annað haldast óbreytt (allar tengingar tengdar, aðeins útlitið breytist). [lotur 14b698a2, 6db7868a]
+- Ragnarök / „Golden Jarvis“ er útlitsstefna fyrir Jarvis-síðuna og 3dwork (kjarni, `apps/web/src/app/3dwork/ragnarok/theme.css`): dökkgulir tónar víkja fyrir „real gold metal“ eða brúnum tónum með smá grófleika og 3D-preview svæði eru ljós. [lota a8586ee5, 17.–18.10.2026]
+- Á kortum í Kjarni vill Agnar fjarlægja bláu slikjuna — ekki breyta bláa litnum á vefsíðunum sjálfum; óljóst hvað „it“ var, staðfestu áður en breytt er. [lota 6f49d5d4, 25.10.2026 (líklega)]

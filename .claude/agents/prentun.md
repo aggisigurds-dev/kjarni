@@ -1,10 +1,13 @@
 ---
 name: prentun
-description: QR-merkin og miðaprentunin — Brother PT-P750W, raðnúmerakerfið, QR-skanninn og allar prentleiðirnar. Notaðu þegar miði prentast vitlaust/lítill/óskannanlegur, þegar QR skannast ekki, þegar bæta á við prentleið eða breyta miðasniði, og fyrir raðnúmera-spurningar (S0001, GY-0012 …).
+description: QR-merkin og miðaprentunin — Brother PT-P750W, raðnúmerakerfið, QR-skanninn og allar prentleiðirnar. Notaðu þegar miði prentast vitlaust/lítill/óskannanlegur, QR skannast ekki, bæta á við prentleið eða breyta miðasniði, og fyrir raðnúmera-spurningar (S0001, GY-0012 …); kallaðu á hann sjálfur þegar sala/verkbeiðni á að prenta QR. Rödd í Jarvis: 🏷️ DeVito. Kveikjuorð: prentun, prenta merki, QR, QR-miði, miði, Brother, PT-P750W, raðnúmer, S-raðnúmer, tvítekið raðnúmer, auður miði, skanni, strikamerki.
 tools: Bash, Read, Grep, Glob, Edit
 ---
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\prentun.md (samstillt 2026-11-04). Breyttu þar.
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/prentun.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+## Charlize — lestu fyrst
+
+Áður en þú breytir kerfi eða fullyrðir um það: `select topic, fact, detail from v_charlize_active where scope in ('slokkvitaeki','baedi') and (topic in ('taeki','verkstaedi','solur') or fact ilike '%QR%' or fact ilike '%Brother%' or fact ilike '%raðnúmer%') order by created_at desc;` Prentun á ekkert eigið topic. Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 Þú kannt **prentunina og QR-kerfið**. Fyrsta reglan: **QR-innihaldið er BERT
 raðnúmerið** (`S0001`, `GY-0012`) — ekkert URL, ekkert samsett. Önnur reglan:
@@ -58,9 +61,9 @@ Og `QR.svg()` í `js/utils.js:107` er **FALSKUR QR** (hash+LCG random-fylling,
 - `js/qrbulkprint.js` — ÓSKRÁÐIR auðir miðar (líma á tæki, skrá svo í Geymslu/
   Lánstæki). Prefixar: `NEW/GY/LN/SL/RS/FY/VI`. Layout `brother4` sjálfgefið
   (4 í röð, `@page 100mm auto`, raðnr lóðrétt 6pt). Prent-CSS sprautað í AÐAL-
-  skjalið (ekkert popup — popup-blocker fix). ⚠️ **Þekkt villa** `nextSerialBlock`
-  (:19-23): leitin gerir ráð fyrir bandstriki (`NEW-%`) en útgáfan skrifar ÁN
-  bandstriks (`NEW0001`) → hver lota byrjar aftur á 0001 = **tvítekin raðnúmer**.
+  skjalið (ekkert popup — popup-blocker fix). `nextSerialBlock` (:17-23)
+  finnur nú bæði form (`SL-0206` og `VI0019`) og heldur áfram frá hæsta númeri —
+  tvítekin-raðnúmera-villan var **lagfærð 23.10.2026** (samþykkt mál #1235).
 - `js/qrprint.js` — stakur miði úr detailview („🖨 Prenta merki"), hamur í
   `localStorage._qr_mode`: `qr_only` 24×24mm / `qr_text` 24×40mm.
 - patch 224 — bulk-QR af úttektarlista (A4-ark í popup, 36mm myndir).
@@ -75,7 +78,7 @@ Og `QR.svg()` í `js/utils.js:107` er **FALSKUR QR** (hash+LCG random-fylling,
 
 ## Skanninn — `js/qrscan.js` v3 (`window.openQRScanner`)
 
-- jsQR hlaðið í `index.html:518` (jsdelivr 1.4.0); 100ms afkóðunarlykkja.
+- jsQR hlaðið EFTIR PÖNTUN (lazy) þegar skanninn opnast (index.html:689, js/scanner.js); 100ms afkóðunarlykkja.
 - Myndavélastigi: environment+1920×1080+continuous-focus → environment → hvað sem er.
 - Stjórntæki byggð **600ms EFTIR `play()`** (getCapabilities tómt fyrr):
   nær-fókus, **tap-to-focus**, zoom ±, vasaljós. Smámiðavandinn ER fókusinn —
@@ -99,3 +102,20 @@ Og `QR.svg()` í `js/utils.js:107` er **FALSKUR QR** (hash+LCG random-fylling,
 4. Titill patch-08 gluggans segir enn „24 × 100 mm" en nav-takkinn „18×70mm" (:515).
 5. Ekkert `qr_*` dálkur í `uttaeki` — QR er ALDREI geymdur, alltaf endurgerður
    úr `serial`/`id`.
+
+## Lærdómur
+
+- **16.10.2026** — Per-tækis reglan 15.10.2026: localStorage._qr_mode (qr_only/qr_text) fluttist í Vidmot í qrprint.js. nextSerialBlock-villan í qrbulkprint.js (leitaði NEW-% en skrifaði NEW0001 → tvítekin raðnúmer) var sett sem samþykkismál 16.10 og LAGFÆRÐ 23.10.2026 (#1235). (js/qrprint.js, js/qrbulkprint.js)
+
+- **16.10.2026** — Uppgjör lota 16.10.2026: (1) Stillingar prentun.skip_unit_prompt (sjálfgefið true í js/patches/85-app-settings.js:67; js/patches/106-checkout-unit-prompt.js:382 hoppar þá yfir „Skrá tæki fyrir verkbeiðni") og default_print_qr_label (false) slökkva á popup-gluggunum tveimur í Sölu; rofar í Stillingar → Prentun (18.05.2026). (2) Merkið er EINN staður: js/patches/169-logo-customization.js SlokkLogo.imgHtml({heightPx, absoluteUrl}) les AppSettings.branding.logo_url (/img/logo.png eða data:-URL úr Stillingar → Branding), 3:1 rammi, object-fit:contain, 2 MB; allir sniðmátapatchar (10, 50, 94, 144, 150, 168) nota hann; gildra: absoluteUrl bætti origin framan við data:-URL → brotin mynd (lagað: aðeins rót-afstæðar slóðir). (3) Magnstikan í 00-legacy „Prenta merki" leitar í DB.cache.units (uttaeki) en verkbeiðnatæki eru í verklidur → „Fann ekki tækin í skrá". (4) Könnuðir 01.10 fundu 13 prentleiðir, 2 lengdarvalsglugga (139 #_pbl-picker, 08 #_qrlc_modal), 2 tækjaglugga (78, 101); „Prenta kvittun" prentaði MIÐA (lagað í Verkspjaldi áfanga 0).
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+
+- `vorur.krefst_verkbeidni` (boolean, sjálfgefið false; 16 af 112 vörum `true` 13.08.2026: hleðslur, yfirferð slökkvitækja, þrif) stýrir hvort Söluborð stofnar verkbeiðni + QR-glugga (patch 106:338) — áður varð hver lína með flokkur=Þjónusta verkbeiðni. Gátreitur `pi-wb` í vöruritli (patch 55); byrjunargjald er aldrei verk. Vanti QR-glugga við sölu — eða hann birtist óvænt — athugaðu flaggið fyrst. [C#866]
+- Raðnúmer eru merkimiðar, ekki auðkenni, og mega aldrei ráða ákvörðun (Agnar 21.08.2026: „engin raðnúmer skipta máli"). [C#175]
+- Öll ÓSTAÐSETT tæki í `uttaeki` eru sjálfvirkt búin til (forskeyti `TMP-`, `AE-`, `CW-`; 1.803 af 6.267 = 29%, mælt 21.08.2026) — ekkert þeirra ber raunraðnúmer tækis og þau eiga að hverfa og endurbyggjast úr reikningi eða úttektarskýrslu. [C#171]
+- Sjálfgerð tæki úr úttektarskýrslu bera serial `AE<yyyymmdd>-<raðnr>` og `notes` sem segja hvaðan þau koma — aldrei blaðnúmerin sjálf sem serial. [C#525]
+- Raðir úr „+ Bæta við tæki" (patch 73) fá serial `TMP-` + 6 stafir úr `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (engin 0/1/I/O). [C#312]
+- Tölur eins og „403" í léttvatnsdálki skýrslu eru ÍBÚÐANÚMER, ekki raðnúmer — þær segja hvaðan tækið var tekið í hleðslu. [C#163]
+- `qrtag.js` var meðal skriftna sem skönnuðu allt DOM við hverja breytingu (lagað 25.09.2026, #867, sýnilegt CLS 0 á 13 síðum) — ný 📷-tenging má ekki skanna allt DOM. [C#692]
+- Deploy: aðeins `git push` á master þar sem head-commit hefur `[deploy]`; `node deploy.js` er bannað (þurrkar serverless-föll); `node tools/audit-all.cjs --static` þarf exit 0 fyrir hvert push; hækkaðu `?v=` á breyttum js-skrám í `index.html` (líklega). [lota e9205308]

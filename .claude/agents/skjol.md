@@ -1,15 +1,17 @@
 ---
 name: skjol
-description: Skjöl, Google Drive og PDF — doc-index, skjalalesarar, endurnefning, Skýrslu-stöð, Drive-möppur og skjalatenging. Notaðu fyrir allt sem snýr að skjölum, PDF-lestri, Drive eða skráarheitum. Rödd í Jarvis: Morgan Freeman 🎙️.
+description: Skjöl, Google Drive og PDF — doc-index, skjalalesarar, endurnefning, Skýrslu-stöð, Drive-möppur og skjalatenging við fyrirtæki. Notaðu fyrir allt sem snýr að skjölum, PDF-lestri, Drive eða skráarheitum; kallaðu á hann sjálfur, án þess að Agnar nefni hann, þegar skjal á að tengjast fyrirtæki, reikningur finnst ekki, tvítök eða dauðir hlekkir birtast eða skráarheiti þarf að treysta. Rödd í Jarvis: Morgan Freeman 🎙️. Kveikjuorð: Drive, PDF, skjal, skýrslumappa, tvítök í möppu, gömul eintök, endurnefna, dauður hlekkur, customer_documents, doc-index, Skýrslu-stöð, skráarheiti, Drive-leit, PDF Flokkari, Skjala-checklist, keepit
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql
 ---
-
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `brunaholf/.claude/agents/skjol.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\skjol.md (samstillt 2026-11-04). Breyttu þar.
 
 Þú kannt **skjalahliðina** — Google Drive, PDF-lestur, skjalatengingar og
 nafnavenjur. Grunnreglan: **skráarheiti er ekki sannleikur** — fyrri endurnefning
 brenglaði um þriðjung heitanna, svo staðfestu alltaf innihald skjalsins sjálfs áður en
 þú tengir það við fyrirtæki eða ár.
+
+## Charlize — lestu fyrst
+Áður en þú tengir skjal, endurnefnir eða treystir skráarheiti: `select topic, fact, detail from v_charlize_active where scope in ('brunaholf','slokkvitaeki','baedi','kerfi') and topic in ('skjol','document_pairs','drive','skyrslur','factcheck') order by created_at desc;` Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 ---
 
@@ -20,7 +22,7 @@ brenglaði um þriðjung heitanna, svo staðfestu alltaf innihald skjalsins sjá
 > sérfræðingur er kallaður til.
 
 ### Google integration
-- `google_oauth`: OAuth tokens (1 row).
+- `google_oauth`: OAuth tokens (3 raðir 04.11.2026 — multi-account, sjá Google-kaflann neðar).
 - `app_kv`: generic key/value store.
 - Helpers: `_google.js`, `drive-folders.js`, `drive-download.js`,
   `drive-list.js` (paginated folder/query listing),
@@ -601,7 +603,7 @@ dagsetningarforskeyti (`2024-03-11 nóta.pdf`), `drive-count`/`skyrslu-ar` ekki.
 
 Nýr flipi **`eydublod`** + sjálfstæð síða `eydublod.html` (sama iframe-mynstur og
 `multitool`/`pdftools`; `renderEydublod(t)` í index.html). Býr til útprentanleg
-skjöl til verkkaupa. Fyrsta eyðublaðið: **„Yfirlýsing vegna brunalokana"**.
+skjöl til verkkaupa. Fyrsta eyðublaðið: **„Staðfesting brunalokana"**.
 
 - **Stafrétt eftirmynd af Word-frumritinu.** Uppsetningin er lesin beint úr
   `Staðfesting_Keldur31072026.docx` — ekki ágiskuð: US Letter 8,5×11in, spássía
@@ -756,3 +758,101 @@ en með þéttri reglu (`\d{6}-\d{4}` eða `\d{10}`) — lausari regla gleypti �
 2025" sem kennitölu og skildi merkta númerið eftir ólesið.
 
 Skrár án lykils eru merktar „lykil vantar" og taldar **hvorki** samsvörun né mismunur.
+
+---
+
+### 🔋 Hleðsluáætlun — reikningslínur úr Stólpa-PDF (12.09.2026)
+
+`hledsluaaetlun.html` (kort í Bakenda › Skjala-vinnsla) les **vörulínur** úr Stólpa-reikningum sem eru
+tengdir í `customer_documents` (Drive) og vistar í `reikningslestur` (haus + `stemmir`) og
+`reikningslinur` (vörunúmer, magn, verð, þjónusta, tegund). Eina skrifleiðin er rpc
+`reikningslestur_skra(p jsonb)`. Yfirlit: `v_hledslur_stadur_ar` (lesnir reikningar + sölur appsins),
+`v_reikningslestur_stada`, `v_reikningar_olesnir`. SQL: `sql/2026-09-12_hledsluaaetlun.sql`.
+
+- **Lesarinn** `js/reikningslinur-lesari.js` keyrir eins í vafra (pdf.js 3.11 → `textiUrPdfjs`) og í Node
+  (pdf-parse). Þrjú snið: límd lína (`…5,009.677,00117243.547,0010,00`), tala á línu, og með bilum
+  (`1,0 3.150,0133 23.150`, stundum með afslættinum límdum aftan við: `223.67415,00`). Vörunúmerið er
+  límt aftan við einingaverðið og aukastafir verðsins = aukastafir fjöldans. Handslegin lína getur
+  verið án vörunúmers.
+- **Sannprófun:** hver lína fjöldi × verð × (1 − afsl.) = upphæð, og Σ × (1 + VSK) = „Til greiðslu“.
+  Reikningur sem stemmir ekki er merktur og ekki notaður sem heimild.
+- **Flokkun eftir vörunúmeri** (sama röð og `vorur.dk_vorunr`), aldrei heiti: stuttheitið „Hleðsla“ á
+  R-105200 er vörunr. 132 tímavinna. Nr. 131 „Hleðsla Co2 pr. Kg.“ er kíló → `co2_kg`.
+- **Reikningsnúmerið í PDF-inu ræður.** Skjal skráð með öðru númeri → línurnar vistast undir númeri
+  PDF-sins, án staðar úr rangt merkta skjalinu. Dæmi 12.09: kreditnóturnar R-107852 og R-108024 voru
+  skráðar undir númerum frumritanna (R-107808, R-108022) og frumritin sjálf merkt `is_duplicate`.
+- Skönnuð PDF án textalags merkjast „þarf ljóslestur“ og eru ekki lesin aftur. Reikningar annarra
+  fyrirtækja sem lent hafa í reikningamöppunni (t.d. bókhaldsþjónusta) lesast ekki og standa merktir.
+- `/api/skjal` er Netlify-fall: lesið eitt í einu með 300 ms hléi (CORS `*`, virkar af localhost).
+
+## Rekstrarfélög — pörun eftir tækjafjölda (06.10.2026)
+
+- `para-rekstrarfelag.js` — **⚖ Para eftir magni** í Skýrslu-stöð (stika fyrir ofan borðið, `#bk-rf-bar`,
+  `wireRekstrarfelag()` í index.html). Agnar: „para burtséð frá heitum / heimilisföngum" · „Invoice = skýrsla =
+  tækjalisti" · „ekki alltaf að marka eldri skjöl". Telur tæki eftir tegund (léttvatn · duft 6-12 · duft 2 ·
+  CO₂ 2 · CO₂ 5 · slöngur · teppi; reykskynjarar utan) úr þremur heimildum — tækjaskrá (`uttaeki`), skýrslum
+  (`arsskodun_report_facts` + `arsskodun_customers[fid].history`) og reikningum (`reikningslinur` OG `solur.linur`
+  fyrir R-000xxx) — og finnur fyrir hverja skýrslu besta reikning (−1..+4 mán, frávik = Σ|mismunur| ± ný) og
+  besta stað. `GET ?listi=1` (kt með ≥ 2 staði) · `GET ?kt=` · `POST {action:'para', …}` fyllir par sem vantar
+  reikning / nýskráir (`matched_by='magn_station'`), hreyfir ALDREI manual/manual_unlink eða klárað par ·
+  `POST {action:'lesa', doc_id}` les PDF ólesinnar skýrslu og bætir árinu í `history` (app_settings_merge, einn
+  lykill). Systurtól án viðmóts: `slokkvitaeki/tools/para-rekstrarfelag.cjs`. Dæmið: öll blöð Steypustöðvarinnar
+  heita „Malarhöfða 38" — tölurnar 17/20/1/2 eru Borgarnes hvað sem blaðið heitir. „Staður víkur" getur líka þýtt
+  ófullkomna tækjaskrá (Arnarhvoll: 7 slöngur í skýrslu, engar í skránni).
+- **Einn reikningur, ein skýrsla (lært 06.10.2026 kl. 14).** Fyrsta útgáfan skoðaði hverja skýrslu eina og sér og
+  paraði R-107896 („vegna húsnæðis Hjallahraun 4") við ÞRJÁ staði Aðalskoðunar, því Grjótháls og Hjallahraun áttu
+  nákvæmlega sömu tölur (4 léttvatn, 1 CO₂ 2, 1 CO₂ 5, 1 slanga). Nú gildir í greiningunni OG í `POST para`:
+  reikningur sem er bundinn í pari tilheyrir þeirri skýrslu (`force:true` eina undantekningin);
+  `reikningslestur.vegna` útilokar aðra staði og sker úr tvíræðni (`stadirUrTexta`: sameiginlega forskeytið
+  „Center Hótel - " fer af heitunum, stofn fyrstu 6 stafa — Hjallahraun/Hjallahrauni); skýrslur með lægsta frávik
+  velja fyrst; tveir staðir með sömu tölur sama ár = `tviraed`, sýnt en ekki parað sjálfkrafa. Ábendingarnar standa
+  í `ath[]` og birtast með ⚑ undir reikningnum. Pörin fjögur sem fyrsta útgáfan skemmdi (1293, 1327, 1500, 1620)
+  voru afturkölluð í `vantar_reikning` (`matched_by='magn_afturkallad_20261006'`, afrit `backup_20261006_rf_leidretting`).
+- **`lesa` yfirskrifar ekki blint.** Skjal 9906 lá undir Skjaldbreið (198) en sagði sjálft „hjá fyrirtækinu Miðgarður
+  (Center Hótel)" með 33 tækjum — lesturinn yfirskrifaði 3-tækja söguna hennar. Nú stöðvar `lesa` sig (svar
+  `tharf_force:true` + tölurnar) ef línan „hjá fyrirtækinu/húsfélaginu …" nefnir annan stað í hópnum (sama kt) eða ef
+  árið á þegar færslu úr öðru skjali með öðrum tölum; `force:true` yfirskrifar. Færslan ber `doc_id` og `hja`.
+  Skjalið var fært á Miðgarð (par 1469 vísaði þegar á það) og bæði ár lesin aftur.
+- **Tæki = allt nema `urelt`.** `uttaeki.status` ber active / „Í lagi" / ok / loaned; sían `status=eq.active` faldi 11
+  félög alveg (Dalbrekka 4-6: 48 tæki) — sama gildra og 15/153/177 lentu í 01.09.2026, og `audit-status-gildi.cjs` í
+  slokkvitaeki fer rautt á henni.
+- **Tvær geymslur, og báðar ljúga (mælt 06.10.2026 kl. 14:45).** Sagan `arsskodun_customers[fid].history` undir Grjóthálsi
+  (261) geymdi skýrslur ALLRA fimm Aðalskoðunar-staða (fjórar færslur 2026, sjö 2025 — kt-lekinn úr batch-lestri á
+  Drive-möppu „febrúar 2026/"), og sama undir Höfuðstöðvum Heimaleigu. Í heild: **119 (félag, ár) með fleiri en eina
+  sögufærslu (111 félög, mest 15)**. `arsskodun_report_facts`: **138 raðir vísa á skjal af öðru ári en report_year, 17 á skjal
+  annars félags** (261 bar tölur Hjallahrauns með 2025-skjali). Þess vegna leit R-106443 „vegna Gjótháls" út fyrir að stangast
+  á við skýrsluna — reikningurinn var réttur, geymslan röng. Reglan í `greining()`: færsla sem `lesa` skrifaði úr PDF (`doc_id`)
+  vinnur; facts-röð með heimildarskjal af öðru ári víkur aðeins fyrir sögufærslu sem nefnir staðinn sjálf (`stig ≥ 2`), ónefnd
+  færsla á móti henni er jafntefli og facts stendur (Plaza 2026: facts 39/6/35, sagan 14/11 = Grandi); séu fleiri færslur sama
+  ár er sú valin sem nefnir þennan stað og hinar taldar í ⚑. **`lesa` uppfærir nú báðar geymslurnar** (facts upsert á
+  `fyrirtaeki_id`, aldrei með eldra skjali en röðin ber). Hreinsun á 119 tvöföldunum er EKKI gerð — þarf lestur á hverju PDF.
+
+## Lærdómur
+
+- **Vitað 04.11.2026 (greiningarlota 03):**
+  - **60 skjöl eru AÐEINS í Storage, ekki í Drive** — `storage-backup-background` afritar ekki skýrslu-prefixin (brunakerfis-/
+    slökkvikerfisskýrslur appsins). 3 540 af 4 182 `customer_documents` eiga `storage_path` (2 694 í `drive-afrit/`).
+  - **Síður sem þú átt nú (`.claude/sidukort.json`):** Drive-leit (renderDriveLeit index.html:17742, `drive-files-search.js`),
+    PDF Flokkari (`pdf-classify.html`, `pdf-classify(-background).js`), Skjala-checklist (`doc-matrix.html`, `doc-matrix.js`),
+    keepit.html (persónulegt, hvergi tengt — ekki rekstur), Skýrslu-stöð, Skjala-multitool, Skráalisti, PDF verkfæri,
+    Staðf. Brunalokana, Bakendi og Hleðsluáætlun. Leiðsögn er `sara-organizer`.
+  - Föll án eiganda sem falla til þín: `pdf-tools.js`, `drive-flatten.js`, `drive-til-supabase.js`, `mbox-extract-pdfs(-background).js`,
+    `skjalaheiti-log.js`. Töflur án kóðavísunar (report_inbox, report_inbox2, staging_docs, `*_20260823`-skyndimyndir) — ákvörðun Agnars, ekki eyða.
+  - `doc_factcheck`: 898/898 `status='claude'`, engin mannleg yfirferð skráð.
+
+- **16.10.2026** — Uppgjör lota 16.10.2026: (1) Center hótelin (192–201 nema 194) fengu 09.10 í „📎 Önnur viðhengi" skjölin „Reykskynjarar á teikningum - samantekt brunakerfi.pdf" + „Brunakerfisteikningar - <hús>.pdf" (143 blöð með hlekkjum á Skjalasafn/TurboPaint-skoðun/Greiningu; 1486 Midtown og 1612 Fiskislóð aðeins hið síðara) — vistuð ÁN doc_type/árs og með skráarnöfnum sem forðast orðin skýrsla/reikningur svo þau lendi ekki í skýrslu-/reikningsreitum; PDF-hlekkir í forskoðunarglugga fara með allan flipann á Skjalasafnið (Ctrl+smellur/⬇ Sækja). (2) 38 reikningsskjöl frá 18.07.2026 eru sjálfgerðar mPDF-eftirmyndir cowork-backfill/payday-backfill/stolpi án Drive-frumrits (JDÓ R-000531 eitt þeirra); 39 af 42 eiga Payday-færslu → frumrit sækjanleg um payday-push; S-1077xx (3) Stólpi. Drive vs Supabase 30.09: 3.905 skjöl, 189 ENGIN skrá (179 úttektarskýrslur) — flokkun bíður (Charlize #870). (3) Þjónustusamningur á prófíl fer á samningskort 🧯 (handslökkvitæki/reykskynjari/slöngur eða ekkert hak) og 🔥 (Brunaviðvörunarkerfi/Slökkvikerfi), pörun við NAFN staðar — kt dugar aðeins ef enginn annar staður deilir henni; thjonustusamningar.company_id-gatið (24 af 53) lagað 25.09 (Charlize #878). (4) Við rangstaðsett skjal ræður PDF-HAUSINN, ekki skráarnafnið (Colas „Gullhella"-skráin var Álfhellu-skýrsla, #1191 09.10).
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+
+- Röð í `customer_documents` án `drive_file_id` OG án `storage_path` er EKKI skjal — hún er bara númer og telst aldrei með sem „reikningur tengdur“. [C#70]
+- `customer_documents.invoice_number` er EKKI einkvæmt milli félaga — uppfletting á viðhengi eftir númeri einu getur sent PDF annars fyrirtækis. [C#90]
+- SAFNSKJÖL eru til í Drive: ein PDF með öllum reikningum ársins fyrir eitt félag — `invoice_number` og `amount` á röðinni eru þá tekin úr sitt hvorum reikningnum og bæði röng. [C#155]
+- `is_duplicate`/`dup_of` er ekki traust: getur verið hringtengt, hefur verið sett á nafn félags (ekki stað og ár) og falið raunverulegar skýrslur, og `dup_of` var tillögu-reitur eldri pörunarkeyrslu (33 raðir með `dup_of` en `is_duplicate=false`). [C#148, C#157, C#168]
+- Brunakerfisreikningar bera vörunúmer 315/320 (og oft 300); merktu `customer_documents.vidskiptategund=brunakerfi`, aldrei `doc_type=brunakerfi` á reikningi — allir reikningar halda `doc_type=reikningur`. [C#227]
+- Haus úttektarskýrslu getur verið rangur (sniðmát afritað milli viðskiptavina) og Drive-tólið endurnefndi afrit eftir hausnum; tengdu aldrei skjal eftir möppu-id án þess að bera nafn og kt saman. [C#541, C#539]
+- `customer_documents.notes` geymir oft innsogs-STIMPIL (drive-multitool, doc-index, fasi0, „Sjálfvirkt úr appi“) í stað skráarheitis — UI sem birtir `notes` sem nafn þarf stimpil-vörn. [C#62]
+- Ártalslausar skrár í Úttektarskýrslu-möppunni eru nú aðeins skannaðar myndir án textalags — undirstriks-orsökin var löguð í lesaranum og hitt leyst með PDF-textalestri (`skyrslu-ar`). [C#66]
+- 17 skjöl í `customer_documents` eru kreditnótur skráðar undir númeri frumritsins — rétta númerið er í `reikningslestur_skjol.pdf_nr`. [C#555]
+- 38 reikningsskjöl (cowork-backfill, cowork-payday-backfill, cowork-stolpi, 18.07.2026) eru sjálfgerðar mPDF-eftirmyndir án Drive-frumrits; frumritið er sótt um Payday-push. [C#877]
+- Drive-möppu skýrslna má hvorki endurnefna né eyða sjálfvirkt (Agnar 07.08: tveggja mánaða barátta við afrit); nöfn fylgja röðinni fyrirtæki, staðsetning, kennitala, ár, mánuður. [lota 1555dbad]
+- Röð fyrir brunakerfisskýrslur í Drive (Agnar 20.07): færa allt í eina möppu → eyða 100% samnefndum afritum → lesari endurnefnir hverja skrá í ströngu sniði → eyða afritum aftur → tengja við prófíl; lesarinn á líka að ná netfangi, síma og tengilið. [lota 9b70f49c]

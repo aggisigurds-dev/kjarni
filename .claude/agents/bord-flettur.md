@@ -1,12 +1,16 @@
 ---
 name: bord-flettur
-description: Flettur, borð og navigation — Verkborð, Bakendi, Bílstjóri, Aksturslisti, URL-routing (218), bakk-takkinn (3 patchar), app-síður (261). Notaðu þegar bætt er við/breytt flipa, borði eða deep-linki. Kveikjuorð: flipi, borð, nav, bílstjóri, aksturslisti, bakk.
+description: Flettur, borð og navigation í Slökkvitæki-appinu — Þjónustuborð (368) og undirborð, Bakendi, Bílstjóri, Aksturslisti, URL-routing (218), bakk (3 lög) og app-síður (261). Notaðu þegar flipa, borði, app-síðu eða deep-linki er bætt við eða breytt, eða bakk/endurhleðsla á síma hegðar sér rangt; kallaðu á hann sjálfur áður en ný síða er tengd. Kveikjuorð: flipi, borð, nav, Þjónustuborð, Mitt borð, Afmerkja, Aðalmál, Vinnusamantekt, bílstjóri, aksturslisti, Akstursdagbók, Tæknimenn, Uppfærsluborð, Mælaborð, Stjórnstöð, Geymsla, Mínar síður, bakk, back, deep link, #company, Öpp-síða, app finnst ekki í síma, uppsetning appa.
 tools: Bash, Read, Grep, Glob, Edit
 ---
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\bord-flettur.md (samstillt 2026-11-04). Breyttu þar.
 
-> ⚠️ **Afrit í kjarna** (samstillt 2026-10-10). Kanóníska eintakið býr í `slokkvitaeki/.claude/agents/bord-flettur.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+## Charlize — lestu fyrst
+
+Áður en þú breytir kerfi eða fullyrðir um það: `select topic, fact, detail from v_charlize_active where scope in ('slokkvitaeki','baedi') and topic in ('bord','bord-flettur','thjonustubord','verkbord','verkbord-teljarar','vinnublod','simi','stillingar','variant','thjonustulisti') order by created_at desc;` Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 Þú kannt **viðmótsgrindina** — hvernig flipar/borð eru skráð (DEFAULT_STATE.tabs + renderXxx + dispatcher), URL-routing og bakk-takkann. GILDRA: bakk er á ÞREMUR lögum (18 afvirkur, 276, 277) — ekki blanda þeim.
+
 
 ---
 
@@ -14,6 +18,13 @@ tools: Bash, Read, Grep, Glob, Edit
 
 > Fluttur hingað 2026-08-01 við uppskiptingu CLAUDE.md (~15k tokens hlóðust í HVERRI
 > lotu). Engu breytt, engu sleppt — hleðst aðeins þegar þessi sérfræðingur er kallaður.
+
+## Djúpdvali — svæfð borð (13.10.2026, patch 465)
+
+Verkdagbók, Aldursgreining, Staðan, Þjónustuverk, Beiðnir, Leiðbeiningar, Móttaka og Vertíð eru í djúpdvala: script-merki
+þeirra eru kommentuð út í `index.html` (build-dist sleppir þeim), skrárnar óbreyttar. `465-djupdvali.js` sendir svæft
+borð á Þjónustuborðið í stað auðs aðalsvæðis. Listi, rök og hvernig á að vekja: `docs/DJUPDVALI.md`. Nýtt borð sem
+vísar á þessi borð verður að fara gegnum `window.X && …` (eins og 16/61/211 gera).
 
 ## URL routing (deep links) — `js/patches/218-url-routing.js`
 
@@ -214,8 +225,8 @@ starfsmanna-sía + 60s auto-refresh. Wiring: script í index.html (eftir 267),
 hliðarstiku-hnappur. `window.Aksturslisti = {open, reload}`.
 
 **Vakt — starfsmanna-nafn + dagleg virkni + staðsetning (2026-07-14):** driver
-picks their name (`EMPLOYEES = ['Hákon','Binni','Elías']`, stored `localStorage
-.bs_employee`; locked-boot prompts if unset, office can skip). Every action is
+picks their name (listinn er í kóða, ekki hér: `BordStarfsmadur.list()` úr `bord_starfsmenn`,
+219-bilstjori.js:158–159; aðeins valið er geymt í `localStorage.bs_employee`; locked-boot prompts if unset, office can skip). Every action is
 logged to Supabase table **`bilstjori_vakt`** (`employee, action, co_id, co_nafn,
 uttaeki_id, lat, lng, created_at`; RLS off, anon full) via `logAct(action,opts)`
 with best-effort `navigator.geolocation` (watchPosition). Actions: `visit`
@@ -378,10 +389,11 @@ fóru líka í einskiptis-`insertOnce`-migrations (`__rf1`, `__jv1`, `__jv1b`) �
 mynstur og `__brky1`/`__vkp1`. Þær bætast við ÞEGAR-vistaðar stillingar EINU SINNI;
 af-haki notandinn þær eftirá troða þær sér ekki inn aftur.
 
+
 ## Þjónustuver póstar (síða patch 309, 2026-08-20)
 
 Ný SJÁLFSTÆÐ síða fyrir kúnnaþjónustu Í PÓSTI — aðskilin frá Þjónustuborði
-(patch 231, sem er áfram innra skipulag). Nákvæmt 231-mynstur: `NAV_KEY=
+(nú 368; patch 231 sem hún var smíðuð við er farinn, d3eb1b78). Sama mynstur og 231 var: `NAV_KEY=
 'thjonustuver-postar'`, view `view-thjonustuver-postar`; `injectNav()` bætir
 `.vnav-btn`, `ensureView()` klónar `.view`-klasann inn í content-panel,
 `patchSwitchView()` grípur `App.switchView('thjonustuver-postar')`, deep-link
@@ -396,7 +408,7 @@ boot). Sidebar-röð (patch 68) við hlið Reikninga-pósts. `waitForSB()` bíð
 - **✨ AI-yfirlit:** `/api/postur-triage` `mode:'thjonustuver'` (Haiku, server-hlið)
   → summary/ask/details[]/contact/needs_action/reply_hint. ⚠️ briefs eru lyklaðar á
   STRENG (Object.keys) en póst-id úr RPC er tala → nota `String(id)` við get/has/set.
-- **Svarstaða:** cutOf (patch 286) + eigin „svarað"-merki í `localStorage.tvp_handled`
+- **Svarstaða:** cutOf (patch 286) + eigin „svarað"-merki (síðan 21.09 í `samskipti_stada`, ekki lengur `localStorage.tvp_handled` — sjá Lærdóm 10.10)
   (lifir innsognstöf) + AI `needs_action` (þaggar „takk"-pósta) + 150 d. recency-gólf.
 - **Aðgerðir:** ✍️ Svara (uppkast `/api/postur-reply` → sending gegnum AppMail/
   email-send eins og patch 240), → Flytja á Þjónustuborð (`thjonustubeidni`,
@@ -547,3 +559,55 @@ umferðum undir límdu stikuna. Teiknað EINU SINNI þegar öll gögn eru komin.
   index.html (447a stendur á undan 00-legacy). (7) Fangaðu smelli inni í Shadow DOM með `e.composedPath()`.
 
 - **04.10.2026** — 04.10.2026: litaspjaldið í app-hausnum (#_app-style, 261) opnar nú „Stærð og útlit" (AppPageZoom.vixla, 333) í stað PageEditor beint — „Litir og letur…" þar opnar ritilinn. Síðulykill 333: m:<modal-id> ef gluggi er opinn, f:<app-síða> fyrir iframe-síður, annars hash-rót (#company/123 → company). Companies.openDetail skiptir um slóð án hashchange — 333 vaktar lykilinn á 700 ms fresti. Öpp-stýriborðið (354) fékk S26-hnapp við hvert app (SlokkDevFrame.open('s26')). (js/patches/261-app-profiles.js, js/patches/333-app-page-zoom.js, js/patches/354-opp-styribord.js)
+
+## Lærdómur
+
+- **10.10.2026** — 05.10.2026 — „Sækja inn úr fyrirtæki" (122) opnar MERKJA-haminn (openReceiveModal(true)): aðeins uttaeki.status='loaned', engin verkbeiðni og engin drög. Agnar: „ekki verkbeiðni … bara fram og til baka hægra megin" (Komið úr þjónustu, 269). Áður kallaði takkinn openReceiveModal(event) → venjulegi hamurinn → verkbeiðni + drög (R-001080, hreinsuð mjúkt). Leysir af ákvörðunina 29.09 í 422; 422 gildir áfram um verkbeiðnir sem til eru, og afturkölluð (cancelled) losar tækin eins og eydd síðan 09.10 (#1125). (js/patches/122-samningshafar-receive.js, js/patches/422-verkstaedi-tenging.js, js/patches/269-verkstaedi-loaned.js)
+
+- **10.10.2026** — 07.10.2026 — Þjónustuver (309) svarstaða: „svarað"-merkið býr í samskipti_stada síðan 21.09 (EKKI localStorage eins og kaflinn að ofan segir), ein röð per fyrirtaeki_id ALLRA bygginga félagsins (base), með handled_by og note. cut = síðasta svar okkar / handled_at / fyrirtaeki_virkni (reikningur, sala, skýrsla — RPC bh_fyrirtaeki_virkni_uppfaera = 🔄 Uppfæra, keyrir líka kl. 05:30). Staða Þjónustuborðsmáls (lokad / svarad_at) er EKKI lesin, svo lokað mál stendur áfram „vantar svar" (mál 1120). Merktu aðeins svarað með sönnun: lokað mál, sjálfvirk staðfesting frá kerfi kúnnans, eða þakkarpóstur á eftir svari okkar. (js/patches/309-thjonustuver-postar.js)
+
+## Lærdómur
+
+- **13.10.2026** — 13.10.2026: (1) 261 PAGES fékk 'brunaaaetlun' (url '/brunaaaetlun/', iframe-síða; án ?fyrirtaeki sýnir smiðurinn leit + áætlanir í vinnslu) og Brunakerfi-appið fékk hana með insertOnce('__ba1', 'brunaaaetlun', 'turbopaint', 'brunakerfi') + defaults. Nýtt flutningsflagg VERÐUR líka í FLOGG-lista tools/audit-app-sidulisti.cjs (gerviþjónn með öllum flöggum) — annars fellur tilvik 1 og 4. (2) Botnstikan stækkuð (Agnar: „allt of lítill“): 316 (allur app-hamur) 52→74 px hnappar / 28 px tákn / 14 px texti, .view padding-bottom 94 px, #_app-frame bottom 88 px; 353 raunstærð á síma (K-keðjan) 62→80 px / 30 px / 14 px, min-width 70. syncFrameBottom (261) og 353 mæla stikuna sjálf, svo rammi og fyllingar fylgja. Mælt: tafla 1000 px → 9/9 flipar, 74 px; S26 (simikrom 2.38) → 4/9 sýnilegir, flettanlegt. (js/patches/261-app-profiles.js, js/patches/353-simi-krom-zoom.js, js/patches/316-simi-boards.js)
+
+- **14.10.2026** — 14.10.2026 (úttekt með agentum): lattar sýnir (#kerfi 221, #minar-sidur 302, #rekstrarfelog 175) smíðar AÐEINS onclick hliðarstikutakkans — App.switchView(v) einn skilaði AUÐUM skjá, því grunn-switchView tekur .active af öllum sýnum. Endurheimt slóðar við F5 (348) og innri tenglar (232 data-goto-view) smella nú á .vnav-btn[data-view] fyrst og switchView er varaleið; 348 setur fyrra borð aftur ef sýnin verður samt ekki til. 261: Öpp-takkinn klónar fyrsta .vnav-btn, sem er nú Vefverslun-<a> — href/target/rel/title fjarlægð. 262 og 333 vefja switchView/openDetail og afrita merki innri vafninga (Object.keys) + nota einingarbreytu, svo pappar sem skoða sitt merki á ysta laginu (465, 18, 24, 235, 451) vefji ekki aftur. (js/patches/348-view-hash-sync.js, js/patches/232-bakendi.js, js/patches/261-app-profiles.js, js/patches/262-page-editor.js, js/patches/333-app-page-zoom.js)
+
+## Lærdómur
+
+- **14.10.2026** — 14.10.2026 (villuvöktun yfirfarin): (1) 219 enterFs — requestFullscreen skilar loforði sem FELLUR með „Permissions check failed" þegar vafrinn hafnar (iframe, engin bending, uppsett app); try/catch grípur það ekki, svo það var 23× í villuskrá — nú p.catch(()=>{}). (2) 261 doInstall — deferredPrompt.prompt() krefst notenda-bendingar; sjálfvirka kallið úr beforeinstallprompt (?install=1, 300 ms) kastaði NotAllowedError 46× — nú try/catch, boðið geymt og beðið um smell („Ýttu á Setja upp einu sinni enn"). (3) Almennt: tveir pappar sem eiga sama window-hlut (460/466 TaekiSaga) sameina með Object.assign — „if (window.X) return" lét þann sem hlóðst síðar hverfa og 430 verkspjald hrundi (TaekiSaga.saekja is not a function). (js/patches/219-bilstjori.js, js/patches/261-app-profiles.js)
+- **14.10.2026** — 14.10.2026 (The Box › Vörur › brunakerfis-verðlisti 410): fast yfirlag sem er sett í <body> utan .modal fær EKKI síðustærð í appham — letrið varð 12 px óstækkað og app-hausinn (z 2147481001) lá yfir ✕, svo ekki var hægt að loka. Lausn: skrá auðkenni yfirlagsins í YFIRLOG_OPIN í 333 (fær _sz-m zoom + _sz-full ramma milli króms, BYRJUN-stærð og nafn í NOFN), kalla AppPageZoom.endurmeta() við opnun/lokun, og hafa gluggann overflow:clip + hausinn position:sticky (top = -padding bakgrunnsins) svo ✕ sjáist við skrun. Prófað í S26-hermun: sérsniðin öpp (xthebox) ræsast aðeins eftir eina hleðslu sem býr til stillingaafritið í localStorage.
+
+## Lærdómur
+
+- **15.10.2026** — 15.10.2026 (regla Agnars: engar per-tækis stillingar): öll viðmótsval fóru úr localStorage í Vidmot (472-vidmot.js → AppSettings 'vidmot', {v|j, ts} per lykil, nýjasta ræður) og rekstrarstillingar í AppSettings 'stillingar' (44/43/47/33/29/254). Röðun/síur/sýn í 157, 03, 143, 161, 36, 175, 50, 94, 261, 262, pos.js (sala.allarVorur), 299/301 lesa Vidmot við opnun og skrifa AÐEINS við smell; leit skrifar aldrei á þjón. Gömlu lyklarnir eru einskiptis upphafsgildi (Vidmot.flytja).
+
+- **16.10.2026** — Uppgjör lota 16.10.2026 — Bílstjóri (396/444, 07.10): „Í vinnslu"-takki á stoppspjaldi fer SÖMU leið og bláa Vista/í vinnslu í Ársskoðun (ArsWorkflow.markInVinnsla í 266: field_inspected_year + uttekt-þrep + last_year 0; annað ýt tekur úr; grár→grænn→grár); „Dagsins verk" er REIKNAÐ úr Ársskoðun (Útrunnið + Þessi mánuður + Forgangur ❗), handvirkt aðeins Akstur 1/2/3, skoðunarmánuður og Forgangur; 🔵/🟢 búin falin af listum og korti (219-sía, „✓ N búin falin — sýna"), „Þessi mánuður" raðað eftir póstnúmeri (100 efst), 📅 á spjaldi skrifar inspect_month; „Maps" heitir „Keyra þangað". Öpp 261 PAGES fékk Bílstjóri · leið dagsins, Birgðir, Aksturslisti, Vörur og þjónusta, Samþykkja; Leiðbeininga-ramminn (124) hlóð öppin inn í sjálfan sig í hring (/app/verkefni/docs/docs/…) — slóð gerð algild b0802bc. Prófunartól tools/opp-profun.cjs (Playwright, 8 öpp í 375 px, útflæði/letur/takkar/JS-villur; skjáskot utan git).
+
+- **16.10.2026** — Uppgjör lota 16.10.2026 — borð og gluggar: (a) js/patches/470-brunakerfi-manudur-profill.js: Brunakerfis-skoðunarmánuður sem flís .b470-bk í „Staða eftir ári", skrifar brunakerfi_customers[fid].inspect_month og sendir atburðinn brunakerfi-month-changed; 388 skyndiminnir raðir í 60 s. (b) js/patches/175-rekstrarfelog.js: Center Hótel á engar handskráðar byggingar — bregðist lifandi hleðsla geymir 175 tóma niðurstöðu og kortið sýnir „0 byggingar" ÁN viðvörunar út lotuna (tillaga: „⚠ Ósótt"); upphlaðin skjöl í „Skjöl félagsins" fengu engan opna-hlekk — lagað c4c7a4f4, vörður tools/audit-rf-skjol-opna.cjs. (c) Verk FAST í Móttekið (22.09): eina tækið var eytt af verkstæði → verkið hvarf af Verkstæðisborði; lausn Verkstæði → „🗑️ Eydd tæki" → ↩ Endurheimta → haka Tilbúið → Senda í afgreiðslu. (d) js/patches/328-uttekt-vorn.js: stöðuplötur úttektarlista (Úttektarskýrsla 2026 o.fl.) á 45 s skyndiminni; Agnar 24.09: platan + hnappur verða GRÆN „✓ 2026" um leið og skýrsla vistast, reikningsplatan helst gul (krafa bíður)/rauð (greitt) til varnar tvírukkun. (e) Hliðarstikufelur: js/patches/88-apply-utlit-almennt.js (gamalt utlit.hidden_nav_views) sló á js/patches/171-sidebar-customizer.js — 171 er EINI eigandi sýnileikans, 88 hvorki felur né af-felur (17.08). (f) 00-legacy enhanceStatusCells treður tækja-fellilista (skrifar uttaeki.status!) í HVERJA töflu með STAÐA-haus; vörnin leit á dálk 0 sem byrjar á tölustaf (kredit-röð byrjar á ↳) → hver nýr gluggi/tafla þarf á undanþágulistann (closest) + data-_pm-status-done. (g) Magnstikan ._pm_batch_bar (00-legacy ~3186–3314) bætir hökum í HVERJA töflu með RAÐN-haus; „Eyða" HARÐEYÐIR uttaeki-raðir + atburði + sögu; „Prenta merki" leitar í uttaeki en verkbeiðnatæki eru í verklidur; „Merkja skoðað" segir ✓ þótt engin röð breyttist (tekin af verkbeiðnatöflu í Verkspjaldi áfanga 0, lifir annars staðar). (h) Verkstæði 12.10: takki heitir „Sækja" (aðgerð, ekki staða); close() skrifaði custody_status/service_choice/last_insp/next_insp yfir án þess að geyma fyrra gildi → uttaeki_sott_log skráð ÁÐUR, „ELDRI · AFHENT" (20 síðustu) með ↩ Afturkalla; verkstæðisborðið síar á status=loaned, EKKI custody_status. (i) Einingar-dálkur Brunakerfis skoðun (ca63194/7e76494): summa búnaðar í nýjustu skýrslu, LOKASKÝRSLA gengur fyrir DRÖGUM innan árs, grá tala úr áskriftarkorti ef skýrsla vantar, ≠ við misræmi, ✎ skráir unit_count. (j) Mini-forskoðun teikningar á prófíl (#co-fp-section) notar annað hnitakerfi en fullt borð → dottar skakkir þar, fullt borð rétt.
+
+- **16.10.2026** — Uppgjör lota 16.10.2026 (Beiðnaskógurinn): POLLING-reglan (Agnar 09.09 „passa að það verðir ekkert overload á netlify … sumt er nóg að ég bara refreshi"): hver sóknarlykkja þarf visibilityState-vörn + lágmarksbil per endapunkt + bakfall við bilun (Jarvis 240→62 köll/klst, falinn flipi 0; hub loadNotes 15 s); ?tolur=1 á verkefnalisti/krofur-yfirlit/veidin/worksites (673→35 KB). Ákvörðun Agnars 17.09 („Kanski frekar ársskoðun og company profiles fyrst … alltaf svo mikið reload"): EKKI sameina 333 patcha né endurbyggja allt — endurbyggja sýn fyrir sýn í Shadow DOM eins og Þjónustuborð 2 (1 dagur á sýn); þyngst Afgreiðsla 28 skrár, Sala 24, Fyrirtæki 23; fmtDate 42 eintök/25 útfærslur, fmtKr 57/24, esc 149/21. Chrome nefnir „Save as PDF" eftir title AÐALskjals, ekki iframe-ins sem prentast → lána titil á aðalskjali meðan print() keyrir.
+
+- **21.10.2026** — 21.10.2026 (Búnaðargreining, 445/474): vinnumyndin í Teikningu (445) hefur lag „Búnaðargreining“ — hönnunarstaðir greiningar sem myndir (img/taeki) undir raunverulegu tækjunum, dofnar og fær ✓ þegar tæki er komið; kveikt og sía í Vidmot teikning.greining. Stóra sýnin á blaði greiningarinnar (474 stortBlad) hefur sýnirnar Teikning, 3D og Blender; Blender-sýnin teiknar tækin ofan á HREINA Blender-mynd með vörpun úr bunadargreining.render[].varpa (P·V, dálkaröð). Blað greiningarinnar fær teikningar[].varpa (borð = k·blað + c) svo veggir, greining og raunveruleg tæki deili hnitum. (js/patches/445-teikning-vinnumynd.js, js/patches/474-bunadargreining.js)
+
+- **21.10.2026** — 21.10.2026 (3D vinnuhamur, 383): stigar eru nú teiknaðir í 3D-sýn Teikningar — sömu stigar og blender/raunsaett.py smíðar. raunUrSidu telur „Stigahús"/„Stigi" án flatarmáls sem herbergi; raunAukagogn skilar stiga með stefnu (neðsta þrep nær hurð) og hlid (pláss fyrir bakarm) og sameinar samsíða arma í sama stigahúsi í einn U-stiga; syna3d teiknaStigana (arm upp um hálfa hæð, pallur, bakarmur) úr gogn.raunPdf (pdfKort úr raunGognUrPdf, seinkomin gögn → G.syn3d.stigar()). blenderSena tekur o.allarHaedir (líka faldar hæðir). Stigar hanga á lg.hopur svo þeir fylgja vali hæðar. (js/patches/383-teikning-hreinsa-3d.js)
+
+- **22.10.2026** — 22.10.2026 Teikning-glugginn á síma (442 hamir Teikning·Tæki·Merki·Skoða, aðeins .fp-simi; Vidmot teikning.ham; kortið 228→571–716 px) · 445 Búnaðargreining-stýringin undir hæðaflipum (grStada) + .fp-3d-btn falinn þegar sýnarvalið sést (fp-synval-sest) · 435 Full gæði sjálfgefið · 383 samraemaStiga (stigar milli hæða, herb = umgjörð stigaherbergis) + smidaVinnumynd tekur hæðir ±1 með (UTLIT 4).
+
+- **26.10.2026** — 26.10.2026 Skipulagsborð (368 skipulag/skipulag2): spjald er nú teygjanlegt í allar áttir (resize:both á .skc; þakið max-height:120px á textareitnum stoppaði handfangið). Stærðin = cols (grid-column span) + h (px) á SPJALDINU í skipulagsbord.by_staff.<nafn>.cards, mæld á pointerup (skStaerdVista) og beitt á hnútana með skBeitaStaerd() eftir hverja render (render er vafið). GILDRA: render-samruninn heldur hnútum og uppfærir EKKI eigindi þeirra — data-h/style úr HTML-inu sáust því aldrei á hnút sem hélst; beita á hnútinn beint. Borðið er í Shadow DOM (document.querySelector sér ekkert; labba shadowRoot). nu() er 'Anni' hjá Agnari: hans spjöld liggja undir by_staff.Anni. 'Vista og sækja' (sk-vista) skolar drögum og kallar AppSettings.load(); skSamstilla() les AÐEINS grein starfsmannsins (ferskSpjold) á 30 s fresti/við fókus og sækir allt aðeins ef hún er önnur — app_settings hefur hvorki realtime né vakt, önnur tæki sáu breytingar aðeins við endurhleðslu. Prófað með Playwright á localhost:5599 með skrif á supabase lokuð (context.route fulfill).
+
+- **26.10.2026** — 26.10.2026 SKIPULAGSBORÐ TEXTI TÝNDIST milli tækja: S.skDrog (uppkast í ritun) lifði í MINNI annars tækis/flipa og fór með í hverja vistun þess (líka stærðarbreyting/merki) ofan á NÝRRI texta annars tækis — mælt: 13:51 'Kvarnir… 2. 3.' yfirskrifað 13:53 með eldri texta. Lagað: S.skTs[id] = tími síðasta innsláttar, spjaldið ber upd = sá tími þegar uppkastið komst inn; drogFyrir(cd) hendir uppkasti sem er ekki nýrra en cd.upd (nema það sé í biðröð). Ferskur lestur (ferskSpjold) á undan hverri vistun var þegar til; vandinn var uppkastið, ekki grunnlistinn. Önnur regla: samstilling (skSamstilla) bíður aðeins eftir innslætti síðustu 8 s, ekki eftir öllum uppköstum.
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+
+- Bakk-takki fer nákvæmlega eitt skref til baka — aldrei á upphafs- eða Ársskoðunarsíðuna — og bakk á síma lokar aldrei appinu eða hendir notanda út; reglan gildir um allt appið. [lota 17c4cd7a, 20.09.2026; lotur 9b70f49c, f9bb2316, 7957a4ea]
+- Spjald eða yfirlit má aldrei vera blindgata: hver færsla á Þjónustuborði sendir Agnar „áfram á þann stað sem ég get klárað málið“, og sýni spjald gögn sem má breyta verður takki eða tengill þangað. [C#831; lotur 731f63e0, 17c4cd7a]
+- Hver starfsmaður á að geta valið eigið vinnuborð (hamur „Mitt“, MITT_HAM í patch 368, `by_staff.<nafn>.mitt`) svo master-borðið flæði ekki yfir alla; VARÚÐ: M(id) í 368 byggir haminn upp úr geymslunni og tekur AÐEINS reiti sem eru nefndir þar — reitur sem gleymist vistast en birtist aldrei. [lota 17c4cd7a, 19.09.2026; C#602]
+- „✕ Afmerkja“ á Verkstæðisborði tekur fyrirtækið af borðinu OG afhakar bláa „í vinnslu“ hakið í Ársskoðun-töflunni; takkinn er í samtengdum takkahóp og aðeins virkur þegar fyrirtækið er „Í vinnslu“ (á bak við var flaggið `sv_force_unstarted` í `arsskodun_customers`). [lota 17c4cd7a, 26.–27.09.2026]
+- Ný verkfæri (t.d. 3dwork) eiga að vera færsla á Öpp-síðunni í Slökkvitæki sem opnast í síma, ekki sidebar-borð. [lota 14b698a2, 23.09.2026]
+- Mánuður úttektar er EINN reitur (`inspect_month`) sem Ársskoðun og mánaðartakkinn við ártölin á fyrirtækjaprófíl lesa og skrifa; skoðunarmánuður er sóttur í röðinni inspect_month í blobbinu → arsskodun_report_facts → v_skodunar_manudur → elsta next_insp. [lota e9205308, 06.10.2026; lota 7576079c (líklega)]
+- Þjónustuborð 2 (368) er á falinni slóð `#bord` frá 11.09.2026 (`#verkbord` og `#verkefni` opna það); Master = opin mál án starfsmanns EÐA á Charlize (claimOldJobs setur óúthlutað eldra en 30 daga á Charlize). [C#505, C#518]
+- Þjónustuborð 368: hvert atriði á EINN ham — mál birtist í Samþykkja aðeins ef það ber merkið samthykki (og spurning ef það þarf svar); mál með eigin merki (t.d. klara-heimsokn) sitja á Master. [C#580, C#601]
+- Drög-stöðin er EKKI „Drög (38)“ í valstikunni: Drög (38) = ókláraðar sölur (`solur` með status=drog, sýn #drog, patch 143) en Drög-stöðin = `reikningspunktar` í Brunahólfs-hubbnum (📱 Öpp → The Big Boss → 🛒 Drög-stöð) — lofaðu aldrei Agnari að setja eitthvað í hana á máli á Þjónustuborði. [C#599]
+- Að samþykkja vinnublað skrifar AÐEINS stöðu og býr ekki til sölu (368): þrjú vinnublöð samþykkt 13.09.2026 áttu enga sölu; vörðurinn er `tools/audit-vinnublad-an-solu.cjs`. [C#600]
+- AppSettings: ræsikóði má aldrei SKRIFA í app_settings út frá AppSettings.get() eða localStorage (fyrstu sekúndurnar er það skyndiminni, allt að 30 daga gamalt) — 05.10.2026 fór app_profiles_json úr 1204 í 608 stafi og allir fengu defaults; og AppSettings.save sameinar djúpt: fylki eru skrifuð yfir og lykla er ekki hægt að eyða — settu 0, false eða vörð í staðinn. [C#751, C#750, C#408; lota 17c4cd7a (líklega)]
+- Fyrirtækið er lokað um helgar — í vikudagskrá (patch 303) birtast laugardagur og sunnudagur sem hálfir dálkar ofan á hvor öðrum. [lota fe668f62, 06.08.2026]
