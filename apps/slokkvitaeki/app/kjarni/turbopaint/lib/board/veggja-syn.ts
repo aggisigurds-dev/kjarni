@@ -56,6 +56,12 @@ export const useVeggjaSyn = create<{
   hlada: () => set({ lita: lesa() }),
 }));
 
+/** Eigin merkingar notandans (penni, texti, örvar, mál, límmiðar) — aldrei dempaðar í Veggir-ham. Agnar 04.11.2026: „mikið
+ * gegnsæi, daufur litur þrátt yfir að vera í 100" — pennastrik fékk 25 % ógagnsæi því það er ekki veggur. */
+export function erAthugasemd(obj: { type: string }): boolean {
+  return obj.type === "pen" || obj.type === "arrow" || obj.type === "line" || obj.type === "measure" || obj.type === "polyline" || obj.type === "text" || obj.type === "sticky";
+}
+
 /** Ógagnsæi hlutar sem ekki er veggur í Veggir-ham: teikningin sést (til að rekja veggina), annað víkur. */
 export function dempadOgagnsaei(opacity: number, erMynd: boolean): number {
   return opacity * (erMynd ? 0.6 : 0.25);

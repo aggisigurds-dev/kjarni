@@ -8,6 +8,7 @@ import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument,
 import { registerStage } from "../../lib/board/stage-ref";
 import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
+import { hjolaThysjun } from "../../lib/board/hjol";
 import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { serializeClipboard } from "../../lib/board/clipboard";
 import {
@@ -438,9 +439,7 @@ export function BoardCanvas({
       x: (pointer.x - cam.x) / oldScale,
       y: (pointer.y - cam.y) / oldScale,
     };
-    const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const factor = e.evt.ctrlKey || e.evt.metaKey ? 1.12 : 1.08;
-    const newScale = Math.min(16, Math.max(0.04, oldScale * (direction > 0 ? factor : 1 / factor)));
+    const newScale = Math.min(16, Math.max(0.04, oldScale * hjolaThysjun(e.evt)));
     useBoardStore.getState().setCamera({
       scale: newScale,
       x: pointer.x - mousePointTo.x * newScale,

@@ -41,6 +41,7 @@ import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
 import { BoxSelect as BoxSelectTakn, Brush as BrushTakn, Magnet as MagnetTakn } from "lucide-react";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
+import { hjolaThysjun } from "../../lib/board/hjol";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
 import type { ImageObject, LineObject } from "../../lib/board/types";
@@ -588,8 +589,7 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
       const px = e.clientX - r.left, py = e.clientY - r.top;
       const k = useBoardStore.getState().camera;
       const fx = (px - k.x) / k.scale, fy = (py - k.y) / k.scale;
-      const factor = e.ctrlKey || e.metaKey ? 1.12 : 1.08;
-      const scale = Math.min(16, Math.max(0.04, k.scale * (e.deltaY > 0 ? 1 / factor : factor)));
+      const scale = Math.min(16, Math.max(0.04, k.scale * hjolaThysjun(e)));
       useBoardStore.getState().setCamera({ scale, x: px - fx * scale, y: py - fy * scale });
     };
     el.addEventListener("wheel", onWheel, { passive: false });

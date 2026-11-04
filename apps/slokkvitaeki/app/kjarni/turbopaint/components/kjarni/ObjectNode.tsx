@@ -28,7 +28,7 @@ import { bladIBordi } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 import { liturMerkimida } from "../../lib/board/sjalftenging";
 import { erVeggur } from "../../lib/board/veggja-leidretting";
-import { dempadOgagnsaei, synilegurVegglitur, useVeggjaSyn } from "../../lib/board/veggja-syn";
+import { dempadOgagnsaei, erAthugasemd, synilegurVegglitur, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { SkarptPdfLag } from "./SkarptPdfLag";
 import { SymbolNode } from "./SymbolNode";
 
@@ -149,7 +149,7 @@ export function ObjectNode({
   // „Lita veggi" (F): veggir teiknaðir í skærum lit eftir tegund — aðeins sýn, geymdi liturinn breytist ekki.
   const litaVeggi = useVeggjaSyn((s) => s.lita);
   // Veggir-hamur: allt nema veggir dempað (aðeins sýn)
-  const dempa = useVeggjaSyn((s) => s.dempa) && !erVeggur(obj);
+  const dempa = useVeggjaSyn((s) => s.dempa) && !erVeggur(obj) && !erAthugasemd(obj);
   const selGlow = isSelected
     ? { shadowColor: "#FE653F", shadowBlur: 22, shadowOpacity: 0.85, shadowEnabled: true }
     : { shadowEnabled: false };
