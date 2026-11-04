@@ -9,7 +9,9 @@ import { AppWindow, BrickWall, DoorOpen, Fence, Flame, Link2, Merge, MoveHorizon
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isDrawnLocked, isDrawnVisible } from "../../lib/board/layers";
-import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
+import { HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
+import { ChevronDown } from "lucide-react";
+import { useEffect } from "react";
 import { ADGERDIR } from "./HamStika";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
@@ -241,7 +243,16 @@ export function VeggjaTegundSimaStika() {
   const nyTegund = useVeggjaRitill((s) => s.tegund);
   const nyThykkt = useVeggjaRitill((s) => s.thykktCm);
   const [thykktOpin, setThykktOpin] = useState(false);
-  if (!VEGGJA_HAMIR.includes(hamur)) return null;
+  const veggjaHamur = VEGGJA_HAMIR.includes(hamur);
+  const ritillVirkur = useVeggjaRitill((s) => s.virkur);
+  useEffect(() => {
+    // Hamur valinn í ⋮-valmyndinni eða dropdown-inu: þétti ritillinn kviknar svo tólalínan sé til staðar.
+    if (!veggjaHamur || ritillVirkur) return;
+    const r = useVeggjaRitill.getState();
+    r.kveikja("velja");
+    r.setThett(true);
+  }, [veggjaHamur, ritillVirkur]);
+  if (!veggjaHamur) return null;
   const veggir = valdirVeggir(objects, selectedIds).filter((o) => !isDrawnLocked(o, layers));
   const tegundir = new Set(veggir.map(veggTegundAf));
   const merkt: VeggTegund | null = veggir.length ? (tegundir.size === 1 ? [...tegundir][0] : null) : nyTegund;
@@ -349,11 +360,8 @@ export function VeggjaTegundSimaStika() {
 export function VeggjaTolSimaHnappar({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const hamur = useHamur((s) => s.hamur);
   if (!VEGGJA_HAMIR.includes(hamur)) return null;
-  const tol: { id: HamAdgerd; texti: string }[] = [
-    { id: "veggir", texti: "Greina veggi" },
-    { id: "ei", texti: "Lesa EI" },
-    { id: "thrividd", texti: "3D" },
-  ];
+  // Greina veggi / Lesa EI fóru í þéttu stikuna neðst (3. umferð) — hér er aðeins 3D, sýnin.
+  const tol: { id: HamAdgerd; texti: string }[] = [{ id: "thrividd", texti: "3D" }];
   return (
     <div role="toolbar" aria-label="Veggjatól" data-veggja-tol-simi className="pointer-events-auto flex flex-col items-end gap-1">
       {tol.map((t) => (
@@ -372,36 +380,53 @@ export function VeggjaTolSimaHnappar({ onAdgerd }: { onAdgerd: (a: HamAdgerd) =>
   );
 }
 
-/** Hamrofi í síma, efst til hægri undir „Vista": Tæki (táknaborðið) ↔ Veggir (þétti ritillinn + tegundastikan). */
-export function HamRofiSimi() {
+/** Hamur í síma — dropdown efst til hægri undir „Vista" (Agnar 04.11.2026: „view, hamar efst … kannski hamar í dropdown").
+ * Veggjahamur (Teikning / Brunaþéttingar) kveikir á þétta ritlinum, aðrir hamir slökkva á honum. */
+export function HamValSimi() {
   const hamur = useHamur((s) => s.hamur);
   const setHamur = useHamur((s) => s.setHamur);
-  const veggja = VEGGJA_HAMIR.includes(hamur);
-  const skipta = (iVeggi: boolean) => {
+  const [opid, setOpid] = useState(false);
+  const h = HAMIR.find((x) => x.id === hamur) ?? HAMIR[0];
+  const velja = (id: HamurId) => {
+    setOpid(false);
+    setHamur(id);
     const r = useVeggjaRitill.getState();
-    if (iVeggi) {
-      setHamur("brunathettingar");
+    if (VEGGJA_HAMIR.includes(id)) {
       if (!r.virkur) r.kveikja("velja");
       r.setThett(true);
-    } else {
-      setHamur("slokkvitaeki");
-      if (r.virkur) r.slokkva();
-    }
+    } else if (r.virkur) r.slokkva();
   };
-  const t = "rounded-full px-3 py-1 text-[12px] font-semibold transition";
   return (
-    <div
-      role="tablist"
-      aria-label="Hamur"
-      data-hamrofi-simi
-      className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 p-0.5 shadow-xl shadow-black/40"
-    >
-      <button type="button" role="tab" aria-selected={!veggja} onClick={() => skipta(false)} className={`${t} ${!veggja ? "bg-[#FE653F] text-white" : "text-stone-300"}`}>
-        Tæki
+    <div className="pointer-events-auto relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={opid}
+        data-hamval-simi
+        title={h.lysing}
+        onClick={() => setOpid(!opid)}
+        className="flex items-center gap-1 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-2.5 pl-3 text-[12px] font-semibold whitespace-nowrap text-stone-100 shadow-xl shadow-black/40 active:translate-y-px"
+      >
+        {h.stutt}
+        <ChevronDown className="size-3.5 text-white/60" />
       </button>
-      <button type="button" role="tab" aria-selected={veggja} onClick={() => skipta(true)} className={`${t} ${veggja ? "bg-[#FE653F] text-white" : "text-stone-300"}`}>
-        Veggir
-      </button>
+      {opid ? (
+        <div role="listbox" aria-label="Hamur" className="absolute top-full right-0 z-30 mt-1.5 flex flex-col gap-0.5 rounded-xl border border-white/10 bg-[#1a1d2e] p-1 shadow-2xl shadow-black/50">
+          {HAMIR.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              role="option"
+              aria-selected={x.id === hamur}
+              title={x.lysing}
+              onClick={() => velja(x.id)}
+              className={`rounded-lg px-3 py-1.5 text-left text-[12px] font-semibold whitespace-nowrap ${x.id === hamur ? "bg-[#FE653F] text-white" : "text-stone-200 hover:bg-white/10"}`}
+            >
+              {x.stutt}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
