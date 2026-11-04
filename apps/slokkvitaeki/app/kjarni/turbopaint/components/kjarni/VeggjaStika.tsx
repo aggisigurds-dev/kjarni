@@ -31,6 +31,8 @@ import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { hurdIBilValda, lengjaValda, sameinaValda } from "./VeggjaRitill";
 
 export const VEGGJA_HAMIR: HamurId[] = ["teikning", "brunathettingar"];
+/** Hamir þar sem símastikurnar (tegund/þykkt, aukatól, 3D) standa — líka „Veggir"-hamurinn, sem í tölvu notar hægra spjaldið. */
+export const SIMA_VEGGJA_HAMIR: HamurId[] = ["teikning", "brunathettingar", "veggir"];
 
 const TEGUNDIR: { id: VeggTegund; texti: string; titill: string; takn: ReactNode }[] = [
   { id: "veggur", texti: "Veggur", titill: "Venjulegur veggur (1)", takn: <BrickWall className="size-3.5" /> },
@@ -243,7 +245,7 @@ export function VeggjaTegundSimaStika() {
   const nyTegund = useVeggjaRitill((s) => s.tegund);
   const nyThykkt = useVeggjaRitill((s) => s.thykktCm);
   const [thykktOpin, setThykktOpin] = useState(false);
-  const veggjaHamur = VEGGJA_HAMIR.includes(hamur);
+  const veggjaHamur = SIMA_VEGGJA_HAMIR.includes(hamur);
   const ritillVirkur = useVeggjaRitill((s) => s.virkur);
   useEffect(() => {
     // Hamur valinn í ⋮-valmyndinni eða dropdown-inu: þétti ritillinn kviknar svo tólalínan sé til staðar.
@@ -359,7 +361,7 @@ export function VeggjaTegundSimaStika() {
  * Setja kannski efst til hægri. Með 3D, greina veggi og lesa EI"). Tengja/Sameina/Hurð í bil eru í „Meira" (ritillinn). */
 export function VeggjaTolSimaHnappar({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const hamur = useHamur((s) => s.hamur);
-  if (!VEGGJA_HAMIR.includes(hamur)) return null;
+  if (!SIMA_VEGGJA_HAMIR.includes(hamur)) return null;
   // Greina veggi / Lesa EI fóru í þéttu stikuna neðst (3. umferð) — hér er aðeins 3D, sýnin.
   const tol: { id: HamAdgerd; texti: string }[] = [{ id: "thrividd", texti: "3D" }];
   return (
@@ -387,11 +389,17 @@ export function HamValSimi() {
   const setHamur = useHamur((s) => s.setHamur);
   const [opid, setOpid] = useState(false);
   const h = HAMIR.find((x) => x.id === hamur) ?? HAMIR[0];
+  useEffect(() => {
+    // Hamur valinn annars staðar (⋮-valmynd): utan veggjahams á þétti ritillinn ekki að standa eftir neðst.
+    if (SIMA_VEGGJA_HAMIR.includes(hamur)) return;
+    const r = useVeggjaRitill.getState();
+    if (r.virkur) r.slokkva();
+  }, [hamur]);
   const velja = (id: HamurId) => {
     setOpid(false);
     setHamur(id);
     const r = useVeggjaRitill.getState();
-    if (VEGGJA_HAMIR.includes(id)) {
+    if (SIMA_VEGGJA_HAMIR.includes(id)) {
       if (!r.virkur) r.kveikja("velja");
       r.setThett(true);
     } else if (r.virkur) r.slokkva();
