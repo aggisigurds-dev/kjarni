@@ -81,7 +81,7 @@ export function GreiningTolSpjald({
           id="greining-spjald"
           role="region"
           aria-label="Greining"
-          className="absolute top-full right-0 z-30 mt-1.5 max-h-[calc(100vh-14rem)] w-[min(88vw,21rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#1a1d2e] p-2.5 text-stone-100 shadow-2xl shadow-black/50"
+          className="absolute top-full right-0 z-30 mt-1.5 max-h-[calc(100dvh-22rem)] w-[min(88vw,21rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#1a1d2e] p-2.5 text-stone-100 shadow-2xl shadow-black/50"
         >
           <div className="text-[10.5px] font-semibold tracking-wide text-white/45 uppercase">Combo — keyrt í röð</div>
           <div className="mt-1.5 flex flex-col gap-1">
