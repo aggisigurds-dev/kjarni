@@ -1,6 +1,6 @@
 ---
 name: artcraft
-description: Edward Scissorhands 🎨 (Johnny Depp) — sérfræðingur ArtCraft í Kjarna (/kjarni/artcraft, 28 síður + 26 API-leiðir): mynd-, myndbands- og hljóðtólin á Replicate (Wan 2.2, Kling, Flux, Topaz, IC-Light, InstantID, ElevenLabs), staðbundin tól (ComfyUI, Forge, í vafra) og 13 opnu ArtCraft-forritin. Notaðu þegar tól bilar eða skilar villu, nýtt líkan eða tól á að bætast við, eða spurt er hvað kall kostar. Opnu API-leiðirnar eru öryggismál → oryggi. Kveikjuorð: ArtCraft, Skýjastúdíó, Skýjahreyfimynd, Einkastúdíó, Upplyfting, Breyta mynd, Útvíkka, Endurljós, Tónsmíð, Verkbók, Bakgrunnur, Replicate
+description: Edward Scissorhands 🎨 (Johnny Depp) — sérfræðingur ArtCraft í Kjarna (/kjarni/artcraft, 28 síður + 26 API-leiðir): mynd-, myndbands- og hljóðtólin á Replicate (Wan 2.2, Kling, Flux, Topaz, IC-Light, InstantID, ElevenLabs), staðbundin tól (ComfyUI, Forge, í vafra) og 5 opnu ArtCraft-forritin; 8 skrifstofuforritin búa í OfficeCraft (/kjarni/officecraft, sama WASM). Notaðu þegar tól bilar eða skilar villu, nýtt líkan eða tól á að bætast við, eða spurt er hvað kall kostar. Opnu API-leiðirnar eru öryggismál → oryggi. Kveikjuorð: ArtCraft, Skýjastúdíó, Skýjahreyfimynd, Einkastúdíó, Upplyfting, Breyta mynd, Útvíkka, Endurljós, Tónsmíð, Verkbók, Bakgrunnur, Replicate
 tools: Bash, Read, Grep, Glob, Edit, Write
 ---
 

@@ -6,6 +6,8 @@ import {
   artcraftAppsByCategory,
   artcraftStudioHref,
   artcraftToolsHref,
+  officecraftHubHref,
+  OFFICECRAFT_APP_IDS,
   type ArtcraftApp,
 } from "./apps";
 import "./artcraft.css";
@@ -28,18 +30,17 @@ function AppCard({ app }: { app: ArtcraftApp }) {
 
 export default function ArtCraftHub() {
   const artcraftApps = artcraftAppsByCategory("artcraft");
-  const multicraftApps = artcraftAppsByCategory("multicraft");
   return (
     <StationChrome tool="artcraft">
       <div className="ac-hub">
         <div className="ac-hub-in">
           <p className="ac-kicker">ArtCraft · Crafting Apps</p>
-          <h1>13 öpp. Eitt handverk.</h1>
+          <h1>Myndir og myndbönd. Eitt handverk.</h1>
           <p className="ac-lead">
-            Opin uppspretta sköpunartól frá ArtCraft, hýst í Kjarnanum. Myndvinnsla,
-            vektorar, myndbönd, RAW, hreyfimyndir, síðuhönnun og hljóðvinnsla undir
-            ArtCraft; ritvinnsla, kynningar, PDF, töflureiknir, CAD og
-            viðmótshönnun undir MultiCraft — allt í vafranum, á þínum skrám.
+            Opin uppspretta sköpunartól frá ArtCraft, hýst í Kjarnanum: myndvinnsla,
+            myndbönd, RAW, hreyfimyndir og síðuhönnun — allt í vafranum, á þínum skrám.
+            Skrifstofuforritin (ritvinnsla, töflur, kynningar, PDF, CAD …) eru nú í{" "}
+            <a href={officecraftHubHref()}>OfficeCraft</a>.
           </p>
           <div className="ac-featured">
             <a className="ac-card ac-card-studio" href={artcraftToolsHref()}>
@@ -69,11 +70,18 @@ export default function ArtCraftHub() {
               <AppCard key={app.id} app={app} />
             ))}
           </div>
-          <h2 className="ac-section-title">MultiCraft — ritvinnsla, kynningar, PDF, töflur, CAD, viðmót</h2>
-          <div className="ac-grid">
-            {multicraftApps.map((app) => (
-              <AppCard key={app.id} app={app} />
-            ))}
+          <h2 className="ac-section-title">OfficeCraft — skrifstofuforritin</h2>
+          <div className="ac-featured">
+            <a className="ac-card ac-card-studio" href={officecraftHubHref()}>
+              <span className="ac-ico" aria-hidden="true">🗂️</span>
+              <b>OfficeCraft</b>
+              <span className="ac-role">{OFFICECRAFT_APP_IDS.length} forrit</span>
+              <p>
+                Ritvinnsla, töflureiknir, kynningar, PDF, CAD, viðmótshönnun, vektorar og
+                hljóð — flutt úr ArtCraft í eigið tól.
+              </p>
+              <span className="ac-meta">WordCraft · GridCraft · DeckCraft · PdfCraft · …</span>
+            </a>
           </div>
           <p className="ac-legal">
             Opin uppspretta frá{" "}

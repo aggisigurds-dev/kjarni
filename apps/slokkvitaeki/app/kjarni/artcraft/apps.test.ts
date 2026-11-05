@@ -13,6 +13,10 @@ import {
   artcraftToolsHref,
   getArtcraftApp,
   isArtcraftAppId,
+  isOfficecraftApp,
+  OFFICECRAFT_APP_IDS,
+  OFFICECRAFT_INTERFACES,
+  officecraftHubHref,
 } from "./apps.ts";
 
 test("all thirteen Crafting Apps are installed in Kjarni", () => {
@@ -38,7 +42,8 @@ test("each app has a pinned web zip, sha256 and kjarni route", () => {
   for (const app of ARTCRAFT_APPS) {
     assert.equal(app.zip, `${app.id}-web-${app.version}.zip`);
     assert.match(app.sha256, /^[0-9a-f]{64}$/);
-    assert.equal(artcraftAppHref(app.id), `/kjarni/artcraft/${app.id}`);
+    const suite = isOfficecraftApp(app.id) ? "officecraft" : "artcraft";
+    assert.equal(artcraftAppHref(app.id), `/kjarni/${suite}/${app.id}`);
     assert.equal(artcraftStaticPath(app.id), `/artcraft/${app.id}/index.html`);
     assert.equal(
       artcraftReleaseUrl(app),
@@ -61,7 +66,11 @@ test("kjarni can open every ArtCraft interface from one list", () => {
     [
       "hub",
       "vinnslur",
-      ...ARTCRAFT_APP_IDS,
+      "photocraft",
+      "filmcraft",
+      "lightcraft",
+      "effectcraft",
+      "designcraft",
       "tol",
       "bakgrunnur",
       "svidsmynd",
@@ -115,4 +124,44 @@ test("lookup rejects unknown slugs", () => {
   assert.equal(isArtcraftAppId("photoshop"), false);
   assert.equal(getArtcraftApp("missing"), undefined);
   assert.equal(getArtcraftApp("pdfcraft")?.name, "PdfCraft");
+});
+
+test("office apps live in OfficeCraft, not ArtCraft", () => {
+  assert.equal(officecraftHubHref(), "/kjarni/officecraft");
+  assert.deepEqual(
+    [...OFFICECRAFT_APP_IDS].sort(),
+    ["cadcraft", "deckcraft", "figcraft", "gridcraft", "pdfcraft", "soundcraft", "vectorcraft", "wordcraft"],
+  );
+  assert.deepEqual(
+    OFFICECRAFT_INTERFACES.map((i) => i.href),
+    OFFICECRAFT_APP_IDS.map((id) => `/kjarni/officecraft/${id}`),
+  );
+  const artIds = new Set(ARTCRAFT_INTERFACES.map((i) => i.id as string));
+  for (const id of OFFICECRAFT_APP_IDS) assert.equal(artIds.has(id), false, `${id} not in ArtCraft`);
+  // Hvert opið forrit er á nákvæmlega einum stað.
+  assert.equal(
+    ARTCRAFT_APP_IDS.filter((id) => !isOfficecraftApp(id)).length + OFFICECRAFT_APP_IDS.length,
+    ARTCRAFT_APP_IDS.length,
+  );
+});
+
+test("Stjórnstöð menu: OfficeCraft and Ajour-Craft groups, no office apps under ArtCraft", async () => {
+  const { QUICK_GROUPS } = await import("../data.ts");
+  const { SYSTEMS } = await import("../stod-gogn.ts");
+  const group = (t: string) => QUICK_GROUPS.find((g) => g.title === t);
+  assert.deepEqual(
+    group("Ajour-Craft")?.items.slice(0, 2).map((i) => i.label),
+    ["Skráning", "Yfirsýn þéttinga"],
+  );
+  assert.equal(group("OfficeCraft")?.items.length, OFFICECRAFT_APP_IDS.length);
+  const artLabels = group("ArtCraft")?.items.map((i) => i.label) ?? [];
+  for (const id of OFFICECRAFT_APP_IDS) assert.equal(artLabels.includes(getArtcraftApp(id)!.name), false);
+  assert.equal(artLabels.includes("Skráning"), false);
+  assert.equal(artLabels.includes("Yfirsýn þéttinga"), false);
+  const names = SYSTEMS.map((s) => s.name);
+  assert.ok(names.indexOf("OfficeCraft") === names.indexOf("Marks") + 1, "OfficeCraft right after Marks");
+  assert.ok(names.includes("Ajour-Craft"));
+  assert.ok(names.includes("Bakgrunnur"));
+  assert.ok(group("Kjarni")?.items.some((i) => i.label === "Bakgrunnur"));
+  assert.equal(artLabels.includes("Bakgrunnur"), false);
 });

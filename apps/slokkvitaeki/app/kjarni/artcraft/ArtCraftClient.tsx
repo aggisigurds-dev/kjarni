@@ -6,12 +6,15 @@ import {
   type ArtcraftApp,
   artcraftHubHref,
   artcraftStaticPath,
+  isOfficecraftApp,
+  officecraftHubHref,
 } from "./apps";
 import "./artcraft.css";
 
 export default function ArtCraftClient({ app }: { app: ArtcraftApp }) {
   const [missing, setMissing] = useState(false);
   const src = artcraftStaticPath(app.id);
+  const office = isOfficecraftApp(app.id);
 
   useEffect(() => {
     let gone = false;
@@ -28,7 +31,7 @@ export default function ArtCraftClient({ app }: { app: ArtcraftApp }) {
   }, [src]);
 
   return (
-    <StationChrome tool="artcraft">
+    <StationChrome tool={office ? "officecraft" : "artcraft"}>
       <div className="ac-stage">
         {missing ? (
           <div className="ac-missing">
@@ -39,7 +42,7 @@ export default function ArtCraftClient({ app }: { app: ArtcraftApp }) {
             </p>
             <pre>pnpm --filter slokkvitaeki-vefur artcraft:install</pre>
             <p>
-              <a href={artcraftHubHref()}>Til baka í ArtCraft</a>
+              <a href={office ? officecraftHubHref() : artcraftHubHref()}>Til baka í {office ? "OfficeCraft" : "ArtCraft"}</a>
               {" · "}
               <a href={app.site} target="_blank" rel="noreferrer">
                 {app.name} hjá ArtCraft
@@ -49,6 +52,7 @@ export default function ArtCraftClient({ app }: { app: ArtcraftApp }) {
         ) : (
           <>
             <div className="ac-stage-bar">
+              {office && <a className="ac-stage-back" href={officecraftHubHref()}>← OfficeCraft</a>}
               <b>{app.name}</b>
               <span>{app.role}</span>
               <a href={src} target="_blank" rel="noreferrer">

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { HeimilisfangLeit } from "../turbopaint/components/kjarni/HeimilisfangLeit";
-import { ARTCRAFT_INTERFACES } from "../artcraft/apps";
+import { ARTCRAFT_INTERFACES, OFFICECRAFT_INTERFACES } from "../artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SYSTEMS, FILTERS, ext, dags, type Filter, type StodKerfi } from "../stod-gogn";
 import { useStationSkin } from "../StationChrome";
@@ -48,6 +48,9 @@ const TAKN: Record<string, ReactNode> = {
   tilraun: <><path d="M9 3h6" /><path d="M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3" /><path d="M7 15h10" /></>,
   teningur: <><path d="M12 2 3 7v10l9 5 9-5V7z" /><path d="m3 7 9 5 9-5" /><path d="M12 12v10" /></>,
   merki: <path d="M6 3h12v18l-6-4-6 4z" />,
+  skrifstofa: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" /><path d="M3 13h18" /></>,
+  skaeri: <><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12" /></>,
+  thetting: <><path d="M12 21s-6-5.6-6-10.5a6 6 0 0 1 12 0C18 15.4 12 21 12 21z" /><circle cx="12" cy="10.5" r="2.2" /></>,
   vefur: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" /></>,
   poki: <><path d="M6 7h12l-1 13H7z" /><path d="M9 7a3 3 0 0 1 6 0" /></>,
   hopur: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.6c1.6.8 2.7 2.5 3 5.4" /></>,
@@ -223,6 +226,15 @@ export function StodView(d: RagnarokData) {
             <Spjald titill="ArtCraft — viðmót" plata={`${ARTCRAFT_INTERFACES.filter((i) => i.id !== "hub").length} viðmót`} haegri={<a className="kst-hlekkur" href="/kjarni/artcraft">Opna yfirlit <Ico n="or" /></a>}>
               <div className="kst-tenglar">
                 {ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub").map((item) => (
+                  <a key={item.id} href={item.href} className="kst-tengill">{item.name}</a>
+                ))}
+              </div>
+              <div className="kst-tenglar-h">
+                OfficeCraft · {OFFICECRAFT_INTERFACES.length} forrit{" "}
+                <a className="kst-hlekkur" href="/kjarni/officecraft">Opna <Ico n="or" /></a>
+              </div>
+              <div className="kst-tenglar">
+                {OFFICECRAFT_INTERFACES.map((item) => (
                   <a key={item.id} href={item.href} className="kst-tengill">{item.name}</a>
                 ))}
               </div>
