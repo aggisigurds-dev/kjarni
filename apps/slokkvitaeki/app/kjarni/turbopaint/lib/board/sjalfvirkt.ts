@@ -113,6 +113,28 @@ function semHLina(o: LineObject): HLina {
 }
 
 /** Vikmörkin eins og þau eru stillt (localStorage `tp_sjalfvirkt_vikmork`), annars sjálfgefin. */
+/** Skekkja blaðsins sem notandinn hefur sett (gráður), eða null = mæld á línunum sjálfum. */
+export function setjaSkekkju(gradur: number | null): void {
+  try {
+    const nu = JSON.parse(localStorage.getItem(VIKMORK_LYKILL) || "{}") as Record<string, unknown>;
+    if (gradur == null) delete nu.skekkjaGradur;
+    else nu.skekkjaGradur = gradur;
+    localStorage.setItem(VIKMORK_LYKILL, JSON.stringify(nu));
+  } catch {
+    /* einkagluggi — stillingin gildir þá aðeins í þessari lotu */
+  }
+}
+
+/** Skekkjan sem er stillt (gráður), eða null þegar hún er mæld sjálfkrafa. */
+export function stillSkekkja(): number | null {
+  try {
+    const nu = JSON.parse(localStorage.getItem(VIKMORK_LYKILL) || "{}") as { skekkjaGradur?: unknown };
+    return typeof nu.skekkjaGradur === "number" && Number.isFinite(nu.skekkjaGradur) ? nu.skekkjaGradur : null;
+  } catch {
+    return null;
+  }
+}
+
 export function virkVikmork(): Vikmork {
   try {
     return lesaVikmork(localStorage.getItem(VIKMORK_LYKILL));
@@ -426,7 +448,7 @@ export async function vinnaLinur(
     const nyttGler: HLina[] = d.gler;
     // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
     const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
-    const u = husUtlina(allar, dpm, vik.lokunM);
+    const u = husUtlina(allar, dpm, vik.lokunM, vik.husHlutur);
     const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
     hreinar = hreinar.filter((_, i) => !burtV.has(i));
     hurdir = hurdir.filter((_, i) => !burtH.has(i));
@@ -607,7 +629,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         veggir = klemmaGreindaThykkt(gr.veggir, dpm);
         heilBladVeggir = veggir;
       }
-      const k = husKassi(veggir, dpm, { spassia: 0.025 });
+      const k = husKassi(veggir, dpm, { spassia: 0.025, hlutur: vik.husHlutur });
       const blad = bladIBordi(p0, frum);
       if (!k) {
         ljuka("skurdur", `Fann ekki húsið á blaðinu (${veggir.length} veggir) — allt blaðið greint`, "villa");
@@ -619,7 +641,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         skurdurFundinn = true;
         const r = skurdurIBord(sk, p0, frum, null);
         if (r && deps.ramma) deps.ramma(r);
-        ljuka("skurdur", `Húsið fundið: ${m2((k.x1 - k.x0) / dpm)} × ${m2((k.y1 - k.y0) / dpm)} m (${k.klasar} klasar, 2,5 % spássía) — ásalínur, titilreitur og lóð utan við`);
+        ljuka("skurdur", `Húsið fundið: ${m2((k.x1 - k.x0) / dpm)} × ${m2((k.y1 - k.y0) / dpm)} m (${k.klasar} klasar, 2,5 % spássía) — þunnar línur utan hans (ásalínur, titilreitur, lóð) fylgja ekki með`);
       }
     }
   } catch (err) {

@@ -55,6 +55,8 @@ export interface Vikmork {
   hillurM: number;
   /** Op í útlínu hússins sem lokast þegar „utan húss" er metið (hurðargöt sem fundust ekki). Sjálfgefið 1,30 m. */
   lokunM: number;
+  /** Hlutfall af heildar veggjaþunga sem gerir klasa að hluta hússins óháð fjarlægð (husKassi). Sjálfgefið 0,08. */
+  husHlutur: number;
   /** Strik-punkt-línur: a.m.k. `butar` samlínu bútar með reglulegu bili [bilMinM, bilMaxM] sem spanna ≥ spannM. */
   strikPunkt: { butar: number; bilMinM: number; bilMaxM: number; spannM: number };
   /** Hurðir: bil í vegg [minM, maxM] = hurð; [bogiMinM, bogiMaxM] = hurð AÐEINS ef bogi sést á teikningunni;
@@ -85,6 +87,7 @@ export const SJALFGEFIN_VIKMORK: Vikmork = {
   stakurSkonnunM: 1,
   hillurM: 6,
   lokunM: 1.3,
+  husHlutur: 0.08,
   strikPunkt: { butar: 4, bilMinM: 0.03, bilMaxM: 0.65, spannM: 3 },
   hurd: { minM: 0.7, maxM: 1.3, bogiMinM: 0.6, bogiMaxM: 1.3, bilahurdM: 2.4, bilahurdMaxM: 6, glerMinM: 0.3, glerMaxM: 8, glerUrBili: 0, bKrefstBoga: 1 },
 };
@@ -104,6 +107,11 @@ export function lesaVikmork(still?: unknown): Vikmork {
   }
   const ut: Vikmork = JSON.parse(JSON.stringify(SJALFGEFIN_VIKMORK));
   if (!o || typeof o !== "object") return ut;
+  // skekkjaGradur er ekki í sjálfgefnu (null = mæld sjálfkrafa) og má vera neikvæð — tekin hér, utan `blanda`
+  {
+    const sk = (o as { skekkjaGradur?: unknown }).skekkjaGradur;
+    if (typeof sk === "number" && Number.isFinite(sk) && Math.abs(sk) <= 45) ut.skekkjaGradur = sk;
+  }
   const blanda = (a: Record<string, unknown>, b: Record<string, unknown>) => {
     for (const k of Object.keys(a)) {
       const v = b[k];
@@ -556,7 +564,10 @@ export function hreinsaVeggi(nyjar: HLina[], fastar: HLina[], dpm: number, vik: 
     talning.strikPunkt = sp.size;
   }
   // 2. rétta — eftir blaðinu sjálfu þegar skönnunin er skökk (skekkjan mæld á löngu línunum)
-  const skekkja = vik.skekkjaGradur != null ? vik.skekkjaGradur : maelaSkekkju(butar, dpm, vik.rettaGradur);
+  // Veggir Agnars (`fastar`) eru ALDREI snúnir, svo þeir eru mældir með: hafi hann teiknað ásrétta veggi dregur það
+  // miðgildið að núlli og nýir veggir tilta ekki frá hans (Lisbeth 05.11.2026: 40 m veggur færðist 22 cm við −0,645°,
+  // umfram smellaM 15 cm).
+  const skekkja = vik.skekkjaGradur != null ? vik.skekkjaGradur : maelaSkekkju([...butar, ...fastar], dpm, vik.rettaGradur);
   talning.skekkja = Math.round(skekkja * 100) / 100;
   butar = butar.map((b) => {
     const r = retta(b.p, vik.rettaGradur, skekkja);
@@ -622,7 +633,7 @@ export interface HusUtlina {
 /** Útlína hússins úr línunum: línurnar teiknaðar þykkar (lokunM / 2 hvoru megin, svo op ≤ lokunM lokist), flætt utan frá
  * og stærsti samfelldi hlutinn sem flóðið náði ekki = húsið (veggir + rými). Stakir hlutir utan þess (lóðarmörk,
  * nágrannahús, norðurör, titilreitur) eru utan húss. Leki útlínan (stórt op án hurðar) er aðeins kassinn notaður. */
-export function husUtlina(linur: HLina[], dpm: number, lokunM = SJALFGEFIN_VIKMORK.lokunM): HusUtlina {
+export function husUtlina(linur: HLina[], dpm: number, lokunM = SJALFGEFIN_VIKMORK.lokunM, hlutHus = SJALFGEFIN_VIKMORK.husHlutur): HusUtlina {
   const reitur = Math.max(1e-6, 0.1 * dpm);
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const l of linur)
@@ -728,7 +739,7 @@ export function husUtlina(linur: HLina[], dpm: number, lokunM = SJALFGEFIN_VIKMO
   // það henti 80 af 110 veggjum á Breiðhöfða 13 (2018-skönnun, 04.11.2026: 87 fjarlægð, 42 eftir). Varaleiðin er því kassi
   // hússins úr veggjaklösunum (husKassi) — hann nær yfir húsið allt og heldur öllu nema lóðarmörkum og titilreit.
   if (!lokud) {
-    const hk = husKassi(linur, dpm, { spassia: 0.02 });
+    const hk = husKassi(linur, dpm, { spassia: 0.02, hlutur: hlutHus });
     if (hk) kassi = { x0: Math.min(kassi.x0, hk.x0), y0: Math.min(kassi.y0, hk.y0), x1: Math.max(kassi.x1, hk.x1), y1: Math.max(kassi.y1, hk.y1) };
   }
   const inni = (x: number, y: number) => {
@@ -791,29 +802,37 @@ export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; alm
       if (d <= bil) rot[finna(i)] = finna(j);
     }
   }
-  const K = new Map<number, { flat: number; x0: number; y0: number; x1: number; y1: number; med: boolean }>();
+  const K = new Map<number, { flat: number; thungi: number; x0: number; y0: number; x1: number; y1: number; med: boolean }>();
   butar.forEach((b, i) => {
     const r = finna(i);
-    const q = K.get(r) ?? { flat: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, med: false };
+    const q = K.get(r) ?? { flat: 0, thungi: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, med: false };
     q.flat += lengdLinu(b.p) * Math.max(b.t, 0.05 * dpm);
+    // Þungi ÁN þykktargólfs: gólfið (0,05 · dpm) lætur langa hárlínu vega meira en stuttan þykkan vegg — titilreitur,
+    // ásalínur og lóðarmörk eru löng og þunn. Hlutfallsreglan hér neðar notar þennan þunga, ekki `flat` (Lisbeth 05.11.2026).
+    q.thungi += lengdLinu(b.p) * Math.max(0, b.t - 0.02 * dpm) ** 1.5;
     q.x0 = Math.min(q.x0, kassi[i][0]);
     q.y0 = Math.min(q.y0, kassi[i][1]);
     q.x1 = Math.max(q.x1, kassi[i][2]);
     q.y1 = Math.max(q.y1, kassi[i][3]);
     K.set(r, q);
   });
-  let adal: { flat: number; x0: number; y0: number; x1: number; y1: number; med: boolean } | null = null;
+  let adal: { flat: number; thungi: number; x0: number; y0: number; x1: number; y1: number; med: boolean } | null = null;
   for (const q of K.values()) if (!adal || q.flat > adal.flat) adal = q;
   if (!adal) return null;
   adal.med = true;
   // ÞUNGIR KLASAR ERU LÍKA HÚSIÐ (Agnar 05.11.2026, Nesdekk Breiðhöfði 13, 2. hæð: „2. hæð er ennþá krapp" — 41 af 66 veggjum fóru
   // sem „utan húss"). Stærsti klasinn var skrifstofuhornið (margir stuttir þykkir veggir) og ytri veggir lagersins voru hvorki
-  // 20 % af honum né innan 4 m, svo kassinn náði aðeins yfir hornið. Klasi sem ber ≥ `hlutur` af HEILDAR veggjaþunga blaðsins
-  // telst hluti hússins óháð fjarlægð; titilreitur og lóðarmörk eru þunnar línur og vega lítið.
+  // 20 % af honum né innan 4 m, svo kassinn náði aðeins yfir hornið. Klasi sem ber ≥ `hlutur` af heildar VEGGJAÞUNGA blaðsins
+  // telst hluti hússins óháð fjarlægð. Þunginn vex með þykktinni í veldinu 1,5 og dregur frá 2 cm, svo hárlínur (titilreitur,
+  // ásalínur, lóðarmörk) vega nánast ekkert hversu langar sem þær eru — mælt af Lisbeth 05.11.2026: með `flat` komust
+  // titilreitur (8×4 m), nágrannahús og fjórar ásalínur inn í kassann.
+  // Klasinn verður líka að vera Á STÆRÐ VIÐ húsið (þvermál ≥ 60 % af aðalklasanum): álma sama húss er stór, en nágrannahús,
+  // titilreitur og bílskúr úti á lóð eru lítil þótt veggirnir séu þykkir (Lisbeth 05.11.2026: 6 × 5 m nágrannahús bar 11 %).
   {
-    const heild = [...K.values()].reduce((t, q) => t + q.flat, 0);
-    const lagm = heild * (st.hlutur ?? 0.08);
-    for (const q of K.values()) if (q.flat >= lagm) q.med = true;
+    const thvermal = (q: { x0: number; y0: number; x1: number; y1: number }) => Math.hypot(q.x1 - q.x0, q.y1 - q.y0);
+    const heild = [...K.values()].reduce((t, q) => t + q.thungi, 0);
+    const lagm = heild * (st.hlutur ?? 0.08), stort = thvermal(adal) * 0.6;
+    if (lagm > 0) for (const q of K.values()) if (q.thungi >= lagm && thvermal(q) >= stort) q.med = true;
   }
   const bilK = (a: Rammi, b: Rammi) => Math.max(0, Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1), Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1));
   for (let breytt = true; breytt; ) {
