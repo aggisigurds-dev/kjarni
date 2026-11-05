@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { download } from "./install-artcraft.mjs";
+import { download, isStrict } from "./install-artcraft.mjs";
 
 function fakeFetch(steps) {
   let i = 0;
@@ -51,4 +51,12 @@ test("404 fails at once; a lasting 504 fails after the last attempt", async () =
   await assert.rejects(download("https://x/d.zip", "/nonexistent/d.zip", { fetchImpl: f504, wait: async (ms) => waits.push(ms) }), /→ 504/);
   assert.equal(f504.calls(), 4);
   assert.deepEqual(waits, [2000, 4000, 8000]);
+});
+
+test("production is strict (keeps the last full deploy live); previews skip a missing app", () => {
+  assert.equal(isStrict({ VERCEL_ENV: "production" }), true);
+  assert.equal(isStrict({ VERCEL_ENV: "preview" }), false);
+  assert.equal(isStrict({}), false);
+  assert.equal(isStrict({ VERCEL_ENV: "production", ARTCRAFT_STRICT: "0" }), false);
+  assert.equal(isStrict({ VERCEL_ENV: "preview", ARTCRAFT_STRICT: "1" }), true);
 });

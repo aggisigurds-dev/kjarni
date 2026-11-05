@@ -22,8 +22,15 @@ const APPS_PATH = path.join(ROOT, "app/kjarni/artcraft/apps.ts");
 // Zip-skrárnar geymdar í byggingarskyndiminni Next/Vercel (.next/cache er
 // endurheimt fyrir hverja byggingu), svo næsta bygging þurfi ekki GitHub.
 const ZIP_CACHE = path.join(ROOT, ".next", "cache", "artcraft-zips");
-// ARTCRAFT_STRICT=1: niðurhalsvilla fellir bygginguna (sjálfgefið: sleppa forritinu).
-const STRICT = process.env.ARTCRAFT_STRICT === "1";
+// Strangt = niðurhalsvilla fellir bygginguna. Sjálfgefið strangt í production
+// (Vercel heldur þá fyrri, heilu útgáfunni í loftinu í stað þess að birta vef án
+// forrits) en ekki í forsýnum (þar er forritinu sleppt). ARTCRAFT_STRICT=1/0 ræður.
+export function isStrict(env = process.env) {
+  if (env.ARTCRAFT_STRICT === "1") return true;
+  if (env.ARTCRAFT_STRICT === "0") return false;
+  return env.VERCEL_ENV === "production";
+}
+const STRICT = isStrict();
 
 function parseApps(source) {
   const blocks = [...source.matchAll(/\{\s*id:\s*"([^"]+)"([\s\S]*?)\n\s*\},?/g)];
