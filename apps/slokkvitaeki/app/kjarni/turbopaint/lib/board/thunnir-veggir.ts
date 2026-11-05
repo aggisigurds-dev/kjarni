@@ -221,8 +221,8 @@ export function finnaThunnaVeggi(gra: Uint8Array, W: number, H: number, o: Thunn
   const ut: ThunnVeggur[] = [];
   const thvert = Math.round(0.12 * dpm), samBil = Math.round(0.3 * dpm);
   // láréttir: raðir eru y (í skekktu grímunni) — y blaðsins er `c`, y myndarinnar er `c − t·x`.
-  // Skekkta gríman lifir aðeins inni í blokkinni: annars væru fjórar W·H fylkingar uppi í einu og 40 MP þakið í
-  // greinaThunnaVeggi (sem reiknar með þremur) stæðist ekki lengur (Lisbeth 05.11.2026).
+  // Skekkta gríman lifir aðeins inni í blokkinni, svo hún og umsnúna gríman eru ekki uppi samtímis: toppurinn fer úr
+  // FIMM W·H fylkingum niður í FJÓRAR (gra + m + afleidd gríma + `e` sem leitaRaka úthlutar sjálft) — Lisbeth 05.11.2026.
   {
     const mh = t ? skekkja(m, W, H, t) : m;
     const h = sameinaRaka(leitaRaka(mh, W, H, wMin, lagmark, gat, hamarkThykkt), thvert, samBil);

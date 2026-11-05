@@ -112,8 +112,10 @@ export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Pro
   const bmp = await createImageBitmap(blob);
   const g0 = greiningarSvaedi(plan, { w: bmp.width, h: bmp.height });
   const dpmFrum = dpmBord * (g0.myndSvaedi.w / plan.width);
-  // ≤ 50 dílar á metra og ≤ 40 MP. ÞÁ ER TOPPURINN ≈ 3 × W·H bæti: grátónamyndin, dökk-gríman og EIN afleidd gríma í einu —
-  // skekkta gríman (halli blaðsins) er sleppt áður en umsnúna gríman verður til, svo þær tvær lifa ekki samtímis (Lisbeth 05.11.2026).
+  // ≤ 50 dílar á metra og ≤ 40 MP. TOPPURINN ER 4 × W·H bæti (160 MB á þakinu), MÆLT AF LISBETH 05.11.2026: grátónamyndin
+  // hér, dökk-gríman, EIN afleidd gríma (skekkt eða umsnúin — skekkta er sleppt áður en umsnúna verður til) og rof-gríman `e`
+  // sem leitaRaka úthlutar sjálft. Var 5 × W·H áður en skekkta gríman var sett í eigið svið. TurboPaint keyrir í iframe á
+  // síma, svo hækki einhver þakið á það að fara í kerfisrýni fyrst (verk e13288e6).
   let k = Math.min(1, 50 / dpmFrum);
   const mp = g0.sk.w * g0.sk.h * k * k;
   if (mp > 40e6) k *= Math.sqrt(40e6 / mp);
