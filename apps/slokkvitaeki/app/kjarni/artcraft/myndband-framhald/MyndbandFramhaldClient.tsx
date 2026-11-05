@@ -8,6 +8,9 @@ import VerkhringirHint from "../VerkhringirHint";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
 import { uploadForReplicate } from "../uploadToStorage";
+import FramePicker from "../video/FramePicker";
+import { extractFrameAt, loadVideoMeta, stitchSegments } from "../video/frames";
+import { defaultContinueTime, formatSeconds } from "../video/timeline";
 import "../artcraft.css";
 
 /** Myndband-framhald — teygja myndband með því að sækja síðasta frame-ið og
@@ -58,59 +61,6 @@ async function fetchVideoBlob(url: string): Promise<Blob> {
   return res.blob();
 }
 
-/** Sækir síðasta frame-ið úr video blob sem PNG-blob. */
-async function extractLastFrame(blob: Blob): Promise<{ frameBlob: Blob; width: number; height: number; duration: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const video = document.createElement("video");
-    video.src = url;
-    video.muted = true;
-    video.crossOrigin = "anonymous";
-    video.preload = "auto";
-    video.playsInline = true;
-
-    const cleanup = () => URL.revokeObjectURL(url);
-
-    video.onerror = () => {
-      cleanup();
-      reject(new Error("Gat ekki opnað video (óstudd kóðun?)"));
-    };
-
-    video.onloadedmetadata = () => {
-      // Seek lítinn tíma AÐEIN frá endanum. Nákvæmlega .duration er risky —
-      // sum videos trigger-a ekki seeked event þar.
-      const seekTo = Math.max(0, video.duration - 0.05);
-      video.currentTime = seekTo;
-    };
-
-    video.onseeked = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Canvas 2D ekki stuttur");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((frameBlob) => {
-          cleanup();
-          if (!frameBlob) {
-            reject(new Error("Gat ekki vistað ramma"));
-            return;
-          }
-          resolve({
-            frameBlob,
-            width: video.videoWidth,
-            height: video.videoHeight,
-            duration: video.duration,
-          });
-        }, "image/png");
-      } catch (err) {
-        cleanup();
-        reject(err instanceof Error ? err : new Error("Óvænt villa við frame-extract"));
-      }
-    };
-  });
-}
 
 /** Vælir aspect ratio sem passar best við video dimensions. */
 function matchAspectRatio(width: number, height: number): AspectRatio {
@@ -136,6 +86,13 @@ export default function MyndbandFramhaldClient() {
   const [resultUrl, setResultUrl] = useState("");
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const pollTimerRef = useRef<number | null>(null);
+  // Ramminn sem framhaldið byrjar á (sjálfgefið 1 sek fyrir enda) og lengd.
+  const [continueAt, setContinueAt] = useState(0);
+  const [numFrames, setNumFrames] = useState(81);
+  const [smooth, setSmooth] = useState(false);
+  const [usedAt, setUsedAt] = useState<number | null>(null);
+  const [joined, setJoined] = useState<{ url: string; blob: Blob } | null>(null);
+  const [joining, setJoining] = useState<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -163,17 +120,18 @@ export default function MyndbandFramhaldClient() {
     setLastFrame("");
     setFrameInfo(null);
 
-    // Dragið út síðasta frame strax svo notandi sjái hvað framhaldið byrjar á.
+    // Lýsigögn strax; ramminn er valinn með sleða og sendur þegar keyrt er.
     try {
-      setStatus("Sæki síðasta frame…");
-      const extracted = await extractLastFrame(file);
-      const frameUrl = await uploadForReplicate(extracted.frameBlob, "reference-images");
-      setLastFrame(frameUrl);
-      setFrameInfo({ width: extracted.width, height: extracted.height, duration: extracted.duration });
-      setAspectRatio(matchAspectRatio(extracted.width, extracted.height));
+      setStatus("Les myndbandið…");
+      const meta = await loadVideoMeta(file);
+      setFrameInfo(meta);
+      setContinueAt(defaultContinueTime(meta.duration));
+      setAspectRatio(matchAspectRatio(meta.width, meta.height));
+      setLastFrame("ready");
+      setJoined(null);
       setStatus("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gat ekki sótt frame");
+      setError(err instanceof Error ? err.message : "Gat ekki lesið myndbandið");
       setStatus("");
     }
   }
@@ -231,8 +189,8 @@ export default function MyndbandFramhaldClient() {
   }
 
   async function run() {
-    if (!lastFrame) {
-      setError("Síðasta frame vantar — hleyptu video inn fyrst.");
+    if (!lastFrame || !sourceFile) {
+      setError("Hleyptu video inn fyrst.");
       return;
     }
     if (!prompt.trim()) {
@@ -245,15 +203,22 @@ export default function MyndbandFramhaldClient() {
     setResultUrl("");
     setResultBlob(null);
     try {
+      setStatus(`Sæki ramma á ${formatSeconds(continueAt)} s…`);
+      const frame = await extractFrameAt(sourceFile, continueAt);
+      const frameUrl = await uploadForReplicate(frame, "reference-images");
+      setUsedAt(continueAt);
+      setJoined(null);
+      setStatus("Sendi á Wan 2.2…");
       const res = await fetch("/api/skyjahreyfimynd", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image: lastFrame,
+          image: frameUrl,
+          interpolateOutput: smooth,
           prompt: prompt.trim(),
           resolution,
           aspectRatio,
-          numFrames: 81,
+          numFrames,
           framesPerSecond: 16,
           disableSafetyChecker: disableSafety,
         }),
@@ -373,24 +338,33 @@ export default function MyndbandFramhaldClient() {
                 </div>
 
                 <div style={{ flex: "1 1 320px", minWidth: 280 }}>
-                  <h3 style={{ marginTop: 0 }}>Síðasta frame (byrjun framhalds)</h3>
-                  {lastFrame ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={lastFrame}
-                      alt="Síðasta frame"
-                      style={{ width: "100%", maxHeight: 220, objectFit: "contain", borderRadius: 6, background: "#000" }}
-                    />
+                  <h3 style={{ marginTop: 0 }}>Hvar á framhaldið að byrja?</h3>
+                  {sourceFile && frameInfo ? (
+                    <FramePicker blob={sourceFile} duration={frameInfo.duration} value={continueAt} onChange={setContinueAt} fps={16} height={220} />
                   ) : (
-                    <p className="ac-hint" style={{ opacity: 0.6 }}>Sæki frame…</p>
+                    <p className="ac-hint" style={{ opacity: 0.6 }}>Les myndbandið…</p>
                   )}
                   <p className="ac-hint" style={{ fontSize: 12, opacity: 0.65, marginTop: 6 }}>
-                    Framhaldið byrjar á þessu frame-i, svo samfella ætti að vera þétt.
+                    Sjálfgefið sekúndu fyrir enda. Myndbönd enda oft nálægt upphafsstöðunni, og framhald úr
+                    allra síðasta rammanum endurtekur þá sömu hreyfingu. „Skeyta saman“ klippir upprunalega
+                    myndbandið við þennan ramma.
                   </p>
                 </div>
               </div>
 
               <div className="ac-settings" style={{ marginTop: 16 }}>
+                <label>
+                  Lengd framhalds
+                  <select value={numFrames} onChange={(e) => setNumFrames(Number(e.target.value))} disabled={busy}>
+                    <option value={81}>81 rammi ≈ 5 s (ódýrast)</option>
+                    <option value={101}>101 rammi ≈ 6,3 s</option>
+                    <option value={121}>121 rammi ≈ 7,5 s (hámark Wan)</option>
+                  </select>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={smooth} onChange={(e) => setSmooth(e.target.checked)} disabled={busy} />
+                  Mýkra (brúa upp í 30 fps)
+                </label>
                 <label>
                   Hvað gerist næst?
                   <textarea
@@ -433,7 +407,7 @@ export default function MyndbandFramhaldClient() {
                 type="button"
                 className="ac-btn"
                 onClick={() => void run()}
-                disabled={busy || !lastFrame || !prompt.trim()}
+                disabled={busy || !lastFrame || !sourceFile || !prompt.trim()}
                 style={{ marginTop: 12 }}
               >
                 {busy ? status || "Vinn…" : "Búa til framhald"}
@@ -468,7 +442,57 @@ export default function MyndbandFramhaldClient() {
                     name={`${(sourceFile?.name || "video").replace(/\.[^.]+$/, "")}-framhald.mp4`}
                   />
                 )}
+                {resultBlob && sourceFile && usedAt != null && (
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    disabled={joining != null}
+                    onClick={() =>
+                      void (async () => {
+                        setJoining(0);
+                        setError("");
+                        try {
+                          const { blob } = await stitchSegments(
+                            [
+                              { blob: sourceFile, inT: 0, outT: usedAt },
+                              // Fyrsti rammi framhaldsins = ramminn sem það var búið til úr.
+                              { blob: resultBlob, inT: 0.07, outT: Number.POSITIVE_INFINITY },
+                            ],
+                            (f) => setJoining(Math.round(f * 100)),
+                          );
+                          if (joined) URL.revokeObjectURL(joined.url);
+                          setJoined({ blob, url: URL.createObjectURL(blob) });
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Samsuða mistókst");
+                        } finally {
+                          setJoining(null);
+                        }
+                      })()
+                    }
+                  >
+                    {joining != null ? `Skeyti saman… ${joining}%` : `Skeyta saman (upprunalegt að ${formatSeconds(usedAt)} s + framhald)`}
+                  </button>
+                )}
               </div>
+              {joined && (
+                <div style={{ marginTop: 12 }}>
+                  <h3 style={{ margin: "0 0 6px" }}>Samsett</h3>
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <video src={joined.url} controls style={{ width: "100%", maxHeight: 500, borderRadius: 6, background: "#000" }} />
+                  <div className="ac-row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    <a className="ac-btn" href={joined.url} download={`${(sourceFile?.name || "video").replace(/\.[^.]+$/, "")}-samsett.${joined.blob.type.includes("mp4") ? "mp4" : "webm"}`}>
+                      Sækja samsett
+                    </a>
+                    <SendTo
+                      blob={joined.blob}
+                      mediaType="video"
+                      sourceTool="myndband-framhald"
+                      sourceToolName="Myndband-framhald"
+                      name={`${(sourceFile?.name || "video").replace(/\.[^.]+$/, "")}-samsett.mp4`}
+                    />
+                  </div>
+                </div>
+              )}
               <VerkhringirHint tool="myndband-framhald" />
             </section>
           )}

@@ -39,7 +39,9 @@ export async function POST(req: NextRequest) {
     resolution?: string;
     aspectRatio?: string;
     disableSafetyChecker?: boolean;
+    interpolateOutput?: boolean;
     image?: string;
+    lastImage?: string;
   };
   try {
     body = await req.json();
@@ -57,12 +59,17 @@ export async function POST(req: NextRequest) {
     prompt,
     image: body.image,
     negative_prompt: body.negativePrompt || "",
-    num_frames: clampNumber(body.numFrames, 81, 81, 129),
-    frames_per_second: clampNumber(body.framesPerSecond, 16, 8, 30),
+    // Schema wan-2.2-i2v-fast: num_frames 81–121, frames_per_second 5–30.
+    num_frames: clampNumber(body.numFrames, 81, 81, 121),
+    frames_per_second: clampNumber(body.framesPerSecond, 16, 5, 30),
     resolution: RESOLUTIONS.includes(body.resolution || "") ? body.resolution : "480p",
     aspect_ratio: ASPECT_RATIOS.includes(body.aspectRatio || "") ? body.aspectRatio : "16:9",
     disable_safety_checker: body.disableSafetyChecker === true,
+    interpolate_output: body.interpolateOutput === true,
   };
+  // Valfrjáls lokarammi: myndbandið endar á þessari mynd (fer þá eitthvert
+  // nýtt í stað þess að snúa aftur að upphafinu).
+  if (typeof body.lastImage === "string" && isOwnStorageUrl(body.lastImage)) input.last_image = body.lastImage;
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
 
   try {

@@ -31,20 +31,57 @@ function brushWeight(d: number, radius: number): number {
   return Math.pow(t, 0.75);
 }
 
+/** Endurnýtt minni fyrir summed-area töfluna í smoothRegion (eitt dab í einu). */
+let satScratch = new Uint32Array(0);
+
 export function smoothRegion(raster: Raster, cx: number, cy: number, radius: number, strength: number): void {
   const w = raster.width;
   const h = raster.height;
+  const data = raster.data;
   const r2 = radius * radius;
   const x0 = Math.max(0, Math.floor(cx - radius));
   const x1 = Math.min(w - 1, Math.ceil(cx + radius));
   const y0 = Math.max(0, Math.floor(cy - radius));
   const y1 = Math.min(h - 1, Math.ceil(cy + radius));
-  // Afrit af pixlum í brush-svæðinu áður en við ritum — forðast feedback
-  // sem myndi færa smooth-ið eftir sweep-áttinni.
+  if (x1 < x0 || y1 < y0) return;
   const kernel = Math.max(1, Math.round(radius / 20)); // skalar með bursta
-  const src = raster.data.slice(y0 * w * 4, (y1 + 1) * w * 4);
-  const srcOffset = y0 * w * 4;
+  // Kassameðaltal (2k+1)² úr pixlum eins og þeir voru FYRIR dabbið, klemmt
+  // við myndbrún og við línur y0..y1. Summed-area tafla gefur hverja summu í
+  // O(1) — kjarninn vex með burstanum, svo í fullri upplausn var beina
+  // lykkjan (2k+1)² á pixla allt of hæg.
+  const wx0 = Math.max(0, x0 - kernel);
+  const wx1 = Math.min(w - 1, x1 + kernel);
+  const ww = wx1 - wx0 + 1;
+  const wh = y1 - y0 + 1;
+  const stride = (ww + 1) * 3;
+  const need = stride * (wh + 1);
+  if (satScratch.length < need) satScratch = new Uint32Array(need);
+  const sat = satScratch;
+  sat.fill(0, 0, stride);
+  for (let y = 0; y < wh; y++) {
+    const row = (y + 1) * stride;
+    const prev = y * stride;
+    sat[row] = 0;
+    sat[row + 1] = 0;
+    sat[row + 2] = 0;
+    let sr = 0;
+    let sg = 0;
+    let sb = 0;
+    let si = ((y0 + y) * w + wx0) * 4;
+    for (let x = 1; x <= ww; x++, si += 4) {
+      sr += data[si];
+      sg += data[si + 1];
+      sb += data[si + 2];
+      const o = row + x * 3;
+      const p = prev + x * 3;
+      sat[o] = sat[p] + sr;
+      sat[o + 1] = sat[p + 1] + sg;
+      sat[o + 2] = sat[p + 2] + sb;
+    }
+  }
   for (let y = y0; y <= y1; y++) {
+    const by0 = Math.max(y0, y - kernel) - y0;
+    const by1 = Math.min(y1, y + kernel) - y0 + 1;
     for (let x = x0; x <= x1; x++) {
       const dx = x - cx;
       const dy = y - cy;
@@ -52,27 +89,20 @@ export function smoothRegion(raster: Raster, cx: number, cy: number, radius: num
       if (d2 > r2) continue;
       const weight = brushWeight(Math.sqrt(d2), radius) * strength;
       if (weight <= 0) continue;
-      let sumR = 0;
-      let sumG = 0;
-      let sumB = 0;
-      let n = 0;
-      for (let ky = -kernel; ky <= kernel; ky++) {
-        for (let kx = -kernel; kx <= kernel; kx++) {
-          const nx = x + kx;
-          const ny = y + ky;
-          if (nx < 0 || nx >= w || ny < y0 || ny > y1) continue;
-          const i = (ny * w + nx) * 4 - srcOffset;
-          sumR += src[i];
-          sumG += src[i + 1];
-          sumB += src[i + 2];
-          n++;
-        }
-      }
-      if (n === 0) continue;
+      const bx0 = Math.max(wx0, x - kernel) - wx0;
+      const bx1 = Math.min(wx1, x + kernel) - wx0 + 1;
+      const n = (bx1 - bx0) * (by1 - by0);
+      const a = by1 * stride + bx1 * 3;
+      const b = by0 * stride + bx1 * 3;
+      const c = by1 * stride + bx0 * 3;
+      const d = by0 * stride + bx0 * 3;
+      const sumR = sat[a] - sat[b] - sat[c] + sat[d];
+      const sumG = sat[a + 1] - sat[b + 1] - sat[c + 1] + sat[d + 1];
+      const sumB = sat[a + 2] - sat[b + 2] - sat[c + 2] + sat[d + 2];
       const idx = (y * w + x) * 4;
-      raster.data[idx] = Math.round(raster.data[idx] * (1 - weight) + (sumR / n) * weight);
-      raster.data[idx + 1] = Math.round(raster.data[idx + 1] * (1 - weight) + (sumG / n) * weight);
-      raster.data[idx + 2] = Math.round(raster.data[idx + 2] * (1 - weight) + (sumB / n) * weight);
+      data[idx] = Math.round(data[idx] * (1 - weight) + (sumR / n) * weight);
+      data[idx + 1] = Math.round(data[idx + 1] * (1 - weight) + (sumG / n) * weight);
+      data[idx + 2] = Math.round(data[idx + 2] * (1 - weight) + (sumB / n) * weight);
     }
   }
 }
@@ -194,10 +224,31 @@ export function cloneRegion(
   // Þegar src er annar raster (reference-mynd) — notum hann beint, ekkert
   // afrit þarf. Þegar src er sama raster og dst, verðum við að afrita fyrst
   // því annars læsi clone-ið frá nýlega-skrifuðum pixlum í skarast svæði.
+  // Afritið nær aðeins yfir upptakagluggann (ekki alla myndina) svo strik í
+  // fullri upplausn haldist hratt.
   const useExternal = !!sourceRaster;
-  const srcData = useExternal ? sourceRaster!.data : new Uint8ClampedArray(raster.data);
   const srcW = useExternal ? sourceRaster!.width : w;
   const srcH = useExternal ? sourceRaster!.height : h;
+  let srcData: Uint8ClampedArray;
+  let winX = 0;
+  let winY = 0;
+  let winW = srcW;
+  if (useExternal) {
+    srcData = sourceRaster!.data;
+  } else {
+    winX = Math.max(0, Math.floor(srcX - radius) - 1);
+    winY = Math.max(0, Math.floor(srcY - radius) - 1);
+    const winX1 = Math.min(w - 1, Math.ceil(srcX + radius) + 1);
+    const winY1 = Math.min(h - 1, Math.ceil(srcY + radius) + 1);
+    if (winX1 < winX || winY1 < winY) return;
+    winW = winX1 - winX + 1;
+    const winH = winY1 - winY + 1;
+    srcData = new Uint8ClampedArray(winW * winH * 4);
+    for (let y = 0; y < winH; y++) {
+      const from = ((winY + y) * w + winX) * 4;
+      srcData.set(raster.data.subarray(from, from + winW * 4), y * winW * 4);
+    }
+  }
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       const dx = x - dstX;
@@ -209,11 +260,45 @@ export function cloneRegion(
       if (sx < 0 || sx >= srcW || sy < 0 || sy >= srcH) continue;
       const weight = brushWeight(Math.sqrt(d2), radius) * strength;
       if (weight <= 0) continue;
-      const srcIdx = (sy * srcW + sx) * 4;
+      const srcIdx = ((sy - winY) * winW + (sx - winX)) * 4;
       const dstIdx = (y * w + x) * 4;
       raster.data[dstIdx] = Math.round(raster.data[dstIdx] * (1 - weight) + srcData[srcIdx] * weight);
       raster.data[dstIdx + 1] = Math.round(raster.data[dstIdx + 1] * (1 - weight) + srcData[srcIdx + 1] * weight);
       raster.data[dstIdx + 2] = Math.round(raster.data[dstIdx + 2] * (1 - weight) + srcData[srcIdx + 2] * weight);
+    }
+  }
+}
+
+/** Endurheimta — blandar upprunalegu myndinni aftur inn undir burstanum
+ *  (jafnstórar myndir). Tekur til baka of mikla mótun eða lagfæringu á
+ *  einum stað án þess að afturkalla allt. */
+export function restoreRegion(
+  raster: Raster,
+  original: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+): void {
+  if (original.width !== raster.width || original.height !== raster.height) return;
+  const w = raster.width;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(raster.height - 1, Math.ceil(cy + radius));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const idx = (y * w + x) * 4;
+      for (let c = 0; c < 4; c++) {
+        raster.data[idx + c] = Math.round(raster.data[idx + c] * (1 - weight) + original.data[idx + c] * weight);
+      }
     }
   }
 }

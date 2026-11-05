@@ -28,6 +28,7 @@ test("auto tools live on their own Kjarni page", () => {
       "himinn",
       "kastljos",
       "mota",
+      "likami",
       "vidgerd",
       "upplyfting",
       "skyjahreyfimynd",

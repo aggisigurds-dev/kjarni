@@ -16,6 +16,9 @@ type Destination = {
 };
 
 const DESTINATIONS: Destination[] = [
+  // Móta-ritillinn (myndir og myndbönd)
+  { id: "mota", label: "Móta (ritill)", path: "/kjarni/artcraft/mota", accepts: ["image"] },
+  { id: "mota-myndband", label: "Móta (myndbandshamur)", path: "/kjarni/artcraft/mota", accepts: ["video"] },
   // Image destinations
   { id: "upplyfting", label: "Upplyfting", path: "/kjarni/artcraft/upplyfting", accepts: ["image"] },
   { id: "endurljos", label: "Endurljós", path: "/kjarni/artcraft/endurljos", accepts: ["image"] },
@@ -27,6 +30,7 @@ const DESTINATIONS: Destination[] = [
   { id: "dypt", label: "Dýpt", path: "/kjarni/artcraft/dypt", accepts: ["image"] },
   { id: "kastljos", label: "Kastljós", path: "/kjarni/artcraft/kastljos", accepts: ["image"] },
   { id: "mota", label: "Móta", path: "/kjarni/artcraft/mota", accepts: ["image"] },
+  { id: "likami", label: "Líkamsmótun", path: "/kjarni/artcraft/likami", accepts: ["image"] },
   { id: "vidgerd", label: "Ljósmyndaviðgerð", path: "/kjarni/artcraft/vidgerd", accepts: ["image"] },
   { id: "bakgrunnur", label: "Fjarlægja bakgrunn", path: "/kjarni/artcraft/bakgrunnur", accepts: ["image"] },
   { id: "svidsmynd", label: "Sviðsmynd", path: "/kjarni/artcraft/svidsmynd", accepts: ["image"] },

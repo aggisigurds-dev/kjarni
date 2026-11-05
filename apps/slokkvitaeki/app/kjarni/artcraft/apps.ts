@@ -357,6 +357,10 @@ export function artcraftHiminnHref(): string {
   return "/kjarni/artcraft/himinn";
 }
 
+export function artcraftLikamiHref(): string {
+  return "/kjarni/artcraft/likami";
+}
+
 export function artcraftAppHref(id: ArtcraftAppId): string {
   return `/kjarni/artcraft/${id}`;
 }
@@ -407,6 +411,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "kastljos", name: "Kastljós", href: artcraftKastljosHref(), icon: "🔦", role: "Birta", desc: "Finnur persónuna og stillir birtu sitt í hvoru lagi á henni og bakgrunninum — hverja hlið sér.", uses: ["Dekkja bakgrunn á vörumynd án þess að snerta vöruna", "Bjarta persónuna frá einni hlið í hóps-mynd"] as readonly string[] },
   { id: "vidgerd", name: "Ljósmyndaviðgerð", href: artcraftVidgerdHref(), icon: "🩹", role: "Andlit & áferð", desc: "Laga óskýr andlit, rauð augu og áferð — staðbundinn netþjónn, skýjaþjónusta eða í vafra.", uses: ["Laga gamla, óskýra fjölskyldumynd", "Skerpa starfsmannamynd fyrir vefsíðu"] as readonly string[] },
   { id: "mota", name: "Móta", href: artcraftMotaHref(), icon: "🖌️", role: "Lögun", desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.", uses: ["Fínstilla fatasnið fyrir vörumynd"] as readonly string[] },
+  { id: "likami", name: "Líkamsmótun", href: artcraftLikamiHref(), icon: "🧍", role: "Líkami", desc: "Picsart/YouCam „Body Tuner“: finnur líkamann sjálfkrafa og þú stillir mitti, mjaðmir, axlir, fótleggi og höfuð með sleðum — í vafranum, engin Replicate, vistað í fullri upplausn.", uses: ["Lengri fótleggir og mjórra mitti á tískumynd", "Jafna axlir og mjaðmir á starfsmannamynd í fullri lengd"] as readonly string[] },
   { id: "comfy", name: "ComfyUI", href: artcraftComfyHref(), icon: "🧩", role: "Texti → mynd", desc: "Teiknar með þínu eigin ComfyUI á vélinni — staðbundið hnútaverk, engin mynd send neitt.", uses: ["Mynd úr texta með þínu eigin ComfyUI-flæði"] as readonly string[] },
   { id: "hreyfimynd", name: "Hreyfimynd", href: artcraftHreyfimyndHref(), icon: "🎞️", role: "Mynd → myndband", desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist.", uses: ["Láta kyrrmynd af starfsfólki hreyfa sig í stuttu kynningarmyndbandi"] as readonly string[] },
   { id: "skyjastudio", name: "Skýjastúdíó", href: artcraftSkyjastudioHref(), icon: "☁️", role: "Texti → mynd", desc: "Teiknar með Stability SDXL, Juggernaut XL v7 eða Flux Fill á Replicate — engin uppsetning, kostar smá upphæð per mynd.", uses: ["Hugmyndavinna þegar engin ComfyUI/Forge-vél er við höndina", "Portrett með Juggernaut-stíl (minni plastic áferð)"] as readonly string[] },
@@ -443,6 +448,7 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
   if (path === "/kjarni/artcraft/kastljos") return "kastljos";
   if (path === "/kjarni/artcraft/vidgerd") return "vidgerd";
   if (path === "/kjarni/artcraft/mota") return "mota";
+  if (path === "/kjarni/artcraft/likami") return "likami";
   if (path === "/kjarni/artcraft/comfy") return "comfy";
   if (path === "/kjarni/artcraft/hreyfimynd") return "hreyfimynd";
   if (path === "/kjarni/artcraft/skyjastudio") return "skyjastudio";

@@ -3,7 +3,7 @@ import MotaClient from "./MotaClient";
 
 export const metadata: Metadata = {
   title: "Móta — Kjarni",
-  description: "Mjókka, þenja eða draga líkamslínur með bursta — í vafranum, engin mynd send neitt.",
+  description: "Myndritill í vafranum: líkamsmótun, mótunarbursti, lagfæringar, ljós og litir — engin mynd send neitt.",
 };
 
 export default function MotaPage() {

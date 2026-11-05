@@ -157,6 +157,74 @@ export function liquifyInPlace(
   liquifyAt(src, img, cx, cy, radius, strength, mode, moveX, moveY);
 }
 
+/** Sama útkoma og liquifyInPlace, en afritar aðeins gluggann sem burstinn les
+ *  úr í stað allrar myndarinnar — munar öllu á mynd í fullri upplausn þar sem
+ *  hvert strik er tugir dabba. Shrink les út í ~1.38r frá miðju og drag færist
+ *  um (moveX, moveY), svo glugginn er r·1.4 + færslan. */
+export function liquifyLocal(
+  img: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+  mode: LiquifyMode,
+  moveX = 0,
+  moveY = 0,
+): void {
+  const r = Math.max(4, radius);
+  const reach = Math.ceil(r * 1.4 + Math.max(Math.abs(moveX), Math.abs(moveY)) + 2);
+  const wx0 = Math.max(0, Math.floor(cx - reach));
+  const wy0 = Math.max(0, Math.floor(cy - reach));
+  const wx1 = Math.min(img.width - 1, Math.ceil(cx + reach));
+  const wy1 = Math.min(img.height - 1, Math.ceil(cy + reach));
+  if (wx1 < wx0 || wy1 < wy0) return;
+  const ww = wx1 - wx0 + 1;
+  const wh = wy1 - wy0 + 1;
+  const win = new Uint8ClampedArray(ww * wh * 4);
+  for (let y = 0; y < wh; y++) {
+    const from = ((wy0 + y) * img.width + wx0) * 4;
+    win.set(img.data.subarray(from, from + ww * 4), y * ww * 4);
+  }
+  const src: Raster = { data: win, width: ww, height: wh };
+  const out = new Uint8ClampedArray(4);
+  const r2 = r * r;
+  const force = Math.min(1, Math.max(0, strength));
+  const x0 = Math.max(0, Math.floor(cx - r));
+  const y0 = Math.max(0, Math.floor(cy - r));
+  const x1 = Math.min(img.width - 1, Math.ceil(cx + r));
+  const y1 = Math.min(img.height - 1, Math.ceil(cy + r));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const falloff = (1 - Math.sqrt(d2) / r) ** 2 * force;
+      let sx = x;
+      let sy = y;
+      if (mode === "expand") {
+        sx = cx + dx * (1 - falloff * 0.38);
+        sy = cy + dy * (1 - falloff * 0.38);
+      } else if (mode === "shrink") {
+        sx = cx + dx * (1 + falloff * 0.38);
+        sy = cy + dy * (1 + falloff * 0.38);
+      } else {
+        sx = x - moveX * falloff;
+        sy = y - moveY * falloff;
+      }
+      // Sama klemma og sampleBilinear á allri myndinni: við myndbrún.
+      sx = Math.min(img.width - 1, Math.max(0, sx));
+      sy = Math.min(img.height - 1, Math.max(0, sy));
+      sampleBilinear(src, sx - wx0, sy - wy0, out, 0);
+      const di = (y * img.width + x) * 4;
+      img.data[di] = out[0];
+      img.data[di + 1] = out[1];
+      img.data[di + 2] = out[2];
+      img.data[di + 3] = out[3];
+    }
+  }
+}
+
 export function warpBody(src: Raster, dest: Raster, body: BodyAmounts): void {
   if (bodyIsIdentity(body)) {
     copyRaster(src, dest);
