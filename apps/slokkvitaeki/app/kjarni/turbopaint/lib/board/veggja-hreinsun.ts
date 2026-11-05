@@ -39,6 +39,8 @@ export interface Vikmork {
   samlinaThvertM: number;
   /** Næstum láréttur / lóðréttur innan þessa (gráður) verður nákvæmlega 0° / 90°. Sjálfgefið 3°. */
   rettaGradur: number;
+  /** Skekkja blaðsins í gráðum — sett af notandanum. Vantar (null) = mæld á línunum sjálfum. */
+  skekkjaGradur?: number | null;
   /** Laus endi lengist að næsta vegg ef hann er nær en þetta. Sjálfgefið 0,40 m. */
   lengjaM: number;
   /** Bútar styttri en þetta sem tengjast engu í hvorugum enda fara. Sjálfgefið 0,50 m. */
@@ -127,6 +129,8 @@ export interface HreinsunTalning {
   lengdir: number;
   /** Stakir stuttir bútar fjarlægðir. */
   stakir: number;
+  /** Mæld skekkja blaðsins í gráðum (0 = beint). */
+  skekkja: number;
   /** Langir frístandandi bútar (hillurekkar) fjarlægðir. */
   hillur: number;
 }
@@ -136,7 +140,7 @@ export interface Fjarlaegd {
   astaeda: "strikpunkt" | "stakur" | "hilla" | "utan";
 }
 
-const tomTalning = (): HreinsunTalning => ({ strikPunkt: 0, rettir: 0, sameinadir: 0, smellt: 0, lengdir: 0, stakir: 0, hillur: 0 });
+const tomTalning = (): HreinsunTalning => ({ strikPunkt: 0, rettir: 0, sameinadir: 0, smellt: 0, lengdir: 0, stakir: 0, hillur: 0, skekkja: 0 });
 
 // ── grunnur ────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -256,11 +260,59 @@ export function strikPunktLinur(butar: HLina[], dpm: number, st: Vikmork["strikP
 
 // ── 2. rétta ───────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Næstum lárétt / lóðrétt (innan `gradur`) → nákvæmlega 0° / 90° um miðju bútsins. Skilar nýjum bút eða null (óbreytt). */
-export function retta(p: number[], gradur: number): number[] | null {
+/** SKEKKJA BLAÐSINS (Agnar 05.11.2026: „skannaða blaðið þarna er aðeins skakt, svo allar línur þurfa að vera ööörlítið á ská · það er
+ * mögulega að trufla vélina"). Mælt 05.11.2026 á Breiðhöfða 13: 1. hæð −0,10°, 2. hæð −0,65°. Blaðið er lagt skakkt í skannann, svo
+ * veggirnir liggja allir á sama örlitla halla. Réttingin hér að neðan snýr þeim annars í NÁKVÆMLEGA 0° / 90° og þá hætta þeir að
+ * falla að teikningunni undir. Skekkjan er mæld á löngu línunum sjálfum: horn hverrar línu mátað í [−45°, 45°) og miðgildið tekið,
+ * vegið með lengd. Finnist hún ekki (of fáar langar línur, eða dreifin of mikil) er 0 skilað og allt er eins og áður. */
+export function maelaSkekkju(linur: HLina[], dpm: number, hamark = 3): number {
+  const horn: { v: number; w: number }[] = [];
+  for (const l of iButa(linur)) {
+    const L = lengdLinu(l.p);
+    if (L < 2 * dpm) continue;
+    let g = (Math.atan2(l.p[3] - l.p[1], l.p[2] - l.p[0]) * 180) / Math.PI;
+    g = ((g % 90) + 135) % 90 - 45; // horn mátað í [−45°, 45°): lárétt og lóðrétt línur lenda á sama gildi
+    if (Math.abs(g) > hamark) continue;
+    horn.push({ v: g, w: L });
+  }
+  if (horn.length < 6) return 0;
+  horn.sort((a, b) => a.v - b.v);
+  const heild = horn.reduce((t, h) => t + h.w, 0);
+  let s = 0, mid = 0;
+  for (const h of horn) {
+    s += h.w;
+    if (s >= heild / 2) {
+      mid = h.v;
+      break;
+    }
+  }
+  // dreifin: helmingur lengdarinnar verður að liggja innan 1° frá miðgildinu, annars er þetta ekki samfelld skekkja
+  const naerri = horn.reduce((t, h) => t + (Math.abs(h.v - mid) <= 1 ? h.w : 0), 0);
+  return naerri * 2 >= heild ? mid : 0;
+}
+
+/** Næstum lárétt / lóðrétt (innan `gradur`) → nákvæmlega 0° / 90° um miðju bútsins — eða `skekkja`° / `skekkja`+90° þegar blaðið
+ * liggur skakkt í skannanum. Skilar nýjum bút eða null (óbreytt). */
+export function retta(p: number[], gradur: number, skekkja = 0): number[] | null {
   if (p.length !== 4) return null;
   const dx = p[2] - p[0], dy = p[3] - p[1];
   if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return null;
+  if (skekkja) {
+    // snúið um skekkjuna, rétt þar, og snúið til baka — svo veggurinn fylgi blaðinu
+    const r = (-skekkja * Math.PI) / 180, c = Math.cos(r), s2 = Math.sin(r);
+    const mx = (p[0] + p[2]) / 2, my = (p[1] + p[3]) / 2;
+    const sn = (x: number, y: number, k: number): [number, number] => {
+      const ax = x - mx, ay = y - my, cc = Math.cos(k * r), ss = Math.sin(k * r);
+      return [mx + ax * cc - ay * ss, my + ax * ss + ay * cc];
+    };
+    void c;
+    void s2;
+    const a = sn(p[0], p[1], 1), b = sn(p[2], p[3], 1);
+    const r2 = retta([a[0], a[1], b[0], b[1]], gradur, 0);
+    if (!r2) return null;
+    const a2 = sn(r2[0], r2[1], -1), b2 = sn(r2[2], r2[3], -1);
+    return [a2[0], a2[1], b2[0], b2[1]];
+  }
   const halli = (Math.atan2(Math.abs(dy), Math.abs(dx)) * 180) / Math.PI; // 0 = lárétt, 90 = lóðrétt
   if (halli > 1e-6 && halli <= gradur) {
     const y = (p[1] + p[3]) / 2;
@@ -503,9 +555,11 @@ export function hreinsaVeggi(nyjar: HLina[], fastar: HLina[], dpm: number, vik: 
     butar = butar.filter((_, i) => !sp.has(i));
     talning.strikPunkt = sp.size;
   }
-  // 2. rétta
+  // 2. rétta — eftir blaðinu sjálfu þegar skönnunin er skökk (skekkjan mæld á löngu línunum)
+  const skekkja = vik.skekkjaGradur != null ? vik.skekkjaGradur : maelaSkekkju(butar, dpm, vik.rettaGradur);
+  talning.skekkja = Math.round(skekkja * 100) / 100;
   butar = butar.map((b) => {
-    const r = retta(b.p, vik.rettaGradur);
+    const r = retta(b.p, vik.rettaGradur, skekkja);
     if (!r) return b;
     talning.rettir++;
     return { ...b, p: r };
@@ -708,7 +762,7 @@ export function utanHuss(nyjar: HLina[], hus: HusUtlina): Set<number> {
 /** Kassi hússins á blaðinu úr veggjunum: klasar veggjanetsins (veggir sem snertast innan `tengiM`), vegnir með lengd ×
  * þykkt (hús er úr þykkum veggjum, titilreitur og málsetning úr línum); stærsti klasinn + álmur (≥ 20 % af honum, innan
  * `almaM` frá því sem er með). Skilar kassanum með `spassia` (hlutfall lengri hliðar) hvoru megin, eða null. */
-export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; almaM?: number; spassia?: number } = {}): (Rammi & { veggir: number; klasar: number }) | null {
+export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; almaM?: number; spassia?: number; hlutur?: number } = {}): (Rammi & { veggir: number; klasar: number }) | null {
   const butar = iButa(linur).filter((b) => tegundAf(b) !== "hurd");
   const n = butar.length;
   if (n < 4) return null;
@@ -752,6 +806,15 @@ export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; alm
   for (const q of K.values()) if (!adal || q.flat > adal.flat) adal = q;
   if (!adal) return null;
   adal.med = true;
+  // ÞUNGIR KLASAR ERU LÍKA HÚSIÐ (Agnar 05.11.2026, Nesdekk Breiðhöfði 13, 2. hæð: „2. hæð er ennþá krapp" — 41 af 66 veggjum fóru
+  // sem „utan húss"). Stærsti klasinn var skrifstofuhornið (margir stuttir þykkir veggir) og ytri veggir lagersins voru hvorki
+  // 20 % af honum né innan 4 m, svo kassinn náði aðeins yfir hornið. Klasi sem ber ≥ `hlutur` af HEILDAR veggjaþunga blaðsins
+  // telst hluti hússins óháð fjarlægð; titilreitur og lóðarmörk eru þunnar línur og vega lítið.
+  {
+    const heild = [...K.values()].reduce((t, q) => t + q.flat, 0);
+    const lagm = heild * (st.hlutur ?? 0.08);
+    for (const q of K.values()) if (q.flat >= lagm) q.med = true;
+  }
   const bilK = (a: Rammi, b: Rammi) => Math.max(0, Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1), Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1));
   for (let breytt = true; breytt; ) {
     breytt = false;
