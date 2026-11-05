@@ -731,3 +731,128 @@
   opacity: 0.5;
   pointer-events: none;
 }
+
+/* ---------------------------------------------------------------- hamur + myndband */
+
+.mx-mode {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--mx-panel);
+  box-shadow: var(--mx-shadow);
+}
+
+.mx-mode button {
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  font-size: 15px !important;
+  color: var(--mx-soft) !important;
+}
+
+.mx-mode button.on {
+  background: var(--mx-accent-bg);
+  color: var(--mx-accent-ink) !important;
+  font-weight: 700 !important;
+}
+
+.mv-stage {
+  display: grid;
+  place-items: center;
+  cursor: default;
+  touch-action: manipulation;
+}
+
+.mv-video {
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  border-radius: 6px;
+  background: #000;
+  box-shadow: 0 2px 12px rgba(20, 20, 30, 0.12);
+  object-fit: contain;
+}
+
+img.mv-video {
+  background: transparent;
+}
+
+.mv-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--mx-shadow);
+  font-size: 28px !important;
+  color: var(--mx-ink) !important;
+  padding-left: 6px;
+}
+
+.mv-transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 4px;
+}
+
+.mv-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: #f3f3f5;
+  font-size: 16px !important;
+}
+
+.mv-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  display: flex;
+  gap: 3px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.mv-seg {
+  flex-basis: 0;
+  min-width: 6px;
+  border-radius: 8px;
+  background: #d9d9de center / cover no-repeat;
+  box-shadow: inset 0 0 0 2px transparent;
+  opacity: 0.85;
+}
+
+.mv-seg.on {
+  opacity: 1;
+  box-shadow: inset 0 0 0 2px var(--mx-accent);
+}
+
+.mv-head {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--mx-ink);
+  box-shadow: 0 0 0 1.5px #fff;
+  pointer-events: none;
+}
+
+.mv-time {
+  flex: none;
+  min-width: 78px;
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mx-soft);
+}

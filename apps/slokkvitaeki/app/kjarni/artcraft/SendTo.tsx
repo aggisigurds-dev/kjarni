@@ -16,6 +16,9 @@ type Destination = {
 };
 
 const DESTINATIONS: Destination[] = [
+  // Móta-ritillinn (myndir og myndbönd)
+  { id: "mota", label: "Móta (ritill)", path: "/kjarni/artcraft/mota", accepts: ["image"] },
+  { id: "mota-myndband", label: "Móta (myndbandshamur)", path: "/kjarni/artcraft/mota", accepts: ["video"] },
   // Image destinations
   { id: "upplyfting", label: "Upplyfting", path: "/kjarni/artcraft/upplyfting", accepts: ["image"] },
   { id: "endurljos", label: "Endurljós", path: "/kjarni/artcraft/endurljos", accepts: ["image"] },

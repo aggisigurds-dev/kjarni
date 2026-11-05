@@ -108,6 +108,10 @@ export type MotaEditorProps = {
   mime: string;
   onClose: () => void;
   onReplace: (file: File) => void;
+  /** false = falinn (myndbandshamur opinn) — heldur sögunni sinni á meðan. */
+  active?: boolean;
+  /** Skipta yfir í myndbandsham með myndina eins og hún er núna. */
+  onVideoMode?: (image: Blob) => void;
 };
 
 function nextPaint(): Promise<void> {
@@ -129,7 +133,9 @@ function trackStyle(value: number, spec: SliderSpec): React.CSSProperties {
   };
 }
 
-export default function MotaEditor({ initial, name, mime, onClose, onReplace }: MotaEditorProps) {
+export default function MotaEditor({ initial, name, mime, onClose, onReplace, active = true, onVideoMode }: MotaEditorProps) {
+  const activeRef = useRef(active);
+  activeRef.current = active;
   // ---- DOM
   const stageRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -402,6 +408,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     zoomBy(Math.exp(-e.deltaY * k), { x: e.clientX - r.left, y: e.clientY - r.top });
   };
   handlers.current.onKey = (e: KeyboardEvent) => {
+    if (!activeRef.current) return;
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA") && (target as HTMLInputElement).type !== "range") return;
     const mod = e.ctrlKey || e.metaKey;
@@ -426,6 +433,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     if (e.key === " ") spaceRef.current = false;
   };
   handlers.current.onPop = () => {
+    if (!activeRef.current) return;
     if (closingRef.current) {
       onClose();
       return;
@@ -1292,17 +1300,38 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
   }
 
   const editor = (
-    <div className="mx-root" role="application" aria-label="Móta — myndritill">
+    <div className="mx-root" style={{ display: active ? undefined : "none" }} role="application" aria-label="Móta — myndritill">
       <header className="mx-top">
         <button type="button" className="mx-icon-btn" onClick={requestClose} aria-label="Loka ritlinum">
           <Icon name="back" />
         </button>
-        <div className="mx-title-block">
-          <strong>Móta</strong>
-          <span>
-            {working.width}×{working.height}
-          </span>
-        </div>
+        {onVideoMode ? (
+          <div className="mx-mode" role="tablist" aria-label="Hamur">
+            <button type="button" role="tab" aria-selected className="on">
+              Mynd
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={false}
+              disabled={!!busy || previewSession}
+              onClick={() =>
+                void exportBlob()
+                  .then((b) => onVideoMode(b))
+                  .catch((err) => showToast(err instanceof Error ? err.message : "Gat ekki opnað myndbandsham"))
+              }
+            >
+              Myndband
+            </button>
+          </div>
+        ) : (
+          <div className="mx-title-block">
+            <strong>Móta</strong>
+            <span>
+              {working.width}×{working.height}
+            </span>
+          </div>
+        )}
         <div className="mx-spacer" />
         <button type="button" className="mx-save" onClick={() => void save()} disabled={!!busy || previewSession}>
           Vista

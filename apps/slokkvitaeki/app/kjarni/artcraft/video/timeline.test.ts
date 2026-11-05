@@ -62,3 +62,22 @@ test("default continue point is a second before the end; frames snap to the fram
   assert.equal(formatSeconds(6.25), "6,3");
   assert.equal(formatSeconds(-1), "0,0");
 });
+
+test("video presets: lengths stay inside what the models accept", async () => {
+  const { LENGTHS, expectedSeconds, lengthsFor, nearestAspect, outputFps } = await import("./presets.ts");
+  for (const l of LENGTHS) {
+    if (l.model === "wan") {
+      assert.ok((l.numFrames ?? 0) >= 81 && (l.numFrames ?? 0) <= 121, `${l.id} frames within Wan 81–121`);
+      assert.ok((l.fps ?? 0) >= 5 && (l.fps ?? 0) <= 30, `${l.id} fps within 5–30`);
+    } else {
+      assert.ok(l.duration === 5 || l.duration === 10, `${l.id} Kling 5 or 10 s`);
+    }
+  }
+  assert.equal(new Set(LENGTHS.map((l) => l.id)).size, LENGTHS.length);
+  assert.ok(Math.abs(expectedSeconds(lengthsFor("wan")[2]) - 10.08) < 0.01);
+  assert.equal(outputFps(lengthsFor("wan")[2]), 30);
+  assert.equal(outputFps(lengthsFor("kling")[0]), 24);
+  assert.equal(nearestAspect(1080, 1920), "9:16");
+  assert.equal(nearestAspect(1920, 1080), "16:9");
+  assert.equal(nearestAspect(1000, 1100), "1:1");
+});
