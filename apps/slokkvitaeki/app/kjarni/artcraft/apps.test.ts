@@ -72,6 +72,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
       "kastljos",
       "vidgerd",
       "mota",
+      "likami",
       "comfy",
       "hreyfimynd",
       "skyjastudio",

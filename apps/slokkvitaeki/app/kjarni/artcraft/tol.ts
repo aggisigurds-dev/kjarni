@@ -232,6 +232,16 @@ export const AUTO_TOOLS = [
     category: "edit" as ToolCategory,
   },
   {
+    id: "likami",
+    name: "Líkamsmótun",
+    role: "Líkami",
+    desc: "Finnur líkamann sjálfkrafa — mitti, mjaðmir, axlir, fótleggir og höfuð með sleðum. Í vafranum, vistað í fullri upplausn.",
+    icon: "🧍",
+    href: "/kjarni/artcraft/likami",
+    ready: true,
+    category: "edit" as ToolCategory,
+  },
+  {
     id: "vidgerd",
     name: "Ljósmyndaviðgerð",
     role: "Andlit & áferð",

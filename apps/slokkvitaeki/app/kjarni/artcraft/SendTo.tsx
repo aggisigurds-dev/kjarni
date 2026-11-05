@@ -27,6 +27,7 @@ const DESTINATIONS: Destination[] = [
   { id: "dypt", label: "Dýpt", path: "/kjarni/artcraft/dypt", accepts: ["image"] },
   { id: "kastljos", label: "Kastljós", path: "/kjarni/artcraft/kastljos", accepts: ["image"] },
   { id: "mota", label: "Móta", path: "/kjarni/artcraft/mota", accepts: ["image"] },
+  { id: "likami", label: "Líkamsmótun", path: "/kjarni/artcraft/likami", accepts: ["image"] },
   { id: "vidgerd", label: "Ljósmyndaviðgerð", path: "/kjarni/artcraft/vidgerd", accepts: ["image"] },
   { id: "bakgrunnur", label: "Fjarlægja bakgrunn", path: "/kjarni/artcraft/bakgrunnur", accepts: ["image"] },
   { id: "svidsmynd", label: "Sviðsmynd", path: "/kjarni/artcraft/svidsmynd", accepts: ["image"] },
