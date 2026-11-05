@@ -1,6 +1,8 @@
 /** Vafra-hjálparföll fyrir myndbönd: lýsigögn, nákvæm leit að ramma, rammi
  *  sem mynd, og samskeyting klipptra búta (canvas + MediaRecorder). */
 
+import { isBlankFrame } from "./frameCheck";
+
 export type VideoMeta = { duration: number; width: number; height: number };
 
 function makeVideo(src: string): HTMLVideoElement {
@@ -31,12 +33,43 @@ function waitFor(v: HTMLVideoElement, event: "loadedmetadata" | "loadeddata" | "
 }
 
 /** Færir myndbandið á tíma `t` og bíður þar til ramminn er tilbúinn. */
-export async function seekVideo(v: HTMLVideoElement, t: number): Promise<void> {
+export async function seekVideo(v: HTMLVideoElement, t: number, force = false): Promise<void> {
   const target = Math.max(0, Math.min(t, (v.duration || t) - 0.001));
-  if (Math.abs(v.currentTime - target) < 1e-4 && v.readyState >= 2) return;
+  if (!force && Math.abs(v.currentTime - target) < 1e-4 && v.readyState >= 2) return;
   const done = waitFor(v, "seeked");
   v.currentTime = target;
   await done;
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Bíður eftir að ramminn sé í raun afkóðaður og sýndur (ekki bara „seeked“).
+ *  requestVideoFrameCallback þar sem hann er til; annars stutt bið. */
+async function framePresented(v: HTMLVideoElement, timeoutMs = 700): Promise<void> {
+  const rvfc = (v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number })
+    .requestVideoFrameCallback;
+  if (typeof rvfc === "function") {
+    await Promise.race([new Promise<void>((r) => rvfc.call(v, () => r())), sleep(timeoutMs)]);
+  } else {
+    await sleep(120);
+  }
+}
+
+/** Myndband utan síðunnar er ekki alltaf afkóðað í síma — sett ósýnilegt inn. */
+function attachHidden(v: HTMLVideoElement): void {
+  v.style.cssText =
+    "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1";
+  document.body.appendChild(v);
+}
+
+function frameLooksBlank(c: HTMLCanvasElement): boolean {
+  const probe = document.createElement("canvas");
+  probe.width = 32;
+  probe.height = 32;
+  const pctx = probe.getContext("2d", { willReadFrequently: true });
+  if (!pctx) return false;
+  pctx.drawImage(c, 0, 0, 32, 32);
+  return isBlankFrame(pctx.getImageData(0, 0, 32, 32).data);
 }
 
 export async function loadVideoMeta(blob: Blob): Promise<VideoMeta> {
@@ -60,25 +93,47 @@ export async function loadVideoMeta(blob: Blob): Promise<VideoMeta> {
   }
 }
 
-/** Ramminn á tíma `t` sem mynd (JPEG sjálfgefið). */
+/** Ramminn á tíma `t` sem mynd (JPEG sjálfgefið). Auður rammi (svartur eða
+ *  gegnsær — Chrome á Android) er aldrei skilaður: reynt aftur með því að
+ *  spila myndbandið örstutt svo afkóðarinn vakni, og annars villa. */
 export async function extractFrameAt(blob: Blob, t: number, type = "image/jpeg", quality = 0.92): Promise<Blob> {
   const url = URL.createObjectURL(blob);
   const v = makeVideo(url);
+  attachHidden(v);
   try {
     await waitFor(v, "loadeddata");
-    await seekVideo(v, t);
     const c = document.createElement("canvas");
     c.width = v.videoWidth;
     c.height = v.videoHeight;
     const ctx = c.getContext("2d");
     if (!ctx) throw new Error("Gat ekki teiknað ramma");
-    ctx.drawImage(v, 0, 0);
-    return await new Promise((resolve, reject) =>
-      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað ramma"))), type, quality),
-    );
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        // Vekja afkóðarann: spila örstutt, stöðva, leita aftur á sama stað.
+        try {
+          await v.play();
+          await sleep(150 * attempt);
+        } catch {
+          /* sjálfvirk spilun bönnuð — leitin ein verður að duga */
+        }
+        v.pause();
+      }
+      await seekVideo(v, t, attempt > 0);
+      await framePresented(v);
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.drawImage(v, 0, 0, c.width, c.height);
+      if (!frameLooksBlank(c)) {
+        return await new Promise((resolve, reject) =>
+          c.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað ramma"))), type, quality),
+        );
+      }
+    }
+    throw new Error("Vafrinn skilaði auðum ramma úr myndbandinu — ekkert sent. Reyndu aftur eða veldu annan stað.");
   } finally {
+    v.pause();
     v.removeAttribute("src");
     v.load();
+    v.remove();
     URL.revokeObjectURL(url);
   }
 }
