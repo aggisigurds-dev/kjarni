@@ -1,0 +1,584 @@
+/* Móta-ritillinn — ljóst símaforritsútlit: ljósgrátt svið, hvít spjöld,
+   appelsínugult fyrir það sem er valið. Allt undir .mx-root (portal á body). */
+
+.mx-root {
+  --mx-stage: #ebebee;
+  --mx-panel: #ffffff;
+  --mx-ink: #1d1d1f;
+  --mx-soft: #5f6168;
+  --mx-faint: #8a8c93;
+  --mx-line: #e6e6ea;
+  --mx-rail: #d9d9de;
+  --mx-accent: #f05a28;
+  --mx-accent-ink: #b8410e;
+  --mx-accent-bg: #fde9e1;
+  --mx-shadow: 0 1px 3px rgba(20, 20, 30, 0.14), 0 1px 1px rgba(20, 20, 30, 0.06);
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--mx-stage);
+  color: var(--mx-ink);
+  font: 15px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.mx-root button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mx-root button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.mx-root button:focus-visible,
+.mx-range:focus-visible {
+  outline: 2px solid var(--mx-accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- toppur */
+
+.mx-top {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  z-index: 3;
+}
+
+.mx-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mx-panel);
+  box-shadow: var(--mx-shadow);
+}
+
+.mx-icon-btn.accent {
+  color: var(--mx-accent-ink);
+}
+
+.mx-title-block {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.mx-title-block strong {
+  font-size: 16px;
+}
+
+.mx-title-block span {
+  font-size: 12px;
+  color: var(--mx-soft);
+}
+
+.mx-spacer {
+  flex: 1;
+}
+
+.mx-save {
+  height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mx-panel);
+  box-shadow: var(--mx-shadow);
+  color: var(--mx-accent-ink) !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+
+.mx-menu {
+  position: absolute;
+  top: calc(60px + env(safe-area-inset-top));
+  right: 12px;
+  min-width: 240px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--mx-panel);
+  box-shadow: 0 10px 30px rgba(20, 20, 30, 0.2), 0 0 0 1px var(--mx-line);
+}
+
+.mx-menu > button,
+.mx-menu-send > button {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  font-size: 15px;
+}
+
+.mx-menu > button:hover:not(:disabled),
+.mx-menu-send > button:hover {
+  background: #f3f3f5;
+}
+
+.mx-menu-send {
+  padding: 2px 0;
+}
+
+/* ---------------------------------------------------------------- svið */
+
+.mx-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  background: var(--mx-stage);
+  cursor: grab;
+}
+
+.mx-stage.brush {
+  cursor: none;
+}
+
+.mx-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.mx-pyr {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  box-shadow: 0 2px 12px rgba(20, 20, 30, 0.12);
+}
+
+.mx-pyr canvas,
+.mx-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100%;
+}
+
+.mx-pyr canvas {
+  height: 100%;
+}
+
+.mx-cursor,
+.mx-size-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  display: none;
+}
+
+.mx-size-preview {
+  display: block;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(240, 90, 40, 0.12);
+}
+
+.mx-anchor,
+.mx-src {
+  position: absolute;
+  left: -11px;
+  top: -11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(240, 90, 40, 0.35);
+  box-shadow: 0 0 0 1.5px var(--mx-accent), 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  display: none;
+}
+
+.mx-src {
+  background: transparent;
+  border-style: dashed;
+}
+
+.mx-zoom-pill {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(29, 29, 31, 0.78);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.mx-zoom-pill.on {
+  opacity: 1;
+  transition: none;
+}
+
+.mx-banner,
+.mx-toast {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(29, 29, 31, 0.86);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.mx-banner.subtle {
+  background: rgba(29, 29, 31, 0.6);
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.mx-toast {
+  top: auto;
+  bottom: 70px;
+}
+
+.mx-float {
+  position: absolute;
+  bottom: 12px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--mx-shadow);
+  touch-action: manipulation;
+}
+
+.mx-float.left {
+  left: 12px;
+}
+
+.mx-float.right {
+  right: 12px;
+}
+
+.mx-float button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.mx-float button.on {
+  background: var(--mx-accent-bg);
+  color: var(--mx-accent-ink);
+}
+
+.mx-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  background: rgba(235, 235, 238, 0.55);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mx-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--mx-rail);
+  border-top-color: var(--mx-accent);
+  animation: mx-spin 0.8s linear infinite;
+}
+
+@keyframes mx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------- neðri hluti */
+
+.mx-panel {
+  flex: none;
+  background: var(--mx-panel);
+  padding-bottom: env(safe-area-inset-bottom);
+  touch-action: manipulation;
+}
+
+.mx-panel > * {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mx-controls {
+  padding: 10px 16px 2px;
+}
+
+.mx-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.mx-lab {
+  flex: none;
+  width: 60px;
+  font-size: 14px;
+  color: var(--mx-soft);
+}
+
+.mx-val {
+  flex: none;
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--mx-soft);
+}
+
+.mx-reset {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mx-soft);
+}
+
+.mx-ends {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 54px 0 48px;
+  font-size: 12px;
+  color: var(--mx-faint);
+  min-height: 16px;
+}
+
+.mx-note {
+  margin: 4px 0 8px;
+  font-size: 14px;
+  color: var(--mx-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mx-hint {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--mx-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+
+.mx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--mx-line);
+  border-radius: 999px;
+  background: #fafafb;
+  font-size: 14px;
+}
+
+.mx-chip.on {
+  border-color: transparent;
+  background: var(--mx-accent-bg);
+  color: var(--mx-accent-ink);
+  font-weight: 600;
+}
+
+/* Sleðinn: þunn braut, appelsínugulur hluti frá núlli, hvítur hnappur. */
+.mx-range {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: pan-y;
+}
+
+.mx-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mx-track, var(--mx-rail));
+}
+
+.mx-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mx-track, var(--mx-rail));
+}
+
+.mx-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #d0d0d6;
+  box-shadow: 0 1px 4px rgba(20, 20, 30, 0.25);
+}
+
+.mx-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #d0d0d6;
+  box-shadow: 0 1px 4px rgba(20, 20, 30, 0.25);
+}
+
+.mx-tools {
+  display: flex;
+  gap: 2px;
+  padding: 8px 6px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.mx-tools::-webkit-scrollbar {
+  display: none;
+}
+
+.mx-tool {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 76px;
+  padding: 8px 6px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #2b2c30 !important;
+  font-size: 13px !important;
+  white-space: nowrap;
+}
+
+.mx-tool.on {
+  color: var(--mx-accent-ink) !important;
+  font-weight: 600 !important;
+}
+
+.mx-dot {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--mx-accent);
+}
+
+.mx-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mx-line);
+}
+
+.mx-bottom .mx-icon-btn {
+  box-shadow: none;
+  background: transparent;
+}
+
+.mx-session-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mx-tabs {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  justify-content: space-between;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.mx-tab {
+  flex: none;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 16px !important;
+  color: #3a3b40 !important;
+}
+
+.mx-tab.on {
+  background: var(--mx-accent-bg);
+  color: var(--mx-accent-ink) !important;
+  font-weight: 600 !important;
+}
+
+@media (min-width: 760px) {
+  .mx-tabs {
+    justify-content: center;
+    gap: 12px;
+  }
+}

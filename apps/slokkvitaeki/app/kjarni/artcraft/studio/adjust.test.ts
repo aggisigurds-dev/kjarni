@@ -77,3 +77,29 @@ test("strokePoints interpolates along a drag", () => {
   assert.ok(pts.length >= 2);
   assert.equal(pts[pts.length - 1].x, 10);
 });
+
+test("liquifyLocal matches liquifyInPlace for every mode, including image edges", async () => {
+  const { liquifyInPlace, liquifyLocal } = await import("./adjust.ts");
+  const w = 90;
+  const h = 70;
+  const base = new Uint8ClampedArray(w * h * 4);
+  let s = 5;
+  for (let i = 0; i < base.length; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    base[i] = s % 256;
+  }
+  const cases: Array<[number, number, number, number, "expand" | "shrink" | "drag", number, number]> = [
+    [45, 35, 20, 0.8, "shrink", 0, 0],
+    [45, 35, 20, 1, "expand", 0, 0],
+    [40, 30, 18, 0.9, "drag", 7, -4],
+    [2, 3, 25, 1, "shrink", 0, 0],
+    [88.5, 68.2, 16, 0.7, "drag", -12, 9],
+  ];
+  for (const [cx, cy, r, st, mode, mx, my] of cases) {
+    const a = { data: new Uint8ClampedArray(base), width: w, height: h };
+    const b = { data: new Uint8ClampedArray(base), width: w, height: h };
+    liquifyInPlace(a, cx, cy, r, st, mode, mx, my);
+    liquifyLocal(b, cx, cy, r, st, mode, mx, my);
+    assert.deepEqual(b.data, a.data, `${mode} at ${cx},${cy}`);
+  }
+});
