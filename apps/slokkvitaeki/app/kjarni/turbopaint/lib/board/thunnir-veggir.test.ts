@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bakgrunnsTonn, finnaThunnaVeggi } from "./thunnir-veggir";
+import { bakgrunnsTonn, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 
 const DPM = 50;
 const W = 1200;
@@ -50,4 +50,44 @@ test("þunnir veggir: stutt rák (< 6 m), þykk fylling og brot sömu línu með
   assert.ok(nedst[0][0] <= 101 && nedst[0][2] >= 1099, "brotin runnu saman");
   assert.equal(r.filter((v) => v[1] === 504 || (v[1] > 495 && v[1] < 515)).length, 0, "4 m rák telst ekki");
   assert.equal(r.filter((v) => v[1] > 90 && v[1] < 170).length, 0, "1,2 m þykk fylling telst ekki");
+});
+
+test("halli blaðsins: skakkt blað mælist, og rákir finnast sem fundust ekki á beinni leit", () => {
+  // 0,6° skakkt blað: lárétt lína dregst um 0,0105 · x. Yfir 1000 díla eru það 10 dílar — margfalt þykkt rákarinnar.
+  const t = Math.tan((0.6 * Math.PI) / 180);
+  const g = new Uint8Array(W * H).fill(243);
+  const settu = (x: number, y: number) => {
+    const yy = Math.round(y);
+    if (x >= 0 && x < W && yy >= 0 && yy < H) g[yy * W + x] = 205;
+  };
+  // tvær langar „tvöfaldar hárlínur" (9 dílar) á skökku blaði
+  for (const y0 of [300, 700]) for (let x = 60; x < 1150; x++) for (let k = 0; k < 9; k++) settu(x, y0 - t * x + k);
+  // og einn lóðréttur veggur
+  for (let y = 120; y < 760; y++) for (let k = 0; k < 9; k++) settu(Math.round(200 + t * y) + k, y);
+  const m = new Uint8Array(W * H);
+  const thr = bakgrunnsTonn(g) - 16;
+  for (let i = 0; i < m.length; i++) m[i] = g[i] < thr ? 1 : 0;
+  const halli = maelaHallaMyndar(m, W, H);
+  assert.ok(Math.abs(halli - t) < 0.003, "mældur halli " + halli.toFixed(4) + " á móti " + t.toFixed(4));
+  const an = finnaThunnaVeggi(g, W, H, { dpm: DPM, skekkja: 0 });
+  const med = finnaThunnaVeggi(g, W, H, { dpm: DPM });
+  assert.ok(med.length >= 3, "skekkjuleiðrétt leit finnur rákirnar þrjár: " + med.length);
+  // bein leit finnur rákina líka hér (blaðið er aðeins 1200 dílar breitt svo drátturinn er 11 dílar), en hún skilar henni
+  // NÁKVÆMLEGA láréttri og of þykkri — veggurinn liggur þá ekki á teikningunni
+  const anLar = an.find((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]));
+  assert.ok(anLar && Math.abs(anLar[3] - anLar[1]) < 1, "bein leit skilar rákinni láréttri: " + JSON.stringify(anLar));
+  const medLar0 = med.find((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]))!;
+  assert.ok(medLar0[4] < anLar![4], `skekkjuleiðrétt rák er grennri (${anLar![4]} → ${medLar0[4]})`);
+  // lárétta rákin fylgir hallanum — ekki nákvæmlega lárétt
+  const lar = med.find((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]));
+  assert.ok(lar && Math.abs(lar[3] - lar[1]) > 5, "lárétta rákin er á ská eins og blaðið: " + JSON.stringify(lar));
+});
+
+test("halli blaðsins: beint blað mælist 0 og leitin er óbreytt", () => {
+  const g = blad([[100, 300, 1000, 300, 9], [200, 350, 200, 700, 9]]);
+  const m = new Uint8Array(W * H);
+  const thr = bakgrunnsTonn(g) - 16;
+  for (let i = 0; i < m.length; i++) m[i] = g[i] < thr ? 1 : 0;
+  assert.equal(maelaHallaMyndar(m, W, H), 0);
+  assert.deepEqual(finnaThunnaVeggi(g, W, H, { dpm: DPM }), finnaThunnaVeggi(g, W, H, { dpm: DPM, skekkja: 0 }));
 });
