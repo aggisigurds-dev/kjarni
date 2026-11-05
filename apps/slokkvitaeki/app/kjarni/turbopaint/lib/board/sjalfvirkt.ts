@@ -354,6 +354,7 @@ export async function vinnaLinur(
       "hreinsun",
       `${tl.sameinadir} sameinaðir · ${tl.smellt} smellt · ${tl.lengdir} lengdir · ${tl.rettir} réttir · ${tl.stakir} stakir fjarlægðir` +
       (tl.hillur ? ` · ${tl.hillur} hillur (frístandandi langar línur) fjarlægðar` : "") +
+      (tl.skekkja ? ` · blaðið liggur ${tl.skekkja.toFixed(2).replace(".", ",")}° skakkt í skannanum — veggirnir réttast eftir því` : "") +
         (tl.strikPunkt ? ` · ${tl.strikPunkt} strik-punkt` : "") +
         ` (${hrar.length} → ${hreinar.length})`
     );
@@ -825,7 +826,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
 
   // ── h) yfirlit og vistun ──
   const nyV = lokaNy.filter(erVeggTeg).length, nyG = lokaNy.filter((l) => l.tegund === "gler").length;
-  const ht = talning.hreinsun as { sameinadir: number; stakir: number } | undefined;
+  const ht = talning.hreinsun as { sameinadir: number; stakir: number; skekkja?: number } | undefined;
   // Aðeins valdir hópar eru taldir (annað var „Sleppt, ekki valið"): „Fann 0 veggi“ um hóp sem var ekki keyrður væri rangt.
   const hlutar: string[] = [];
   if (veggjaHopur) hlutar.push(`${nyV} veggi`, `${hurdir.length} hurðir`, `${nyG} gler`);
@@ -833,7 +834,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   if (taekiVal) hlutar.push(`${taekiFj} tæki`);
   const yfirlit =
     `Fann ${hlutar.join(", ") || "ekkert (engir hópar valdir)"}. ` +
-    (veggjaHopur ? `Hreinsun: ${ht?.sameinadir ?? 0} sameinaðir, ${ht?.stakir ?? 0} stakir fjarlægðir.` : "") +
+    (veggjaHopur ? `Hreinsun: ${ht?.sameinadir ?? 0} sameinaðir, ${ht?.stakir ?? 0} stakir fjarlægðir.${ht?.skekkja ? ` Blaðið ${ht.skekkja.toFixed(2).replace(".", ",")}° skakkt.` : ""}` : "") +
     (fastarH.length ? ` ${fastarH.length} veggir Agnars óbreyttir.` : "");
   S().set({ yfirlit });
   // Mælingin (dílar frummyndar) — prófanir bera hana saman við leiðréttingar Agnars.

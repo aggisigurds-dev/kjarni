@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   hillurButar,
+  maelaSkekkju,
   hreinsaVeggi,
   husKassi,
   husUtlina,
@@ -191,4 +192,64 @@ test("hillur: raungögn Breiðhöfða 13 (2018-skönnun) — engin frístandandi
   assert.ok(r.talning.hillur >= 6, "hillur fjarlægðar: " + r.talning.hillur);
   assert.equal(hillurButar(r.linur, [], 6 * dpm, 0.15 * dpm).size, 0);
   assert.ok(r.linur.length >= 80, "of fáar línur eftir: " + r.linur.length);
+});
+
+test("utan húss: raungögn 2. hæðar (Breiðhöfði 13) — stærsti klasinn er skrifstofuhornið, en þungu klasarnir halda húsinu", () => {
+  // 78 línur veggjavélarinnar 05.11.2026. Áður fóru 41 af 66 línum sem „utan húss": húskassinn náði aðeins yfir
+  // skrifstofuhornið (flestir stuttir þykkir veggir) því ytri veggir lagersins voru hvorki 20 % af þeim klasa né innan 4 m.
+  const raun = JSON.parse(readFileSync(new URL("./fixtures/veggjavel-breidhofdi-13-2018-2h.json", import.meta.url), "utf8")) as { linur: HLina[] };
+  const dpm = 49.4;
+  const vik = { ...SJALFGEFIN_VIKMORK, stakurM: Math.max(SJALFGEFIN_VIKMORK.stakurM, SJALFGEFIN_VIKMORK.stakurSkonnunM) };
+  const hreint = hreinsaVeggi(raun.linur, [], dpm, vik).linur;
+  const k = husKassi(hreint, dpm, { spassia: 0.02 })!;
+  assert.ok(k.x1 - k.x0 > 60 * dpm, "húskassinn nær yfir allt húsið, ekki bara hornið: " + Math.round((k.x1 - k.x0) / dpm) + " m");
+  const u = husUtlina(hreint, dpm, vik.lokunM);
+  assert.equal(u.lokud, false);
+  const burt = utanHuss(hreint, u);
+  assert.ok(burt.size <= 10, "fjarlægðar línur: " + burt.size + " af " + hreint.length);
+});
+
+test("skekkja blaðsins: skakkt blað mælist og veggirnir réttast eftir því, beint blað mælist 0", () => {
+  const dpm = 50;
+  const sk = -0.6, r = (sk * Math.PI) / 180;
+  const sn = (x: number, y: number): [number, number] => [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)];
+  // tíu langir veggir á skökku blaði, hver með örlitlu viðbótarfrávki
+  const skakkt: HLina[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = sn(100, 100 + i * 300), b = sn(1600 + (i % 2) * 4, 100 + i * 300 + (i % 2 ? 3 : -2));
+    skakkt.push(L(a[0], a[1], b[0], b[1]));
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = sn(200 + i * 400, 100), b = sn(200 + i * 400 + 2, 1600);
+    skakkt.push(L(a[0], a[1], b[0], b[1]));
+  }
+  const m = maelaSkekkju(skakkt, dpm);
+  assert.ok(Math.abs(m - sk) < 0.25, "mæld skekkja " + m.toFixed(2) + "°");
+  const h = hreinsaVeggi(skakkt, [], dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 });
+  assert.ok(Math.abs(h.talning.skekkja - sk) < 0.25, JSON.stringify(h.talning));
+  // réttir veggir halda hallanum (ekki snúnir í nákvæmlega 0°)
+  const lar = h.linur.find((l) => Math.abs(l.p[2] - l.p[0]) > Math.abs(l.p[3] - l.p[1]))!;
+  const g = (Math.atan2(lar.p[3] - lar.p[1], lar.p[2] - lar.p[0]) * 180) / Math.PI;
+  assert.ok(Math.abs(g - sk) < 0.15, "veggurinn fylgir blaðinu: " + g.toFixed(2) + "°");
+  // beint blað: engin skekkja, og veggir verða nákvæmlega láréttir
+  const beint = hreinsaVeggi([L(0, 0, 1500, 4), L(0, 400, 1500, -3), L(300, 0, 302, 1500), L(800, 0, 798, 1500), L(0, 800, 1500, 2), L(1200, 0, 1201, 1500)], [], dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 });
+  assert.equal(beint.talning.skekkja, 0);
+  assert.equal(beint.linur[0].p[1], beint.linur[0].p[3]);
+});
+
+test("skekkja: notandinn getur sett hana sjálfur (skekkjaGradur) og 0 slekkur á mælingunni", () => {
+  const dpm = 50;
+  const sk = -0.6, r = (sk * Math.PI) / 180;
+  const sn = (x: number, y: number): [number, number] => [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)];
+  const linur: HLina[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = sn(100, 100 + i * 220), b = sn(1600, 100 + i * 220 + 3);
+    linur.push(L(a[0], a[1], b[0], b[1]));
+  }
+  const med0 = hreinsaVeggi(linur, [], dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0, skekkjaGradur: 0 });
+  assert.equal(med0.talning.skekkja, 0);
+  assert.equal(med0.linur[0].p[1], med0.linur[0].p[3], "með skekkju 0 verða veggirnir nákvæmlega láréttir");
+  const sett = hreinsaVeggi(linur, [], dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0, skekkjaGradur: -0.6 });
+  assert.equal(sett.talning.skekkja, -0.6);
+  assert.notEqual(sett.linur[0].p[1], sett.linur[0].p[3]);
 });
