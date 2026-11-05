@@ -19,6 +19,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEST = path.join(ROOT, "public", "artcraft");
 const APPS_PATH = path.join(ROOT, "app/kjarni/artcraft/apps.ts");
+// Zip-skrárnar geymdar í byggingarskyndiminni Next/Vercel (.next/cache er
+// endurheimt fyrir hverja byggingu), svo næsta bygging þurfi ekki GitHub.
+const ZIP_CACHE = path.join(ROOT, ".next", "cache", "artcraft-zips");
+// ARTCRAFT_STRICT=1: niðurhalsvilla fellir bygginguna (sjálfgefið: sleppa forritinu).
+const STRICT = process.env.ARTCRAFT_STRICT === "1";
 
 function parseApps(source) {
   const blocks = [...source.matchAll(/\{\s*id:\s*"([^"]+)"([\s\S]*?)\n\s*\},?/g)];
@@ -141,15 +146,34 @@ function flattenExtract(extractRoot, dest) {
 async function installOne(app, tmp) {
   if (alreadyInstalled(app)) {
     console.log(`artcraft: ${app.id} ${app.tag} already present`);
-    return;
+    return { id: app.id };
   }
   const url = `${app.repo}/releases/download/${app.tag}/${app.zip}`;
-  const zip = path.join(tmp, app.zip);
-  console.log(`artcraft: downloading ${app.zip}`);
-  await download(url, zip);
-  const digest = sha256File(zip);
-  if (digest !== app.sha256) {
-    throw new Error(`${app.zip} sha256 mismatch\n expected ${app.sha256}\n      got ${digest}`);
+  const cached = path.join(ZIP_CACHE, app.zip);
+  let zip = path.join(tmp, app.zip);
+  if (existsSync(cached) && sha256File(cached) === app.sha256) {
+    console.log(`artcraft: ${app.zip} úr byggingarskyndiminni`);
+    zip = cached;
+  } else {
+    console.log(`artcraft: downloading ${app.zip}`);
+    try {
+      await download(url, zip);
+    } catch (err) {
+      // GitHub-útgáfa ónáanleg (5xx/netvilla eftir endurtilraunir): ekki fella
+      // allan Kjarnann fyrir eitt innfellt forrit — síðan sýnir „ekki uppsett“.
+      if (STRICT || (err && err.fatal)) throw err;
+      return { id: app.id, skipped: err instanceof Error ? err.message : String(err) };
+    }
+    const digest = sha256File(zip);
+    if (digest !== app.sha256) {
+      throw new Error(`${app.zip} sha256 mismatch\n expected ${app.sha256}\n      got ${digest}`);
+    }
+    try {
+      mkdirSync(ZIP_CACHE, { recursive: true });
+      writeFileSync(cached, readFileSync(zip));
+    } catch {
+      /* skyndiminni er valfrjálst */
+    }
   }
   const extract = path.join(tmp, `${app.id}-extract`);
   rmSync(extract, { recursive: true, force: true });
@@ -161,6 +185,7 @@ async function installOne(app, tmp) {
   }
   writeLock(app);
   console.log(`artcraft: installed ${app.id} ${app.tag}`);
+  return { id: app.id };
 }
 
 async function main() {
@@ -170,10 +195,17 @@ async function main() {
   mkdirSync(DEST, { recursive: true });
   const tmp = path.join(os.tmpdir(), `kjarni-artcraft-${process.pid}`);
   mkdirSync(tmp, { recursive: true });
+  const skipped = [];
   try {
-    await mapLimit(apps, 4, (app) => installOne(app, tmp));
+    await mapLimit(apps, 4, async (app) => {
+      const r = await installOne(app, tmp);
+      if (r && r.skipped) skipped.push(r);
+    });
   } finally {
     rmSync(tmp, { recursive: true, force: true });
+  }
+  for (const s of skipped) {
+    console.warn(`artcraft: ⚠ ${s.id} ekki sett upp (GitHub ónáanlegt: ${s.skipped}) — síðan sýnir „ekki uppsett“; næsta bygging reynir aftur.`);
   }
 }
 
