@@ -71,24 +71,35 @@ export function maelaHallaMyndar(m: Uint8Array, W: number, H: number, hamark = 0
       sm[y * w + x] = n;
     }
   }
-  let best = 0, bestSk = -1, beintSk = 0;
   const skref = Math.max(0.00025, hamark / 60);
-  for (let t = -hamark; t <= hamark + 1e-9; t += skref) {
-    const acc = new Float64Array(h + Math.ceil(Math.abs(t) * w) + 2);
-    const grunn = t < 0 ? Math.ceil(Math.abs(t) * w) : 0;
+  const svigrum = Math.ceil(hamark * w) + 2;
+  const acc = new Float64Array(h + 2 * svigrum);
+  const skor = (t: number) => {
+    acc.fill(0);
     for (let x = 0; x < w; x++) {
-      const d = Math.round(x * t) + grunn;
+      const d = Math.round(x * t) + svigrum;
       for (let y = 0; y < h; y++) acc[y + d] += sm[y * w + x];
     }
     let s2 = 0;
     for (let i = 0; i < acc.length; i++) s2 += acc[i] * acc[i];
-    if (Math.abs(t) < skref / 2) beintSk = s2;
+    return s2;
+  };
+  // Beint blað er metið SÉR, ekki treyst á að rastinn hitti núllið: með litlu `hamark` lendir hann aldrei á því og
+  // jafnteflisreglan hér neðar slokknaði þá þegjandi (Lisbeth 05.11.2026).
+  const beintSk = skor(0);
+  let best = 0, bestSk = -1;
+  for (let t = -hamark; t <= hamark + 1e-9; t += skref) {
+    const s2 = skor(t);
     if (s2 > bestSk) {
       bestSk = s2;
       best = t;
     }
   }
   // Beint blað vinnur jafntefli: örlítið betri summa á hálfgráðu skekkju er suð, ekki halli. Krafist er 0,5 % betra en við 0°.
+  // TALAN ER ÚR TVEIMUR BLÖÐUM (Breiðhöfði 13, 1. og 2. hæð, 05.11.2026) og einu tilbúnu beinu prófi — hún er ekki stillt á
+  // fjölda blaða og summa kvaðrata hefur grunnlínu sem fer eftir bleki blaðsins, svo strjált blað getur hagað sér öðruvísi.
+  // Rétta vörnin til lengri tíma er samræmi tveggja óháðra mæla (þessa og maelaSkekkju á línunum): víki þeir um meira en
+  // ~0,2° á að treysta hvorugum (Lisbeth 05.11.2026).
   if (Math.abs(best) < skref / 2 || bestSk <= beintSk * 1.005) return 0;
   return best;
 }
@@ -207,13 +218,17 @@ export function finnaThunnaVeggi(gra: Uint8Array, W: number, H: number, o: Thunn
   for (let i = 0; i < m.length; i++) m[i] = gra[i] < thr ? 1 : 0;
   // Halli blaðsins: leitin skannar raðir, svo skakkt blað er skekkt til baka fyrst og línurnar skekktar aftur á eftir.
   const t = o.skekkja != null ? o.skekkja : maelaHallaMyndar(m, W, H);
-  const mh = t ? skekkja(m, W, H, t) : m;
   const ut: ThunnVeggur[] = [];
   const thvert = Math.round(0.12 * dpm), samBil = Math.round(0.3 * dpm);
-  // láréttir: raðir eru y (í skekktu grímunni) — y blaðsins er `c`, y myndarinnar er `c − t·x`
-  const h = sameinaRaka(leitaRaka(mh, W, H, wMin, lagmark, gat, hamarkThykkt), thvert, samBil);
-  for (const r of h) ut.push([r.a, r.c - t * r.a, r.b, r.c - t * r.b, r.th]);
-  // lóðréttir: umsnúið (raðir eru x). Lóðrétt lína blaðsins liggur á x = c − t·y í myndinni.
+  // láréttir: raðir eru y (í skekktu grímunni) — y blaðsins er `c`, y myndarinnar er `c − t·x`.
+  // Skekkta gríman lifir aðeins inni í blokkinni: annars væru fjórar W·H fylkingar uppi í einu og 40 MP þakið í
+  // greinaThunnaVeggi (sem reiknar með þremur) stæðist ekki lengur (Lisbeth 05.11.2026).
+  {
+    const mh = t ? skekkja(m, W, H, t) : m;
+    const h = sameinaRaka(leitaRaka(mh, W, H, wMin, lagmark, gat, hamarkThykkt), thvert, samBil);
+    for (const r of h) ut.push([r.a, r.c - t * r.a, r.b, r.c - t * r.b, r.th]);
+  }
+  // lóðréttir: umsnúið (raðir eru x). Lóðrétt lína blaðsins liggur á x = c + t·y í myndinni.
   const mv = new Uint8Array(W * H);
   if (t) {
     for (let y = 0; y < H; y++) {

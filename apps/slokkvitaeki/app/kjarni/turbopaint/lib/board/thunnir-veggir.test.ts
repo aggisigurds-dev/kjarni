@@ -3,7 +3,12 @@ import { test } from "node:test";
 import { bakgrunnsTonn, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 
 const DPM = 50;
-const W = 1200;
+// BLAÐIÐ ER 3000 DÍLA BREITT AF ÁSTÆÐU (Lisbeth 05.11.2026): á 1200 dílum dregst 0,6° skökk lína aðeins 11 díla og lifir
+// beina leitina af — prófið sannaði þá aðeins að rákin yrði grennri, ekki að hún fyndist. Raðirnar renna saman í eitt blobb
+// sem er jafnþykkt drættinum, svo blaðið verður að vera breitt nóg að blobbið falli á þykktarþakinu (0,45 m = 22,5 dílar):
+// á 2000 dílum mælist blobbið 22 dílar og sleppur ennþá, á 3000 dílum er það ~35 dílar og beina leitin finnur EKKERT.
+// Raunblaðið er 6006 dílar (121 m) — þetta er hálft blað, ekki ýkt tilfelli.
+const W = 3000;
 const H = 800;
 
 /** Ljós blað með dökkum láréttum / lóðréttum rákum: [x0, y0, x1, y1, þykkt í dílum]. */
@@ -53,7 +58,7 @@ test("þunnir veggir: stutt rák (< 6 m), þykk fylling og brot sömu línu með
 });
 
 test("halli blaðsins: skakkt blað mælist, og rákir finnast sem fundust ekki á beinni leit", () => {
-  // 0,6° skakkt blað: lárétt lína dregst um 0,0105 · x. Yfir 1000 díla eru það 10 dílar — margfalt þykkt rákarinnar.
+  // 0,6° skakkt blað: lárétt lína dregst um 0,0105 · x. Yfir 2890 díla eru það 30 dílar — margfalt þykkt rákarinnar (9).
   const t = Math.tan((0.6 * Math.PI) / 180);
   const g = new Uint8Array(W * H).fill(243);
   const settu = (x: number, y: number) => {
@@ -61,7 +66,7 @@ test("halli blaðsins: skakkt blað mælist, og rákir finnast sem fundust ekki 
     if (x >= 0 && x < W && yy >= 0 && yy < H) g[yy * W + x] = 205;
   };
   // tvær langar „tvöfaldar hárlínur" (9 dílar) á skökku blaði
-  for (const y0 of [300, 700]) for (let x = 60; x < 1150; x++) for (let k = 0; k < 9; k++) settu(x, y0 - t * x + k);
+  for (const y0 of [340, 700]) for (let x = 60; x < W - 50; x++) for (let k = 0; k < 9; k++) settu(x, y0 - t * x + k);
   // og einn lóðréttur veggur
   for (let y = 120; y < 760; y++) for (let k = 0; k < 9; k++) settu(Math.round(200 + t * y) + k, y);
   const m = new Uint8Array(W * H);
@@ -69,18 +74,19 @@ test("halli blaðsins: skakkt blað mælist, og rákir finnast sem fundust ekki 
   for (let i = 0; i < m.length; i++) m[i] = g[i] < thr ? 1 : 0;
   const halli = maelaHallaMyndar(m, W, H);
   assert.ok(Math.abs(halli - t) < 0.003, "mældur halli " + halli.toFixed(4) + " á móti " + t.toFixed(4));
+  const larettar = (r: number[][]) => r.filter((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]));
   const an = finnaThunnaVeggi(g, W, H, { dpm: DPM, skekkja: 0 });
   const med = finnaThunnaVeggi(g, W, H, { dpm: DPM });
-  assert.ok(med.length >= 3, "skekkjuleiðrétt leit finnur rákirnar þrjár: " + med.length);
-  // bein leit finnur rákina líka hér (blaðið er aðeins 1200 dílar breitt svo drátturinn er 11 dílar), en hún skilar henni
-  // NÁKVÆMLEGA láréttri og of þykkri — veggurinn liggur þá ekki á teikningunni
-  const anLar = an.find((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]));
-  assert.ok(anLar && Math.abs(anLar[3] - anLar[1]) < 1, "bein leit skilar rákinni láréttri: " + JSON.stringify(anLar));
-  const medLar0 = med.find((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]))!;
-  assert.ok(medLar0[4] < anLar![4], `skekkjuleiðrétt rák er grennri (${anLar![4]} → ${medLar0[4]})`);
-  // lárétta rákin fylgir hallanum — ekki nákvæmlega lárétt
-  const lar = med.find((v) => Math.abs(v[2] - v[0]) > Math.abs(v[3] - v[1]));
-  assert.ok(lar && Math.abs(lar[3] - lar[1]) > 5, "lárétta rákin er á ská eins og blaðið: " + JSON.stringify(lar));
+  // ÞETTA ER PRÓFIÐ: beina leitin finnur EKKERT af löngu láréttu rákunum — raðirnar renna saman í ~35 díla blobb sem fellur
+  // á þykktarþakinu. Skekkjuleiðrétt leit finnur þær báðar (+ lóðrétta vegginn).
+  assert.equal(larettar(an).length, 0, "BEIN leit á að finna 0 láréttar rákir: " + JSON.stringify(an));
+  assert.equal(larettar(med).length, 2, "skekkjuleiðrétt leit finnur báðar láréttu rákirnar: " + JSON.stringify(med));
+  assert.ok(med.length >= 3, "og lóðrétta vegginn með: " + JSON.stringify(med));
+  // rákirnar fylgja hallanum — ekki nákvæmlega láréttar — og eru á réttum stað á blaðinu
+  for (const lar of larettar(med)) {
+    assert.ok(lar[1] - lar[3] > 25, "rákin er á ská eins og blaðið: " + JSON.stringify(lar));
+    assert.ok(lar[4] <= 11, "og 9 díla þykk, ekki samanrunnið blobb: " + JSON.stringify(lar));
+  }
 });
 
 test("halli blaðsins: beint blað mælist 0 og leitin er óbreytt", () => {
