@@ -6,7 +6,7 @@ import { Group, Layer, Line, Rect, Stage, Text as KonvaText, Transformer } from 
 import { toast } from "sonner";
 import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
-import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
+import { isDrawnLocked, isDrawnVisible, isLayerLocked, isLayerVisible, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { hjolaThysjun } from "../../lib/board/hjol";
 import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
@@ -813,7 +813,15 @@ export function BoardCanvas({
     if (currentTool === "gegnumtak") {
       // Sama snið og innlestu merkin (Loftgegnumtak …, 20 px græn) svo talningin haldist ein.
       // Tólið helst virkt til að setja mörg í röð — Esc eða annað tól hættir.
-      const { gegnumtakMm: mm, addObjects } = useBoardStore.getState();
+      const { gegnumtakMm: mm, addObjects, layers } = useBoardStore.getState();
+      // Merkin fara alltaf á Loftræsting + Loftmál, ekki virka lagið — því þarf báðar læsingar og sýnileika athugaðan.
+      const lokad = ["loftræsting", "loftmal"].find((id) => isLayerLocked(layers, id) || !isLayerVisible(layers, id));
+      if (lokad) {
+        toast.message(
+          `Lagið „${layers.find((l) => l.id === lokad)?.name ?? lokad}“ er læst eða falið — aflæstu því og sýndu til að setja gegnumtak`
+        );
+        return;
+      }
       const s = 20;
       addObjects([
         {

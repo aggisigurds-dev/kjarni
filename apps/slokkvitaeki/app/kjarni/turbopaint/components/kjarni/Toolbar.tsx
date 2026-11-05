@@ -173,15 +173,15 @@ export function Toolbar() {
         onClick={() => breyta(false)}
         className="tp-sula-opna pointer-events-auto relative flex size-10 shrink-0 items-center justify-center self-start rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-[#FE653F] shadow-2xl shadow-black/40 active:translate-y-px"
       >
-        {virkt ? (
-          virkt.icon
-        ) : tool === "symbol" ? (
+        {tool === "symbol" ? (
           <span
             className="flex size-5 items-center justify-center rounded-sm text-[8px] font-bold"
             style={{ background: symbolColors(symbol.kind).bg, color: symbolColors(symbol.kind).fg }}
           >
             {symbol.short.slice(0, 2)}
           </span>
+        ) : virkt ? (
+          virkt.icon
         ) : (
           <MousePointer2 className="size-4" />
         )}

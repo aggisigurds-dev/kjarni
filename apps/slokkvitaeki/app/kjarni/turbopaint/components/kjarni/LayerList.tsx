@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { isCrossingMark } from "../../lib/board/crossings";
@@ -20,6 +20,10 @@ export function LayerList() {
   const gegnumtakOn = useBoardStore((s) => s.tool === "gegnumtak");
   const gegnumtakMm = useBoardStore((s) => s.gegnumtakMm);
   const setGegnumtakMm = useBoardStore((s) => s.setGegnumtakMm);
+  const [mmTexti, setMmTexti] = useState(String(gegnumtakMm));
+  useEffect(() => {
+    setMmTexti((cur) => (Number(cur) === gegnumtakMm ? cur : String(gegnumtakMm)));
+  }, [gegnumtakMm]);
   const pipesOpen = useBoardStore((s) => s.pipesOpen);
   const setPipesOpen = useBoardStore((s) => s.setPipesOpen);
 
@@ -101,8 +105,19 @@ export function LayerList() {
             min={10}
             max={3000}
             step={50}
-            value={gegnumtakMm}
-            onChange={(e) => setGegnumtakMm(Number(e.target.value))}
+            value={mmTexti}
+            onChange={(e) => {
+              // Hrái strengurinn er geymdur hér; store fær aðeins gild gildi, og reiturinn lagast við onBlur.
+              setMmTexti(e.target.value);
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n >= 10 && n <= 3000) setGegnumtakMm(n);
+            }}
+            onBlur={() => {
+              const n = Number(mmTexti);
+              if (!Number.isFinite(n) || mmTexti.trim() === "") setGegnumtakMm(useBoardStore.getState().gegnumtakMm);
+              else setGegnumtakMm(n);
+              setMmTexti(String(useBoardStore.getState().gegnumtakMm));
+            }}
             className="w-14 rounded border border-white/15 bg-transparent px-1 py-0.5 text-right tabular-nums text-white"
           />
           <span className="shrink-0">mm</span>
