@@ -346,7 +346,14 @@ export async function vinnaLinur(
   let hreinar: HLina[] = hrar;
   try {
     // Skönnun: stakir bútar < stakurSkonnunM fara (húsgögn, texti sem varð að vegg); vigur-PDF heldur stakurM.
-    const h = hreinsaVeggi(hrar, fastarH, dpm, vigur ? vik : { ...vik, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
+    // Halli blaðsins: AÐEINS gildi sem Agnar setti sjálfur (skekkjaHandvirk) gengur fyrir mælingunni. Mælda gildið er aldrei
+    // skrifað á blaðið — það læsti mælingunni (fyrsta keyrsla skrifaði gildið, næsta las það og `fastar` komu aldrei til álita,
+    // svo nýir veggir tiltust frá veggjum Agnars að eilífu) og það skrif hefði hvorki fylgt „Hætta við" né Afturkalla
+    // (Lisbeth 05.11.2026). Viðmótið (Halli blaðsins) skrifar handvirka gildið með commitHistory.
+    const tU = plan()?.uttekt ?? null;
+    const skBlads = tU?.skekkjaHandvirk && typeof tU.skekkja === "number" && Number.isFinite(tU.skekkja) ? tU.skekkja : null;
+    const vikH = { ...vik, skekkjaGradur: skBlads ?? vik.skekkjaGradur ?? null };
+    const h = hreinsaVeggi(hrar, fastarH, dpm, vigur ? vikH : { ...vikH, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
     hreinar = h.linur;
     Object.assign(talning, { hreinsun: h.talning });
     const tl = h.talning;
@@ -426,7 +433,7 @@ export async function vinnaLinur(
     const nyttGler: HLina[] = d.gler;
     // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
     const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
-    const u = husUtlina(allar, dpm, vik.lokunM);
+    const u = husUtlina(allar, dpm, vik.lokunM, vik.husHlutur);
     const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
     hreinar = hreinar.filter((_, i) => !burtV.has(i));
     hurdir = hurdir.filter((_, i) => !burtH.has(i));
@@ -607,7 +614,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         veggir = klemmaGreindaThykkt(gr.veggir, dpm);
         heilBladVeggir = veggir;
       }
-      const k = husKassi(veggir, dpm, { spassia: 0.025 });
+      const k = husKassi(veggir, dpm, { spassia: 0.025, hlutur: vik.husHlutur });
       const blad = bladIBordi(p0, frum);
       if (!k) {
         ljuka("skurdur", `Fann ekki húsið á blaðinu (${veggir.length} veggir) — allt blaðið greint`, "villa");
@@ -619,7 +626,7 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         skurdurFundinn = true;
         const r = skurdurIBord(sk, p0, frum, null);
         if (r && deps.ramma) deps.ramma(r);
-        ljuka("skurdur", `Húsið fundið: ${m2((k.x1 - k.x0) / dpm)} × ${m2((k.y1 - k.y0) / dpm)} m (${k.klasar} klasar, 2,5 % spássía) — ásalínur, titilreitur og lóð utan við`);
+        ljuka("skurdur", `Húsið fundið: ${m2((k.x1 - k.x0) / dpm)} × ${m2((k.y1 - k.y0) / dpm)} m (${k.klasar} klasar, 2,5 % spássía) — þunnar línur utan hans (ásalínur, titilreitur, lóð) fylgja ekki með`);
       }
     }
   } catch (err) {

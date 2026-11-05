@@ -38,15 +38,15 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { BoxSelect as BoxSelectTakn, Brush as BrushTakn, Magnet as MagnetTakn } from "lucide-react";
+import { BoxSelect as BoxSelectTakn, Brush as BrushTakn, Magnet as MagnetTakn, Ruler as RulerTakn } from "lucide-react";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
 import { hjolaThysjun } from "../../lib/board/hjol";
 import { useBoardStore } from "../../lib/board/store";
 import type { VeggTegund } from "../../lib/board/teikning-veggir";
-import type { ImageObject, LineObject } from "../../lib/board/types";
+import type { BoardObject, ImageObject, LineObject } from "../../lib/board/types";
 import { hurdirTeikningar } from "../../lib/board/hurdabogar-mynd";
-import type { HLina } from "../../lib/board/veggja-hreinsun";
+import { maelaSkekkju, type HLina } from "../../lib/board/veggja-hreinsun";
 import { erVeggur, tengjaVeggi, tengjaVikmork, VEGG_LITIR } from "../../lib/board/veggja-leidretting";
 import {
   faeraEnda,
@@ -1279,6 +1279,118 @@ const TOL_TAKN: Record<RitilTol, ReactNode> = {
   "hafna-kassi": <XSquare className="size-3.5" />,
 };
 
+/** HALLI BLAÐSINS (Agnar 05.11.2026: „skannaða blaðið er aðeins skakt … mér langar bara að geta cropað helvítis blaðið og snúið því
+ * aðeins svo það sé hornrétt"). Blaðinu sjálfu er ekki snúið — merkin og veggirnir eru vistuð í dílum skjalasafnsblaðsins og
+ * Teikning-glugginn sýnir sama blað, svo snúningur þar myndi færa allt úr stað. Í staðinn fylgir VÉLIN hallanum: hann er mældur á
+ * löngu línunum (maelaSkekkju) og veggirnir réttast eftir blaðinu í stað þess að snúast í nákvæmlega 0°/90°.
+ *
+ * GILDIÐ BÝR Á BLAÐINU (`uttekt.skekkja`), eins og skurðurinn — ekki sem hnattræn stilling vélarinnar, sem hefði elt næstu
+ * teikningu (Lisbeth 05.11.2026). Reiturinn er textareitur með drögum sem eru þáttuð við blur/Enter: stýrður number-reitur
+ * þurrkaði út mínusinn um leið og „−0" var slegið inn. */
+function SkekkjaStilling() {
+  const simi = useErSimi();
+  const [opid, setOpid] = useState(false);
+  const [drog, setDrog] = useState<string | null>(null);
+  const plan = useBoardStore((s) => s.objects.find((o): o is ImageObject => o.type === "image" && !!o.uttekt) ?? null);
+  const vistud = typeof plan?.uttekt?.skekkja === "number" && Number.isFinite(plan.uttekt.skekkja) ? plan.uttekt.skekkja : null;
+  const handvirk = !!plan?.uttekt?.skekkjaHandvirk;
+  const maelt = useBoardStore((s) => {
+    if (!opid) return 0;
+    const dpm = ritillDilarAMetra(s.objects, s.pixelsPerMeter);
+    if (!dpm) return 0;
+    const v = ritillVeggir().map((o) => ({ p: heimsPunktar(o), t: o.strokeWidth }));
+    return v.length >= 6 ? maelaSkekkju(v, dpm) : 0;
+  });
+  const setja = (g: number | null) => {
+    setDrog(null);
+    if (!plan?.uttekt) {
+      toast.message("Opnaðu hæð úr úttekt — hallinn geymist á blaðinu");
+      return;
+    }
+    const b = useBoardStore.getState();
+    b.commitHistory();
+    const u = { ...plan.uttekt };
+    if (g == null) {
+      delete u.skekkja;
+      delete u.skekkjaHandvirk;
+    } else {
+      u.skekkja = g;
+      u.skekkjaHandvirk = true;
+    }
+    b.patchObject(plan.id, { uttekt: u } as Partial<BoardObject>, false);
+    toast.message(
+      g == null ? "Hallinn mælist sjálfkrafa við næstu greiningu" : `Blaðið stillt ${g.toFixed(2).replace(".", ",")}° skakkt — vistast með „Vista í úttekt"`,
+      { duration: 2400 }
+    );
+  };
+  const thatta = (v: string) => {
+    const t = v.trim();
+    if (!t) return setja(null);
+    const n = Number(t.replace(",", ".").replace("−", "-"));
+    if (!Number.isFinite(n) || Math.abs(n) > 45) {
+      setDrog(null);
+      toast.message("Hallinn verður að vera tala á bilinu −45 til 45");
+      return;
+    }
+    setja(n);
+  };
+  const synt = vistud ?? maelt;
+  const reitur = simi ? "py-2 text-[13px]" : "py-0.5 text-[10.5px]";
+  return (
+    <div className="mt-1.5" data-veggir-skekkja>
+      <button
+        type="button"
+        onClick={() => setOpid(!opid)}
+        title="Skannað blað liggur oft örlítið skakkt. Þá réttast veggirnir eftir blaðinu í stað þess að snúast í nákvæmlega lárétt og lóðrétt."
+        className={`flex w-full items-center justify-between gap-1 rounded-md px-1 text-white/80 hover:bg-white/8 ${simi ? "py-2 text-[13px]" : "py-0.5 text-[11px]"}`}
+      >
+        <span className="flex items-center gap-1.5">
+          <RulerTakn className="size-3.5 text-amber-300" />
+          Halli blaðsins
+        </span>
+        <span className="tabular-nums text-white/60">
+          {synt ? `${synt.toFixed(2).replace(".", ",")}°` : "beint"}
+          {vistud != null ? (handvirk ? " · stillt" : " · mælt") : ""}
+        </span>
+      </button>
+      {opid ? (
+        <div className="mt-1 rounded-md bg-white/5 p-1.5">
+          <div className="text-[10.5px] leading-snug text-white/55">
+            {maelt ? `Veggirnir á borðinu mælast ${maelt.toFixed(2).replace(".", ",")}°.` : "Veggirnir á borðinu mælast beinir."} Hallinn geymist á blaðinu og vistast með
+            „Vista í úttekt". Blaðinu sjálfu er ekki snúið — merkin eru í dílum skjalasafnsblaðsins og Teikning sýnir sama blað.
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={drog ?? (vistud != null ? String(vistud).replace(".", ",") : "")}
+              placeholder={maelt ? maelt.toFixed(2).replace(".", ",") : "0"}
+              onChange={(e) => setDrog(e.target.value)}
+              onBlur={(e) => (drog != null ? thatta(e.target.value) : undefined)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  thatta((e.target as HTMLInputElement).value);
+                } else if (e.key === "Escape") setDrog(null);
+              }}
+              aria-label="Halli blaðsins í gráðum"
+              data-veggir-skekkja-gildi
+              className={`w-20 rounded border border-white/15 bg-black/30 px-1.5 tabular-nums text-white ${reitur}`}
+            />
+            <span className="text-[11px] text-white/50">°</span>
+            <button type="button" data-veggir-skekkja-maelt onClick={() => setja(maelt)} disabled={!maelt} className={`rounded bg-white/10 px-2 hover:bg-white/15 disabled:opacity-40 ${reitur}`}>
+              Nota mælt
+            </button>
+            <button type="button" data-veggir-skekkja-sjalf onClick={() => setja(null)} className={`rounded bg-white/10 px-2 hover:bg-white/15 ${reitur}`}>
+              Sjálfvirkt
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function RitilSpjald() {
   const tol = useVeggjaRitill((s) => s.tol);
   const thykktCm = useVeggjaRitill((s) => s.thykktCm);
@@ -1981,6 +2093,7 @@ export function VeggjaHamSpjald() {
         <Magnet className="size-3.5 text-teal-300" />
         Smella á línu teikningarinnar
       </label>
+      <SkekkjaStilling />
       <div className="mt-1.5 text-[10.5px] leading-snug text-white/45" data-veggir-greining-visun>
         Finna veggi, Finna hurðir og Lesa EI eru í <b className="text-white/70">Greining</b>-flipanum efst til hægri.
       </div>
