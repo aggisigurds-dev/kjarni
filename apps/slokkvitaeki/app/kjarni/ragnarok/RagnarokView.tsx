@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { HeimilisfangLeit } from "../turbopaint/components/kjarni/HeimilisfangLeit";
-import { ARTCRAFT_INTERFACES } from "../artcraft/apps";
+import { ARTCRAFT_INTERFACES, OFFICECRAFT_INTERFACES } from "../artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SKINS, type SkinId } from "../skins";
 import { useStationSkin } from "../StationChrome";
@@ -168,37 +168,55 @@ export function RagnarokView(d: RagnarokData) {
             </div>
           </Panel>
 
-          <Panel className="rgk-leit">
-            <div className="rgk-h2row">
-              <h2 className="rg-h2">ArtCraft — 23 sköpunarviðmót</h2>
-              <a className="rgk-link" href="/kjarni/artcraft">OPNA YFIRLIT →</a>
-            </div>
-            <p className="rgk-sub">
-              Opin sköpunartól hýst hér í Kjarnanum — smelltu og þau opnast beint á Kjarnasíðunni,
-              ekkert að setja upp eða borga fyrir.
-            </p>
-            <div className="rgk-gal-grid ac-grid">
-              {ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub").map((item) => (
-                <a key={item.id} href={item.href} className="rgk-mod">
-                  <span className="rgk-mod-face">
-                    <span className="rgk-mod-top">
-                      <b>{item.icon} {item.name}</b>
-                      <span className="rgk-mod-kind">{item.role}</span>
-                    </span>
-                    <span className="rgk-mod-desc">{item.desc}</span>
-                    {item.uses.length > 0 && (
-                      <span className="ac-uses">
-                        <span className="ac-uses-h">DÆMI</span>
-                        {item.uses.map((u) => (
-                          <span key={u} className="ac-use">{u}</span>
-                        ))}
+          {[
+            {
+              key: "artcraft",
+              title: "ArtCraft",
+              unit: "sköpunarviðmót",
+              href: "/kjarni/artcraft",
+              sub: "Opin sköpunartól hýst hér í Kjarnanum — smelltu og þau opnast beint á Kjarnasíðunni, ekkert að setja upp eða borga fyrir.",
+              items: ARTCRAFT_INTERFACES.filter((item) => item.id !== "hub"),
+            },
+            {
+              key: "officecraft",
+              title: "OfficeCraft",
+              unit: "skrifstofuforrit",
+              href: "/kjarni/officecraft",
+              sub: "Ritvinnsla, töflur, kynningar, PDF, CAD, viðmót, vektorar og hljóð — keyrir í vafranum á þínum skrám.",
+              items: OFFICECRAFT_INTERFACES,
+            },
+          ].map((suite) => (
+            <Panel key={suite.key} className="rgk-leit">
+              <div className="rgk-h2row">
+                <h2 className="rg-h2">
+                  {suite.title} — {suite.items.length} {suite.unit}
+                </h2>
+                <a className="rgk-link" href={suite.href}>OPNA YFIRLIT →</a>
+              </div>
+              <p className="rgk-sub">{suite.sub}</p>
+              <div className="rgk-gal-grid ac-grid">
+                {suite.items.map((item) => (
+                  <a key={item.id} href={item.href} className="rgk-mod">
+                    <span className="rgk-mod-face">
+                      <span className="rgk-mod-top">
+                        <b>{item.icon} {item.name}</b>
+                        <span className="rgk-mod-kind">{item.role}</span>
                       </span>
-                    )}
-                  </span>
-                </a>
-              ))}
-            </div>
-          </Panel>
+                      <span className="rgk-mod-desc">{item.desc}</span>
+                      {item.uses.length > 0 && (
+                        <span className="ac-uses">
+                          <span className="ac-uses-h">DÆMI</span>
+                          {item.uses.map((u) => (
+                            <span key={u} className="ac-use">{u}</span>
+                          ))}
+                        </span>
+                      )}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </Panel>
+          ))}
 
           <div className="rgk-stats">
             {[

@@ -81,3 +81,23 @@ test("video presets: lengths stay inside what the models accept", async () => {
   assert.equal(nearestAspect(1920, 1080), "16:9");
   assert.equal(nearestAspect(1000, 1100), "1:1");
 });
+
+test("reframing: cover crops to the ratio, contain keeps the whole picture", async () => {
+  const { reframePlan } = await import("./presets.ts");
+  // Skammsnið 1000×1500 → 16:9 klippt: full breidd, 562,5 há, aðeins ofan við miðju.
+  const c = reframePlan(1000, 1500, 16 / 9, "cover", 4000);
+  assert.ok(Math.abs(c.src.w - 1000) < 1e-9 && Math.abs(c.src.h - 562.5) < 1e-9);
+  assert.ok(Math.abs(c.src.y - (1500 - 562.5) * 0.4) < 1e-9);
+  assert.ok(Math.abs(c.width / c.height - 16 / 9) < 0.01);
+  // Sama í contain: 2667×1500 rammi, öll myndin í miðjunni.
+  const f = reframePlan(1000, 1500, 16 / 9, "contain", 4000);
+  assert.equal(f.height, 1500);
+  assert.equal(f.width, 2667);
+  assert.ok(Math.abs(f.dst.w - 1000) < 1e-9 && Math.abs(f.dst.x - (2667 - 1000) / 2) < 1e-9);
+  // Upprunalegt hlutfall: óbreytt, en minnkað að maxSide.
+  const o = reframePlan(3000, 2000, null, "cover", 1920);
+  assert.deepEqual([o.width, o.height], [1920, 1280]);
+  // Aldrei stækkað.
+  const small = reframePlan(400, 300, 1, "cover", 1920);
+  assert.deepEqual([small.width, small.height], [300, 300]);
+});

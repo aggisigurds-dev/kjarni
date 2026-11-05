@@ -211,22 +211,29 @@ export function getArtcraftApp(id: string): ArtcraftApp | undefined {
   return ARTCRAFT_APPS.find((app) => app.id === id);
 }
 
-/** Flokkun á öppunum milli ArtCraft (listrænt/myndrænt) og MultiCraft
- *  (forrita/vinnutengt — Office-ígildi). Öppin búa samt öll undir sömu
- *  /kjarni/artcraft/<id> leiðinni; þetta er aðeins fyrir yfirlitið. */
-export type ArtcraftCategory = "artcraft" | "multicraft";
+/** Öppin skiptast milli ArtCraft (myndir, myndbönd, hreyfimyndir, umbrot)
+ *  og OfficeCraft (ritvinnsla, kynningar, PDF, töflur, CAD, viðmót, vektorar,
+ *  hljóð). OfficeCraft er sérstakt Kjarna-tól með eigin leið
+ *  /kjarni/officecraft/<id>; sama WASM-útgáfan er notuð (public/artcraft/<id>). */
+export type ArtcraftCategory = "artcraft" | "officecraft";
 
-export const MULTICRAFT_APP_IDS: ReadonlyArray<ArtcraftAppId> = [
+export const OFFICECRAFT_APP_IDS: ReadonlyArray<ArtcraftAppId> = [
   "wordcraft",
+  "gridcraft",
   "deckcraft",
   "pdfcraft",
-  "gridcraft",
   "cadcraft",
   "figcraft",
+  "vectorcraft",
+  "soundcraft",
 ];
 
+export function isOfficecraftApp(id: string): boolean {
+  return (OFFICECRAFT_APP_IDS as readonly string[]).includes(id);
+}
+
 export function getArtcraftCategory(id: ArtcraftAppId): ArtcraftCategory {
-  return MULTICRAFT_APP_IDS.includes(id) ? "multicraft" : "artcraft";
+  return isOfficecraftApp(id) ? "officecraft" : "artcraft";
 }
 
 export function artcraftAppsByCategory(category: ArtcraftCategory): ReadonlyArray<ArtcraftApp> {
@@ -361,8 +368,13 @@ export function artcraftLikamiHref(): string {
   return "/kjarni/artcraft/likami";
 }
 
+export function officecraftHubHref(): string {
+  return "/kjarni/officecraft";
+}
+
+/** Kjarna-leið forrits: OfficeCraft-öpp undir /kjarni/officecraft, hin undir /kjarni/artcraft. */
 export function artcraftAppHref(id: ArtcraftAppId): string {
-  return `/kjarni/artcraft/${id}`;
+  return isOfficecraftApp(id) ? `${officecraftHubHref()}/${id}` : `/kjarni/artcraft/${id}`;
 }
 
 export function artcraftStaticPath(id: ArtcraftAppId): string {
@@ -390,9 +402,9 @@ const ARTCRAFT_USES = {
 /** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio.
  *  role/desc/uses fylgja með svo yfirlitssíður (Ragnarök, StodView) geti sýnt meira en bara nafn. */
 export const ARTCRAFT_INTERFACES = [
-  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll 23 viðmótin á einum stað, með niðurhali og útgáfum.", uses: [] as readonly string[] },
+  { id: "hub", name: "Yfirlit", href: artcraftHubHref(), icon: "🎨", role: "Yfirlit", desc: "Öll ArtCraft-viðmótin á einum stað, með niðurhali og útgáfum.", uses: [] as readonly string[] },
   { id: "vinnslur", name: "Verkbók", href: artcraftVinnslurHref(), icon: "📋", role: "Vinnslur", desc: "Allar pending Replicate-vinnslur og vistaðar útkomur á einum stað. Opnaðu beint í tólið sem gerði hana.", uses: ["Fylgjast með mörgum vinnslum í einu", "Opna aftur eldri útkomu án þess að muna hvaða tól var notað"] as readonly string[] },
-  ...ARTCRAFT_APPS.map((app) => ({
+  ...ARTCRAFT_APPS.filter((app) => !isOfficecraftApp(app.id)).map((app) => ({
     id: app.id,
     name: app.name,
     href: artcraftAppHref(app.id),
@@ -410,7 +422,7 @@ export const ARTCRAFT_INTERFACES = [
   { id: "studio", name: "Einkastúdíó", href: artcraftStudioHref(), icon: "🔓", role: "Staðbundið líkan", desc: "Texti → mynd á þinni vél (Automatic1111/Forge/SD.Next). Ekkert fer í skýið, engin ritskoðun.", uses: ["Mynd úr texta án skýs — allt helst á vélinni"] as readonly string[] },
   { id: "kastljos", name: "Kastljós", href: artcraftKastljosHref(), icon: "🔦", role: "Birta", desc: "Finnur persónuna og stillir birtu sitt í hvoru lagi á henni og bakgrunninum — hverja hlið sér.", uses: ["Dekkja bakgrunn á vörumynd án þess að snerta vöruna", "Bjarta persónuna frá einni hlið í hóps-mynd"] as readonly string[] },
   { id: "vidgerd", name: "Ljósmyndaviðgerð", href: artcraftVidgerdHref(), icon: "🩹", role: "Andlit & áferð", desc: "Laga óskýr andlit, rauð augu og áferð — staðbundinn netþjónn, skýjaþjónusta eða í vafra.", uses: ["Laga gamla, óskýra fjölskyldumynd", "Skerpa starfsmannamynd fyrir vefsíðu"] as readonly string[] },
-  { id: "mota", name: "Móta", href: artcraftMotaHref(), icon: "🖌️", role: "Lögun", desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.", uses: ["Fínstilla fatasnið fyrir vörumynd"] as readonly string[] },
+  { id: "mota", name: "Móta", href: artcraftMotaHref(), icon: "🖌️", role: "Ritill", desc: "Mynd- og myndbandaritill eins og í símanum: líkamsmótun, burstar, ljós og litir, 12 gervigreindartól (bakgrunnur, endurljós, fjarlægja hlut …) og myndbandshamur með framhaldi frá völdum ramma.", uses: ["Fínstilla fatasnið fyrir vörumynd"] as readonly string[] },
   { id: "likami", name: "Líkamsmótun", href: artcraftLikamiHref(), icon: "🧍", role: "Líkami", desc: "Picsart/YouCam „Body Tuner“: finnur líkamann sjálfkrafa og þú stillir mitti, mjaðmir, axlir, fótleggi og höfuð með sleðum — í vafranum, engin Replicate, vistað í fullri upplausn.", uses: ["Lengri fótleggir og mjórra mitti á tískumynd", "Jafna axlir og mjaðmir á starfsmannamynd í fullri lengd"] as readonly string[] },
   { id: "comfy", name: "ComfyUI", href: artcraftComfyHref(), icon: "🧩", role: "Texti → mynd", desc: "Teiknar með þínu eigin ComfyUI á vélinni — staðbundið hnútaverk, engin mynd send neitt.", uses: ["Mynd úr texta með þínu eigin ComfyUI-flæði"] as readonly string[] },
   { id: "hreyfimynd", name: "Hreyfimynd", href: artcraftHreyfimyndHref(), icon: "🎞️", role: "Mynd → myndband", desc: "Vekur mynd til lífsins (Wan 2.1) gegnum þitt eigið ComfyUI — lýstu hreyfingunni, hún hreyfist.", uses: ["Láta kyrrmynd af starfsfólki hreyfa sig í stuttu kynningarmyndbandi"] as readonly string[] },
@@ -477,3 +489,17 @@ export function artcraftInterfaceFromPath(pathname: string): ArtcraftInterfaceId
 export function artcraftReleaseUrl(app: ArtcraftApp): string {
   return `${app.repo}/releases/download/${app.tag}/${app.zip}`;
 }
+
+/** OfficeCraft: skrifstofuforritin, sér Kjarna-tól (færð úr ArtCraft 05.11.2026). */
+export const OFFICECRAFT_INTERFACES = OFFICECRAFT_APP_IDS.map((id) => {
+  const app = getArtcraftApp(id)!;
+  return {
+    id: app.id,
+    name: app.name,
+    href: artcraftAppHref(app.id),
+    icon: app.icon,
+    role: app.role,
+    desc: app.desc,
+    uses: ARTCRAFT_USES[app.id] as readonly string[],
+  };
+});

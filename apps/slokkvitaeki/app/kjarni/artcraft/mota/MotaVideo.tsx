@@ -16,9 +16,21 @@ import SendTo from "../SendTo";
 import { uploadForReplicate } from "../uploadToStorage";
 import { DEFAULT_WAN_SETTINGS, generateWanVideo } from "../skyjahreyfimynd/wan";
 import { DEFAULT_KLING_SETTINGS, generateKlingVideo } from "../skyjahreyfimynd/kling";
-import { extractFrameAt, loadVideoMeta, seekVideo, stitchSegments } from "../video/frames";
+import { extractFrameAt, loadVideoMeta, reframeImage, seekVideo, stitchSegments } from "../video/frames";
 import { continueAt, defaultContinueTime, formatSeconds, globalTime, locate, segmentLength, totalLength, type Segment } from "../video/timeline";
-import { LENGTHS, MOTION_PRESETS, expectedSeconds, lengthsFor, nearestAspect, outputFps, type VideoModelId } from "../video/presets";
+import {
+  ASPECT_CHOICES,
+  LENGTHS,
+  MOTION_PRESETS,
+  expectedSeconds,
+  lengthsFor,
+  nearestAspect,
+  outputFps,
+  reframePlan,
+  type AspectId,
+  type FitMode,
+  type VideoModelId,
+} from "../video/presets";
 import { throttleDelaySeconds } from "./aiPresets";
 import { Icon } from "./icons";
 import "./editor.css";
@@ -101,6 +113,11 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
   const [menuOpen, setMenuOpen] = useState(false);
   const [exported, setExported] = useState<Blob | null>(null);
   const [imageUrl, setImageUrl] = useState("");
+  // Hlutföll myndbandsins: myndin er klippt (eða fyllt) í valið hlutfall áður
+  // en hún fer á Wan/Kling — líkönin fylgja hlutföllum myndarinnar.
+  const [aspectId, setAspectId] = useState<AspectId>("orig");
+  const [fit, setFit] = useState<FitMode>("cover");
+  const [framedUrl, setFramedUrl] = useState("");
   const dirtyRef = useRef(false);
   const closingRef = useRef<null | (() => void)>(null);
   const activeRef = useRef(active);
@@ -135,6 +152,28 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
       return () => URL.revokeObjectURL(u);
     }
   }, [initialImage]);
+
+  // Forsýn af rammanum með völdu hlutfalli.
+  useEffect(() => {
+    const ratio = ASPECT_CHOICES.find((a) => a.id === aspectId)?.ratio ?? null;
+    if (!initialImage || !ratio) {
+      setFramedUrl("");
+      return;
+    }
+    let alive = true;
+    let url = "";
+    void reframeImage(initialImage, (w, h) => reframePlan(w, h, ratio, fit, 1024), "image/jpeg", 0.85)
+      .then((r) => {
+        if (!alive) return;
+        url = URL.createObjectURL(r.blob);
+        setFramedUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [initialImage, aspectId, fit]);
 
   useEffect(() => {
     if (!initialVideo) return;
@@ -302,7 +341,10 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
       let frame: Blob;
       if (kind === "start") {
         if (!initialImage) throw new Error("Engin mynd til að hreyfa");
-        frame = initialImage;
+        const ratio = ASPECT_CHOICES.find((a) => a.id === aspectId)?.ratio ?? null;
+        frame = ratio
+          ? (await reframeImage(initialImage, (w, h) => reframePlan(w, h, ratio, fit, 1920), "image/jpeg", 0.93)).blob
+          : initialImage;
       } else {
         const { index, local } = locate(cl, at);
         status(`Tek rammann á ${formatSeconds(at)} s…`);
@@ -561,7 +603,7 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
           />
         ) : imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className="mv-video" src={imageUrl} alt="Myndin sem á að hreyfa" />
+          <img className="mv-video" src={framedUrl || imageUrl} alt="Myndin sem á að hreyfa" />
         ) : (
           <video ref={videoRef} className="mv-video" muted playsInline />
         )}
@@ -655,6 +697,26 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
                 <span className="mx-hint" style={{ alignSelf: "center" }}>
                   {atEnd > 0.05 ? `síðustu ${formatSeconds(atEnd)} s bútsins detta út` : "frá enda bútsins"}
                 </span>
+              </div>
+            )}
+            {clips.length === 0 && initialImage && (
+              <div className="mx-chips scroll">
+                {ASPECT_CHOICES.map((a) => (
+                  <button key={a.id} type="button" className={`mx-chip${aspectId === a.id ? " on" : ""}`} onClick={() => setAspectId(a.id)}>
+                    {a.label}
+                  </button>
+                ))}
+                {aspectId !== "orig" && (
+                  <>
+                    <span style={{ width: 8 }} />
+                    <button type="button" className={`mx-chip${fit === "cover" ? " on" : ""}`} onClick={() => setFit("cover")}>
+                      Klippa
+                    </button>
+                    <button type="button" className={`mx-chip${fit === "contain" ? " on" : ""}`} onClick={() => setFit("contain")}>
+                      Fylla
+                    </button>
+                  </>
+                )}
               </div>
             )}
             <div className="mx-prompt-row">

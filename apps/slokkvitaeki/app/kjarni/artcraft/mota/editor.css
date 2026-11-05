@@ -759,23 +759,22 @@
 }
 
 .mv-stage {
-  display: grid;
-  place-items: center;
+  position: relative;
   cursor: default;
   touch-action: manipulation;
 }
 
+/* Myndin/myndbandið fyllir sviðið og er minnkað til að passa (contain) —
+   annars birtist hún í fullri stærð og neðri hlutinn hverfur undir spjaldið. */
 .mv-video {
-  max-width: calc(100% - 16px);
-  max-height: calc(100% - 16px);
-  border-radius: 6px;
-  background: #000;
-  box-shadow: 0 2px 12px rgba(20, 20, 30, 0.12);
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
   object-fit: contain;
-}
-
-img.mv-video {
   background: transparent;
+  display: block;
 }
 
 .mv-play {
