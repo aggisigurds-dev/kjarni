@@ -10,7 +10,8 @@
 //   Stök tól — hvert tól opnast sér með skýringu á því hvað það gerir og hvaða vél vinnur.
 
 import { Box, ChevronDown, DoorOpen, Flame, ScanSearch, ScanText, Wand2, BrickWall, Search } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { HamAdgerd } from "../../lib/board/hamir";
 import type { SkrefId } from "../../lib/board/sjalfvirkt-stada";
 import { finnaHurdirTillogur, finnaVeggiTillogur } from "./VeggjaRitill";
@@ -39,6 +40,35 @@ export function GreiningTolSpjald({
   uttekt: boolean;
 }) {
   const [opid, setOpid] = useState(false);
+  // Valmyndin er teiknuð á body með föstum stað (Agnar 05.11.2026: „greiningarglugginn opnast ekki"): efsta stikan (header með
+  // overflow: auto) klippti hana af svo hún sást ekki á tölvu. Staðurinn kemur af hnappinum; lokast við smell utan og Esc.
+  const hnappur = useRef<HTMLButtonElement>(null);
+  const spjald = useRef<HTMLDivElement>(null);
+  const [stadur, setStadur] = useState<{ top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (!opid) return;
+    const stilla = () => {
+      const r = hnappur.current?.getBoundingClientRect();
+      if (r) setStadur({ top: Math.round(r.bottom + 6), right: Math.max(8, Math.round(window.innerWidth - r.right)) });
+    };
+    stilla();
+    const utan = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (t && (hnappur.current?.contains(t) || spjald.current?.contains(t))) return;
+      setOpid(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpid(false);
+    };
+    window.addEventListener("resize", stilla);
+    window.addEventListener("pointerdown", utan);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("resize", stilla);
+      window.removeEventListener("pointerdown", utan);
+      window.removeEventListener("keydown", esc, true);
+    };
+  }, [opid]);
   const [valin, setValin] = useState<Set<string>>(() => new Set(HOPAR.map((h) => h.id)));
   const fjoldi = valin.size;
   const skiptaVali = (id: string) =>
@@ -64,6 +94,7 @@ export function GreiningTolSpjald({
   return (
     <div className="pointer-events-auto relative" data-greining-flipi>
       <button
+        ref={hnappur}
         type="button"
         aria-expanded={opid}
         aria-controls="greining-spjald"
@@ -76,12 +107,14 @@ export function GreiningTolSpjald({
         Greining
         <ChevronDown className={`size-3.5 text-white/60 transition-transform ${opid ? "rotate-180" : ""}`} />
       </button>
-      {opid ? (
+      {opid && stadur && typeof document !== "undefined" ? createPortal(
         <div
+          ref={spjald}
           id="greining-spjald"
           role="region"
           aria-label="Greining"
-          className="absolute top-full right-0 z-30 mt-1.5 max-h-[calc(100dvh-22rem)] w-[min(88vw,21rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#1a1d2e] p-2.5 text-stone-100 shadow-2xl shadow-black/50"
+          style={{ position: "fixed", top: stadur.top, right: stadur.right, maxHeight: `calc(100dvh - ${stadur.top}px - 12px)` }}
+          className="z-[80] w-[min(88vw,21rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#1a1d2e] p-2.5 text-stone-100 shadow-2xl shadow-black/50"
         >
           <div className="text-[10.5px] font-semibold tracking-wide text-white/45 uppercase">Combo — keyrt í röð</div>
           <div className="mt-1.5 flex flex-col gap-1">
@@ -138,7 +171,8 @@ export function GreiningTolSpjald({
               <li>Veggir sem þú hefur leiðrétt eru aldrei yfirskrifaðir.</li>
             </ul>
           </details>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

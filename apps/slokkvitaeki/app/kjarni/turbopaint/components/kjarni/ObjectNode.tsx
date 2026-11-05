@@ -388,7 +388,7 @@ export function ObjectNode({
     // teikningin sjáist í gegn, og smellisvæðið er kassinn sjálfur (ekki þrefalt) svo hann steli ekki smellum af veggjum í kring.
     const erStigi = obj.type === "polyline" && obj.veggTegund === "stigi";
     return (
-      <Group {...common} opacity={erStigi ? Math.min(common.opacity, 0.55) : vegglitur ? 1 : common.opacity}>
+      <Group {...common} shadowEnabled={erStigi ? false : common.shadowEnabled} opacity={erStigi ? Math.min(common.opacity, 0.55) : vegglitur ? 1 : common.opacity}>
         <Line
           points={obj.points}
           stroke={vegglitur ?? obj.stroke}
