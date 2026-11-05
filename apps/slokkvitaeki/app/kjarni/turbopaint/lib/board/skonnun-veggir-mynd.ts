@@ -10,7 +10,7 @@ import {
   type SkonnunarVeggir,
   type Talning,
 } from "./skonnun-veggir";
-import { finnaThunnaVeggi } from "./thunnir-veggir";
+import { bakgrunnsTonn, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 import type { VeggTegund } from "./teikning-veggir";
 import type { ImageObject } from "./types";
 import { anda } from "./anda";
@@ -130,6 +130,39 @@ export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Pro
   const th = finnaThunnaVeggi(gra, g.W, g.H, { dpm: dpmFrum * k });
   const frum = th.map((v) => [v[0] / k, v[1] / k, v[2] / k, v[3] / k, v[4] / k] as number[]);
   return butarIBord(frum, g, plan);
+}
+
+/** HALLI BLAÐSINS Í GRÁÐUM, mældur á MYNDINNI sjálfri — ekki á veggjunum sem þegar liggja á borðinu.
+ *
+ * AGNAR 05.11.2026: „skannaða blaðið þarna er aðeins skakt, svo allar línur þurfa að vera ööööörlítið á ská."
+ * Fyrsta útgáfa stillingarinnar „Halli blaðsins" mældi `maelaSkekkju` á veggjunum á borðinu — en Agnar teiknar sína
+ * veggi ásrétta, svo stillingin sagði „beint" á blaði sem er mælanlega 0,57° skakkt (Nesdekk Breiðhöfði 13 2. hæð,
+ * staðfest á lifandi vefnum). Það var einmitt það sem hann var að reyna að laga, svo talan verður að koma úr blaðinu.
+ *
+ * Hallinn er stórsæ stærð: 1600 dílar á langhliðina gefa ~0,02° upplausn (skrefið í maelaHallaMyndar er 0,00025) og
+ * kosta tvo litla W·H buffera — margfalt ódýrara en greiningarmyndin, svo þetta má keyra þegar notandinn opnar
+ * stillinguna sjálfur. Skilar GRÁÐUM í sömu átt og `maelaSkekkju` (lína sem hallar niður til hægri er negatíf):
+ * `maelaHallaMyndar` skilar `t` þannig að lárétt lína blaðsins uppfylli `y + t·x = c`, svo hallatalan er `−t`.
+ * 0 ef ekkert sker sig úr. */
+export async function maelaHallaBlads(plan: ImageObject): Promise<number> {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob || !(plan.width > 0)) return 0;
+  const bmp = await createImageBitmap(blob);
+  const g0 = greiningarSvaedi(plan, { w: bmp.width, h: bmp.height });
+  const k = Math.min(1, 1600 / Math.max(g0.sk.w, g0.sk.h));
+  const g = { ...g0, kvardi: k, W: Math.max(1, Math.round(g0.sk.w * k)), H: Math.max(1, Math.round(g0.sk.h * k)) };
+  let gra: Uint8Array;
+  try {
+    gra = await vinnumynd(bmp, g);
+  } finally {
+    bmp.close();
+  }
+  await andaUI();
+  const thr = bakgrunnsTonn(gra) - 16;
+  const m = new Uint8Array(g.W * g.H);
+  for (let i = 0; i < m.length; i++) m[i] = gra[i] < thr ? 1 : 0;
+  const t = maelaHallaMyndar(m, g.W, g.H);
+  return t ? -(Math.atan(t) * 180) / Math.PI : 0;
 }
 
 /** Veggir skannaðrar teikningar (sama greining og Teikning-glugginn) í borðhnitum. Gler fylgir sem tegundin „gler";
