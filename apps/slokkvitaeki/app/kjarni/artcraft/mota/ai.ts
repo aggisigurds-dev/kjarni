@@ -13,6 +13,10 @@ import { placeOnWhite } from "../bakgrunnur/cut";
 import { DEFAULT_ENDURLJOS_SETTINGS, relightImage, type LightSource } from "../endurljos/model";
 import { DEFAULT_RETOUCH_SETTINGS, buildRetouchPrompt, generateRetouch, type RetouchSettings } from "../andlitsfegrun/retouch";
 import { DEFAULT_ANDLIT_SETTINGS, generateAndlit } from "../andlit/model";
+import { eraseObject } from "../fjarlaegjahlut/eraser";
+import { DEFAULT_SKY_SETTINGS, generateSky } from "../himinn/sky";
+import { DEFAULT_UTVIKKA_SETTINGS, outpaintImage, type UtvikkaAmount, type UtvikkaDirection } from "../utvikka/model";
+import { DEFAULT_LITUN_SETTINGS, colorizeImage } from "../litun/model";
 import type { BackgroundChoice } from "./aiPresets";
 
 export type AiRequest =
@@ -23,7 +27,11 @@ export type AiRequest =
   | { tool: "bakgrunnur"; choice: BackgroundChoice; prompt?: string }
   | { tool: "endurljos"; prompt: string; light: LightSource; keepBackground: boolean }
   | { tool: "andlitsfegrun"; options: Pick<RetouchSettings, "skinSmooth" | "blemishes" | "teeth" | "underEye"> }
-  | { tool: "andlit"; prompt: string };
+  | { tool: "andlit"; prompt: string }
+  | { tool: "fjarlaegja"; mask: Blob }
+  | { tool: "himinn"; prompt: string; mask: Blob }
+  | { tool: "utvikka"; direction: UtvikkaDirection; amount: UtvikkaAmount; prompt: string }
+  | { tool: "litun" };
 
 export type AiResult = { blob: Blob; alpha: boolean };
 
@@ -158,6 +166,38 @@ export async function runAi(req: AiRequest, source: Blob, onStatus: (text: strin
       if (!buildRetouchPrompt(settings)) throw new Error("Veldu að minnsta kosti eina lagfæringu.");
       onStatus("Fegra andlitið…");
       return { blob: await generateRetouch(settings, source), alpha: false };
+    }
+
+    case "fjarlaegja":
+      onStatus("Fjarlægi og fylli í…");
+      return { blob: await eraseObject(source, req.mask), alpha: false };
+
+    case "himinn": {
+      if (!req.prompt.trim()) throw new Error("Veldu nýjan himin fyrst.");
+      onStatus("Skipti um himin…");
+      const blobs = await generateSky({ ...DEFAULT_SKY_SETTINGS, prompt: req.prompt }, { image: source, mask: req.mask });
+      return { blob: first(blobs, "Himinn"), alpha: false };
+    }
+
+    case "utvikka": {
+      onStatus("Útvíkka rammann…");
+      const objectUrl = URL.createObjectURL(source);
+      try {
+        const { blobs } = await outpaintImage(
+          { ...DEFAULT_UTVIKKA_SETTINGS, direction: req.direction, amount: req.amount, prompt: req.prompt.trim(), numOutputs: 1 },
+          objectUrl,
+        );
+        return { blob: first(blobs, "Útvíkka"), alpha: false };
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+
+    case "litun": {
+      const image = await url();
+      onStatus("Lita myndina…");
+      const blobs = await colorizeImage({ ...DEFAULT_LITUN_SETTINGS }, image);
+      return { blob: first(blobs, "Litun"), alpha: false };
     }
 
     case "andlit": {

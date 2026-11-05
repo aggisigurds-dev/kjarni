@@ -250,7 +250,7 @@ test("AI tools and presets are complete and unambiguous", async () => {
   const { AI_TOOLS, BACKGROUND_CHOICES, LIGHT_PRESETS, QUICK_EDITS, PORTRAIT_PRESETS } = await import("./aiPresets.ts");
   const ids = AI_TOOLS.map((t) => t.id);
   assert.equal(new Set(ids).size, ids.length);
-  assert.deepEqual(ids, ["vidgerd", "topaz", "clarity", "hradbreyta", "bakgrunnur", "endurljos", "andlitsfegrun", "andlit"]);
+  assert.deepEqual(ids, ["vidgerd", "fjarlaegja", "bakgrunnur", "himinn", "hradbreyta", "endurljos", "andlitsfegrun", "topaz", "clarity", "utvikka", "litun", "andlit"]);
   assert.equal(new Set(BACKGROUND_CHOICES.map((c) => c.id)).size, BACKGROUND_CHOICES.length);
   for (const c of BACKGROUND_CHOICES) {
     assert.ok(c.swatch, c.id);

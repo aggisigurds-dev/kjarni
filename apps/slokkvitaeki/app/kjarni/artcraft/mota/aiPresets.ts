@@ -6,23 +6,50 @@
 
 export type AiToolId =
   | "vidgerd"
-  | "topaz"
-  | "clarity"
-  | "hradbreyta"
+  | "fjarlaegja"
   | "bakgrunnur"
+  | "himinn"
+  | "hradbreyta"
   | "endurljos"
   | "andlitsfegrun"
+  | "topaz"
+  | "clarity"
+  | "utvikka"
+  | "litun"
   | "andlit";
+
+/** Tól þar sem notandinn málar fyrst yfir svæðið sem á að breyta. */
+export const MASK_TOOLS: ReadonlySet<AiToolId> = new Set<AiToolId>(["fjarlaegja", "himinn"]);
 
 export const AI_TOOLS: Array<{ id: AiToolId; label: string; icon: string; hint: string; wait: string }> = [
   { id: "vidgerd", label: "Viðgerð", icon: "restorePhoto", hint: "Lagar gamlar, óskýrar eða rispaðar myndir og andlit", wait: "~15 sek" },
-  { id: "topaz", label: "Topaz", icon: "upscale", hint: "Skerpir og hreinsar alla myndina (Topaz) — eða vistar hana beint í tvöfaldri upplausn", wait: "~30 sek" },
-  { id: "clarity", label: "Clarity", icon: "sparkle", hint: "Bætir við smáatriðum og skýrleika (Clarity) — skapandi upplyfting", wait: "1–2 mín" },
-  { id: "hradbreyta", label: "Hraðbreyta", icon: "wand", hint: "Segðu hvað á að breyta og gervigreindin gerir það", wait: "~10 sek" },
+  { id: "fjarlaegja", label: "Fjarlægja hlut", icon: "eraser", hint: "Málaðu yfir hlut, manneskju eða blett — gervigreindin fyllir í", wait: "~15 sek" },
   { id: "bakgrunnur", label: "Bakgrunnur", icon: "background", hint: "Fjarlægja, gera hvítan eða óskýran, eða velja nýjan bakgrunn", wait: "~15 sek" },
+  { id: "himinn", label: "Himinn", icon: "sky", hint: "Málaðu yfir himininn og veldu nýjan", wait: "~20 sek" },
+  { id: "hradbreyta", label: "Hraðbreyta", icon: "wand", hint: "Segðu hvað á að breyta og gervigreindin gerir það", wait: "~10 sek" },
   { id: "endurljos", label: "Endurljós", icon: "relight", hint: "Ný lýsing á myndina — gluggaljós, sólsetur, stúdíó …", wait: "~1 mín" },
   { id: "andlitsfegrun", label: "Andlitsfegrun", icon: "face", hint: "Jafnar húð, tekur bletti, hvíttar tennur — breytir engu öðru", wait: "~20 sek" },
+  { id: "topaz", label: "Topaz", icon: "upscale", hint: "Skerpir og hreinsar alla myndina (Topaz) — eða vistar hana beint í tvöfaldri upplausn", wait: "~30 sek" },
+  { id: "clarity", label: "Clarity", icon: "sparkle", hint: "Bætir við smáatriðum og skýrleika (Clarity) — skapandi upplyfting", wait: "1–2 mín" },
+  { id: "utvikka", label: "Útvíkka", icon: "expandFrame", hint: "Stækkar rammann — gervigreindin býr til það sem var utan myndar", wait: "~30 sek" },
+  { id: "litun", label: "Litun", icon: "palette", hint: "Litar svarthvítar og gamlar myndir", wait: "~15 sek" },
   { id: "andlit", label: "Andlit", icon: "portrait", hint: "Ný mynd af sama andliti í öðru umhverfi", wait: "~30 sek" },
+];
+
+export const OUTPAINT_DIRECTIONS: Array<{ id: "all" | "horizontal" | "vertical" | "top" | "bottom" | "left" | "right"; label: string }> = [
+  { id: "all", label: "Allan hringinn" },
+  { id: "horizontal", label: "Til hliðanna" },
+  { id: "vertical", label: "Upp og niður" },
+  { id: "top", label: "Upp" },
+  { id: "bottom", label: "Niður" },
+  { id: "left", label: "Vinstri" },
+  { id: "right", label: "Hægri" },
+];
+
+export const OUTPAINT_AMOUNTS: Array<{ id: 25 | 50 | 100; label: string }> = [
+  { id: 25, label: "Smá" },
+  { id: 50, label: "Miðlungs" },
+  { id: 100, label: "Mikið" },
 ];
 
 export type BackgroundChoice = {

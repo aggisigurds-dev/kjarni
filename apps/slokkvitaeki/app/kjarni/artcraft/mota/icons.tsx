@@ -52,6 +52,10 @@ const PATHS: Record<string, string> = {
   relight: "M9 18h6M10 21h4M12 3a6 6 0 0 1 3.5 10.9c-.6.4-1 1.2-1 2.1H9.5c0-.9-.4-1.7-1-2.1A6 6 0 0 1 12 3z",
   face: "M12 3a8 8 0 1 1 0 18 8 8 0 0 1 0-18zM9 10v.01M15 10v.01M8.5 14.5c2 2 5 2 7 0M17.5 4.5l1-1.5M19.5 6.5l1.5-.5",
   portrait: "M4 4h16v16H4zM12 7.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM6.5 20c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5",
+  eraser: "M15.5 4.5l4 4L10 18H5.5l-2-2a1.4 1.4 0 0 1 0-2zM9 9l6 6M10 18h10",
+  sky: "M7 18a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 9.5a3.5 3.5 0 0 1 .5 6.97V18zM4 21h16",
+  expandFrame: "M8 8h8v8H8zM3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5",
+  palette: "M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-1.3-1.2-1.6-1.2-2.8 0-.9.7-1.5 1.7-1.5H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8zM7.5 11v.01M9.5 7.5v.01M14 7v.01M17 10v.01",
 };
 
 export function Icon({ name, size = 24, fill }: { name: string; size?: number; fill?: boolean }) {

@@ -15,7 +15,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import SendTo from "../SendTo";
-import { cloneRaster, liquifyLocal, type Raster } from "../studio/adjust";
+import { cloneRaster, createRaster, fitSize, liquifyLocal, strokePoints, type Raster } from "../studio/adjust";
+import { maskCoverage, paintCircle } from "../skyjastudio/maskPaint";
+import { upscaleMaskToBlob } from "../maskUpscale";
+import { SKY_PRESETS } from "../himinn/sky";
 import { tuneIsIdentity, warpBody, type BodyFrame } from "../likami/bodyWarp";
 import { detectBody } from "../likami/pose";
 import { RETOUCH_OPTIONS } from "../andlitsfegrun/retouch";
@@ -39,6 +42,9 @@ import {
   LIGHT_DIRECTIONS,
   LIGHT_PRESETS,
   PORTRAIT_PRESETS,
+  MASK_TOOLS,
+  OUTPAINT_AMOUNTS,
+  OUTPAINT_DIRECTIONS,
   QUICK_EDITS,
   throttleDelaySeconds,
   type AiToolId,
@@ -84,6 +90,7 @@ type Gesture =
   | { kind: "pan"; start: View; p0: Point }
   | { kind: "pinch"; start: View; mid0: Point; dist0: number }
   | { kind: "paint" }
+  | { kind: "mask"; last: Point }
   | { kind: "blocked" };
 
 type Stroke = {
@@ -206,10 +213,19 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
   const [hasAlpha, setHasAlpha] = useState(mime === "image/png");
   const [busyCancel, setBusyCancel] = useState(false);
   const aiRunRef = useRef(0);
+  const [outpaintDir, setOutpaintDir] = useState<(typeof OUTPAINT_DIRECTIONS)[number]["id"]>("all");
+  const [outpaintAmount, setOutpaintAmount] = useState<(typeof OUTPAINT_AMOUNTS)[number]["id"]>(50);
+  const [skyPrompt, setSkyPrompt] = useState(SKY_PRESETS[0].prompt);
+  // Gríma fyrir Fjarlægja hlut / Himin: máluð á smækkaða mynd, sýnd sem
+  // hálfgegnsætt appelsínugult lag yfir myndinni, stækkuð við sendingu.
+  const maskRef = useRef<Raster | null>(null);
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [maskPainted, setMaskPainted] = useState(false);
+  const maskSnapRef = useRef<{ data: Uint8ClampedArray; overlay: ImageData | null; painted: boolean } | null>(null);
 
   // Nýjustu gildi fyrir rAF/native hlustara.
-  const live = useRef({ session, brushMode, brushSize, strength: brushStrength / 100, cloneAnchor, cloneSource, handMode, picking, bodyValues, lookValues, busy });
-  live.current = { session, brushMode, brushSize, strength: brushStrength / 100, cloneAnchor, cloneSource, handMode, picking, bodyValues, lookValues, busy };
+  const live = useRef({ session, brushMode, brushSize, strength: brushStrength / 100, cloneAnchor, cloneSource, handMode, picking, bodyValues, lookValues, busy, aiTool });
+  live.current = { session, brushMode, brushSize, strength: brushStrength / 100, cloneAnchor, cloneSource, handMode, picking, bodyValues, lookValues, busy, aiTool };
 
   const history = historyRef.current;
   const working = workingRef.current;
@@ -657,6 +673,67 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     };
   }
 
+  // ------------------------------------------------------------------ gríma
+
+  function ensureMask(): Raster {
+    const w = workingRef.current;
+    const size = fitSize(w.width, w.height, 1280);
+    let m = maskRef.current;
+    if (!m || m.width !== size.width || m.height !== size.height) {
+      m = createRaster(size.width, size.height, 0);
+      maskRef.current = m;
+      const c = maskCanvasRef.current;
+      if (c) {
+        c.width = size.width;
+        c.height = size.height;
+      }
+      setMaskPainted(false);
+    }
+    return m;
+  }
+
+  function clearMask() {
+    maskRef.current = null;
+    const c = maskCanvasRef.current;
+    c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+    setMaskPainted(false);
+  }
+
+  /** Málar grímu frá a til b (myndhnit). */
+  function paintMaskSegment(a: Point, b: Point) {
+    const m = ensureMask();
+    const k = m.width / workingRef.current.width;
+    const r = Math.max(1, (live.current.brushSize / viewRef.current.scale) * k);
+    const ctx = maskCanvasRef.current?.getContext("2d");
+    if (ctx) ctx.fillStyle = "#f05a28";
+    for (const p of strokePoints(a.x * k, a.y * k, b.x * k, b.y * k, Math.max(1, r * 0.35))) {
+      paintCircle(m, p.x, p.y, r);
+      if (ctx) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function cancelMaskStroke() {
+    const snap = maskSnapRef.current;
+    maskSnapRef.current = null;
+    const m = maskRef.current;
+    if (!snap || !m || snap.data.length !== m.data.length) return;
+    m.data.set(snap.data);
+    const c = maskCanvasRef.current;
+    if (c && snap.overlay) c.getContext("2d")?.putImageData(snap.overlay, 0, 0);
+    setMaskPainted(snap.painted);
+  }
+
+  async function maskBlob(): Promise<Blob> {
+    const m = maskRef.current;
+    if (!m || maskCoverage(m) === 0) throw new Error("Málaðu fyrst yfir svæðið.");
+    const w = workingRef.current;
+    return upscaleMaskToBlob(m, w.width, w.height);
+  }
+
   function onPointerDown(e: RPointerEvent<HTMLDivElement>) {
     if (live.current.busy) return;
     if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 1) return;
@@ -672,6 +749,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
 
     if (pointersRef.current.size === 2) {
       if (gestureRef.current?.kind === "paint") cancelStroke();
+      if (gestureRef.current?.kind === "mask") cancelMaskStroke();
       showCursor(null);
       beginPinch();
       downRef.current = null;
@@ -702,6 +780,22 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
       if (gestureRef.current.kind === "paint") showCursor(p);
       return;
     }
+    if (L.session?.kind === "ai" && MASK_TOOLS.has(L.aiTool) && !L.handMode && !spaceRef.current && e.button === 0) {
+      // Afrit svo hægt sé að taka strikið til baka ef annar fingur kemur (klíp).
+      const m = ensureMask();
+      const c = maskCanvasRef.current;
+      maskSnapRef.current = {
+        data: new Uint8ClampedArray(m.data),
+        overlay: c ? c.getContext("2d")?.getImageData(0, 0, c.width, c.height) ?? null : null,
+        painted: maskPainted,
+      };
+      const ip = toImage(viewRef.current, p);
+      paintMaskSegment(ip, ip);
+      setMaskPainted(true);
+      gestureRef.current = { kind: "mask", last: ip };
+      showCursor(p);
+      return;
+    }
     gestureRef.current = { kind: "pan", start: viewRef.current, p0: p };
   }
 
@@ -710,7 +804,9 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     const g = gestureRef.current;
     if (!pointersRef.current.has(e.pointerId)) {
       // Mús á sveimi yfir myndinni: sýna burstann.
-      if (e.pointerType === "mouse" && live.current.session?.kind === "brush" && !live.current.handMode) showCursor(p);
+      const L = live.current;
+      const painting = L.session?.kind === "brush" || (L.session?.kind === "ai" && MASK_TOOLS.has(L.aiTool));
+      if (e.pointerType === "mouse" && painting && !L.handMode) showCursor(p);
       return;
     }
     pointersRef.current.set(e.pointerId, p);
@@ -728,6 +824,11 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     } else if (g.kind === "paint") {
       showCursor(p);
       queueStroke(p);
+    } else if (g.kind === "mask") {
+      showCursor(p);
+      const ip = toImage(viewRef.current, p);
+      paintMaskSegment(g.last, ip);
+      g.last = ip;
     }
   }
 
@@ -739,6 +840,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
       endStroke();
       if (e.pointerType !== "mouse") showCursor(null);
     }
+    if (g?.kind === "mask" && e.pointerType !== "mouse") showCursor(null);
     if (g?.kind === "pinch") {
       // Ekkert málað fyrr en allir fingur eru farnir eftir klíp.
       gestureRef.current = pointersRef.current.size > 0 ? { kind: "blocked" } : null;
@@ -818,6 +920,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
   }
 
   function endSession() {
+    clearMask();
     setSession(null);
     setPreviewShown(false);
     previewBaseRef.current = null;
@@ -1088,6 +1191,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
       history.pushFull(workingRef.current);
       setWorking(raster);
       fitNow();
+      clearMask();
       if (result.alpha) setHasAlpha(true);
       showToast(`${label}: komið. Afturkallaðu ef þér líkar það ekki.`, 3500);
     } catch (err) {
@@ -1237,7 +1341,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
 
       <div
         ref={stageRef}
-        className={`mx-stage${brushSession && !handMode ? " brush" : ""}`}
+        className={`mx-stage${(brushSession || (session?.kind === "ai" && MASK_TOOLS.has(aiTool))) && !handMode ? " brush" : ""}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1259,6 +1363,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
             <canvas ref={orig2} />
           </div>
           <canvas ref={previewRef} className="mx-preview" style={{ visibility: showPreview ? "visible" : "hidden" }} />
+          <canvas ref={maskCanvasRef} className="mx-mask" style={{ visibility: session?.kind === "ai" && MASK_TOOLS.has(aiTool) && !comparing ? "visible" : "hidden" }} />
           <canvas ref={refCanvasRef} className="mx-preview" style={{ visibility: showRef ? "visible" : "hidden", height: refRasterRef.current ? `${(refRasterRef.current.height / refRasterRef.current.width) * working.width}px` : undefined }} />
         </div>
 
@@ -1284,7 +1389,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
             <button type="button" onClick={redo} disabled={!redoable} aria-label="Endurgera">
               <Icon name="redo" size={22} />
             </button>
-            {brushSession && (
+            {(brushSession || (session?.kind === "ai" && MASK_TOOLS.has(aiTool))) && (
               <button
                 type="button"
                 className={handMode ? "on" : ""}
@@ -1606,6 +1711,103 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
                   Fegra andlitið
                 </button>
               </>
+            )}
+            {MASK_TOOLS.has(aiTool) && (
+              <div className="mx-slider-row">
+                <span className="mx-lab">Bursti</span>
+                <input
+                  type="range"
+                  className="mx-range"
+                  min={BRUSH_MIN}
+                  max={BRUSH_MAX}
+                  value={brushSize}
+                  style={trackStyle(brushSize, { min: BRUSH_MIN, max: BRUSH_MAX, left: "", right: "" })}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  onPointerDown={() => setSizePreview(true)}
+                  onPointerUp={() => setSizePreview(false)}
+                  onPointerCancel={() => setSizePreview(false)}
+                  aria-label="Burstastærð"
+                />
+                <button type="button" className="mx-chip" onClick={clearMask} disabled={!maskPainted}>
+                  Hreinsa
+                </button>
+              </div>
+            )}
+            {aiTool === "fjarlaegja" && (
+              <button
+                type="button"
+                className="mx-run"
+                disabled={!!busy || !maskPainted}
+                onClick={() =>
+                  void (async () => {
+                    try {
+                      await runAiNow({ tool: "fjarlaegja", mask: await maskBlob() }, "Fjarlægja hlut");
+                    } catch (err) {
+                      showToast(err instanceof Error ? err.message : "Málaðu fyrst yfir hlutinn");
+                    }
+                  })()
+                }
+              >
+                {maskPainted ? "Fjarlægja" : "Málaðu yfir það sem á að hverfa"}
+              </button>
+            )}
+            {aiTool === "himinn" && (
+              <>
+                <div className="mx-chips scroll">
+                  {SKY_PRESETS.map((p) => (
+                    <button key={p.label} type="button" className={`mx-chip${skyPrompt === p.prompt ? " on" : ""}`} onClick={() => setSkyPrompt(p.prompt)}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mx-run"
+                  disabled={!!busy || !maskPainted}
+                  onClick={() =>
+                    void (async () => {
+                      try {
+                        await runAiNow({ tool: "himinn", prompt: skyPrompt, mask: await maskBlob() }, "Himinn");
+                      } catch (err) {
+                        showToast(err instanceof Error ? err.message : "Málaðu fyrst yfir himininn");
+                      }
+                    })()
+                  }
+                >
+                  {maskPainted ? "Skipta um himin" : "Málaðu yfir himininn"}
+                </button>
+              </>
+            )}
+            {aiTool === "utvikka" && (
+              <>
+                <div className="mx-chips scroll">
+                  {OUTPAINT_DIRECTIONS.map((d) => (
+                    <button key={d.id} type="button" className={`mx-chip${outpaintDir === d.id ? " on" : ""}`} onClick={() => setOutpaintDir(d.id)}>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mx-chips">
+                  {OUTPAINT_AMOUNTS.map((a) => (
+                    <button key={a.id} type="button" className={`mx-chip${outpaintAmount === a.id ? " on" : ""}`} onClick={() => setOutpaintAmount(a.id)}>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mx-run"
+                  disabled={!!busy}
+                  onClick={() => void runAiNow({ tool: "utvikka", direction: outpaintDir, amount: outpaintAmount, prompt: "" }, "Útvíkka")}
+                >
+                  Útvíkka rammann
+                </button>
+              </>
+            )}
+            {aiTool === "litun" && (
+              <button type="button" className="mx-run" disabled={!!busy} onClick={() => void runAiNow({ tool: "litun" }, "Litun")}>
+                Lita myndina
+              </button>
             )}
             {aiTool === "andlit" && (
               <>
