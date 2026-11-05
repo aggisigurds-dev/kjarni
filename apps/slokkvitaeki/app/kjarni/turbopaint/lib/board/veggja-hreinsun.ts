@@ -838,7 +838,9 @@ export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; alm
   for (let breytt = true; breytt; ) {
     breytt = false;
     for (const q of K.values()) {
-      if (q.med || q.flat < adal.flat * 0.2) continue;
+      // Álman verður að vera þykkur veggjaklasi: `flat` hefur þykktargólf svo blaðrammi og lóðarmörk (sem UMLYKJA húsið,
+      // bilK = 0) komust inn sem „álma" (Lisbeth 05.11.2026). Þunginn án gólfs sker þau frá.
+      if (q.med || q.flat < adal.flat * 0.2 || q.thungi < adal.thungi * 0.2) continue;
       for (const o of K.values()) {
         if (o.med && bilK(o, q) <= alma) {
           q.med = true;

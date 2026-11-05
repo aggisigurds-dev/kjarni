@@ -131,6 +131,11 @@ export interface UttektTenging {
   taknEining?: number;
   /** `skurdur` var fundinn af sjálfvirka verkferlinu (húsið á blaðinu) — „Vista í úttekt" skrifar hann í hæðina. */
   skurdurSjalfvirkt?: boolean;
+  /** Halli skannaða blaðsins í gráðum (Agnar 05.11.2026). Skekkjan er eiginleiki BLAÐSINS, eins og `skurdur` — ekki stilling
+   * vélarinnar: hnattræn stilling hefði elt næstu teikningu (Lisbeth 05.11.2026). Vantar = mæld á veggjunum í hvert sinn. */
+  skekkja?: number | null;
+  /** Skekkjan sett í höndunum — mælingin yfirskrifar hana þá ekki. */
+  skekkjaHandvirk?: boolean;
 }
 
 export interface RectObject extends BaseObject {

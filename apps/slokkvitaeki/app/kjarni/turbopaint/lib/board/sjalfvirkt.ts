@@ -113,28 +113,6 @@ function semHLina(o: LineObject): HLina {
 }
 
 /** Vikmörkin eins og þau eru stillt (localStorage `tp_sjalfvirkt_vikmork`), annars sjálfgefin. */
-/** Skekkja blaðsins sem notandinn hefur sett (gráður), eða null = mæld á línunum sjálfum. */
-export function setjaSkekkju(gradur: number | null): void {
-  try {
-    const nu = JSON.parse(localStorage.getItem(VIKMORK_LYKILL) || "{}") as Record<string, unknown>;
-    if (gradur == null) delete nu.skekkjaGradur;
-    else nu.skekkjaGradur = gradur;
-    localStorage.setItem(VIKMORK_LYKILL, JSON.stringify(nu));
-  } catch {
-    /* einkagluggi — stillingin gildir þá aðeins í þessari lotu */
-  }
-}
-
-/** Skekkjan sem er stillt (gráður), eða null þegar hún er mæld sjálfkrafa. */
-export function stillSkekkja(): number | null {
-  try {
-    const nu = JSON.parse(localStorage.getItem(VIKMORK_LYKILL) || "{}") as { skekkjaGradur?: unknown };
-    return typeof nu.skekkjaGradur === "number" && Number.isFinite(nu.skekkjaGradur) ? nu.skekkjaGradur : null;
-  } catch {
-    return null;
-  }
-}
-
 export function virkVikmork(): Vikmork {
   try {
     return lesaVikmork(localStorage.getItem(VIKMORK_LYKILL));
@@ -368,7 +346,15 @@ export async function vinnaLinur(
   let hreinar: HLina[] = hrar;
   try {
     // Skönnun: stakir bútar < stakurSkonnunM fara (húsgögn, texti sem varð að vegg); vigur-PDF heldur stakurM.
-    const h = hreinsaVeggi(hrar, fastarH, dpm, vigur ? vik : { ...vik, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
+    // Skekkja blaðsins (uttekt.skekkja) gengur fyrir mælingunni; mælda gildið er skrifað á blaðið svo það gildi áfram.
+    const tU = plan()?.uttekt ?? null;
+    const skBlads = typeof tU?.skekkja === "number" && Number.isFinite(tU.skekkja) ? tU.skekkja : null;
+    const vikH = { ...vik, skekkjaGradur: skBlads ?? vik.skekkjaGradur ?? null };
+    const h = hreinsaVeggi(hrar, fastarH, dpm, vigur ? vikH : { ...vikH, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
+    if (!vigur && skBlads == null && h.talning.skekkja) {
+      const p2 = plan();
+      if (p2?.uttekt) useBoardStore.getState().patchObject(p2.id, { uttekt: { ...p2.uttekt, skekkja: h.talning.skekkja } } as Partial<BoardObject>, false);
+    }
     hreinar = h.linur;
     Object.assign(talning, { hreinsun: h.talning });
     const tl = h.talning;
