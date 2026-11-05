@@ -33,7 +33,17 @@ import {
 import { EditHistory, clipRect, cutRect, unionRect, type Rect } from "./history";
 import { Icon } from "./icons";
 import { runAi, topazFullResolution, type AiRequest } from "./ai";
-import { AI_TOOLS, BACKGROUND_CHOICES, LIGHT_DIRECTIONS, LIGHT_PRESETS, PORTRAIT_PRESETS, QUICK_EDITS, type AiToolId, type BackgroundChoice } from "./aiPresets";
+import {
+  AI_TOOLS,
+  BACKGROUND_CHOICES,
+  LIGHT_DIRECTIONS,
+  LIGHT_PRESETS,
+  PORTRAIT_PRESETS,
+  QUICK_EDITS,
+  throttleDelaySeconds,
+  type AiToolId,
+  type BackgroundChoice,
+} from "./aiPresets";
 import { applyLooks, looksIsNeutral } from "./looks";
 import { applyRetouch, restoreRegion } from "./retouch";
 import {
@@ -1053,10 +1063,25 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     setBusyCancel(true);
     try {
       const source = await aiSource();
-      const result = await runAi(req, source, (text) => {
+      const status = (text: string) => {
         if (aiRunRef.current === run) setBusy(text);
-      });
-      if (aiRunRef.current !== run) return;
+      };
+      let result: Awaited<ReturnType<typeof runAi>> | null = null;
+      for (let attempt = 0; !result; attempt++) {
+        try {
+          result = await runAi(req, source, status);
+        } catch (err) {
+          // Replicate takmarkar köll þegar inneign er lág — bíða og reyna aftur.
+          const wait = throttleDelaySeconds(err instanceof Error ? err.message : String(err));
+          if (wait == null || attempt >= 3) throw err;
+          for (let left = wait; left > 0; left--) {
+            if (aiRunRef.current !== run) return;
+            status(`Replicate biður um bið (lítil inneign) — reyni aftur eftir ${left} sek…`);
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+        if (aiRunRef.current !== run) return;
+      }
       setBusy("Opna útkomuna…");
       const raster = await loadRaster(result.blob, MAX_WORKING);
       if (aiRunRef.current !== run) return;
@@ -1066,13 +1091,21 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
       if (result.alpha) setHasAlpha(true);
       showToast(`${label}: komið. Afturkallaðu ef þér líkar það ekki.`, 3500);
     } catch (err) {
-      if (aiRunRef.current === run) showToast(err instanceof Error ? err.message : `${label} mistókst`, 7000);
+      if (aiRunRef.current === run) showToast(aiErrorText(err, label), 7000);
     } finally {
       if (aiRunRef.current === run) {
         setBusy(null);
         setBusyCancel(false);
       }
     }
+  }
+
+  function aiErrorText(err: unknown, label: string): string {
+    const message = err instanceof Error ? err.message : "";
+    if (throttleDelaySeconds(message) != null) {
+      return "Replicate takmarkar köll núna (inneign undir $5 = 6 köll á mínútu). Bíddu smá og reyndu aftur, eða bættu inneign á Replicate.";
+    }
+    return message || `${label} mistókst`;
   }
 
   function stopWaiting() {
@@ -1102,7 +1135,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
       showToast(`Vistað í ${bmp.width}×${bmp.height}`, 4000);
       bmp.close();
     } catch (err) {
-      if (aiRunRef.current === run) showToast(err instanceof Error ? err.message : "Topaz mistókst", 7000);
+      if (aiRunRef.current === run) showToast(aiErrorText(err, "Topaz"), 7000);
     } finally {
       if (aiRunRef.current === run) {
         setBusy(null);

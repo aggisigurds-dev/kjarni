@@ -259,3 +259,14 @@ test("AI tools and presets are complete and unambiguous", async () => {
   }
   for (const p of [...LIGHT_PRESETS, ...QUICK_EDITS, ...PORTRAIT_PRESETS]) assert.ok(p.prompt.trim().length > 10, p.label);
 });
+
+test("Replicate throttling is recognised and waits as long as Replicate asks", async () => {
+  const { throttleDelaySeconds } = await import("./aiPresets.ts");
+  const msg =
+    'Replicate hafnaði beiðninni (429): {"detail":"Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~4s.","status":429,"retry_after":4}';
+  assert.equal(throttleDelaySeconds(msg), 5);
+  assert.equal(throttleDelaySeconds("Request was throttled. Your rate limit resets in ~30s."), 31);
+  assert.equal(throttleDelaySeconds("429 too many"), 11);
+  assert.equal(throttleDelaySeconds("REPLICATE_API_TOKEN vantar"), null);
+  assert.equal(throttleDelaySeconds('{"status":429,"retry_after":600}'), 61, "capped at a minute");
+});

@@ -33,23 +33,43 @@ function first(blobs: Blob[], what: string): Blob {
   return b;
 }
 
-/** Myndin (`source`) með óskýrum bakgrunni: útklippt manneskja yfir óskýrt frumrit. */
+/** Myndin (`source`) með óskýrum bakgrunni: útklippt manneskja yfir óskýrt
+ *  frumrit. Manneskjan er fyrst klippt ÚR bakgrunninum áður en hann er gerður
+ *  óskýr — annars smitast hún út í bakgrunninn sem daufur skuggi. Óskýrleiki á
+ *  mynd með gati er „normaliseraður“ af striganum sjálfum (forþáttað alfa), svo
+ *  litir bakgrunnsins renna inn í gatið; dýpra inni fyllir sterkari óskýrleiki. */
 async function blurBehind(source: Blob, cutout: Blob, radiusFraction = 0.012): Promise<Blob> {
   const [orig, cut] = await Promise.all([createImageBitmap(source), createImageBitmap(cutout)]);
   try {
-    const canvas = document.createElement("canvas");
-    canvas.width = orig.width;
-    canvas.height = orig.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Gat ekki teiknað á striga");
-    const r = Math.max(4, Math.round(Math.max(orig.width, orig.height) * radiusFraction));
-    // Stækkað aðeins svo óskýru brúnirnar dragi ekki inn gegnsæi frá jaðrinum.
-    ctx.filter = `blur(${r}px)`;
-    ctx.drawImage(orig, -r * 2, -r * 2, orig.width + r * 4, orig.height + r * 4);
-    ctx.filter = "none";
-    ctx.drawImage(cut, 0, 0, orig.width, orig.height);
+    const w = orig.width;
+    const h = orig.height;
+    const r = Math.max(4, Math.round(Math.max(w, h) * radiusFraction));
+    const layer = (fn: (ctx: CanvasRenderingContext2D) => void) => {
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("Gat ekki teiknað á striga");
+      fn(ctx);
+      return c;
+    };
+    // Bakgrunnurinn einn: frumritið með manneskjuna klippta út (gat).
+    const bgOnly = layer((ctx) => {
+      ctx.drawImage(orig, 0, 0);
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.drawImage(cut, 0, 0, w, h);
+    });
+    const out = layer((ctx) => {
+      // Stækkað aðeins svo óskýru brúnirnar dragi ekki inn gegnsæi frá jaðrinum.
+      for (const radius of [r * 4, r * 2, r]) {
+        ctx.filter = `blur(${radius}px)`;
+        ctx.drawImage(bgOnly, -radius * 2, -radius * 2, w + radius * 4, h + radius * 4);
+      }
+      ctx.filter = "none";
+      ctx.drawImage(cut, 0, 0, w, h);
+    });
     return await new Promise((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað mynd"))), "image/jpeg", 0.95),
+      out.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað mynd"))), "image/jpeg", 0.95),
     );
   } finally {
     orig.close();

@@ -80,3 +80,13 @@ export const PORTRAIT_PRESETS: Array<{ label: string; prompt: string }> = [
   { label: "Kvikmyndaleg", prompt: "cinematic portrait, moody warm lighting, shallow depth of field" },
   { label: "Brúðkaup", prompt: "elegant wedding portrait, soft romantic light, flowers in the background" },
 ];
+
+/** Ef villan er frá því að Replicate takmarkaði köll (429 — gerist þegar
+ *  inneign er undir $5: 6 köll á mínútu, eitt í einu): hve margar sekúndur á
+ *  að bíða áður en reynt er aftur. null = önnur villa, ekki reyna aftur. */
+export function throttleDelaySeconds(message: string): number | null {
+  if (!/\b429\b|throttled/i.test(message)) return null;
+  const m = message.match(/retry_after"?\s*:\s*(\d+)/i) ?? message.match(/resets in ~?(\d+)\s*s/i);
+  const seconds = m ? Number(m[1]) : 10;
+  return Math.min(60, Math.max(2, seconds)) + 1;
+}
