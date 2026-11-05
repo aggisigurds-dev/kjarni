@@ -2164,7 +2164,9 @@ export function WhiteboardApp() {
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               <RitilThettStika auka={simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? { onAdgerd: hamAdgerd } : undefined} />
               {simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? null : <SymbolTray />}
-              {simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? <VeggjaTegundSimaStika /> : <StyleStrip />}
+              {/* Veggjahamir (tölva líka — Agnar 05.11.2026: „litakóðinn niðri mætti vera val á veggjum eins og í Teikningu"): neðsta stikan er
+                  veggjategund + þykkt í stað litapallettunnar. */}
+              {SIMA_VEGGJA_HAMIR.includes(hamur) ? <VeggjaTegundSimaStika /> : <StyleStrip />}
             </div>
           </div>
           {dragOver ? (

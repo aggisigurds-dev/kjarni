@@ -36,6 +36,7 @@ import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } f
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
 import { useSkodun } from "../../lib/board/skodun";
 import { saekjaBladstaerd } from "../../lib/board/teikn-thjonusta";
+import { husUtlina, type HLina } from "../../lib/board/veggja-hreinsun";
 import { SVALIR_HAED_M } from "../../lib/board/teikning-veggir";
 import type { BoardObject } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
@@ -100,6 +101,36 @@ async function golfAferd(T: Three, hd: Haed3D, hamark: number) {
   const t = new T.CanvasTexture(c);
   t.anisotropy = 8;
   return t;
+}
+
+/** Gólf án teikningar stoppar innan veggja hússins (Agnar 05.11.2026: „má stoppa bara innan veggja hússins" — eins og 3D í Teikningu):
+ * útlína hússins úr veggjunum (op ≤ 1,3 m lokast; lekur hún er aðeins kassi hússins) verður gegnsæisgríma á gólfplötuna. */
+function husGrima(T: Three, hd: Haed3D, metri: number) {
+  const linur: HLina[] = hd.veggir
+    .filter((v) => v.tegund === "veggur" || v.tegund === "gler" || v.tegund === "hurd")
+    .map((v) => ({ p: [v.ax, v.ay, v.bx, v.by], t: v.thykkt }));
+  if (linur.length < 3 || !(metri > 0)) return null;
+  const u = husUtlina(linur, metri);
+  const w = hd.golf.x1 - hd.golf.x0, h = hd.golf.y1 - hd.golf.y0;
+  if (!(w > 0 && h > 0)) return null;
+  const s = 700 / Math.max(w, h);
+  const cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+  const c = document.createElement("canvas");
+  c.width = cw;
+  c.height = ch;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  const d = x.createImageData(cw, ch);
+  for (let py = 0; py < ch; py++) {
+    for (let px = 0; px < cw; px++) {
+      const v = u.inni(hd.golf.x0 + (px + 0.5) / s, hd.golf.y0 + (py + 0.5) / s) ? 255 : 0;
+      const i = (py * cw + px) * 4;
+      d.data[i] = d.data[i + 1] = d.data[i + 2] = v;
+      d.data[i + 3] = 255;
+    }
+  }
+  x.putImageData(d, 0, 0);
+  return new T.CanvasTexture(c);
 }
 
 /** Kvarði hæðar: borðdílar á metra og hvaðan hann kom (null = enginn trúverðugur — hlutfall af stærð teikningar). */
@@ -343,9 +374,12 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           // gólf: teikningin sem áferð (efri hæðir hálfgagnsæjar svo neðri sjáist), annars grá plata
           const aferd = teikningAGolfi ? await golfAferd(T, hd, hamarkAferdar) : null;
           if (!lifir) return;
+          const grima = aferd ? null : husGrima(T, hd, metri);
           const gG = new T.PlaneGeometry(hd.golf.x1 - hd.golf.x0, hd.golf.y1 - hd.golf.y0);
           const gE = new T.MeshBasicMaterial({
             map: aferd,
+            alphaMap: grima,
+            alphaTest: grima ? 0.5 : 0,
             color: aferd ? 0xffffff : 0xc9c4ba,
             side: T.DoubleSide,
             transparent: nr > 0,
@@ -358,6 +392,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           hopur.add(g);
           losa.push(gG, gE);
           if (aferd) losa.push(aferd);
+          if (grima) losa.push(grima);
           lag.push({ hopur, golfE: gE, nr, veggH, metri, hd });
 
           // Efni veggja: hvítt grunnefni (litur á hvert eintak) og dökk efri brún (efnisröð BoxGeometry: +x −x +y −y +z −z).

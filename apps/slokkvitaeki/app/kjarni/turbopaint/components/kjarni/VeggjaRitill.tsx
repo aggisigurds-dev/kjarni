@@ -356,12 +356,18 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     const sel = new Set(b.selectedIds);
     // sveimaður veggur
     const sv = sveima.current && !sel.has(sveima.current) ? V.find((o) => o.id === sveima.current) : null;
+    // Stigi (breiður kassi): halóið með flötum endum — ávalir endar gerðu það að stórri klessu utan um kassann (Agnar 05.11.2026)
+    const endar = (o: LineObject) => {
+      ctx.lineCap = o.veggTegund === "stigi" ? "butt" : "round";
+    };
     if (sv) {
+      endar(sv);
       ctx.beginPath();
       slod(heimsPunktar(sv));
       ctx.strokeStyle = "rgba(254,101,63,0.35)";
       ctx.lineWidth = sv.strokeWidth * k.scale + 8;
       ctx.stroke();
+      ctx.lineCap = "round";
     }
     // fyrsti veggur „Lengja að"
     const lf = lengjaFyrsti.current ? V.find((o) => o.id === lengjaFyrsti.current) : null;
@@ -375,12 +381,14 @@ function RitilYfirlag({ virkur }: { virkur: boolean }) {
     // valdir veggir
     const valdir = V.filter((o) => sel.has(o.id));
     for (const o of valdir) {
+      endar(o);
       ctx.beginPath();
       slod(heimsPunktar(o));
       ctx.strokeStyle = "rgba(254,101,63,0.45)";
       ctx.lineWidth = o.strokeWidth * k.scale + 6;
       ctx.stroke();
     }
+    ctx.lineCap = "round";
     ctx.beginPath();
     for (const o of valdir) slod(heimsPunktar(o));
     ctx.strokeStyle = APPELSINA;

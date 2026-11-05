@@ -163,6 +163,47 @@ function gra(cv: HTMLCanvasElement): Float32Array {
   return a;
 }
 
+/** REITIR EFTIR INNIHALDI (Agnar 05.11.2026, Nesdekk Breiðhöfða 13: 2. hæð varð óskýr því níu FASTIR reitir lentu á auðu og TIF-inu var
+ * hafnað): net 9 × 6 innan `fokus`, sex reitir með mestu birtuskilin (innbyrðis ≥ 0,2 í brotum af fókus). Auðir reitir (dreifni < 400)
+ * segja ekkert um hliðrun. Sama regla og í Teikningu (438). */
+function veljaReiti(mynd: ImageBitmap, fokus: { x: number; y: number; w: number; h: number }, N: number, D: number): [number, number][] {
+  const c = document.createElement("canvas");
+  c.width = N;
+  c.height = N;
+  const cx = c.getContext("2d", { willReadFrequently: true });
+  if (!cx) return [];
+  const kost: { a: number; b: number; v: number }[] = [];
+  for (let gy = 0; gy < 6; gy++) {
+    for (let gx = 0; gx < 9; gx++) {
+      const a = 0.06 + gx * 0.11, b = 0.08 + gy * 0.17;
+      const fx0 = Math.round(fokus.x + a * fokus.w - N / 2), fy0 = Math.round(fokus.y + b * fokus.h - N / 2);
+      if (fx0 < D || fy0 < D || fx0 + N + D > mynd.width || fy0 + N + D > mynd.height) continue;
+      cx.fillStyle = "#fff";
+      cx.fillRect(0, 0, N, N);
+      cx.drawImage(mynd, fx0, fy0, N, N, 0, 0, N, N);
+      const d = cx.getImageData(0, 0, N, N).data;
+      let m = 0, n = 0, v = 0;
+      for (let i = 0; i < d.length; i += 28) {
+        m += d[i] + d[i + 1] + d[i + 2];
+        n++;
+      }
+      m /= n * 3;
+      for (let i = 0; i < d.length; i += 28) {
+        const g = (d[i] + d[i + 1] + d[i + 2]) / 3 - m;
+        v += g * g;
+      }
+      kost.push({ a, b, v: v / n });
+    }
+  }
+  kost.sort((p, q) => q.v - p.v);
+  const val: { a: number; b: number }[] = [];
+  for (const k of kost) {
+    if (val.length >= 6 || k.v < 400) break;
+    if (val.every((q) => Math.abs(q.a - k.a) + Math.abs(q.b - k.b) >= 0.2)) val.push(k);
+  }
+  return val.map((k) => [k.a, k.b]);
+}
+
 /** HLIÐRUN TIF → JPEG (438 hlidrun; mælt 05.10.2026 á Þingholti: JPEG-ið situr 3,4 díla neðar og 0,75 til vinstri,
  * jafnt yfir allt blaðið). N × N JPEG-reitir á níu stöðum innan `fokus`, TIF-svæðið sama staðar teiknað í JPEG-kvarða,
  * hvort tveggja þrefaldað (SUB) og besta hliðrun hvers reits fundin (gróf leit, svo fín). Auðir reitir sleppa. */
@@ -174,8 +215,9 @@ async function hlidrun(
 ): Promise<{ fx: number; fy: number; reitir: { x: number; y: number; dx: number; dy: number; c: number }[] }> {
   const N = 160, D = 8, SUB = 3, G = N * SUB, M = (N + 2 * D) * SUB, kp = k.kp;
   const reitir: { x: number; y: number; dx: number; dy: number; c: number }[] = [];
-  for (const b of [0.25, 0.5, 0.75]) {
-    for (const a of [0.25, 0.5, 0.75]) {
+  const val = veljaReiti(mynd, fokus, N, D);
+  {
+    for (const [a, b] of val) {
       const fx0 = Math.round(fokus.x + a * fokus.w - N / 2), fy0 = Math.round(fokus.y + b * fokus.h - N / 2);
       if (fx0 < D || fy0 < D || fx0 + N + D > mynd.width || fy0 + N + D > mynd.height) continue;
       const j = document.createElement("canvas");
@@ -243,10 +285,10 @@ async function hlidrun(
           if (c > best.c) best = { dx, dy, c };
         }
       }
-      if (best.c > 0.75) reitir.push({ x: fx0 + N / 2, y: fy0 + N / 2, dx: -best.dx / SUB, dy: -best.dy / SUB, c: +best.c.toFixed(3) });
+      if (best.c > 0.7) reitir.push({ x: fx0 + N / 2, y: fy0 + N / 2, dx: -best.dx / SUB, dy: -best.dy / SUB, c: +best.c.toFixed(3) });
     }
   }
-  if (reitir.length < 2) throw new Error(`TIF passar ekki við JPEG-ið (${reitir.length} af 9 reitum)`);
+  if (reitir.length < 2) throw new Error(`TIF passar ekki við JPEG-ið (${reitir.length} af ${val.length} reitum)`);
   return { fx: midgildi(reitir.map((r) => r.dx)), fy: midgildi(reitir.map((r) => r.dy)), reitir };
 }
 
