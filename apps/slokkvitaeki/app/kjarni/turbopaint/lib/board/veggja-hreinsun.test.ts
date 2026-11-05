@@ -294,3 +294,59 @@ test("skekkja: veggir Agnars eru mældir með — nógu langir ásréttir veggir
   assert.equal(radandi.talning.skekkja, 0, "ásréttir veggir Agnars ráða: " + radandi.talning.skekkja);
   assert.deepEqual(fastar[0].p, [0, 0, 3000, 0], "fastar línur hreyfast aldrei");
 });
+
+test("húskassi: lítil álma með veggjaþykkum línum kemst inn, blaðrammi og hárfín lóðarmörk ekki (Lisbeth 05.11.2026)", () => {
+  const dpm = 50;
+  const hus = [...ferningur(0, 0, 1500, 1000, 25), L(700, 0, 700, 1000, 15)];
+  const innan = (k: { x0: number; y0: number; x1: number; y1: number }, r: { x0: number; y0: number; x1: number; y1: number }) =>
+    k.x0 <= r.x0 && k.y0 <= r.y0 && k.x1 >= r.x1 && k.y1 >= r.y1;
+  // 8 × 6 m inngangsskúr úr 20 cm veggjum, 2 m frá húsinu — Á að komast inn
+  const alma = ferningur(1600, 200, 400, 300, 20);
+  const kA = husKassi([...hus, ...alma], dpm)!;
+  assert.ok(innan(kA, { x0: 1600, y0: 200, x1: 2000, y1: 500 }), "lítil álma inni í kassanum: " + JSON.stringify(kA));
+  // blaðrammi (hárlína) utan um allt — má EKKI stækka kassann
+  const rammi = ferningur(-400, -400, 3000, 2000, 2);
+  const kR = husKassi([...hus, ...rammi], dpm)!;
+  assert.ok(kR.x1 - kR.x0 < 1800, "blaðrammi utan kassans: " + JSON.stringify(kR));
+  // hárfín lóðarmörk sem umlykja húsið
+  const lod = ferningur(-300, -300, 2600, 1800, 3);
+  const kL = husKassi([...hus, ...lod], dpm)!;
+  assert.ok(kL.x1 - kL.x0 < 1800, "hárfín lóðarmörk utan kassans: " + JSON.stringify(kL));
+});
+
+test("skekkja: aðeins handvirkt gildi blaðsins gengur fyrir — mælt gildi læsir ekki mælingunni", () => {
+  const dpm = 50;
+  const sk = -0.6, r = (sk * Math.PI) / 180;
+  const sn = (x: number, y: number): [number, number] => [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)];
+  const nyjar: HLina[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = sn(100, 100 + i * 220), b = sn(1600, 100 + i * 220 + 3);
+    nyjar.push(L(a[0], a[1], b[0], b[1]));
+  }
+  // Agnar hefur teiknað langa ásrétta veggi: mælingin verður að fá að keyra svo þeir ráði
+  const langir = [L(0, 0, 9000, 0), L(0, 1800, 9000, 1800), L(0, 3600, 9000, 3600)];
+  const maelt = hreinsaVeggi(nyjar, langir, dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 });
+  assert.equal(maelt.talning.skekkja, 0, "mælingin keyrir og veggir Agnars ráða");
+  // handvirkt gildi á blaðinu (skekkjaGradur) gengur fyrir og mælingin keyrir ekki
+  const handvirkt = hreinsaVeggi(nyjar, langir, dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0, skekkjaGradur: -0.6 });
+  assert.equal(handvirkt.talning.skekkja, -0.6, "handvirkt gildi ræður");
+});
+
+test("skekkja: 45 % fastar ráða EKKI (miðgildið er vegið með lengd — þröskuldurinn er helmingur)", () => {
+  const dpm = 50;
+  const sk = -0.6, r = (sk * Math.PI) / 180;
+  const sn = (x: number, y: number): [number, number] => [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)];
+  const nyjar: HLina[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = sn(100, 100 + i * 200), b = sn(1600, 100 + i * 200 + 3);
+    nyjar.push(L(a[0], a[1], b[0], b[1]));
+  }
+  const nyLengd = 10 * 1500;
+  // fastar ~45 % af heildarlengd: 4 × 3000 = 12.000 á móti 15.000
+  const f45 = [L(0, 0, 3000, 0), L(0, 500, 3000, 500), L(0, 1000, 3000, 1000), L(0, 1500, 3000, 1500)];
+  assert.ok(Math.abs(4 * 3000 / (nyLengd + 4 * 3000) - 0.44) < 0.02);
+  assert.ok(Math.abs(hreinsaVeggi(nyjar, f45, dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 }).talning.skekkja - sk) < 0.25, "45 % duga ekki");
+  // 55 %: 6 × 3000 = 18.000 á móti 15.000
+  const f55 = [...f45, L(0, 2000, 3000, 2000), L(0, 2500, 3000, 2500)];
+  assert.equal(hreinsaVeggi(nyjar, f55, dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 }).talning.skekkja, 0, "55 % ráða");
+});

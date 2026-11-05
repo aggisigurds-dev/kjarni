@@ -566,7 +566,8 @@ export function hreinsaVeggi(nyjar: HLina[], fastar: HLina[], dpm: number, vik: 
   // 2. rétta — eftir blaðinu sjálfu þegar skönnunin er skökk (skekkjan mæld á löngu línunum)
   // Veggir Agnars (`fastar`) eru ALDREI snúnir, svo þeir eru mældir með: hafi hann teiknað ásrétta veggi dregur það
   // miðgildið að núlli og nýir veggir tilta ekki frá hans (Lisbeth 05.11.2026: 40 m veggur færðist 22 cm við −0,645°,
-  // umfram smellaM 15 cm).
+  // umfram smellaM 15 cm). ÞRÖSKULDUR: miðgildið er vegið með lengd, svo `fastar` ráða aðeins ef þeir eiga MEIRA EN
+  // HELMING heildarlengdarinnar — mælt af Lisbeth 05.11.2026: 44 % → −0,64°, 55 % → 0°.
   const skekkja = vik.skekkjaGradur != null ? vik.skekkjaGradur : maelaSkekkju([...butar, ...fastar], dpm, vik.rettaGradur);
   talning.skekkja = Math.round(skekkja * 100) / 100;
   butar = butar.map((b) => {
@@ -802,21 +803,23 @@ export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; alm
       if (d <= bil) rot[finna(i)] = finna(j);
     }
   }
-  const K = new Map<number, { flat: number; thungi: number; x0: number; y0: number; x1: number; y1: number; med: boolean }>();
+  const K = new Map<number, { flat: number; thungi: number; lengd: number; thykktSum: number; x0: number; y0: number; x1: number; y1: number; med: boolean }>();
   butar.forEach((b, i) => {
     const r = finna(i);
-    const q = K.get(r) ?? { flat: 0, thungi: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, med: false };
+    const q = K.get(r) ?? { flat: 0, thungi: 0, lengd: 0, thykktSum: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, med: false };
     q.flat += lengdLinu(b.p) * Math.max(b.t, 0.05 * dpm);
     // Þungi ÁN þykktargólfs: gólfið (0,05 · dpm) lætur langa hárlínu vega meira en stuttan þykkan vegg — titilreitur,
     // ásalínur og lóðarmörk eru löng og þunn. Hlutfallsreglan hér neðar notar þennan þunga, ekki `flat` (Lisbeth 05.11.2026).
     q.thungi += lengdLinu(b.p) * Math.max(0, b.t - 0.02 * dpm) ** 1.5;
+    q.lengd += lengdLinu(b.p);
+    q.thykktSum += lengdLinu(b.p) * b.t;
     q.x0 = Math.min(q.x0, kassi[i][0]);
     q.y0 = Math.min(q.y0, kassi[i][1]);
     q.x1 = Math.max(q.x1, kassi[i][2]);
     q.y1 = Math.max(q.y1, kassi[i][3]);
     K.set(r, q);
   });
-  let adal: { flat: number; thungi: number; x0: number; y0: number; x1: number; y1: number; med: boolean } | null = null;
+  let adal: { flat: number; thungi: number; lengd: number; thykktSum: number; x0: number; y0: number; x1: number; y1: number; med: boolean } | null = null;
   for (const q of K.values()) if (!adal || q.flat > adal.flat) adal = q;
   if (!adal) return null;
   adal.med = true;
@@ -838,9 +841,11 @@ export function husKassi(linur: HLina[], dpm: number, st: { tengiM?: number; alm
   for (let breytt = true; breytt; ) {
     breytt = false;
     for (const q of K.values()) {
-      // Álman verður að vera þykkur veggjaklasi: `flat` hefur þykktargólf svo blaðrammi og lóðarmörk (sem UMLYKJA húsið,
-      // bilK = 0) komust inn sem „álma" (Lisbeth 05.11.2026). Þunginn án gólfs sker þau frá.
-      if (q.med || q.flat < adal.flat * 0.2 || q.thungi < adal.thungi * 0.2) continue;
+      // Álman verður að vera úr VEGGJAÞYKKUM línum: `flat` hefur þykktargólf svo blaðrammi og hárfín lóðarmörk (sem UMLYKJA
+      // húsið, bilK = 0) komust inn sem „álma" (Lisbeth 05.11.2026). Meðalþykkt klasans (vegin með lengd) sker þau frá — og
+      // hún fellir ekki litlar álmur eins og hlutfall af þunga HÚSSINS gerði: 8 × 6 m inngangsskúr úr 20 cm veggjum féll þá út.
+      if (q.med || q.flat < adal.flat * 0.2) continue;
+      if (q.lengd > 0 && q.thykktSum / q.lengd < 0.07 * dpm) continue;
       for (const o of K.values()) {
         if (o.med && bilK(o, q) <= alma) {
           q.med = true;

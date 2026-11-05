@@ -346,15 +346,14 @@ export async function vinnaLinur(
   let hreinar: HLina[] = hrar;
   try {
     // Skönnun: stakir bútar < stakurSkonnunM fara (húsgögn, texti sem varð að vegg); vigur-PDF heldur stakurM.
-    // Skekkja blaðsins (uttekt.skekkja) gengur fyrir mælingunni; mælda gildið er skrifað á blaðið svo það gildi áfram.
+    // Halli blaðsins: AÐEINS gildi sem Agnar setti sjálfur (skekkjaHandvirk) gengur fyrir mælingunni. Mælda gildið er aldrei
+    // skrifað á blaðið — það læsti mælingunni (fyrsta keyrsla skrifaði gildið, næsta las það og `fastar` komu aldrei til álita,
+    // svo nýir veggir tiltust frá veggjum Agnars að eilífu) og það skrif hefði hvorki fylgt „Hætta við" né Afturkalla
+    // (Lisbeth 05.11.2026). Viðmótið (Halli blaðsins) skrifar handvirka gildið með commitHistory.
     const tU = plan()?.uttekt ?? null;
-    const skBlads = typeof tU?.skekkja === "number" && Number.isFinite(tU.skekkja) ? tU.skekkja : null;
+    const skBlads = tU?.skekkjaHandvirk && typeof tU.skekkja === "number" && Number.isFinite(tU.skekkja) ? tU.skekkja : null;
     const vikH = { ...vik, skekkjaGradur: skBlads ?? vik.skekkjaGradur ?? null };
     const h = hreinsaVeggi(hrar, fastarH, dpm, vigur ? vikH : { ...vikH, stakurM: Math.max(vik.stakurM, vik.stakurSkonnunM) });
-    if (!vigur && skBlads == null && h.talning.skekkja) {
-      const p2 = plan();
-      if (p2?.uttekt) useBoardStore.getState().patchObject(p2.id, { uttekt: { ...p2.uttekt, skekkja: h.talning.skekkja } } as Partial<BoardObject>, false);
-    }
     hreinar = h.linur;
     Object.assign(talning, { hreinsun: h.talning });
     const tl = h.talning;
