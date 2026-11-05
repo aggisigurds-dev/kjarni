@@ -23,7 +23,12 @@ export type WanSettings = {
   resolution: WanResolution;
   aspectRatio: WanAspectRatio;
   disableSafetyChecker: boolean;
+  /** Replicate brúar myndbandið upp í 30 rammar/sek (ffmpeg) — mýkri hreyfing. */
+  interpolateOutput: boolean;
 };
+
+/** Hámark wan-video/wan-2.2-i2v-fast (schema: num_frames 81–121, frames_per_second 5–30). */
+export const WAN_MAX_FRAMES = 121;
 
 export const DEFAULT_WAN_PROMPT =
   "cinematic motion, subtle camera push-in, natural lighting, smooth movement, high quality";
@@ -41,18 +46,19 @@ export const DEFAULT_WAN_SETTINGS: WanSettings = {
   resolution: "720p",
   aspectRatio: "16:9",
   disableSafetyChecker: false,
+  interpolateOutput: false,
 };
 
 export function clampFrames(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_WAN_SETTINGS.numFrames;
-  // wan-video/wan-2.2-i2v-fast krefst num_frames ≥ 81 (schema validation).
-  // Haldum 4N+1 mynstrinu (81, 97, 113, 129) sem er algengt í Wan fjölskyldu.
-  return Math.min(129, Math.max(81, Math.round((n - 1) / 4) * 4 + 1));
+  // wan-video/wan-2.2-i2v-fast: num_frames 81–121 samkvæmt schema (staðfest
+  // 05.11.2026 — 129 var leyft hér áður en Replicate hafnar því). 4N+1 mynstur.
+  return Math.min(WAN_MAX_FRAMES, Math.max(81, Math.round((n - 1) / 4) * 4 + 1));
 }
 
 export function clampFps(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_WAN_SETTINGS.framesPerSecond;
-  return Math.min(30, Math.max(8, Math.round(n)));
+  return Math.min(30, Math.max(5, Math.round(n)));
 }
 
 export function clampSeed(n: number): number {
@@ -79,6 +85,7 @@ export function normalizeWanSettings(raw: Partial<WanSettings> | null | undefine
       typeof src.disableSafetyChecker === "boolean"
         ? src.disableSafetyChecker
         : DEFAULT_WAN_SETTINGS.disableSafetyChecker,
+    interpolateOutput: src.interpolateOutput === true,
   };
 }
 

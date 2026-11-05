@@ -5,6 +5,9 @@ import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import "../artcraft.css";
 import { uploadForReplicate } from "../uploadToStorage";
+import FramePicker from "../video/FramePicker";
+import { extractFrameAt, loadVideoMeta, stitchSegments } from "../video/frames";
+import { defaultContinueTime, formatSeconds } from "../video/timeline";
 import StagingPicker from "../StagingPicker";
 import { useStagedSource } from "../useStagedSource";
 import { clearPending, loadPending, savePending } from "../pendingPredictions";
@@ -75,142 +78,15 @@ type Clip = {
   blob: Blob;
   prompt: string;
   timestamp: number;
+  /** Bútur byrjar hér (sek) — framhald sleppir fyrsta rammanum sem er sá sami og sá sem það var búið til úr. */
+  inT?: number;
+  /** Bútur endar hér (sek) — þar sem framhaldið tók við. */
+  outT?: number;
 };
 
-/** Soðja fleiri myndbands-blobs saman í eitt með því að spila þá í röð
- * inn á canvas og taka upp í gegnum MediaRecorder. Takmarkanir: tekur
- * raun-tíma (10s af clips = 10s af upptöku), kóðar á nýtt (örlítill
- * gæðatap vs. bitstream-copy sem er flóknara). Reynir MP4/H.264 fyrst,
- * fellur í WebM þegar vafrinn styður ekki MP4 (t.d. Firefox).
- *
- * `onProgress` lætur vita hvaða bút við erum að taka upp. */
-async function stitchClips(
-  clips: Array<{ url: string; blob: Blob }>,
-  onProgress?: (current: number, total: number) => void,
-): Promise<{ blob: Blob; mimeType: string }> {
-  if (clips.length === 0) throw new Error("Engir bútar til að soðja.");
-
-  // Lesum stærð úr fyrsta bút — allir bútar í keðjunni ættu að hafa
-  // sömu stærð (sama líkan, sama hlutfall).
-  const probe = document.createElement("video");
-  probe.src = clips[0].url;
-  probe.muted = true;
-  probe.playsInline = true;
-  await new Promise<void>((resolve, reject) => {
-    probe.onloadedmetadata = () => resolve();
-    probe.onerror = () => reject(new Error("Gat ekki lesið fyrsta bút."));
-  });
-  const width = probe.videoWidth || 1024;
-  const height = probe.videoHeight || 1024;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D context óaðgengilegur.");
-  const stream = canvas.captureStream(30);
-
-  const candidateTypes = [
-    "video/mp4;codecs=avc1.42E01E",
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
-  const mimeType =
-    candidateTypes.find((t) => (window as unknown as { MediaRecorder: typeof MediaRecorder }).MediaRecorder.isTypeSupported(t)) ||
-    "video/webm";
-
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
-  const chunks: Blob[] = [];
-  recorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) chunks.push(e.data);
-  };
-  recorder.start(500);
-
-  for (let i = 0; i < clips.length; i++) {
-    onProgress?.(i + 1, clips.length);
-    const clip = clips[i];
-    const video = document.createElement("video");
-    video.src = clip.url;
-    video.muted = true;
-    video.playsInline = true;
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error(`Bútur ${i + 1} hleðst ekki.`));
-    });
-    try {
-      await video.play();
-    } catch (err) {
-      // Sumir vafrar henda á autoplay — reyna aftur eftir user gesture
-      // ætti ekki að gerast því þessi fall er alltaf triggered af click.
-      throw err;
-    }
-    let rafId = 0;
-    await new Promise<void>((resolve) => {
-      const draw = () => {
-        ctx.drawImage(video, 0, 0, width, height);
-        if (video.ended || video.paused || video.currentTime >= video.duration - 0.02) {
-          cancelAnimationFrame(rafId);
-          resolve();
-          return;
-        }
-        rafId = requestAnimationFrame(draw);
-      };
-      video.onended = () => {
-        cancelAnimationFrame(rafId);
-        resolve();
-      };
-      draw();
-    });
-    video.pause();
-    video.src = "";
-  }
-
-  recorder.stop();
-  await new Promise<void>((resolve) => {
-    recorder.onstop = () => resolve();
-  });
-
-  const blob = new Blob(chunks, { type: mimeType });
-  return { blob, mimeType };
-}
-
-/** Tekur síðasta ramma úr myndbands-blob og skilar sem JPEG-blob. Notar
- * off-DOM video + canvas; vafrinn þarf að hafa afkóðað myndbandið (sem er
- * alltaf tilfellið þegar við köllum þetta — blobinn er nýbúinn að spila í
- * result-panel-inu). Við seek-um aðeins fyrir enda til að sleppa við
- * svartan "end of stream" ramma í sumum codec-um. */
-async function extractLastFrameBlob(blob: Blob): Promise<Blob> {
-  const url = URL.createObjectURL(blob);
-  try {
-    const video = document.createElement("video");
-    video.src = url;
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error("Gat ekki hlaðið myndband fyrir rammatöku."));
-    });
-    const seekTo = Math.max(0, (isFinite(video.duration) ? video.duration : 0) - 0.08);
-    await new Promise<void>((resolve, reject) => {
-      video.onseeked = () => resolve();
-      video.onerror = () => reject(new Error("Rammataka mistókst."));
-      video.currentTime = seekTo;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1024;
-    canvas.height = video.videoHeight || 1024;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas 2D context óaðgengilegur.");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað ramma"))), "image/jpeg", 0.92);
-    });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
+/** Fyrsti rammi framhalds er ramminn sem það var búið til úr — honum er
+ *  sleppt svo hann komi ekki tvisvar við samskeytin (1 rammi á 16–24 fps). */
+const SEAM_SKIP = 0.07;
 
 export default function SkyjahreyfimyndClient() {
   const [ready, setReady] = useState(false);
@@ -243,6 +119,10 @@ export default function SkyjahreyfimyndClient() {
   const [mergedClip, setMergedClip] = useState<{ url: string; blob: Blob; mimeType: string; sourceCount: number } | null>(null);
   const [stitching, setStitching] = useState(false);
   const [stitchStatus, setStitchStatus] = useState<{ current: number; total: number } | null>(null);
+  // Hvar framhald á að taka við í síðasta bút (sjálfgefið 1 sek fyrir enda).
+  const [extendAt, setExtendAt] = useState(0);
+  const [lastDuration, setLastDuration] = useState(0);
+  const pendingAtRef = useRef<number | null>(null);
   const clipsRef = useRef<Clip[]>([]);
   const pendingRef = useRef<Clip | null>(null);
   const mergedRef = useRef<{ url: string } | null>(null);
@@ -424,8 +304,9 @@ export default function SkyjahreyfimyndClient() {
     try {
       if (mergedRef.current) URL.revokeObjectURL(mergedRef.current.url);
       setMergedClip(null);
-      const { blob, mimeType } = await stitchClips(current, (c, t) =>
-        setStitchStatus({ current: c, total: t }),
+      const { blob, mimeType } = await stitchSegments(
+        current.map((c) => ({ blob: c.blob, inT: c.inT ?? 0, outT: c.outT ?? Number.POSITIVE_INFINITY })),
+        (f) => setStitchStatus({ current: Math.round(f * 100), total: 100 }),
       );
       const url = URL.createObjectURL(blob);
       setMergedClip({ url, blob, mimeType, sourceCount: current.length });
@@ -437,7 +318,7 @@ export default function SkyjahreyfimyndClient() {
     }
   }
 
-  async function run(options?: { extendFrom?: Clip }) {
+  async function run(options?: { extendFrom?: Clip; at?: number }) {
     const extendFrom = options?.extendFrom;
     const isExtension = !!extendFrom;
 
@@ -445,8 +326,10 @@ export default function SkyjahreyfimyndClient() {
     let sourceName: string;
     if (isExtension) {
       try {
-        setProgress({ status: "sæki síðasta ramma…", elapsed: 0 });
-        const lastFrame = await extractLastFrameBlob(extendFrom.blob);
+        setProgress({ status: "sæki ramma…", elapsed: 0 });
+        const at = options?.at ?? defaultContinueTime((await loadVideoMeta(extendFrom.blob)).duration);
+        pendingAtRef.current = at;
+        const lastFrame = await extractFrameAt(extendFrom.blob, at);
         sourceDataUrl = await uploadForReplicate(lastFrame, "reference-images");
         sourceName = `framhald-${clipsRef.current.length}`;
       } catch (err) {
@@ -557,7 +440,14 @@ export default function SkyjahreyfimyndClient() {
   function acceptPending() {
     const pending = pendingClip;
     if (!pending) return;
-    const nextClips = [...clips, pending];
+    // Síðasti bútur endar þar sem framhaldið tók við; framhaldið sleppir
+    // fyrsta (tvöfalda) rammanum.
+    const at = pendingAtRef.current;
+    pendingAtRef.current = null;
+    const nextClips =
+      at != null && clips.length > 0
+        ? [...clips.slice(0, -1), { ...clips[clips.length - 1], outT: at }, { ...pending, inT: SEAM_SKIP }]
+        : [...clips, pending];
     setClips(nextClips);
     setPendingClip(null);
     // Nýr bútur í keðju → gamla soðningin á ekki við lengur.
@@ -594,6 +484,24 @@ export default function SkyjahreyfimyndClient() {
   }
 
   const lastClip = clips.length > 0 ? clips[clips.length - 1] : null;
+
+  useEffect(() => {
+    if (!lastClip) {
+      setLastDuration(0);
+      return;
+    }
+    let alive = true;
+    void loadVideoMeta(lastClip.blob)
+      .then((m) => {
+        if (!alive) return;
+        setLastDuration(m.duration);
+        setExtendAt(defaultContinueTime(m.duration));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [lastClip]);
   const baseName = source?.name?.replace(/\.[^.]+$/, "") || "myndband";
 
   if (!ready) {
@@ -809,23 +717,32 @@ export default function SkyjahreyfimyndClient() {
                 <input
                   type="range"
                   min={81}
-                  max={129}
+                  max={121}
                   step={4}
                   value={settings.numFrames}
                   onChange={(e) => updateSettings({ numFrames: Number(e.target.value) })}
                 />
-                <small className="ac-rec">mælt: 81 (~5s á 16fps — ódýrast); 129 fyrir lengri klip</small>
+                <small className="ac-rec">mælt: 81 (~5s á 16fps — ódýrast); 121 er hámark Wan (~7,5s á 16fps)</small>
               </label>
               <label>
                 FPS ({settings.framesPerSecond})
                 <input
                   type="range"
-                  min={8}
+                  min={5}
                   max={30}
                   value={settings.framesPerSecond}
                   onChange={(e) => updateSettings({ framesPerSecond: Number(e.target.value) })}
                 />
-                <small className="ac-rec">mælt: 16 (Wan native); 24 fyrir mýkra playback (styttra klip þó)</small>
+                <small className="ac-rec">mælt: 16 (Wan native); lægra = lengra klip (121 rammi á 12 fps ≈ 10 sek)</small>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.interpolateOutput}
+                  onChange={(e) => updateSettings({ interpolateOutput: e.target.checked })}
+                />
+                Mýkra (brúa upp í 30 fps)
+                <small className="ac-rec" style={{ marginLeft: 8 }}>gott með lágu fps — lengra klip án hökts</small>
               </label>
               <label>
                 Upplausn
@@ -968,16 +885,29 @@ export default function SkyjahreyfimyndClient() {
                       Framlengja?
                     </strong>
                     <p className="ac-hint" style={{ margin: 0, color: "#e5e7eb" }}>
-                      Vélin tekur síðasta ramma úr bút {clips.length} og býr til næsta bút með virka
-                      prompt-inu. Þú getur breytt prompt-inu áður en þú ýtir.
+                      Veldu rammann í bút {clips.length} sem næsti bútur byrjar á. Sjálfgefið er sekúndu
+                      fyrir enda: bútar enda oft nálægt upphafsstöðunni, og þá endurtekur framhald úr
+                      allra síðasta rammanum sömu hreyfingu. Það sem kemur á eftir rammanum dettur út
+                      við samsuðu. Lýstu nýrri hreyfingu í prompt-inu.
                     </p>
+                    {lastClip && lastDuration > 0 && (
+                      <div style={{ marginTop: 10 }}>
+                        <FramePicker
+                          blob={lastClip.blob}
+                          duration={lastDuration}
+                          value={extendAt}
+                          onChange={setExtendAt}
+                          fps={model === "kling" ? 24 : settings.framesPerSecond}
+                        />
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
                     className="ac-btn"
-                    onClick={() => void run({ extendFrom: lastClip })}
+                    onClick={() => void run({ extendFrom: lastClip, at: extendAt })}
                   >
-                    Framlengja bút {clips.length}
+                    Framlengja frá {formatSeconds(extendAt)} s
                   </button>
                 </div>
               )}
@@ -1017,7 +947,7 @@ export default function SkyjahreyfimyndClient() {
                       className="ac-btn ghost"
                       onClick={() => {
                         discardPending();
-                        if (lastClip) void run({ extendFrom: lastClip });
+                        if (lastClip) void run({ extendFrom: lastClip, at: extendAt });
                       }}
                       disabled={busy || !lastClip}
                     >
@@ -1062,7 +992,7 @@ export default function SkyjahreyfimyndClient() {
                     >
                       {stitching
                         ? stitchStatus
-                          ? `Tek upp bút ${stitchStatus.current}/${stitchStatus.total}…`
+                          ? `Tek upp… ${stitchStatus.current}%`
                           : "Soðja saman…"
                         : mergedClip
                           ? "Soðja aftur"
