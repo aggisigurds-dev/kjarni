@@ -32,6 +32,7 @@ import {
   type VideoModelId,
 } from "../video/presets";
 import { throttleDelaySeconds } from "./aiPresets";
+import { motaFileName } from "./detail";
 import { Icon } from "./icons";
 import "./editor.css";
 
@@ -503,7 +504,8 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${name.replace(/\.[^.]+$/, "") || "myndband"}-mota.${ext}`;
+      // Nýtt nafn í hvert sinn — áður skrifaði hver vistun yfir þá síðustu.
+      a.download = motaFileName(name || "myndband", ext);
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       dirtyRef.current = false;

@@ -151,6 +151,8 @@ export async function relightImage(
   settings: EndurljosSettings,
   imageDataUrl: string,
   activePrompt: string,
+  /** Vinnustærð líkansins (IC-Light-enum); án hennar 512×640, klippt í 4:5. */
+  size?: { width: number; height: number },
 ): Promise<Blob[]> {
   if (!activePrompt.trim()) throw new Error("Virka prompt-ið er tómt.");
   const res = await fetch("/api/endurljos", {
@@ -174,6 +176,7 @@ export async function relightImage(
       outputFormat: settings.outputFormat,
       outputQuality: settings.outputQuality,
       autoUpscale: settings.autoUpscale,
+      ...(size ? { width: size.width, height: size.height } : {}),
     }),
   });
   const text = await res.text();
