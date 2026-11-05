@@ -1293,6 +1293,7 @@ function SkekkjaStilling() {
   const [drog, setDrog] = useState<string | null>(null);
   const plan = useBoardStore((s) => s.objects.find((o): o is ImageObject => o.type === "image" && !!o.uttekt) ?? null);
   const vistud = typeof plan?.uttekt?.skekkja === "number" && Number.isFinite(plan.uttekt.skekkja) ? plan.uttekt.skekkja : null;
+  // Vélin skrifar ALDREI `uttekt.skekkja` (sjá sjalfvirkt.ts) — gildi á blaðinu er því alltaf handvirkt.
   const handvirk = !!plan?.uttekt?.skekkjaHandvirk;
   const maelt = useBoardStore((s) => {
     if (!opid) return 0;
@@ -1350,7 +1351,7 @@ function SkekkjaStilling() {
         </span>
         <span className="tabular-nums text-white/60">
           {synt ? `${synt.toFixed(2).replace(".", ",")}°` : "beint"}
-          {vistud != null ? (handvirk ? " · stillt" : " · mælt") : ""}
+          {handvirk ? " · stillt" : ""}
         </span>
       </button>
       {opid ? (
