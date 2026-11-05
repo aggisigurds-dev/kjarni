@@ -61,12 +61,45 @@ function writeLock(app) {
   writeFileSync(lockPath(app.id), `${app.id}\n${app.tag}\n${app.sha256}\n`);
 }
 
-async function download(url, dest) {
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
-  const bytes = Buffer.from(await res.arrayBuffer());
-  writeFileSync(dest, bytes);
-  return bytes.length;
+const RETRIES = 4;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** GitHub-útgáfur skila stöku sinnum 502/503/504 þegar 13 skrár eru sóttar í
+ *  einu — ein slík felldi alla Vercel-bygginguna. Reynt aftur (2, 4, 8 s) við
+ *  5xx, 429 og netvillur; 404 og aðrar 4xx-villur stöðva strax. */
+export async function download(url, dest, { retries = RETRIES, wait = sleep, fetchImpl = fetch } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    let status = 0;
+    try {
+      const res = await fetchImpl(url, { redirect: "follow" });
+      status = res.status;
+      if (res.ok) {
+        const bytes = Buffer.from(await res.arrayBuffer());
+        writeFileSync(dest, bytes);
+        return bytes.length;
+      }
+      if (status < 500 && status !== 429) throw Object.assign(new Error(`GET ${url} → ${status}`), { fatal: true });
+    } catch (err) {
+      if (err && err.fatal) throw err;
+      if (attempt >= retries) throw new Error(`GET ${url} → ${status || (err instanceof Error ? err.message : err)}`);
+    }
+    if (attempt >= retries) throw new Error(`GET ${url} → ${status}`);
+    const ms = 2000 * 2 ** (attempt - 1);
+    console.log(`artcraft: ${path.basename(dest)} → ${status || "netvilla"}, reyni aftur eftir ${ms / 1000} s (${attempt}/${retries - 1})`);
+    await wait(ms);
+  }
+}
+
+/** Keyrir `fn` á hvert stak, mest `limit` í einu. */
+async function mapLimit(items, limit, fn) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
 }
 
 function unzip(zip, dest) {
@@ -138,13 +171,16 @@ async function main() {
   const tmp = path.join(os.tmpdir(), `kjarni-artcraft-${process.pid}`);
   mkdirSync(tmp, { recursive: true });
   try {
-    await Promise.all(apps.map((app) => installOne(app, tmp)));
+    await mapLimit(apps, 4, (app) => installOne(app, tmp));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Keyrt beint (prebuild / artcraft:install), ekki þegar prófið flytur inn `download`.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
