@@ -224,8 +224,8 @@ export const AUTO_TOOLS = [
   {
     id: "mota",
     name: "Móta",
-    role: "Lögun",
-    desc: "Mjókka, þenja eða draga líkamslínur með bursta sem þú stillir — í vafranum, engin mynd send neitt.",
+    role: "Ritill",
+    desc: "Mynd- og myndbandaritill eins og í símanum: líkamsmótun, burstar, ljós og litir, 12 gervigreindartól (bakgrunnur, endurljós, fjarlægja hlut …) og myndbandshamur með framhaldi frá völdum ramma.",
     icon: "🖌️",
     href: "/kjarni/artcraft/mota",
     ready: true,

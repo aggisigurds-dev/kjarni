@@ -8,16 +8,20 @@ import GlobalStagingDock from "./GlobalStagingDock";
 // Mest notuðu Kjarni-tólin birtast beint í fliparöðinni. Hin
 // (installed CraftApps, local-first/less-used og Leiðarvísir) fara í
 // „Fleiri ▾" dropdown svo mobile-flipabarinn er ekki 29 atriði á lengd.
+// Röðin eftir óskum notanda (05.11.2026): tólin sem hann notar mest inn —
+// Ljósmyndaviðgerð, Móta, Andlitsfegrun, Líkamsmótun — en Skýjastúdíó,
+// Tónsmíð og Bakgrunnur út í „Fleiri“.
 const PRIMARY_IDS: ReadonlyArray<ArtcraftInterfaceId> = [
   "hub",
   "vinnslur",
   "tol",
-  "skyjastudio",
+  "vidgerd",
+  "mota",
   "skyjahreyfimynd",
   "upplyfting",
   "breyta",
-  "tonsmid",
-  "bakgrunnur",
+  "andlitsfegrun",
+  "likami",
   "studio",
 ];
 
