@@ -141,6 +141,8 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   );
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
+  // Agnar 05.11.2026: „hak … hvort sýna á teikningu á gólfi … auk þess að geta valið að sjá rauðu brunaveggina eða ekki"
+  const [synaBrunaveggi, setSynaBrunaveggi] = useState(true);
   const [glerSemGluggar, setGlerSemGluggar] = useState(true);
   const [synaHurdarblod, setSynaHurdarblod] = useState(true);
   const [tengjaSmaBil, setTengjaSmaBil] = useState(true);
@@ -367,7 +369,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           losa.push(kE, kTopp);
           veggEfni.push(kE, kTopp);
           const veggLitur = (v: Haed3D["veggir"][number]) =>
-            v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
+            synaBrunaveggi && v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
           const sjalfg = Math.max(metri * 0.12, lengd * 0.004);
           const kassi = (v: Haed3D["veggir"][number], y: number, hH: number, lengdAuki: number, thykktK = 1) => {
             q.setFromAxisAngle(ofan, -Math.atan2(v.by - v.ay, v.bx - v.ax));
@@ -533,10 +535,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             const rendur = new T.InstancedMesh(kG, rE, hurdir.length);
             hurdir.forEach((v, i) => {
               karmar.setMatrixAt(i, kassi(v, veggH - karmH / 2, karmH, 0));
-              karmar.setColorAt(i, lit.setHex(v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : VEGGLITUR_3D));
+              karmar.setColorAt(i, lit.setHex(synaBrunaveggi && v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : VEGGLITUR_3D));
               // Lituð rönd ofan á karminum: hurðirnar sjást líka beint ofan frá og þegar veggir eru gegnsæir.
               rendur.setMatrixAt(i, kassi(v, veggH + veggH * 0.012, veggH * 0.024, 0, 1.25));
-              rendur.setColorAt(i, lit.setHex(v.eld ? ELDHURD_3D : HURDALITUR_3D));
+              rendur.setColorAt(i, lit.setHex(synaBrunaveggi && v.eld ? ELDHURD_3D : HURDALITUR_3D));
               if (v.eld) fjoldi.brunahurdir++;
             });
             karmar.instanceMatrix.needsUpdate = true;
@@ -1008,7 +1010,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil]);
+  }, [haedir, syna, teikningAGolfi, synaBrunaveggi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -1088,6 +1090,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         <label className="flex items-center gap-1.5 text-[12px]">
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
           Teikning á gólfi
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Rauðir eldveggir (EI-60 og EI-30) og appelsínugular brunahurðir. Slökktu til að sýna alla veggi eins. Aðeins 3D-birting.">
+          <input type="checkbox" checked={synaBrunaveggi} onChange={(e) => setSynaBrunaveggi(e.target.checked)} />
+          Rauðir brunaveggir
         </label>
         <label className="flex items-center gap-1.5 text-[12px]" title="Áætluð gluggahæð (brjóstveggur og karmar) úr glermerktum veggjum. Slökktu til að sýna fullháa glerveggi. Breytir ekki vistuðum teikningum.">
           <input type="checkbox" checked={glerSemGluggar} onChange={(e) => setGlerSemGluggar(e.target.checked)} />
