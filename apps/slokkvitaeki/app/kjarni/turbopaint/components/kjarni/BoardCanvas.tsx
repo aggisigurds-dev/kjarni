@@ -6,7 +6,7 @@ import { Group, Layer, Line, Rect, Stage, Text as KonvaText, Transformer } from 
 import { toast } from "sonner";
 import { boardBounds, cameraFit, dashArray, effectiveGridGap, objectsOnDocument, rectFromPoints, simplifyPoints, translateObject, worldFromScreen } from "../../lib/board/geometry";
 import { registerStage } from "../../lib/board/stage-ref";
-import { isDrawnLocked, isDrawnVisible, isLayerLocked, selectableIds } from "../../lib/board/layers";
+import { isDrawnLocked, isDrawnVisible, isLayerLocked, isLayerVisible, selectableIds } from "../../lib/board/layers";
 import { newId, snapPoint, useBoardStore } from "../../lib/board/store";
 import { hjolaThysjun } from "../../lib/board/hjol";
 import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
@@ -807,6 +807,59 @@ export function BoardCanvas({
       ]);
       // Stimpil-hamur: tólið helst virkt svo hægt sé að stimpla mörg í röð —
       // Esc eða annað tól hættir (áður datt það úr sambandi eftir eitt stykki).
+      return;
+    }
+
+    if (currentTool === "gegnumtak") {
+      // Sama snið og innlestu merkin (Loftgegnumtak …, 20 px græn) svo talningin haldist ein.
+      // Tólið helst virkt til að setja mörg í röð — Esc eða annað tól hættir.
+      const { gegnumtakMm: mm, addObjects, layers } = useBoardStore.getState();
+      // Merkin fara alltaf á Loftræsting + Loftmál, ekki virka lagið — því þarf báðar læsingar og sýnileika athugaðan.
+      const lokad = ["loftræsting", "loftmal"].find((id) => isLayerLocked(layers, id) || !isLayerVisible(layers, id));
+      if (lokad) {
+        toast.message(
+          `Lagið „${layers.find((l) => l.id === lokad)?.name ?? lokad}“ er læst eða falið — aflæstu því og sýndu til að setja gegnumtak`
+        );
+        return;
+      }
+      const s = 20;
+      addObjects([
+        {
+          id: newId(),
+          type: "ellipse",
+          x: world.x - s / 2,
+          y: world.y - s / 2,
+          width: s,
+          height: s,
+          fill: "#16a34a99",
+          stroke: "#14532d",
+          strokeWidth: 2,
+          rotation: 0,
+          opacity: 1,
+          locked: false,
+          hidden: false,
+          name: `Loftgegnumtak ${mm} mm (handvirkt)`,
+          layerId: "loftræsting",
+        },
+        {
+          id: newId(),
+          type: "text",
+          x: world.x + s / 2 + 2,
+          y: world.y - 7,
+          text: String(mm),
+          fontSize: 12,
+          fill: "#14532d",
+          width: 40,
+          fontStyle: "bold",
+          align: "left",
+          rotation: 0,
+          opacity: 1,
+          locked: false,
+          hidden: false,
+          name: `Loftmál ${mm}`,
+          layerId: "loftmal",
+        },
+      ]);
       return;
     }
 

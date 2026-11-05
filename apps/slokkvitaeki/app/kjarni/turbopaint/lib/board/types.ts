@@ -20,7 +20,8 @@ export type Tool =
   | "eydalinu"
   | "room"
   | "checkbox"
-  | "fjolcrop";
+  | "fjolcrop"
+  | "gegnumtak";
 
 export type ImportQuality = "fast" | "standard" | "print";
 

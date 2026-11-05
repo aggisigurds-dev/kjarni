@@ -4,9 +4,12 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import {
   ArrowUpRight,
+  ChevronUp,
   ChevronRight,
   Circle,
+  Crosshair,
   Eraser,
+  MoreHorizontal,
   Slash,
   Brush,
   SquareDashed,
@@ -36,6 +39,7 @@ import {
 } from "../../lib/board/symbol-settings";
 import { lesaSulu, vistaSulu } from "../../lib/board/simi";
 import type { Tool } from "../../lib/board/types";
+import { useHamur, type HamurId } from "../../lib/board/hamir";
 import { finnaTengduMynd, medStaerdUmMidju } from "../../lib/board/uttekt";
 import { cn } from "../../lib/utils";
 
@@ -50,6 +54,13 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
   { id: "pen", label: "Penni", shortcut: "P", icon: <Pencil className="size-4" /> },
   { id: "text", label: "Texti", shortcut: "T", icon: <Type className="size-4" /> },
   { id: "sticky", label: "Minnispunktur", shortcut: "N", icon: <StickyNote className="size-4" /> },
+  { id: "symbol", label: "Tákn", shortcut: "S", icon: null },
+  {
+    id: "gegnumtak",
+    label: "Setja gegnumtak — smelltu þar sem lögn fer í gegnum vegg; mm-málið er í lagnaspjaldinu",
+    shortcut: "J",
+    icon: <Crosshair className="size-4" />,
+  },
   {
     id: "checkbox",
     label: "Gátreitur — hakreitur sem grænkar þegar hakað er",
@@ -89,11 +100,60 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: ReactNode }[] = 
   },
 ];
 
+/** Tólin sem hver hamur notar mest — hin fara undir „Fleiri tól" (Agnar 04.11.2026: „færa burt eða collapsa sem
+ * maður notar sjaldan og hafa aðgengilegra takka sem maður notar"). Flýtilyklarnir virka áfram á öll tól. */
+const HAM_TOL: Record<HamurId, Tool[]> = {
+  teikning: ["select", "hand", "polyline", "measure", "calibrate", "eraser", "hvitta", "hvitpensill", "eydalinu", "text"],
+  slokkvitaeki: ["select", "hand", "symbol", "text", "arrow", "measure"],
+  brunathettingar: ["select", "hand", "gegnumtak", "polyline", "ellipse", "text", "measure"],
+  brunakerfi: ["select", "hand", "symbol", "text", "arrow", "line"],
+  rymi: ["select", "hand", "rect", "checkbox", "text", "measure"],
+  // Veggir og Lagnir eru greiningarhamir (tólin búa í hægra spjaldinu) — á borðinu nægir að velja, færa og mæla.
+  veggir: ["select", "hand", "polyline", "eydalinu", "measure"],
+  lagnir: ["select", "hand", "gegnumtak", "ellipse", "text", "measure"],
+};
+
+const FLEIRI_LYKILL = "tp_tol_fleiri";
+
 export function Toolbar() {
   const tool = useBoardStore((s) => s.tool);
   const setTool = useBoardStore((s) => s.setTool);
   const style = useBoardStore((s) => s.style);
+  const hamur = useHamur((s) => s.hamur);
   const symbol = getSymbol(style.symbolId);
+  const [fleiri, setFleiri] = useState(false);
+  useEffect(() => {
+    try {
+      setFleiri(window.localStorage.getItem(FLEIRI_LYKILL) === "1");
+    } catch {
+      /* einkagluggi */
+    }
+  }, []);
+
+  const oft = HAM_TOL[hamur];
+  // Virkt tól sést alltaf, þótt það sé ekki meðal „oft" í hamnum (t.d. valið með flýtilykli).
+  const synileg = oft.map((id) => TOOLS.find((t) => t.id === id)!);
+  const virkt = TOOLS.find((t) => t.id === tool);
+  if (virkt && !synileg.includes(virkt)) synileg.push(virkt);
+  const falin = TOOLS.filter((t) => !synileg.includes(t));
+  const synaFalin = fleiri && falin.length > 0;
+
+  const takki = (item: (typeof TOOLS)[number]) =>
+    item.id === "symbol" ? (
+      <ToolButton key={item.id} active={tool === "symbol"} label={`Tákn — ${symbol.name} (S)`} onClick={() => setTool("symbol")}>
+        <span
+          className="flex size-5 items-center justify-center rounded-sm text-[8px] font-bold"
+          style={{ background: symbolColors(symbol.kind).bg, color: symbolColors(symbol.kind).fg }}
+        >
+          {symbol.short.slice(0, 2)}
+        </span>
+      </ToolButton>
+    ) : (
+      <ToolButton key={item.id} active={tool === item.id} label={`${item.label} (${item.shortcut})`} onClick={() => setTool(item.id)}>
+        {item.icon}
+      </ToolButton>
+    );
+
   // Samanbrot (Agnar 09.10.2026: „collapse takka fyrir hliðarstikuna"): í síma byrjar súlan samanbrotin í einn hnapp,
   // í tölvu opin — og vafrinn man síðasta val. Flýtilyklarnir virka áfram þó hún sé samanbrotin.
   const [samanbrotin, setSamanbrotin] = useState(lesaSulu);
@@ -101,7 +161,6 @@ export function Toolbar() {
     setSamanbrotin(v);
     vistaSulu(v);
   };
-  const virkt = TOOLS.find((t) => t.id === tool);
 
   if (samanbrotin) {
     return (
@@ -114,15 +173,15 @@ export function Toolbar() {
         onClick={() => breyta(false)}
         className="tp-sula-opna pointer-events-auto relative flex size-10 shrink-0 items-center justify-center self-start rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-[#FE653F] shadow-2xl shadow-black/40 active:translate-y-px"
       >
-        {virkt ? (
-          virkt.icon
-        ) : tool === "symbol" ? (
+        {tool === "symbol" ? (
           <span
             className="flex size-5 items-center justify-center rounded-sm text-[8px] font-bold"
             style={{ background: symbolColors(symbol.kind).bg, color: symbolColors(symbol.kind).fg }}
           >
             {symbol.short.slice(0, 2)}
           </span>
+        ) : virkt ? (
+          virkt.icon
         ) : (
           <MousePointer2 className="size-4" />
         )}
@@ -144,31 +203,28 @@ export function Toolbar() {
       >
         <PanelLeftClose className="size-3.5" />
       </button>
-      {TOOLS.map((item, index) => (
-        <div key={item.id}>
-          {index === 2 || index === 8 ? <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" /> : null}
+      {synileg.map(takki)}
+      {falin.length > 0 ? (
+        <>
+          <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" />
           <ToolButton
-            active={tool === item.id}
-            label={`${item.label} (${item.shortcut})`}
-            onClick={() => setTool(item.id)}
+            active={false}
+            label={synaFalin ? "Fela sjaldnotuð tól" : `Fleiri tól (${falin.length})`}
+            onClick={() => {
+              const next = !fleiri;
+              setFleiri(next);
+              try {
+                window.localStorage.setItem(FLEIRI_LYKILL, next ? "1" : "0");
+              } catch {
+                /* einkagluggi */
+              }
+            }}
           >
-            {item.icon}
+            {synaFalin ? <ChevronUp className="size-4" /> : <MoreHorizontal className="size-4" />}
           </ToolButton>
-        </div>
-      ))}
-      <div className="tp-tooldiv mx-auto my-1 h-px w-6 bg-white/10" />
-      <ToolButton
-        active={tool === "symbol"}
-        label={`Tákn — ${symbol.name}`}
-        onClick={() => setTool("symbol")}
-      >
-        <span
-          className="flex size-5 items-center justify-center rounded-sm text-[8px] font-bold"
-          style={{ background: symbolColors(symbol.kind).bg, color: symbolColors(symbol.kind).fg }}
-        >
-          {symbol.short.slice(0, 2)}
-        </span>
-      </ToolButton>
+          {synaFalin ? <div className="flex flex-col gap-1 opacity-75">{falin.map(takki)}</div> : null}
+        </>
+      ) : null}
     </div>
   );
 }

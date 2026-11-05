@@ -246,13 +246,16 @@ export function VeggjaTegundSimaStika() {
   const [thykktOpin, setThykktOpin] = useState(false);
   const veggjaHamur = SIMA_VEGGJA_HAMIR.includes(hamur);
   const ritillVirkur = useVeggjaRitill((s) => s.virkur);
+  const virktTol = useBoardStore((s) => s.tool);
   useEffect(() => {
     // Hamur valinn í ⋮-valmyndinni eða dropdown-inu: þétti ritillinn kviknar svo tólalínan sé til staðar.
-    if (!veggjaHamur || ritillVirkur) return;
+    // Annað tól valið (Texti, Hringur, Setja gegnumtak …) slekkur á ritlinum — þá má hann EKKI kvikna aftur strax,
+    // því kveikja() skilar tólinu í „Velja" og ekkert annað tól festist. Hann kviknar þegar „Velja" er aftur valið.
+    if (!veggjaHamur || ritillVirkur || virktTol !== "select") return;
     const r = useVeggjaRitill.getState();
     r.kveikja("velja");
     r.setThett(true);
-  }, [veggjaHamur, ritillVirkur]);
+  }, [veggjaHamur, ritillVirkur, virktTol]);
   if (!veggjaHamur) return null;
   const veggir = valdirVeggir(objects, selectedIds).filter((o) => !isDrawnLocked(o, layers));
   const tegundir = new Set(veggir.map(veggTegundAf));

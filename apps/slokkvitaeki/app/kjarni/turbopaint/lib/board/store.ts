@@ -89,6 +89,9 @@ interface BoardStore {
   setHydrated: (v: boolean) => void;
   setName: (name: string) => void;
   setTool: (tool: Tool) => void;
+  /** Þvermál (mm) sem „Setja gegnumtak" merkir næsta punkt með. */
+  gegnumtakMm: number;
+  setGegnumtakMm: (mm: number) => void;
   setCamera: (camera: Camera) => void;
   setPixelsPerMeter: (n: number | null) => void;
   toggleGrid: () => void;
@@ -108,6 +111,8 @@ interface BoardStore {
   setSymbolOpacity: (v: number) => void;
   toggleLayerVisible: (id: string) => void;
   toggleLayerLocked: (id: string) => void;
+  /** „Sýna aðeins þetta lag": felur öll önnur lög; kallað aftur sýnir öll lög. */
+  toggleSoloLayer: (id: string) => void;
   startFirewall: () => void;
   setSelected: (ids: string[]) => void;
   replaceBoard: (data: {
@@ -175,6 +180,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   // ATH: þetta er AÐEINS upphafsgildið. Tólin skipta sér áfram sjálf yfir í
   // „select" eftir að teiknað hefur verið (sjá setTool-köllin í BoardCanvas).
   tool: "hand",
+  gegnumtakMm: 200,
+  setGegnumtakMm: (mm) => set({ gegnumtakMm: Math.max(10, Math.min(3000, Math.round(mm) || 200)) }),
   camera: { x: 80, y: 64, scale: 0.62 },
   pixelsPerMeter: null,
   grid: true,
@@ -328,6 +335,18 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         return !obj || objectLayerId(obj) !== id;
       });
     }
+    set({ layers, selectedIds });
+  },
+  toggleSoloLayer: (id) => {
+    const cur = get().layers;
+    const aloneNow = cur.every((l) => (l.id === id ? l.visible : !l.visible));
+    const layers = cur.map((l) => ({ ...l, visible: aloneNow ? true : l.id === id }));
+    const selectedIds = aloneNow
+      ? get().selectedIds
+      : get().selectedIds.filter((sid) => {
+          const obj = get().objects.find((o) => o.id === sid);
+          return !obj || objectLayerId(obj) === id;
+        });
     set({ layers, selectedIds });
   },
   toggleLayerLocked: (id) => {

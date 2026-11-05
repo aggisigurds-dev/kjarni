@@ -12,7 +12,9 @@ import {
   Brush,
   BrickWall,
   CheckSquare,
+  ChevronUp,
   Crosshair,
+  MoreHorizontal,
   Eraser,
   Flame,
   Ruler,
@@ -72,6 +74,25 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const h = getHamur(hamur);
   // Greiningartólin eru í efstu stikunni / Greining-flipanum — hér aðeins teikni- og breytitól hamsins.
   const adgerdir = h.adgerdir.filter((a) => !GREININGAR_ADGERDIR.includes(a));
+  // Sjaldnotaðar aðgerðir hamsins (hamir.ts `sjaldan`) eru felldar; valið helst meðan borðið er opið.
+  const [fleiri, setFleiri] = useState(false);
+  const sjaldan = adgerdir.filter((a) => h.sjaldan?.includes(a));
+  const oft = adgerdir.filter((a) => !sjaldan.includes(a));
+  const takki = (a: HamAdgerd) => {
+    const d = ADGERDIR[a];
+    return (
+      <button
+        key={a}
+        type="button"
+        title={d.titill}
+        onClick={() => onAdgerd(a)}
+        className="flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] font-medium text-stone-100 hover:bg-white/12"
+      >
+        {d.takn}
+        {d.texti}
+      </button>
+    );
+  };
   // „Sýna drægi slangna (165.BR1)" — sjálfgefið AF (Agnar 07.10.2026: „og taka þennan rauða hring")
   const [draegi, setDraegi] = useState(false);
   useEffect(() => {
@@ -102,23 +123,23 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
         ))}
       </div>
       {adgerdir.length ? (
+      <>
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {adgerdir.map((a) => {
-          const d = ADGERDIR[a];
-          return (
-            <button
-              key={a}
-              type="button"
-              title={d.titill}
-              onClick={() => onAdgerd(a)}
-              className="flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] font-medium text-stone-100 hover:bg-white/12"
-            >
-              {d.takn}
-              {d.texti}
-            </button>
-          );
-        })}
+        {oft.map(takki)}
+        {sjaldan.length ? (
+          <button
+            type="button"
+            title={fleiri ? "Fela sjaldnotaðar aðgerðir" : "Sjaldnotaðar aðgerðir: " + sjaldan.map((a) => ADGERDIR[a].texti).join(", ")}
+            onClick={() => setFleiri(!fleiri)}
+            className="flex items-center gap-0.5 rounded-md border border-dashed border-white/15 px-1.5 py-1 text-[11px] text-stone-400 hover:bg-white/8 hover:text-white"
+          >
+            {fleiri ? <ChevronUp className="size-3.5" /> : <MoreHorizontal className="size-3.5" />}
+            {fleiri ? "Færri" : `Fleiri (${sjaldan.length})`}
+          </button>
+        ) : null}
       </div>
+      {fleiri && sjaldan.length ? <div className="mt-1 flex flex-wrap gap-1 opacity-80">{sjaldan.map(takki)}</div> : null}
+      </>
       ) : null}
       {h.adgerdir.includes("slt-brsl") ? (
         <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[10.5px] text-stone-400" title="Teiknar 25 m drægi kringum hverja brunaslöngu næst þegar „SLT / BRSL af teikningu“ er keyrt">

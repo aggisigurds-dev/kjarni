@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { isCrossingMark } from "../../lib/board/crossings";
@@ -16,6 +16,14 @@ export function LayerList() {
   const setActiveLayer = useBoardStore((s) => s.setActiveLayer);
   const toggleLayerVisible = useBoardStore((s) => s.toggleLayerVisible);
   const toggleLayerLocked = useBoardStore((s) => s.toggleLayerLocked);
+  const toggleSoloLayer = useBoardStore((s) => s.toggleSoloLayer);
+  const gegnumtakOn = useBoardStore((s) => s.tool === "gegnumtak");
+  const gegnumtakMm = useBoardStore((s) => s.gegnumtakMm);
+  const setGegnumtakMm = useBoardStore((s) => s.setGegnumtakMm);
+  const [mmTexti, setMmTexti] = useState(String(gegnumtakMm));
+  useEffect(() => {
+    setMmTexti((cur) => (Number(cur) === gegnumtakMm ? cur : String(gegnumtakMm)));
+  }, [gegnumtakMm]);
   const pipesOpen = useBoardStore((s) => s.pipesOpen);
   const setPipesOpen = useBoardStore((s) => s.setPipesOpen);
 
@@ -23,13 +31,17 @@ export function LayerList() {
   // fyrsta teikning vafrans á við þjóninn.
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(PIPES_OPEN_KEY) === "1") setPipesOpen(true);
+      // Lagnirnar eru opnar nema notandinn hafi lokað þeim sjálfur — lokaðar færist teiknunin á Almennt og
+      // lagaveljarinn hverfur, svo ný lög (t.d. Gegnumtök loft) virtust „ekki virka".
+      if (window.localStorage.getItem(PIPES_OPEN_KEY) !== "0") setPipesOpen(true);
     } catch {
       /* privat gluggi — sjálfgefið lokað */
     }
   }, [setPipesOpen]);
 
   const counts = countByLayer(objects);
+  const activeLayer = layers.find((l) => l.id === activeLayerId);
+  const onlyActiveVisible = layers.every((l) => (l.id === activeLayerId ? l.visible : !l.visible));
   const drawing = layers.filter((l) => l.kind !== "piping");
   const piping = layers.filter((l) => l.kind === "piping");
   const pipingCount = piping.reduce((n, l) => n + (counts.get(l.id) ?? 0), 0);
@@ -51,6 +63,66 @@ export function LayerList() {
         Lagnir liggja ofan á teikningunni — feldu Teikning til að sjá bara veggi og lagnir, eða hafðu
         skönnunina sýnilega. Nýjar strokur lenda á virka laginu.
       </p>
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs">
+        <span className="size-3 shrink-0 rounded-full ring-1 ring-white/30" style={{ background: activeLayer?.color }} />
+        <span className="min-w-0 flex-1 truncate text-white">
+          <span className="text-stone-500">Teiknar á: </span>
+          {activeLayer?.name ?? "—"}
+        </span>
+        <button
+          type="button"
+          onClick={() => toggleSoloLayer(activeLayerId)}
+          className="shrink-0 rounded border border-white/15 px-1.5 py-0.5 text-[11px] text-stone-300 hover:bg-white/10 hover:text-white"
+        >
+          {onlyActiveVisible ? "Öll lög" : "Bara þetta"}
+        </button>
+      </div>
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-[#16a34a]/40 bg-[#16a34a]/10 px-2 py-1.5 text-xs">
+        <button
+          type="button"
+          aria-pressed={gegnumtakOn}
+          onClick={() => {
+            const st = useBoardStore.getState();
+            if (gegnumtakOn) {
+              st.setTool("select");
+              return;
+            }
+            st.setActiveLayer("loftræsting");
+            st.setTool("gegnumtak");
+          }}
+          className={cn(
+            "shrink-0 rounded border px-2 py-0.5 text-[11px]",
+            gegnumtakOn
+              ? "border-[#16a34a] bg-[#16a34a] text-white"
+              : "border-white/15 text-stone-200 hover:bg-white/10"
+          )}
+        >
+          {gegnumtakOn ? "Hætta" : "Setja gegnumtak"}
+        </button>
+        <label className="flex min-w-0 flex-1 items-center justify-end gap-1 text-stone-400" title="Þvermál lagnar í mm">
+          <input
+            type="number"
+            min={10}
+            max={3000}
+            step={50}
+            value={mmTexti}
+            onChange={(e) => {
+              // Hrái strengurinn er geymdur hér; store fær aðeins gild gildi, og reiturinn lagast við onBlur.
+              setMmTexti(e.target.value);
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n >= 10 && n <= 3000) setGegnumtakMm(n);
+            }}
+            onBlur={() => {
+              const n = Number(mmTexti);
+              if (!Number.isFinite(n) || mmTexti.trim() === "") setGegnumtakMm(useBoardStore.getState().gegnumtakMm);
+              else setGegnumtakMm(n);
+              setMmTexti(String(useBoardStore.getState().gegnumtakMm));
+            }}
+            className="w-14 rounded border border-white/15 bg-transparent px-1 py-0.5 text-right tabular-nums text-white"
+          />
+          <span className="shrink-0">mm</span>
+        </label>
+      </div>
       <div className="space-y-0.5">
         {drawing.map((layer) => (
           <LayerRow

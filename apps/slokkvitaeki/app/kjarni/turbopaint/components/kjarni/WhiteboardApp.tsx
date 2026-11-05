@@ -1924,6 +1924,7 @@ export function WhiteboardApp() {
           g: "hvitpensill",
           d: "eydalinu",
           x: "checkbox",
+          j: "gegnumtak",
         };
         const tool = map[e.key.toLowerCase()];
         if (tool) store.setTool(tool);

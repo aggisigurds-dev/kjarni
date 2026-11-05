@@ -39,6 +39,8 @@ export interface Hamur {
   /** Ein lína um hvað er gert í hamnum. */
   lysing: string;
   adgerdir: HamAdgerd[];
+  /** Aðgerðir úr `adgerdir` sem eru sjaldan notaðar — hamstikan fellir þær undir „Fleiri". */
+  sjaldan?: HamAdgerd[];
   /** Tákn í slánni (null = sláin falin). Eigin tákn Agnars bætast alltaf við þar sem sláin sést. */
   takn: string[] | null;
   /** Aukatákn TurboPaint sem Teikning-glugginn á ekki — standa sér í slánni og vistast ekki í úttektina. */
@@ -82,6 +84,7 @@ export const HAMIR: Hamur[] = [
       "teikna-ei30",
       "thrividd",
     ],
+    sjaldan: ["croppa-oft", "hreinsa", "teikna-gler", "teikna-ei60", "teikna-ei30", "thrividd"],
     takn: null,
   },
   {
@@ -102,6 +105,7 @@ export const HAMIR: Hamur[] = [
     // „+ Eldveggur" teiknar VEGG með tegund EI-60 / EI-30 (dregið eins og „+ Teikna vegg") — gamla smell-horn-af-horni
     // yfirlagið („Eldveggur") var ekki veggur og gaf svarta veggi þegar „+ Teikna vegg" var notað í staðinn.
     adgerdir: ["ei", "teikna-ei60", "teikna-ei30", "gegnumtok", "veggir", "teikna-vegg", "teikna-hurd"],
+    sjaldan: ["veggir", "teikna-vegg", "teikna-hurd"],
     takn: ["firewall", "firedoor", "pin"],
   },
   {
