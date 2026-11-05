@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
 import { StationChrome } from "../../StationChrome";
 import { artcraftHubHref, artcraftToolsHref } from "../apps";
 import SendTo from "../SendTo";
@@ -13,11 +13,11 @@ import {
   fitSize,
   liquifyInPlace,
   strokePoints,
-  warpBody,
-  type BodyAmounts,
   type LiquifyMode,
   type Raster,
 } from "../studio/adjust";
+import { DEFAULT_TUNE, warpBody, type BodyTune } from "../likami/bodyWarp";
+import { detectBody } from "../likami/pose";
 import {
   adjustBrightnessGlobal,
   adjustContrastGlobal,
@@ -73,6 +73,15 @@ function MotaSendTo({ getBlob, name }: { getBlob: () => Promise<Blob | null>; na
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const MAX_DIMENSION = 1200;
 const MAX_UNDO = 20;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 10;
+
+function clampZoom(z: number): number {
+  return Math.round(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)) * 100) / 100;
+}
+
+/** Punktur á striganum (hlutfall fx, fy) sem á að lenda undir skjápunkti (cx, cy). */
+type ZoomAnchor = { fx: number; fy: number; cx: number; cy: number };
 
 type ToolCategory = "lögun" | "áferð";
 type AnyMode = LiquifyMode | RetouchMode;
@@ -191,14 +200,94 @@ export default function MotaClient() {
   const [canUndo, setCanUndo] = useState(false);
   const [error, setError] = useState("");
   const [cursor, setCursor] = useState<{ x: number; y: number; size: number } | null>(null);
-  // Zoom: default 1 = fit. 0.25-4 range. Notandi getur zoomad með +/- tokkum,
-  // ctrl+wheel, eða fit-takkanum. Canvas style width/height skala m.v. zoom —
-  // browser gerir resten.
+  // Zoom: 1 = myndin passar í sviðið. Striginn fær nákvæma birtingarstærð
+  // (fit × zoom) svo að músar-/fingrahnit varpist beint á pixla; sviðið skrunar.
+  // Tveir fingur klípa/færa, einn fingur málar; ctrl+skrun á tölvu.
   const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  const [stageWidth, setStageWidth] = useState(0);
+  // Hækkað þegar stærð myndarinnar getur breyst (ný mynd, líkamsmótun,
+  // afturkalla) svo birtingarstærð strigans sé reiknuð upp á nýtt.
+  const [, setRasterVersion] = useState(0);
+  const pendingAnchorRef = useRef<ZoomAnchor | null>(null);
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const gestureRef = useRef<{ dist: number; zoom: number; fx: number; fy: number } | null>(null);
+  const [bodyBusy, setBodyBusy] = useState(false);
 
   toolRef.current = tool;
   radiusRef.current = radius;
   strengthRef.current = strength;
+  zoomRef.current = zoom;
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!ready || !stage) return;
+    const measure = () => setStageWidth(stage.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    // React skráir wheel sem passive, svo preventDefault í onWheel er hunsað
+    // og vafrinn zoom-ar allri síðunni — því native, non-passive hlustari hér.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      zoomTo(zoomRef.current * Math.exp(-e.deltaY * 0.0015), anchorAt(e.clientX, e.clientY));
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      stage.removeEventListener("wheel", onWheel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
+  useLayoutEffect(() => {
+    const anchor = pendingAnchorRef.current;
+    pendingAnchorRef.current = null;
+    if (anchor) scrollToAnchor(anchor);
+  }, [zoom]);
+
+  /** Hlutfallsstaða skjápunkts á striganum — það sem á að haldast kyrrt. */
+  function anchorAt(clientX: number, clientY: number): ZoomAnchor | null {
+    const canvas = viewRef.current;
+    if (!canvas) return null;
+    const r = canvas.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return null;
+    return { fx: (clientX - r.left) / r.width, fy: (clientY - r.top) / r.height, cx: clientX, cy: clientY };
+  }
+
+  function centerAnchor(): ZoomAnchor | null {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    const s = stage.getBoundingClientRect();
+    return anchorAt(s.left + s.width / 2, s.top + s.height / 2);
+  }
+
+  function scrollToAnchor(a: ZoomAnchor) {
+    const stage = stageRef.current;
+    const canvas = viewRef.current;
+    if (!stage || !canvas) return;
+    const r = canvas.getBoundingClientRect();
+    stage.scrollLeft += r.left + a.fx * r.width - a.cx;
+    stage.scrollTop += r.top + a.fy * r.height - a.cy;
+  }
+
+  function zoomTo(next: number, anchor: ZoomAnchor | null = centerAnchor()) {
+    const z = clampZoom(next);
+    if (z === zoomRef.current) {
+      if (anchor) scrollToAnchor(anchor);
+      return;
+    }
+    pendingAnchorRef.current = anchor;
+    zoomRef.current = z;
+    setZoom(z);
+  }
+
+  const fitHeight = typeof window === "undefined" ? 520 : Math.min(520, window.innerHeight * 0.7);
+  const shown = workingRef.current;
+  const fit = shown && stageWidth > 0 ? Math.min(stageWidth / shown.width, fitHeight / shown.height) : 1;
+  const displayWidth = shown ? Math.max(1, Math.round(shown.width * fit * zoom)) : 0;
+  const displayHeight = shown ? Math.max(1, Math.round(shown.height * fit * zoom)) : 0;
 
   function paint() {
     const working = workingRef.current;
@@ -227,6 +316,9 @@ export default function MotaClient() {
       setCanUndo(false);
       setSourceName(file.name);
       setReady(true);
+      zoomRef.current = 1;
+      setZoom(1);
+      setRasterVersion((v) => v + 1);
       paint();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gat ekki opnað myndina.");
@@ -335,9 +427,45 @@ export default function MotaClient() {
     setTool(first);
   }
 
+  function pinch(): { dist: number; mx: number; my: number } {
+    const [a, b] = [...pointersRef.current.values()];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }
+
+  /** Fyrsti fingurinn byrjaði strik; annar fingur kom = þetta er klíp, ekki
+   *  málning, svo strikið er tekið til baka. */
+  function cancelStroke() {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    lastRef.current = null;
+    strokeStartDstRef.current = null;
+    cloneOffsetRef.current = null;
+    const prev = undoRef.current.pop();
+    if (prev) workingRef.current = prev;
+    setCanUndo(undoRef.current.length > 0);
+    paint();
+  }
+
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (!workingRef.current) return;
     e.preventDefault();
+    // Fyrsti fingur nýrrar snertingar: hreinsa fingur sem vafrinn gleymdi
+    // að senda pointerup fyrir, svo þeir trufli ekki næsta klíp.
+    if (e.isPrimary) {
+      pointersRef.current.clear();
+      gestureRef.current = null;
+    }
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (pointersRef.current.size === 2) {
+      cancelStroke();
+      setCursor(null);
+      const { dist, mx, my } = pinch();
+      const anchor = anchorAt(mx, my);
+      gestureRef.current = { dist: Math.max(1, dist), zoom: zoomRef.current, fx: anchor?.fx ?? 0.5, fy: anchor?.fy ?? 0.5 };
+      return;
+    }
+    if (pointersRef.current.size > 2 || gestureRef.current) return;
     const p = canvasPoint(e);
     // Ef user valdi að taka clone-source, þá fer fyrsta smell í að setja
     // anchor-inn — ekki strik.
@@ -347,7 +475,6 @@ export default function MotaClient() {
       setPickingSource(false);
       return;
     }
-    e.currentTarget.setPointerCapture(e.pointerId);
     drawingRef.current = true;
     pushUndo();
     strokeStartDstRef.current = { x: p.x, y: p.y };
@@ -363,14 +490,24 @@ export default function MotaClient() {
     const canvasRect = canvas.getBoundingClientRect();
     const stageRect = stage.getBoundingClientRect();
     const scale = canvasRect.width / canvas.width;
+    // Hringurinn er absolute inni í skrunandi sviðinu → innihaldshnit (+ skrun).
     setCursor({
-      x: e.clientX - stageRect.left,
-      y: e.clientY - stageRect.top,
+      x: e.clientX - stageRect.left - stage.clientLeft + stage.scrollLeft,
+      y: e.clientY - stageRect.top - stage.clientTop + stage.scrollTop,
       size: radiusRef.current * 2 * scale,
     });
   }
 
   function onPointerMove(e: PointerEvent<HTMLCanvasElement>) {
+    if (pointersRef.current.has(e.pointerId)) pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const gesture = gestureRef.current;
+    if (gesture) {
+      if (pointersRef.current.size >= 2) {
+        const { dist, mx, my } = pinch();
+        zoomTo((gesture.zoom * dist) / gesture.dist, { fx: gesture.fx, fy: gesture.fy, cx: mx, cy: my });
+      }
+      return;
+    }
     updateCursor(e);
     if (!drawingRef.current) return;
     const p = canvasPoint(e);
@@ -378,7 +515,13 @@ export default function MotaClient() {
     lastRef.current = p;
   }
 
-  function onPointerUp() {
+  function onPointerUp(e: PointerEvent<HTMLCanvasElement>) {
+    pointersRef.current.delete(e.pointerId);
+    if (gestureRef.current) {
+      // Ekkert málað fyrr en allir fingur eru farnir af eftir klíp.
+      if (pointersRef.current.size === 0) gestureRef.current = null;
+      return;
+    }
     drawingRef.current = false;
     lastRef.current = null;
     strokeStartDstRef.current = null;
@@ -394,6 +537,7 @@ export default function MotaClient() {
     if (!prev) return;
     workingRef.current = prev;
     setCanUndo(undoRef.current.length > 0);
+    setRasterVersion((v) => v + 1);
     paint();
   }
 
@@ -403,6 +547,7 @@ export default function MotaClient() {
     workingRef.current = cloneRaster(original);
     undoRef.current = [];
     setCanUndo(false);
+    setRasterVersion((v) => v + 1);
     paint();
   }
 
@@ -421,19 +566,39 @@ export default function MotaClient() {
     paint();
   }
 
-  function applyBodyPreset(body: Partial<BodyAmounts>) {
+  /** Líkamsforstillingar finna líkamann fyrst (sama greining og Líkamsmótun)
+   *  svo breytingin lendi á mitti/mjöðmum manneskjunnar, ekki á fastri rönd
+   *  um miðju myndarinnar. Greint upp á nýtt í hvert sinn — fyrri breyting
+   *  hefur fært líkamann. */
+  async function applyBodyTune(tune: Partial<BodyTune>, fallback?: (r: Raster) => void) {
     const w = workingRef.current;
-    if (!w) return;
-    pushUndo();
-    const dest = createRaster(w.width, w.height, 0, 255);
-    warpBody(w, dest, {
-      bust: body.bust ?? 0,
-      waist: body.waist ?? 0,
-      hips: body.hips ?? 0,
-      width: body.width ?? 0,
-    });
-    workingRef.current = dest;
-    paint();
+    if (!w || bodyBusy) return;
+    setBodyBusy(true);
+    setError("");
+    try {
+      const probe = document.createElement("canvas");
+      drawRaster(probe, w);
+      const frame = await detectBody(probe);
+      if (!frame || (tune.legs && !frame.legs)) {
+        if (fallback) {
+          applyGlobal(fallback);
+          return;
+        }
+        setError("Fann ekki líkama — axlir og mjaðmir þurfa að sjást. Notaðu burstann í staðinn.");
+        return;
+      }
+      // Myndin eins og hún er núna — notandinn gæti hafa afturkallað á meðan.
+      const current = workingRef.current;
+      if (!current) return;
+      pushUndo();
+      workingRef.current = warpBody(current, frame, { ...DEFAULT_TUNE, ...tune });
+      setRasterVersion((v) => v + 1);
+      paint();
+    } catch (err) {
+      setError(`Líkamsgreining mistókst: ${err instanceof Error ? err.message : "óþekkt villa"}`);
+    } finally {
+      setBodyBusy(false);
+    }
   }
 
   return (
@@ -663,68 +828,68 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => setZoom((z) => Math.max(0.25, Math.round((z - 0.1) * 100) / 100))}
-                  disabled={zoom <= 0.25}
-                  title="Minnka zoom"
+                  onClick={() => zoomTo(zoom / 1.25)}
+                  disabled={zoom <= MIN_ZOOM}
+                  title="Minnka"
+                  aria-label="Minnka zoom"
                 >
                   −
                 </button>
                 <input
                   type="range"
-                  min={0.25}
-                  max={10}
+                  min={MIN_ZOOM}
+                  max={MAX_ZOOM}
                   step={0.05}
                   value={zoom}
-                  onChange={(e) => setZoom(Number(e.target.value))}
-                  style={{ width: 180 }}
-                  aria-label="Zoom slider"
+                  onChange={(e) => zoomTo(Number(e.target.value))}
+                  style={{ width: 160 }}
+                  aria-label="Zoom"
                 />
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => setZoom((z) => Math.min(10, Math.round((z + 0.1) * 100) / 100))}
-                  disabled={zoom >= 10}
-                  title="Stækka zoom"
+                  onClick={() => zoomTo(zoom * 1.25)}
+                  disabled={zoom >= MAX_ZOOM}
+                  title="Stækka"
+                  aria-label="Stækka zoom"
                 >
                   +
                 </button>
                 <span className="ac-hint" style={{ minWidth: 48, textAlign: "center" }}>
                   {Math.round(zoom * 100)}%
                 </span>
-                <button type="button" className="ac-btn ghost" onClick={() => setZoom(1)} title="Zoom á 100%">
-                  1:1
+                <button type="button" className="ac-btn ghost" onClick={() => zoomTo(1)} title="Öll myndin sést">
+                  Passa
                 </button>
-                <button type="button" className="ac-btn ghost" onClick={() => setZoom(3)} title="3x zoom fyrir fíngerð">
+                <button type="button" className="ac-btn ghost" onClick={() => zoomTo(3)} title="3× fyrir fíngerða vinnu">
                   3×
                 </button>
-                <button type="button" className="ac-btn ghost" onClick={() => setZoom(6)} title="6x zoom fyrir tanna/augna-fix">
+                <button type="button" className="ac-btn ghost" onClick={() => zoomTo(6)} title="6× fyrir tennur/augu">
                   6×
                 </button>
-                <span className="ac-hint" style={{ opacity: 0.6, fontSize: 11 }}>
-                  Tip: ctrl+scroll til að zoom-a (0.25×–10×)
+                <span className="ac-hint" style={{ opacity: 0.7, fontSize: 12 }}>
+                  Sími: klíptu með tveimur fingrum og dragðu með tveimur til að færa. Tölva: ctrl+skrun.
                 </span>
               </div>
 
               <div
                 className="ac-adjust-stage"
                 ref={stageRef}
-                style={{ overflow: "auto", maxHeight: "70vh", position: "relative" }}
-                onWheel={(e) => {
-                  if (e.ctrlKey || e.metaKey) {
-                    e.preventDefault();
-                    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-                    setZoom((z) => Math.max(0.25, Math.min(10, Math.round((z + delta) * 100) / 100)));
-                  }
-                }}
+                // Ekki flex-miðjun: stækkuð mynd flæðir þá út til vinstri þar sem
+                // ekki er hægt að skruna. Blokk + margin:auto miðjar þegar hún er minni.
+                style={{ overflow: "auto", maxHeight: "70vh", position: "relative", display: "block" }}
               >
                 <canvas
                   ref={viewRef}
                   className="ac-adjust-canvas"
                   style={{
-                    width: workingRef.current ? `${workingRef.current.width * zoom}px` : undefined,
-                    height: workingRef.current ? `${workingRef.current.height * zoom}px` : undefined,
-                    display: "block",
+                    width: displayWidth || undefined,
+                    height: displayHeight || undefined,
                     maxWidth: "none",
+                    maxHeight: "none",
+                    objectFit: "fill",
+                    display: "block",
+                    margin: "0 auto",
                   }}
                   onPointerDown={onPointerDown}
                   onPointerMove={onPointerMove}
@@ -738,16 +903,16 @@ export default function MotaClient() {
                     style={{ left: cursor.x, top: cursor.y, width: cursor.size, height: cursor.size }}
                   />
                 )}
-                {tool === "clone" && cloneAnchor && viewRef.current && stageRef.current && (() => {
-                  const canvasRect = viewRef.current.getBoundingClientRect();
-                  const stageRect = stageRef.current.getBoundingClientRect();
-                  const scale = canvasRect.width / viewRef.current.width;
+                {tool === "clone" && cloneAnchor && viewRef.current && shown && (() => {
+                  // Innihaldshnit í skrunandi sviðinu — óháð því hvert er skrunað.
+                  const canvas = viewRef.current;
+                  const scale = displayWidth / shown.width;
                   return (
                     <div
                       className="ac-clone-anchor"
                       style={{
-                        left: canvasRect.left - stageRect.left + cloneAnchor.x * scale,
-                        top: canvasRect.top - stageRect.top + cloneAnchor.y * scale,
+                        left: canvas.offsetLeft + cloneAnchor.x * scale,
+                        top: canvas.offsetTop + cloneAnchor.y * scale,
                       }}
                       aria-hidden="true"
                     />
@@ -824,12 +989,15 @@ export default function MotaClient() {
               </div>
 
               <div className="ac-row" style={{ gap: 6, flexWrap: "wrap" }}>
-                <span className="ac-hint" style={{ opacity: 0.7, marginRight: 4 }}>Líkami:</span>
+                <span className="ac-hint" style={{ opacity: 0.7, marginRight: 4 }}>
+                  Líkami{bodyBusy ? " — finn líkamann…" : ":"}
+                </span>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyGlobal((w) => stretchHeight(w, 1.05))}
-                  title="Teygir myndina ~5% lóðrétt — persónan virðist hærri"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ legs: 0.5 }, (w) => stretchHeight(w, 1.05))}
+                  title="Lengir fótleggina — persónan virðist hærri (teygir alla myndina ef hnén sjást ekki)"
                 >
                   Hærri
                 </button>
@@ -844,59 +1012,69 @@ export default function MotaClient() {
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ waist: -0.3 })}
-                  title="Mjókka mitti (dreger inn miðbik)"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ waist: -0.55 })}
+                  title="Mjókkar mitti og maga þar sem þau eru á myndinni"
                 >
-                  Mitti −
+                  Magi/mitti −
                 </button>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ waist: 0.25 })}
-                  title="Breikka mitti (fyllir út miðbik)"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ waist: 0.45 })}
+                  title="Breikkar mitti og maga"
                 >
-                  Mitti +
+                  Magi/mitti +
                 </button>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ hips: -0.25 })}
-                  title="Mjókka mjaðmir"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ hips: -0.55 })}
+                  title="Mjókkar mjaðmir"
                 >
                   Mjaðmir −
                 </button>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ hips: 0.25 })}
-                  title="Breiða mjaðmir"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ hips: 0.45 })}
+                  title="Breikkar mjaðmir"
                 >
                   Mjaðmir +
                 </button>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ bust: 0.25 })}
-                  title="Fylla bringu"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ bust: 0.5 })}
+                  title="Fyllir bringu"
                 >
                   Bringa +
                 </button>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ width: -0.15 })}
-                  title="Allur grennri — dregur inn alla breidd um ~15%"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ slim: -0.7 })}
+                  title="Grennir allan búkinn, frá öxlum niður á læri"
                 >
                   Allur grennri
                 </button>
                 <button
                   type="button"
                   className="ac-btn ghost"
-                  onClick={() => applyBodyPreset({ width: 0.15 })}
-                  title="Allur fyllri — breikkar alla breidd um ~15%"
+                  disabled={bodyBusy}
+                  onClick={() => void applyBodyTune({ slim: 0.6 })}
+                  title="Fyllir allan búkinn"
                 >
                   Allur fyllri
                 </button>
+                <a className="ac-hint" href="/kjarni/artcraft/likami" style={{ marginLeft: 4 }}>
+                  Fleiri stillingar með sleðum: Líkamsmótun →
+                </a>
               </div>
 
               <div className="ac-row" style={{ gap: 6, flexWrap: "wrap" }}>
