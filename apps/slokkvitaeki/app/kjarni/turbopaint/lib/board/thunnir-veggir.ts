@@ -27,6 +27,8 @@ export interface ThunnirStillingar {
   hamarksThykktM?: number;
   /** Lágmarksmunur á bakgrunni og línu (grátónar). Sjálfgefið 16. */
   munur?: number;
+  /** Halli blaðsins (dy/dx). Vantar = mældur á myndinni sjálfri. 0 = beint. */
+  skekkja?: number;
 }
 
 /** Bakgrunnsgrátónn: miðgildi sýnis (blaðið er að mestu autt). */
@@ -45,6 +47,73 @@ export function bakgrunnsTonn(gra: Uint8Array): number {
     if (s >= t / 2) return v;
   }
   return 255;
+}
+
+/** HALLI BLAÐSINS Á MYNDINNI (Agnar 05.11.2026: „skannaða blaðið er aðeins skakt … það er mögulega að trufla vélina"). Leitin hér
+ * skannar RAÐIR, svo blað sem liggur 0,65° skakkt dregur 40 m vegg um 45 díla yfir myndina og rákin finnst aldrei — mælt á
+ * Nesdekk Breiðhöfða 13 2. hæð, þar sem ytri veggir lagersins fundust ekki. Hallinn er mældur eins og í vörpunarsniði: dökku
+ * dílarnir eru lagðir saman eftir skáröðum fyrir hvert horn og það horn valið þar sem summurnar eru hvassastar (lárétt
+ * mannvirki safnast þá öll í sömu röð). Skilar dy/dx; 0 ef ekkert sker sig úr. */
+export function maelaHallaMyndar(m: Uint8Array, W: number, H: number, hamark = 0.015): number {
+  const sk = Math.max(1, Math.round(Math.max(W, H) / 1200)); // grófur rasti — hallinn er stórsæ stærð
+  const w = Math.floor(W / sk), h = Math.floor(H / sk);
+  if (w < 40 || h < 40) return 0;
+  const sm = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const oy = y * sk;
+    for (let x = 0; x < w; x++) {
+      let n = 0;
+      const ox = x * sk;
+      for (let j = 0; j < sk; j++) {
+        const r = (oy + j) * W;
+        for (let i = 0; i < sk; i++) if (m[r + ox + i]) n++;
+      }
+      sm[y * w + x] = n;
+    }
+  }
+  const skref = Math.max(0.00025, hamark / 60);
+  const svigrum = Math.ceil(hamark * w) + 2;
+  const acc = new Float64Array(h + 2 * svigrum);
+  const skor = (t: number) => {
+    acc.fill(0);
+    for (let x = 0; x < w; x++) {
+      const d = Math.round(x * t) + svigrum;
+      for (let y = 0; y < h; y++) acc[y + d] += sm[y * w + x];
+    }
+    let s2 = 0;
+    for (let i = 0; i < acc.length; i++) s2 += acc[i] * acc[i];
+    return s2;
+  };
+  // Beint blað er metið SÉR, ekki treyst á að rastinn hitti núllið: með litlu `hamark` lendir hann aldrei á því og
+  // jafnteflisreglan hér neðar slokknaði þá þegjandi (Lisbeth 05.11.2026).
+  const beintSk = skor(0);
+  let best = 0, bestSk = -1;
+  for (let t = -hamark; t <= hamark + 1e-9; t += skref) {
+    const s2 = skor(t);
+    if (s2 > bestSk) {
+      bestSk = s2;
+      best = t;
+    }
+  }
+  // Beint blað vinnur jafntefli: örlítið betri summa á hálfgráðu skekkju er suð, ekki halli. Krafist er 0,5 % betra en við 0°.
+  // TALAN ER ÚR TVEIMUR BLÖÐUM (Breiðhöfði 13, 1. og 2. hæð, 05.11.2026) og einu tilbúnu beinu prófi — hún er ekki stillt á
+  // fjölda blaða og summa kvaðrata hefur grunnlínu sem fer eftir bleki blaðsins, svo strjált blað getur hagað sér öðruvísi.
+  // Rétta vörnin til lengri tíma er samræmi tveggja óháðra mæla (þessa og maelaSkekkju á línunum): víki þeir um meira en
+  // ~0,2° á að treysta hvorugum (Lisbeth 05.11.2026).
+  if (Math.abs(best) < skref / 2 || bestSk <= beintSk * 1.005) return 0;
+  return best;
+}
+
+/** Gríman skekkt svo lárétt mannvirki blaðsins verði nákvæmlega lárétt. Mælingin finnur `t` þannig að lárétt lína blaðsins
+ * uppfylli `y + t·x = c` í myndinni, svo flöt röð `c` fæst með `ut[c][x] = m[c − t·x][x]`. */
+function skekkja(m: Uint8Array, W: number, H: number, t: number): Uint8Array {
+  const ut = new Uint8Array(W * H);
+  for (let x = 0; x < W; x++) {
+    const d = Math.round(x * t);
+    const y0 = Math.max(0, d), y1 = Math.min(H, H + d);
+    for (let y = y0; y < y1; y++) ut[y * W + x] = m[(y - d) * W + x];
+  }
+  return ut;
 }
 
 interface Rak {
@@ -147,14 +216,30 @@ export function finnaThunnaVeggi(gra: Uint8Array, W: number, H: number, o: Thunn
   const thr = bakgrunnsTonn(gra) - (o.munur ?? 16);
   const m = new Uint8Array(W * H);
   for (let i = 0; i < m.length; i++) m[i] = gra[i] < thr ? 1 : 0;
+  // Halli blaðsins: leitin skannar raðir, svo skakkt blað er skekkt til baka fyrst og línurnar skekktar aftur á eftir.
+  const t = o.skekkja != null ? o.skekkja : maelaHallaMyndar(m, W, H);
   const ut: ThunnVeggur[] = [];
-  // láréttir: raðir eru y
-  const h = sameinaRaka(leitaRaka(m, W, H, wMin, lagmark, gat, hamarkThykkt), Math.round(0.12 * dpm), Math.round(0.3 * dpm));
-  for (const r of h) ut.push([r.a, r.c, r.b, r.c, r.th]);
-  // lóðréttir: umsnúið (raðir eru x)
-  const mt = new Uint8Array(W * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) mt[x * H + y] = m[y * W + x];
-  const v = sameinaRaka(leitaRaka(mt, H, W, wMin, lagmark, gat, hamarkThykkt), Math.round(0.12 * dpm), Math.round(0.3 * dpm));
-  for (const r of v) ut.push([r.c, r.a, r.c, r.b, r.th]);
+  const thvert = Math.round(0.12 * dpm), samBil = Math.round(0.3 * dpm);
+  // láréttir: raðir eru y (í skekktu grímunni) — y blaðsins er `c`, y myndarinnar er `c − t·x`.
+  // Skekkta gríman lifir aðeins inni í blokkinni, svo hún og umsnúna gríman eru ekki uppi samtímis: toppurinn fer úr
+  // FIMM W·H fylkingum niður í FJÓRAR (gra + m + afleidd gríma + `e` sem leitaRaka úthlutar sjálft) — Lisbeth 05.11.2026.
+  {
+    const mh = t ? skekkja(m, W, H, t) : m;
+    const h = sameinaRaka(leitaRaka(mh, W, H, wMin, lagmark, gat, hamarkThykkt), thvert, samBil);
+    for (const r of h) ut.push([r.a, r.c - t * r.a, r.b, r.c - t * r.b, r.th]);
+  }
+  // lóðréttir: umsnúið (raðir eru x). Lóðrétt lína blaðsins liggur á x = c + t·y í myndinni.
+  const mv = new Uint8Array(W * H);
+  if (t) {
+    for (let y = 0; y < H; y++) {
+      const d = Math.round(y * t), r0 = y * W;
+      const x0 = Math.max(0, d), x1 = Math.min(W, W + d);
+      for (let x = x0; x < x1; x++) mv[(x - d) * H + y] = m[r0 + x];
+    }
+  } else {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) mv[x * H + y] = m[y * W + x];
+  }
+  const v = sameinaRaka(leitaRaka(mv, H, W, wMin, lagmark, gat, hamarkThykkt), thvert, samBil);
+  for (const r of v) ut.push([r.c + t * r.a, r.a, r.c + t * r.b, r.b, r.th]);
   return ut;
 }
