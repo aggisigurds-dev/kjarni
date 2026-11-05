@@ -383,16 +383,20 @@ export function ObjectNode({
   ) {
     const length = obj.type === "measure" ? lineLength(obj.points) : 0;
     const vegglitur = litaVeggi && erVeggur(obj) ? synilegurVegglitur(obj.stroke, obj.veggTegund, true) : null;
+    // STIGI (Agnar 05.11.2026: „stigakassinn verður einhver klessa"): stigi dreginn sem kassi er geymdur sem lína með þykkt kassans.
+    // Ávalir endar teygðu hann út fyrir kassann og gerðu hann að klessu; flatir endar (butt) gefa nákvæmlega kassann, hálfgagnsær svo
+    // teikningin sjáist í gegn, og smellisvæðið er kassinn sjálfur (ekki þrefalt) svo hann steli ekki smellum af veggjum í kring.
+    const erStigi = obj.type === "polyline" && obj.veggTegund === "stigi";
     return (
-      <Group {...common} opacity={vegglitur ? 1 : common.opacity}>
+      <Group {...common} opacity={erStigi ? Math.min(common.opacity, 0.55) : vegglitur ? 1 : common.opacity}>
         <Line
           points={obj.points}
           stroke={vegglitur ?? obj.stroke}
           strokeWidth={obj.strokeWidth}
-          lineCap="round"
-          lineJoin="round"
+          lineCap={erStigi ? "butt" : "round"}
+          lineJoin={erStigi ? "miter" : "round"}
           dash={dashArray(obj.dash, obj.strokeWidth)}
-          hitStrokeWidth={Math.max(16, obj.strokeWidth * 3)}
+          hitStrokeWidth={erStigi ? obj.strokeWidth : Math.max(16, obj.strokeWidth * 3)}
         />
         {obj.type === "measure" ? (
           <KonvaText
