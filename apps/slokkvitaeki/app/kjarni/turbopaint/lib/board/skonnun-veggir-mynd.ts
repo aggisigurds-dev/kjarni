@@ -132,6 +132,22 @@ export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Pro
   return butarIBord(frum, g, plan);
 }
 
+/** SVIGRÚM Á HALLANUM (Agnar 05.11.2026: „geturðu ekki sett smá buffer á lesinguna, 1% halli leyfður eða álíka").
+ *
+ * Talan er EKKI 1%. 1% halli er 0,57°, og blaðið sem allt þetta snýst um — Nesdekk Breiðhöfði 13 2. hæð — mælist 0,63°:
+ * 1% svigrúm hefði gleypt nánast allt tilefnið. Í staðinn er þröskuldurinn leiddur af appinu sjálfu: hallinn skiptir máli
+ * þegar hann færir langan vegg MEIRA en smellivikmörkin (`VIKMORK.smellaM` = 0,15 m), því neðan við það smellur veggurinn
+ * samt á sinn stað og leiðréttingin breytir engu sem sést. Á 40 m vegg (ytri veggur lagerhúss, lengsta sem kemur fyrir á
+ * þessum blöðum) er það atan(0,15 / 40) = 0,21°.
+ *
+ * Fylgni við raunblöðin: 1. hæð mælist 0,07° (færir 40 m vegg um 4,9 cm — undir, lesin sem hornrétt) og 2. hæð 0,63°
+ * (færir hann um 44 cm — langt yfir, lesin sem skökk). Breytist `smellaM` á þessi tala að fylgja.
+ *
+ * ÞETTA GILDIR AÐEINS UM TÖLUNA SEM NOTANDINN SÉR OG GETUR TEKIÐ. `maelaHallaMyndar` sjálft fær ENGAN þröskuld: þar er
+ * leitað í röðum á 6006 díla blaði þar sem 0,07° dregur rákina 7 díla — meira en þykkt hennar — svo þar munar um hvert
+ * brot úr gráðu. Vélin heldur því áfram að leiðrétta sig nákvæmt þótt viðmótið segi „hornrétt". */
+export const HALLA_THROSKULDUR = (Math.atan(0.15 / 40) * 180) / Math.PI;
+
 /** HALLI BLAÐSINS Í GRÁÐUM, mældur á MYNDINNI sjálfri — ekki á veggjunum sem þegar liggja á borðinu.
  *
  * AGNAR 05.11.2026: „skannaða blaðið þarna er aðeins skakt, svo allar línur þurfa að vera ööööörlítið á ská."
@@ -143,7 +159,7 @@ export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Pro
  * kosta tvo litla W·H buffera — margfalt ódýrara en greiningarmyndin, svo þetta má keyra þegar notandinn opnar
  * stillinguna sjálfur. Skilar GRÁÐUM í sömu átt og `maelaSkekkju` (lína sem hallar niður til hægri er negatíf):
  * `maelaHallaMyndar` skilar `t` þannig að lárétt lína blaðsins uppfylli `y + t·x = c`, svo hallatalan er `−t`.
- * 0 ef ekkert sker sig úr. */
+ * 0 ef ekkert sker sig úr, og 0 líka ef hallinn er undir `HALLA_THROSKULDUR` (sjá þar). */
 export async function maelaHallaBlads(plan: ImageObject): Promise<number> {
   const blob = getAssetBlob(plan.assetId);
   if (!blob || !(plan.width > 0)) return 0;
@@ -162,7 +178,8 @@ export async function maelaHallaBlads(plan: ImageObject): Promise<number> {
   const m = new Uint8Array(g.W * g.H);
   for (let i = 0; i < m.length; i++) m[i] = gra[i] < thr ? 1 : 0;
   const t = maelaHallaMyndar(m, g.W, g.H);
-  return t ? -(Math.atan(t) * 180) / Math.PI : 0;
+  const gradur = t ? -(Math.atan(t) * 180) / Math.PI : 0;
+  return Math.abs(gradur) < HALLA_THROSKULDUR ? 0 : gradur;
 }
 
 /** Veggir skannaðrar teikningar (sama greining og Teikning-glugginn) í borðhnitum. Gler fylgir sem tegundin „gler";

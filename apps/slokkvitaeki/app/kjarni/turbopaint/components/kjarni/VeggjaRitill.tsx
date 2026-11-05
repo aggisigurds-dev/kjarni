@@ -38,7 +38,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { maelaHallaBlads } from "../../lib/board/skonnun-veggir-mynd";
+import { HALLA_THROSKULDUR, maelaHallaBlads } from "../../lib/board/skonnun-veggir-mynd";
 import { BoxSelect as BoxSelectTakn, Brush as BrushTakn, Magnet as MagnetTakn, Ruler as RulerTakn } from "lucide-react";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
@@ -1392,7 +1392,7 @@ function SkekkjaStilling() {
               : blad
                 ? `Blaðið mælist ${tala(blad)}° skakkt.`
                 : blad === 0
-                  ? "Blaðið mælist hornrétt."
+                  ? `Blaðið mælist hornrétt — halli undir ${tala(HALLA_THROSKULDUR)}° færir 40 m vegg minna en smellivikmörkin og breytir engu.`
                   : "Náði ekki að mæla blaðið."}
             {maelt ? ` Veggirnir á borðinu mælast ${tala(maelt)}°.` : ""} Hallinn geymist á blaðinu og vistast með „Vista í úttekt". Blaðinu sjálfu er ekki
             snúið — merkin eru í dílum skjalasafnsblaðsins og Teikning sýnir sama blað.
