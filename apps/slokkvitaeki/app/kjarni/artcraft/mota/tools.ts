@@ -6,7 +6,7 @@ import { DEFAULT_TUNE, normalizeTune, type BodyTune } from "../likami/bodyWarp";
 import { NEUTRAL_LOOKS, normalizeLooks, type Looks } from "./looks";
 import type { RetouchMode } from "./retouch";
 
-export type TabId = "likami" | "mota" | "lagfaera" | "stilla";
+export type TabId = "likami" | "mota" | "lagfaera" | "stilla" | "snjallt";
 
 export type BrushMode = LiquifyMode | RetouchMode | "restore";
 
@@ -22,8 +22,18 @@ export const TABS: Array<{ id: TabId; label: string; hint: string }> = [
   { id: "likami", label: "Líkami", hint: "Finnur líkamann og mótar mitti, mjaðmir, fótleggi o.fl. með sleða" },
   { id: "mota", label: "Móta", hint: "Bursti sem mjókkar, þenur eða færir línur" },
   { id: "lagfaera", label: "Lagfæra", hint: "Húð, blettir, afritun, ljós og skuggi með bursta" },
-  { id: "stilla", label: "Ljós og litir", hint: "Birta, kontrast, litir og skerpa á allri myndinni" },
+  { id: "stilla", label: "Litir", hint: "Ljós og litir: birta, kontrast, litir og skerpa á allri myndinni" },
+  { id: "snjallt", label: "Snjallt", hint: "Gervigreind: viðgerð, Topaz, Clarity, Hraðbreyta, bakgrunnur, endurljós, andlit" },
 ];
+
+/** Titill neðst meðan tól í flipanum er opið. */
+export const TAB_TITLES: Record<TabId, string> = {
+  likami: "Líkami",
+  mota: "Móta",
+  lagfaera: "Lagfæra",
+  stilla: "Ljós og litir",
+  snjallt: "Snjallt",
+};
 
 export const BODY_TOOLS: Array<ToolItem<BodyToolId> & { slider: SliderSpec }> = [
   { id: "auto", label: "Sjálfvirkt", icon: "✨", hint: "Grennir búk, mitti og mjaðmir og lengir fótleggi örlítið, allt í einu", slider: { min: 0, max: 100, left: "", right: "meira" } },

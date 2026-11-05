@@ -243,3 +243,19 @@ test("every tool has a slider spec and look values map to looks", () => {
   near(looks.brightness, 0.5);
   near(looks.sharpen, 0.3);
 });
+
+// ---------------------------------------------------------------- snjallt
+
+test("AI tools and presets are complete and unambiguous", async () => {
+  const { AI_TOOLS, BACKGROUND_CHOICES, LIGHT_PRESETS, QUICK_EDITS, PORTRAIT_PRESETS } = await import("./aiPresets.ts");
+  const ids = AI_TOOLS.map((t) => t.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(ids, ["vidgerd", "topaz", "clarity", "hradbreyta", "bakgrunnur", "endurljos", "andlitsfegrun", "andlit"]);
+  assert.equal(new Set(BACKGROUND_CHOICES.map((c) => c.id)).size, BACKGROUND_CHOICES.length);
+  for (const c of BACKGROUND_CHOICES) {
+    assert.ok(c.swatch, c.id);
+    if (c.kind === "scene") assert.ok((c.prompt ?? "").length > 20, `${c.id} has a real prompt`);
+    else assert.equal(c.prompt, undefined, `${c.id} needs no prompt`);
+  }
+  for (const p of [...LIGHT_PRESETS, ...QUICK_EDITS, ...PORTRAIT_PRESETS]) assert.ok(p.prompt.trim().length > 10, p.label);
+});

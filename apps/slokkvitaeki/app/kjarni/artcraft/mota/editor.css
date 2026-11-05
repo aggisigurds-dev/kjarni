@@ -582,3 +582,142 @@
     gap: 12px;
   }
 }
+
+/* ---------------------------------------------------------------- snjallt */
+
+.mx-hint.wrap {
+  white-space: normal;
+  margin-bottom: 8px;
+}
+
+.mx-run {
+  display: block;
+  width: 100%;
+  height: 46px;
+  margin: 6px 0 4px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mx-accent);
+  color: #fff !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.mx-run.ghost {
+  background: var(--mx-accent-bg);
+  color: var(--mx-accent-ink) !important;
+}
+
+.mx-run.small {
+  flex: none;
+  width: auto;
+  height: 42px;
+  margin: 0;
+  padding: 0 16px;
+  font-size: 15px !important;
+}
+
+.mx-run-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mx-prompt-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.mx-input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--mx-line);
+  border-radius: 12px;
+  background: #fafafb;
+  color: var(--mx-ink);
+  font: inherit;
+  font-size: 15px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.mx-input:focus {
+  outline: 2px solid var(--mx-accent);
+  outline-offset: 0;
+  background: #fff;
+}
+
+.mx-chips.scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.mx-chips.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.mx-chips.scroll .mx-chip {
+  flex: none;
+}
+
+.mx-swatches {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.mx-swatches::-webkit-scrollbar {
+  display: none;
+}
+
+.mx-swatch {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 72px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.mx-swatch span {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  border: 1px solid var(--mx-line);
+  box-shadow: inset 0 0 0 2px transparent;
+}
+
+.mx-swatch.on span {
+  border-color: var(--mx-accent);
+  box-shadow: 0 0 0 2px var(--mx-accent);
+}
+
+.mx-swatch em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--mx-soft);
+  white-space: nowrap;
+}
+
+.mx-swatch.on em {
+  color: var(--mx-accent-ink);
+  font-weight: 600;
+}
+
+.mx-busy span:not(.mx-spinner) {
+  max-width: min(80vw, 420px);
+  padding: 0 16px;
+  text-align: center;
+}

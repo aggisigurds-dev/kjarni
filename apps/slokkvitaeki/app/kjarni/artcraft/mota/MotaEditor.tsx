@@ -18,6 +18,7 @@ import SendTo from "../SendTo";
 import { cloneRaster, liquifyLocal, type Raster } from "../studio/adjust";
 import { tuneIsIdentity, warpBody, type BodyFrame } from "../likami/bodyWarp";
 import { detectBody } from "../likami/pose";
+import { RETOUCH_OPTIONS } from "../andlitsfegrun/retouch";
 import {
   MAX_WORKING,
   canvasToBlob,
@@ -31,6 +32,8 @@ import {
 } from "./canvasUtil";
 import { EditHistory, clipRect, cutRect, unionRect, type Rect } from "./history";
 import { Icon } from "./icons";
+import { runAi, topazFullResolution, type AiRequest } from "./ai";
+import { AI_TOOLS, BACKGROUND_CHOICES, LIGHT_DIRECTIONS, LIGHT_PRESETS, PORTRAIT_PRESETS, QUICK_EDITS, type AiToolId, type BackgroundChoice } from "./aiPresets";
 import { applyLooks, looksIsNeutral } from "./looks";
 import { applyRetouch, restoreRegion } from "./retouch";
 import {
@@ -38,6 +41,7 @@ import {
   BRUSH_TABS,
   LOOK_TOOLS,
   TABS,
+  TAB_TITLES,
   ZERO_BODY,
   ZERO_LOOKS,
   bodyTuneFromValues,
@@ -63,7 +67,8 @@ const FRAME_BUDGET_MS = 14;
 type Session =
   | { kind: "body"; mark: number; status: "detecting" | "ready" | "nobody" | "failed"; frame: BodyFrame | null }
   | { kind: "looks"; mark: number }
-  | { kind: "brush"; tab: "mota" | "lagfaera"; mark: number };
+  | { kind: "brush"; tab: "mota" | "lagfaera"; mark: number }
+  | { kind: "ai"; mark: number };
 
 type Gesture =
   | { kind: "pan"; start: View; p0: Point }
@@ -177,6 +182,20 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
   const [picking, setPicking] = useState(false);
   const [refVersion, setRefVersion] = useState(0);
   const [sendBlob, setSendBlob] = useState<Blob | null>(null);
+  // Snjallt (gervigreind)
+  const [aiTool, setAiTool] = useState<AiToolId>("vidgerd");
+  const [aiText, setAiText] = useState({ hradbreyta: "", bakgrunnur: "", andlit: PORTRAIT_PRESETS[0].prompt });
+  const [keepFace, setKeepFace] = useState(true);
+  const [topazFace, setTopazFace] = useState(true);
+  const [creativity, setCreativity] = useState(3);
+  const [lightPreset, setLightPreset] = useState(0);
+  const [lightDir, setLightDir] = useState<(typeof LIGHT_DIRECTIONS)[number]["id"]>("Left Light");
+  const [keepBackground, setKeepBackground] = useState(true);
+  const [retouchOpts, setRetouchOpts] = useState({ skinSmooth: true, blemishes: true, teeth: false, underEye: false });
+  const [bgChoice, setBgChoice] = useState<string | null>(null);
+  const [hasAlpha, setHasAlpha] = useState(mime === "image/png");
+  const [busyCancel, setBusyCancel] = useState(false);
+  const aiRunRef = useRef(0);
 
   // Nýjustu gildi fyrir rAF/native hlustara.
   const live = useRef({ session, brushMode, brushSize, strength: brushStrength / 100, cloneAnchor, cloneSource, handMode, picking, bodyValues, lookValues, busy });
@@ -429,10 +448,10 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     else onClose();
   }
 
-  function showToast(text: string) {
+  function showToast(text: string, ms = 2800) {
     setToast(text);
     window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => setToast(""), 2800);
+    toastTimerRef.current = window.setTimeout(() => setToast(""), ms);
   }
 
   // ------------------------------------------------------------------ burstar
@@ -744,6 +763,9 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     } else if (tabId === "stilla") {
       setLookTool(toolId as LookToolId);
       if (session?.kind !== "looks") enterLooks();
+    } else if (tabId === "snjallt") {
+      setAiTool(toolId as AiToolId);
+      if (session?.kind !== "ai") setSession({ kind: "ai", mark: history.mark() });
     } else {
       setBrushMode(toolId as BrushMode);
       if (toolId === "clone" && !cloneAnchor) setPicking(true);
@@ -798,7 +820,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
 
   function cancelSession() {
     const s = live.current.session;
-    if (s?.kind === "brush") {
+    if (s?.kind === "brush" || s?.kind === "ai") {
       const before = history.topSerial;
       const next = history.revertTo(s.mark, workingRef.current);
       if (before > s.mark) {
@@ -814,7 +836,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
   async function commitSession() {
     const s = session;
     if (!s || busy) return;
-    if (s.kind === "brush") {
+    if (s.kind === "brush" || s.kind === "ai") {
       endSession();
       return;
     }
@@ -937,7 +959,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
 
   function canUndoNow(): boolean {
     if (busy || previewSession) return false;
-    if (session?.kind === "brush") return history.topSerial > session.mark;
+    if (session?.kind === "brush" || session?.kind === "ai") return history.topSerial > session.mark;
     return history.canUndo;
   }
 
@@ -962,7 +984,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
 
   // ------------------------------------------------------------------ vista
 
-  const outType = mime === "image/png" ? "image/png" : "image/jpeg";
+  const outType = hasAlpha ? "image/png" : "image/jpeg";
   const outName = `${name.replace(/\.[^.]+$/, "") || "mynd"}-mota.${outType === "image/png" ? "png" : "jpg"}`;
 
   async function exportBlob(): Promise<Blob> {
@@ -1013,14 +1035,108 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
     }
   }
 
+  // ------------------------------------------------------------------ snjallt
+
+  /** Myndin eins og hún er núna, til að senda á gervigreindina. */
+  async function aiSource(): Promise<Blob> {
+    const c = main0.current;
+    if (!c) throw new Error("Engin mynd");
+    return canvasToBlob(c, hasAlpha ? "image/png" : "image/jpeg", 0.92);
+  }
+
+  /** Keyrir eitt gervigreindartól; útkoman kemur inn sem afturkallanlegt skref.
+   *  „Hætta að bíða“ hunsar svarið (kallið sjálft heldur áfram á þjóninum). */
+  async function runAiNow(req: AiRequest, label: string) {
+    if (busy) return;
+    const run = ++aiRunRef.current;
+    setBusy(`${label}…`);
+    setBusyCancel(true);
+    try {
+      const source = await aiSource();
+      const result = await runAi(req, source, (text) => {
+        if (aiRunRef.current === run) setBusy(text);
+      });
+      if (aiRunRef.current !== run) return;
+      setBusy("Opna útkomuna…");
+      const raster = await loadRaster(result.blob, MAX_WORKING);
+      if (aiRunRef.current !== run) return;
+      history.pushFull(workingRef.current);
+      setWorking(raster);
+      fitNow();
+      if (result.alpha) setHasAlpha(true);
+      showToast(`${label}: komið. Afturkallaðu ef þér líkar það ekki.`, 3500);
+    } catch (err) {
+      if (aiRunRef.current === run) showToast(err instanceof Error ? err.message : `${label} mistókst`, 7000);
+    } finally {
+      if (aiRunRef.current === run) {
+        setBusy(null);
+        setBusyCancel(false);
+      }
+    }
+  }
+
+  function stopWaiting() {
+    aiRunRef.current++;
+    setBusy(null);
+    setBusyCancel(false);
+    showToast("Hætt að bíða — myndin er óbreytt");
+  }
+
+  async function saveTopazFull() {
+    if (busy) return;
+    const run = ++aiRunRef.current;
+    setBusy("Topaz…");
+    setBusyCancel(true);
+    try {
+      const blob = await topazFullResolution(await aiSource(), topazFace, (text) => {
+        if (aiRunRef.current === run) setBusy(text);
+      });
+      if (aiRunRef.current !== run) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = outName.replace(/\.(jpg|png)$/, "-topaz.jpg");
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      const bmp = await createImageBitmap(blob);
+      showToast(`Vistað í ${bmp.width}×${bmp.height}`, 4000);
+      bmp.close();
+    } catch (err) {
+      if (aiRunRef.current === run) showToast(err instanceof Error ? err.message : "Topaz mistókst", 7000);
+    } finally {
+      if (aiRunRef.current === run) {
+        setBusy(null);
+        setBusyCancel(false);
+      }
+    }
+  }
+
   // ------------------------------------------------------------------ útlit
 
-  const tabTools =
-    tab === "likami" ? BODY_TOOLS : tab === "stilla" ? LOOK_TOOLS : BRUSH_TABS[tab];
-  const activeTab: TabId = session ? (session.kind === "body" ? "likami" : session.kind === "looks" ? "stilla" : session.tab) : tab;
-  const shownTools = session ? (activeTab === "likami" ? BODY_TOOLS : activeTab === "stilla" ? LOOK_TOOLS : BRUSH_TABS[activeTab as "mota" | "lagfaera"]) : tabTools;
-  const activeToolId = !session ? null : session.kind === "body" ? bodyTool : session.kind === "looks" ? lookTool : brushMode;
-  const sessionTitle = TABS.find((t) => t.id === activeTab)?.label ?? "";
+  type StripItem = { id: string; label: string; hint: string; icon: string };
+  const toolsFor = (t: TabId): StripItem[] =>
+    t === "likami" ? BODY_TOOLS : t === "stilla" ? LOOK_TOOLS : t === "snjallt" ? AI_TOOLS : BRUSH_TABS[t];
+  const activeTab: TabId = session
+    ? session.kind === "body"
+      ? "likami"
+      : session.kind === "looks"
+        ? "stilla"
+        : session.kind === "ai"
+          ? "snjallt"
+          : session.tab
+    : tab;
+  const shownTools = toolsFor(activeTab);
+  const activeToolId = !session
+    ? null
+    : session.kind === "body"
+      ? bodyTool
+      : session.kind === "looks"
+        ? lookTool
+        : session.kind === "ai"
+          ? aiTool
+          : brushMode;
+  const aiSpec = AI_TOOLS.find((t) => t.id === aiTool)!;
+  const sessionTitle = session?.kind === "ai" ? aiSpec.label : TAB_TITLES[activeTab];
 
   const showOriginal = comparing && !previewSession;
   const showPreview = previewSession && previewShown && !comparing;
@@ -1165,9 +1281,14 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
         </div>
 
         {busy && (
-          <div className="mx-busy">
+          <div className="mx-busy" role="status">
             <span className="mx-spinner" />
-            {busy}
+            <span>{busy}</span>
+            {busyCancel && (
+              <button type="button" className="mx-chip" onClick={stopWaiting}>
+                Hætta að bíða
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1280,6 +1401,209 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
           </div>
         )}
 
+        {session?.kind === "ai" && (
+          <div className="mx-controls">
+            <p className="mx-hint wrap">
+              {aiSpec.hint} · {aiSpec.wait} · keyrir á Replicate
+            </p>
+            {aiTool === "vidgerd" && (
+              <button type="button" className="mx-run" disabled={!!busy} onClick={() => void runAiNow({ tool: "vidgerd" }, "Viðgerð")}>
+                Gera við myndina
+              </button>
+            )}
+            {aiTool === "topaz" && (
+              <>
+                <div className="mx-chips">
+                  <button type="button" className={`mx-chip${topazFace ? " on" : ""}`} aria-pressed={topazFace} onClick={() => setTopazFace((v) => !v)}>
+                    Bæta andlit
+                  </button>
+                </div>
+                <div className="mx-run-row">
+                  <button type="button" className="mx-run" disabled={!!busy} onClick={() => void runAiNow({ tool: "topaz", face: topazFace }, "Topaz")}>
+                    Skerpa myndina
+                  </button>
+                  <button type="button" className="mx-run ghost" disabled={!!busy} onClick={() => void saveTopazFull()}>
+                    Vista í 2× upplausn
+                  </button>
+                </div>
+              </>
+            )}
+            {aiTool === "clarity" && (
+              <>
+                <div className="mx-chips">
+                  {[
+                    { v: 1, l: "Varlega" },
+                    { v: 3, l: "Hóflegt" },
+                    { v: 6, l: "Meira" },
+                  ].map((o) => (
+                    <button key={o.v} type="button" className={`mx-chip${creativity === o.v ? " on" : ""}`} onClick={() => setCreativity(o.v)}>
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="mx-run" disabled={!!busy} onClick={() => void runAiNow({ tool: "clarity", creativity }, "Clarity")}>
+                  Bæta smáatriðum við
+                </button>
+              </>
+            )}
+            {aiTool === "hradbreyta" && (
+              <>
+                <div className="mx-prompt-row">
+                  <input
+                    className="mx-input"
+                    value={aiText.hradbreyta}
+                    placeholder="Hvað á að breyta? (enska virkar best)"
+                    onChange={(e) => setAiText((t) => ({ ...t, hradbreyta: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="mx-run small"
+                    disabled={!!busy || !aiText.hradbreyta.trim()}
+                    onClick={() => void runAiNow({ tool: "hradbreyta", prompt: aiText.hradbreyta, preserveFace: keepFace }, "Hraðbreyta")}
+                  >
+                    Breyta
+                  </button>
+                </div>
+                <div className="mx-chips scroll">
+                  <button type="button" className={`mx-chip${keepFace ? " on" : ""}`} aria-pressed={keepFace} onClick={() => setKeepFace((v) => !v)}>
+                    Halda andliti
+                  </button>
+                  {QUICK_EDITS.map((q) => (
+                    <button key={q.label} type="button" className={`mx-chip${aiText.hradbreyta === q.prompt ? " on" : ""}`} onClick={() => setAiText((t) => ({ ...t, hradbreyta: q.prompt }))}>
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {aiTool === "bakgrunnur" && (
+              <>
+                <div className="mx-swatches">
+                  {BACKGROUND_CHOICES.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`mx-swatch${bgChoice === c.id ? " on" : ""}`}
+                      disabled={!!busy}
+                      onClick={() => {
+                        setBgChoice(c.id);
+                        void runAiNow({ tool: "bakgrunnur", choice: c }, c.label);
+                      }}
+                    >
+                      <span style={{ background: c.swatch }} />
+                      <em>{c.label}</em>
+                    </button>
+                  ))}
+                </div>
+                <div className="mx-prompt-row">
+                  <input
+                    className="mx-input"
+                    value={aiText.bakgrunnur}
+                    placeholder="Eða lýstu eigin bakgrunni (enska virkar best)"
+                    onChange={(e) => setAiText((t) => ({ ...t, bakgrunnur: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="mx-run small"
+                    disabled={!!busy || !aiText.bakgrunnur.trim()}
+                    onClick={() => {
+                      const custom: BackgroundChoice = { id: "custom", label: "Eigin bakgrunnur", kind: "scene", swatch: "" };
+                      setBgChoice("custom");
+                      void runAiNow({ tool: "bakgrunnur", choice: custom, prompt: aiText.bakgrunnur }, "Bakgrunnur");
+                    }}
+                  >
+                    Búa til
+                  </button>
+                </div>
+              </>
+            )}
+            {aiTool === "endurljos" && (
+              <>
+                <div className="mx-swatches">
+                  {LIGHT_PRESETS.map((l, i) => (
+                    <button key={l.label} type="button" className={`mx-swatch${lightPreset === i ? " on" : ""}`} onClick={() => setLightPreset(i)}>
+                      <span style={{ background: l.swatch }} />
+                      <em>{l.label}</em>
+                    </button>
+                  ))}
+                </div>
+                <div className="mx-chips scroll">
+                  {LIGHT_DIRECTIONS.map((d) => (
+                    <button key={d.id} type="button" className={`mx-chip${lightDir === d.id ? " on" : ""}`} onClick={() => setLightDir(d.id)}>
+                      {d.label}
+                    </button>
+                  ))}
+                  <button type="button" className={`mx-chip${keepBackground ? " on" : ""}`} aria-pressed={keepBackground} onClick={() => setKeepBackground((v) => !v)}>
+                    Halda bakgrunni
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="mx-run"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void runAiNow({ tool: "endurljos", prompt: LIGHT_PRESETS[lightPreset].prompt, light: lightDir, keepBackground }, "Endurljós")
+                  }
+                >
+                  Lýsa upp á nýtt
+                </button>
+              </>
+            )}
+            {aiTool === "andlitsfegrun" && (
+              <>
+                <div className="mx-chips">
+                  {RETOUCH_OPTIONS.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className={`mx-chip${retouchOpts[o.id] ? " on" : ""}`}
+                      aria-pressed={retouchOpts[o.id]}
+                      onClick={() => setRetouchOpts((r) => ({ ...r, [o.id]: !r[o.id] }))}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mx-run"
+                  disabled={!!busy || !Object.values(retouchOpts).some(Boolean)}
+                  onClick={() => void runAiNow({ tool: "andlitsfegrun", options: retouchOpts }, "Andlitsfegrun")}
+                >
+                  Fegra andlitið
+                </button>
+              </>
+            )}
+            {aiTool === "andlit" && (
+              <>
+                <div className="mx-chips scroll">
+                  {PORTRAIT_PRESETS.map((p) => (
+                    <button key={p.label} type="button" className={`mx-chip${aiText.andlit === p.prompt ? " on" : ""}`} onClick={() => setAiText((t) => ({ ...t, andlit: p.prompt }))}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mx-prompt-row">
+                  <input
+                    className="mx-input"
+                    value={aiText.andlit}
+                    placeholder="Lýstu nýju myndinni (enska virkar best)"
+                    onChange={(e) => setAiText((t) => ({ ...t, andlit: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="mx-run small"
+                    disabled={!!busy || !aiText.andlit.trim()}
+                    onClick={() => void runAiNow({ tool: "andlit", prompt: aiText.andlit }, "Andlit")}
+                  >
+                    Búa til
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="mx-tools" role="toolbar" aria-label="Tól">
           {shownTools.map((t) => (
             <button
@@ -1290,7 +1614,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace }: 
               title={t.hint}
               disabled={!!busy}
             >
-              <Icon name={t.id} size={26} />
+              <Icon name={activeTab === "snjallt" ? t.icon : t.id} size={26} />
               <span>{t.label}</span>
               {toolHasValue(t.id) && <i className="mx-dot" />}
             </button>
