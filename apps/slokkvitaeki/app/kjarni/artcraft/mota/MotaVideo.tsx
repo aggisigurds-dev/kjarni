@@ -17,6 +17,7 @@ import { uploadForReplicate } from "../uploadToStorage";
 import { DEFAULT_WAN_SETTINGS, generateWanVideo } from "../skyjahreyfimynd/wan";
 import { DEFAULT_KLING_SETTINGS, generateKlingVideo } from "../skyjahreyfimynd/kling";
 import { extractFrameAt, loadVideoMeta, reframeImage, seekVideo, stitchSegments } from "../video/frames";
+import { lockFace } from "../video/faceLock";
 import { continueAt, defaultContinueTime, formatSeconds, globalTime, locate, segmentLength, totalLength, type Segment } from "../video/timeline";
 import {
   ASPECT_CHOICES,
@@ -130,6 +131,47 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
     });
   }
   const prompt = slots[activeSlot]?.prompt ?? "";
+
+  // Andlitslás: andlitið úr fyrsta bútnum (eða myndinni sem var hreyfð) er
+  // sett á upphafsramma hvers framhalds, svo það reki ekki eftir 2–4 framhöld.
+  const [keepFace, setKeepFace] = useState(true);
+  const faceRefRef = useRef<{ blob: Blob; url?: string } | null>(null);
+  const [faceThumb, setFaceThumb] = useState("");
+  function setFaceRef(blob: Blob | null) {
+    faceRefRef.current = blob ? { blob } : null;
+    setFaceThumb((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return blob ? URL.createObjectURL(blob) : "";
+    });
+  }
+  async function getFaceRef(): Promise<{ blob: Blob; url?: string }> {
+    if (faceRefRef.current) return faceRefRef.current;
+    const first = clipsRef.current[0];
+    const blob = first
+      ? await extractFrameAt(first.blob, Math.min(0.3, first.duration / 2), "image/jpeg", 0.95)
+      : initialImage;
+    if (!blob) throw new Error("Ekkert andlit til viðmiðunar");
+    setFaceRef(blob);
+    return faceRefRef.current!;
+  }
+  // Sýna viðmiðunarandlitið um leið og framhaldsspjaldið opnast.
+  useEffect(() => {
+    if (panel !== "create" || clips.length === 0 || !keepFace || faceRefRef.current) return;
+    void getFaceRef().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, clips.length, keepFace]);
+
+  async function pickFaceFromFrame() {
+    const cl = clipsRef.current;
+    if (!cl.length) return;
+    try {
+      const { index, local } = locate(cl, tRef.current);
+      setFaceRef(await extractFrameAt(cl[index].blob, local, "image/jpeg", 0.95));
+      showToast("Andlitið úr þessum ramma verður notað í framhöldum");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Gat ekki tekið rammann");
+    }
+  }
   const [model, setModel] = useState<VideoModelId>("wan");
   const [lengthId, setLengthId] = useState("wan5");
   const [resolution, setResolution] = useState<"720p" | "480p">("720p");
@@ -378,6 +420,21 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
         status(`Tek rammann á ${formatSeconds(at)} s…`);
         frame = await extractFrameAt(cl[index].blob, local, "image/jpeg", 0.95);
       }
+      if (kind === "continue" && keepFace) {
+        // Upprunalega andlitið á upphafsrammann, svo framhaldið haldi manneskjunni.
+        try {
+          const ref = await getFaceRef();
+          status("Set upprunalega andlitið á rammann…");
+          if (!ref.url) ref.url = await uploadForReplicate(ref.blob, "reference-images");
+          const frameUrl = await uploadForReplicate(frame, "reference-images");
+          frame = await lockFace(frameUrl, ref.url);
+        } catch (err) {
+          if (runRef.current !== run) return;
+          const why = err instanceof Error ? err.message : "";
+          showToast(`Andlitslás tókst ekki${why ? ` (${why.slice(0, 80)})` : ""} — held áfram með rammann óbreyttan`, 5000);
+        }
+        if (runRef.current !== run) return;
+      }
       const bmp = await createImageBitmap(frame);
       const aspect = nearestAspect(bmp.width, bmp.height);
       bmp.close();
@@ -426,6 +483,8 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
       status("Opna bútinn…");
       const clip = await makeClip(blob, prompt.trim());
       if (runRef.current !== run) return;
+      // Ný byrjun: myndin sem Wan fékk verður viðmiðunarandlitið.
+      if (kind === "start") setFaceRef(frame);
       const next = kind === "start" ? [clip] : continueAt(clipsRef.current, at, clip, outputFps(length));
       commit(next);
       setPanel(null);
@@ -705,6 +764,26 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
 
         {panel === "create" && (
           <div className="mx-controls">
+            {clips.length > 0 && (
+              <div className="mx-chips">
+                <button
+                  type="button"
+                  className={`mx-chip${keepFace ? " on" : ""}`}
+                  aria-pressed={keepFace}
+                  title="Andlitið úr fyrsta bútnum er sett á upphafsramma framhaldsins"
+                  onClick={() => {
+                    setKeepFace((v) => !v);
+                    if (!faceRefRef.current) void getFaceRef().catch(() => undefined);
+                  }}
+                >
+                  {faceThumb && <img className="mv-face-thumb" src={faceThumb} alt="" />}
+                  Halda andliti
+                </button>
+                <button type="button" className="mx-chip" onClick={() => void pickFaceFromFrame()}>
+                  Nota þennan ramma sem andlit
+                </button>
+              </div>
+            )}
             {clips.length > 0 && (
               <div className="mx-chips">
                 <button type="button" className="mx-chip" onClick={() => stepFrame(-1)} aria-label="Einn ramma fyrr">

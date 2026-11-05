@@ -1021,3 +1021,12 @@
   flex: 1;
   margin: 0;
 }
+
+.mv-face-thumb {
+  width: 24px;
+  height: 24px;
+  margin: -4px 6px -4px -6px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}

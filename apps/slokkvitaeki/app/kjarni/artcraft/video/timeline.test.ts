@@ -118,3 +118,21 @@ test("video prompt slots: always five, editable, broken storage falls back", asy
   assert.deepEqual(edited[2], d[2]);
   assert.equal(normalizeVideoPromptSlots([{ label: "x".repeat(50), prompt: "p" }])[0].label.length, 24);
 });
+
+test("blank-frame check: black, flat or transparent frames are rejected, real frames pass", async () => {
+  const { isBlankFrame } = await import("./frameCheck.ts");
+  const make = (f: (i: number) => [number, number, number, number]) => {
+    const d = new Uint8ClampedArray(32 * 32 * 4);
+    for (let i = 0; i < 32 * 32; i++) d.set(f(i), i * 4);
+    return d;
+  };
+  assert.equal(isBlankFrame(make(() => [0, 0, 0, 255])), true, "black");
+  assert.equal(isBlankFrame(make(() => [128, 128, 128, 255])), true, "flat grey");
+  assert.equal(isBlankFrame(make(() => [0, 0, 0, 0])), true, "transparent");
+  assert.equal(isBlankFrame(make((i) => [i % 2 ? 1 : 0, 0, 0, 255])), true, "black with 1-level noise");
+  // Raunverulegur rammi: andlit/form á bakgrunni.
+  assert.equal(isBlankFrame(make((i) => { const x = i % 32, y = Math.floor(i / 32); const r = (x - 16) ** 2 + (y - 12) ** 2 < 60; return r ? [210, 160, 130, 255] : [60, 70, 80, 255]; })), false);
+  // Dökk en ekki svört sena hefur samt dreifni.
+  assert.equal(isBlankFrame(make((i) => [10 + (i % 7) * 3, 12, 15, 255])), false);
+  assert.equal(isBlankFrame(new Uint8ClampedArray(0)), true);
+});
