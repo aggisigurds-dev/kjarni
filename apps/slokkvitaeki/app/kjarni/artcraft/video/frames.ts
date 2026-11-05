@@ -183,3 +183,41 @@ export async function stitchSegments(
     urls.forEach((u) => URL.revokeObjectURL(u));
   }
 }
+
+/** Setur mynd í ramma með völdu hlutfalli (sjá reframePlan): klippt, eða öll
+ *  myndin með óskýrri útgáfu af sjálfri sér í kring. */
+export async function reframeImage(
+  blob: Blob,
+  plan: (w: number, h: number) => { width: number; height: number; src: { x: number; y: number; w: number; h: number }; dst: { x: number; y: number; w: number; h: number } },
+  type = "image/jpeg",
+  quality = 0.92,
+): Promise<{ blob: Blob; width: number; height: number }> {
+  const bmp = await createImageBitmap(blob);
+  try {
+    const p = plan(bmp.width, bmp.height);
+    const c = document.createElement("canvas");
+    c.width = p.width;
+    c.height = p.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("Gat ekki teiknað mynd");
+    ctx.imageSmoothingQuality = "high";
+    const contain = p.src.w === bmp.width && p.src.h === bmp.height && (p.dst.w < p.width - 0.5 || p.dst.h < p.height - 0.5);
+    if (contain) {
+      // Óskýr fylling: myndin sjálf, stækkuð yfir allan rammann.
+      const s = Math.max(p.width / bmp.width, p.height / bmp.height);
+      const blur = Math.max(8, Math.round(Math.max(p.width, p.height) * 0.03));
+      ctx.filter = `blur(${blur}px) brightness(0.85)`;
+      const bw = bmp.width * s * 1.1;
+      const bh = bmp.height * s * 1.1;
+      ctx.drawImage(bmp, (p.width - bw) / 2, (p.height - bh) / 2, bw, bh);
+      ctx.filter = "none";
+    }
+    ctx.drawImage(bmp, p.src.x, p.src.y, p.src.w, p.src.h, p.dst.x, p.dst.y, p.dst.w, p.dst.h);
+    const out = await new Promise<Blob>((resolve, reject) =>
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað mynd"))), type, quality),
+    );
+    return { blob: out, width: p.width, height: p.height };
+  } finally {
+    bmp.close();
+  }
+}

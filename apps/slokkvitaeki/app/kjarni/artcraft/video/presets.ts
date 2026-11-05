@@ -57,3 +57,61 @@ export function nearestAspect(width: number, height: number): "16:9" | "9:16" | 
   if (r < 0.83) return "9:16";
   return "1:1";
 }
+
+// ---------------------------------------------------------------- hlutföll
+
+export type AspectId = "orig" | "9:16" | "4:5" | "1:1" | "16:9";
+export type FitMode = "cover" | "contain";
+
+export const ASPECT_CHOICES: Array<{ id: AspectId; label: string; ratio: number | null }> = [
+  { id: "orig", label: "Eins og myndin", ratio: null },
+  { id: "9:16", label: "9:16 sími", ratio: 9 / 16 },
+  { id: "4:5", label: "4:5", ratio: 4 / 5 },
+  { id: "1:1", label: "1:1", ratio: 1 },
+  { id: "16:9", label: "16:9 breitt", ratio: 16 / 9 },
+];
+
+type Rect = { x: number; y: number; w: number; h: number };
+
+/** Hvernig mynd srcW×srcH er sett í ramma með hlutfallinu `ratio`.
+ *  cover = klippt (enginn auður flötur; lóðrétt staða `focusY`, sjálfgefið
+ *  aðeins ofan við miðju svo höfuð haldist inni), contain = öll myndin með
+ *  óskýrri fyllingu í kring. Myndin er aldrei stækkuð umfram upprunastærð. */
+export function reframePlan(
+  srcW: number,
+  srcH: number,
+  ratio: number | null,
+  fit: FitMode,
+  maxSide = 1920,
+  focusY = 0.4,
+): { width: number; height: number; src: Rect; dst: Rect } {
+  const r = ratio && ratio > 0 ? ratio : srcW / srcH;
+  if (fit === "cover" || !ratio) {
+    let w = srcW;
+    let h = srcH;
+    if (srcW / srcH > r) w = srcH * r;
+    else h = srcW / r;
+    const x = (srcW - w) / 2;
+    const y = (srcH - h) * Math.min(1, Math.max(0, focusY));
+    const k = Math.min(1, maxSide / Math.max(w, h));
+    const width = Math.max(2, Math.round(w * k));
+    const height = Math.max(2, Math.round(h * k));
+    return { width, height, src: { x, y, w, h }, dst: { x: 0, y: 0, w: width, h: height } };
+  }
+  // contain: rammi sem rúmar alla myndina
+  let fw = srcW;
+  let fh = srcH;
+  if (srcW / srcH > r) fh = srcW / r;
+  else fw = srcH * r;
+  const k = Math.min(1, maxSide / Math.max(fw, fh));
+  const width = Math.max(2, Math.round(fw * k));
+  const height = Math.max(2, Math.round(fh * k));
+  const dw = srcW * k;
+  const dh = srcH * k;
+  return {
+    width,
+    height,
+    src: { x: 0, y: 0, w: srcW, h: srcH },
+    dst: { x: (width - dw) / 2, y: (height - dh) / 2, w: dw, h: dh },
+  };
+}
