@@ -1,0 +1,635 @@
+/** Áferðarburstar fyrir Móta — vinna beint á pixlum (ekki liquify-geometry).
+ *
+ * Fjórir bursta-hamir:
+ *   smooth   — jafnar út húð / sléttar yfir hrukkur með smá blur-i.
+ *   lighten  — bætir birtu smám saman (klassískur dodge).
+ *   darken   — minnkar birtu (klassískur burn).
+ *   heal     — fjarlægir bletti/ör: tekur meðaltal af HRINGNUM UTAN við
+ *              burstann og blandar inn í miðjuna. Vinnur best á litlum
+ *              hlutum (fæðingarbletti, ör, hárspotti) með samleitri áferð
+ *              í kringum.
+ *
+ * Allar aðgerðir mutera raster-inn beint (í samræmi við liquifyInPlace í
+ * adjust.ts); kallandinn verður að pushUndo áður en strik byrjar. */
+
+import type { Raster } from "../studio/adjust";
+
+export type RetouchMode =
+  | "smooth"
+  | "lighten"
+  | "darken"
+  | "heal"
+  | "clone"
+  | "contrast"
+  | "sharpen";
+
+/** Soft brush falloff: 1 í miðjunni, 0 á brúninni, cos-shaped en nálgað
+ *  með (1 - r/R)^0.75 fyrir eðlilegra heal/smooth. */
+function brushWeight(d: number, radius: number): number {
+  if (d >= radius) return 0;
+  const t = 1 - d / radius;
+  return Math.pow(t, 0.75);
+}
+
+/** Endurnýtt minni fyrir summed-area töfluna í smoothRegion (eitt dab í einu). */
+let satScratch = new Uint32Array(0);
+
+export function smoothRegion(raster: Raster, cx: number, cy: number, radius: number, strength: number): void {
+  const w = raster.width;
+  const h = raster.height;
+  const data = raster.data;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(h - 1, Math.ceil(cy + radius));
+  if (x1 < x0 || y1 < y0) return;
+  const kernel = Math.max(1, Math.round(radius / 20)); // skalar með bursta
+  // Kassameðaltal (2k+1)² úr pixlum eins og þeir voru FYRIR dabbið, klemmt
+  // við myndbrún og við línur y0..y1. Summed-area tafla gefur hverja summu í
+  // O(1) — kjarninn vex með burstanum, svo í fullri upplausn var beina
+  // lykkjan (2k+1)² á pixla allt of hæg.
+  const wx0 = Math.max(0, x0 - kernel);
+  const wx1 = Math.min(w - 1, x1 + kernel);
+  const ww = wx1 - wx0 + 1;
+  const wh = y1 - y0 + 1;
+  const stride = (ww + 1) * 3;
+  const need = stride * (wh + 1);
+  if (satScratch.length < need) satScratch = new Uint32Array(need);
+  const sat = satScratch;
+  sat.fill(0, 0, stride);
+  for (let y = 0; y < wh; y++) {
+    const row = (y + 1) * stride;
+    const prev = y * stride;
+    sat[row] = 0;
+    sat[row + 1] = 0;
+    sat[row + 2] = 0;
+    let sr = 0;
+    let sg = 0;
+    let sb = 0;
+    let si = ((y0 + y) * w + wx0) * 4;
+    for (let x = 1; x <= ww; x++, si += 4) {
+      sr += data[si];
+      sg += data[si + 1];
+      sb += data[si + 2];
+      const o = row + x * 3;
+      const p = prev + x * 3;
+      sat[o] = sat[p] + sr;
+      sat[o + 1] = sat[p + 1] + sg;
+      sat[o + 2] = sat[p + 2] + sb;
+    }
+  }
+  for (let y = y0; y <= y1; y++) {
+    const by0 = Math.max(y0, y - kernel) - y0;
+    const by1 = Math.min(y1, y + kernel) - y0 + 1;
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const bx0 = Math.max(wx0, x - kernel) - wx0;
+      const bx1 = Math.min(wx1, x + kernel) - wx0 + 1;
+      const n = (bx1 - bx0) * (by1 - by0);
+      const a = by1 * stride + bx1 * 3;
+      const b = by0 * stride + bx1 * 3;
+      const c = by1 * stride + bx0 * 3;
+      const d = by0 * stride + bx0 * 3;
+      const sumR = sat[a] - sat[b] - sat[c] + sat[d];
+      const sumG = sat[a + 1] - sat[b + 1] - sat[c + 1] + sat[d + 1];
+      const sumB = sat[a + 2] - sat[b + 2] - sat[c + 2] + sat[d + 2];
+      const idx = (y * w + x) * 4;
+      data[idx] = Math.round(data[idx] * (1 - weight) + (sumR / n) * weight);
+      data[idx + 1] = Math.round(data[idx + 1] * (1 - weight) + (sumG / n) * weight);
+      data[idx + 2] = Math.round(data[idx + 2] * (1 - weight) + (sumB / n) * weight);
+    }
+  }
+}
+
+function adjustBrightness(
+  raster: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+  direction: 1 | -1,
+): void {
+  const w = raster.width;
+  const h = raster.height;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(h - 1, Math.ceil(cy + radius));
+  // Hámark ±40 per dab; margir dabsar magnast upp því brush-sweep leggur
+  // margfalt yfir, en ekki svo mikið að eitt tap verði of hart.
+  const maxDelta = 40;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const delta = direction * weight * maxDelta;
+      const idx = (y * w + x) * 4;
+      raster.data[idx] = Math.max(0, Math.min(255, raster.data[idx] + delta));
+      raster.data[idx + 1] = Math.max(0, Math.min(255, raster.data[idx + 1] + delta));
+      raster.data[idx + 2] = Math.max(0, Math.min(255, raster.data[idx + 2] + delta));
+    }
+  }
+}
+
+export function lightenRegion(raster: Raster, cx: number, cy: number, radius: number, strength: number): void {
+  adjustBrightness(raster, cx, cy, radius, strength, 1);
+}
+
+export function darkenRegion(raster: Raster, cx: number, cy: number, radius: number, strength: number): void {
+  adjustBrightness(raster, cx, cy, radius, strength, -1);
+}
+
+export function healRegion(raster: Raster, cx: number, cy: number, radius: number, strength: number): void {
+  // Tökum meðaltal úr þunnum hring utan við burstann (frá radius til
+  // outerRadius) og blöndum inn í svæðið innan radius með falloff.
+  const w = raster.width;
+  const h = raster.height;
+  const outerRadius = radius * 1.5;
+  const r2 = radius * radius;
+  const outer2 = outerRadius * outerRadius;
+  const x0 = Math.max(0, Math.floor(cx - outerRadius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + outerRadius));
+  const y0 = Math.max(0, Math.floor(cy - outerRadius));
+  const y1 = Math.min(h - 1, Math.ceil(cy + outerRadius));
+  let sumR = 0;
+  let sumG = 0;
+  let sumB = 0;
+  let n = 0;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > outer2 || d2 < r2) continue;
+      const i = (y * w + x) * 4;
+      sumR += raster.data[i];
+      sumG += raster.data[i + 1];
+      sumB += raster.data[i + 2];
+      n++;
+    }
+  }
+  if (n === 0) return;
+  const avgR = sumR / n;
+  const avgG = sumG / n;
+  const avgB = sumB / n;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const idx = (y * w + x) * 4;
+      raster.data[idx] = Math.round(raster.data[idx] * (1 - weight) + avgR * weight);
+      raster.data[idx + 1] = Math.round(raster.data[idx + 1] * (1 - weight) + avgG * weight);
+      raster.data[idx + 2] = Math.round(raster.data[idx + 2] * (1 - weight) + avgB * weight);
+    }
+  }
+}
+
+/** Clone Stamp — Photoshop-stíl. Afritar pixla úr source-stöðu yfir á
+ *  burstastöðu með falloff + strength. Kallandinn verður að muna
+ *  (sourceX, sourceY) ÁÐUR en strik byrjar, og uppfæra þannig að offset
+ *  (dstX - firstDstX, dstY - firstDstY) sé bætt við original source.
+ *  Við munum ekki afrita utan myndsvæðisins. */
+export function cloneRegion(
+  raster: Raster,
+  dstX: number,
+  dstY: number,
+  srcX: number,
+  srcY: number,
+  radius: number,
+  strength: number,
+  sourceRaster?: Raster,
+): void {
+  const w = raster.width;
+  const h = raster.height;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(dstX - radius));
+  const x1 = Math.min(w - 1, Math.ceil(dstX + radius));
+  const y0 = Math.max(0, Math.floor(dstY - radius));
+  const y1 = Math.min(h - 1, Math.ceil(dstY + radius));
+  // Þegar src er annar raster (reference-mynd) — notum hann beint, ekkert
+  // afrit þarf. Þegar src er sama raster og dst, verðum við að afrita fyrst
+  // því annars læsi clone-ið frá nýlega-skrifuðum pixlum í skarast svæði.
+  // Afritið nær aðeins yfir upptakagluggann (ekki alla myndina) svo strik í
+  // fullri upplausn haldist hratt.
+  const useExternal = !!sourceRaster;
+  const srcW = useExternal ? sourceRaster!.width : w;
+  const srcH = useExternal ? sourceRaster!.height : h;
+  let srcData: Uint8ClampedArray;
+  let winX = 0;
+  let winY = 0;
+  let winW = srcW;
+  if (useExternal) {
+    srcData = sourceRaster!.data;
+  } else {
+    winX = Math.max(0, Math.floor(srcX - radius) - 1);
+    winY = Math.max(0, Math.floor(srcY - radius) - 1);
+    const winX1 = Math.min(w - 1, Math.ceil(srcX + radius) + 1);
+    const winY1 = Math.min(h - 1, Math.ceil(srcY + radius) + 1);
+    if (winX1 < winX || winY1 < winY) return;
+    winW = winX1 - winX + 1;
+    const winH = winY1 - winY + 1;
+    srcData = new Uint8ClampedArray(winW * winH * 4);
+    for (let y = 0; y < winH; y++) {
+      const from = ((winY + y) * w + winX) * 4;
+      srcData.set(raster.data.subarray(from, from + winW * 4), y * winW * 4);
+    }
+  }
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - dstX;
+      const dy = y - dstY;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const sx = Math.round(srcX + dx);
+      const sy = Math.round(srcY + dy);
+      if (sx < 0 || sx >= srcW || sy < 0 || sy >= srcH) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const srcIdx = ((sy - winY) * winW + (sx - winX)) * 4;
+      const dstIdx = (y * w + x) * 4;
+      raster.data[dstIdx] = Math.round(raster.data[dstIdx] * (1 - weight) + srcData[srcIdx] * weight);
+      raster.data[dstIdx + 1] = Math.round(raster.data[dstIdx + 1] * (1 - weight) + srcData[srcIdx + 1] * weight);
+      raster.data[dstIdx + 2] = Math.round(raster.data[dstIdx + 2] * (1 - weight) + srcData[srcIdx + 2] * weight);
+    }
+  }
+}
+
+/** Endurheimta — blandar upprunalegu myndinni aftur inn undir burstanum
+ *  (jafnstórar myndir). Tekur til baka of mikla mótun eða lagfæringu á
+ *  einum stað án þess að afturkalla allt. */
+export function restoreRegion(
+  raster: Raster,
+  original: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+): void {
+  if (original.width !== raster.width || original.height !== raster.height) return;
+  const w = raster.width;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(raster.height - 1, Math.ceil(cy + radius));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const idx = (y * w + x) * 4;
+      for (let c = 0; c < 4; c++) {
+        raster.data[idx + c] = Math.round(raster.data[idx + c] * (1 - weight) + original.data[idx + c] * weight);
+      }
+    }
+  }
+}
+
+/** Contrast — s-curve lift innan burstans. Pullar skugga niður og
+ *  highlights upp í kringum 128 miðju með falloff.
+ *  factor er áhrifastyrkur: 0 = engin breyting, 1 = sterkt. */
+export function contrastRegion(
+  raster: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+): void {
+  const w = raster.width;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(raster.height - 1, Math.ceil(cy + radius));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      const idx = (y * w + x) * 4;
+      // S-curve lift: factor controls stiffness around 128.
+      const factor = 1 + weight * 0.6; // max ~1.6x contrast per full-strength dab
+      for (let c = 0; c < 3; c++) {
+        const v = raster.data[idx + c];
+        const lifted = (v - 128) * factor + 128;
+        raster.data[idx + c] = Math.max(0, Math.min(255, Math.round(lifted)));
+      }
+    }
+  }
+}
+
+/** Sharpen — unsharp mask innan burstans. Reiknar local blur og bætir
+ *  við muninn margfaldað með amount. Virkar sem clarity/focus. */
+export function sharpenRegion(
+  raster: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+): void {
+  const w = raster.width;
+  const h = raster.height;
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const x1 = Math.min(w - 1, Math.ceil(cx + radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const y1 = Math.min(h - 1, Math.ceil(cy + radius));
+  // Afrit af svæðinu áður en við ritum — annars les blur frá nýju gildunum.
+  const src = raster.data.slice(y0 * w * 4, (y1 + 1) * w * 4);
+  const srcOffset = y0 * w * 4;
+  const amount = 1.2; // max multiplier per full-strength dab
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const weight = brushWeight(Math.sqrt(d2), radius) * strength;
+      if (weight <= 0) continue;
+      // 3x3 blur av source
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let n = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const nx = x + kx;
+          const ny = y + ky;
+          if (nx < 0 || nx >= w || ny < y0 || ny > y1) continue;
+          const i = (ny * w + nx) * 4 - srcOffset;
+          sumR += src[i];
+          sumG += src[i + 1];
+          sumB += src[i + 2];
+          n++;
+        }
+      }
+      if (n === 0) continue;
+      const blurR = sumR / n;
+      const blurG = sumG / n;
+      const blurB = sumB / n;
+      const idx = (y * w + x) * 4;
+      const i0 = idx - srcOffset;
+      for (let c = 0; c < 3; c++) {
+        const orig = src[i0 + c];
+        const blur = c === 0 ? blurR : c === 1 ? blurG : blurB;
+        const sharpened = orig + (orig - blur) * amount * weight;
+        raster.data[idx + c] = Math.max(0, Math.min(255, Math.round(sharpened)));
+      }
+    }
+  }
+}
+
+export function applyRetouch(
+  raster: Raster,
+  cx: number,
+  cy: number,
+  radius: number,
+  strength: number,
+  mode: RetouchMode,
+  clone?: { srcX: number; srcY: number; srcRaster?: Raster },
+): void {
+  switch (mode) {
+    case "smooth":
+      smoothRegion(raster, cx, cy, radius, strength);
+      break;
+    case "lighten":
+      lightenRegion(raster, cx, cy, radius, strength);
+      break;
+    case "darken":
+      darkenRegion(raster, cx, cy, radius, strength);
+      break;
+    case "heal":
+      healRegion(raster, cx, cy, radius, strength);
+      break;
+    case "clone":
+      if (clone) cloneRegion(raster, cx, cy, clone.srcX, clone.srcY, radius, strength, clone.srcRaster);
+      break;
+    case "contrast":
+      contrastRegion(raster, cx, cy, radius, strength);
+      break;
+    case "sharpen":
+      sharpenRegion(raster, cx, cy, radius, strength);
+      break;
+  }
+}
+
+// Whole-image aðgerðir — nota sömu stærðfræði og brush-ar en á allri myndinni
+// í einni pösun. Kallandinn verður að pushUndo áður.
+
+export function adjustBrightnessGlobal(raster: Raster, delta: number): void {
+  // delta -100..+100
+  const amount = Math.max(-100, Math.min(100, delta));
+  const data = raster.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.max(0, Math.min(255, data[i] + amount));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + amount));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + amount));
+  }
+}
+
+export function adjustContrastGlobal(raster: Raster, factor: number): void {
+  // factor -1..+1 (0 = no change, +1 = ~2x contrast, -1 = flat)
+  const f = Math.max(-1, Math.min(1, factor));
+  const mult = 1 + f;
+  const data = raster.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.max(0, Math.min(255, (data[i] - 128) * mult + 128));
+    data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] - 128) * mult + 128));
+    data[i + 2] = Math.max(0, Math.min(255, (data[i + 2] - 128) * mult + 128));
+  }
+}
+
+// --- Skin tone adjustments ----------------------------------------------
+// Áætlum "skin likelihood" á hverju pixli (0..1): hvað hue er nálægt
+// húðlit (hue ~0-40°), saturation hóflegur og birta ekki of lág. Þessi
+// weight er svo notaður til að blanda hue/sat shifti aðeins á húðsvæðum
+// — bakgrunnur og föt breytast ekki (eða mjög lítið).
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  return [h, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  h = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60)       { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else              { r = c; g = 0; b = x; }
+  return [
+    Math.max(0, Math.min(255, (r + m) * 255)),
+    Math.max(0, Math.min(255, (g + m) * 255)),
+    Math.max(0, Math.min(255, (b + m) * 255)),
+  ];
+}
+
+/** Skin likelihood 0..1 á pixli — hátt þegar hue er milli ~5° og 35°, sat
+ *  hóflegur, light ekki of dökk eða of björt. */
+function skinWeight(h: number, s: number, l: number): number {
+  const hueDist = Math.min(Math.abs(h - 20), Math.abs(h - 20 + 360), Math.abs(h - 20 - 360));
+  const hueScore = Math.max(0, 1 - hueDist / 30);
+  const satScore = Math.max(0, Math.min(1, s * 2.5)) * (s > 0.6 ? 1 - (s - 0.6) * 1.5 : 1);
+  const lightScore = l > 0.15 && l < 0.9 ? 1 - Math.abs(l - 0.6) * 1.4 : 0;
+  return Math.max(0, Math.min(1, hueScore * Math.max(0.1, satScore) * Math.max(0, lightScore)));
+}
+
+/** Shift skin tone — hueDeg -30..+30 (hlýrra/kaldara), satDelta -0.5..+0.5
+ *  (mettaðra/fölara), lightDelta -0.2..+0.2 (bjartara/dekkra). Áhrif eru
+ *  weighted af skinWeight svo bakgrunnur og föt breytast lítið. */
+export function shiftSkinTone(
+  raster: Raster,
+  hueDeg: number,
+  satDelta: number,
+  lightDelta: number,
+): void {
+  const data = raster.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const w = skinWeight(h, s, l);
+    if (w <= 0.02) continue;
+    const nh = h + hueDeg * w;
+    const ns = Math.max(0, Math.min(1, s + satDelta * w));
+    const nl = Math.max(0, Math.min(1, l + lightDelta * w));
+    const [r, g, b] = hslToRgb(nh, ns, nl);
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+  }
+}
+
+/** Equalize skin tone — minnkar fráviksbreytingar í hue meðal húðpixla.
+ *  Reiknar meðal-hue meðal pixla sem hafa skinWeight > 0.3 og togar þá
+ *  nær því meðaltali (strength 0..1). Gott á roða-bletti, misliti og
+ *  mislýstar húð-svæði. */
+export function equalizeSkinTone(raster: Raster, strength: number): void {
+  const data = raster.data;
+  const amt = Math.max(0, Math.min(1, strength));
+  // Fyrri pössun: safnið meðaltalið (hue + sat) með vectorial sum svo
+  // það meðhöndlar wrap-around (hue 350° og 10° báru hliðarmeðaltal ~0°).
+  let sumX = 0, sumY = 0, sumS = 0, wtot = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const w = skinWeight(h, s, l);
+    if (w < 0.3) continue;
+    const rad = (h * Math.PI) / 180;
+    sumX += Math.cos(rad) * w;
+    sumY += Math.sin(rad) * w;
+    sumS += s * w;
+    wtot += w;
+  }
+  if (wtot < 1) return;
+  const avgHue = ((Math.atan2(sumY, sumX) * 180) / Math.PI + 360) % 360;
+  const avgSat = sumS / wtot;
+  // Önnur pössun: togum hue+sat skinpixla að meðaltali.
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const w = skinWeight(h, s, l);
+    if (w < 0.1) continue;
+    // Shortest-path hue distance
+    let dh = avgHue - h;
+    if (dh > 180) dh -= 360;
+    if (dh < -180) dh += 360;
+    const nh = h + dh * amt * w;
+    const ns = s + (avgSat - s) * amt * w * 0.7;
+    const [r, g, b] = hslToRgb(nh, Math.max(0, Math.min(1, ns)), l);
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+  }
+}
+
+/** Stretch raster lóðrétt um factor — >1 teygjir upp (allur hærri), <1
+ *  þjappar (lágvaxinn). Sýnishorn með bilinear í kringum lóðrétta miðju. */
+export function stretchHeight(raster: Raster, factor: number): void {
+  const f = Math.max(0.6, Math.min(1.6, factor));
+  if (Math.abs(f - 1) < 0.001) return;
+  const w = raster.width;
+  const h = raster.height;
+  const cy = (h - 1) / 2;
+  const src = new Uint8ClampedArray(raster.data);
+  for (let y = 0; y < h; y++) {
+    const sy = cy + (y - cy) / f;
+    const y0 = Math.max(0, Math.min(h - 1, Math.floor(sy)));
+    const y1 = Math.max(0, Math.min(h - 1, Math.ceil(sy)));
+    const fy = sy - y0;
+    for (let x = 0; x < w; x++) {
+      const i0 = (y0 * w + x) * 4;
+      const i1 = (y1 * w + x) * 4;
+      const idx = (y * w + x) * 4;
+      for (let c = 0; c < 4; c++) {
+        raster.data[idx + c] = src[i0 + c] * (1 - fy) + src[i1 + c] * fy;
+      }
+    }
+  }
+}
+
+export function sharpenGlobal(raster: Raster, amount: number): void {
+  // amount 0..3 (0 = no change)
+  const amt = Math.max(0, Math.min(3, amount));
+  if (amt <= 0) return;
+  const w = raster.width;
+  const h = raster.height;
+  const src = new Uint8ClampedArray(raster.data);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = (y * w + x) * 4;
+      // 3x3 blur
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const i = ((y + ky) * w + (x + kx)) * 4;
+          sumR += src[i];
+          sumG += src[i + 1];
+          sumB += src[i + 2];
+        }
+      }
+      const blurR = sumR / 9;
+      const blurG = sumG / 9;
+      const blurB = sumB / 9;
+      raster.data[idx] = Math.max(0, Math.min(255, src[idx] + (src[idx] - blurR) * amt));
+      raster.data[idx + 1] = Math.max(0, Math.min(255, src[idx + 1] + (src[idx + 1] - blurG) * amt));
+      raster.data[idx + 2] = Math.max(0, Math.min(255, src[idx + 2] + (src[idx + 2] - blurB) * amt));
+    }
+  }
+}

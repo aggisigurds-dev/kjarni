@@ -48,6 +48,23 @@ export const FINISHES: Finish[] = [
     roughness: 0.42,
     texture: 'brushed',
   },
+  // 18.10.2026: asked for with chrome, steel and gold when painting a collection.
+  {
+    id: 'silver',
+    name: 'Silver',
+    color: '#c4c8cd',
+    metalness: 1,
+    roughness: 0.18,
+    texture: null,
+  },
+  {
+    id: 'bronze',
+    name: 'Bronze',
+    color: '#b07a3e',
+    metalness: 0.92,
+    roughness: 0.32,
+    texture: 'stipple',
+  },
 ];
 
 export function finishById(id: string | undefined | null): Finish | undefined {

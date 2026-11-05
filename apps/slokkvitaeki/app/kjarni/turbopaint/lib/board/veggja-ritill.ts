@@ -178,12 +178,12 @@ export interface Kassi {
   height: number;
 }
 
-function inniKassa(x: number, y: number, k: Kassi) {
+export function inniKassa(x: number, y: number, k: Kassi) {
   return x >= k.x && y >= k.y && x <= k.x + k.width && y <= k.y + k.height;
 }
 
 /** Sker strik kassann? (Liang–Barsky) */
-function strikSkerKassa(ax: number, ay: number, bx: number, by: number, k: Kassi): boolean {
+export function strikSkerKassa(ax: number, ay: number, bx: number, by: number, k: Kassi): boolean {
   if (inniKassa(ax, ay, k) || inniKassa(bx, by, k)) return true;
   const dx = bx - ax, dy = by - ay;
   let t0 = 0, t1 = 1;
@@ -292,6 +292,36 @@ export function rettHyrningur(A: P, B: P, st: Omit<NyrVeggurStillingar, "id">, n
     [x0, y1, x0, y0],
   ];
   return hlidar.map((p) => nyrVeggur(p, { ...st, id: nyttId() }));
+}
+
+// ── stigi úr kassa ───────────────────────────────────────────────────────────────────────────────────────────
+
+/** Stigi úr dregnum kassa A→B (Agnar 04.11.2026: „best með stigann að draga kassa … + þýðir að hann fari upp þeim megin").
+ * Langás kassans er stefna leggsins, stutta hliðin er breiddin (þykkt línunnar — 3D-stiginn les hana sem breidd ef hún
+ * er ≥ 0,55 m), og „+" (upp) er endinn þar sem dregið er TIL. Mjórri kassi en `lagmarkBreidd` verður þunn lína A→B
+ * (skástigi) með þykkt `st.thykkt`. Línan er frá neðsta þrepi (fyrsti punktur) upp á efsta (síðasti). */
+export function stigiUrKassa(A: P, B: P, st: Omit<NyrVeggurStillingar, "id" | "tegund">, lagmarkBreidd: number, nyttId: () => string): LineObject | null {
+  const dx = B[0] - A[0], dy = B[1] - A[1];
+  if (Math.hypot(dx, dy) < 1e-6) return null;
+  const lodrett = Math.abs(dy) > Math.abs(dx);
+  const breidd = lodrett ? Math.abs(dx) : Math.abs(dy);
+  if (breidd < lagmarkBreidd) return nyrVeggur([A[0], A[1], B[0], B[1]], { ...st, tegund: "stigi", id: nyttId() });
+  const heims = lodrett ? [(A[0] + B[0]) / 2, A[1], (A[0] + B[0]) / 2, B[1]] : [A[0], (A[1] + B[1]) / 2, B[0], (A[1] + B[1]) / 2];
+  return nyrVeggur(heims, { ...st, tegund: "stigi", thykkt: breidd, id: nyttId() });
+}
+
+/** Stiganum snúið: upp og niður víxlast (punktarnir í öfugri röð). */
+export function snuaStiga(o: LineObject): LineObject {
+  const p = o.points;
+  const ut: number[] = [];
+  for (let i = p.length - 2; i >= 0; i -= 2) ut.push(p[i], p[i + 1]);
+  return { ...o, points: ut };
+}
+
+/** Endar stiga í heimshnitum: `upp` = „+" (efsta þrep), `nidur` = „−" (neðsta). */
+export function stigaEndar(o: LineObject): { upp: P; nidur: P } {
+  const p = heimsPunktar(o);
+  return { nidur: [p[0], p[1]], upp: [p[p.length - 2], p[p.length - 1]] };
 }
 
 // ── breytingar á einum vegg ───────────────────────────────────────────────────────────────────────────────
@@ -591,11 +621,15 @@ export interface VeggjaTalning {
   hurd: number;
   /** Eldveggir (EI-60 + EI-30). */
   eld: number;
+  /** Svalaveggir (lágir, 1,1 m). */
+  svalir: number;
+  /** Stigar (3D þrepastigar). */
+  stigi: number;
   alls: number;
 }
 
 export function veggjaTalning(objects: BoardObject[]): VeggjaTalning {
-  const t: VeggjaTalning = { veggur: 0, gler: 0, hurd: 0, eld: 0, alls: 0 };
+  const t: VeggjaTalning = { veggur: 0, gler: 0, hurd: 0, eld: 0, svalir: 0, stigi: 0, alls: 0 };
   for (const o of objects) {
     if (!erVeggur(o) || o.hidden) continue;
     const tg = o.veggTegund ?? "veggur";
@@ -617,6 +651,8 @@ export function talningTexti(t: VeggjaTalning): string {
   if (t.gler) hlutar.push(`${t.gler} gler`);
   if (t.hurd) hlutar.push(`${t.hurd} ${eintala(t.hurd) ? "hurð" : "hurðir"}`);
   if (t.eld) hlutar.push(`${t.eld} ${eintala(t.eld) ? "eldveggur" : "eldveggir"}`);
+  if (t.svalir) hlutar.push(`${t.svalir} ${eintala(t.svalir) ? "svalaveggur" : "svalaveggir"}`);
+  if (t.stigi) hlutar.push(`${t.stigi} ${eintala(t.stigi) ? "stigi" : "stigar"}`);
   return hlutar.join(" · ");
 }
 

@@ -5,13 +5,14 @@ import { collectFirewallHits, ratingColor, type FirewallHit, type FirewallRating
 import { makeSymbol } from "./markup-kit";
 import { getStampSize } from "./symbol-settings";
 import type { BoardObject, ImageObject, RectObject, TextObject } from "./types";
+import { anda } from "./anda";
 
 export const FIREWALL_MARK_NAMES = ["Eldveggur", "Eldhurð", "Eldveggir"] as const;
 
 const OCR_MAX = 5200;
 const OCR_MIN = 3600;
 
-const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const yieldToUi = anda;
 
 /** Svart blek á hvítu fyrir OCR: rauð/bleik ský og lituð yfirstrikun sem
  * liggja yfir EI-merkingum á skönnuðum teikningum drekkja textanum annars.
@@ -198,6 +199,18 @@ function rotate90cw(src: HTMLCanvasElement) {
   return dst;
 }
 
+function rotate180(src: HTMLCanvasElement) {
+  const dst = document.createElement("canvas");
+  dst.width = src.width;
+  dst.height = src.height;
+  const ctx = dst.getContext("2d");
+  if (!ctx) throw new Error("Gat ekki snúið mynd");
+  ctx.translate(dst.width, dst.height);
+  ctx.rotate(Math.PI);
+  ctx.drawImage(src, 0, 0);
+  return dst;
+}
+
 function rotate90ccw(src: HTMLCanvasElement) {
   const dst = document.createElement("canvas");
   dst.width = src.height;
@@ -238,11 +251,17 @@ function mapCcwRotatedWord(word: OcrWord, srcWidth: number): OcrWord {
   };
 }
 
+/** Orð úr mynd sem var snúið 180° (texti á hvolfi — merki á vegg sem snýr frá lesandanum). */
+function mapRot180Word(word: OcrWord, srcWidth: number, srcHeight: number): OcrWord {
+  return { ...word, x: srcWidth - (word.x + word.width), y: srcHeight - (word.y + word.height) };
+}
+
 async function ocrPlan(
   prepared: { canvas: HTMLCanvasElement; scale: number },
   extra: OcrWord[],
   onProgress?: (message: string, percent: number) => void,
-  lodrett = true
+  lodrett = true,
+  hvolf = false
 ) {
   const { canvas, scale } = prepared;
   const worker = await getWorker(onProgress);
@@ -269,6 +288,15 @@ async function ocrPlan(
   }
   const srcW = canvas.width;
   const srcH = canvas.height;
+  // 180°: texti á hvolfi (Agnar 26.10.2026: „það þarf að lesa úr nokkrum angles“) — aðeins SLT / BRSL, sem er á vegg í hvaða átt sem er
+  let hvolfRes: Awaited<ReturnType<TesseractWorker["recognize"]>> | null = null;
+  if (hvolf) {
+    onProgress?.("Les merkingar á hvolfi…", 88);
+    const rotated180 = rotate180(canvas);
+    hvolfRes = await worker.recognize(rotated180, {}, { blocks: true, text: true });
+    rotated180.width = 0;
+    rotated180.height = 0;
+  }
   canvas.width = 0;
   canvas.height = 0;
 
@@ -276,6 +304,7 @@ async function ocrPlan(
     ...wordsFromResult(horiz.data, false),
     ...(vertCw ? wordsFromResult(vertCw.data, true).map((w) => mapRotatedWord(w, srcH)) : []),
     ...(vertCcw ? wordsFromResult(vertCcw.data, true).map((w) => mapCcwRotatedWord(w, srcW)) : []),
+    ...(hvolfRes ? wordsFromResult(hvolfRes.data, false).map((w) => mapRot180Word(w, srcW, srcH)) : []),
   ].map((w) => ({
     ...w,
     x: w.x / scale,
@@ -371,6 +400,8 @@ export async function lesaTextaTeikningar(
     medBlek?: boolean;
     /** false = aðeins láréttur texti (⅓ tímans) — SLT/BRSL. Sjálfgefið: allar þrjár stefnur (EI). */
     lodrett?: boolean;
+    /** Líka lesið með myndina á hvolfi (180°) — fjórða stefnan. Sjálfgefið ekki (EI les 3). */
+    hvolf?: boolean;
   }
 ): Promise<{ words: OcrWord[]; hits: FirewallHit[]; srcW: number; srcH: number; blek: BlekGrima | null }> {
   const canvas = await loadPlanCanvas(plan);
@@ -388,7 +419,7 @@ export async function lesaTextaTeikningar(
   const blekData = options?.medBlek ? new Uint8Array(bw * bh) : undefined;
   await binarizeForOcr(ocrFit.canvas, blekData);
 
-  const { words, hits } = await ocrPlan(ocrFit, extra, options?.onProgress, options?.lodrett !== false);
+  const { words, hits } = await ocrPlan(ocrFit, extra, options?.onProgress, options?.lodrett !== false, options?.hvolf === true);
   return {
     words,
     hits,
@@ -450,7 +481,16 @@ export async function detectFirewallsOnPlan(
     onProgress?: (message: string, percent: number) => void;
   }
 ): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[]; srcW: number; srcH: number }> {
-  const { words, hits: rawHits, srcW, srcH } = await lesaTextaTeikningar(plan, options);
+  return eiUrTexta(plan, await lesaTextaTeikningar(plan, options));
+}
+
+/** EI-niðurstaða úr texta sem þegar var lesinn (lesaTextaTeikningar) — sjálfvirka verkferlið les textann EINU sinni fyrir
+ * bæði EI og SLT / BRSL. */
+export async function eiUrTexta(
+  plan: ImageObject,
+  texti: { words: OcrWord[]; hits: FirewallHit[]; srcW: number; srcH: number }
+): Promise<{ objects: BoardObject[]; hits: FirewallHit[]; words: OcrWord[]; midar: EiMidi[]; srcW: number; srcH: number }> {
+  const { words, hits: rawHits, srcW, srcH } = texti;
   const sx = plan.width / srcW;
   const sy = plan.height / srcH;
   const hits = rawHits.filter((hit) => !inTitleBlock(hit, srcW, srcH));
@@ -519,4 +559,64 @@ export function eiYfirlitsmidi(
     name: "Eldveggir — sjálfvirk merking",
     parentId: plan.id,
   };
+}
+
+/** Stakur stafur í hverjum ramma (bunadur-lestur.ts finnaRammaMerki): reiturinn `stafur` (myndardílar) úr blekgrímunni,
+ * svart á hvítu með 25 % spássíu, 3× stækkaður, lesinn með PSM 10 (eitt tákn). OCR á fullri síðu les ekki stakan staf
+ * í ramma (0 af 9 á Trönuhraun 10) — einn og sér les hann. Skilar null fyrir ramma sem gaf ekkert. */
+export async function lesaStafi(
+  blek: BlekGrima,
+  rammar: { x0: number; y0: number; x1: number; y1: number }[]
+): Promise<({ text: string; confidence: number } | null)[]> {
+  if (!rammar.length) return [];
+  const worker = await getWorker();
+  await worker.setParameters({ tessedit_pageseg_mode: "10", user_defined_dpi: "220" });
+  const S = 3;
+  const k = blek.kvardi;
+  const ut: ({ text: string; confidence: number } | null)[] = [];
+  try {
+    for (const r of rammar) {
+      const bx0 = Math.max(0, Math.floor(r.x0 * k)), by0 = Math.max(0, Math.floor(r.y0 * k));
+      const bx1 = Math.min(blek.w, Math.ceil(r.x1 * k)), by1 = Math.min(blek.h, Math.ceil(r.y1 * k));
+      const w = bx1 - bx0, h = by1 - by0;
+      if (w < 4 || h < 4) {
+        ut.push(null);
+        continue;
+      }
+      const sp = Math.round(Math.max(w, h) * 0.25);
+      const cw = (w + 2 * sp) * S, ch = (h + 2 * sp) * S;
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        ut.push(null);
+        continue;
+      }
+      const img = ctx.createImageData(cw, ch);
+      const d = img.data;
+      for (let y = 0; y < ch; y++) {
+        const sy = by0 - sp + ((y / S) | 0);
+        for (let x = 0; x < cw; x++) {
+          const sx = bx0 - sp + ((x / S) | 0);
+          const inni = sx >= bx0 && sx < bx1 && sy >= by0 && sy < by1;
+          const v = inni && blek.data[sy * blek.w + sx] ? 0 : 255;
+          const i = (y * cw + x) * 4;
+          d[i] = d[i + 1] = d[i + 2] = v;
+          d[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      const res = await worker.recognize(canvas, {}, { blocks: true, text: true });
+      canvas.width = 0;
+      canvas.height = 0;
+      const ord = wordsFromResult(res.data, false).filter((o) => o.text.trim());
+      const best = ord.sort((a, b) => b.confidence - a.confidence)[0];
+      ut.push(best ? { text: best.text.trim(), confidence: best.confidence } : null);
+      await yieldToUi();
+    }
+  } finally {
+    await worker.setParameters({ tessedit_pageseg_mode: "11", user_defined_dpi: "220" });
+  }
+  return ut;
 }

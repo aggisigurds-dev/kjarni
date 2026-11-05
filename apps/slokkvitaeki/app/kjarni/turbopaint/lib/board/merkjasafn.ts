@@ -25,7 +25,8 @@ export type Glyff =
   | "pin"
   | "alarm"
   | "detector"
-  | "magnet";
+  | "magnet"
+  | "window";
 
 /** 434 GLYFF */
 export const GLYFF: Glyff[] = [
@@ -40,6 +41,7 @@ export const GLYFF: Glyff[] = [
   "alarm",
   "detector",
   "magnet",
+  "window",
 ];
 
 /** 434 GLYFF_NOFN */
@@ -55,6 +57,7 @@ export const GLYFF_NOFN: Record<Glyff, string> = {
   alarm: "Hnappur",
   detector: "Skynjari",
   magnet: "Segull",
+  window: "Björgunarop",
 };
 
 export interface Stimpill {
@@ -77,6 +80,8 @@ export const STIMPLAR: Stimpill[] = [
   { id: "hitaskynjari", nafn: "Hitaskynjari", stutt: "HS", litur: "#c93c1d", glyff: "detector" },
   { id: "bjalla", nafn: "Viðvörunarbjalla", stutt: "BJ", litur: "#c93c1d", glyff: "alarm" },
   { id: "segull", nafn: "Segulloki", stutt: "SG", litur: "#c93c1d", glyff: "magnet" },
+  // 15.10.2026 (Agnar, skýringar Trönuhrauns 10): BO = björgunarop — opnanlegur gluggi sem flóttaleið.
+  { id: "bjorgunarop", nafn: "Björgunarop", stutt: "BO", litur: "#15803d", glyff: "window" },
 ];
 
 /** 433 TAEKI_TAKN — tækjategundirnar. */
@@ -103,6 +108,7 @@ export const SJALF: Record<string, Glyff> = {
   hitaskynjari: "detector",
   bjalla: "alarm",
   segull: "magnet",
+  bjorgunarop: "window",
 };
 
 export interface Litur {
@@ -131,6 +137,8 @@ export const LITIR: Record<string, Litur> = {
   bjalla: { bg: "#e11d2e", fg: "#fff" },
   segull: { bg: "#e11d2e", fg: "#fff" },
   hitaskynjari: { bg: "#e11d2e", fg: "#fff" },
+  handbodi: { bg: "#f57c00", fg: "#fff" },
+  bjorgunarop: { bg: "#15803d", fg: "#fff" },
   annad: { bg: "#e11d2e", fg: "#fff" },
 };
 
@@ -146,12 +154,17 @@ export const STIMPIL_LYKILL: Record<string, string> = {
   hitaskynjari: "hitaskynjari",
   bjalla: "bjalla",
   segull: "segull",
+  bjorgunarop: "bjorgunarop",
 };
 
-export type TaekjaLykill = "lettvatn" | "duft" | "co2" | "slanga" | "annad";
+/** Tegundir TÆKJA (uttaeki.type → lykill). 15.10.2026 (Agnar: „búnaður … síðan getur maður tengt það við tækin sjálf"):
+ * brunakerfisbúnaður — reykskynjari, hitaskynjari, bjalla, segulloki — er líka tæki (uttaeki geymir 92 reykskynjara), svo
+ * Nýtt-merki af þeim tegundum tengjast skráðum tækjum eins og slökkvitæki. Stimplarnir með sömu lyklum (MERKI) standa
+ * áfram sem skilti — `uttektSign` skilur þá frá búnaði. */
+export type TaekjaLykill = "lettvatn" | "duft" | "co2" | "slanga" | "reykskynjari" | "hitaskynjari" | "bjalla" | "segull" | "annad";
 
 /** 434 fjold — tegund tækis (uttaeki.type) → lykill. Nákvæmlega sama regla og Teikning-glugginn. NFKD (06.10.2026):
- * lækkað ₂ verður 2 svo „CO₂" er co2, og „slong" grípur Slönguskáp (ö → o). */
+ * lækkað ₂ verður 2 svo „CO₂" er co2, og „slong" grípur Slönguskáp (ö → o). 15.10.2026: brunakerfisbúnaður. */
 export function fjold(tegund: string | null | undefined): TaekjaLykill {
   const t = String(tegund || "")
     .toLowerCase()
@@ -161,6 +174,10 @@ export function fjold(tegund: string | null | undefined): TaekjaLykill {
   if (/duft|abc|pfc/.test(t)) return "duft";
   if (/slang|slong/.test(t)) return "slanga";
   if (/lettvatn|vatn|abf|frod/.test(t)) return "lettvatn";
+  if (/reyksk/.test(t)) return "reykskynjari";
+  if (/hitask/.test(t)) return "hitaskynjari";
+  if (/bjall|siren/.test(t)) return "bjalla";
+  if (/segul/.test(t)) return "segull";
   return "annad";
 }
 
@@ -208,6 +225,8 @@ export function liturLykils(lykill: string, color?: string | null): Litur {
 }
 
 export function glyffLykils(lykill: string): Glyff {
+  // handbodi er í LITIR Teikningar en ekki SJALF — platan hans ber hnappinn
+  if (lykill === "handbodi") return "alarm";
   return SJALF[lykill] || "extinguisher";
 }
 
@@ -351,6 +370,13 @@ export function teiknaGlyff(ctx: CanvasRenderingContext2D, id: Glyff, fg: string
       ctx.beginPath(); ctx.arc(12, 12, 7, 0, 7); strok();
       ctx.beginPath(); ctx.arc(12, 12, 2.4, 0, 7); fyll();
       break;
+    case "window":
+      // Björgunarop: gluggi (rammi með krosspósti) og ör út um hann
+      box(4, 5, 11, 13, 0); ctx.strokeStyle = fg; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9.5, 5); ctx.lineTo(9.5, 18); ctx.moveTo(4, 11.5); ctx.lineTo(15, 11.5); strok();
+      ctx.beginPath(); ctx.moveTo(13, 15); ctx.lineTo(20, 15); strok();
+      ctx.beginPath(); ctx.moveTo(17, 12); ctx.lineTo(20, 15); ctx.lineTo(17, 18); strok();
+      break;
     default: {
       // Slökkvitæki: kútur með ávölum öxlum, borði í lit tegundar, háls, handfang, þrýstimælir og slanga (CO₂: trekt).
       const band = litur && litur.band;
@@ -459,7 +485,84 @@ export function teiknaTakn(
   ctx.restore();
 }
 
-/** Tákn úr safninu teiknað eftir lykli (með lit merkisins ef það ber eigin `color`). */
+/* ── Raunsæ tákn og skilti (Agnar 04.11.2026: „raunverulegu táknin inn, í staðinn fyrir þessi gömlu · og raunverulegar
+ * skiltamerkingar") ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * Sömu myndir og Teikning-glugginn notar (slokkvitaeki: img/taeki, 434 RAUN + 474/485): slökkvitæki með áletrun, slöngukefli,
+ * hvítir skynjarar, bjalla, segull og gljáandi skilti (ÚT, handboði, rafmagn). Afritaðar í public/turbopaint/taeki.
+ * Á meðan mynd hleðst (eða vanti hana) teiknast gamla málmplatan — aldrei tómur reitur. Tákn án myndar (SLT/BRSL-skilti,
+ * annað) halda plötunni. */
+export const RAUN_SLOD = "/turbopaint/taeki/";
+/** lykill merkjasafnsins → skráarnafn myndar (án .png) */
+export const RAUN_MYND: Record<string, string> = {
+  lettvatn: "l",
+  duft: "duft",
+  co2: "co2",
+  slanga: "slanga_rod",
+  hose: "slanga_rod",
+  reykskynjari: "reykskynjari",
+  hitaskynjari: "hitaskynjari",
+  bjalla: "bjalla",
+  segull: "segull",
+  handbodi: "skilti_bjalla",
+  ut: "skilti_ut",
+  neydarutgangur: "skilti_ut",
+  bjorgunarop: "skilti_ut",
+  rafmagn: "skilti_rafmagn",
+};
+/** Skilti eru ferköntuð (128 × 128) — fylla sama reit og platan; tæki eru há/breið og fá 1,15 × reitinn eins og í Teikningu. */
+const RAUN_SKILTI = new Set(["skilti_bjalla", "skilti_ut", "skilti_rafmagn"]);
+
+const raunMyndir = new Map<string, HTMLImageElement>();
+const raunHlustendur = new Set<() => void>();
+
+function raunMynd(n: string): HTMLImageElement | null {
+  if (typeof window === "undefined" || typeof window.Image === "undefined") return null;
+  let i = raunMyndir.get(n);
+  if (!i) {
+    i = new window.Image();
+    i.onload = () => {
+      for (const f of raunHlustendur) f();
+    };
+    i.src = RAUN_SLOD + n + ".png";
+    raunMyndir.set(n, i);
+  }
+  return i.complete && i.naturalWidth ? i : null;
+}
+
+/** Kallað þegar mynd tákns hefur hlaðist — teikning skal endurtaka. Skilar afskráningu. */
+export function afskraRaunMyndir(f: () => void): () => void {
+  raunHlustendur.add(f);
+  return () => {
+    raunHlustendur.delete(f);
+  };
+}
+
+/** Raunsæ mynd tákns miðjuð á (x, y); false ef lykillinn á enga mynd eða hún er ekki hlaðin enn. */
+export function teiknaRaun(ctx: CanvasRenderingContext2D, lykill: string, x: number, y: number, size: number): boolean {
+  const n = RAUN_MYND[lykill];
+  if (!n) return false;
+  const i = raunMynd(n);
+  if (!i) return false;
+  const kassi = RAUN_SKILTI.has(n) ? size : size * 1.15;
+  const k = kassi / Math.max(i.naturalWidth, i.naturalHeight);
+  const w = i.naturalWidth * k, h = i.naturalHeight * k;
+  let m = 1;
+  try {
+    const t = ctx.getTransform();
+    m = Math.hypot(t.a, t.b) || 1;
+  } catch {
+    m = 1;
+  }
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,.55)";
+  ctx.shadowBlur = Math.max(3, size * 0.22) * m;
+  ctx.shadowOffsetY = Math.max(1, size * 0.06) * m;
+  ctx.drawImage(i, x - w / 2, y - h / 2, w, h);
+  ctx.restore();
+  return true;
+}
+
+/** Tákn úr safninu teiknað eftir lykli (með lit merkisins ef það ber eigin `color`). Raunsæja myndin gengur fyrir; platan er varaleið. */
 export function teiknaLykil(
   ctx: CanvasRenderingContext2D,
   lykill: string,
@@ -469,6 +572,7 @@ export function teiknaLykil(
   rot?: number,
   color?: string | null
 ) {
+  if (teiknaRaun(ctx, lykill, x, y, size)) return;
   const f = faerslaLykils(lykill);
   const litur = color ? liturLykils(lykill, color) : f ? f.litur : liturLykils(lykill);
   teiknaTakn(ctx, glyffLykils(lykill), litur, x, y, size, rot);

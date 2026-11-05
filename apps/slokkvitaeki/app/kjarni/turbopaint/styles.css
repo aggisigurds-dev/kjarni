@@ -123,6 +123,10 @@ body:has(.tp-root),
     width: 2.5rem;
     height: 2.5rem;
   }
+  /* „Fella saman"-röndin efst á súlunni: nógu há fyrir fingur (Agnar 09.10.2026) */
+  .tp-toolbar .tp-sula-loka {
+    height: 2rem;
+  }
 }
 
 /* Lágir skjáir (sími á hlið, lítil fartölva): þéttari verkfærasúla svo öll
@@ -140,6 +144,9 @@ body:has(.tp-root),
   .tp-toolbar .tp-tooldiv {
     margin-top: 0.125rem;
     margin-bottom: 0.125rem;
+  }
+  .tp-toolbar .tp-sula-loka {
+    height: 1.25rem;
   }
 }
 
@@ -168,6 +175,24 @@ body:has(.tp-root),
 }
 .tp-topbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Neðsta stikan (Merkingar · litir · px · strik) var ~730 px breið: í síma (412 px) lágu svartur/appelsínugulur og
+   „heil/strik/punktar" utan skjás og ekki hægt að ná í þá, og breiddin gerði borðið hliðrunarhæft (Agnar 09.10.2026:
+   „Margt fyrir"). Núna: aldrei breiðari en skjárinn — skrunar til hliðar inni í sjálfri sér, eins og .tp-topbar.
+   Í tölvu kemst hún fyrir og ekkert breytist. */
+.tp-strip-skrun {
+  max-width: calc(100vw - 1rem);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tp-strip-skrun::-webkit-scrollbar {
+  display: none;
+}
+.tp-strip-skrun > * {
+  flex-shrink: 0;
 }
 
 /* StyleStrip á snertiskjá: ósýnilegt ::after stækkar snertiflötinn (~36px á

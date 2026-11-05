@@ -20,12 +20,23 @@ html[data-kjarni-skin="ragnarok"] body { background:#020202; }
 }
 .rgk::after {
   content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
-  background:repeating-linear-gradient(0deg,rgba(255,200,90,.04) 0 1px,transparent 1px 4px);
+  background:repeating-linear-gradient(0deg,rgba(255,200,90,.015) 0 1px,transparent 1px 4px);
+}
+/* 15.10.2026 (Agnar: „minnkað styrkinn á línunum, finnst þær trufla smá"): áferðin á stöðinni sjálfri er daufari
+   — skannlínur .04 → .015 (hér að ofan), skástrik grunnsins .02 → .008, stálrákir spjaldanna .03 → .012 og
+   glóðarblettirnir (flatar sporbaugar sem lesast sem láréttar rákir) um 40 % daufari. Aðeins innan .rgk, svo
+   önnur tól í Ragnarök-útliti haldast óbreytt. */
+.rgk {
+  --rg-ground:radial-gradient(ellipse 30% 12% at 8% 62%,rgba(140,60,12,.2),transparent 70%),radial-gradient(ellipse 26% 10% at 92% 18%,rgba(160,70,15,.18),transparent 70%),radial-gradient(ellipse 40% 8% at 50% 88%,rgba(120,50,10,.18),transparent 70%),repeating-linear-gradient(45deg,rgba(255,255,255,.008) 0 2px,transparent 2px 14px),radial-gradient(ellipse 120% 40% at 50% 28%,#1a1408 0%,#080808 40%,#020202 100%);
+  --rg-steel:repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(180deg,#141414 0%,#030303 100%);
+  --rg-steel-deep:repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),linear-gradient(180deg,#1c1c1c,#070707);
 }
 .rgk *, .rgk *::before, .rgk *::after { box-sizing:border-box; }
+/* 15.10.2026 (Agnar: „breikkað aðeins vinnusvæðið á kjarna"): 1280 → 1560 px — kortaraðirnar fara úr 4 í 5 dálka
+ * 25.10.2026 (Agnar: „breikka vinnusvæðið" aftur): 1560 → 1800 px — kerfisspjöldin fara úr 5 í 6 dálka */
 .rgk-in {
   position:relative; z-index:1;
-  max-width:1280px; margin:0 auto; padding:28px 24px 0;
+  max-width:1800px; margin:0 auto; padding:28px 24px 0;
   display:flex; flex-direction:column; gap:26px;
 }
 .rgk-sec { display:flex; flex-direction:column; gap:22px; scroll-margin-top:90px; }
@@ -79,7 +90,7 @@ a.rgk-sys:hover { filter:brightness(1.15); }
 }
 .rgk-leit-reitur [data-hleit] input {
   width:100%; min-width:0; height:100%;
-  font:500 13px var(--rg-mono); letter-spacing:.04em; color:var(--rg-text);
+  font:500 16px var(--rg-mono); letter-spacing:.04em; color:var(--rg-text);
 }
 .rgk-leit-reitur [data-hleit] input::placeholder { color:var(--rg-text-faint); }
 .rgk-leit-reitur [data-hleit] svg { color:var(--rg-gold-500); }
@@ -172,6 +183,13 @@ a.rgk-lnk .rg-diamond { flex:none; }
 .rgk-gal-h span { font:400 12px var(--rg-font); color:var(--rg-text-muted); }
 .rgk-count { font:600 11px var(--rg-mono) !important; padding:3px 10px; border:1px solid rgba(230,176,74,.5); color:var(--rg-gold-500) !important; }
 .rgk-gal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr)); gap:10px; }
+/* ArtCraft-kortin í Yfirliti bera lengri lýsingu en Einingar-flísarnar — aðeins breiðari dálkar */
+.ac-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr)); }
+.ac-grid .rgk-mod-face { min-height:76px; }
+.ac-uses { display:flex; flex-direction:column; gap:4px; margin-top:4px; padding-top:8px; border-top:1px solid rgba(201,160,74,.2); }
+.ac-uses-h { font:700 8.5px var(--rg-mono); letter-spacing:.2em; color:var(--rg-gold-500); }
+.ac-use { position:relative; padding-left:12px; font:400 11px/1.4 var(--rg-font); color:var(--rg-text-dim); }
+.ac-use::before { content:"›"; position:absolute; left:0; color:var(--rg-ember-500); }
 .rgk-mod {
   display:block; padding:1px; background:var(--rg-frame-dim); color:inherit;
   clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);

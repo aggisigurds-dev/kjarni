@@ -2,11 +2,12 @@ import { canvasToBlob, getAssetBlob, putAsset } from "./assets";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
 import { midlinurUrMaska, type Midlina } from "./midlinur";
-import { flokkaPdfLinur, paraVeggi, veljaVeggjaflokk, type PdfOps, type Strik } from "./pdf-veggir";
+import { flokkaPdfLinur, finnaVeggiUrPdfFlokkum, type PdfOps, type Strik } from "./pdf-veggir";
 import { PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
 import { finnaVeggi, sjalfgefnarVeggjaStillingar, type VeggjaNidurstada } from "./veggir";
 import { siaRgba, sjalfgefinVeggthykkt, teljaFlokka, type SiaFlokkur, type SiaUrGlugga } from "./siur";
 import type { ImageObject } from "./types";
+import { anda } from "./anda";
 
 // „Strip": hreinsar skannaða teikningu niður í svart blek á hvítum grunni.
 // Reglan per pixil: haldið ef hann er nógu dökkur OG nálægt gráskala —
@@ -22,7 +23,7 @@ export interface StripResult {
 const CHUNK_ROWS = 400;
 
 /** Hleypir viðmótinu að (framvindustika) — setTimeout, ekki rAF: rAF stöðvast í földum flipa og síunin hengi. */
-const andaUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const andaUI = anda;
 
 function nextFrame() {
   return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -208,11 +209,11 @@ export async function greinaVeggiUrPdf(
   const sida = await lesaPdfSidu(plan, onProgress);
   if (!sida) return null;
   const { flokkar } = sida;
-  const val = veljaVeggjaflokk(flokkar, sida.breidd, sida.haed);
-  if (!val.valinn) return null;
+  const nidurstada = finnaVeggiUrPdfFlokkum(flokkar, sida.breidd, sida.haed);
+  if (!nidurstada.veggir.length) return null;
   // Svæði sem notandinn hreinsaði („Hreinsa svæði") eru hunsuð — frumskráin sjálf er óbreytt.
   const burt = plan.hvittad ?? [];
-  const veggir = paraVeggi(flokkar[val.valinn]).filter((v) => {
+  const veggir = nidurstada.veggir.filter((v) => {
     const mx = (v.a[0] + v.b[0]) / 2 / sida.breidd, my = (v.a[1] + v.b[1]) / 2 / sida.haed;
     return !burt.some((b) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
   });
@@ -223,7 +224,7 @@ export async function greinaVeggiUrPdf(
     lengd: Math.hypot(v.b[0] - v.a[0], v.b[1] - v.a[1]),
   }));
   onProgress?.(100);
-  return { midlinur, breidd: sida.breidd, haed: sida.haed, flokkur: val.valinn };
+  return { midlinur, breidd: sida.breidd, haed: sida.haed, flokkur: nidurstada.flokkar.join(",") };
 }
 
 /** White-out OCR word boxes (raster px of the same canvas), small padding. */

@@ -84,8 +84,11 @@ export type UttektMerki = {
   stada?: string;
   [k: string]: unknown;
 };
-/** Merki um að veggir hæðarinnar voru leiðréttir annars staðar en í Teikning-glugganum. */
-export type UttektLeidrett = { af: "turbopaint"; kl: string };
+/** Merki um að veggir hæðarinnar voru leiðréttir annars staðar en í Teikning-glugganum: `turbopaint` = Agnar lagaði þá
+ * í höndunum („Vista í úttekt"), `sjalfvirkt` = sjálfvirka verkferlið vistaði þá og enginn hefur skoðað þá enn
+ * (Teikning sýnir „· sjálfvirkt"). Sjálfvirka verkferlið skrifar ALDREI sjálfkrafa yfir `turbopaint`. */
+export type LeidrettAf = "turbopaint" | "sjalfvirkt";
+export type UttektLeidrett = { af: LeidrettAf; kl: string };
 export type UttektHaed = {
   id: string;
   nafn?: string;
@@ -368,10 +371,10 @@ export function skurdurIBord(
 }
 
 /** Veggirnir skrifast í hæðina sem veggjaLinur og hún fær `leidrett` (Teikning veit þá að veggirnir voru leiðréttir í
- * TurboPaint). Aðrar hæðir og annað á hæðinni er ósnert. Engir veggir = ekkert breytist (þeir sem fyrir voru haldast). */
-export function skrifaVeggiIHaed<T extends UttektHaed>(haedir: T[], haedId: string, veggir: UttektVeggur[], kl: string): T[] {
-  if (!veggir.length) return haedir;
-  const leidrett: UttektLeidrett = { af: "turbopaint", kl };
+ * TurboPaint). Aðrar hæðir og annað á hæðinni er ósnert. Tómur listi er líka leiðrétting: notandinn hefur fjarlægt
+ * alla veggi og gamla `veggjaLinur` má ekki lifna aftur í 3D. */
+export function skrifaVeggiIHaed<T extends UttektHaed>(haedir: T[], haedId: string, veggir: UttektVeggur[], kl: string, af: LeidrettAf = "turbopaint"): T[] {
+  const leidrett: UttektLeidrett = { af, kl };
   return haedir.map((h) => (h.id === haedId ? { ...h, veggjaLinur: veggir, leidrett } : h));
 }
 
@@ -437,7 +440,7 @@ export function merkiFraTakni(s: TaknMedTaeki, p: { x: number; y: number }, vidm
 /** Tegund úr Nýtt-lykli `n:<lykill>:<id>` (annað = „annad"). */
 function nyttTegundUrLykli(unitId: unknown): TaekjaTegund {
   const l = String(unitId ?? "").split(":")[1] || "";
-  return (["lettvatn", "duft", "co2", "slanga"] as string[]).includes(l) ? (l as TaekjaTegund) : "annad";
+  return (["lettvatn", "duft", "co2", "slanga", "reykskynjari", "hitaskynjari", "bjalla", "segull"] as string[]).includes(l) ? (l as TaekjaTegund) : "annad";
 }
 
 /** Færir staðsetningar táknanna inn í hæðina. Tæki sem fær stöðu hér er tekið af ÖÐRUM hæðum (tæki er aðeins á einni
@@ -1022,6 +1025,10 @@ export function nyHaedFraHluta(id: string, nafn: string, bh: BladHluti, skurdur:
   return stillaBladHaedar({ id, nafn, image_url: bh.imageUrl ?? null, markers: [], skurdur: null, veggir: [], pdfVeggir: [] }, bh, skurdur);
 }
 
+/** Stillingar vistunar: `leidrettAf` = hver leiðrétti veggina (sjálfgefið `turbopaint` — Agnar ýtti á „Vista í úttekt";
+ * sjálfvirka verkferlið vistar með `sjalfvirkt`). */
+export type VistunarStillingar = { leidrettAf?: LeidrettAf };
+
 /** Hluti vistunar: ein tengd mynd og hæðin hennar. */
 export type VistunarHluti = {
   myndId: string;
@@ -1054,7 +1061,8 @@ export function utbuaVistun(
   kl: string,
   nyttId: (sign: string) => string = nyttStimpilId,
   stimpilBound = 56,
-  sjalf?: { taeki: UttektTaeki[] | null; nyttLykill?: (t: TaekjaTegund) => string }
+  sjalf?: { taeki: UttektTaeki[] | null; nyttLykill?: (t: TaekjaTegund) => string },
+  opts: VistunarStillingar = {}
 ) {
   const myndir = myndirTengdar(objects);
   if (!myndir.length) throw new Error("Þetta borð er ekki tengt úttektarteikningu.");
@@ -1082,12 +1090,32 @@ export function utbuaVistun(
   }
   nyjar.sort((a, b) => (haedNumer(a.haed.nafn) ?? 999) - (haedNumer(b.haed.nafn) ?? 999));
   let hs: UttektHaed[] = [...haedir, ...nyjar.map((n) => n.haed)];
+  // Hnit merkja eru í dílum frummyndarinnar. Geymdu því stærð frummyndar á HVERRI tengdri hæð við hverja vistun,
+  // líka þegar myndin er heilt blað. Áður var `frum` aðeins skrifað fyrir skorinn blaðhluta; annar klient gat þá
+  // þurft að giska á 6006 px og hnikað öllum tækjum ef teikningin hafði aðra stærð eða hlutföll.
+  for (const m of myndir) {
+    const t = m.uttekt!;
+    if (!(t.frumB > 0) || !(t.frumH > 0)) continue;
+    const frum = { b: t.frumB, h: t.frumH };
+    hs = hs.map((h) =>
+      h.id === t.haedId && (h.frum?.b !== frum.b || h.frum?.h !== frum.h) ? { ...h, frum } : h
+    );
+  }
   // Skornar myndir: blaðið, frum og skurðurinn (= hlutinn) í hæðina.
   for (const m of myndir) {
     const t = m.uttekt!;
     const sk = gilturSkurdur(t.myndSkurdur);
     if (!m.bladhluti || !sk) continue;
     hs = hs.map((h) => (h.id === t.haedId ? stillaBladHaedar(h, m.bladhluti!, sk) : h));
+  }
+  // Skurður sem sjálfvirka verkferlið fann (húsið á blaðinu): í hæðina sem fastur skurður (sjalf: false, thett: true) svo
+  // sjálfskurður Teikning-gluggans (383) skrifi ekki yfir hann; `skurdurAf` segir hvaðan hann kom.
+  for (const m of myndir) {
+    const t = m.uttekt!;
+    const sk = gilturSkurdur(t.skurdur ?? null);
+    if (!t.skurdurSjalfvirkt || !sk || m.bladhluti) continue;
+    const r = { x: Math.round(sk.x), y: Math.round(sk.y), w: Math.round(sk.w), h: Math.round(sk.h) };
+    hs = hs.map((h) => (h.id === t.haedId ? { ...h, skurdur: r, sjalf: false, thett: true, skurdurAf: "sjalfvirkt" } : h));
   }
   const lidir: MyndILotu[] = myndir.map((m) => {
     const t = m.uttekt!;
@@ -1136,7 +1164,7 @@ export function utbuaVistun(
     // Veggirnir fylgja með, með tegund (veggur/gler/hurð), og hæðin merkist leiðrétt í TurboPaint — ef einhverjir eru
     // á myndinni; annars haldast þeir sem fyrir voru.
     const veggir = veggirIFrum(objects, m, lidir[i].frum, lidir[i].svaedi);
-    hs = skrifaVeggiIHaed(hs, t.haedId, veggir, kl);
+    hs = skrifaVeggiIHaed(hs, t.haedId, veggir, kl, opts.leidrettAf ?? "turbopaint");
     veggjaFjoldi.push(veggir.length);
     veggirAlls += veggir.length;
   });
@@ -1197,7 +1225,7 @@ export function utbuaVistun(
 /** Skrifar staðsetningar tengdra tákna aftur í teikning_bord. Les röðina FERSKA fyrst svo breytingar úr appinu
  * (nýjar hæðir, skurður, veggir, merki sett eftir opnun) tapist ekki — aðeins `markers`/veggir tengdu hæðanna og
  * tækja sem fluttu breytast (og blað/skurður skorinna hluta, og nýjar hæðir aftast). */
-export async function vistaIUttekt(objects: BoardObject[], stimpilBound = 56) {
+export async function vistaIUttekt(objects: BoardObject[], stimpilBound = 56, opts: VistunarStillingar = {}) {
   const mynd = finnaTengduMynd(objects);
   if (!mynd || !mynd.uttekt) throw new Error("Þetta borð er ekki tengt úttektarteikningu — tengdu hlutana við hæðir fyrst.");
   const t = mynd.uttekt;
@@ -1205,7 +1233,7 @@ export async function vistaIUttekt(objects: BoardObject[], stimpilBound = 56) {
   if (!sb) throw new Error("Engin tenging við gagnagrunn");
   const nu = await saekjaUttekt(t.companyId);
   // Sjálftenging við tæki staðarins (ferskur listi): ótengd tækjatákn → óstaðsett tæki af sömu tegund, afgangurinn Nýtt
-  const u = utbuaVistun(objects, nu.haedir, new Date().toISOString(), nyttStimpilId, stimpilBound, { taeki: nu.taeki });
+  const u = utbuaVistun(objects, nu.haedir, new Date().toISOString(), nyttStimpilId, stimpilBound, { taeki: nu.taeki }, opts);
   const fyrsta = u.haedir[0];
   const { error, data } = await sb
     .from("teikning_bord")

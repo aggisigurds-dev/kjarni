@@ -11,7 +11,9 @@ export default function TurboPaintClient() {
     <StationChrome tool="turbopaint">
       <TooltipProvider>
         <TurboPaintApp />
-        <Toaster theme="dark" />
+        {/* Í síma (sonner: ≤ 600 px) fljóta tilkynningar ofan við neðri stikurnar (þétti veggjaritillinn, tákn, litir)
+            í stað þess að leggjast yfir þær — „⌘Z afturkallar"-tilkynningin huldi annars Afturkalla-hnappinn. */}
+        <Toaster theme="dark" mobileOffset={{ bottom: "7.25rem" }} />
       </TooltipProvider>
     </StationChrome>
   );

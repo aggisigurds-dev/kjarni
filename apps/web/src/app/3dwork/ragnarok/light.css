@@ -1,0 +1,165 @@
+/*
+ * 3dwork × Ragnarök Light — chips, tabs and the "new" button of the Partasafn.
+ *
+ * Source: the design system "Ragnarök Light" (https://claude.ai/artifact/89ps3w72gnnVMZSvuYFvKG),
+ * the daylight edition of the Stjórnstöð's Ragnarök skin (apps/slokkvitaeki/app/kjarni/ragnarok):
+ * the same carved corners (top-left and bottom-right cut) and the same Chakra Petch,
+ * on the work area's golden paper (.wb-theme in theme.css).
+ *
+ * Three layers per control: the button (a hard ledge shadow, NOT clipped — clip-path would cut a
+ * box-shadow), .f (the bronze rim, clipped) and .i (the face, clipped by the rim cut minus 0.8px so
+ * the rim stays even along the diagonal).
+ *
+ * Crispness rules — Agnar reads this at 75 % browser zoom, where all of these turned to mush in the
+ * first draft: the rim is 2px and an even bronze (no pale highlight stop, no notches), the faces are flat
+ * (no grain), shadows are hard offsets (no blur, no glow), and nothing moves by a fractional pixel.
+ */
+
+.rgl-chip,
+.rgl-tab {
+  --c: 8px;
+  --ci: calc(var(--c) - 0.8px);
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: #1a1208;
+  font: 600 14px/1 var(--font-rg, 'Chakra Petch'), 'Chakra Petch', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  filter: drop-shadow(0 2px 0 rgba(120, 76, 14, 0.28));
+}
+.rgl-chip > .f,
+.rgl-tab > .f {
+  display: block;
+  flex: 1 1 auto;
+  padding: 2px;
+  background: linear-gradient(135deg, #b8821f, #8f5a0c 50%, #b8821f);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+}
+.rgl-chip > .f > .i,
+.rgl-tab > .f > .i {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 14px 0 16px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #fffcf3, #f6ebd0);
+  clip-path: polygon(var(--ci) 0, 100% 0, 100% calc(100% - var(--ci)), calc(100% - var(--ci)) 100%, 0 100%, 0 var(--ci));
+}
+.rgl-chip:hover > .f,
+.rgl-tab:hover > .f {
+  background: linear-gradient(135deg, #9a6412, #6e3a0a 50%, #9a6412);
+}
+.rgl-chip:hover > .f > .i,
+.rgl-tab:hover > .f > .i {
+  background: linear-gradient(180deg, #fffdf8, #f8ecd0);
+}
+.rgl-chip:active,
+.rgl-tab:active {
+  filter: none;
+}
+.rgl-chip:focus-visible,
+.rgl-tab:focus-visible {
+  outline: 2px solid #9a3e08;
+  outline-offset: 3px;
+}
+
+/* the count plate */
+.rgl-chip .n,
+.rgl-tab .n {
+  min-width: 20px;
+  padding: 4px 6px;
+  text-align: center;
+  border-radius: 2px;
+  font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0;
+  color: #86570c;
+  background: rgba(134, 87, 12, 0.12);
+  border: 1px solid rgba(134, 87, 12, 0.45);
+}
+
+/* active: lit steel — the one dark thing in a row, with a rim of Boss gold (the gold of the Brunahólf wordmark and
+   the Tímabil badge: brunaholf css/theme.css --gold-face) and a bronze ledge */
+.rgl-chip.on,
+.rgl-tab.on {
+  filter: drop-shadow(0 2px 0 rgba(122, 86, 18, 0.7));
+}
+.rgl-chip.on > .f,
+.rgl-tab.on > .f,
+.rgl-chip.on:hover > .f,
+.rgl-tab.on:hover > .f {
+  background: linear-gradient(135deg, #f3dc95, #d9b25a 24%, #b8892e 46%, #8f6a1c 54%, #d9b25a 80%, #e8cb7a);
+}
+.rgl-chip.on > .f > .i,
+.rgl-tab.on > .f > .i,
+.rgl-chip.on:hover > .f > .i,
+.rgl-tab.on:hover > .f > .i {
+  background: linear-gradient(180deg, #3a2a10, #141414);
+  color: #fff0c0;
+}
+.rgl-chip.on .n,
+.rgl-tab.on .n {
+  color: #ffd98a;
+  background: rgba(255, 217, 138, 0.14);
+  border-color: rgba(255, 217, 138, 0.55);
+}
+
+/* quiet: the collection is empty (count 0) */
+.rgl-chip.dim {
+  filter: none;
+}
+.rgl-chip.dim > .f {
+  background: linear-gradient(135deg, #c4b48c, #a89668);
+}
+.rgl-chip.dim > .f > .i {
+  color: #766036;
+}
+
+/* "+ Nýtt safn": dashed means it does not exist yet */
+.rgl-chip.add {
+  filter: none;
+}
+.rgl-chip.add > .f {
+  background: none;
+  padding: 0;
+  clip-path: none;
+}
+.rgl-chip.add > .f > .i {
+  height: 40px;
+  gap: 8px;
+  background: transparent;
+  border: 2px dashed #9a6f22;
+  clip-path: none;
+  color: #7a5410;
+}
+.rgl-chip.add:hover > .f > .i {
+  background: rgba(255, 154, 58, 0.14);
+}
+
+/* tabs: system words, uppercase and wider; fill the row on a phone */
+.rgl-tab {
+  flex: 1 1 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.rgl-tab > .f > .i {
+  justify-content: center;
+  padding: 0 14px;
+}
+@media (min-width: 640px) {
+  .rgl-tab {
+    flex: none;
+  }
+  .rgl-tab > .f > .i {
+    min-width: 112px;
+    padding: 0 20px;
+  }
+}

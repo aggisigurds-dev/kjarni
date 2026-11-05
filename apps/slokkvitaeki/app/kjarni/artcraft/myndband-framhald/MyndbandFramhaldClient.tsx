@@ -1,0 +1,503 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { StationChrome } from "../../StationChrome";
+import { artcraftHubHref, artcraftToolsHref } from "../apps";
+import SendTo from "../SendTo";
+import VerkhringirHint from "../VerkhringirHint";
+import StagingPicker from "../StagingPicker";
+import { useStagedSource } from "../useStagedSource";
+import { uploadForReplicate } from "../uploadToStorage";
+import FramePicker from "../video/FramePicker";
+import { extractFrameAt, loadVideoMeta, stitchSegments } from "../video/frames";
+import { defaultContinueTime, formatSeconds } from "../video/timeline";
+import "../artcraft.css";
+
+/** Myndband-framhald — teygja myndband með því að sækja síðasta frame-ið og
+ *  nota það sem image-input í Wan 2.2 i2v (gegnum /api/skyjahreyfimynd).
+ *
+ *  Flæði:
+ *    1) notandi dropar video eða picker-ar úr staging
+ *    2) við hlöðum video, seek-um alveg að endanum, drawImage á canvas,
+ *       toDataURL -> last frame image
+ *    3) notandi skrifar prompt um hvað eigi að gerast í framhaldinu
+ *    4) call /api/skyjahreyfimynd með því frame-i + prompt -> 5-6s klippa
+ *    5) notandi getur sent framhaldið í Myndbanda-saumur (síðar) eða halaði
+ *       niður báðum klippunum.
+ *
+ *  Lykil-tækni: HTMLVideoElement.currentTime seek + canvas draw. Virkar bara
+ *  á videos sem browser-inn getur spilað (mp4/webm/mov).
+ */
+
+const VIDEO_ACCEPT = "video/mp4,video/webm,video/quicktime";
+const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
+
+const RESOLUTIONS = ["480p", "720p"] as const;
+type Resolution = (typeof RESOLUTIONS)[number];
+
+const ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
+type AspectRatio = (typeof ASPECT_RATIOS)[number];
+
+type SubmitResponse =
+  | { videos: string[] }
+  | { predictionId: string; status: string }
+  | { error: string };
+
+type StatusResponse =
+  | { status: "succeeded"; videos: string[] }
+  | { status: "failed" | "canceled"; error?: string }
+  | { status: string }
+  | { error: string };
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}kB`;
+  return `${(n / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+async function fetchVideoBlob(url: string): Promise<Blob> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Gat ekki sótt myndbandið (${res.status})`);
+  return res.blob();
+}
+
+
+/** Vælir aspect ratio sem passar best við video dimensions. */
+function matchAspectRatio(width: number, height: number): AspectRatio {
+  const r = width / height;
+  if (r > 1.5) return "16:9";
+  if (r < 0.75) return "9:16";
+  return "1:1";
+}
+
+export default function MyndbandFramhaldClient() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sourcePreview, setSourcePreview] = useState("");
+  const [lastFrame, setLastFrame] = useState<string>("");
+  const [frameInfo, setFrameInfo] = useState<{ width: number; height: number; duration: number } | null>(null);
+  const [prompt, setPrompt] = useState("The scene continues naturally with subtle motion");
+  const [resolution, setResolution] = useState<Resolution>("720p");
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
+  const [disableSafety, setDisableSafety] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [resultUrl, setResultUrl] = useState("");
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  // Ramminn sem framhaldið byrjar á (sjálfgefið 1 sek fyrir enda) og lengd.
+  const [continueAt, setContinueAt] = useState(0);
+  const [numFrames, setNumFrames] = useState(81);
+  const [smooth, setSmooth] = useState(false);
+  const [usedAt, setUsedAt] = useState<number | null>(null);
+  const [joined, setJoined] = useState<{ url: string; blob: Blob } | null>(null);
+  const [joining, setJoining] = useState<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
+      if (sourcePreview) URL.revokeObjectURL(sourcePreview);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function acceptFile(file: File) {
+    if (!file.type.startsWith("video/")) {
+      setError("Þetta er ekki video-skrá.");
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError(`Video er of stórt (${formatBytes(file.size)}). Hámark: ${formatBytes(MAX_VIDEO_BYTES)}.`);
+      return;
+    }
+    if (sourcePreview) URL.revokeObjectURL(sourcePreview);
+    setError("");
+    setResultUrl("");
+    setResultBlob(null);
+    setSourceFile(file);
+    setSourcePreview(URL.createObjectURL(file));
+    setLastFrame("");
+    setFrameInfo(null);
+
+    // Lýsigögn strax; ramminn er valinn með sleða og sendur þegar keyrt er.
+    try {
+      setStatus("Les myndbandið…");
+      const meta = await loadVideoMeta(file);
+      setFrameInfo(meta);
+      setContinueAt(defaultContinueTime(meta.duration));
+      setAspectRatio(matchAspectRatio(meta.width, meta.height));
+      setLastFrame("ready");
+      setJoined(null);
+      setStatus("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gat ekki lesið myndbandið");
+      setStatus("");
+    }
+  }
+
+  useStagedSource(async (blob, item) => {
+    const name = item.name || `from-${item.sourceTool}.mp4`;
+    const file = new File([blob], name, { type: blob.type || "video/mp4" });
+    await acceptFile(file);
+  });
+
+  async function pollStatus(predictionId: string, submittedAt: number) {
+    const maxWait = 10 * 60 * 1000;
+    if (Date.now() - submittedAt > maxWait) {
+      setBusy(false);
+      setError("Tímamörk — Replicate skilaði ekki innan 10 mínútna.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/skyjahreyfimynd/status?id=${encodeURIComponent(predictionId)}`);
+      const data = (await res.json()) as StatusResponse;
+      if ("error" in data && data.error) {
+        setBusy(false);
+        setError(data.error);
+        return;
+      }
+      if ("status" in data) {
+        if (data.status === "succeeded" && "videos" in data && data.videos.length > 0) {
+          const url = data.videos[0];
+          setStatus("Sæki framhaldið…");
+          try {
+            const blob = await fetchVideoBlob(url);
+            setResultBlob(blob);
+            setResultUrl(URL.createObjectURL(blob));
+            setStatus("Klárað");
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Gat ekki sótt útkomuna");
+          } finally {
+            setBusy(false);
+          }
+          return;
+        }
+        if (data.status === "failed" || data.status === "canceled") {
+          setBusy(false);
+          setError(("error" in data && data.error) || `Keyrsla ${data.status}`);
+          return;
+        }
+        setStatus(`Vinnsla: ${data.status}…`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Villa í stöðuskoðun");
+      setBusy(false);
+      return;
+    }
+    pollTimerRef.current = window.setTimeout(() => pollStatus(predictionId, submittedAt), 5000);
+  }
+
+  async function run() {
+    if (!lastFrame || !sourceFile) {
+      setError("Hleyptu video inn fyrst.");
+      return;
+    }
+    if (!prompt.trim()) {
+      setError("Lýstu framhaldinu í prompt-reitnum.");
+      return;
+    }
+    setBusy(true);
+    setStatus("Sendi á Wan 2.2…");
+    setError("");
+    setResultUrl("");
+    setResultBlob(null);
+    try {
+      setStatus(`Sæki ramma á ${formatSeconds(continueAt)} s…`);
+      const frame = await extractFrameAt(sourceFile, continueAt);
+      const frameUrl = await uploadForReplicate(frame, "reference-images");
+      setUsedAt(continueAt);
+      setJoined(null);
+      setStatus("Sendi á Wan 2.2…");
+      const res = await fetch("/api/skyjahreyfimynd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: frameUrl,
+          interpolateOutput: smooth,
+          prompt: prompt.trim(),
+          resolution,
+          aspectRatio,
+          numFrames,
+          framesPerSecond: 16,
+          disableSafetyChecker: disableSafety,
+        }),
+      });
+      const data = (await res.json()) as SubmitResponse;
+      if (!res.ok || "error" in data) {
+        throw new Error(("error" in data && data.error) || `Villa (${res.status})`);
+      }
+      if ("videos" in data && data.videos.length > 0) {
+        const url = data.videos[0];
+        setStatus("Sæki framhaldið…");
+        const blob = await fetchVideoBlob(url);
+        setResultBlob(blob);
+        setResultUrl(URL.createObjectURL(blob));
+        setStatus("Klárað");
+        setBusy(false);
+        return;
+      }
+      if ("predictionId" in data) {
+        setStatus("Keyrir á Replicate…");
+        pollStatus(data.predictionId, Date.now());
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Óvænt villa");
+      setBusy(false);
+    }
+  }
+
+  function downloadResult() {
+    if (!resultUrl) return;
+    const a = document.createElement("a");
+    a.href = resultUrl;
+    const base = (sourceFile?.name || "video").replace(/\.[^.]+$/, "");
+    a.download = `${base}-framhald.mp4`;
+    a.click();
+  }
+
+  return (
+    <StationChrome tool="artcraft">
+      <div className="ac-hub">
+        <div className="ac-hub-in ac-studio">
+          <p className="ac-kicker">
+            <a href={artcraftHubHref()}>ArtCraft</a>
+            {" · "}
+            <a href={artcraftToolsHref()}>Tól</a>
+            {" · Myndband-framhald"}
+          </p>
+          <h1>Myndband-framhald</h1>
+          <p className="ac-lead">
+            Teygja myndband með því að sækja síðasta frame-ið og nota það sem byrjunarmynd á nýjan
+            Wan 2.2 i2v klippu. Lýstu bara hvað eigi að gerast næst. Þú getur svo saumað
+            upprunalega klippu + framhald saman í einni röð, eða ítrað aftur (framhald af framhaldi).
+          </p>
+
+          {error && <p className="ac-error">{error}</p>}
+
+          {!sourceFile && (
+            <section className="ac-drop">
+              <p>Veldu myndband sem þú vilt teygja</p>
+              <button type="button" className="ac-btn" onClick={() => inputRef.current?.click()}>
+                Velja video
+              </button>
+              <div style={{ marginTop: 8 }}>
+                <StagingPicker
+                  accepts="video"
+                  onPick={async (blob, item) => {
+                    const name = item.name || `from-${item.sourceTool}.mp4`;
+                    const file = new File([blob], name, { type: blob.type || "video/mp4" });
+                    await acceptFile(file);
+                  }}
+                />
+              </div>
+            </section>
+          )}
+
+          <input
+            ref={inputRef}
+            type="file"
+            accept={VIDEO_ACCEPT}
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void acceptFile(file);
+              e.target.value = "";
+            }}
+          />
+
+          {sourceFile && (
+            <section className="ac-panel">
+              <div className="ac-row" style={{ gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 320px", minWidth: 280 }}>
+                  <h3 style={{ marginTop: 0 }}>Uppspretta</h3>
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <video
+                    src={sourcePreview}
+                    controls
+                    style={{ width: "100%", maxHeight: 220, borderRadius: 6, background: "#000" }}
+                  />
+                  <p className="ac-hint" style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+                    {sourceFile.name} · {formatBytes(sourceFile.size)}
+                    {frameInfo && ` · ${frameInfo.width}×${frameInfo.height} · ${frameInfo.duration.toFixed(1)}s`}
+                  </p>
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    onClick={() => {
+                      if (sourcePreview) URL.revokeObjectURL(sourcePreview);
+                      setSourceFile(null);
+                      setSourcePreview("");
+                      setLastFrame("");
+                      setFrameInfo(null);
+                    }}
+                    disabled={busy}
+                  >
+                    Nýtt video
+                  </button>
+                </div>
+
+                <div style={{ flex: "1 1 320px", minWidth: 280 }}>
+                  <h3 style={{ marginTop: 0 }}>Hvar á framhaldið að byrja?</h3>
+                  {sourceFile && frameInfo ? (
+                    <FramePicker blob={sourceFile} duration={frameInfo.duration} value={continueAt} onChange={setContinueAt} fps={16} height={220} />
+                  ) : (
+                    <p className="ac-hint" style={{ opacity: 0.6 }}>Les myndbandið…</p>
+                  )}
+                  <p className="ac-hint" style={{ fontSize: 12, opacity: 0.65, marginTop: 6 }}>
+                    Sjálfgefið sekúndu fyrir enda. Myndbönd enda oft nálægt upphafsstöðunni, og framhald úr
+                    allra síðasta rammanum endurtekur þá sömu hreyfingu. „Skeyta saman“ klippir upprunalega
+                    myndbandið við þennan ramma.
+                  </p>
+                </div>
+              </div>
+
+              <div className="ac-settings" style={{ marginTop: 16 }}>
+                <label>
+                  Lengd framhalds
+                  <select value={numFrames} onChange={(e) => setNumFrames(Number(e.target.value))} disabled={busy}>
+                    <option value={81}>81 rammi ≈ 5 s (ódýrast)</option>
+                    <option value={101}>101 rammi ≈ 6,3 s</option>
+                    <option value={121}>121 rammi ≈ 7,5 s (hámark Wan)</option>
+                  </select>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={smooth} onChange={(e) => setSmooth(e.target.checked)} disabled={busy} />
+                  Mýkra (brúa upp í 30 fps)
+                </label>
+                <label>
+                  Hvað gerist næst?
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    rows={3}
+                    placeholder="Lýstu hvað eigi að gerast í framhaldinu — hreyfing, breyting á stellingu, breytt umhverfi…"
+                  />
+                  <small className="ac-rec">mælt: lýstu bara hreyfingu, EKKI nýjum hlutum/senum (annars missist samfella). Dæmi: „subject turns head slowly to the left while camera stays still"</small>
+                </label>
+                <label>
+                  Upplausn
+                  <select value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)}>
+                    {RESOLUTIONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                  <small className="ac-rec">mælt: sama og upprunalegt video — passar best við samtenginguna seinna</small>
+                </label>
+                <label>
+                  Aspect ratio
+                  <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}>
+                    {ASPECT_RATIOS.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={disableSafety}
+                    onChange={(e) => setDisableSafety(e.target.checked)}
+                  />
+                  Slökkva á safety checker
+                  <small className="ac-rec" style={{ marginLeft: 8 }}>mælt: Á — Wan 2.2 filter er oft of varkár á framhöld sem fylgja upprunamyndinni</small>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                className="ac-btn"
+                onClick={() => void run()}
+                disabled={busy || !lastFrame || !sourceFile || !prompt.trim()}
+                style={{ marginTop: 12 }}
+              >
+                {busy ? status || "Vinn…" : "Búa til framhald"}
+              </button>
+              {busy && (
+                <p className="ac-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                  Framhaldið tekur venjulega 30s–2 mín.
+                </p>
+              )}
+            </section>
+          )}
+
+          {resultUrl && (
+            <section className="ac-panel">
+              <h3 style={{ marginTop: 0 }}>Framhald</h3>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                src={resultUrl}
+                controls
+                style={{ width: "100%", maxHeight: 500, borderRadius: 6, background: "#000" }}
+              />
+              <div className="ac-row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                <button type="button" className="ac-btn" onClick={downloadResult}>
+                  Sækja framhaldið
+                </button>
+                {resultBlob && (
+                  <SendTo
+                    blob={resultBlob}
+                    mediaType="video"
+                    sourceTool="myndband-framhald"
+                    sourceToolName="Myndband-framhald"
+                    name={`${(sourceFile?.name || "video").replace(/\.[^.]+$/, "")}-framhald.mp4`}
+                  />
+                )}
+                {resultBlob && sourceFile && usedAt != null && (
+                  <button
+                    type="button"
+                    className="ac-btn ghost"
+                    disabled={joining != null}
+                    onClick={() =>
+                      void (async () => {
+                        setJoining(0);
+                        setError("");
+                        try {
+                          const { blob } = await stitchSegments(
+                            [
+                              { blob: sourceFile, inT: 0, outT: usedAt },
+                              // Fyrsti rammi framhaldsins = ramminn sem það var búið til úr.
+                              { blob: resultBlob, inT: 0.07, outT: Number.POSITIVE_INFINITY },
+                            ],
+                            (f) => setJoining(Math.round(f * 100)),
+                          );
+                          if (joined) URL.revokeObjectURL(joined.url);
+                          setJoined({ blob, url: URL.createObjectURL(blob) });
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Samsuða mistókst");
+                        } finally {
+                          setJoining(null);
+                        }
+                      })()
+                    }
+                  >
+                    {joining != null ? `Skeyti saman… ${joining}%` : `Skeyta saman (upprunalegt að ${formatSeconds(usedAt)} s + framhald)`}
+                  </button>
+                )}
+              </div>
+              {joined && (
+                <div style={{ marginTop: 12 }}>
+                  <h3 style={{ margin: "0 0 6px" }}>Samsett</h3>
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <video src={joined.url} controls style={{ width: "100%", maxHeight: 500, borderRadius: 6, background: "#000" }} />
+                  <div className="ac-row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    <a className="ac-btn" href={joined.url} download={`${(sourceFile?.name || "video").replace(/\.[^.]+$/, "")}-samsett.${joined.blob.type.includes("mp4") ? "mp4" : "webm"}`}>
+                      Sækja samsett
+                    </a>
+                    <SendTo
+                      blob={joined.blob}
+                      mediaType="video"
+                      sourceTool="myndband-framhald"
+                      sourceToolName="Myndband-framhald"
+                      name={`${(sourceFile?.name || "video").replace(/\.[^.]+$/, "")}-samsett.mp4`}
+                    />
+                  </div>
+                </div>
+              )}
+              <VerkhringirHint tool="myndband-framhald" />
+            </section>
+          )}
+        </div>
+      </div>
+    </StationChrome>
+  );
+}

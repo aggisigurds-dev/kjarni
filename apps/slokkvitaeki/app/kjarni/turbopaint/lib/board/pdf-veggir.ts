@@ -124,6 +124,46 @@ export function veljaVeggjaflokk(flokkar: Record<string, Strik[]>, bladB: number
   return { valinn: best, yfirlit };
 }
 
+/**
+ * Detect paired wall lines across PDF stroke-width groups rather than relying on
+ * a single width. Retain only groups with enough paired geometry.
+ * Coordinates are PDF points; callers remain responsible for crop/scale.
+ */
+export function finnaVeggiUrPdfFlokkum(
+  flokkar: Record<string, Strik[]>,
+  bladB: number,
+  bladH: number,
+  opt: { minT?: number; maxT?: number; minLengd?: number } = {}
+): { veggir: PdfVeggur[]; flokkar: string[] } {
+  const minLengd = opt.minLengd ?? Math.max(6, Math.min(bladB, bladH) * 0.004);
+  const candidates: { key: string; walls: PdfVeggur[]; length: number }[] = [];
+  for (const [key, strokes] of Object.entries(flokkar)) {
+    const width = Number(key);
+    if (!Number.isFinite(width) || width < 0.3 || !strokes.length || strokes.length > 5000) continue;
+    const walls = paraVeggi(strokes, { ...opt, minLengd });
+    const length = walls.reduce((total, wall) => total + Math.hypot(wall.b[0] - wall.a[0], wall.b[1] - wall.a[1]), 0);
+    if (walls.length && length >= minLengd * 2) candidates.push({ key, walls, length });
+  }
+  candidates.sort((a, b) => b.length - a.length);
+  if (!candidates.length) return { veggir: [], flokkar: [] };
+  const threshold = Math.max(minLengd * 3, candidates[0].length * 0.06);
+  const selected = candidates.filter((c, i) => i === 0 || c.length >= threshold);
+  const result: PdfVeggur[] = [];
+  for (const group of selected) {
+    for (const wall of group.walls) {
+      const mx = (wall.a[0] + wall.b[0]) / 2, my = (wall.a[1] + wall.b[1]) / 2;
+      const len = Math.hypot(wall.b[0] - wall.a[0], wall.b[1] - wall.a[1]);
+      const duplicate = result.some((prev) => {
+        const x = (prev.a[0] + prev.b[0]) / 2, y = (prev.a[1] + prev.b[1]) / 2;
+        const n = Math.hypot(prev.b[0] - prev.a[0], prev.b[1] - prev.a[1]);
+        return Math.hypot(mx - x, my - y) < 0.5 && Math.abs(len - n) < 0.5;
+      });
+      if (!duplicate) result.push(wall);
+    }
+  }
+  return { veggir: result, flokkar: selected.map((c) => c.key) };
+}
+
 /** Teiknar strik (pt) í blekmaska w×h við `kvardi` dílar á punkt, `breidd` dílar á þykkt. */
 export function teiknaStrikIMaska(strik: Strik[], w: number, h: number, kvardi: number, breidd = 2): Uint8Array {
   const m = new Uint8Array(w * h);

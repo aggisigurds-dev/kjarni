@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react';
+import { RotateCcw, RotateCw } from 'lucide-react';
 import {
   DEFAULT_MOVE_STEP,
   DEFAULT_ROTATE_STEP,
@@ -50,6 +51,9 @@ interface ManipBarProps {
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** The axes' colours, as the rings around a part in rotate mode draw them: X red, Y green, Z blue. */
+const AXIS_TEXT = { x: 'text-red-600', y: 'text-green-600', z: 'text-blue-600' } as const;
 
 /** Small numeric field that commits on blur / Enter, not on every keystroke. */
 function MiniNum({
@@ -148,7 +152,7 @@ export function ManipBar({
                 }`}
                 onClick={() => onRotateAxis(axis)}
               >
-                {axis}
+                <span className={axis === 'free' ? '' : AXIS_TEXT[axis]}>{axis}</span>
               </button>
             ))}
             <span className="mx-0.5 h-4 w-px bg-slate-200" />
@@ -177,20 +181,24 @@ export function ManipBar({
           <div key={axis} className="flex items-center gap-0.5">
             <button
               type="button"
-              className="h-7 w-7 rounded border border-slate-300 font-mono text-base leading-none text-slate-700 hover:bg-slate-100"
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-300 font-mono text-base leading-none text-slate-700 hover:bg-slate-100"
               onClick={() => onNudge(axis, -1)}
               aria-label={`${axis.toUpperCase()} minus ${step} ${unit}`}
+              title={mode === 'rotate' ? `Snúa um ${axis.toUpperCase()} á móti örinni á hringnum` : undefined}
             >
-              −
+              {mode === 'rotate' ? <RotateCw className={`h-4 w-4 ${AXIS_TEXT[axis]}`} /> : '−'}
             </button>
-            <span className="w-3 text-center text-[0.66rem] font-bold text-slate-500">{axis.toUpperCase()}</span>
+            <span className={`w-3 text-center text-[0.66rem] font-bold ${mode === 'rotate' ? AXIS_TEXT[axis] : 'text-slate-500'}`}>
+              {axis.toUpperCase()}
+            </span>
             <button
               type="button"
-              className="h-7 w-7 rounded border border-slate-300 font-mono text-base leading-none text-slate-700 hover:bg-slate-100"
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-300 font-mono text-base leading-none text-slate-700 hover:bg-slate-100"
               onClick={() => onNudge(axis, 1)}
               aria-label={`${axis.toUpperCase()} plus ${step} ${unit}`}
+              title={mode === 'rotate' ? `Snúa um ${axis.toUpperCase()} í átt örvarinnar á hringnum` : undefined}
             >
-              +
+              {mode === 'rotate' ? <RotateCcw className={`h-4 w-4 ${AXIS_TEXT[axis]}`} /> : '+'}
             </button>
           </div>
         ))}
@@ -252,6 +260,7 @@ export function ManipBar({
       )}
 
       <div className="mt-1 text-center text-[0.58rem] text-slate-400">
+        {mode === 'rotate' ? 'litirnir passa við hringina á partinum · ↺ snýr eins og örin · ' : ''}
         drag · arrows · Esc
         {snapHint ? <span className="ml-1 font-semibold text-emerald-600">· snap {snapHint}</span> : null}
       </div>

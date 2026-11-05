@@ -17,7 +17,8 @@ import type { OcrWord } from "./firewall-rating";
 import { erTengtTaekiTakn, SLT_TEGUNDIR, tegundABordi, TaekjaSjodur, type TaekjaTegund } from "./sjalftenging";
 import type { BoardObject, SymbolObject } from "./types";
 
-export type SbTegund = "brsl" | "slt";
+/** brsl / slt = tæki; bo = björgunarop (skilti), ut = flóttaleið „ÚT" (skilti) — 15.10.2026, skýringar Trönuhrauns 10. */
+export type SbTegund = "brsl" | "slt" | "bo" | "ut";
 
 /** Blekgríma OCR-myndarinnar (sjá detect-firewalls.ts lesaTextaTeikningar): 1 = blek. kvardi = OCR-dílar á myndardíl. */
 export type Blek = { w: number; h: number; kvardi: number; data: Uint8Array };
@@ -30,25 +31,40 @@ function hreint(t: string) {
   return t.toUpperCase().replace(/[ÚÜ]/g, "U").replace(/[^A-Z0-9$]/g, "");
 }
 
-/** Hvað orðið segir: BRSL og/eða SLT. `sterkt` = nákvæmlega rétt stafsett (BRSL / SLT); annars algengar OCR-villur
- * (8RSL, BR5L, BRS, SL1, 5LT, SLI …) sem þurfa meiri vissu. „BRSL | SLT" / „BRSL/SLT" / „BRSLSLT" gefa bæði. */
-export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean }[] {
-  const ut: { tegund: SbTegund; sterkt: boolean }[] = [];
-  const baeta = (tegund: SbTegund, sterkt: boolean) => {
+/** Hvað orðið segir: BRSL og/eða SLT. `sterkt` = nákvæmlega rétt stafsett (BRSL / SLT / HSL); annars algengar OCR-villur
+ * (8RSL, BR5L, BRS, SL1, 5LT, SLI, H5L …) sem þurfa meiri vissu. „BRSL | SLT" / „BRSL/SLT" / „BRSLSLT" gefa bæði.
+ * HSL = handslökkvitæki (Agnar 11.10.2026, DRA ehf: „HSL þýðir handslökkvitæki") — telst slökkvitæki eins og SLT. */
+export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean; metri?: boolean }[] {
+  const ut: { tegund: SbTegund; sterkt: boolean; metri?: boolean }[] = [];
+  const baeta = (tegund: SbTegund, sterkt: boolean, metri?: boolean) => {
     const f = ut.find((x) => x.tegund === tegund);
     if (f) f.sterkt = f.sterkt || sterkt;
-    else ut.push({ tegund, sterkt });
+    else ut.push({ tegund, sterkt, ...(metri ? { metri } : {}) });
   };
   for (const hluti of String(texti || "").split(SKIL)) {
     const c = hreint(hluti);
     if (!c) continue;
     if (/^BRSL\d{0,2}$/.test(c)) baeta("brsl", true);
     else if (/^SLT\d{0,2}$/.test(c)) baeta("slt", true);
+    else if (/^HSL\d{0,2}$/.test(c)) baeta("slt", true);
+    // 26.10.2026 (Bríetartún 9 = Höfðatorg, PK/ÖRUGG): skýringar blaðsins segja „HST = Handslökkvitæki" og „BS =
+    // Brunaslanga" — talningin las hvorugt. BS er tveggja stafa orð (oft tilviljun í texta) og gildir því aðeins með
+    // hring keflisins við orðið, eins og slöngulengdin („30 m"): sltBrslStadir sleppir því án tákns.
+    else if (/^HST\d{0,2}$/.test(c)) baeta("slt", true);
+    else if (/^BS\d{0,2}$/.test(c)) baeta("brsl", false, true);
+    // 15.10.2026 (Trönuhraun 10): slöngukeflið er merkt með lengd slöngunnar („30 m", EN 671-1 ≤ 30 m), ekki BRSL —
+    // gildir AÐEINS með spíral keflisins við orðið (metri: sltBrslStadir sleppir orðinu án tákns). BO = björgunarop,
+    // ÚT = flóttaleiðarör — skilti, ekki tæki.
+    else if (/^[123]\dM$/.test(c)) baeta("brsl", false, true);
+    else if (/^BO$/.test(c)) baeta("bo", true);
+    else if (/^UT$/.test(c)) baeta("ut", true);
     else if (/^BRSLSLT$/.test(c)) {
       baeta("brsl", true);
       baeta("slt", true);
     } else if (/^[B8]R[S5$]([L1I]|LL)?$/.test(c)) baeta("brsl", false);
     else if (/^[S5$][L1I][T7I1]$/.test(c)) baeta("slt", false);
+    else if (/^H[S5$][L1]$/.test(c)) baeta("slt", false);
+    else if (/^H[S5$][T7]$/.test(c)) baeta("slt", false);
     else if (/^[B8]R[S5$][L1I]?[S5$][L1I][T7I1]$/.test(c)) {
       baeta("brsl", false);
       baeta("slt", false);
@@ -61,38 +77,76 @@ export function ordTegundir(texti: string): { tegund: SbTegund; sterkt: boolean 
  * villur þurfa ≥ 50 % eins og áður. */
 export const VISSA_STERKT = 20;
 export const VISSA_VEIKT = 50;
+/** Skilti (BO / ÚT): tveggja stafa orð eru oftar tilviljun en BRSL — meiri vissa (Trönuhraun 10: BO 96 % og 88 %). */
+export const VISSA_SKILTI = 35;
 
 export interface SbOrd {
   tegund: SbTegund;
+  /** Slöngulengd („30 m") í stað BRSL — telst aðeins með spíral keflisins við orðið. */
+  metri?: boolean;
   /** Miðja orðsins (myndardílar). */
   x: number;
   y: number;
   /** Hæð stafanna (myndardílar) — mælikvarði leitarinnar að tákninu. */
   h: number;
+  /** OCR-kassi orðsins (myndardílar) — blekið í honum er textinn sjálfur, ekki tákn. */
+  kassi?: Svaedi;
   vissa: number;
   texti: string;
 }
 
 export type Svaedi = { x0: number; y0: number; x1: number; y1: number };
 
+/** Orð í SKÝRINGARTEXTA blaðsins, ekki tákn á teikningunni (Bríetartún 9 / Höfðatorg 26.10.2026: „HST = Handslökkvitæki“ og
+ * „BS = Brunaslanga“ stóðu í skýringunum og urðu að stöðum). Skýringar eru lína af stuttum kóðum (AG, BO, BS, DF, GNF, HST …)
+ * sem standa í sömu stöðu þvert á lesstefnuna — súla á láréttu blaði, lína á blaði sem er teiknað á hlið. Orð sem hefur
+ * ≥ 4 slíka kóða á sömu línu (aðrar stöður) er skýringarlína. */
+export function erSkyringarOrd(w: OcrWord, words: OcrWord[]): boolean {
+  const lodrett = !!w.vertical && w.height >= w.width;
+  const thykkt = Math.max(4, lodrett ? w.width : w.height);
+  const lina = (o: OcrWord) => (lodrett ? o.y : o.x);          // staða þvert á lesstefnu (sama gildi á allri skýringarlínunni)
+  const staflad = (o: OcrWord) => (lodrett ? o.x : o.y);        // röðin í skýringunni
+  const stadir = new Set<number>();
+  for (const o of words) {
+    if (o === w || o.confidence < 20) continue;
+    const c = hreint(o.text);
+    if (c.length < 1 || c.length > 4 || /[0-9]/.test(c)) continue;
+    const olodrett = !!o.vertical && o.height >= o.width;
+    if (olodrett !== lodrett) continue;
+    if (Math.abs(lina(o) - lina(w)) > thykkt * 1.5) continue;
+    const d = Math.abs(staflad(o) - staflad(w));
+    if (d < thykkt * 0.6 || d > thykkt * 60) continue;
+    stadir.add(Math.round(staflad(o) / (thykkt * 0.8)));
+  }
+  return stadir.size >= 4;
+}
+
 /** BRSL/SLT-orð teikningarinnar, innan `svaedi` (hússins á blaðinu, myndardílar) ef það er gefið, annars utan
- * titilreitsins (neðst til hægri á blaðinu). Tvítekin orð (sami staður, sama tegund) talin einu sinni. */
+ * titilreitsins (neðst til hægri á blaðinu). Tvítekin orð (sami staður, sama tegund) talin einu sinni. Lóðrétt skrifuð
+ * orð gilda líka (DRA ehf 11.10.2026: „HSL" stendur upp á rönd við vegginn) — kassi þeirra er hár og mjór. */
 export function sltBrslOrd(words: OcrWord[], mynd: { b: number; h: number }, svaedi?: Svaedi | null): SbOrd[] {
   const ut: SbOrd[] = [];
   for (const w of words) {
-    if (w.vertical) continue;
     const x = w.x + w.width / 2, y = w.y + w.height / 2;
+    if (erSkyringarOrd(w, words)) continue;
+    // OCR merkir stundum láréttan kassa „lóðréttan" (Lindaberg: „30 m" 68 × 37 með vertical) — kassi sem er breiðari en hann
+    // er hár er láréttur, annars fengi orðið fáránlega litla stafahæð og leitin að tákninu færi á rangan stað.
+    const lodrett = w.vertical && w.height >= w.width;
+    const lengd = lodrett ? w.height : w.width, thykkt = lodrett ? w.width : w.height;   // eftir línu textans / þvert á hana
     if (svaedi) {
       if (x < svaedi.x0 || y < svaedi.y0 || x > svaedi.x1 || y > svaedi.y1) continue;
     } else if (x > mynd.b * 0.84 && y > mynd.h * 0.42) continue;
-    for (const { tegund, sterkt } of ordTegundir(w.text)) {
-      if (w.confidence < (sterkt ? VISSA_STERKT : VISSA_VEIKT)) continue;
+    for (const { tegund, sterkt, metri } of ordTegundir(w.text)) {
+      const lagmark = tegund === "bo" || tegund === "ut" ? VISSA_SKILTI : sterkt ? VISSA_STERKT : VISSA_VEIKT;
+      if (w.confidence < lagmark) continue;
       // „BRSL SLT" í einu orði: hvor hluti fær sinn helming svo staðirnir verði réttir
       const tvi = ordTegundir(w.text).length === 2;
-      const hx = tvi ? (tegund === "brsl" ? w.x + w.width * 0.3 : w.x + w.width * 0.8) : x;
+      const hlutfall = tegund === "brsl" ? 0.3 : 0.8;
+      const hx = tvi && !lodrett ? w.x + w.width * hlutfall : x;
+      const hy = tvi && lodrett ? w.y + w.height * hlutfall : y;
       // stafahæð: OCR-kassi orðs með litla vissu er oft of hár (Álfaborg: „BRSL" 29 % = 63 × 45) — breiddin ræður þá
       const stafir = Math.max(2, hreint(w.text).length);
-      ut.push({ tegund, x: hx, y, h: Math.max(4, Math.min(w.height, w.width / (0.8 * stafir))), vissa: w.confidence, texti: w.text });
+      ut.push({ tegund, x: hx, y: hy, h: Math.max(4, Math.min(thykkt, lengd / (0.8 * stafir))), vissa: w.confidence, texti: w.text, kassi: { x0: w.x - 3, y0: w.y - 3, x1: w.x + w.width + 3, y1: w.y + w.height + 3 }, ...(metri ? { metri } : {}) });
     }
   }
   const rodud = ut.sort((a, b) => b.vissa - a.vissa);
@@ -127,10 +181,32 @@ export interface Hringur {
  *      gegnheill (súla, fylltur veggur);
  *   4. miðja hans innan 7,5 stafahæða frá orðinu.
  * Skilar tákninu næst orðinu sem stenst (Álfaborg: stafir 20 dílar, keflið ~80 dílar + ör), eða null. */
-export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?: (lina: string) => void): Hringur | null {
+export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?: (lina: string) => void, kassi?: Svaedi): Hringur | null {
+  const beint = finnaHringMed(blek, cx, cy, h, skra, {});
+  if (beint) return beint;
+  // Punktalínu-spírall (Lindaberg 20.10.2026: keflið er teiknað með stökum punktum, 1,6–2 stafahæðir á kant): 3×3 þensla
+  // tengir ekki punktana. Seinna þrep á ÞUNNU bleki (þykkt blek — stafir, veggir, fyllt ör — tekið burt, annars rennur
+  // textinn „30 m" saman við hringinn) með meiri þenslu og lægra lágmarki; þátturinn verður að vera gisinn.
+  for (const v of [3, 4, 5, 6]) {
+    const r = finnaHringMed(blek, cx, cy, h, skra, { thunnt: true, v, minStaerd: 1.4, kassi });
+    if (r) return r;
+  }
+  return null;
+}
+
+function finnaHringMed(
+  blek: Blek,
+  cx: number,
+  cy: number,
+  h: number,
+  skra: ((lina: string) => void) | undefined,
+  val: { thunnt?: boolean; v?: number; minStaerd?: number; kassi?: Svaedi }
+): Hringur | null {
   const k = blek.kvardi;
   const hk = Math.max(3, h * k);
-  const leit = 7.5 * hk, minD = 2.2 * hk, maxD = 8 * hk, L = 3.2 * hk;
+  const v = val.v ?? 1;
+  // punktalínu-þrepið leitar nær orðinu (keflið stendur 1,9–2,0 stafahæðir undir „30 m"); langsótt „tákn" er hávaði
+  const leit = (val.thunnt ? 3.6 : 7.5) * hk, minD = (val.minStaerd ?? 2.2) * hk, maxD = 8 * hk, L = 3.2 * hk;
   const ocx = cx * k, ocy = cy * k;
   const sp = leit + maxD / 2 + 4;
   const x0 = Math.max(0, Math.floor(ocx - sp)), y0 = Math.max(0, Math.floor(ocy - sp));
@@ -141,6 +217,38 @@ export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?:
   for (let y = 0; y < H; y++) {
     const row = (y + y0) * blek.w + x0;
     for (let x = 0; x < W; x++) if (blek.data[row + x]) g[y * W + x] = 1;
+  }
+  if (val.thunnt) {
+    // textinn sjálfur (OCR-kassi orðsins) er ekki tákn
+    if (val.kassi) {
+      const ax = Math.max(0, Math.floor(val.kassi.x0 * k - x0)), bx = Math.min(W - 1, Math.ceil(val.kassi.x1 * k - x0));
+      const ay = Math.max(0, Math.floor(val.kassi.y0 * k - y0)), by = Math.min(H - 1, Math.ceil(val.kassi.y1 * k - y0));
+      for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) g[y * W + x] = 0;
+    }
+    // opnun 3×3 heldur aðeins þykku bleki (≥ 3 dílar); það ásamt 1 dílas rönd fer burt — eftir verða punktar og þunnar línur
+    const nid = new Uint8Array(W * H);
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        let full = true;
+        for (let dy = -1; dy <= 1 && full; dy++) for (let dx = -1; dx <= 1; dx++) if (!g[(y + dy) * W + x + dx]) { full = false; break; }
+        if (full) nid[y * W + x] = 1;
+      }
+    }
+    const thykkt = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (!nid[y * W + x]) continue;
+        for (let dy = -2; dy <= 2; dy++) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= H) continue;
+          for (let dx = -2; dx <= 2; dx++) {
+            const xx = x + dx;
+            if (xx >= 0 && xx < W) thykkt[yy * W + xx] = 1;
+          }
+        }
+      }
+    }
+    for (let i = 0; i < W * H; i++) if (thykkt[i]) g[i] = 0;
   }
   // 1. beinar línur burt
   const lina = new Uint8Array(W * H);
@@ -170,10 +278,10 @@ export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?:
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
       if (!g[i] || lina[i]) continue;
-      for (let dy = -1; dy <= 1; dy++) {
+      for (let dy = -v; dy <= v; dy++) {
         const yy = y + dy;
         if (yy < 0 || yy >= H) continue;
-        for (let dx = -1; dx <= 1; dx++) {
+        for (let dx = -v; dx <= v; dx++) {
           const xx = x + dx;
           if (xx >= 0 && xx < W) m[yy * W + xx] = 1;
         }
@@ -218,7 +326,12 @@ export function finnaHring(blek: Blek, cx: number, cy: number, h: number, skra?:
     if (skra && px.length > 40 && Math.max(bw, bh) >= minD) skra(`þáttur ${hvar()} n${px.length}`);
     if (Math.min(bw, bh) < minD || Math.max(bw, bh) > maxD) continue;
     if (Math.max(bw, bh) / Math.min(bw, bh) > 1.6) continue;
-    if (px.length / (bw * bh) > 0.3) continue;
+    if (val.thunnt) {
+      let ink = 0;
+      for (const j of px) if (g[j]) ink++;
+      // punktalínu-spírall er mjög gisinn (Lindaberg: ~3 % af kassanum); 11 % á Álfaborg var súla + texti
+      if (ink / (bw * bh) > 0.07) continue;
+    } else if (px.length / (bw * bh) > 0.3) continue;
     const mx = (mnx + mxx) / 2, my = (mny + mxy) / 2;
     if (Math.hypot(mx + x0 - ocx, my + y0 - ocy) > leit) continue;
     // 3. lokað form: stefnur frá miðjunni sem rekast á þáttinn
@@ -304,7 +417,12 @@ export function sltBrslStadir(ord: SbOrd[], blek: Blek | null, skra?: (lina: str
   const merki = (o: SbOrd) => `${o.texti.trim()} (${Math.round(o.vissa)} %)`;
   for (const o of ord.filter((x) => x.tegund === "brsl")) {
     skra?.(`BRSL ${Math.round(o.x)},${Math.round(o.y)} h${Math.round(o.h)}`);
-    const takn = blek ? finnaHring(blek, o.x, o.y, o.h, skra) : null;
+    const takn = blek ? finnaHring(blek, o.x, o.y, o.h, skra, o.kassi) : null;
+    // „30 m" án spírals er málsetning eða lagnalengd, ekki slöngukefli
+    if (o.metri && !takn) {
+      skra?.(`  ${o.texti.trim()} án kefils — sleppt`);
+      continue;
+    }
     // sama kefli lesið tvisvar (t.d. „BRSL" + „BRSL|SLT")
     const sami = takn && stadir.find((s) => s.takn && Math.hypot(s.takn.x - takn.x, s.takn.y - takn.y) < Math.max(s.takn.r, takn.r));
     if (sami) {
@@ -355,14 +473,14 @@ export interface SbTaekiABord {
   y: number;
   /** Tengt tæki, eða null = ótengt. */
   taeki: Tki | null;
-  hvad: SbTegund;
+  hvad: "brsl" | "slt";
   stadur: number;
 }
 
 export interface SbAetlun {
   taeki: SbTaekiABord[];
   /** Staðir þar sem tæki af réttri tegund var þegar á borðinu (innan seilingar) — ekkert nýtt sett. */
-  fyrir: { hvad: SbTegund; stadur: number }[];
+  fyrir: { hvad: "brsl" | "slt"; stadur: number }[];
 }
 
 /** SLT-tegundir í röð (býr í sjalftenging.ts — forgangsröð úthlutunar notar hana líka). */
@@ -473,3 +591,26 @@ export const DRAEGI_SLONGU_M = 25;
 /** localStorage: „Sýna drægi slangna (165.BR1)" í Slökkvitæki-hamnum — sjálfgefið AF (Agnar 07.10.2026: „og taka þennan
  * rauða hring"). Útlitsval vafrans, ekki gögn. */
 export const DRAEGI_LYKILL = "tp_draegi_slangna";
+
+/* ── Skilti úr orðum: BO (björgunarop) og ÚT (flóttaleið) — 15.10.2026 ─────────────────────────────── */
+
+export interface SkiltiStadur {
+  /** Miðja orðsins (myndardílar) — skiltið fer þar sem textinn stendur. */
+  x: number;
+  y: number;
+  sign: "bjorgunarop" | "ut";
+  ord: string[];
+}
+
+/** BO- og ÚT-orð → skilti (433 stimplar bjorgunarop / ut). Tvítekin orð eru þegar felld í sltBrslOrd. */
+export function skiltiUrOrdum(ord: SbOrd[]): SkiltiStadur[] {
+  return ord
+    .filter((o) => o.tegund === "bo" || o.tegund === "ut")
+    .map((o) => ({ x: o.x, y: o.y, sign: o.tegund === "bo" ? ("bjorgunarop" as const) : ("ut" as const), ord: [`${o.texti.trim()} (${Math.round(o.vissa)} %)`] }))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/** Punktur í myndardílum → borðhnit (sama vörpun og stadirABord). */
+export function hnitABord<T extends { x: number; y: number }>(p: T, plan: { x: number; y: number; width: number; height: number }, src: { b: number; h: number }): T {
+  return { ...p, x: plan.x + (p.x * plan.width) / src.b, y: plan.y + (p.y * plan.height) / src.h };
+}

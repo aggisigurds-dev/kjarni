@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 
-export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunakerfi" | "rymi";
+export type HamurId = "teikning" | "slokkvitaeki" | "brunathettingar" | "brunakerfi" | "rymi" | "veggir" | "lagnir";
 
 /** Aðgerðir sem hamstikan getur sýnt; WhiteboardApp tengir hverja við sína virkni. */
 export type HamAdgerd =
@@ -28,6 +28,9 @@ export type HamAdgerd =
   | "rymi"
   | "gatreitur"
   | "croppa-oft";
+
+/** Greiningaraðgerðir: búa í efstu stikunni og Greining-flipanum (Agnar 04.11.2026: „setja greiningartakkana í top panel stikuna“) — ekki í hamstikunni. */
+export const GREININGAR_ADGERDIR: HamAdgerd[] = ["veggir", "ei", "slt-brsl", "thrividd", "gegnumtok"];
 
 export interface Hamur {
   id: HamurId;
@@ -57,6 +60,7 @@ const TEIKNING_MERKI = [
   "teikn:hitaskynjari",
   "teikn:bjalla",
   "teikn:segull",
+  "teikn:bjorgunarop",
 ];
 
 export const HAMIR: Hamur[] = [
@@ -120,6 +124,26 @@ export const HAMIR: Hamur[] = [
     lysing: "Teiknaðu rýmin og merktu hvað er klárt — gátreitir og staða hvers rýmis.",
     adgerdir: ["rymi", "gatreitur"],
     takn: ["wc", "stairs", "elevator", "pin"],
+  },
+  {
+    // Agnar 10.10.2026: „bætt við öðrum ham þarna sem er bara veggir, og aðstoð við að reyna að finna veggina". Aðeins
+    // veggjalagið er virkt (annað dempað, veggjaritillinn tekur við músinni); tólin búa í hægra spjaldinu (VeggjaHamSpjald).
+    id: "veggir",
+    heiti: "Veggir",
+    stutt: "Veggir",
+    lysing: "Aðeins veggirnir: teiknaðu, veldu og eyddu veggjum — „Finna veggi“ stingur upp á veggjum sem þú samþykkir eða hafnar, og nýr veggur smellur á línur teikningarinnar.",
+    adgerdir: [],
+    takn: null,
+  },
+  {
+    // Agnar 30.10.2026: „alveg sér ham … einn takki … öll greiningartólin" — lagnir (loftræsing/vatn/rafmagn) á móti
+    // brunaveggjum Brunayfirlits, talin sem gegnumtök. Tólin búa í hægra spjaldinu (LagnaHamSpjald), ekki á borðinu.
+    id: "lagnir",
+    heiti: "Lagnir og gegnumtök",
+    stutt: "Lagnir",
+    lysing: "Brunayfirlit + lagnablöð (loftræsing, vatn, rafmagn): hvar lögn sker brunavegg, talið eftir stærð.",
+    adgerdir: [],
+    takn: null,
   },
 ];
 

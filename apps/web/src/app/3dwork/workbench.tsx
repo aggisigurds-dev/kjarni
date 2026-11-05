@@ -44,6 +44,7 @@ import {
   Upload,
   Paintbrush,
   Brush,
+  Library,
   ScanSearch,
   Cloud,
   Github,
@@ -63,7 +64,12 @@ import {
   SquareDashed,
   Grid2x2,
   AlignCenterVertical,
+  Crosshair,
   Target,
+  House,
+  SquarePen,
+  BookmarkPlus,
+  Gauge,
 } from 'lucide-react';
 import {
   alignPaintedVertices,
@@ -94,6 +100,7 @@ import {
   type CutItem,
 } from '@/lib/3dwork/measure';
 import { exportBinaryStl, parseStl } from '@/lib/3dwork/stl';
+import { centreSoup } from '@/lib/3dwork/import-part';
 import { exportColored3mf, is3mf, parse3mf } from '@/lib/3dwork/threemf';
 import { lookFor } from '@/lib/3dwork/finish';
 import {
@@ -127,6 +134,7 @@ import {
   type Placement,
   type Project,
   type Transform,
+  type MarkerRole,
   flattenGroupMembers,
 } from '@/lib/3dwork/project';
 import {
@@ -230,7 +238,7 @@ import { ProjectListItem } from './project-list-item';
 import { SketchBoard } from './sketch-board';
 import { SteelPanel, makeCutItem } from './steel';
 import { renderThumbnail } from './thumbnail';
-import { Viewport, type ViewportCallout, type ViewportPart, type ViewportSeamBrush } from './viewport';
+import { Viewport, type MotionDrive, type ViewportCallout, type ViewportPart, type ViewportSeamBrush } from './viewport';
 import { SeamBrushBar, type SeamStrength, type SeamTool } from './seam-brush-bar';
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
@@ -245,9 +253,25 @@ import { KitBoard } from './kit-board';
 import { CloudPicker } from './cloud-picker';
 import { OnePieceDialog, type OnePieceSettings } from './one-piece-dialog';
 import { BuilderPanel } from './builder-panel';
-import { FavoritesGallery } from './favorites-gallery';
+import { PartsLibrary, type LibraryTab } from './parts-library';
+import { NameDialog } from './name-dialog';
 import { HammerDialog } from './hammer-dialog';
-import { addFavorite, loadFavoriteGeometry, type Favorite } from '@/lib/3dwork/favorites';
+import { MotionPanel } from './motion-panel';
+import { DEFAULT_HAMMER, hammerStrike, springRate, type HammerInputs, type SpringCoil } from '@/lib/3dwork/hammer';
+import { cyclePhases } from '@/lib/3dwork/motion';
+import { muzzleResult, DEFAULT_SHOT, type ShotParams } from '@/lib/3dwork/muzzle';
+import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
+import { addFavorite, updateFavoriteMesh } from '@/lib/3dwork/favorites';
+import { turnAboutWorld } from '@/lib/3dwork/turn';
+import { classifyPart, readMark } from '@/lib/3dwork/categories';
+import {
+  bumpVersionName,
+  copyBuild,
+  failureNote,
+  FROM_LIBRARY,
+  suggestLibraryName,
+  type BoardItem,
+} from '@/lib/3dwork/parts-library';
 
 type Mode = 'assembled' | 'scattered' | 'free';
 type Workspace = 'kits' | 'bench' | 'sketch';
@@ -310,12 +334,24 @@ export function Workbench({
   pendingImport,
   pendingCloudId,
   onPendingConsumed,
+  startFresh = false,
+  libraryEdit = null,
+  onExit,
 }: {
   initialWorkspace?: Workspace;
   pendingImport?: { files: File[]; tags: Record<string, { slotId: string; kitId: string }> } | null;
   pendingCloudId?: string | null;
   onPendingConsumed?: () => void;
+  /** Start on a new, empty build instead of the one left open. */
+  startFresh?: boolean;
+  /** Changing a saved part from the Partasafn: the board holds it; saving writes it back to the library. */
+  libraryEdit?: { favoriteId: string; name: string; projectId: string } | null;
+  /** Back to the start page. */
+  onExit?: () => void;
 } = {}) {
+  const startFreshRef = useRef(startFresh);
+  const libraryEditRef = useRef(libraryEdit);
+  libraryEditRef.current = libraryEdit;
   const [project, setProject] = useState<Project>(() => createProject());
   const [geometries, setGeometries] = useState<Map<string, Float32Array>>(() => new Map());
   const [layoutChoice, setMode] = useState<Mode>('scattered');
@@ -419,6 +455,36 @@ export function Workbench({
   // Centre mode: every drawn part laid on one vertical wall (shared Z), camera
   // pinned front-on and depth locked, so they line up in 2-D before 3-D.
   const [centerMode, setCenterMode] = useState(false);
+  // Prufukeyrsla (test-run): play the blowback cycle on the real parts.
+  const [motionMode, setMotionMode] = useState(false);
+  const [motionPlaying, setMotionPlaying] = useState(true);
+  const [motionScrub, setMotionScrub] = useState<number | null>(null);
+  const [motionSpeed, setMotionSpeed] = useState(0.8);
+  const [motionInput, setMotionInput] = useState<HammerInputs>(DEFAULT_HAMMER);
+  const [motionCoil, setMotionCoil] = useState<SpringCoil>({ wireMm: 1.6, meanDiameterMm: 12, activeCoils: 18 });
+  const [motionClash, setMotionClash] = useState<string[]>([]);
+  const [motionShot, setMotionShot] = useState<ShotParams>(DEFAULT_SHOT);
+  // One tap seeds the test-run with Aggi's Iron wolf numbers (⌀28 body, 274 g
+  // hammer, ⌀15/1,5 spring, 70 mm stroke, CO2 57 bar, ⌀6 valve seat, ⌀25
+  // blowback face), overriding whatever the sliders (or localStorage) held.
+  const loadIronWolf = useCallback(() => {
+    setMotionInput({
+      hammerMassG: 274,
+      springRateNmm: 0.85,
+      freeLengthMm: 140,
+      strikeLengthMm: 120,
+      cockedLengthMm: 50,
+      dragN: 4,
+      pressureBar: 57,
+      valveSealMm: 6,
+      valvePreloadN: 15,
+      valveLiftMm: 2.5,
+      contactMs: 1,
+      hammerFaceMm: 25,
+    });
+    setMotionCoil({ wireMm: 1.5, meanDiameterMm: 13.5, activeCoils: 25 });
+    setMotionShot({ boreMm: 17.3, barrelMm: 130, effPct: 12, throatMm: 6, ballG: 3.2, airThrough: true });
+  }, []);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
     removeTool: false,
@@ -442,7 +508,14 @@ export function Workbench({
   const [outlineBusy, setOutlineBusy] = useState(false);
   const [showGithub, setShowGithub] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
-  const [showFavorites, setShowFavorites] = useState(false);
+  // The Partasafn, open on one of its tabs; null when closed.
+  const [libraryTab, setLibraryTab] = useState<LibraryTab | null>(null);
+  // "Vista í Partasafn…" for the selected part, and "Vista sem…" for the build.
+  const [saveAsPart, setSaveAsPart] = useState<{ partId: string; name: string } | null>(null);
+  const [saveAsStarred, setSaveAsStarred] = useState(false);
+  // Which collection and category the part goes into.
+  const [saveAsTarget, setSaveAsTarget] = useState<SaveTarget>({});
+  const [saveBuildAs, setSaveBuildAs] = useState(false);
   const [showHammer, setShowHammer] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
   const [githubToken, setGithubToken] = useState('');
@@ -547,7 +620,10 @@ export function Workbench({
         .filter((thumbnail): thumbnail is string => Boolean(thumbnail))
         .slice(0, 3),
     }));
-    const merged = mergeProjectLists(local, cloud);
+    // An empty build that never reached Supabase ("New build · 0 parts") is not worth a row — unless it is the one open.
+    const merged = mergeProjectLists(local, cloud).filter(
+      (entry) => entry.parts > 0 || entry.cloud || entry.id === projectRef.current.id
+    );
     if (githubRef.current.connected) {
       try {
         const remote = await githubListProjects();
@@ -597,6 +673,8 @@ export function Workbench({
     async (reason: 'auto' | 'manual' = 'auto') => {
       if (!loadedRef.current || cloudBusyRef.current) return;
       if (reason === 'auto' && !cloudDirtyRef.current) return;
+      // A board opened to change one saved part is a scratch pad: it goes back to the library, not to Supabase as a build.
+      if (libraryEditRef.current?.projectId === projectRef.current.id) return;
       if (projectRef.current.parts.length === 0) {
         if (reason === 'manual') toast.error('Add a part before saving to Supabase.');
         return;
@@ -765,7 +843,7 @@ export function Workbench({
       if (cancelled) return;
 
       let current: Project;
-      if (saved.length === 0) {
+      if (saved.length === 0 || startFreshRef.current) {
         // Nothing to restore: give the blank draft a real id now that we are
         // on the client, so autosave has something stable to write against.
         const draft = { ...projectRef.current, id: newProjectId() };
@@ -811,7 +889,7 @@ export function Workbench({
         const takeId =
           remoteThis && cloudIsNewer(current.updatedAt, remoteThis.updatedAt)
             ? current.id
-            : current.parts.length === 0 && newest && !importing
+            : current.parts.length === 0 && newest && !importing && !startFreshRef.current
               ? newest.id
               : null;
         if (takeId) {
@@ -1281,6 +1359,7 @@ export function Workbench({
         rotation: part.transform.rotation,
         scale: part.transform.scale,
         dimmed: placement.dimmed,
+        role: part.role,
       });
     }
     return parts;
@@ -1506,6 +1585,138 @@ export function Workbench({
     },
     []
   );
+
+  // ---- Prufukeyrsla (test-run) derivations ----
+  const motionResult = useMemo(
+    () => hammerStrike({ ...motionInput, springRateNmm: springRate(motionCoil) }),
+    [motionInput, motionCoil]
+  );
+  const motionStroke = Math.max(1, motionInput.strikeLengthMm - motionInput.cockedLengthMm);
+  const motionMuzzle = useMemo(
+    () =>
+      muzzleResult(
+        { ...motionShot, pressureBar: motionInput.pressureBar },
+        { dwellMs: motionResult.dwellMs, opens: motionResult.bottomsOut || motionResult.valveLiftMm > 0.5 }
+      ),
+    [motionShot, motionInput.pressureBar, motionResult]
+  );
+
+  // The world axis the bolt+hammer group reciprocates along — the long axis of
+  // the parts tagged recip (or of the whole bench when none are tagged yet).
+  const recipAxis = useMemo<{ axis: 'x' | 'y' | 'z'; sign: 1 | -1 }>(() => {
+    const recip = new Set(project.parts.filter((p) => p.role === 'recip').map((p) => p.id));
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    let any = false;
+    for (const part of project.parts) {
+      if (recip.size > 0 && !recip.has(part.id)) continue;
+      const soup = geometries.get(part.activeVersionId);
+      if (!soup) continue;
+      const b = computeBounds(soup);
+      const pos = partWorldPos(part);
+      const base = [pos.x, pos.y, pos.z];
+      for (let k = 0; k < 3; k++) {
+        lo[k] = Math.min(lo[k], base[k] + b.min[k]);
+        hi[k] = Math.max(hi[k], base[k] + b.max[k]);
+      }
+      any = true;
+    }
+    if (!any) return { axis: 'x', sign: 1 };
+    const span = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+    const idx = span[0] >= span[1] && span[0] >= span[2] ? 0 : span[1] >= span[2] ? 1 : 2;
+    return { axis: (['x', 'y', 'z'] as const)[idx], sign: 1 };
+  }, [project.parts, geometries, partWorldPos]);
+
+  const axisCfg = project.motionAxis ?? recipAxis;
+  const axisUnit = useMemo(
+    () => ({
+      x: axisCfg.axis === 'x' ? axisCfg.sign : 0,
+      y: axisCfg.axis === 'y' ? axisCfg.sign : 0,
+      z: axisCfg.axis === 'z' ? axisCfg.sign : 0,
+    }),
+    [axisCfg.axis, axisCfg.sign]
+  );
+
+  const motionDrive = useMemo<MotionDrive | null>(() => {
+    if (!motionMode) return null;
+    return {
+      enabled: true,
+      playing: motionPlaying,
+      scrub: motionScrub,
+      axis: axisUnit,
+      strokeMm: motionStroke,
+      valveLiftMm: Math.min(Math.max(motionInput.valveLiftMm, 0.5), 8),
+      ballFlightMm: Math.max(motionStroke * 4, 120),
+      phases: cyclePhases(motionResult, motionSpeed),
+    };
+  }, [motionMode, motionPlaying, motionScrub, axisUnit, motionStroke, motionInput.valveLiftMm, motionResult, motionSpeed]);
+
+  const setPartRole = useCallback(
+    (id: string, role: MarkerRole | undefined) => {
+      patchProject(
+        (cur) => ({ ...cur, parts: cur.parts.map((p) => (p.id === id ? { ...p, role } : p)) }),
+        { history: false }
+      );
+    },
+    [patchProject]
+  );
+  const autoRoles = useCallback(() => {
+    const guess = (name: string): MarkerRole | undefined => {
+      const n = name.toLowerCase();
+      if (/(kúla|kula|\bball\b|paintball|\bbb\b)/.test(n)) return 'ball';
+      if (/(ventil|valve|poppet|pinni|\bpin\b|stem)/.test(n)) return 'valve';
+      if (/(bolt|bolti|hamar|hammer|striker|slag|breech|ram)/.test(n)) return 'recip';
+      return undefined;
+    };
+    patchProject((cur) => ({ ...cur, parts: cur.parts.map((p) => ({ ...p, role: guess(p.name) })) }), {
+      history: false,
+    });
+  }, [patchProject]);
+  const setMotionAxis = useCallback(
+    (axis: 'x' | 'y' | 'z') => {
+      patchProject((cur) => ({ ...cur, motionAxis: { axis, sign: cur.motionAxis?.sign ?? 1 } }), { history: false });
+    },
+    [patchProject]
+  );
+  const flipMotion = useCallback(() => {
+    patchProject(
+      (cur) => ({
+        ...cur,
+        motionAxis: { axis: cur.motionAxis?.axis ?? 'x', sign: ((cur.motionAxis?.sign ?? 1) * -1) as 1 | -1 },
+      }),
+      { history: false }
+    );
+  }, [patchProject]);
+  const toggleMotion = useCallback(() => {
+    setMotionMode((v) => {
+      const next = !v;
+      if (next) {
+        setMotionPlaying(true);
+        setMotionScrub(null);
+      }
+      return next;
+    });
+  }, []);
+  const motionPartList = useMemo(
+    () => project.parts.filter((p) => p.visible).map((p) => ({ id: p.id, name: p.name, role: p.role })),
+    [project.parts]
+  );
+  // Share the hammer numbers with the Hammer dialog's store, so both agree.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('kjarni3d_hammer');
+      if (raw) setMotionInput((cur) => ({ ...cur, ...(JSON.parse(raw) as Partial<HammerInputs>) }));
+    } catch {
+      /* private mode, or an older value */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('kjarni3d_hammer', JSON.stringify(motionInput));
+    } catch {
+      /* the numbers just are not remembered */
+    }
+  }, [motionInput]);
 
   /**
    * Move one step along the history in either direction.
@@ -2001,24 +2212,19 @@ export function Workbench({
     [patchProject, mode, partWorldPos, centerMode]
   );
 
-  /** Commit a viewport grab-to-rotate: add the degree delta to the rotation. */
+  /**
+   * Commit a turn of a part by degrees about the world axes (x, then y, then z)
+   * — a grab-to-rotate in the viewport, the ± buttons or the arrow keys. Turned
+   * as a quaternion, so X and Z stay two different axes whatever the part's
+   * turn already is (adding to the Euler numbers made them one at 90° about Y).
+   */
   const spinPart = useCallback(
     (id: string, delta: { x: number; y: number; z: number }) => {
       patchProject((current) => ({
         ...current,
         parts: current.parts.map((part) =>
           part.id === id
-            ? {
-                ...part,
-                transform: {
-                  ...part.transform,
-                  rotation: {
-                    x: part.transform.rotation.x + delta.x,
-                    y: part.transform.rotation.y + delta.y,
-                    z: part.transform.rotation.z + delta.z,
-                  },
-                },
-              }
+            ? { ...part, transform: { ...part.transform, rotation: turnAboutWorld(part.transform.rotation, delta) } }
             : part
         ),
       }));
@@ -2222,6 +2428,33 @@ export function Workbench({
     });
     if (mode !== 'free') setMode('free');
   }, [drawnIds, mode, sizes, patchProject]);
+
+  // Centre mode: put every drawn part on the middle of the base — its centre
+  // on the base's centre line (x = 0) and on the wall through the middle of the
+  // base (z = 0) — each keeping its height, so the stack only needs sliding up
+  // and down to line up. Hidden parts stay put; one undo step.
+  const centreOnBase = useCallback(() => {
+    const boxById = new Map(snapNeighbors.map((entry) => [entry.id, entry.box]));
+    const drawn = new Set(drawnIds);
+    patchProject((current) => ({
+      ...current,
+      parts: current.parts.map((part) => {
+        const box = drawn.has(part.id) ? boxById.get(part.id) : undefined;
+        if (!box) return part;
+        const fp = part.freePos ?? partWorldPos(part);
+        return {
+          ...part,
+          freePos: {
+            x: fp.x - (box.min[0] + box.max[0]) / 2,
+            y: fp.y,
+            z: fp.z - (box.min[2] + box.max[2]) / 2,
+          },
+        };
+      }),
+    }));
+    if (mode !== 'free') setMode('free');
+    setFrameToken((token) => token + 1);
+  }, [snapNeighbors, drawnIds, partWorldPos, mode, patchProject]);
 
   const toggleCenterMode = useCallback(() => {
     if (centerMode) {
@@ -4102,7 +4335,7 @@ export function Workbench({
 
   /** The selected part weighed, for the hammer calculator — only while it is open. */
   const hammerCandidate = useMemo(() => {
-    if (!showHammer || !selectedPart) return null;
+    if ((!showHammer && !motionMode) || !selectedPart) return null;
     const soup = soupOfPart(selectedPart.id);
     if (!soup) return null;
     const { scale: s } = selectedPart.transform;
@@ -4118,7 +4351,7 @@ export function Workbench({
       name: selectedPart.name,
       massG: massGrams(stats.volume * scale, materialById(selectedPart.materialId).density),
     };
-  }, [showHammer, selectedPart, soupOfPart]);
+  }, [showHammer, motionMode, selectedPart, soupOfPart]);
 
   const sliceAxisIndex = { x: 0, y: 1, z: 2 }[sliceSpec.axis];
 
@@ -4149,114 +4382,216 @@ export function Workbench({
     [selectedBounds, sliceSpec.axis]
   );
 
-  /** Put the selected part on the favourites shelf, as it is turned and scaled here. */
-  const saveFavorite = useCallback(async () => {
-    const part = selectedPart;
-    const soup = part ? soupOfPart(part.id) : undefined;
-    if (!part || !soup) {
-      toast.error('Select a part first.');
+  /** Ask what to call the selected part in the Partasafn — then `storeInLibrary` saves it. */
+  const saveFavorite = useCallback(() => {
+    // With nothing selected, the one part on the bench is the part meant (17.10.2026: on the phone
+    // nothing looked selected and "Vista í Partasafn" did nothing he could see).
+    const part = selectedPart ?? (project.parts.length === 1 ? project.parts[0] : null);
+    if (!part) {
+      toast.error(
+        project.parts.length === 0
+          ? 'Enginn partur á bekknum til að vista.'
+          : 'Veldu partinn fyrst — pikkaðu á hann á bekknum — og ýttu svo aftur á „Vista í safn“.'
+      );
       return;
     }
-    setBusy(`Saving ${part.name} to favorites…`);
+    setSaveAsStarred(false);
+    const guess = classifyPart({
+      name: part.name,
+      notes: part.notes,
+      fileName: part.fileName,
+      slotId: part.slotId,
+      projectName: project.name,
+    }).category;
+    setSaveAsTarget({
+      collectionId: lastSaveCollection(),
+      category: readMark(part.category, part.categoryAuto) ?? (guess ? { category: guess, auto: true } : undefined),
+    });
+    setSaveAsPart({ partId: part.id, name: suggestLibraryName(part) });
+  }, [selectedPart, project.parts, project.name]);
+
+  /** Put a part into the Partasafn under a name, as it is turned and scaled here. */
+  /** The part changed on the bench goes back to the Partasafn as a new version of itself; then home. */
+  const saveLibraryEdit = useCallback(async () => {
+    if (!libraryEdit) return;
+    const shown = project.parts.filter((part) => part.visible);
+    if (shown.length === 0) {
+      toast.error('Ekkert á bekknum til að vista.');
+      return;
+    }
+    setBusy(`Vista ${libraryEdit.name} í Partasafn…`);
     try {
-      const { rotation, scale } = part.transform;
-      const turned =
-        rotation.x !== 0 || rotation.y !== 0 || rotation.z !== 0 ||
-        scale.x !== 1 || scale.y !== 1 || scale.z !== 1;
-      const mesh = turned
-        ? bakeTransform(soup, { position: { x: 0, y: 0, z: 0 }, rotation, scale })
-        : soup;
-      const look = lookFor(part);
-      await addFavorite(
-        {
-          name: part.name,
-          color: part.color,
-          materialId: part.materialId,
-          finishId: part.finishId,
-          thumbnail: part.thumbnail ?? renderThumbnail(mesh, look.color, look),
-        },
-        mesh
-      );
-      toast.success(`Saved ${part.name} to favorites — on the shelf on every computer.`);
+      const pieces: Float32Array[] = [];
+      for (const part of shown) {
+        const soup = soupOfPart(part.id);
+        if (!soup) continue;
+        // One part: its own frame, turned and sized as shown. Several: where they stand relative to each other.
+        const position = shown.length === 1 ? { x: 0, y: 0, z: 0 } : partWorldPos(part);
+        pieces.push(bakeTransform(soup, { position, rotation: part.transform.rotation, scale: part.transform.scale }));
+      }
+      const total = pieces.reduce((sum, piece) => sum + piece.length, 0);
+      const joined = new Float32Array(total);
+      let at = 0;
+      for (const piece of pieces) {
+        joined.set(piece, at);
+        at += piece.length;
+      }
+      const mesh = centreSoup(joined);
+      const look = lookFor(shown[0]);
+      await updateFavoriteMesh(libraryEdit.favoriteId, mesh, renderThumbnail(mesh, look.color, look));
+      await deleteProject(libraryEdit.projectId);
+      toast.success(`„${libraryEdit.name}“ vistaður í Partasafnið.`);
+      onExit?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save that favorite.');
+      toast.error(failureNote(error, 'Náði ekki að vista í Partasafnið.'));
     } finally {
       setBusy(null);
     }
-  }, [selectedPart, soupOfPart]);
+  }, [libraryEdit, project.parts, soupOfPart, partWorldPos, onExit]);
 
-  /** Put a favourite on the bench, past the far end of whatever is there. */
-  const addFavoriteToBench = useCallback(
-    async (favorite: Favorite) => {
-      setBusy(`Fetching ${favorite.name} from favorites…`);
+  /** Leave a part's edit without saving: the scratch board is dropped from this computer. */
+  const leaveLibraryEdit = useCallback(async () => {
+    if (libraryEdit) await deleteProject(libraryEdit.projectId);
+    onExit?.();
+  }, [libraryEdit, onExit]);
+
+  const storeInLibrary = useCallback(
+    async (partId: string, name: string, starred: boolean, target: SaveTarget) => {
+      const part = project.parts.find((candidate) => candidate.id === partId);
+      const soup = part ? soupOfPart(part.id) : undefined;
+      if (!part || !soup) {
+        toast.error('That part is no longer on the bench.');
+        return;
+      }
+      setBusy(`Vista ${name} í Partasafn…`);
       try {
-        const soup = await loadFavoriteGeometry(favorite.versionId);
-        if (!soup) {
-          toast.error('That favorite’s mesh is missing from the shelf.');
-          return;
-        }
-        const id = newPartId();
-        const versionId = newVersionId();
-        setGeometries((current) => new Map(current).set(versionId, soup));
-        void saveGeometry(versionId, soup);
-        const triangles = Math.floor(soup.length / 9);
-        // Beside the table's right-hand edge, so it does not land inside another part.
-        const rightEdge = snapNeighbors.reduce(
-          (edge, entry) => Math.max(edge, entry.box.max[0]),
-          -Infinity
+        const { rotation, scale } = part.transform;
+        const turned =
+          rotation.x !== 0 || rotation.y !== 0 || rotation.z !== 0 ||
+          scale.x !== 1 || scale.y !== 1 || scale.z !== 1;
+        const mesh = turned
+          ? bakeTransform(soup, { position: { x: 0, y: 0, z: 0 }, rotation, scale })
+          : soup;
+        const look = lookFor(part);
+        const saved = await addFavorite(
+          {
+            name,
+            color: part.color,
+            materialId: part.materialId,
+            finishId: part.finishId,
+            thumbnail: turned || !part.thumbnail ? renderThumbnail(mesh, look.color, look) : part.thumbnail,
+            starred,
+            collectionId: target.newCollectionName === undefined ? target.collectionId : undefined,
+            newCollectionName: target.newCollectionName?.trim() || undefined,
+            category: target.category,
+          },
+          mesh
         );
-        const freePos = Number.isFinite(rightEdge)
-          ? { x: rightEdge + 20 - computeBounds(soup).min[0], y: 200, z: 0 }
-          : { x: 0, y: 200, z: 0 };
-        patchProject((current) => ({
-          ...current,
-          parts: [
-            ...current.parts,
-            {
-              id,
-              name: favorite.name,
-              fileName: '',
-              slotId: '',
-              color: favorite.color,
-              finishId: favorite.finishId,
-              visible: true,
-              transform: {
-                position: { x: 0, y: 0, z: 0 },
-                rotation: { x: 0, y: 0, z: 0 },
-                scale: { x: 1, y: 1, z: 1 },
-              },
-              ...(freePos ? { freePos } : {}),
-              triangles,
-              materialId: favorite.materialId,
-              notes: 'From favorites',
-              versions: [
-                {
-                  id: versionId,
-                  label: 'v1 favorite',
-                  note: `From favorites: ${favorite.name}`,
-                  triangles,
-                  createdAt: Date.now(),
-                },
-              ],
-              activeVersionId: versionId,
-              thumbnail: favorite.thumbnail ?? renderThumbnail(soup, favorite.color),
-              addedAt: Date.now(),
-            },
-          ],
-        }));
-        setSelectedId(id);
-        setMarked(new Set());
-        setShowFavorites(false);
-        setWorkspace('bench');
-        setFrameToken((token) => token + 1);
-        toast.success(`Added ${favorite.name} from favorites.`);
+        rememberSaveCollection(saved.collectionId);
+        setSaveAsPart(null);
+        toast.success(`Vistað í Partasafn sem „${name}“ — á öllum tölvum.`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not fetch that favorite.');
+        toast.error(failureNote(error, 'Náði ekki að vista í Partasafn.'));
       } finally {
         setBusy(null);
       }
     },
+    [project.parts, soupOfPart]
+  );
+
+  /** Put parts from the Partasafn on the bench, in a row past the far end of whatever is there. */
+  const addItemsToBench = useCallback(
+    (items: BoardItem[]) => {
+      if (items.length === 0) return;
+      const now = Date.now();
+      // Beside the table's right-hand edge, so nothing lands inside another part.
+      let edge = snapNeighbors.reduce((far, entry) => Math.max(far, entry.box.max[0]), -Infinity);
+      if (!Number.isFinite(edge)) edge = -20;
+      const added: Part[] = [];
+      const meshes = new Map<string, Float32Array>();
+      for (const item of items) {
+        const id = newPartId();
+        const versionId = newVersionId();
+        const bounds = computeBounds(item.soup);
+        const triangles = Math.floor(item.soup.length / 9);
+        meshes.set(versionId, item.soup);
+        void saveGeometry(versionId, item.soup);
+        added.push({
+          id,
+          name: item.name,
+          fileName: '',
+          slotId: '',
+          color: item.color,
+          finishId: item.finishId,
+          visible: true,
+          transform: {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+          freePos: { x: edge + 20 - bounds.min[0], y: 0 - bounds.min[1], z: 0 - bounds.center[2] },
+          triangles,
+          materialId: item.materialId,
+          notes: FROM_LIBRARY,
+          versions: [
+            { id: versionId, label: 'v1 partasafn', note: `Úr Partasafni: ${item.name}`, triangles, createdAt: now },
+          ],
+          activeVersionId: versionId,
+          thumbnail: item.thumbnail ?? renderThumbnail(item.soup, item.color),
+          addedAt: now,
+        });
+        edge += 20 + bounds.size[0];
+      }
+      setGeometries((current) => {
+        const next = new Map(current);
+        for (const [id, soup] of meshes) next.set(id, soup);
+        return next;
+      });
+      patchProject((current) => ({ ...current, parts: [...current.parts, ...added] }));
+      setSelectedId(added[added.length - 1].id);
+      setMarked(new Set());
+      setLibraryTab(null);
+      setWorkspace('bench');
+      setFrameToken((token) => token + 1);
+      toast.success(
+        added.length === 1 ? `${added[0].name} kominn á bekkinn.` : `${added.length} partar komnir á bekkinn.`
+      );
+    },
     [patchProject, snapNeighbors]
+  );
+
+  /** A board made in the Partasafn: kept on this computer, then opened here — which saves it to Supabase. */
+  const openLibraryBoard = useCallback(
+    async (board: { project: Project; geometries: Map<string, Float32Array> }) => {
+      await persistLocal(board.project, board.geometries, board.project.updatedAt);
+      setLibraryTab(null);
+      await openProject(board.project.id);
+      toast.success(`„${board.project.name}“ opnað með ${board.project.parts.length} pörtum.`);
+    },
+    [persistLocal, openProject]
+  );
+
+  /**
+   * "Vista sem…": go on working in a copy of the build under a new name. The
+   * build as it stands now stays as it is, to go back to if the work goes wrong.
+   */
+  const saveCurrentBuildAs = useCallback(
+    async (name: string) => {
+      setBusy(`Vista sem ${name}…`);
+      try {
+        const copy = copyBuild(project, name, geometries);
+        await persistLocal(project, new Map(), project.updatedAt || undefined);
+        await persistLocal(copy.project, copy.geometries, copy.project.updatedAt);
+        setSaveBuildAs(false);
+        setBusy(null);
+        await openProject(copy.project.id);
+        toast.success(`Vistað sem „${copy.project.name}“. „${project.name}“ stendur óbreytt.`);
+      } catch (error) {
+        setBusy(null);
+        toast.error(failureNote(error, 'Náði ekki að vista afritið.'));
+      }
+    },
+    [project, geometries, persistLocal, openProject]
   );
 
   const exportCombined = useCallback(() => {
@@ -5354,6 +5689,11 @@ export function Workbench({
         return;
       }
 
+      if (meta && event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (project.parts.length > 0) setSaveBuildAs(true);
+        return;
+      }
       if (meta && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo();
@@ -5579,7 +5919,7 @@ export function Workbench({
         {
           cap: 'Library',
           tools: [
-            { icon: Star, label: 'Favorites', onClick: () => setShowFavorites(true) },
+            { icon: Library, label: 'Partasafn', onClick: () => setLibraryTab('library') },
             { icon: Upload, label: 'Import', onClick: () => fileInputRef.current?.click() },
             { icon: HardDrive, label: 'Drive', onClick: () => setShowDrive(true) },
           ],
@@ -5625,7 +5965,7 @@ export function Workbench({
           tools: [
             { icon: EyeOff, label: 'Hide', disabled: !hasSel, onClick: () => selectedId && patchPart(selectedId, { visible: false }) },
             { icon: Focus, label: 'Isolate', disabled: !hasSel, onClick: () => selectedId && setFocusId((c) => (c === selectedId ? null : selectedId)) },
-            { icon: Star, label: 'Favorite', disabled: !hasSel || busyB, onClick: () => void saveFavorite() },
+            { icon: Star, label: 'Í Partasafn', disabled: !hasSel || busyB, onClick: () => saveFavorite() },
             { icon: Trash2, label: 'Delete', tone: 'danger', disabled: !hasSel, onClick: () => selectedId && removePart(selectedId) },
           ],
         },
@@ -5669,6 +6009,7 @@ export function Workbench({
           cap: 'Physics',
           tools: [
             { icon: Zap, label: 'Hammer', tone: 'primary', disabled: !hasSel, onClick: () => setShowHammer(true) },
+            { icon: Gauge, label: 'Prufukeyrsla', on: motionMode, onClick: toggleMotion },
           ],
         },
       ],
@@ -5695,6 +6036,15 @@ export function Workbench({
               on: centerMode,
               onClick: toggleCenterMode,
               title: 'Centre mode — lay parts on one wall to line them up front-on, then turn it off to move in 3D',
+            },
+            {
+              icon: Crosshair,
+              label: 'Allt á miðju',
+              disabled: !centerMode,
+              onClick: centreOnBase,
+              title: centerMode
+                ? 'Setur alla parta á miðju grunnsins — hver heldur hæðinni sinni, svo þarf bara að renna þeim upp eða niður'
+                : 'Kveiktu á Center fyrst',
             },
           ],
         },
@@ -5783,9 +6133,36 @@ export function Workbench({
       />
 
       <div className={`${PANEL} bench-chrome relative z-40 flex flex-col gap-1 px-2 py-1.5`}>
+        {libraryEdit && (
+          <div
+            className="flex items-center gap-1.5 rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[0.72rem] text-emerald-900"
+            title="Breytir parti úr Partasafni — lagaðu hann og vistaðu svo aftur í safnið."
+          >
+            <SquarePen className="h-4 w-4 shrink-0" />
+            <b className="min-w-0 flex-1 truncate">{libraryEdit.name}</b>
+            <button type="button" className={`${ACTION_PRIMARY} shrink-0`} onClick={() => void saveLibraryEdit()} disabled={Boolean(busy)}>
+              Vista og loka
+            </button>
+            <button type="button" className={`${ACTION_GHOST} shrink-0`} onClick={() => void leaveLibraryEdit()} disabled={Boolean(busy)}>
+              Loka
+            </button>
+          </div>
+        )}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-accent)]" />
+          {onExit ? (
+            <button
+              type="button"
+              onClick={() => (libraryEdit ? void leaveLibraryEdit() : onExit())}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--wb-accent)] hover:bg-[var(--wb-tool-hover)]"
+              title="Heim — upphafssíðan: verkefni og Partasafn"
+              aria-label="Heim"
+            >
+              <House className="h-5 w-5" />
+            </button>
+          ) : (
+            <Boxes className="h-5 w-5 shrink-0 text-[var(--wb-accent)]" />
+          )}
           <input
             value={project.name}
             onChange={(event) =>
@@ -5811,13 +6188,34 @@ export function Workbench({
           </button>
           <button
             type="button"
-            onClick={() => setShowFavorites(true)}
-            title="Favorites — parts saved from any build, on every computer"
+            onClick={() => setLibraryTab('library')}
+            title="Partasafn — partar sem þú hefur vistað, og allir partar úr öllum verkefnum"
+            className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-amber-800 hover:bg-amber-100"
+          >
+            <Library className="h-3 w-3" />
+            <span className="hidden sm:inline">Partasafn</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLibraryTab('starred')}
+            title="Uppáhalds — stjörnumerktir partar í Partasafninu"
             className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-amber-800 hover:bg-amber-100"
           >
             <Star className="h-3 w-3" />
             <span className="hidden sm:inline">Favorites</span>
           </button>
+          {!libraryEdit && (
+            <button
+              type="button"
+              onClick={() => saveFavorite()}
+              disabled={Boolean(busy) || project.parts.length === 0}
+              title="Vista valda partinn í Partasafnið — undir nafni, á öllum tölvum"
+              className="flex shrink-0 items-center gap-1 rounded border border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wide text-emerald-800 hover:bg-emerald-100 disabled:opacity-40"
+            >
+              <BookmarkPlus className="h-3 w-3" />
+              Vista í safn
+            </button>
+          )}
         </div>
 
         <MenuBar>
@@ -5854,6 +6252,15 @@ export function Workbench({
           <Menu label="Project">
             <MenuItem onClick={() => createProjectFolder()} icon={FolderPlus}>
               New project
+            </MenuItem>
+            <MenuItem
+              onClick={() => setSaveBuildAs(true)}
+              icon={Save}
+              shortcut="⌘⇧S"
+              disabled={project.parts.length === 0 || Boolean(busy)}
+              hint="Afrit undir nýju nafni til að vinna áfram í — þetta stendur óbreytt"
+            >
+              Vista sem…
             </MenuItem>
             <MenuItem
               onClick={() => fileInputRef.current?.click()}
@@ -5942,12 +6349,12 @@ export function Workbench({
           {false && (<>
           <Menu label="Add">
             <MenuItem
-              onClick={() => setShowFavorites(true)}
-              icon={Star}
+              onClick={() => setLibraryTab('library')}
+              icon={Library}
               tone="primary"
               hint="Parts you saved from other builds"
             >
-              From favorites…
+              Úr Partasafni…
             </MenuItem>
             <MenuSeparator />
             <MenuLabel>Primitives</MenuLabel>
@@ -6028,12 +6435,12 @@ export function Workbench({
               Duplicate as variant
             </MenuItem>
             <MenuItem
-              onClick={() => void saveFavorite()}
+              onClick={() => saveFavorite()}
               disabled={!selectedId || Boolean(busy)}
               icon={Star}
-              hint="Kept on Supabase outside this build — for any build, on any computer"
+              hint="Undir nafni, utan verkefnisins — fyrir öll verkefni á öllum tölvum"
             >
-              Save to favorites
+              Vista í Partasafn…
             </MenuItem>
             <MenuItem
               onClick={() => setShowHammer(true)}
@@ -6693,14 +7100,17 @@ export function Workbench({
               Blaster assembly slots
             </MenuCheckItem>
             <MenuItem
-              onClick={() => void saveFavorite()}
+              onClick={() => saveFavorite()}
               disabled={!selectedId || Boolean(busy)}
               icon={Star}
-              hint="Kept on Supabase, for any build on any computer"
+              hint="Undir nafni, fyrir öll verkefni á öllum tölvum"
             >
-              Save to favorites
+              Vista í Partasafn…
             </MenuItem>
-            <MenuItem onClick={() => setShowFavorites(true)} icon={Star} hint="Parts saved from other builds">
+            <MenuItem onClick={() => setLibraryTab('library')} icon={Library} hint="Vistaðir partar og allir partar úr öllum verkefnum">
+              Partasafn…
+            </MenuItem>
+            <MenuItem onClick={() => setLibraryTab('starred')} icon={Star} hint="Stjörnumerktir partar í Partasafninu">
               Favorites…
             </MenuItem>
             <MenuItem onClick={() => setShowHammer(true)} icon={Zap} hint="Spring, hammer speed, valve dwell">
@@ -6985,7 +7395,61 @@ export function Workbench({
             onEnterMoveMode={enterMoveMode}
             onDragMove={nudgeParts}
             onDragRotate={spinPart}
+            motion={motionDrive}
+            onClash={setMotionClash}
           />
+
+          {workspace === 'bench' && (
+            <button
+              type="button"
+              onClick={toggleMotion}
+              title="Prufukeyrsla — spila blowback-hringinn á pörtunum"
+              className={`absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-4 py-2 text-[0.8rem] font-bold shadow-lg transition ${
+                motionMode
+                  ? 'border-amber-300 bg-amber-500 text-amber-950'
+                  : 'border-amber-500/60 bg-slate-900/90 text-amber-300 hover:bg-slate-800'
+              }`}
+            >
+              <Gauge className="h-4 w-4" />
+              Prufukeyrsla
+            </button>
+          )}
+
+          {motionMode && (
+            <MotionPanel
+              onClose={() => setMotionMode(false)}
+              parts={motionPartList}
+              onRole={setPartRole}
+              onAuto={autoRoles}
+              input={motionInput}
+              setInput={(patch) => setMotionInput((cur) => ({ ...cur, ...patch }))}
+              coil={motionCoil}
+              setCoil={(patch) => setMotionCoil((cur) => ({ ...cur, ...patch }))}
+              result={motionResult}
+              strokeMm={motionStroke}
+              setStroke={(mm) =>
+                setMotionInput((cur) => ({ ...cur, cockedLengthMm: Math.max(0, cur.strikeLengthMm - mm) }))
+              }
+              selected={hammerCandidate}
+              playing={motionPlaying}
+              setPlaying={setMotionPlaying}
+              scrub={motionScrub}
+              setScrub={setMotionScrub}
+              speed={motionSpeed}
+              setSpeed={setMotionSpeed}
+              axis={axisCfg.axis}
+              sign={axisCfg.sign}
+              setAxis={setMotionAxis}
+              flip={flipMotion}
+              clashCount={motionClash.length}
+              muzzle={motionMuzzle}
+              shot={motionShot}
+              setShot={(patch) => setMotionShot((cur) => ({ ...cur, ...patch }))}
+              onOpenHammer={() => setShowHammer(true)}
+              onLoadMarker={loadIronWolf}
+              markerName="Iron wolf"
+            />
+          )}
 
           {project.parts.length > 0 && moveModeId && (() => {
             const mp = project.parts.find((part) => part.id === moveModeId);
@@ -7151,7 +7615,7 @@ export function Workbench({
               canMove={Boolean(selectedId) && !moveModeId}
               onSplit={() => openSlice(true)}
               canSplit={Boolean(selectedId) && !busy}
-              onFavorite={() => void saveFavorite()}
+              onFavorite={() => saveFavorite()}
               canFavorite={Boolean(selectedId) && !busy}
               onCoaxial={alignCoaxial}
               canCoaxial={pickedOnTable.length >= 2}
@@ -7321,7 +7785,7 @@ export function Workbench({
             onCenter={centerPart}
             onDuplicate={duplicatePart}
             onToggleVisible={togglePartVisible}
-            onSaveFavorite={() => void saveFavorite()}
+            onSaveFavorite={() => saveFavorite()}
             onAutoFix={runAutoFix}
             onSimplify={runSimplify}
             onFixMisalignment={runFixMisalignment}
@@ -7975,13 +8439,48 @@ export function Workbench({
         selected={hammerCandidate}
       />
 
-      <FavoritesGallery
-        open={showFavorites}
-        onClose={() => setShowFavorites(false)}
-        onAdd={addFavoriteToBench}
-        onSaveSelected={saveFavorite}
-        selectedName={selectedPart?.name ?? null}
+      <PartsLibrary
+        open={libraryTab !== null}
+        initialTab={libraryTab ?? 'library'}
+        onClose={() => setLibraryTab(null)}
+        onOpenBoard={openLibraryBoard}
+        onAddToBench={addItemsToBench}
+      />
+
+      <NameDialog
+        open={saveAsPart !== null}
+        title="Vista í Partasafn"
+        hint="Partinn eins og hann er hér, undir nafni — á öllum tölvum. Vistaðu aftur seinna sem nýja útgáfu."
+        defaultName={saveAsPart?.name ?? ''}
+        confirmLabel="Vista"
         busy={Boolean(busy)}
+        onCancel={() => setSaveAsPart(null)}
+        onConfirm={(name) => {
+          if (!saveAsPart) return undefined;
+          if (!saveTargetReady(saveAsTarget)) {
+            toast.error('Gefðu nýja safninu nafn.');
+            return undefined;
+          }
+          return storeInLibrary(saveAsPart.partId, name, saveAsStarred, saveAsTarget);
+        }}
+      >
+        <SaveTargetFields value={saveAsTarget} onChange={setSaveAsTarget} disabled={Boolean(busy)} />
+        <label className="flex items-center gap-2 text-[0.75rem] text-[var(--wb-ink)]">
+          <input type="checkbox" checked={saveAsStarred} onChange={(event) => setSaveAsStarred(event.target.checked)} />
+          <Star className="h-3.5 w-3.5 text-amber-500" />
+          Líka í Uppáhalds
+        </label>
+      </NameDialog>
+
+      <NameDialog
+        open={saveBuildAs}
+        title="Vista verkefnið sem…"
+        hint={`Þú heldur áfram í afritinu. „${project.name}“ stendur eins og það er núna — þangað geturðu farið aftur ef eitthvað fer úrskeiðis.`}
+        defaultName={bumpVersionName(project.name)}
+        confirmLabel="Vista sem"
+        busy={Boolean(busy)}
+        onCancel={() => setSaveBuildAs(false)}
+        onConfirm={(name) => saveCurrentBuildAs(name)}
       />
 
       <CloudPicker

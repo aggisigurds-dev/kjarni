@@ -57,8 +57,10 @@ export function CloudPicker({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className={`${PANEL} flex max-h-[min(36rem,90dvh)] w-full max-w-md flex-col p-4`}>
+    // Carries the bench theme itself: opened from the home page, which has none
+    // of its own, the panel had no background and the cards behind showed through.
+    <div className="wb-theme fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm">
+      <div className={`${PANEL} flex max-h-[min(36rem,90dvh)] w-full max-w-md flex-col p-4 shadow-2xl`}>
         <div className="mb-2 flex items-start gap-2">
           <Cloud className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
           <div>

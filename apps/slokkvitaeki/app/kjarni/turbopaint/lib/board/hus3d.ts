@@ -17,7 +17,7 @@ import { dilarAMetraGisk } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject, SymbolObject } from "./types";
 import { innflutningsSlod } from "./uttekt";
 
-export type VeggTegund3D = "veggur" | "gler" | "hurd";
+export type VeggTegund3D = "veggur" | "gler" | "hurd" | "svalir" | "stigi";
 /** Eldflokkur veggjar í mínútum: 60 = EI-60, 30 = EI-30, 0 = ekki brunaveggur (eða óþekktur flokkur). */
 export type Eldflokkur = 0 | 30 | 60;
 
@@ -343,9 +343,24 @@ function rammiButa(butar: Veggbutur[]): Rammi | null {
   return r;
 }
 
+/** Stuttir veggbútar sem koma úr húsgögnum / málstrikum — ekki lyfta í 3D-yfirliti. Gler, hurðir og eldveggir haldast.
+ * `husL` = lengsta hlið hússins (dílar). Lágmark ~7 % af henni (≈ 1,8 m á 26 m húsi). Ef síunin tæmdi húsið er henni sleppt. */
+export function siaVeggiFyrirYfirlit(veggir: Veggbutur[], husL: number): Veggbutur[] {
+  if (!(husL > 0) || veggir.length < 8) return veggir;
+  const min = husL * 0.07;
+  const haldnir = veggir.filter(
+    (v) => v.tegund !== "veggur" || v.eld > 0 || v.laus || Math.hypot(v.bx - v.ax, v.by - v.ay) >= min
+  );
+  return haldnir.some((v) => v.tegund === "veggur") ? haldnir : veggir;
+}
+
 /** Byggir hæðir úr borðinu. Teikningar án veggja og tækja (skráningartöflur, afstöðumyndir) detta út — nema engin hafi neitt.
  * `taeki` = tækjalisti staðarins (tegund og staða tengdra tákna). */
-export function husUrBordi(objects: BoardObject[], taeki: Taekjaupplysingar[] = []): Haed3D[] {
+export function husUrBordi(
+  objects: BoardObject[],
+  taeki: Taekjaupplysingar[] = [],
+  st: { synaStuttaVeggi?: boolean } = {}
+): Haed3D[] {
   const plon = objects.filter((o): o is ImageObject => o.type === "image");
   const notad = new Set<string>();
   const haedir: Haed3D[] = [];
@@ -422,9 +437,14 @@ export function husUrBordi(objects: BoardObject[], taeki: Taekjaupplysingar[] = 
       const k = klippaBut(v, golf);
       if (k && Math.hypot(k.bx - k.ax, k.by - k.ay) >= 0.5) lausar.push(k);
     }
-    const allir = [...fastir, ...lausar];
+    const hrair = [...fastir, ...lausar];
+    const umfang0 = rammiButa(fastir) ?? rammiButa(lausar);
+    const husL = umfang0 ? Math.max(umfang0.x1 - umfang0.x0, umfang0.y1 - umfang0.y0) : Math.max(plan.width, plan.height);
+    // Í ítarlegri 3D-sýn megum við ekki fella út stutta, vistaða veggi: margir þeirra eru
+    // baðherbergi, skilrúm og veggbútar milli dyra. Flýti-/yfirlitssían er enn tiltæk.
+    const allir = st.synaStuttaVeggi ? hrair : siaVeggiFyrirYfirlit(hrair, husL);
     // „Stærð hússins" (kvarðapróf, römmun): raunverulegir veggir; lausar merkingar aðeins ef engir veggir eru
-    const umfang = rammiButa(fastir) ?? rammiButa(lausar);
+    const umfang = rammiButa(allir.filter((v) => !v.laus)) ?? rammiButa(allir);
     haedir.push({ plan, nafn: plan.name, breidd: plan.width, haed: plan.height, veggir: allir, taeki: taekiH, umfang, golf });
   }
   const medEfni = haedir.filter((h) => h.veggir.length || h.taeki.length);

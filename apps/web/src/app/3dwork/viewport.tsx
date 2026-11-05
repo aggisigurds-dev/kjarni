@@ -38,6 +38,8 @@ import {
 } from '@/lib/3dwork/seam-brush';
 import { isSlowMachine } from '@/lib/3dwork/slow-machine';
 import { snapAngle, snapHint, snapTranslation, type Aabb } from '@/lib/3dwork/snap';
+import { cyclePose, scrubToTime, type CyclePhases } from '@/lib/3dwork/motion';
+import { worldTurnQuaternion } from '@/lib/3dwork/turn';
 import type { SeamTool } from './seam-brush-bar';
 
 export interface ViewportPart {
@@ -52,6 +54,22 @@ export interface ViewportPart {
   scale: { x: number; y: number; z: number };
   /** Spare variants are drawn faded so the fitted part reads clearly. */
   dimmed: boolean;
+  /** Prufukeyrsla: mechanical role, so the cycle loop knows what to move. */
+  role?: 'recip' | 'valve' | 'ball';
+}
+
+/** Prufukeyrsla: the blowback cycle the viewport animates when test-run is on. */
+export interface MotionDrive {
+  enabled: boolean;
+  playing: boolean;
+  /** 0..1 to freeze the cycle at; null plays from the clock. */
+  scrub: number | null;
+  /** Unit vector toward the muzzle, world space. */
+  axis: { x: number; y: number; z: number };
+  strokeMm: number;
+  valveLiftMm: number;
+  ballFlightMm: number;
+  phases: CyclePhases;
 }
 
 export interface ViewportCallout {
@@ -158,8 +176,39 @@ interface ViewportProps {
   onEnterMoveMode: (id: string) => void;
   /** Commit a world-space move of parts (the same delta added to each offset). */
   onDragMove: (ids: string[], delta: { x: number; y: number; z: number }) => void;
-  /** Commit a rotation of a part (delta degrees added to its rotation). */
+  /** Commit a rotation of a part: degrees about the world axes, x then y then z. */
   onDragRotate: (id: string, delta: { x: number; y: number; z: number }) => void;
+  /** Prufukeyrsla: the blowback cycle to animate, or null when test-run is off. */
+  motion?: MotionDrive | null;
+  /** Prufukeyrsla: ids whose boxes newly overlap during the cycle (interference). */
+  onClash?: (ids: string[]) => void;
+}
+
+/** The colours of the three axes, shared with the move / rotate panel: X red, Y green, Z blue. */
+export const AXIS_COLORS = { x: '#ef4444', y: '#22c55e', z: '#3b82f6' } as const;
+
+/**
+ * Three rings around a part in rotate mode, one per world axis, each with an
+ * arrowhead showing which way „+" turns it. Unit radius; scaled to the part.
+ */
+function makeRotateGizmo(): THREE.Group {
+  const gizmo = new THREE.Group();
+  gizmo.renderOrder = 999;
+  for (const axis of ['x', 'y', 'z'] as const) {
+    const material = new THREE.MeshBasicMaterial({ color: AXIS_COLORS[axis], depthTest: false, transparent: true, opacity: 0.9 });
+    const ring = new THREE.Group();
+    // Three quarters of a circle about +Z, counter-clockwise seen from +Z — the way a positive turn goes.
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(1, 0.022, 8, 72, Math.PI * 1.5), material);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 16), material);
+    head.position.set(0, -1, 0);
+    head.rotation.z = -Math.PI / 2; // the arc ends at (0, -1, 0) heading +X
+    for (const piece of [arc, head]) piece.renderOrder = 999;
+    ring.add(arc, head);
+    if (axis === 'x') ring.rotation.y = Math.PI / 2; // its +Z becomes +X
+    if (axis === 'y') ring.rotation.x = -Math.PI / 2; // its +Z becomes +Y
+    gizmo.add(ring);
+  }
+  return gizmo;
 }
 
 const DEG = Math.PI / 180;
@@ -335,6 +384,9 @@ interface Grab {
   startPoint: THREE.Vector3;
   startPos: THREE.Vector3;
   startRot: THREE.Euler;
+  startQuat: THREE.Quaternion;
+  /** Rotate mode: the degrees turned so far, about the world axes. */
+  turn: { x: number; y: number; z: number };
   mode: 'move' | 'rotate';
   /** Axis lock: move mode's setting, or none for a drag in the builder view. */
   axis: 'xyz' | 'x' | 'y' | 'z';
@@ -377,6 +429,75 @@ function buildBrushGeometry(brush: SeamBrushMesh): THREE.BufferGeometry {
   // The whole of it goes to the GPU with the first frame.
   brush.dirty.clear();
   return geometry;
+}
+
+/** Prufukeyrsla loop state kept in a ref, read every frame by the render loop. */
+interface MotionRefState {
+  drive: MotionDrive | null;
+  time: number;
+  last: number;
+  baseline: Set<string>;
+  lastClash: string;
+}
+
+const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+/** Every pair of part meshes whose world boxes currently overlap. */
+function overlapPairs(state: SceneRefs | null): Set<string> {
+  const out = new Set<string>();
+  if (!state) return out;
+  const boxes: Array<[string, THREE.Box3]> = [];
+  for (const [id, mesh] of state.meshes) boxes.push([id, new THREE.Box3().setFromObject(mesh)]);
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      if (boxes[i][1].intersectsBox(boxes[j][1])) out.add(pairKey(boxes[i][0], boxes[j][0]));
+    }
+  }
+  return out;
+}
+
+/** Drop the red interference tint from every part. */
+function clearClashTint(state: SceneRefs | null): void {
+  if (!state) return;
+  for (const [, mesh] of state.meshes) {
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.emissive && material.emissive.getHex() !== 0) {
+      material.emissive.setHex(0);
+      material.emissiveIntensity = 0;
+    }
+  }
+}
+
+/**
+ * Light up parts whose boxes overlap now but did not at rest — interference the
+ * stroke introduces, as opposed to the nesting a marker has by design.
+ */
+function runClearance(state: SceneRefs, md: MotionRefState, onClash?: (ids: string[]) => void): void {
+  const current = overlapPairs(state);
+  const clash = new Set<string>();
+  for (const key of current) {
+    if (md.baseline.has(key)) continue;
+    const [a, b] = key.split('|');
+    clash.add(a);
+    clash.add(b);
+  }
+  for (const [id, mesh] of state.meshes) {
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    const hot = clash.has(id);
+    const cur = material.emissive ? material.emissive.getHex() : 0;
+    if (hot && cur !== 0xef4444) {
+      material.emissive.setHex(0xef4444);
+      material.emissiveIntensity = 0.5;
+    } else if (!hot && cur !== 0) {
+      material.emissive.setHex(0);
+      material.emissiveIntensity = 0;
+    }
+  }
+  const sig = [...clash].sort().join(',');
+  if (sig !== md.lastClash) {
+    md.lastClash = sig;
+    onClash?.([...clash]);
+  }
 }
 
 export function Viewport({
@@ -422,8 +543,19 @@ export function Viewport({
   onEnterMoveMode,
   onDragMove,
   onDragRotate,
+  motion,
+  onClash,
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const motionRef = useRef<MotionRefState>({
+    drive: null,
+    time: 0,
+    last: performance.now(),
+    baseline: new Set<string>(),
+    lastClash: '',
+  });
+  const onClashRef = useRef(onClash);
+  onClashRef.current = onClash;
   const refs = useRef<SceneRefs | null>(null);
 
   // Callout DOM, addressed by slot id and positioned from the render loop.
@@ -843,14 +975,39 @@ export function Viewport({
       state.raf = requestAnimationFrame(tick);
       runSeamStroke(SEAM_FRAME_BUDGET_MS);
       syncSeamBrush();
+      // Prufukeyrsla: where in the blowback cycle we are this frame (null = off).
+      const md = motionRef.current;
+      const drive = md.drive;
+      let pose = null as ReturnType<typeof cyclePose> | null;
+      if (drive && drive.enabled) {
+        const nowMs = performance.now();
+        const dt = Math.min((nowMs - md.last) / 1000, 0.05);
+        md.last = nowMs;
+        if (drive.scrub != null) md.time = scrubToTime(drive.scrub, drive.phases);
+        else if (drive.playing) md.time += dt;
+        pose = cyclePose(md.time, drive.phases, drive.strokeMm, drive.valveLiftMm);
+      }
       // Ease every mesh toward its arrangement position; this is what makes
-      // scatter and assemble read as one motion instead of a jump cut.
+      // scatter and assemble read as one motion instead of a jump cut. Parts
+      // with a cycle role are driven straight to their stroke position instead.
       for (const [id, mesh] of state.meshes) {
         const target = state.targets.get(id);
+        const role = mesh.userData.role as 'recip' | 'valve' | 'ball' | undefined;
+        if (pose && drive && role && target) {
+          const off =
+            role === 'recip' ? pose.recipMm : role === 'valve' ? pose.valveMm : pose.ball * drive.ballFlightMm;
+          mesh.position.set(
+            target.x + drive.axis.x * off,
+            target.y + drive.axis.y * off,
+            target.z + drive.axis.z * off
+          );
+          continue;
+        }
         if (target && mesh.position.distanceToSquared(target) > 1e-4) {
           mesh.position.lerp(target, EASE);
         }
       }
+      if (pose) runClearance(state, md, onClashRef.current);
       if (state.selection.visible) state.selection.update();
       for (const box of state.markedBoxes.children) (box as THREE.BoxHelper).update();
       // The cut plane rides the part it belongs to while that part eases home.
@@ -1167,6 +1324,8 @@ export function Viewport({
         startPoint: hits[0].point.clone(),
         startPos: mesh.position.clone(),
         startRot: mesh.rotation.clone(),
+        startQuat: mesh.quaternion.clone(),
+        turn: { x: 0, y: 0, z: 0 },
         mode,
         axis: armed ? h.moveAxis : 'xyz',
         riders,
@@ -1212,20 +1371,21 @@ export function Viewport({
         const pitchPx = (event.clientY - grab.startClient.y) * ROT_PER_PX;
         const step = Math.max(0.1, h.rotateStep);
         const axis = h.rotateAxis;
-        const next = grab.startRot.clone();
+        const turn = { x: 0, y: 0, z: 0 };
         if (axis === 'x' || axis === 'y' || axis === 'z') {
           // Dominant screen axis drives a single world axis — the CAD way to
           // get a rotation to land where you meant it.
           const raw = Math.abs(yawPx) >= Math.abs(pitchPx) ? yawPx : -pitchPx;
-          const abs = grab.startRot[axis] / DEG + raw;
-          next[axis] = snapAngle(abs, step) * DEG;
+          turn[axis] = snapAngle(raw, step);
         } else if (event.shiftKey) {
-          next.z = snapAngle(grab.startRot.z / DEG + yawPx, step) * DEG;
+          turn.z = snapAngle(yawPx, step);
         } else {
-          next.x = snapAngle(grab.startRot.x / DEG + pitchPx, step) * DEG;
-          next.y = snapAngle(grab.startRot.y / DEG + yawPx, step) * DEG;
+          turn.x = snapAngle(pitchPx, step);
+          turn.y = snapAngle(yawPx, step);
         }
-        mesh.rotation.copy(next);
+        // About the world axes, the same way the commit turns it (spinPart).
+        grab.turn = turn;
+        mesh.quaternion.copy(worldTurnQuaternion(grab.startQuat, turn));
       } else {
         setPointer(event);
         raycaster.setFromCamera(pointer, camera);
@@ -1332,11 +1492,7 @@ export function Viewport({
         const mesh = state.meshes.get(grab.id);
         if (grab.moved && mesh) {
           if (grab.mode === 'rotate') {
-            h.onDragRotate(grab.id, {
-              x: (mesh.rotation.x - grab.startRot.x) / DEG,
-              y: (mesh.rotation.y - grab.startRot.y) / DEG,
-              z: (mesh.rotation.z - grab.startRot.z) / DEG,
-            });
+            h.onDragRotate(grab.id, grab.turn);
           } else {
             h.onDragMove([grab.id, ...grab.riders.keys()], {
               x: mesh.position.x - grab.startPos.x,
@@ -1500,6 +1656,25 @@ export function Viewport({
     state.controls.update();
   }, []);
 
+  // Prufukeyrsla: keep the loop's motion state in step with the prop, and capture
+  // the resting overlaps as a baseline so only NEW interference during the stroke
+  // lights up — not the parts that nest inside each other by design.
+  useEffect(() => {
+    const m = motionRef.current;
+    const was = m.drive?.enabled ?? false;
+    const now = motion?.enabled ?? false;
+    m.drive = motion ?? null;
+    if (now && !was) {
+      m.time = 0;
+      m.last = performance.now();
+      m.baseline = overlapPairs(refs.current);
+      m.lastClash = '';
+    } else if (!now && was) {
+      clearClashTint(refs.current);
+      m.lastClash = '';
+    }
+  }, [motion]);
+
   // Reconcile the scene against the part list.
   useEffect(() => {
     const state = refs.current;
@@ -1541,6 +1716,7 @@ export function Viewport({
         mesh.geometry = brushed ? buildBrushGeometry(brushed) : buildGeometry(part.soup);
       }
       mesh.userData.soup = source;
+      mesh.userData.role = part.role;
 
       const material = mesh.material as THREE.MeshStandardMaterial;
       const ghosted = isolating && part.id !== selectedId;
@@ -1582,6 +1758,40 @@ export function Viewport({
       state.targets.set(part.id, new THREE.Vector3(part.target.x, part.target.y, part.target.z));
     }
   }, [parts, wireframe, xray, selectedId, builder, picked, brushMesh, brushPartId]);
+
+  // Rotate mode: rings with arrowheads around the part, one per world axis, showing which way „+" turns it.
+  useEffect(() => {
+    const state = refs.current;
+    if (!state || !moveModeId || manipMode !== 'rotate') return;
+    const gizmo = makeRotateGizmo();
+    state.scene.add(gizmo);
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
+    let raf = 0;
+    // Follows the part as it eases into place or turns.
+    const follow = () => {
+      raf = requestAnimationFrame(follow);
+      const mesh = state.meshes.get(moveModeId);
+      gizmo.visible = Boolean(mesh);
+      if (!mesh) return;
+      box.setFromObject(mesh);
+      if (box.isEmpty()) return;
+      box.getCenter(gizmo.position);
+      box.getSize(size);
+      gizmo.scale.setScalar(Math.max(size.x, size.y, size.z, 5) * 0.62);
+    };
+    follow();
+    return () => {
+      cancelAnimationFrame(raf);
+      state.scene.remove(gizmo);
+      gizmo.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          (object.material as THREE.Material).dispose();
+        }
+      });
+    };
+  }, [moveModeId, manipMode]);
 
   // The rings belong to the brush: put them away with it, and while drags turn the view.
   useEffect(() => {
@@ -1784,10 +1994,10 @@ export function Viewport({
   useEffect(() => {
     if (frameToken === 0) return;
     // Wait a frame: on the first import the meshes have only just been added,
-    // and the canvas may not have its final size yet.
-    const handle = requestAnimationFrame(() => frameAll());
+    // and the canvas may not have its final size yet. Centre mode stays front-on.
+    const handle = requestAnimationFrame(() => (handlers.current.lockFront ? frontView() : frameAll()));
     return () => cancelAnimationFrame(handle);
-  }, [frameToken, frameAll]);
+  }, [frameToken, frameAll, frontView]);
 
   // Centre mode pins the camera front-on and stops the orbit turning; leaving
   // it lets you rotate freely again. Parts stay where they were flattened.

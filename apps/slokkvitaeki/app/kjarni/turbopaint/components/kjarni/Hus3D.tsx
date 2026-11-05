@@ -18,6 +18,7 @@ import {
   bladSlod,
   festaAVegg,
   giskDilarAMetra,
+  haedarNumer,
   husLengd,
   husUrBordi,
   pdfDilarAMetra,
@@ -27,9 +28,18 @@ import {
   type KvardaHeimild,
   type TaekjaGerd,
 } from "../../lib/board/hus3d";
+import { saekjaKynningarMynd, teiknaKynningarblad } from "../../lib/board/hus3d-kynning-blad";
+import { gluggaHaedir } from "../../lib/board/hus3d-gluggar";
+import { STIGA_BRUN_LITUR_3D, STIGA_GLER_LITUR_3D, STIGA_VANGI_LITUR_3D, stigar3D } from "../../lib/board/hus3d-stigar";
+import { smatengingar3D } from "../../lib/board/hus3d-smasamkeyti";
+import { kynningarDags, kynningarLykill, kynningarSkrarnafn, kynningarTitill } from "../../lib/board/hus3d-kynning";
 import { teiknaTaekistakn } from "../../lib/board/hus3d-takn";
+import { useSkodun } from "../../lib/board/skodun";
 import { saekjaBladstaerd } from "../../lib/board/teikn-thjonusta";
+import { husUtlina, type HLina } from "../../lib/board/veggja-hreinsun";
+import { SVALIR_HAED_M } from "../../lib/board/teikning-veggir";
 import type { BoardObject } from "../../lib/board/types";
+import { useBoardStore } from "../../lib/board/store";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 
 const THREE_SLOD = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
@@ -58,7 +68,10 @@ function saekjaThree(): Promise<Three> {
 
 // Litir 383: ljósir veggir með dökkri efri brún (grunnmyndin lesist ofan frá), EI-60 rauður, EI-30 ljósrauður; hurðir
 // sjást ofan frá á litaðri rönd — brunahurð appelsínugul, önnur brún.
-const BAKGRUNNUR_3D = 0xdcd9d2;
+const BAKGRUNNUR_3D = 0xe8e6e1;
+/** Yfirlit eins og í Teikning: ofan frá, húsið lesist. Ekki ¾-horn sem sýnir aðeins efri brúnir veggja. */
+const YFIRLIT_PHI = 0.34;
+const YFIRLIT_THETA = -0.22;
 const VEGGLITUR_3D = 0xf2eee6;
 const TOPPLITUR_3D = 0x5c574f;
 const ELDLITIR_3D: Record<number, number> = { 60: 0xd32f2f, 30: 0xe57373 };
@@ -90,6 +103,36 @@ async function golfAferd(T: Three, hd: Haed3D, hamark: number) {
   return t;
 }
 
+/** Gólf án teikningar stoppar innan veggja hússins (Agnar 05.11.2026: „má stoppa bara innan veggja hússins" — eins og 3D í Teikningu):
+ * útlína hússins úr veggjunum (op ≤ 1,3 m lokast; lekur hún er aðeins kassi hússins) verður gegnsæisgríma á gólfplötuna. */
+function husGrima(T: Three, hd: Haed3D, metri: number) {
+  const linur: HLina[] = hd.veggir
+    .filter((v) => v.tegund === "veggur" || v.tegund === "gler" || v.tegund === "hurd")
+    .map((v) => ({ p: [v.ax, v.ay, v.bx, v.by], t: v.thykkt }));
+  if (linur.length < 3 || !(metri > 0)) return null;
+  const u = husUtlina(linur, metri);
+  const w = hd.golf.x1 - hd.golf.x0, h = hd.golf.y1 - hd.golf.y0;
+  if (!(w > 0 && h > 0)) return null;
+  const s = 700 / Math.max(w, h);
+  const cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+  const c = document.createElement("canvas");
+  c.width = cw;
+  c.height = ch;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  const d = x.createImageData(cw, ch);
+  for (let py = 0; py < ch; py++) {
+    for (let px = 0; px < cw; px++) {
+      const v = u.inni(hd.golf.x0 + (px + 0.5) / s, hd.golf.y0 + (py + 0.5) / s) ? 255 : 0;
+      const i = (py * cw + px) * 4;
+      d.data[i] = d.data[i + 1] = d.data[i + 2] = v;
+      d.data[i + 3] = 255;
+    }
+  }
+  x.putImageData(d, 0, 0);
+  return new T.CanvasTexture(c);
+}
+
 /** Kvarði hæðar: borðdílar á metra og hvaðan hann kom (null = enginn trúverðugur — hlutfall af stærð teikningar). */
 type Kvardi = { dilar: number; heimild: KvardaHeimild } | null;
 
@@ -110,23 +153,41 @@ interface Props {
 interface Handfang {
   gegnsaett: (a: boolean) => void;
   ganga: (a: boolean) => boolean;
+  kynning: (a: boolean) => void;
+  vista: () => HTMLCanvasElement | null;
   stada: () => { ganga: boolean; x: number; y: number; z: number; fov: number; metri: number | null };
 }
 
 export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   const gamur = useRef<HTMLDivElement>(null);
   const gogn = useUttektGogn((s) => s.gogn);
-  const haedir = useMemo(() => husUrBordi(objects, gogn?.taeki ?? []), [objects, gogn]);
+  const bordNafn = useBoardStore((s) => s.name);
+  const skodunTitill = useSkodun((s) => (s.virk ? s.titill : ""));
+  // Sjálfgefið sýnum við alla vistaða veggi. Eldri yfirlitssía fjarlægði veggi styttri en
+  // 7% af húslengd; í Dalshrauni 1 hurfu þannig flest baðherbergi og skilrúm.
+  const [synaStuttaVeggi, setSynaStuttaVeggi] = useState(true);
+  const haedir = useMemo(
+    () => husUrBordi(objects, gogn?.taeki ?? [], { synaStuttaVeggi }),
+    [objects, gogn, synaStuttaVeggi]
+  );
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
+  // Agnar 05.11.2026: „hak … hvort sýna á teikningu á gólfi … auk þess að geta valið að sjá rauðu brunaveggina eða ekki"
+  const [synaBrunaveggi, setSynaBrunaveggi] = useState(true);
+  const [glerSemGluggar, setGlerSemGluggar] = useState(true);
+  const [synaHurdarblod, setSynaHurdarblod] = useState(true);
+  const [tengjaSmaBil, setTengjaSmaBil] = useState(true);
   const [gegn, setGegn] = useState(false);
   const [ganga, setGanga] = useState(false);
+  const [kynning, setKynning] = useState(false);
   const [villa, setVilla] = useState<string | null>(null);
   const [hledst, setHledst] = useState(true);
   const [kvardar, setKvardar] = useState<Kvardi[] | null>(null);
   const handfang = useRef<Handfang | null>(null);
   const gegnRef = useRef(gegn);
   gegnRef.current = gegn;
+  const kynningRef = useRef(kynning);
+  kynningRef.current = kynning;
   const loka = useRef(onClose);
   loka.current = onClose;
 
@@ -206,6 +267,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const sporM: Three[] = [];
         const lag: { hopur: Three; golfE: Three; nr: number; veggH: number; metri: number; hd: Haed3D }[] = [];
         const midar: { midi: Three; hlutfall: number }[] = [];
+        const skraut: Three[] = [];
         const hamarkAferdar = Math.min(valdar.length > 2 ? 2048 : 4096, teiknari.capabilities.maxTextureSize || 2048);
 
         // Efni tækjalíkana — eitt eintak á lit (383 efni()).
@@ -294,7 +356,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const m4 = new T.Matrix4(), q = new T.Quaternion(), ofan = new T.Vector3(0, 1, 0), st3 = new T.Vector3(), kv3 = new T.Vector3();
         const lit = new T.Color();
         let haedY = 0;
-        const fjoldi = { veggir: 0, gler: 0, hurdir: 0, brunahurdir: 0, e60: 0, e30: 0, taeki: 0, likon: 0 };
+        const fjoldi = { veggir: 0, gler: 0, hurdir: 0, brunahurdir: 0, stigar: 0, e60: 0, e30: 0, taeki: 0, likon: 0 };
 
         for (let nr = 0; nr < valdar.length; nr++) {
           const hd = valdar[nr];
@@ -303,6 +365,8 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           // RAUNHÆÐ (383 vegghaed): 3,0 m í kvarða teikningarinnar; án trúverðugs kvarða gamla hlutfallið.
           const veggH = kv ? VEGGHAED_M * kv.dilar : Math.max(hd.breidd, hd.haed) * 0.03;
           const metri = veggH / VEGGHAED_M;
+          // Fyllum aðeins smábil (≤10 cm) í sýninni, aldrei í vistuðum gögnum.
+          const synilegirVeggbutar = tengjaSmaBil ? [...hd.veggir, ...smatengingar3D(hd.veggir, metri)] : hd.veggir;
           const hopur = new T.Group();
           hopur.position.y = haedY;
           svid.add(hopur);
@@ -310,9 +374,12 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           // gólf: teikningin sem áferð (efri hæðir hálfgagnsæjar svo neðri sjáist), annars grá plata
           const aferd = teikningAGolfi ? await golfAferd(T, hd, hamarkAferdar) : null;
           if (!lifir) return;
+          const grima = aferd ? null : husGrima(T, hd, metri);
           const gG = new T.PlaneGeometry(hd.golf.x1 - hd.golf.x0, hd.golf.y1 - hd.golf.y0);
           const gE = new T.MeshBasicMaterial({
             map: aferd,
+            alphaMap: grima,
+            alphaTest: grima ? 0.5 : 0,
             color: aferd ? 0xffffff : 0xc9c4ba,
             side: T.DoubleSide,
             transparent: nr > 0,
@@ -325,6 +392,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           hopur.add(g);
           losa.push(gG, gE);
           if (aferd) losa.push(aferd);
+          if (grima) losa.push(grima);
           lag.push({ hopur, golfE: gE, nr, veggH, metri, hd });
 
           // Efni veggja: hvítt grunnefni (litur á hvert eintak) og dökk efri brún (efnisröð BoxGeometry: +x −x +y −y +z −z).
@@ -336,21 +404,25 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           losa.push(kE, kTopp);
           veggEfni.push(kE, kTopp);
           const veggLitur = (v: Haed3D["veggir"][number]) =>
-            v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
-          const sjalfg = lengd * 0.004;
+            synaBrunaveggi && v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
+          const sjalfg = Math.max(metri * 0.12, lengd * 0.004);
           const kassi = (v: Haed3D["veggir"][number], y: number, hH: number, lengdAuki: number, thykktK = 1) => {
             q.setFromAxisAngle(ofan, -Math.atan2(v.by - v.ay, v.bx - v.ax));
-            const th = Math.max(0.8, v.thykkt || sjalfg) * thykktK;
+            // Skönnun gefur stundum 50–70 cm „vegg" (húsgögn / tvöfalt strik). Í yfirliti eru veggir 12–20 cm.
+            const th = Math.min(metri * 0.2, Math.max(metri * 0.12, v.thykkt || sjalfg)) * thykktK;
             m4.compose(st3.set((v.ax + v.bx) / 2, y, (v.ay + v.by) / 2), q, kv3.set(Math.hypot(v.bx - v.ax, v.by - v.ay) + (lengdAuki ? th : 0), hH, th));
             return m4;
           };
 
-          const veggir = hd.veggir.filter((v) => v.tegund === "veggur");
-          const gler = hd.veggir.filter((v) => v.tegund === "gler");
-          const hurdir = hd.veggir.filter((v) => v.tegund === "hurd");
+          const veggir = synilegirVeggbutar.filter((v) => v.tegund === "veggur");
+          const gler = synilegirVeggbutar.filter((v) => v.tegund === "gler");
+          const hurdir = synilegirVeggbutar.filter((v) => v.tegund === "hurd");
+          const svalir = synilegirVeggbutar.filter((v) => v.tegund === "svalir");
+          const stigar = synilegirVeggbutar.filter((v) => v.tegund === "stigi");
           fjoldi.veggir += veggir.length;
           fjoldi.gler += gler.length;
           fjoldi.hurdir += hurdir.length;
+          fjoldi.stigar += stigar.length;
           if (veggir.length) {
             // HEILIR VEGGIR: einn kassi á bút, lengdur um hálfa þykkt í hvorn enda svo hornin fyllist.
             const mesh = new T.InstancedMesh(kG, kEfni, veggir.length);
@@ -380,14 +452,115 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             sporM.push(spor);
           }
           if (gler.length) {
-            // Gler (gluggar, glerveggir): hálfgagnsæir bláleitir fletir — húsið lokast en sést í gegn.
-            const glE = new T.MeshLambertMaterial({ color: GLERLITUR_3D, transparent: true, opacity: 0.42, depthWrite: false });
+            // Gler er merkt á borðinu, en teikningin segir ekki hvort um sé að ræða glugga með brjóstvegg
+            // eða glervegg. Gefum notanda afturkræfa 3D-sýnastillingu; vistuðum veggjum er ALDREI breytt.
+            const glE = new T.MeshLambertMaterial({ color: GLERLITUR_3D, transparent: true, opacity: 0.35, depthWrite: false, side: T.DoubleSide });
             const glM = new T.InstancedMesh(kG, glE, gler.length);
-            gler.forEach((v, i) => glM.setMatrixAt(i, kassi(v, veggH / 2, veggH, 0, 0.45)));
+            if (glerSemGluggar) {
+              // Glugga-hamur: staðlaður (áætlaður) brjóstveggur + efri hluti + blátt gler + dökkir karmar.
+              // Ekki áætla gluggahæðina út frá línu á grunnmynd: hún er stilling í SÝN, ekki staðreynd í gögnunum.
+              const gH = gluggaHaedir(veggH);
+              const under = new T.InstancedMesh(kG, kEfni, gler.length);
+              const over = new T.InstancedMesh(kG, kEfni, gler.length);
+              const frameE = new T.MeshLambertMaterial({ color: 0x66727a });
+              const rimTop = new T.InstancedMesh(kG, frameE, gler.length);
+              const rimBottom = new T.InstancedMesh(kG, frameE, gler.length);
+              const uprights = new T.InstancedMesh(kG, frameE, gler.length * 2);
+              gler.forEach((v, i) => {
+                const length = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                const frameW = Math.min(gH.rammi, length * 0.25);
+                // Veggur fyrir neðan/ofan gluggann er samfelldur á sömu miðlínu og glerið.
+                under.setMatrixAt(i, kassi(v, gH.brjost / 2, gH.brjost, 0));
+                over.setMatrixAt(i, kassi(v, veggH - gH.efri / 2, gH.efri, 0));
+                under.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+                over.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+                glM.setMatrixAt(i, kassi(v, gH.glerMidja, gH.gler, 0, 0.28));
+                rimTop.setMatrixAt(i, kassi(v, gH.brjost + gH.gler - gH.rammi / 2, gH.rammi, 0, 0.6));
+                rimBottom.setMatrixAt(i, kassi(v, gH.brjost + gH.rammi / 2, gH.rammi, 0, 0.6));
+                const ux = (v.bx - v.ax) / length, uy = (v.by - v.ay) / length;
+                // Notum sömu snúningu og veggurinn svo karmarnir fylgi jafnvel skásettum gluggum.
+                const lodrett = (x: number, y: number) => kassi({
+                  ...v, ax: x - ux * frameW / 2, ay: y - uy * frameW / 2,
+                  bx: x + ux * frameW / 2, by: y + uy * frameW / 2,
+                }, gH.glerMidja, gH.gler, 0, 0.6);
+                uprights.setMatrixAt(2 * i, lodrett(v.ax, v.ay));
+                uprights.setMatrixAt(2 * i + 1, lodrett(v.bx, v.by));
+              });
+              for (const mesh of [under, over]) {
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+              }
+              for (const mesh of [rimTop, rimBottom, uprights]) mesh.instanceMatrix.needsUpdate = true;
+              hopur.add(under, over, rimTop, rimBottom, uprights);
+              losa.push(frameE);
+            } else {
+              // Upprunalegi hátturinn: glerveggur frá gólfi til lofts.
+              gler.forEach((v, i) => glM.setMatrixAt(i, kassi(v, veggH / 2, veggH, 0, 0.45)));
+            }
             glM.instanceMatrix.needsUpdate = true;
             glM.renderOrder = 2;
             hopur.add(glM);
             losa.push(glE);
+          }
+          if (svalir.length) {
+            // Svalir (Agnar 10.10.2026: „Hafðu svalirnar bara í 1.1m"): lágur veggur í lit veggjanna, sama efni og veggirnir.
+            const svH = SVALIR_HAED_M * metri;
+            const svM = new T.InstancedMesh(kG, kEfni, svalir.length);
+            svalir.forEach((v, i) => {
+              svM.setMatrixAt(i, kassi(v, svH / 2, svH, 1));
+              svM.setColorAt(i, lit.setHex(VEGGLITUR_3D));
+            });
+            svM.instanceMatrix.needsUpdate = true;
+            if (svM.instanceColor) svM.instanceColor.needsUpdate = true;
+            hopur.add(svM);
+          }
+          if (stigar.length) {
+            // Stigar: þrep sem hækka frá gólfi upp í lofthæð með dökkum þrepabrúnum og hliðarvöngum svo stiginn
+            // lesist skýrt beint ofan frá í sama stíl og veggirnir.
+            const stGogn = stigar3D(stigar, synilegirVeggbutar, veggH, metri);
+            if (stGogn.threp.length) {
+              const threpE = new T.MeshLambertMaterial({ color: 0xffffff });
+              const brunE = new T.MeshLambertMaterial({ color: STIGA_BRUN_LITUR_3D });
+              const vangiE = new T.MeshLambertMaterial({ color: STIGA_VANGI_LITUR_3D });
+              const threpM = new T.InstancedMesh(kG, threpE, stGogn.threp.length);
+              const brunM = new T.InstancedMesh(kG, brunE, stGogn.brir.length);
+              const vangiM = new T.InstancedMesh(kG, vangiE, stGogn.vangar.length);
+              const qHalli = new T.Quaternion(), asZ = new T.Vector3(0, 0, 1);
+              const setKassa = (mesh: Three, listi: typeof stGogn.threp, medLit: boolean) => {
+                listi.forEach((b, i) => {
+                  q.setFromAxisAngle(ofan, b.horn);
+                  if (b.halli) {
+                    qHalli.setFromAxisAngle(asZ, b.halli);
+                    q.multiply(qHalli);
+                  }
+                  m4.compose(st3.set(b.x, b.y, b.z), q, kv3.set(b.lengd, b.haed, b.breidd));
+                  mesh.setMatrixAt(i, m4);
+                  if (medLit) mesh.setColorAt(i, lit.setHex(b.litur));
+                });
+                mesh.instanceMatrix.needsUpdate = true;
+                if (medLit && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+              };
+              setKassa(threpM, stGogn.threp, true);
+              setKassa(brunM, stGogn.brir, false);
+              setKassa(vangiM, stGogn.vangar, false);
+              hopur.add(threpM, brunM, vangiM);
+              losa.push(threpE, brunE, vangiE);
+              veggEfni.push(threpE);
+              if (stGogn.gler.length) {
+                const sGlerE = new T.MeshLambertMaterial({
+                  color: STIGA_GLER_LITUR_3D,
+                  transparent: true,
+                  opacity: 0.34,
+                  depthWrite: false,
+                  side: T.DoubleSide,
+                });
+                const sGlerM = new T.InstancedMesh(kG, sGlerE, stGogn.gler.length);
+                setKassa(sGlerM, stGogn.gler, false);
+                sGlerM.renderOrder = 2;
+                hopur.add(sGlerM);
+                losa.push(sGlerE);
+              }
+            }
           }
           if (hurdir.length) {
             // Hurðargöt: veggurinn heldur áfram OFAN við hurðina (dyrakarmur, efsti fjórðungur vegghæðar) — gengt undir.
@@ -397,10 +570,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             const rendur = new T.InstancedMesh(kG, rE, hurdir.length);
             hurdir.forEach((v, i) => {
               karmar.setMatrixAt(i, kassi(v, veggH - karmH / 2, karmH, 0));
-              karmar.setColorAt(i, lit.setHex(v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : VEGGLITUR_3D));
+              karmar.setColorAt(i, lit.setHex(synaBrunaveggi && v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : VEGGLITUR_3D));
               // Lituð rönd ofan á karminum: hurðirnar sjást líka beint ofan frá og þegar veggir eru gegnsæir.
               rendur.setMatrixAt(i, kassi(v, veggH + veggH * 0.012, veggH * 0.024, 0, 1.25));
-              rendur.setColorAt(i, lit.setHex(v.eld ? ELDHURD_3D : HURDALITUR_3D));
+              rendur.setColorAt(i, lit.setHex(synaBrunaveggi && v.eld ? ELDHURD_3D : HURDALITUR_3D));
               if (v.eld) fjoldi.brunahurdir++;
             });
             karmar.instanceMatrix.needsUpdate = true;
@@ -409,6 +582,33 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             if (rendur.instanceColor) rendur.instanceColor.needsUpdate = true;
             hopur.add(karmar, rendur);
             losa.push(rE);
+            if (synaHurdarblod) {
+              // Aðeins hurðir sem eru þegar merktar sem "hurd" í veggjalíkaninu.
+              // Sýnum hálfopið hurðarblað svo dyr sjáist ofan frá. Opnunarátt er ÁÆTLUÐ.
+              const venjulegar = hurdir.filter((v) => {
+                const l = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                return l >= metri * 0.45 && l <= metri * 2.4;
+              });
+              if (venjulegar.length) {
+                const bladE = new T.MeshLambertMaterial({ color: 0xc4a17a, side: T.DoubleSide });
+                const blod = new T.InstancedMesh(kG, bladE, venjulegar.length);
+                const bladH = veggH * 0.73;
+                const opn = Math.PI / 3.5;
+                venjulegar.forEach((v, i) => {
+                  const l = Math.hypot(v.bx - v.ax, v.by - v.ay);
+                  const uX = (v.bx - v.ax) / l, uY = (v.by - v.ay) / l;
+                  const dyrBreidd = Math.min(l * 0.92, metri * 1.15);
+                  const xx = (uX * Math.cos(opn) - uY * Math.sin(opn)) * dyrBreidd;
+                  const yy = (uX * Math.sin(opn) + uY * Math.cos(opn)) * dyrBreidd;
+                  blod.setMatrixAt(i, kassi({
+                    ...v, bx: v.ax + xx, by: v.ay + yy,
+                  }, bladH / 2 + veggH * 0.008, bladH, 0, 0.30));
+                });
+                blod.instanceMatrix.needsUpdate = true;
+                hopur.add(blod);
+                losa.push(bladE);
+              }
+            }
           }
 
           // Tæki: líkan á næsta vegg (snýr út frá honum) + stöng, kúla og miði. Miðinn heldur stærð sinni á skjánum og
@@ -438,6 +638,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             kula.position.set(fest.x, toppur + rad, fest.y);
             hopur.add(kula);
             losa.push(sG, sE, kG2, kE2);
+            skraut.push(stong, kula);
             const txt = String(t.texti || t.stutt || "").slice(0, 18);
             if (!txt) return;
             const letur = "700 34px system-ui,sans-serif";
@@ -492,6 +693,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             hopur.add(midi);
             losa.push(mA, mE);
             midar.push({ midi, hlutfall: ms.width / ms.height });
+            skraut.push(midi);
           });
           haedY += syna === "allar" ? veggH * 3.2 : 0;
         }
@@ -500,12 +702,33 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
         const fyrsta = valdar[0];
         const u0 = fyrsta.umfang;
         const efstaY = lag.length ? lag[lag.length - 1].hopur.position.y : 0;
+        {
+          const skC = document.createElement("canvas");
+          skC.width = 256;
+          skC.height = 256;
+          const skx = skC.getContext("2d");
+          if (skx) {
+            const grd = skx.createRadialGradient(128, 128, 16, 128, 128, 128);
+            grd.addColorStop(0, "rgba(40,36,30,0.2)");
+            grd.addColorStop(1, "rgba(40,36,30,0)");
+            skx.fillStyle = grd;
+            skx.fillRect(0, 0, 256, 256);
+          }
+          const skT = new T.CanvasTexture(skC);
+          const skG = new T.PlaneGeometry(husStaerst * 1.4, husStaerst * 1.4);
+          const skE = new T.MeshBasicMaterial({ map: skT, transparent: true, depthWrite: false });
+          const skuggi = new T.Mesh(skG, skE);
+          skuggi.rotation.x = -Math.PI / 2;
+          skuggi.position.set(u0 ? (u0.x0 + u0.x1) / 2 : 0, -Math.max(0.4, husStaerst * 0.004), u0 ? (u0.y0 + u0.y1) / 2 : 0);
+          svid.add(skuggi);
+          losa.push(skT, skG, skE);
+        }
         const vel = new T.PerspectiveCamera(42, b / h, Math.max(0.01, husStaerst * 0.001), bladStaerst * 20 + efstaY * 6);
         const midjaY = syna === "allar" ? efstaY * 0.5 : 0;
         const mid = new T.Vector3(u0 ? (u0.x0 + u0.x1) / 2 : 0, midjaY, u0 ? (u0.y0 + u0.y1) / 2 : 0);
         const upphafsFjarl = () =>
           Math.max(husStaerst * 1.25, efstaY * 2.3) * (b < h * 1.5 ? Math.min(2.6, (1.5 * h) / Math.max(1, b)) : 1);
-        let theta = -0.6, phi = 0.95, fjarl = upphafsFjarl();
+        let theta = YFIRLIT_THETA, phi = YFIRLIT_PHI, fjarl = upphafsFjarl();
         const stillaVel = () => {
           phi = Math.min(1.5, Math.max(0.12, phi));
           fjarl = Math.min(bladStaerst * 6 + efstaY * 2, Math.max(husStaerst * 0.06, fjarl));
@@ -739,12 +962,29 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           });
         };
         gegnsaett(gegnRef.current);
+        const synaKynningu = (a: boolean) => {
+          skraut.forEach((o) => {
+            o.visible = !a;
+          });
+          if (a && !gongu) {
+            theta = YFIRLIT_THETA;
+            phi = YFIRLIT_PHI;
+            fjarl = upphafsFjarl();
+            stillaVel();
+          }
+        };
+        synaKynningu(kynningRef.current);
         handfang.current = {
           gegnsaett,
           ganga: (a) => {
             if (a) return gangaByrja();
             gangaHaetta();
             return false;
+          },
+          kynning: synaKynningu,
+          vista: () => {
+            teiknari.render(svid, vel);
+            return canvas;
           },
           stada: () => ({
             ganga: !!gongu,
@@ -805,7 +1045,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, kvardar]);
+  }, [haedir, syna, teikningAGolfi, synaBrunaveggi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -823,6 +1063,10 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
     handfang.current?.gegnsaett(gegn);
   }, [gegn]);
 
+  useEffect(() => {
+    handfang.current?.kynning(kynning);
+  }, [kynning]);
+
   // Staða myndavélarinnar fyrir prófanir (tools/turbopaint-3d.cjs) — aðeins lesin, breytir engu.
   useEffect(() => {
     const w = window as unknown as { __hus3dStada?: () => ReturnType<Handfang["stada"]> | null };
@@ -834,6 +1078,16 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
 
   const veggjaFjoldi = haedir.reduce((s, h) => s + h.veggir.length, 0);
   const taekjaFjoldi = haedir.reduce((s, h) => s + h.taeki.length, 0);
+  const synHaedir = syna === "allar" ? haedir : haedir[syna] ? [haedir[syna]] : [];
+  const haedNafn =
+    syna === "allar" && haedir.length > 1
+      ? `${haedir.length} hæðir`
+      : synHaedir[0] && haedarNumer(synHaedir[0].nafn) != null
+        ? synHaedir[0].nafn
+        : "";
+  const kynningTitill = kynningarTitill(skodunTitill || gogn?.nafn || bordNafn, haedNafn);
+  const kynningLykill = kynningarLykill(synHaedir.flatMap((h) => h.taeki));
+  const kynningUndir = [gogn?.nafn && gogn.nafn !== kynningTitill ? gogn.nafn : "", kynningarDags()].filter(Boolean).join(" · ");
   const takki = "rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors";
   const virkur = "bg-[#FE653F] text-white";
   const ovirkur = "bg-white/10 hover:bg-white/20";
@@ -860,9 +1114,29 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
             {i + 1}
           </button>
         ))}
-        <label className="ml-2 flex items-center gap-1.5 text-[12px]">
+        <label className="ml-2 flex items-center gap-1.5 text-[12px] font-semibold" title="Sýna alla vistaða veggbúta, einnig stutta baðherbergisveggi og skilrúm. Slökktu til að nota eldri hreinsaða yfirlitið. Breytir ekki vistuðum teikningum.">
+          <input type="checkbox" checked={synaStuttaVeggi} onChange={(e) => setSynaStuttaVeggi(e.target.checked)} />
+          Allir veggir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Brúar aðeins örsmá samlínu bil milli heilla veggja (mest 10 cm). Hurðir og gler eru aldrei brúuð. Aðeins 3D-birting, ekki vistuð gögn.">
+          <input type="checkbox" checked={tengjaSmaBil} onChange={(e) => setTengjaSmaBil(e.target.checked)} />
+          Tengja smábil
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]">
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
           Teikning á gólfi
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Rauðir eldveggir (EI-60 og EI-30) og appelsínugular brunahurðir. Slökktu til að sýna alla veggi eins. Aðeins 3D-birting.">
+          <input type="checkbox" checked={synaBrunaveggi} onChange={(e) => setSynaBrunaveggi(e.target.checked)} />
+          Rauðir brunaveggir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Áætluð gluggahæð (brjóstveggur og karmar) úr glermerktum veggjum. Slökktu til að sýna fullháa glerveggi. Breytir ekki vistuðum teikningum.">
+          <input type="checkbox" checked={glerSemGluggar} onChange={(e) => setGlerSemGluggar(e.target.checked)} />
+          Gluggar (áætlað)
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Sýnir hálfopin hurðarblöð aðeins þar sem hurð er þegar merkt í gögnunum. Opnunarátt er áætluð, og engum vistaðri hurð er breytt.">
+          <input type="checkbox" checked={synaHurdarblod} onChange={(e) => setSynaHurdarblod(e.target.checked)} />
+          Hurðarblöð (áætlað)
         </label>
         <button
           type="button"
@@ -888,6 +1162,33 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           onClick={() => setGegn((g) => !g)}
         >
           Gegnsætt
+        </button>
+        <button
+          type="button"
+          aria-pressed={kynning}
+          title="Kynning: fela miða á stöngum, sýna lykil og titil — tilbúið fyrir viðskiptavin"
+          className={`${takki} ${kynning ? virkur : ovirkur}`}
+          onClick={() => setKynning((k) => !k)}
+        >
+          Kynning
+        </button>
+        <button
+          type="button"
+          title="Vista 3D-myndina sem blað með heiti staðar og tækjalykli"
+          className={`${takki} ${ovirkur}`}
+          onClick={() => {
+            const mynd = handfang.current?.vista();
+            if (!mynd) return;
+            const blad = teiknaKynningarblad({
+              mynd,
+              titill: kynningTitill,
+              undirtitill: kynningUndir,
+              lykill: kynningLykill,
+            });
+            saekjaKynningarMynd(blad, kynningarSkrarnafn(kynningTitill));
+          }}
+        >
+          Vista mynd
         </button>
         <span className="ml-auto text-[11.5px] text-stone-400">
           {ganga
@@ -916,6 +1217,30 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-stone-500">Byggi húsið…</p>
         ) : null}
         {villa ? <p className="p-6 text-sm text-red-300">{villa}</p> : null}
+        {kynning && !hledst && !villa ? (
+          <div className="pointer-events-none absolute inset-0 z-10 p-4 text-[#1a1814]">
+            <div className="max-w-md rounded-lg bg-[#f3efe6]/92 px-4 py-3 shadow-sm ring-1 ring-black/10">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#5c574f]">
+                Slökkvitæki ehf · Brunavarnir
+              </p>
+              <h2 className="mt-1 text-[20px] font-extrabold leading-tight">{kynningTitill}</h2>
+              <p className="mt-1 text-[12px] font-semibold text-[#5c574f]">{kynningUndir}</p>
+            </div>
+            {kynningLykill.length > 0 ? (
+              <div className="absolute bottom-4 left-4 min-w-[200px] rounded-lg bg-[#f3efe6]/92 px-3 py-2.5 shadow-sm ring-1 ring-black/10">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c574f]">Tæki á teikningu</p>
+                <ul className="space-y-0.5 text-[12.5px] font-semibold">
+                  {kynningLykill.map((lid) => (
+                    <li key={lid.heiti} className="flex justify-between gap-6">
+                      <span>{lid.heiti}</span>
+                      <span className="tabular-nums text-[#5c574f]">{lid.fjoldi}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

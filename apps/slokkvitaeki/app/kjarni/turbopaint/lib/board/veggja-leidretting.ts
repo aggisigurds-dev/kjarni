@@ -13,6 +13,8 @@ export const VEGG_LITIR: Record<VeggTegund, string> = {
   hurd: "#b45309",
   ei60: "#d32f2f",
   ei30: "#ef5350",
+  svalir: "#0f766e",
+  stigi: "#6d28d9",
 };
 
 /** Nafnið heldur „Veggur"-forskeytinu: gegnumtök (crossings) og 3D (hus3d) þekkja veggi á því. „EI-60" í nafni eldveggjar
@@ -23,6 +25,8 @@ export const VEGG_NOFN: Record<VeggTegund, string> = {
   hurd: "Veggur · hurð",
   ei60: "Veggur · EI-60",
   ei30: "Veggur · EI-30",
+  svalir: "Veggur · svalir",
+  stigi: "Veggur · stigi",
 };
 
 /** Heiti tegundar í viðmótinu. */
@@ -32,6 +36,8 @@ export const VEGG_HEITI: Record<VeggTegund, string> = {
   hurd: "Hurð",
   ei60: "EI-60",
   ei30: "EI-30",
+  svalir: "Svalir",
+  stigi: "Stigi",
 };
 
 export function erEldveggur(o: { veggTegund?: VeggTegund }): boolean {

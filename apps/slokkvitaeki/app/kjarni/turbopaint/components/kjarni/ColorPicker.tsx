@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "../../lib/utils";
 import { normalizeHex, rememberCustomColor } from "../../lib/board/custom-colors";
 
@@ -8,6 +8,11 @@ import { normalizeHex, rememberCustomColor } from "../../lib/board/custom-colors
  * The "+" swatch: opens the browser's own colour picker. `onPreview` fires
  * while the picker is being dragged (no history step), `onChange` when it is
  * dismissed — that one is remembered as a recent custom colour.
+ *
+ * ATH (Agnar 04.11.2026: „bættust óvart fullt af svörtum litum í stikuna"): React-`onChange` á `<input type=color>` er
+ * `input`-atburðurinn og kviknar við HVERT skref þegar dregið er í litaveljaranum — hvert skref var vistað sem nýr
+ * litur og sex nánast svartir skygging fylltu stikuna. Við vistum aðeins á raunverulega `change`-atburðinum
+ * (veljari lokað / lit staðfestur).
  */
 export function CustomColorSwatch({
   value,
@@ -24,6 +29,24 @@ export function CustomColorSwatch({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const base = normalizeHex(value) ?? "#ff4d00";
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const kominn = () => {
+      rememberCustomColor(el.value);
+      onChangeRef.current(el.value);
+    };
+    el.addEventListener("change", kominn);
+    return () => el.removeEventListener("change", kominn);
+  }, []);
+  // Óstýrður reitur: stýrður reitur (value=) er settur aftur á gamla litinn eftir hvert `input`-skref því forskoðunin
+  // breytir ekki stílnum — veljarinn rykktist til baka. Liturinn er samræmdur hér þegar stíllinn breytist.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el && el.value !== base) el.value = base;
+  }, [base]);
   return (
     <span className={cn("relative inline-flex size-6 shrink-0", className)}>
       <button
@@ -41,15 +64,10 @@ export function CustomColorSwatch({
       <input
         ref={inputRef}
         type="color"
-        value={base}
+        defaultValue={base}
         aria-label={`${title} — velja`}
         className="absolute inset-0 size-full cursor-pointer opacity-0"
         onInput={(e) => onPreview?.(e.currentTarget.value)}
-        onChange={(e) => {
-          const hex = e.currentTarget.value;
-          rememberCustomColor(hex);
-          onChange(hex);
-        }}
       />
     </span>
   );

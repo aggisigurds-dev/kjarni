@@ -18,6 +18,8 @@ const ALLOWED_HOSTS = new Set([
   // Samþykktir uppdrættir byggingarfulltrúa Hafnarfjarðar, Garðabæjar og
   // Kópavogs — beinar PDF-slóðir úr kortasjánum (má líka líma í „Af slóð").
   ...MAPIS_TEIKNINGA_HOSTS,
+  // Skrár Gagnalands (landsskrá teikninga, t.d. Hveragerði svf 8716): beinar PDF-slóðir á skrar.gagnaland.is.
+  "skrar.gagnaland.is",
 ]);
 const MAX_BYTES = 80 * 1024 * 1024;
 const OK_TYPES = /^(image\/|application\/pdf)/i;

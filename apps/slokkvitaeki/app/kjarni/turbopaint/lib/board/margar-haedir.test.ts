@@ -368,6 +368,13 @@ test("Vista í úttekt: þrjár hæðir af sama blaði — sama image_url, þrí
   assert.equal(haedir[0].skurdur, null);
 });
 
+test("Vista í úttekt geymir stærð frummyndar líka fyrir heilt blað", () => {
+  const haedir = fersk().map((h) => ({ ...h, frum: null }));
+  const u = utbuaVistun([SHEET], haedir, "2026-10-09T22:00:00.000Z", naestaId());
+  assert.deepEqual(u.haedir[0].frum, FRUM);
+  assert.equal(haedir[0].frum, null, "ferska röðin sjálf er ósnert");
+});
+
 test("óhreyft merki með brotatölu (x,5) heldur nákvæmum hnitum þótt vörpunin um skurðinn námundi niður", () => {
   const r = eftirCrop();
   const m1 = r.myndir[0];

@@ -1,0 +1,215 @@
+import { NextRequest, NextResponse } from "next/server";
+import { badReplicate, outputToUrls, runReplicate } from "@/app/api/_lib/replicate";
+import { isOwnStorageUrl } from "../_lib/storageUrl";
+
+// Endurljós — zsxkib/ic-light á Replicate (foreground only)
+// og zsxkib/ic-light-background (foreground + background preserved).
+//
+// Þegar notandi vill halda bakgrunninum: notum ic-light-background með
+// upprunalegu myndinni sem BÆÐI subject og background. Þá endurlýsir
+// modelið subject-ið og passar sig við bakgrunninn sem er fyrir. Þegar
+// notandi vill nýjan bakgrunn: ic-light foreground-only, model býr til
+// nýjan bakgrunn eftir prompt.
+//
+// Útkomustærð + varaauðkenni: `lowres_denoise` + `highres_denoise` ráða
+// hversu mikið módelið má endurteikna (lægra = meira trú upprunalegu en
+// flatara ljós; hærra = meiri drama en meiri breyting). `output_quality`
+// hækkar webp-gæðin — default 80 skilar oft smárri skrá.
+
+// 180s þegar face-swap OG auto-upscale pipeline keyra á eftir.
+export const maxDuration = 180;
+
+const LIGHT_SOURCES = ["Left Light", "Right Light", "Top Light", "Bottom Light", "None"] as const;
+type LightSource = (typeof LIGHT_SOURCES)[number];
+
+const OUTPUT_FORMATS = ["webp", "png", "jpg"] as const;
+type OutputFormat = (typeof OUTPUT_FORMATS)[number];
+
+function bad(status: number, error: string) {
+  return NextResponse.json({ error }, { status });
+}
+
+function clampInt(n: unknown, fallback: number, min: number, max: number): number {
+  const num = typeof n === "number" ? n : fallback;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(num)));
+}
+
+function clampFloat(n: unknown, fallback: number, min: number, max: number): number {
+  const num = typeof n === "number" ? n : fallback;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
+export async function POST(req: NextRequest) {
+  const functionStart = Date.now();
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) {
+    return bad(500, "REPLICATE_API_TOKEN vantar í umhverfisbreytur — sjá Vercel Settings → Environment Variables.");
+  }
+
+  let body: {
+    image?: string;
+    backgroundImage?: string;
+    preserveBackground?: boolean;
+    preserveFace?: boolean;
+    prompt?: string;
+    appendedPrompt?: string;
+    negativePrompt?: string;
+    lightSource?: string;
+    numResults?: number;
+    seed?: number;
+    disableSafetyChecker?: boolean;
+    lowresDenoise?: number;
+    highresDenoise?: number;
+    highresScale?: number;
+    cfg?: number;
+    steps?: number;
+    outputFormat?: string;
+    outputQuality?: number;
+    autoUpscale?: boolean;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return bad(400, "Ógilt JSON");
+  }
+
+  const prompt = body.prompt?.trim();
+  if (!prompt) return bad(400, "prompt vantar");
+  if (typeof body.image !== "string" || !isOwnStorageUrl(body.image)) {
+    return bad(400, "image vantar");
+  }
+
+  // Veldu módel: ef preserveBackground er true notum við ic-light-background
+  // með upprunalegu myndinni (eða annarri uppsettri bg) sem bakgrunns-conditioning.
+  // Annars venjulegt foreground-only ic-light.
+  const useBackgroundModel =
+    body.preserveBackground === true ||
+    (typeof body.backgroundImage === "string" && isOwnStorageUrl(body.backgroundImage));
+  const backgroundImageData =
+    typeof body.backgroundImage === "string" && isOwnStorageUrl(body.backgroundImage)
+      ? body.backgroundImage
+      : body.image; // ef preserveBackground án uppsettrar bg: notum upprunalegu myndina
+
+  const lightSource: LightSource = LIGHT_SOURCES.includes(body.lightSource as LightSource)
+    ? (body.lightSource as LightSource)
+    : "Left Light";
+  const outputFormat: OutputFormat = OUTPUT_FORMATS.includes(body.outputFormat as OutputFormat)
+    ? (body.outputFormat as OutputFormat)
+    : "webp";
+
+  const commonInput: Record<string, unknown> = {
+    subject_image: body.image,
+    prompt,
+    appended_prompt:
+      body.appendedPrompt?.trim() ||
+      "best quality, highres, cinematic lighting, intricate details, sharp focus",
+    negative_prompt:
+      body.negativePrompt?.trim() ||
+      "lowres, bad anatomy, bad hands, cropped, worst quality, blurry",
+    number_of_images: clampInt(body.numResults, 1, 1, 4),
+    cfg: clampFloat(body.cfg, 2, 1, 10),
+    steps: clampInt(body.steps, 25, 10, 50),
+    highres_scale: clampFloat(body.highresScale, 1.5, 1.0, 1.5),
+    highres_denoise: clampFloat(body.highresDenoise, 0.3, 0, 1),
+    lowres_denoise: clampFloat(body.lowresDenoise, 0.7, 0, 1),
+    output_format: outputFormat,
+    output_quality: clampInt(body.outputQuality, 95, 1, 100),
+  };
+  if (typeof body.seed === "number" && body.seed >= 0) commonInput.seed = Math.trunc(body.seed);
+  if (body.disableSafetyChecker === true) commonInput.disable_safety_checker = true;
+
+  const input: Record<string, unknown> = useBackgroundModel
+    ? {
+        ...commonInput,
+        background_image: backgroundImageData,
+        // ic-light-background notar "Use Background Image" sem sérstaka ljósastefnu.
+        // Ef notandi hefur valið ljósastefnu notum við hana, annars Background.
+        light_source: lightSource === "None" ? "Use Background Image" : lightSource,
+      }
+    : {
+        ...commonInput,
+        light_source: lightSource,
+      };
+
+  try {
+    // Fyrri skref: IC-Light eða IC-Light-background endurlýsir myndina.
+    // Budget skiptum við á milli skrefa: 55s á IC-Light + 55s á face-swap
+    // ef togglad, annars 110s á IC-Light eitt.
+    const budget = body.preserveFace === true ? 55_000 : 110_000;
+    const output = await runReplicate({
+      token,
+      owner: "zsxkib",
+      name: useBackgroundModel ? "ic-light-background" : "ic-light",
+      input,
+      functionStart,
+      budgetMs: budget,
+    });
+    let urls = outputToUrls(output);
+
+    // Seinni skref (optional): face-swap með upprunalegu andlitinu til að
+    // tryggja pixel-perfect andlits-identity. Keyrir face-swap á hvert
+    // IC-Light output með upprunalegu myndinni sem andlits-source. Þetta
+    // tvöfaldar kostnað og tíma, en gefur andlit sem breytist ekki.
+    if (body.preserveFace === true && urls.length > 0) {
+      const faceSwapped: string[] = [];
+      for (const relitUrl of urls) {
+        const swapOutput = await runReplicate({
+          token,
+          owner: "noahgsolomon",
+          name: "face-swap",
+          input: {
+            // input_image: myndin sem andlitið er sett á (endurlýstu)
+            // swap_image: andlits-source (upprunalega myndin)
+            input_image: relitUrl,
+            swap_image: body.image,
+          },
+          functionStart,
+          budgetMs: 110_000,
+        });
+        const swapped = outputToUrls(swapOutput);
+        if (swapped[0]) faceSwapped.push(swapped[0]);
+      }
+      if (faceSwapped.length > 0) urls = faceSwapped;
+    }
+
+    // Þriðja skref (optional): auto-upscale með topazlabs/image-upscale 2x
+    // (Standard V2) í lokin — notandi fær fullgæða mynd án Upplyftingar.
+    // face_enhancement: false því face-swap sér um andlitið áður.
+    if (body.autoUpscale === true && urls.length > 0) {
+      const upscaled: string[] = [];
+      for (const url of urls) {
+        try {
+          const upOutput = await runReplicate({
+            token,
+            owner: "topazlabs",
+            name: "image-upscale",
+            input: {
+              image: url,
+              enhance_model: "Standard V2",
+              upscale_factor: "2x",
+              face_enhancement: false,
+              face_enhancement_creativity: 0,
+              face_enhancement_strength: 0.8,
+              subject_detection: "None",
+              output_format: "png",
+            },
+            functionStart,
+            budgetMs: 100_000,
+          });
+          const upUrls = outputToUrls(upOutput);
+          upscaled.push(upUrls[0] ?? url);
+        } catch {
+          upscaled.push(url);
+        }
+      }
+      urls = upscaled;
+    }
+
+    return NextResponse.json({ images: urls });
+  } catch (err) {
+    const r = badReplicate(err);
+    return bad(r.status, r.error);
+  }
+}

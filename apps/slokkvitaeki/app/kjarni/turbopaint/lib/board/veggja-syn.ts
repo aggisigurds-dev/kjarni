@@ -16,6 +16,8 @@ export const SKAERIR_VEGGLITIR: Record<VeggTegund, string> = {
   hurd: "#ff8a00",
   ei60: "#ff1744",
   ei30: "#ff6e9c",
+  svalir: "#00c9a7",
+  stigi: "#a855f7",
 };
 
 export const LITA_VEGGI_LYKILL = "tp_lita_veggi";
@@ -29,8 +31,18 @@ function lesa(): boolean {
   }
 }
 
-export const useVeggjaSyn = create<{ lita: boolean; setLita: (v: boolean) => void; vixla: () => void; hlada: () => void }>((set, get) => ({
+export const useVeggjaSyn = create<{
+  lita: boolean;
+  setLita: (v: boolean) => void;
+  vixla: () => void;
+  hlada: () => void;
+  /** Veggir-hamur: allt annað en veggir dempað (teikningin hálfgagnsæ, tákn og annað nær ósýnilegt). Aðeins sýn. */
+  dempa: boolean;
+  setDempa: (v: boolean) => void;
+}>((set, get) => ({
   lita: false,
+  dempa: false,
+  setDempa: (dempa) => set({ dempa }),
   setLita: (lita) => {
     try {
       window.localStorage.setItem(LITA_VEGGI_LYKILL, lita ? "1" : "0");
@@ -43,6 +55,17 @@ export const useVeggjaSyn = create<{ lita: boolean; setLita: (v: boolean) => voi
   /** Les vistað val eftir hydration (forðast misræmi milli þjóns og vafra). */
   hlada: () => set({ lita: lesa() }),
 }));
+
+/** Eigin merkingar notandans (penni, texti, örvar, mál, límmiðar) — aldrei dempaðar í Veggir-ham. Agnar 04.11.2026: „mikið
+ * gegnsæi, daufur litur þrátt yfir að vera í 100" — pennastrik fékk 25 % ógagnsæi því það er ekki veggur. */
+export function erAthugasemd(obj: { type: string }): boolean {
+  return obj.type === "pen" || obj.type === "arrow" || obj.type === "line" || obj.type === "measure" || obj.type === "polyline" || obj.type === "text" || obj.type === "sticky";
+}
+
+/** Ógagnsæi hlutar sem ekki er veggur í Veggir-ham: teikningin sést (til að rekja veggina), annað víkur. */
+export function dempadOgagnsaei(opacity: number, erMynd: boolean): number {
+  return opacity * (erMynd ? 0.6 : 0.25);
+}
 
 /** Liturinn sem veggurinn er TEIKNAÐUR í: skær litur tegundarinnar þegar „Lita veggi" er á, annars geymdi liturinn. */
 export function synilegurVegglitur(geymdur: string, tegund: VeggTegund | undefined, lita: boolean): string {

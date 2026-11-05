@@ -166,6 +166,12 @@ test("veggjaLinur ganga fyrir; annars PDF + handdregnir saman", () => {
   const ur = veggirHaedar({ veggjaLinur: [], pdfVeggir: pdf, veggir: [[0, 100, 0, 400]] }, frum);
   assert.equal(ur.heimild, "teikning");
   assert.equal(ur.veggir.length, 2);
+  const hreinsad = veggirHaedar(
+    { veggjaLinur: [], leidrett: { af: "turbopaint", kl: "2026-10-09T22:00:00.000Z" }, pdfVeggir: pdf },
+    frum
+  );
+  assert.equal(hreinsad.heimild, "turbopaint");
+  assert.deepEqual(hreinsad.veggir, [], "samþykkt tómt yfirlag má ekki falla aftur á PDF-veggi");
   assert.equal(veggirHaedar({}, frum).heimild, null);
 });
 

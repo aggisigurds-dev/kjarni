@@ -34,8 +34,10 @@ import { makeSymbol, markupKitForPlan, SYMBOL_DRAG_TYPE } from "../../lib/board/
 import { getStampSize } from "../../lib/board/symbol-settings";
 import * as symbolSettingsApi from "../../lib/board/symbol-settings";
 import * as symbolsApi from "../../lib/board/symbols";
-import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaSvaedi, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
-import { DRAEGI_LYKILL, endurlestrarRammar, husSvaediIMynd, sltBrslOrd, sltBrslStadir, stadirABord } from "../../lib/board/slt-brsl";
+import { detectFirewallsOnPlan, eiYfirlitsmidi, isFirewallMark, lesaTextaTeikningar, loadPlanCanvas } from "../../lib/board/detect-firewalls";
+import { iMyndardila, merkiUrBru } from "../../lib/board/merki-ocr";
+import { DRAEGI_LYKILL, sltBrslOrd, sltBrslStadir } from "../../lib/board/slt-brsl";
+import { sltBrslUrTexta } from "../../lib/board/slt-brsl-lestur";
 import { beitaSltBrsl, type SltBrslTeikning } from "../../lib/board/slt-brsl-bord";
 import { nyttTexti, TEGUND_HEITI, type TaekjaTegund } from "../../lib/board/sjalftenging";
 import type { EiMidi, FestiVeggur } from "../../lib/board/ei-festing";
@@ -46,7 +48,32 @@ import { ritillDilarAMetra } from "../../lib/board/veggja-ritill-adgerdir";
 import { nyGreiningarLota } from "../../lib/board/veggja-ritill";
 import { drawingScaleFromWords, pixelsPerMeterFromScale } from "../../lib/board/mvs165";
 import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
-import { clearBoard, createBoard, listBoards, loadBoard, migrateBoardObjects, persistBoard, schedulePersist, switchBoard } from "../../lib/board/persistence";
+import {
+  clearBoard,
+  createBoard,
+  listBoards,
+  loadBoard,
+  migrateBoardObjects,
+  opnaSkodun,
+  persistBoard,
+  schedulePersist,
+  switchBoard,
+  vistaSkodunSemBord,
+} from "../../lib/board/persistence";
+import {
+  DROG_BREYTA,
+  drogIBord,
+  drogFingur,
+  erSkjalasafnsSlod,
+  erSkodun,
+  heitiUrSlod,
+  lesaDrog,
+  lesaSkodunarBeidni,
+  skodunBreytt,
+  useSkodun,
+  SKODUN_BREYTA,
+  TITILL_BREYTA,
+} from "../../lib/board/skodun";
 import {
   finnaTengduMynd,
   giskaFrumStaerd,
@@ -72,6 +99,7 @@ import {
   vorpunMyndar,
   NYTT_MIDI,
   OTENGT_MIDI,
+  type LeidrettAf,
   type UttektHaed,
   type UttektTaeki,
 } from "../../lib/board/uttekt";
@@ -100,12 +128,19 @@ import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
+import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
 import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
-import { VeggjaStika } from "./VeggjaStika";
-import { VeggjaRitill } from "./VeggjaRitill";
+import { GreiningTolSpjald } from "./GreiningTolSpjald";
+import { HamValSimi, SIMA_VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika } from "./VeggjaStika";
+import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
+import { useErSimi } from "../../lib/board/simi";
+import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
+import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
+import { useSjalfvirkt, type SkrefId } from "../../lib/board/sjalfvirkt-stada";
 import { teiknaEldvegg, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
+import { teikningTilGreiningar } from "../../lib/board/greining-teikning";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -188,6 +223,15 @@ export function WhiteboardApp() {
   // Eiginleika-panellinn sem yfirlag á síma/spjaldtölvu (< lg) — á desktop er
   // hann fastur dálkur til hægri eins og áður.
   const [panelOpen, setPanelOpen] = useState(false);
+  // Veggir-hamur í síma: skúffan (hægra spjaldið) víkur þegar tól er valið eða „Finna veggi" opnast — annars skyggir
+  // hún (og bakgrunnur hennar) á teikninguna og greiningarspjaldið.
+  useEffect(
+    () =>
+      useVeggjaRitill.subscribe((s, p) => {
+        if ((s.greining && !p.greining) || (s.virkur && (s.tol !== p.tol || s.tegund !== p.tegund))) setPanelOpen(false);
+      }),
+    []
+  );
   const markBusyRef = useRef(false);
   const hydrated = useBoardStore((s) => s.hydrated);
   const importProgress = useBoardStore((s) => s.importProgress);
@@ -213,9 +257,15 @@ export function WhiteboardApp() {
   }, []);
   const camera = useBoardStore((s) => s.camera);
   const selectedIds = useBoardStore((s) => s.selectedIds);
+  // Skoðunarhamur (`?skoda=<slóð teikningar>&titill=<heiti>`, lib/board/skodun.ts): teikningin opnast í minni, ekkert
+  // borð verður til fyrr en „Vista sem borð". Lesið einu sinni við ræsingu (síðan er aðeins teiknuð í vafranum).
+  const [skodunBeidni] = useState(() => (typeof window === "undefined" ? null : lesaSkodunarBeidni(window.location.search, window.location.hash)));
+  const skodunVirk = useSkodun((s) => s.virk);
+  const skodunVistar = useSkodun((s) => s.vistar);
 
   useEffect(() => {
-    void loadBoard();
+    if (skodunBeidni) opnaSkodun(skodunBeidni.titill, skodunBeidni.slod);
+    else void loadBoard();
     // Prófunar-krókur: reykprófin (tools/turbopaint-smoke.cjs) lesa raun-stöðu
     // borðsins gegnum window.__tpStore í stað þess að giska út frá DOM.
     // Táknin fylgja með svo hægt sé að sanna litina, stimpilstærðina og
@@ -223,10 +273,14 @@ export function WhiteboardApp() {
     const w = window as unknown as Record<string, unknown>;
     w.__tpStore = useBoardStore;
     w.__tpFjolcrop = useFjolcrop;
+    w.__tpSjalfvirkt = useSjalfvirkt;
     w.__tpSymbols = symbolsApi;
     w.__tpSettings = symbolSettingsApi;
     w.__tpKit = { makeSymbol, exportTiledPdf, getRegisteredStage, detectFirewallsOnPlan, loadPlanCanvas, lesaTextaTeikningar, sltBrslOrd, sltBrslStadir };
-  }, []);
+    // Skoðunarprófið (tools/turbopaint-skodun.cjs) les stöðu skoðunar og mælir upplausn myndarinnar sjálfrar.
+    w.__tpSkodun = useSkodun;
+    w.__tpEign = getAssetBlob;
+  }, [skodunBeidni]);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
   const focusObject = useCallback(
@@ -369,49 +423,25 @@ export function WhiteboardApp() {
         const plan = images[i];
         const framvinda = (message: string, percent: number) =>
           useBoardStore.getState().setImportProgress({ fileName: plan.name, percent, message });
-        framvinda(`Les SLT / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
-        // SLT/BRSL eru láréttir: aðeins láréttur lestur (⅓ tímans — Álfaborg: ~115 s í stað ~300 s)
-        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: false, onProgress: framvinda });
-        const src = { b: r.srcW, h: r.srcH };
-        const v = vorpunMyndar(plan);
-        const hus = v ? husSvaediIMynd(plan.uttekt?.skurdur, v.frum, v.svaedi, src) : null;
-        let ord = sltBrslOrd(r.words, src, hus);
-        let stadir = sltBrslStadir(ord, r.blek);
-        // Slöngukefli sem fékk ekkert SLT: reiturinn kringum það lesinn aftur (OCR missir stök orð á fullri síðu)
-        const hMid = ord.length ? [...ord].sort((a, b) => a.h - b.h)[Math.floor(ord.length / 2)].h : 20;
-        const rammar = r.blek ? endurlestrarRammar(stadir, hMid) : [];
-        let endurlesid = 0;
-        let aukaOrd: string[] = [];
-        if (rammar.length && r.blek) {
-          framvinda(`Les aftur við ${rammar.length} slöngukefli…`, 90);
-          const auka = await lesaSvaedi(r.blek, rammar);
-          aukaOrd = auka.filter((w) => w.text.length <= 8).map((w) => `${w.text}@${Math.round(w.x)},${Math.round(w.y)}:${Math.round(w.confidence)}`);
-          const ord2 = sltBrslOrd([...r.words, ...auka], src, hus);
-          if (ord2.length > ord.length) {
-            endurlesid = ord2.length - ord.length;
-            ord = ord2;
-            stadir = sltBrslStadir(ord, r.blek);
-          }
-        }
-        console.info(
-          "[SLT] " +
-            JSON.stringify({
-              teikning: plan.name,
-              mynd: [r.srcW, r.srcH],
-              bord: [Math.round(plan.x), Math.round(plan.y), Math.round(plan.width), Math.round(plan.height)],
-              hus: hus && [Math.round(hus.x0), Math.round(hus.y0), Math.round(hus.x1), Math.round(hus.y1)],
-              ord: ord.map((o) => [o.tegund, Math.round(o.x), Math.round(o.y), Math.round(o.vissa), o.texti]),
-              stadir: stadir.map((s) => [Math.round(s.x), Math.round(s.y), s.brsl ? 1 : 0, s.slt ? 1 : 0, s.takn ? 1 : 0]),
-              endurlesid,
-              aukaOrd,
-            })
-        );
-        const bord = useBoardStore.getState();
-        const metri = ritillDilarAMetra(bord.objects, bord.pixelsPerMeter) ?? dilarAMetraGisk({ b: plan.width, h: plan.height });
-        const staerd = plan.uttekt
-          ? stimpilStaerdMyndar(plan, getStampSize())
-          : stimpilStaerdBords(bord.objects, getStampSize(), { x: plan.x + plan.width / 2, y: plan.y + plan.height / 2 });
-        teikningar.push({ plan, stadir: stadirABord(stadir, plan, src), staerd, metri });
+        framvinda(`Les SLT / HSL / BRSL af teikningunni (${i + 1}/${images.length})…`, 8);
+        // Skrifstofutölvan (RapidOCR, luna-bridge merki-ocr) les SAMHLIÐA — líka lóðrétt og í ramma (Agnar 11.10.2026, DRA
+        // ehf: „HSL" upp á rönd við veggi, sem tesseract les ekki). Vafrinn les aðeins lárétt (⅓ tímans); náist ekki í
+        // brúna stendur lestur vafrans einn.
+        let bruStada = "";
+        const bruP = merkiUrBru(plan.assetId, (t) => {
+          bruStada = t;
+        }).catch(() => null);
+        // Allar fjórar áttir (0°, 90°, 270°, 180°) í vafranum: blöð eru teiknuð á hlið og merki standa á hvolfi (Agnar 26.10.2026:
+        // „það þarf að lesa úr nokkrum angles“; Bríetartún 9 / Höfðatorg: texti lóðréttur, HST ekki lesið). Mælt: lárétt eitt og sér
+        // fann 0 HST/BS á blaðinu, lóðrétt lestur 2 101 orð. Skrifstofutölvan bætir RapidOCR við ef hún svarar.
+        const r = await lesaTextaTeikningar(plan, { medBlek: true, lodrett: true, hvolf: true, onProgress: framvinda });
+        framvinda(bruStada ? "Skrifstofutölvan: " + bruStada : "Bíð eftir skrifstofutölvunni (RapidOCR)…", 96);
+        const bru = await bruP;
+        if (bru && bru.ord.length) r.words = r.words.concat(iMyndardila(bru, r.srcW, r.srcH));
+        if (!bru) toast.message("Skrifstofutölvan svaraði ekki — lestur vafrans úr öllum fjórum áttum stendur einn");
+        const { teikning, log } = await sltBrslUrTexta(plan, r, framvinda);
+        console.info("[SLT] " + JSON.stringify(log));
+        teikningar.push(teikning);
         await new Promise((resolve) => setTimeout(resolve, 60));
       }
       // Tæki staðarins — FERSK úr úttektinni (tæki sem eru merki á einhverri hæð eru staðsett og ekki tekin)
@@ -449,6 +479,15 @@ export function WhiteboardApp() {
         for (const [k, n] of Object.entries(x.otengdTegundir) as [TaekjaTegund, number][]) otengdT[k] = (otengdT[k] ?? 0) + n;
       }
       const otengd = Object.values(otengdT).reduce((s, n) => s + (n ?? 0), 0);
+      // 15.10.2026: búnaður í römmum (R / S / H / B) og skilti (BO / ÚT) — talið með (Agnar: „sjá hvað það eru margir
+      // reykskynjarar og búnaður í húsinu")
+      const bunadurT: Partial<Record<TaekjaTegund, number>> = {};
+      for (const x of b.samantekt) {
+        for (const [k, n] of Object.entries(x.bunadur) as [TaekjaTegund, number][]) bunadurT[k] = (bunadurT[k] ?? 0) + n;
+      }
+      const bunadur = Object.values(bunadurT).reduce((s, n) => s + (n ?? 0), 0);
+      const bunadurFyrir = b.samantekt.reduce((s, x) => s + x.bunadurFyrir, 0);
+      const skilti = b.samantekt.reduce((s, x) => s + (x.skilti.bjorgunarop ?? 0) + (x.skilti.ut ?? 0), 0);
       console.info(
         "[SLT] " +
           JSON.stringify({
@@ -458,11 +497,18 @@ export function WhiteboardApp() {
             tengd: b.samantekt.flatMap((x) => x.tengd.map((t) => [t.hvad, t.unitId, t.serial])),
             otengd: otengdT,
             fyrir,
+            bunadur: bunadurT,
+            bunadurFyrir,
+            skilti: b.samantekt.map((x) => x.skilti),
             fjarlaegd: b.fjarlaegd,
           })
       );
-      if (!brsl && !slt) {
-        toast.message("Fann engin SLT / BRSL á teikningunni" + (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : ""));
+      if (!brsl && !slt && !bunadur && !skilti) {
+        toast.message(
+          "Fann engin SLT / BRSL, búnað í römmum né skilti á teikningunni" +
+            (bunadurFyrir ? ` · ${bunadurFyrir} rammar áttu tákn fyrir` : "") +
+            (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : "")
+        );
         return;
       }
       toast.success(
@@ -472,9 +518,14 @@ export function WhiteboardApp() {
             ? ` · ${otengd} ótengd (${(Object.keys(otengdT) as TaekjaTegund[]).map((k) => `${TEGUND_HEITI[k]} ${otengdT[k]}`).join(", ")}) — verða „Nýtt“ við vistun`
             : "") +
           (fyrir ? ` · ${fyrir} áttu tæki fyrir` : "") +
+          (bunadur
+            ? ` · búnaður: ${(Object.keys(bunadurT) as TaekjaTegund[]).map((k) => `${bunadurT[k]} ${TEGUND_HEITI[k].toLowerCase()}`).join(", ")} (tengist tækjum við vistun, annars Nýtt)`
+            : "") +
+          (bunadurFyrir ? ` · ${bunadurFyrir} rammar áttu tákn fyrir` : "") +
+          (skilti ? ` · ${skilti} skilti (BO / ÚT)` : "") +
           (b.fjarlaegd ? ` · ${b.fjarlaegd} eldri 165.BR1-merki fjarlægð` : "") +
           " · ⌘Z afturkallar",
-        { duration: 8000 }
+        { duration: 9000 }
       );
     } catch (err) {
       useBoardStore.getState().setImportProgress(null);
@@ -487,7 +538,14 @@ export function WhiteboardApp() {
   const runImport = useCallback(async (
     files: File[],
     world?: { x: number; y: number },
-    opts?: { asPlan?: boolean; skonnun?: { blob: Blob; nafn: string; b: number; h: number; lykill?: string } }
+    opts?: {
+      asPlan?: boolean;
+      skonnun?: { blob: Blob; nafn: string; b: number; h: number; lykill?: string };
+      /** Skoðun: teikningin ein — enginn 165.BR1-miði við hliðina. */
+      anMerkja?: boolean;
+      /** Skjáskot úr klippiborði (hluti af teikningu): miðjuð á `world`, minnkuð ef hún er stór, valin — og myndavélin hreyfist EKKI. */
+      hluti?: boolean;
+    }
   ): Promise<BoardObject[]> => {
     const json = files.find((f) => f.name.endsWith(".kjarni.json") || f.name.endsWith(".json"));
     if (json) {
@@ -523,7 +581,29 @@ export function WhiteboardApp() {
         const kind = classifyFile(f);
         return kind === "pdf" || kind === "tiff";
       });
-      const kit = isPlan ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
+      if (opts?.hluti) {
+        // Skjáskot af litlum hluta teikningar (Agnar 23.10.2026: „paste að skjáskot inn á turboprint … af svona litlum pörtum"):
+        // lendir MIÐJUÐ í sjónsviðinu og er minnkuð niður í 60 % af því ef hún er stærri, svo hún sé á skjánum og hægt sé að draga hana á
+        // réttan stað og stilla stærðina. Hún er valin; myndavélin helst kyrr (annars hoppar borðið út af hverju límdu broti).
+        const view = shellRef.current;
+        const cam = useBoardStore.getState().camera;
+        const vw = view ? view.clientWidth / cam.scale : 0;
+        const vh = view ? view.clientHeight / cam.scale : 0;
+        const stillt = incoming.map((img) => {
+          const k = vw > 0 && vh > 0 ? Math.min(1, (vw * 0.6) / img.width, (vh * 0.6) / img.height) : 1;
+          const w = img.width * k;
+          const h = img.height * k;
+          return { ...img, width: w, height: h, x: origin.x - w / 2, y: origin.y - h / 2 };
+        });
+        useBoardStore.getState().addObjects(stillt, false);
+        useBoardStore.getState().setTool("select");
+        useBoardStore.getState().setSelected(stillt.map((o) => o.id));
+        useBoardStore.getState().setImportProgress(null);
+        toast.success("Skjáskotið er á borðinu — dragðu það á réttan stað og stilltu stærðina");
+        warnings.forEach((w) => toast.message(w));
+        return stillt;
+      }
+      const kit = isPlan && !opts?.anMerkja ? withLayerId(incoming.flatMap((img) => markupKitForPlan(img)), LAYER_ALMENNT) : [];
       useBoardStore.getState().addObjects([...incoming, ...kit], false);
       useBoardStore.getState().setTool("select");
       const bounds = boardBounds([...incoming, ...kit]);
@@ -681,7 +761,9 @@ export function WhiteboardApp() {
     setStripPlanId(plan.id);
   }, [resolvePlan]);
   const greinaVeggi = useCallback(() => {
-    const plan = resolvePlan();
+    // sama regla og „Greina veggi…" / „Finna veggi" í ritlinum (greining-teikning.ts)
+    const st = useBoardStore.getState();
+    const plan = teikningTilGreiningar(st.objects, st.selectedIds);
     if (!plan) {
       toast.error("Engin teikning fannst — veldu teikninguna fyrst");
       return;
@@ -691,7 +773,7 @@ export function WhiteboardApp() {
       return;
     }
     useVeggjaRitill.getState().opnaGreiningu(plan.id);
-  }, [resolvePlan]);
+  }, []);
   const hamAdgerd = useCallback(
     (a: HamAdgerd) => {
       const st = useBoardStore.getState();
@@ -1068,11 +1150,17 @@ export function WhiteboardApp() {
     }
   }, []);
 
+  // Hvaðan síðasta teikning kom (TIF-frumrit, vigur-PDF, JPEG) — skref a) sjálfvirka verkferlisins segir frá því.
+  const gaediRef = useRef<GaediLysing | null>(null);
   // Sækja teikningu beint af permalink (FotoWeb Reykjavíkur eða PDF
   // Hafnarfjarðar) gegnum /api/turbopaint/fetch-plan — CORS bannar beina sókn.
   const runUrlImport = useCallback(
-    async (raw: string, opts?: { throwOnError?: boolean; asPlan?: boolean; fokus?: { x: number; y: number; w: number; h: number } | null }) => {
+    async (
+      raw: string,
+      opts?: { throwOnError?: boolean; asPlan?: boolean; fokus?: { x: number; y: number; w: number; h: number } | null; anMerkja?: boolean }
+    ) => {
       const trimmed = raw.trim();
+      const anMerkja = opts?.anMerkja === true;
       if (!/^https?:\/\//i.test(trimmed)) {
         const msg = "Þetta lítur ekki út eins og slóð";
         if (opts?.throwOnError) throw new Error(msg);
@@ -1100,9 +1188,13 @@ export function WhiteboardApp() {
             useBoardStore.getState().setImportProgress({ fileName: "skjalasafn", percent, message });
           const sk = await saekjaSkarpaSkonnun(trimmed, quality, { fokus: opts?.fokus, framvinda });
           useBoardStore.getState().setImportProgress(null);
+          gaediRef.current = sk.ok
+            ? { gerd: "tif", b: sk.upplausn.w, h: sk.upplausn.h, texti: `TIF-frumrit ${sk.upplausn.w}×${sk.upplausn.h} dílar (JPEG skjalasafnsins ${sk.frum.b}×${sk.frum.h})` }
+            : { gerd: "jpeg", b: 0, h: 0, texti: `JPEG skjalasafnsins — TIF-frumritið fékkst ekki (${sk.villa})` };
           if (sk.ok) {
             const komnar = await runImport([], undefined, {
               asPlan: opts?.asPlan !== false,
+              anMerkja,
               // Fast auðkenni (slóð + gæði + fókus + stærð JPEG-sins): sama teikning hleðst ekki upp aftur við hverja opnun
               skonnun: {
                 blob: sk.blob,
@@ -1122,7 +1214,7 @@ export function WhiteboardApp() {
           if (sk.jpeg) {
             toast.message(sk.villa, { duration: 5000 });
             const file = new File([sk.jpeg], sk.nafn + ".jpg", { type: sk.jpeg.type || "image/jpeg" });
-            merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false }));
+            merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false, anMerkja }));
             return;
           }
           // JPEG-ið náðist ekki heldur — venjulega leiðin hér að neðan reynir aftur
@@ -1142,7 +1234,16 @@ export function WhiteboardApp() {
           : trimmed.split("/").pop() || "teikning";
         useBoardStore.getState().setImportProgress(null);
         const file = new File([blob], name, { type: blob.type || "image/tiff" });
-        merkjaHeimild(await runImport([file], undefined, { asPlan: opts?.asPlan !== false }));
+        const komnar = await runImport([file], undefined, { asPlan: opts?.asPlan !== false, anMerkja });
+        merkjaHeimild(komnar);
+        const fyrsta = komnar.find((o) => o.type === "image") as ImageObject | undefined;
+        const pdf = /pdf/i.test(blob.type) || /\.pdf$/i.test(name);
+        gaediRef.current = {
+          gerd: pdf ? "pdf" : "mynd",
+          b: fyrsta?.width ?? 0,
+          h: fyrsta?.height ?? 0,
+          texti: (pdf ? "PDF-frumskjalið" : "Mynd skjalasafnsins") + (fyrsta ? ` ${fyrsta.width}×${fyrsta.height} dílar á borðinu` : ""),
+        };
       } catch (err) {
         useBoardStore.getState().setImportProgress(null);
         if (opts?.throwOnError) throw err;
@@ -1158,13 +1259,37 @@ export function WhiteboardApp() {
   // skrifar merkin til baka í sömu röð.
   const [uttektVistar, setUttektVistar] = useState(false);
   const tengdMynd = useBoardStore((st) => finnaTengduMynd(st.objects));
+  const hefurMyndGr = useBoardStore((st) => st.objects.some((o) => o.type === "image"));
+  // „Keyra valin" í Greining-flipanum: sjálfvirka verkferlið á opnu úttektarhæðinni, aðeins valdir hópar (veggir · ei · taeki).
+  const keyraGreiningu = useCallback((valin: SkrefId[]) => {
+    const m = finnaTengduMynd(useBoardStore.getState().objects);
+    if (!m) {
+      toast.error("Opnaðu hæð úr úttekt fyrst — combo vistar til baka á hæðina");
+      return;
+    }
+    void keyraSjalfvirkt(m.id, {
+      valin,
+      vista: (o) => vistaRef.current(o),
+      gaedi: gaediRef.current,
+      ramma: (r) => {
+        const v = shellRef.current;
+        if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
+      },
+    });
+  }, []);
   // „Croppa oft": hlutar blaðs á borðinu og hve margir eru tengdir hæð.
   const hlutarABordi = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti).length);
   const tengdirHlutar = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti && o.uttekt).length);
+  // „Vista í úttekt" (Agnar 09.10.2026: „gera vista gluggann minni"): í síma aðeins lítill hnappur í hægra horni borðsins
+  // (ofan við magntöfluna) — borðinn með textanum fyllti breiddina og lá ofan á veggjaritlinum og verkfærasúlunni.
+  const simi = useErSimi();
+  // Í skoðun er „Vista í úttekt" falið — skoðun skrifar hvergi (aðeins „Vista sem borð").
+  const vistaSyn = !skodunVirk && (!!tengdMynd?.uttekt || hlutarABordi > 0);
   const uttektFromQuery = useRef(false);
   const planFromQuery = useRef(false);
   useEffect(() => {
-    if (uttektFromQuery.current) return;
+    // Skoðun (`?skoda=`) gengur fyrir: hún opnar aldrei úttektarborð né skrifar í úttekt.
+    if (uttektFromQuery.current || skodunBeidni) return;
     const q = new URLSearchParams(window.location.search);
     const cid = Number(q.get("uttekt") || 0);
     const haedId = q.get("haed") || "";
@@ -1176,9 +1301,16 @@ export function WhiteboardApp() {
     // Úttektarteikning úr Slökkvitæki-appinu = tækin raðast: byrja í Slökkvitækjaham. `&ham=teikning` (t.d. „Leiðrétta
     // veggi" í Teikning-glugganum) opnar beint í Teikning-ham þar sem veggjastikan er.
     const hamQ = q.get("ham") || "";
-    useHamur.getState().setHamur(HAMIR.some((x) => x.id === hamQ) ? (hamQ as HamurId) : "slokkvitaeki");
+    // `&sjalfvirkt=1` („Sjálfvirkt" í Teikning-glugganum, Agnar 08.10.2026): sjálfvirka verkferlið keyrir eftir opnun —
+    // hæstu gæði, skurður að húsinu, veggir, hreinsun, hurðir, EI, SLT/BRSL og vistun (lib/board/sjalfvirkt.ts).
+    const sjalfvirkt = q.get("sjalfvirkt") === "1";
+    // `&rod=<hæð>,<hæð>` (Agnar 11.10.2026 — „Veggjavél" í 3D Teikningar: sömu vél og vinnuaðferð og TurboPaint): næstu
+    // hæðir sem fá verkferlið. Að lokinni vistun opnast sú næsta sjálfkrafa.
+    const rod = sjalfvirkt ? (q.get("rod") || "").split(",").map((x) => x.trim()).filter(Boolean) : [];
+    useHamur.getState().setHamur(HAMIR.some((x) => x.id === hamQ) ? (hamQ as HamurId) : sjalfvirkt ? "teikning" : "slokkvitaeki");
+    if (sjalfvirkt) useBoardStore.getState().setImportQuality("print");
     const hrein = new URL(window.location.href);
-    ["uttekt", "haed", "b", "h", "plan", "ham"].forEach((k) => hrein.searchParams.delete(k));
+    ["uttekt", "haed", "b", "h", "plan", "ham", "sjalfvirkt", "rod"].forEach((k) => hrein.searchParams.delete(k));
     window.history.replaceState({}, "", hrein.pathname + hrein.search);
     const urlFrum = { b: Number(q.get("b") || 0), h: Number(q.get("h") || 0) };
     void (async () => {
@@ -1259,18 +1391,117 @@ export function WhiteboardApp() {
               : vh.heimild === "turbopaint"
                 ? ` · ${veggir.length} veggir`
                 : "") +
-            `. Ýttu á „Vista í úttekt" til að skrifa til baka.`
+            (sjalfvirkt ? ". Sjálfvirka verkferlið byrjar…" : `. Ýttu á „Vista í úttekt" til að skrifa til baka.`)
         );
+        if (sjalfvirkt) {
+          await keyraSjalfvirkt(mynd.id, {
+            vista: (o) => vistaRef.current(o),
+            gaedi: gaediRef.current,
+            ramma: (r) => {
+              const v = shellRef.current;
+              if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
+            },
+          });
+          const st = useSjalfvirkt.getState();
+          if (rod.length && !st.stodva && st.vistun === "vistad") {
+            const n = new URL(window.location.href);
+            n.searchParams.set("uttekt", String(cid));
+            n.searchParams.set("haed", rod[0]);
+            n.searchParams.set("ham", "teikning");
+            n.searchParams.set("sjalfvirkt", "1");
+            if (rod.length > 1) n.searchParams.set("rod", rod.slice(1).join(","));
+            toast.message(`Næsta hæð eftir 3 s — ${rod.length} ${rod.length === 1 ? "hæð eftir" : "hæðir eftir"}`, { duration: 3000 });
+            await new Promise((r) => setTimeout(r, 3000));
+            if (!useSjalfvirkt.getState().stodva) window.location.assign(n.toString());
+          }
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
+        if (sjalfvirkt) useSjalfvirkt.getState().set({ synilegt: true, keyrir: false, yfirlit: "Gat ekki opnað hæðina: " + (err instanceof Error ? err.message : String(err)) });
       }
     })();
-  }, [runUrlImport]);
+  }, [runUrlImport, skodunBeidni]);
 
-  const vistaUttekt = useCallback(async () => {
+  // ── Skoðun: `?skoda=<slóð teikningar>&titill=<heiti>` (Greining fasteignar í Slökkvitæki-appinu) ──────────────────
+  // Teikningin kemur á skoðunarborðið (aðeins í minni) í HÆSTU gæðum: skönnun úr TIF-frumritinu, PDF teiknað með pdf.js í
+  // allt að 12.500 px / 40 MP (og skarpa PDF-lagið við aðdrátt). Ekkert vistast fyrr en ýtt er á „Vista sem borð".
+  const skodunHafin = useRef(false);
+  useEffect(() => {
+    if (!skodunBeidni || !hydrated || skodunHafin.current) return;
+    skodunHafin.current = true;
+    useBoardStore.getState().setImportQuality("print");
+    void (async () => {
+      const { slod, titill } = skodunBeidni;
+      if (erSkjalasafnsSlod(slod)) {
+        await runUrlImport(slod, { asPlan: true, anMerkja: true });
+      } else {
+        // Ekki skjalasafn (t.d. upphlaðin mynd í Supabase-geymslunni) — sótt beint; CORS þeirrar slóðar ræður.
+        try {
+          useBoardStore.getState().setImportProgress({ fileName: titill, percent: 10, message: "Sæki teikningu…" });
+          const res = await fetch(slod);
+          if (!res.ok) throw new Error(`Gat ekki sótt teikninguna (${res.status})`);
+          const blob = await res.blob();
+          const ending = /pdf/i.test(blob.type) ? ".pdf" : /tiff/i.test(blob.type) ? ".tif" : /png/i.test(blob.type) ? ".png" : ".jpg";
+          useBoardStore.getState().setImportProgress(null);
+          await runImport([new File([blob], heitiUrSlod(slod) + ending, { type: blob.type })], undefined, { asPlan: true, anMerkja: true });
+        } catch (err) {
+          useBoardStore.getState().setImportProgress(null);
+          toast.error(err instanceof Error ? err.message : "Gat ekki sótt teikninguna");
+        }
+      }
+      // Drög (`&drog=`, þjálfunargögn veggjavélarinnar sem bíða yfirferðar): veggir / hurðir / gler sem TILLÖGUR í
+      // Veggir-ham — Agnar samþykkir (smellur / kassi / allar), hafnar (Shift+smellur) og vistar með „Vista sem borð".
+      const drog = lesaDrog(skodunBeidni.drog);
+      if (drog) {
+        const myndir = useBoardStore.getState().objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden);
+        const plan = myndir.find((o) => o.uttekt) ?? myndir[myndir.length - 1];
+        if (plan && !plan.rotation) {
+          useVeggjaRitill.getState().setTillogur({ planId: plan.id, lota: nyGreiningarLota(), veggir: drogIBord(drog, plan) });
+          // „Vista sem borð" merkir þessa mynd `thjalfun` (yfirfarin drög → þjálfunargögn veggjavélarinnar).
+          useSkodun.setState({ drog: { fingur: drogFingur(skodunBeidni.drog ?? ""), planId: plan.id } });
+          useHamur.getState().setHamur("veggir");
+          if (!useVeggjaRitill.getState().virkur) useVeggjaRitill.getState().kveikja("velja");
+          const n = (t: string) => drog.filter((l) => l.tegund === t).length;
+          toast.message(`Drög: ${n("veggur") + n("ei60") + n("ei30")} veggir · ${n("hurd")} hurðir · ${n("gler")} gler sem tillögur — samþykktu / hafnaðu og „Vista sem borð"`, { duration: 6000 });
+        }
+      }
+      // Grunnlínan: það sem kom inn. Teikni/merki notandinn eitthvað er varað við áður en skoðuninni er hent.
+      if (erSkodun()) useSkodun.setState({ grunnur: useBoardStore.getState().objects });
+    })();
+  }, [skodunBeidni, hydrated, runUrlImport, runImport]);
+
+  // Lokun/endurhleðsla: ekkert er eftir á þjóninum — en hafi eitthvað verið teiknað spyr vafrinn fyrst.
+  useEffect(() => {
+    if (!skodunVirk) return;
+    const vid = (e: BeforeUnloadEvent) => {
+      if (!skodunBreytt(useBoardStore.getState().objects)) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", vid);
+    return () => window.removeEventListener("beforeunload", vid);
+  }, [skodunVirk]);
+
+  const vistaSemBord = useCallback(async () => {
+    try {
+      const r = await vistaSkodunSemBord();
+      // Endurhleðsla opnar nú nýja borðið, ekki nýja skoðun.
+      const hrein = new URL(window.location.href);
+      [SKODUN_BREYTA, TITILL_BREYTA, DROG_BREYTA].forEach((k) => hrein.searchParams.delete(k));
+      window.history.replaceState({}, "", hrein.pathname + hrein.search);
+      const nafn = useBoardStore.getState().name;
+      if (r.sky === "synced") toast.success(`Vistað sem borð „${nafn}" — opnast á öllum tækjum`);
+      else toast.message(`„${nafn}" er vistað á þessu tæki — skýið reynir aftur sjálfkrafa`, { duration: 6000 });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gat ekki vistað borðið");
+    }
+  }, []);
+
+  // `leidrettAf`: „Vista í úttekt"-takkinn = turbopaint (Agnar lagaði); sjálfvirka verkferlið vistar með „sjalfvirkt".
+  const vistaUttekt = useCallback(async (opts?: { leidrettAf?: LeidrettAf }): Promise<{ ok: true; texti: string } | { ok: false; villa: string }> => {
     setUttektVistar(true);
     try {
-      const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize());
+      const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize(), { leidrettAf: opts?.leidrettAf });
       const st = useBoardStore.getState();
       // Nýir stimplar fá unitId sitt á borðinu — næsta vistun færir þá í stað þess að bæta öðrum við.
       for (const n of r.nyirStimplar) {
@@ -1329,6 +1560,7 @@ export function WhiteboardApp() {
         sott += ny.length;
         const tenging: UttektTenging = { ...mynd.uttekt, merki: [...hl.merkiABordi, ...ny.map((s) => merkiLykill(s.uttektUnitId))] };
         delete tenging.nyHaed; // hæðin er nú til í úttektinni
+        delete tenging.skurdurSjalfvirkt; // sjálfvirki skurðurinn er nú skurður hæðarinnar
         // Vistaða stærðin er nú viðmiðið: næsta vistun skrifar stimpilStaerd aðeins ef henni er breytt aftur.
         if (tenging.stimpilStaerd) tenging.stimpilStaerdVid = tenging.stimpilStaerd;
         st.patchObject(mynd.id, { uttekt: tenging } as Partial<BoardObject>, false);
@@ -1365,18 +1597,23 @@ export function WhiteboardApp() {
           : r.nyjarHaedir.length
             ? ` · ný hæð „${r.hlutar[0].nafn}“`
             : "";
-      toast.success(
+      const texti =
         `${r.nafn}: ${r.fjoldi} merki vistuð (${r.breytt} færð, ${r.ny} ný, ${r.tekin} tekin af)` +
-          haedaTexti +
-          (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
-          (auka.length ? " · " + auka.join(" · ") : "")
-      );
+        haedaTexti +
+        (r.veggir ? ` · ${r.veggir} veggir fylgja í 3D` : "") +
+        (auka.length ? " · " + auka.join(" · ") : "");
+      toast.success(texti);
+      return { ok: true, texti };
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Vistun í úttekt mistókst");
+      const villa = err instanceof Error ? err.message : "Vistun í úttekt mistókst";
+      toast.error(villa);
+      return { ok: false, villa };
     } finally {
       setUttektVistar(false);
     }
   }, []);
+  const vistaRef = useRef(vistaUttekt);
+  vistaRef.current = vistaUttekt;
 
   // Tæki eða stimpill úr tækjalistanum sett á teikninguna (smellur eða dráttur). Tæki sem er á hæðinni færist (aldrei
   // tvítekið); tæki á annarri hæð er fært hingað eftir staðfestingu (það fer af hinni hæðinni við vistun).
@@ -1456,7 +1693,7 @@ export function WhiteboardApp() {
   );
 
   useEffect(() => {
-    if (planFromQuery.current) return;
+    if (planFromQuery.current || skodunBeidni) return;
     const q = new URLSearchParams(window.location.search);
     if (q.get("uttekt")) return;
     const raw = q.get("plan");
@@ -1466,7 +1703,7 @@ export function WhiteboardApp() {
     url.searchParams.delete("plan");
     window.history.replaceState({}, "", url.pathname + url.search);
     void runUrlImport(raw);
-  }, [runUrlImport]);
+  }, [runUrlImport, skodunBeidni]);
 
   // ⌘C / ⌘X / ⌘V on the board itself. The browser's own copy/cut/paste
   // events carry the data (no clipboard permission prompts); the keydown
@@ -1499,6 +1736,23 @@ export function WhiteboardApp() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       nativeClipboardSeen.current.paste = Date.now();
+      // Skjáskot (eða afrituð mynd) í klippiborðinu → hluti á borðið. Ekki þegar skrifað er í reit; skrár (t.d. afrituð PDF) fara áfram um
+      // dragðu-og-slepptu / „Hlaða upp".
+      const mynd = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/") && !/tiff?$/i.test(f.type));
+      if (mynd && !isTyping(e.target)) {
+        e.preventDefault();
+        const nu = new Date();
+        const stimpill = [nu.getHours(), nu.getMinutes(), nu.getSeconds()].map((n) => String(n).padStart(2, "0")).join(".");
+        const ending = mynd.type === "image/jpeg" ? "jpg" : mynd.type.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+        const skra = new File([mynd], `Skjáskot ${stimpill}.${ending}`, { type: mynd.type });
+        const shell = shellRef.current;
+        const cam = useBoardStore.getState().camera;
+        const mid = shell
+          ? worldFromScreen({ x: shell.clientWidth / 2, y: shell.clientHeight / 2 }, cam)
+          : undefined;
+        void runImport([skra], mid, { hluti: true });
+        return;
+      }
       const text = e.clipboardData?.getData("text")?.trim() ?? "";
       const copiedObjects = text ? parseClipboard(text) : null;
       if (copiedObjects) {
@@ -1543,7 +1797,7 @@ export function WhiteboardApp() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [runUrlImport]);
+  }, [runUrlImport, runImport]);
 
   const openSamplePlan = useCallback(async () => {
     try {
@@ -1734,14 +1988,41 @@ export function WhiteboardApp() {
         on3d={() => setThrividd(true)}
         onHamAdgerd={hamAdgerd}
         onOpenLayers={() => setPanelOpen(true)}
+        greining={hefurMyndGr ? { onAdgerd: hamAdgerd, keyraCombo: keyraGreiningu, uttekt: !!tengdMynd?.uttekt } : null}
         viewSize={size}
       />
+      <VeggjaYfirlit />
+      {skodunVirk ? (
+        <div
+          data-skodun-bordi
+          className="flex shrink-0 items-center gap-2 border-b border-amber-300/25 bg-[#2b2513] py-1.5 pr-1.5 pl-3 text-[12.5px] text-amber-100"
+        >
+          <span aria-hidden>👁</span>
+          <span className="min-w-0 flex-1 truncate">
+            <b className="font-semibold">Skoðun — ekki vistað</b>
+            <span className="text-amber-100/70 max-sm:hidden">
+              {" "}
+              · teikningin hverfur þegar glugganum er lokað nema hún sé vistuð sem borð
+            </span>
+          </span>
+          <button
+            type="button"
+            data-vista-sem-bord
+            disabled={skodunVistar || !!importProgress || !objects.length}
+            onClick={() => void vistaSemBord()}
+            title="Býr til venjulegt TurboPaint-borð úr þessari skoðun (teikningin hleðst upp í skýið) og skiptir yfir í það"
+            className="shrink-0 rounded-full bg-[#FE653F] px-3 py-1 font-semibold whitespace-nowrap text-white shadow-md hover:bg-[#ff7a58] active:translate-y-px disabled:opacity-50"
+          >
+            {skodunVistar ? "Vistar…" : "💾 Vista sem borð"}
+          </button>
+        </div>
+      ) : null}
       {thrividd ? (
         <Hus3D objects={objects} pixelsPerMeter={pixelsPerMeter} onClose={() => setThrividd(false)} />
       ) : null}
-      {(tengdMynd?.uttekt || hlutarABordi > 0) && (
+      {vistaSyn && !simi && (
         <div className="pointer-events-none absolute inset-x-0 top-[6.75rem] z-30 flex justify-center px-2">
-          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
+          <div data-vista-uttekt-bordi className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
             <span className="min-w-0 truncate">
               🧯 Úttektarteikning ·{" "}
               {hlutarABordi > 0
@@ -1805,6 +2086,7 @@ export function WhiteboardApp() {
             </div>
           )}
           {hydrated ? <VeggjaRitill /> : null}
+          <SjalfvirktSpjald />
           <div className="pointer-events-none absolute inset-0">
             {/* Verkfærasúlan var lóðrétt MIÐJUÐ (top-1/2 + -translate-y-1/2).
                 Á síma er hún hærri en borðið, svo hún klipptist af að ofan OG
@@ -1815,11 +2097,45 @@ export function WhiteboardApp() {
             <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
             </div>
-            {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
-              <div className="pointer-events-auto absolute top-3 right-3">
-                <CountTable />
-              </div>
-            ) : null}
+            <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+              {vistaSyn && simi ? (
+                <button
+                  type="button"
+                  data-vista-uttekt-bordi
+                  disabled={uttektVistar}
+                  onClick={() => void vistaUttekt()}
+                  aria-label="Vista í úttekt"
+                  title={
+                    "Vista í úttekt — skrifar tækin, merkin (NÚ, ÚT, skilti …) og veggina á þessari hæð aftur í úttektarteikninguna í Slökkvitæki-appinu" +
+                    (hlutarABordi > 0 ? ` · ${tengdirHlutar} af ${hlutarABordi} hlutum tengdir hæðum` : "")
+                  }
+                  className="pointer-events-auto flex items-center gap-1 rounded-full bg-[#FE653F] py-1.5 pr-3 pl-2.5 text-[12px] font-semibold whitespace-nowrap text-white shadow-xl shadow-black/40 active:translate-y-px disabled:opacity-60"
+                >
+                  {uttektVistar ? (
+                    "Vistar…"
+                  ) : (
+                    <>
+                      <span aria-hidden>💾</span>
+                      Vista
+                      {hlutarABordi > 0 ? (
+                        <span className="font-normal text-white/80">
+                          {tengdirHlutar}/{hlutarABordi}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </button>
+              ) : null}
+              {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir og greiningartólin efst til hægri undir „Vista" — ekki fyrir á borðinu */}
+              {simi && tengdMynd?.uttekt ? <HamValSimi /> : null}
+              {/* Greining: einn samanbrotinn flipi með öllum greiningartólunum — combo (valdir hópar í röð) eða stök tól */}
+              {simi && hefurMyndGr ? <GreiningTolSpjald onAdgerd={hamAdgerd} keyraCombo={keyraGreiningu} uttekt={!!tengdMynd?.uttekt} /> : null}
+              {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
+                <div className="pointer-events-auto" data-magntafla>
+                  <CountTable />
+                </div>
+              ) : null}
+            </div>
             {selectedIds.length ? (
               <div className="pointer-events-auto absolute right-3 bottom-28 lg:hidden">
                 <button
@@ -1835,7 +2151,7 @@ export function WhiteboardApp() {
             {/* Undir „Vista í úttekt"-borðanum þegar hann er uppi — annars skyggði hann á stikurnar. */}
             <div
               className={`absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 ${
-                tengdMynd?.uttekt ? "top-16" : "top-3"
+                tengdMynd?.uttekt || (simi && vistaSyn) ? "top-16" : "top-3"
               }`}
             >
               <SelectionBar
@@ -1847,8 +2163,11 @@ export function WhiteboardApp() {
               <VeggjaStika />
             </div>
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
-              <SymbolTray />
-              <StyleStrip />
+              <RitilThettStika auka={simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? { onAdgerd: hamAdgerd } : undefined} />
+              {simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? null : <SymbolTray />}
+              {/* Veggjahamir (tölva líka — Agnar 05.11.2026: „litakóðinn niðri mætti vera val á veggjum eins og í Teikningu"): neðsta stikan er
+                  veggjategund + þykkt í stað litapallettunnar. */}
+              {SIMA_VEGGJA_HAMIR.includes(hamur) ? <VeggjaTegundSimaStika /> : <StyleStrip />}
             </div>
           </div>
           {dragOver ? (
@@ -2195,7 +2514,8 @@ function ExportDialog({
   initialTarget?: "board" | "viewport" | "selection";
 }) {
   const [target, setTarget] = useState<"board" | "viewport" | "selection">("board");
-  const [scale, setScale] = useState<ExportScale>(3);
+  // Sjálfgefið 4× hámark og valið (Agnar 11.10.2026: „hafa default valinn hlut og full gæði")
+  const [scale, setScale] = useState<ExportScale>(4);
   const [busy, setBusy] = useState(false);
   // A4-flísar: hve mörg blöð og hvernig þau snúa. Sjálfgefið 2 lárétt hlið við
   // hlið — það sem hentar löngu hústeikningunum sem Agnar prentar mest.
@@ -2205,7 +2525,9 @@ function ExportDialog({
   const area = tiledAreaMm(tiles);
 
   useEffect(() => {
-    if (open) setTarget(initialTarget === "selection" && !hasSelection ? "board" : initialTarget);
+    if (!open) return;
+    setTarget(hasSelection ? "selection" : initialTarget === "selection" ? "board" : initialTarget);
+    setScale(4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTarget]);
 
@@ -2261,15 +2583,15 @@ function ExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      {/* Þéttur (Agnar 11.10.2026: „þarf að zooma út í desktop til að geta ýtt á neðstu takkana"): aldrei hærri en
+          skjárinn, svæði og upplausn hlið við hlið, A4-skiptingin felld saman. */}
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] gap-3 overflow-y-auto p-4 sm:max-w-md">
+        <DialogHeader className="gap-1">
           <DialogTitle>Flytja út í háum gæðum</DialogTitle>
-          <DialogDescription>
-            PNG og PDF eru teiknuð af öllu borðinu eða því sem þú sérð. JSON vistar borðið með
-            innfelldum gólfplönum.
-          </DialogDescription>
+          <DialogDescription className="text-xs">PNG / PDF af völdu, sýnilegu svæði eða öllu borðinu · JSON vistar borðið.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 text-sm">
+        <div className="grid gap-2.5 text-sm">
+          <div className="grid grid-cols-2 gap-2">
           <label className="grid gap-1">
             <span className="text-muted-foreground">Svæði</span>
             <select
@@ -2297,17 +2619,18 @@ function ExportDialog({
               <option value={4}>4× hámark</option>
             </select>
           </label>
+          </div>
 
-          <div className="mt-1 grid gap-2 rounded-lg border p-3">
-            <div className="flex items-center justify-between">
+          <details className="group rounded-lg border px-3 py-2">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
               <span className="font-medium">Skipta á A4-blöð</span>
               <span className="text-xs text-muted-foreground">
                 {tiles.cols * tiles.rows} blöð · {Math.round(area.w)} × {Math.round(area.h)} mm
               </span>
-            </div>
+            </summary>
+            <div className="mt-2 grid gap-2">
             <p className="text-xs text-muted-foreground">
-              Fyrir stór kort: hvert blað prentast sér með skurðarmerkjum og yfirlitsreit, svo þú
-              plastar og límir saman.
+              Hvert blað prentast sér með skurðarmerkjum og yfirlitsreit — plastar og límir saman.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {(
@@ -2375,7 +2698,8 @@ function ExportDialog({
             <Button variant="secondary" disabled={busy} onClick={() => void run("tiles")}>
               Prenta á {tiles.cols * tiles.rows} A4-blöð (PDF)
             </Button>
-          </div>
+            </div>
+          </details>
         </div>
         <DialogFooter className="sm:justify-between">
           <Button variant="outline" disabled={busy} onClick={() => void run("json")}>

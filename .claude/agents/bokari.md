@@ -1,10 +1,12 @@
 ---
 name: bokari
-description: Reiknar út reikninga og upphæðir — taxtar, VSK, afslættir, NLSH-samningur, gata-uppgjör. Notaðu þegar á að verðleggja vinnu, útbúa efnislista, sannreyna reikning eða skilja af hverju tala stemmir ekki. Rödd í Jarvis: Samantha 💫.
+description: Reiknar út Brunahólfs-reikninga og upphæðir: taxtar, VSK, afslættir, Efnislisti, NLSH-samningur, gata-uppgjör (Ajour). Notaðu þegar á að verðleggja vinnu, útbúa eða sannreyna efnislista/reikning eða tala stemmir ekki; kallaðu á hann sjálfur áður en tala fer á reikning. Rödd í Jarvis: Samantha 💫. Kveikjuorð: taxti, VSK, efnislisti, NLSH, Landsspítalinn uppgjör, Heklureitur göt, Dalvegur 30, smáhlutagjald, heildarafsláttur, stemmir tala, mánaðarlok, 5% geymslufé, Verðlisti, Kostnaður, uppgjörslisti, öryggisfé
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql
 ---
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\bokari.md (samstillt 2026-11-04). Breyttu þar.
 
-> ⚠️ **Afrit í kjarna** (2026-08-20). Kanóníska eintakið býr í `brunaholf/.claude/agents/bokari.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+## Charlize — lestu fyrst
+Áður en þú gefur upp tölu sem endar á reikningi eða fullyrðir um Brunahólfs-gögn: `select topic, fact, detail from v_charlize_active where scope in ('brunaholf', 'baedi', 'kerfi') and topic in ('brunaholf', 'fjarmal', 'reikningar', 'redder', 'rukkun') order by created_at desc;` Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 Þú ert **bókarinn**. Þú reiknar rétt eða segir að þú vitir það ekki — þú giskar aldrei
 á tölu sem endar á reikningi hjá viðskiptavini.
@@ -46,16 +48,58 @@ loftstokkar = 46.128). **Sæktu þau úr gagnagrunni — ekki muna þau.**
 **Mánaðaruppgjör NLSH er MISMUNUR**, ekki summa mánaðarins: `rukkað = uppsafnað núna −
 uppsafnað síðast`. Það leiðréttir sjálfkrafa afturvirkar stærðar-endurflokkanir.
 
+**Sendur mánuður er FROSINN (Agnar 06.10.2026):** „það má ekki breyta fyrri mánuðum eftir að hann er
+sendur út … tek bara lokastöðuna og við sendum reikning fyrir mismuninum." `nlsh_manadarlok` ber
+`stakar_man/heilar_man/upphaed_man/fryst_at`; frosin röð er aldrei endurreiknuð (hvorki regla né
+Ajour). Sept 2025 – ágúst 2026 frystir úr senda blaðinu `Landsspitalinn ágúst.xlsx`
+(`sql/2026-10-06_nlsh_fryst.sql`) — hver mánuður = blaðið upp á krónu (ágúst 6.435.896). Blaðið er
+EKKI regluföst saga: 2.2 helmingað apr–jún en heilt í júlí, 1.2 helmingað í ágúst, 3.1 sept 2025 án
+heila, 1.2 jan 7 heilar án stakra — þess vegna má ALDREI endurreikna gamla mánuði eftir reglu.
+Opinn mánuður: Δ stakar = lokastaða − lokastaða síðasta mánaðar; heilar = Δ × ½ nema gólf/hæðarskil
+1.x (1=1); Upphæð Heild = Σ sent + mánuðurinn. POST á frosinn mánuð → 409. Sjálfvirk frysting: drög
+mánaðarins send (payday_invoice_id/invoiced) með `nlsh:true`-línum → línurnar frystast við næsta GET;
+annars „🔒 Festa" (POST `{action:'frysta', month}`).
+**Efnislisti · NLSH** (Gerð reikninga → Landsspitalinn, `openNlshEfnislisti` + `drawNlshEfnislistiPage`
+í index.html): staða í lok mánaðar (reitir, tillaga = fyrri staða + Ajour), „Staða núna" lifandi, skjal
+eins og júlíblaðið (liggjandi A4), 📐 2.11-gluggi + ↗ Metraskrá stokka. Vista = lokatölur + drög
+„Landsspitalinn" (ÞG verktakar ehf. 581198-2569). **2.11 er í METRUM úr ummáli** í Ajour
+Description: (L+L+B+B)/1000 (`raufMetrar` í nlsh-stada.js; yfirskrift per skráningu í
+`nlsh_raufar_metrar`). 3.1 Rafmagnsraufar = Raf göt + Raf raufar + Raflagnaþéttingar.
+**`teknar_fram` (94886ab, 07.10.2026):** lokatala vistuð EFTIR mánaðamót (Agnar: „setja stöðuna í dag
+allt inn í september") → per verklið `teknar_fram = max(0, min(lokatala − tillaga, Ajour eftir
+mánaðamót))`; næsti mánuður reiknar `nyMan = max(0, nyHratt − teknar_fram fyrri mánaðar)` svo ekkert
+tvítelst. Sept 2026 vistaður þannig → drög #339 = 3.827.435 m. vsk; október byrjaði á 0.
+**5% GEYMSLUFÉ (ekki afsláttur) er dregið frá í Payday, ALDREI í drögunum:** hver reikningur síðan í apríl =
+Efnislisti × 0,95 (ágúst 6.435.896 → R-370 6.114.101; júlí 10.573.087 → R-352 10.044.433). Drögin
+og Kröfu yfirlit sýna upphæð fyrir geymslufé (mál #1131 er LOKAÐ — staðfest 04.11.2026).
+Glugginn velur sjálfur fyrsta ófrosna mánuðinn (síðumánuður skiptir ekki máli); PDF-ið sýnir
+heilar allra fyrri mánaða + mánuðinn. Kröfu yfirlit: drög á mánuðinum → aðeins viðbót sem „Tími
+eftir" (`nlsh-vidbot|<mán>`, 1c35343). Verklagið skref fyrir skref: skill `gata-manadarlok`.
+
 **Starfsmaður er í `category`-reitnum** („Starfsmaður N"), ekki í
 `CheckListItemCheckedByUser` (sá er alltaf almennur og gagnslaus).
 
-## Dalvegur 30 og Heklureitur — almenn hole_size_rates
+## Dalvegur 30 og Heklureitur — hole_size_rates
 
 `category_group` er á sniðinu `"Gat Ø NNN-NNN"` → dragðu út tölurnar tvær og tengdu við
-`hole_size_rates` (`size_min_mm`/`size_max_mm`, `scope='generic'`). Bönd og kragar eru
-**ekki** í Ajour fyrir þessa staði — þau koma handvirkt (`bands_m_vsk` yfirskrift).
-NB Dalvegur er skipt í Ajour: `Dalvegur 18B` + `Dalvegur 26` + `Dalvegur 30A` — leggðu
-öll þrjú saman.
+`hole_size_rates` (`size_min_mm`/`size_max_mm`). Dalvegur: `scope='generic'`; bönd og kragar
+koma handvirkt (`bands_m_vsk` yfirskrift). NB Dalvegur er skipt í Ajour: `Dalvegur 18B` +
+`Dalvegur 26` + `Dalvegur 30A` — leggðu öll þrjú saman.
+
+**Heklureitur (06.10.2026) — EIGIN verðskrá + „Efnislisti · göt":** `scope='heklureitur'`
+(41 stærð, 2.900 → 100.500 kr án vsk, úr Heklureitur_30.04.2026.xlsx; `notes` = reikningslýsingin
+„Brunalokanir á stærðum Ø00-31"). Gjaldið per gat felur í sér vinnu OG efni — engir Tímaveru-
+taxtar, enginn efniskostnaður, engin bönd/kragar. Gerð Reikninga → Heklu reitur → **🧾 Efnislisti ·
+göt** (`openHeklureitur` í index.html) les `/api/gata-uppgjor?worksite=Heklu+reitur&month=…&klarad=1`
+(aðeins `registration_status='Done'`; ókláraðar skráningar og flokkar utan verðskrár sýndir sem
+viðvörun). Vistast sem venjuleg drög „Heklu reitur" (gatalínur í `materials_jsonb` með `gat:true`,
+`materials_total`=0, `fixed_total`=samtala → Kröfu yfirlit sýnir fast verð) + PDF `efnislisti_pdf`.
+Greiðandi: Framkvæmdafélagið Laugavegur ehf. kt. 680921-2020. Sannreynt: apríl 2026 = 1.629.608
+m.vsk, nákvæmlega Gatastærðir-blaðið (með 3 ókláruðum + Ø1700-1799 á 1710-1759 bætt við handvirkt).
+Ajour-raðir Heklureits samstilltar af luna-bridge `ajour-yfirlit.js` (`syncVerkefnaRadir`, app_kv
+`ajour_radir_sync`) — CSV-útflutningurinn nær aðeins yfir NLSH.
+Glugginn á EIGIÐ mánaðarval (`#hk-man`) og drögin eru `DRAFTS[ws|mánuður gluggans]` — ekki
+`draftFor`, sem les mánuð síðunnar (gildran 06.10: síðan á ágúst → 0 kr drög #338).
 
 ## 🔴 Afsláttar-konvensjónin (algengasta villan í kerfinu)
 
@@ -79,6 +123,16 @@ greinir sjálfkrafa hvor túlkunin endurskapar `samtals`.
   tölurnar hér að ofan eru til að þekkja líkanið, ekki til að fylla inn í reikning.
 - Ef tala stemmir ekki: **segðu hvaða tvær tölur stangast á** og hvor er líklegri rétt,
   í stað þess að velja þegjandi.
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+- Tilbúnir reikningar vistast sem PDF/snapshot svo gamlir útreikningar endurreiknist ekki; þar á að vera hægt að eyða, raða dálkum, haka ✓ og opna/breyta (Agnar 13.06.2026) [lota 532a8e1d].
+- Efnislisti þarf handvirka yfirskrift á klst (forfyllt úr Tímaveru), sérlínu (efni/magn/verð), dagsetningatexta („Maí 2026“), heildarafslátt í % og smáhlutagjald (má fjarlægja) [lota 532a8e1d 13.06.2026].
+- Brunahólf-reikningar (Efnislisti) bera sjálfstætt Brunahólf-lógó — ekki sameinaða Slökkvitæki + Brunahólf-lógóið [lota 532a8e1d 13.06.2026].
+- Tímabók-hnappurinn „Endursækja“ kallar `/api/timabok` (les `timavera_entries` úr Supabase), EKKI `/api/timavera-pull` [lota 177227fe 03.08.2026].
+- Í Kröfu yfirliti má sameina mörg ósend drög (þrep 2) í eitt: allar tímabækur verða ein tímabók og einn efnislisti [lota 177227fe 03.08.2026].
+- Útlagður kostnaður/efni sem er endurrukkað fer á fullu listaverði; afsláttur birgja er framlegð okkar og kemur aldrei fram á reikningi kúnna [C#410].
+- Efniskostnaðar-glugginn (`rgOpenEfniEditor`) er opinn fyrir handvirka leiðréttingu síðan 03.09.2026: verkstaður reiknings og „Á verkstað“ á hverri línu (`redder_line_items.worksite_override`) — notaðu hann í stað þess að giska þegar Redder-lína lendir á röngu verki [C#386].
+- Ajour-yfirlit og skýrslugerð er sér forrit í Kjarni-repo (opnast af kjarni-forsíðunni), ekki í hub-num; það les `ajour_registrations` [lota c2a00410 13.10.2026].
 
 
 ---
@@ -286,9 +340,10 @@ Mánaðaruppgjör table (charge = this month − previous) + a 📸 Loka mánað
 button (hub only) that captures the live cumulative. Seeded: 2026-04 = 59.472.216
 (úr samningssheet), 2026-05 = 60.429.627 (Ajour).
 
-#### Heklureitur, Dalvegur 30 — generic per-hole-size Verðskrá
-**Confirmed (Dalvegur_30.04.2026.xlsx, user-verified for Heklureitur):**
-both use the **same generic per-hole-size Verðskrá** — NOT a custom
+#### Dalvegur 30 (+ Heklureitur fyrir 06.10.2026) — generic per-hole-size Verðskrá
+**06.10.2026: Heklureitur hefur nú EIGIN verðskrá (`scope='heklureitur'`, sjá kaflann ofar) — eldri
+fullyrðingin um að hann notaði sömu almennu verðin stóðst ekki (Heklureits-skjalið: 2.900/3.600/5.500…).**
+**Confirmed (Dalvegur_30.04.2026.xlsx):** Dalvegur uses the **generic per-hole-size Verðskrá** — NOT a custom
 contract like NLSH. Rates by 50mm bucket from 000-031 mm → 1960-2009 mm,
 plus a Bönd/Kragar/Borði rate table by specific size in mm.
 
@@ -331,7 +386,8 @@ either use the calculated total or override with a flat amount.
   `invoices` table.
 - **Landsbankinn bank ledger** — some customers pay straight to the
   bank, bypassing Payday. User exports CSV from Landsbankinn
-  regularly → imported into `bank_transactions` (currently 840 rows).
+  regularly → imported into `bank_transactions` (938 raðir 04.11.2026; **síðasta færsla 15.06.2026** —
+  pörunin hér að neðan vinnur á 4½ mánaðar gömlum gögnum; `gagnaleidslur` á innsogið).
   The `worksites.js` function already cross-references by
   `kt_counterparty` + fuzzy text match on customer name to detect
   bank-paid invoices that aren't marked paid in Payday.
@@ -598,3 +654,64 @@ Verkefnalisti 3af766ff, sex smærri fix á `renderNLSH` í index.html + `netlify
   "15.09–21.09" — notað í "Lokuð göt per viku" og "Frammistaða per starfsmann"
   töflunum (tooltip + undirtexti).
 - **Lokuð göt per viku**: pakkað í `<details>` svo hægt sé að fella út/inn.
+
+## 📥 Drög-stöð — punktar sem safnast áður en reikningur er sendur (2026-09-05)
+
+> ⚠️ **04.11.2026: Drög-stöðin er ónotuð síðan 06.09.2026** — `reikningspunktar` hefur ekki fengið nýja færslu síðan
+> (22 opnir, allir > 60 daga). Rukkunarmál fara á Þjónustuborðið. Lýsingin hér að neðan gildir ef hún er notuð í reikningalotu.
+
+Tafla `reikningspunktar` (felag · raw · status nytt/flokkad/notad/hafnad ·
+worksite_name/work_month · ai · applied). Brunahólf: markið er drög (verkstaður|mánuður)
+og `POST /api/reikningspunktar {action:"apply"}` er EINA leiðin héðan í `invoice_drafts`:
+klst leggjast við `hours_dagvinna/eftirvinna` (taxtar úr Verðskrá ef vantar), efni bætist í
+`materials_jsonb`, gjald setur `fixed_total`, greiðandi setur `customer_name/kennitala`;
+upphæðin er endurreiknuð með sama kjarna og Efnislistinn (vinna + smáhlutagjald + staðfesting
++ efni, afsláttur, vsk — fast verð yfirríður) og nótulína „• dd.mm punktur: …" bætist í
+`invoice_drafts.notes`. Slökkvitæki: markið er kúnni (`fyrirtaeki.nafn`), reikningurinn
+verður til í Slökkvitæki-appinu og `apply` merkir punktinn aðeins notaðan.
+
+Gátlistinn (`?op=stada`) per drög: tímar (klst>0 eða fast verð) · efni (fast verð, ekkert
+Redder, eða materials_total>0) · greiðandi+kt (drög → customer_worksite_map → pricing_guide)
+· upphæð (total_m_vsk>0) · skjöl (efnislisti_pdf/_timabok_pdf eða ⭐ is_primary) · engir opnir
+punktar. `ready` = allt grænt. Sameinuð/sleppt/rukkuð drög og `paid` í meta eru ekki „í smíðum".
+
+## Lærdómur
+
+- **04.11.2026 — síður sem þú átt (`.claude/sidukort.json`):** Verðskrá, Verðlisti (Redder innkaup ↔ söluverð,
+  renderVerdlisti index.html:23677), NLSH (flipi + nlsh.html), Gerð reikninga + Efnislisti, Reikningagerð, Tilbúnir reikningar,
+  Vinnubók, Vinnustofa (með jarvis/rukkara), Efniskostnaður, Verðsamanburður, Verkstaðir, Vörubirgðir, Fjármála-yfirlit og yfirferd.html.
+  Í Slökkvitækja-appinu: **Kostnaður · reikningar úr pósti** (patch 419, taflan `kostnadur` = póstviðhengi eldklar@ —
+  innkaupahliðin er `innkaupabokari`) og **uppgjorslisti.html**. Lagaleg vottun (VSK, númeraröð) → `endurskodandi`.
+- **04.11.2026 — NLSH:** október 2026 er opinn (`nlsh_manadarlok` 15 línur, `fryst_at` null); `nlsh_month_snapshot` stöðvaðist
+  11.06 (síðasti mánuður 2026-05) en `nlsh-monthly.js` les hana enn. Efniskostnaður verkstjóra (field_entries kind
+  `kostnadur`) er aðeins til yfirlits á einingaverkum — `verkstadur` (The Rock) á appið, þú á upphæðina.
+
+- **16.10.2026** — Uppgjör lota 16.10.2026: (1) Gerð reikninga/Efnislisti 15.10: gluggi sem Agnar hafði opinn (óvistaður, gömul gildi) var vistaður 18:01 og þurrkaði bæði leiðrétta yfirvinnu OG efnið sem lotan hafði sett (Áland 6 79.478 kr) — þriðja skiptið sama kvöld; verklag: eftir að lota skrifar í drög má EKKI vista úr opnum glugga — loka og opna aftur; tveir ritlar staflast með sömu auðkenni (gr-ws/gr-save/gr-mat-pick). (2) Drög bera ákvörðun um dagvinnu/yfirvinnu (ev=0/ev>0) frá 15.10 — drog-timar les ekki lengur dv/ev úr /api/timabok (Charlize #880 leysir af #836). (3) Efniskostnaður-kortið „Reikningar í gagnagrunni" (15.10) opnar lista 391 reikninga (255 tengdir, 136 ótengdir) með 🔗 Tengja / ✏️, hver mánuður í ramma með samtölu; Redder 137012 (22.06, Landspítalinn, 90.750) og 136032 höfðu sloppið framhjá möppunni — Landspítala-reikningurinn aldrei á Efnislista júní (sendir mánuðir frosnir, ákvörðun Agnars).
+
+## Efnislisti 16.10.2026 — Redder-innkaup, efnishlutfall, 06 Fyrri reikningar, talnasnið
+
+- **03 Efni · Redder:** kassinn `#gr-redder-box` telur upp vörulínur mánaðarins (innkaupsverð = upphæð eftir afslátt /
+  magn). Lína telst „í efnislistanum" ef heiti hennar, Verðskrár-samsvörun þess (`matchVerdskra`) EÐA Verðskrár-
+  samsvörun efnislínu ber saman — eldri forútfyllingar bera innkaupaheitið („Eldv. Málning ISO14001 Hvítt"), ekki
+  Verðskrár-heitið. ➕ setur línu í listann á söluverði Verðskrár ef samsvörun finnst, annars sérlínu á innkaupsverði
+  sem Agnar breytir. Tvær viðvaranir: línu vantar í lista · efni á reikningi (matSum) < Redder-innkaup (an_vsk).
+- **Efnishlutfall** = efni / reikningur án vsk (`c.matSum / c.net`), birt í Samantekt og haus 03; sama regla í 06.
+- **06 Fyrri reikningar:** ein röð per fyrri mánuð verkstaðarins úr drögunum (klst dagv. + yfirv., efni, %, m. vsk);
+  greiðslustaða úr `/api/krofur-yfirlit?year=` — SAMA regla og Kröfu yfirlit (Payday greitt EÐA bankapörun; kredit,
+  afturkallað, undanskilið telja ekki). Payday-reikningur paraður við mánuð á upphæð (±2 kr) yfir ÖLL drög
+  verkstaðarins (líka opna mánuðinn — annars lendir ágúst-reikningur á september-röð), annars gjalddagi 1–60 dögum
+  EFTIR mánaðarlok. Dæmi: Áland 6 ágúst 2026 = Payday nr. 371, tilv. 21727, 949.308 kr, greiddur 30/09.
+  🧾 Reikningur = doc_type 'invoice' í efnislisti-docs ef til, annars prentun okkar úr drögunum; Payday-PDF sjálft er
+  hvergi speglað í kerfinu.
+- **Talnasnið:** Kr/klst, akstursgjald og fast verð sýna þúsundapunkt (9.951); `parseNum` les punkt sem þúsundaskil
+  þegar engin komma er og hver hópur er þrír tölustafir („9.951"→9951, „1.764.014"), annars brot („168.5", „9.951,5").
+  Geymd gildi eru áfram hráar tölur. Mætingar-taflan (openTimabok) tekur dd/mm/áááá, geymir ISO.
+- **Kröfu yfirlit:** tímabilsmerkið „Tímabil 01/08–31/08" (gull = annar mánuður en reikningurinn) svarar ruglingi
+  Agnars um ágúst-tíma sem eru sendir í september (R-361 Hrafnista Nesvellir 4).
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

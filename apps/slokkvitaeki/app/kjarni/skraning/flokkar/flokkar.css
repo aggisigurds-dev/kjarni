@@ -1,0 +1,17 @@
+.fk { max-width: 1100px; }
+.fk-haus { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.fk-haus label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.fk-haus .aj-sel { width: auto; min-width: 260px; }
+.fk-tabs { margin-left: auto; display: flex; gap: 4px; }
+.fk-tabs button { border: 1px solid #555; background: #fff; border-radius: 3px; padding: 7px 12px; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.fk-tabs button b { background: #1e1e1e; color: #fff; border-radius: 10px; padding: 0 6px; font-size: 11px; }
+.fk-tabs button.on { background: #1a9bb1; border-color: #1a9bb1; color: #fff; }
+.fk-tabs button.on b { background: #fff; color: #1a9bb1; }
+.fk-tafla td input[type="text"], .fk-tafla td select { border: 1px solid #c8ccd0; border-radius: 3px; padding: 5px 8px; font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; }
+.fk-mm { width: 72px !important; border: 1px solid #c8ccd0; border-radius: 3px; padding: 5px 6px; font: inherit; font-size: 13px; text-align: right; }
+.fk-rod { white-space: nowrap; width: 60px; }
+.fk-rod button { border: 1px solid #ccc; background: #fff; border-radius: 3px; width: 24px; height: 22px; font-size: 10px; cursor: pointer; padding: 0; margin-right: 2px; }
+.fk-tafla tr.af td { opacity: 0.5; }
+.fk-ny td { background: #f4f5f6; }
+.fk-ny button { border: 1px solid #1a9bb1; border-radius: 3px; padding: 6px 12px; font: inherit; cursor: pointer; }
+.fk-menn td:first-child { width: 60px; font-weight: 700; }

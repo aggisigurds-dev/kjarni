@@ -78,6 +78,9 @@ export interface ImageObject extends BaseObject {
   /** Hvaðan teikningin kom (skjalasafnsslóð — permalink eða bein PDF-slóð) og stærð alls blaðsins á borðinu við
    * innflutning. 3D les blaðstærðina (teikn-blad) og fær þannig raunkvarða í 1:100; skurður síðar breytir ekki b/h. */
   heimild?: { slod: string; b: number; h: number };
+  /** Vistað úr drögum veggjavélarinnar (`#drog=`) með „Vista sem borð": Agnar hefur yfirfarið, borðið er þjálfunargögn
+   * (teikning-greining/thjalfun/raun_saekja.js). drog = drogFingur(drög), sjá ThjalfunMerki í skodun.ts. */
+  thjalfun?: { drog: string; yfirfarid: true; kl: string };
   /** Hluti af blaði („Croppa oft", Agnar 06.10.2026: 1–3 grunnmyndir hlið við hlið á EINU blaði): myndin var skorin úr
    * blaðinu og man hvaðan — svæðið í dílum FRUMMYNDAR, stærð frummyndar og slóð blaðsins í sniði teikning_bord. „Tengja
    * við hæð" gerir úr þessu úttektartengingu (uttekt.myndSkurdur = svaedi). */
@@ -127,6 +130,8 @@ export interface UttektTenging {
   /** Borðdílar á hvern skjádíl Teikning-gluggans (sett við opnun/tengingu: lengri hlið hússins ÷ 28 = 56 px). Geymt svo
    * stærðirnar haldist þótt skurður myndarinnar breytist síðar („Croppa teikningu"). */
   taknEining?: number;
+  /** `skurdur` var fundinn af sjálfvirka verkferlinu (húsið á blaðinu) — „Vista í úttekt" skrifar hann í hæðina. */
+  skurdurSjalfvirkt?: boolean;
 }
 
 export interface RectObject extends BaseObject {
@@ -173,8 +178,9 @@ export interface LineObject extends BaseObject {
   meters?: number;
   /** Greindur veggur (miðlína úr veggjagreiningu; strokeWidth = þykkt veggjarins). */
   veggur?: boolean;
-  /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi, hurð eða eldveggur EI-60 / EI-30. Vantar = veggur. */
-  veggTegund?: "veggur" | "gler" | "hurd" | "ei60" | "ei30";
+  /** Tegund veggjar (leiðrétting): venjulegur veggur, glerveggur/gluggi, hurð, eldveggur EI-60 / EI-30, svalir (lágur
+   * svalaveggur, 1,1 m) eða stigi (3D þrepastigi). Vantar = veggur. */
+  veggTegund?: "veggur" | "gler" | "hurd" | "ei60" | "ei30" | "svalir" | "stigi";
   /** Veggurinn kom úr „Greina veggi" — auðkenni lotunnar (`g<tími36>`), svo hægt sé að eyða einni greiningu í heild. */
   greining?: string;
 }

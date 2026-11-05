@@ -5,6 +5,7 @@ import {
   benchPlacement,
   classifyPart,
   createProject,
+  scatterPlacement,
   flattenGroupMembers,
   freePlacement,
   guessKit,
@@ -184,5 +185,27 @@ describe('classifyPart', () => {
     expect(classifyPart('mws_charging_handle_knob 6mm_3mm.3mf').slotId).toBe('internals');
     expect(classifyPart('tipx hulstur hækkað f 10 kúlur v6.3mf').slotId).toBe('magazine');
     expect(guessSlot('muzzle tip.3mf')).toBe('muzzle');
+  });
+});
+
+describe('scatterPlacement', () => {
+  it('lays many loose parts out as a block of rows, longest first, not one long row', () => {
+    const project = createProject('Layout');
+    project.slots = [];
+    const sizes = new Map<string, { width: number; height: number; depth: number }>();
+    for (let i = 0; i < 20; i++) {
+      const id = `p${i}`;
+      project.parts.push({ ...project.parts[0], id } as never);
+      sizes.set(id, { width: i === 7 ? 360 : 60, height: 30, depth: 30 });
+    }
+    const placements = scatterPlacement(project, sizes);
+    const xs = placements.map((entry) => entry.position.x);
+    const zs = new Set(placements.map((entry) => Math.round(entry.position.z)));
+    // One row of 20 would span ~2 m; wrapped it stays well under a metre and takes several rows.
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(800);
+    expect(zs.size).toBeGreaterThan(1);
+    // The 360 mm part (a barrel) leads the first row.
+    const first = placements.reduce((a, b) => (b.position.z < a.position.z ? b : a));
+    expect(placements.find((entry) => entry.partId === 'p7')?.position.z).toBe(first.position.z);
   });
 });

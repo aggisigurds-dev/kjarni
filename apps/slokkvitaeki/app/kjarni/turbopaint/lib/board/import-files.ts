@@ -11,6 +11,7 @@ import { PDFJS_WORKER_SRC, classifyFile, pdfJsDocumentOptions } from "./pdfjs-se
 import { downsampleTiffData } from "./tiff-raster";
 import type { ImageObject, ImportQuality } from "./types";
 import { IMPORT_MAX_PX } from "./types";
+import { anda } from "./anda";
 
 export { classifyFile, PDFJS_WASM_URL, PDFJS_WORKER_SRC, pdfJsDocumentOptions } from "./pdfjs-setup";
 
@@ -35,7 +36,7 @@ function idFyrirSkra(skraHash: string | null, gaedi: ImportQuality): IdFyrir {
   return async (sida) => (await eignarIdUrLykli(skjamyndarLykill(skraHash, gaedi, sida))) ?? newId();
 }
 
-const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const yieldUi = anda;
 
 /** Skannað PDF (stærra en vigur-uppdráttur) og TIF eru ljósmyndir af blaði: sem PNG varð ein síða 63 MB á
  * borðinu og í skýinu. JPEG í 0,9 heldur línunum skörpum á broti af stærðinni. Vigur-PDF helst PNG. */
@@ -191,7 +192,10 @@ async function rasterizePdfPage(
       const viewport = page.getViewport({ scale: plan.scale });
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      // intent "print": pdf.js teiknar þá án requestAnimationFrame. Með sjálfgefnu („display") bíður hver bútur eftir
+      // skjáramma — í földum flipa koma engir og innflutningurinn stöðvast (Dalshraun 1, 11.10.2026: biðröð
+      // „Veggjavél · N" stóð í 25 mín á „PDF tilbúið" þar til flipinn var sýndur).
+      await page.render({ canvasContext: ctx, viewport, canvas, intent: "print" }).promise;
       boostSheetCanvas(canvas);
       return { canvas, warnings: [...new Set(warnings)] };
     } catch (err) {

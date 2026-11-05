@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { paraVeggi, teiknaStrikIMaska, veljaVeggjaflokk, type Strik } from "./pdf-veggir";
+import { finnaVeggiUrPdfFlokkum, paraVeggi, teiknaStrikIMaska, veljaVeggjaflokk, type Strik } from "./pdf-veggir";
 
 test("paraVeggi: tvær samsíða línur 4 pt í sundur verða einn veggur með þykkt 4 á miðjunni", () => {
   const strik: Strik[] = [[0, 0, 100, 0], [0, 4, 100, 4]];
@@ -38,4 +38,14 @@ test("teiknaStrikIMaska teiknar strik í kvarða", () => {
   const m = teiknaStrikIMaska([[1, 1, 9, 1]], 20, 6, 2, 2);
   assert.equal(m[2 * 20 + 10], 1);
   assert.equal(m[5 * 20 + 10], 0);
+});
+
+test("multi-width detection retains bathroom walls from secondary line group", () => {
+  const outer: Strik[] = [[10,10,150,10],[10,14,150,14],[10,90,150,90],[10,94,150,94]];
+  const bathrooms: Strik[] = [[30,35,80,35],[30,38,80,38],[80,35,80,70],[83,35,83,70]];
+  const result = finnaVeggiUrPdfFlokkum({ "0.48": outer, "0.35": bathrooms, "0.24": [[0,150,100,150]] }, 240, 200);
+  assert.ok(result.flokkar.includes("0.48"));
+  assert.ok(result.flokkar.includes("0.35"));
+  assert.ok(!result.flokkar.includes("0.24"));
+  assert.ok(result.veggir.some((wall) => Math.abs(wall.thykkt - 3) < 0.1));
 });

@@ -129,6 +129,28 @@ export async function loadGeometry(partId: string): Promise<Float32Array | null>
   }
 }
 
+/**
+ * A picture drawn for a part that came without one — a build made on another
+ * computer — kept so it is drawn once, not every time the Partasafn opens.
+ * Shares the geometry store under its own prefix.
+ */
+export async function saveThumbnail(versionId: string, dataUrl: string): Promise<void> {
+  try {
+    await run(GEOMETRY, 'readwrite', (store) => store.put(dataUrl, `thumb:${versionId}`));
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function loadThumbnail(versionId: string): Promise<string | null> {
+  try {
+    const stored = await run<unknown>(GEOMETRY, 'readonly', (store) => store.get(`thumb:${versionId}`));
+    return typeof stored === 'string' ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteGeometry(partId: string): Promise<void> {
   try {
     await run(GEOMETRY, 'readwrite', (store) => store.delete(partId));

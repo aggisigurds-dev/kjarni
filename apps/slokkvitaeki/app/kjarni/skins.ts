@@ -1,11 +1,10 @@
 export const SKINS = [
   { id: "ragnarok", label: "Ragnarök", hint: "Bráðið gull · svart stál" },
-  { id: "command", label: "Command", hint: "Ísblátt HUD-stjórnborð" },
-  { id: "atlas", label: "Atlas", hint: "Bláprent · kortaborð" },
-  { id: "pulse", label: "Pulse", hint: "Vaktborð · ops" },
-  { id: "helix", label: "Helix", hint: "Rásir · lab" },
-  { id: "vector", label: "Vector", hint: "Fjólublá geimstöð" },
-  { id: "don", label: "Don", hint: "Gull · maffía" },
+  /* 15.10.2026 (Agnar): þemun úr hönnunarkerfum fyrirtækjanna í stað Command/Atlas/Pulse/Helix/Vector/Don — skins.css */
+  { id: "midakerfi", label: "Miðakerfi", hint: "Miðar á stálplötu · málmhaus" },
+  { id: "brunastal", label: "Brunastál", hint: "Stálspjöld · rautt málmmerki" },
+  { id: "boss", label: "Big Boss", hint: "Svart stál · rjómapappír · gull" },
+  { id: "brunaholf", label: "Brunahólf", hint: "Navy og appelsínugult á mist" },
 ] as const;
 
 export type SkinId = (typeof SKINS)[number]["id"];
@@ -18,9 +17,13 @@ export const DEFAULT_SKIN: SkinId = "ragnarok";
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
   { id: "turbopaint", label: "TurboPaint", href: "/kjarni/turbopaint" },
+  { id: "artcraft", label: "ArtCraft", href: "/kjarni/artcraft" },
+  { id: "officecraft", label: "OfficeCraft", href: "/kjarni/officecraft" },
+  { id: "skraning", label: "Ajour-Craft", href: "/kjarni/skraning" },
   { id: "bord", label: "Borð", href: "/bord" },
   { id: "stjorn", label: "Stjórnborð", href: "/stjorn" },
   { id: "kerfi", label: "Kerfi", href: "/kerfi" },
+  { id: "borgarferdir", label: "Borgarferðir", href: "/borgarferdir" },
   { id: "skjalarinn", label: "Skjalarinn", href: "/skjalarinn" },
   { id: "draft", label: "Prufusvæði", href: "/draft" },
   { id: "3dwork", label: "3dwork", href: "/3dwork", ext: true },

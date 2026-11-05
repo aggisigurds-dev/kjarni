@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "web", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "slokkvitaeki",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "slokkvitaeki-vefur", "dev", "--", "-p", "3010"],
+      "port": 3010
+    }
+  ]
+}

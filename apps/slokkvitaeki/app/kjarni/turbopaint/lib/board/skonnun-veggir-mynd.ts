@@ -10,8 +10,10 @@ import {
   type SkonnunarVeggir,
   type Talning,
 } from "./skonnun-veggir";
+import { finnaThunnaVeggi } from "./thunnir-veggir";
 import type { VeggTegund } from "./teikning-veggir";
 import type { ImageObject } from "./types";
+import { anda } from "./anda";
 
 export interface VeggirSkonnunar {
   /** Veggir og gler í borðhnitum (miðlína + þykkt + tegund). */
@@ -20,7 +22,7 @@ export interface VeggirSkonnunar {
   ms: number;
 }
 
-const andaUI = () => new Promise<void>((r) => setTimeout(r, 0));
+const andaUI = anda;
 
 /** Grátónamynd svæðisins: minnkað í helmingsþrepum (stór minnkun í einu skrefi tekur fáa díla — sbr. skonnun.ts). */
 async function vinnumynd(bmp: ImageBitmap, g: ReturnType<typeof greiningarSvaedi>): Promise<Uint8Array> {
@@ -73,14 +75,14 @@ async function vinnumynd(bmp: ImageBitmap, g: ReturnType<typeof greiningarSvaedi
 }
 
 /** Keyrir greininguna í vinnuþræði; á aðalþræðinum ef þráðurinn fæst ekki. */
-function keyra(gra: Uint8Array, W: number, H: number, kvardi: number, fb: number, fh: number): Promise<SkonnunarVeggir> {
+function keyra(gra: Uint8Array, W: number, H: number, kvardi: number, fb: number, fh: number, dilarAMetra: number | null): Promise<SkonnunarVeggir> {
   let w: Worker | null = null;
   try {
     w = new Worker(new URL("./skonnun-veggir-verk.ts", import.meta.url));
   } catch {
     w = null;
   }
-  if (!w) return Promise.resolve(skonnunarVeggir(gra, W, H, kvardi, fb, fh));
+  if (!w) return Promise.resolve(skonnunarVeggir(gra, W, H, kvardi, fb, fh, { dilarAMetra }));
   const verk = w;
   return new Promise<SkonnunarVeggir>((res, rej) => {
     verk.onmessage = (e: MessageEvent<SkonnunarVeggir & { villa?: string }>) => {
@@ -92,18 +94,45 @@ function keyra(gra: Uint8Array, W: number, H: number, kvardi: number, fb: number
       verk.terminate();
       // vinnuþráðurinn ræstist ekki (t.d. gamall vafri) — reikna hér í staðinn
       try {
-        res(skonnunarVeggir(gra, W, H, kvardi, fb, fh));
+        res(skonnunarVeggir(gra, W, H, kvardi, fb, fh, { dilarAMetra }));
       } catch (err) {
         rej(err instanceof Error ? err : new Error(e.message || "Veggjagreining mistókst"));
       }
     };
-    verk.postMessage({ id: 1, gra, W, H, kvardi, fb, fh });
+    verk.postMessage({ id: 1, gra, W, H, kvardi, fb, fh, dilarAMetra });
   });
 }
 
+/** Þunnir veggir (tvöföld hárfín lína sem rennur saman í ~0,15 m rák á skönnuninni) á skannaðri teikningu — borðhnit.
+ * Mynd svæðisins er greind í ~50 dílum á metra (ekki 2800 dílum á blaðið eins og veggjagreiningin: þar hverfur rákin).
+ * Finnur líka málsetningarlínur og rekkabrúnir — hreinsunin og „utan húss" fella þær sem tengjast ekki húsinu. */
+export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Promise<{ p: number[]; t: number; tegund?: VeggTegund }[]> {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob || !(dpmBord > 0) || !(plan.width > 0)) return [];
+  const bmp = await createImageBitmap(blob);
+  const g0 = greiningarSvaedi(plan, { w: bmp.width, h: bmp.height });
+  const dpmFrum = dpmBord * (g0.myndSvaedi.w / plan.width);
+  // ≤ 50 dílar á metra og ≤ 40 MP (grá + dökk-gríma + umsnúin gríma ≈ 3 × W·H bæti)
+  let k = Math.min(1, 50 / dpmFrum);
+  const mp = g0.sk.w * g0.sk.h * k * k;
+  if (mp > 40e6) k *= Math.sqrt(40e6 / mp);
+  const g = { ...g0, kvardi: k, W: Math.max(1, Math.round(g0.sk.w * k)), H: Math.max(1, Math.round(g0.sk.h * k)) };
+  let gra: Uint8Array;
+  try {
+    gra = await vinnumynd(bmp, g);
+  } finally {
+    bmp.close();
+  }
+  await andaUI();
+  const th = finnaThunnaVeggi(gra, g.W, g.H, { dpm: dpmFrum * k });
+  const frum = th.map((v) => [v[0] / k, v[1] / k, v[2] / k, v[3] / k, v[4] / k] as number[]);
+  return butarIBord(frum, g, plan);
+}
+
 /** Veggir skannaðrar teikningar (sama greining og Teikning-glugginn) í borðhnitum. Gler fylgir sem tegundin „gler";
- * hurðargötin ekki — Teikning finnur þau sjálf úr bilunum. */
-export async function greinaVeggiSkonnunar(plan: ImageObject, onProgress?: (percent: number) => void): Promise<VeggirSkonnunar> {
+ * hurðargötin ekki — Teikning finnur þau sjálf úr bilunum. `dpmBord` = kvarði borðsins (borðdílar á metra) — síun
+ * veggjanna (þykktarþak, mynstur) miðast við hann; vantar hann er 1:100 reiknað af stærð blaðsins. */
+export async function greinaVeggiSkonnunar(plan: ImageObject, onProgress?: (percent: number) => void, dpmBord?: number | null): Promise<VeggirSkonnunar> {
   const t0 = performance.now();
   const blob = getAssetBlob(plan.assetId);
   if (!blob) throw new Error("Teikningin er ekki í minni — opnaðu borðið aftur");
@@ -118,7 +147,9 @@ export async function greinaVeggiSkonnunar(plan: ImageObject, onProgress?: (perc
     bmp.close();
   }
   onProgress?.(40);
-  const r = await keyra(gra, g.W, g.H, g.kvardi, g.frum.b, g.frum.h);
+  // borðdílar á metra → dílar frummyndar á metra (myndin á borðinu sýnir myndSvaedi af frummyndinni)
+  const dpmFrum = dpmBord && dpmBord > 0 && plan.width > 0 ? dpmBord * (g.myndSvaedi.w / plan.width) : null;
+  const r = await keyra(gra, g.W, g.H, g.kvardi, g.frum.b, g.frum.h, dpmFrum);
   onProgress?.(95);
   const veggir = [
     ...butarIBord(r.veggir, g, plan),

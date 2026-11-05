@@ -28,7 +28,7 @@ import { bladIBordi } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 import { liturMerkimida } from "../../lib/board/sjalftenging";
 import { erVeggur } from "../../lib/board/veggja-leidretting";
-import { synilegurVegglitur, useVeggjaSyn } from "../../lib/board/veggja-syn";
+import { dempadOgagnsaei, erAthugasemd, synilegurVegglitur, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { SkarptPdfLag } from "./SkarptPdfLag";
 import { SymbolNode } from "./SymbolNode";
 
@@ -148,6 +148,8 @@ export function ObjectNode({
   const symbolOpacity = useBoardStore((s) => s.symbolOpacity);
   // „Lita veggi" (F): veggir teiknaðir í skærum lit eftir tegund — aðeins sýn, geymdi liturinn breytist ekki.
   const litaVeggi = useVeggjaSyn((s) => s.lita);
+  // Veggir-hamur: allt nema veggir dempað (aðeins sýn)
+  const dempa = useVeggjaSyn((s) => s.dempa) && !erVeggur(obj) && !erAthugasemd(obj);
   const selGlow = isSelected
     ? { shadowColor: "#FE653F", shadowBlur: 22, shadowOpacity: 0.85, shadowEnabled: true }
     : { shadowEnabled: false };
@@ -158,7 +160,7 @@ export function ObjectNode({
     x: obj.x,
     y: obj.y,
     rotation: obj.rotation,
-    opacity: obj.opacity,
+    opacity: dempa ? dempadOgagnsaei(obj.opacity, obj.type === "image") : obj.opacity,
     ...selGlow,
     visible: isDrawnVisible(obj, layers),
     draggable,
@@ -381,16 +383,20 @@ export function ObjectNode({
   ) {
     const length = obj.type === "measure" ? lineLength(obj.points) : 0;
     const vegglitur = litaVeggi && erVeggur(obj) ? synilegurVegglitur(obj.stroke, obj.veggTegund, true) : null;
+    // STIGI (Agnar 05.11.2026: „stigakassinn verður einhver klessa"): stigi dreginn sem kassi er geymdur sem lína með þykkt kassans.
+    // Ávalir endar teygðu hann út fyrir kassann og gerðu hann að klessu; flatir endar (butt) gefa nákvæmlega kassann, hálfgagnsær svo
+    // teikningin sjáist í gegn, og smellisvæðið er kassinn sjálfur (ekki þrefalt) svo hann steli ekki smellum af veggjum í kring.
+    const erStigi = obj.type === "polyline" && obj.veggTegund === "stigi";
     return (
-      <Group {...common} opacity={vegglitur ? 1 : common.opacity}>
+      <Group {...common} shadowEnabled={erStigi ? false : common.shadowEnabled} opacity={erStigi ? Math.min(common.opacity, 0.55) : vegglitur ? 1 : common.opacity}>
         <Line
           points={obj.points}
           stroke={vegglitur ?? obj.stroke}
           strokeWidth={obj.strokeWidth}
-          lineCap="round"
-          lineJoin="round"
+          lineCap={erStigi ? "butt" : "round"}
+          lineJoin={erStigi ? "miter" : "round"}
           dash={dashArray(obj.dash, obj.strokeWidth)}
-          hitStrokeWidth={Math.max(16, obj.strokeWidth * 3)}
+          hitStrokeWidth={erStigi ? obj.strokeWidth : Math.max(16, obj.strokeWidth * 3)}
         />
         {obj.type === "measure" ? (
           <KonvaText
@@ -478,7 +484,7 @@ export function ObjectNode({
         {...common}
         // Sameiginlega dofnunin margfaldast við ógegnsæi hlutarins sjálfs, svo
         // tákn sem var handdofnað verður aldrei skýrara en það var.
-        opacity={obj.opacity * symbolOpacity}
+        opacity={(dempa ? dempadOgagnsaei(obj.opacity, false) : obj.opacity) * symbolOpacity}
         onTransformEnd={(e) => {
           const node = e.target as Konva.Node;
           const scale = (Math.abs(node.scaleX()) + Math.abs(node.scaleY())) / 2;

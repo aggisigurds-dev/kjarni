@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, X, ExternalLink, MapPin } from "lucide-react";
+import { hreinsaEignir, LISTI_HAMARK } from "../../lib/board/heimilisfang-leit";
 
 /* Heimilisfang → landnúmer → teikning beint á borðið.
  *
@@ -171,8 +172,9 @@ export function HeimilisfangLeit({
     const t = term.normalize("NFC").trim();
     setTeikningar([]);
     setValin(null);
-    if (t.length < 2) { setEignir([]); setMsg(null); return; }
+    // seq hækkar líka hér: svar við eldri fyrirspurn („Br") á ekki að lenda á listanum eftir að innsláttur var styttur.
     const my = ++seq.current;
+    if (t.length < 2) { setEignir([]); setMsg(null); setBusy(false); return; }
     setBusy(true);
     setMsg("Leita…");
     try {
@@ -180,7 +182,13 @@ export function HeimilisfangLeit({
       const d = (await r.json()) as { results?: Eign[]; error?: string; numer?: number | null; gataFjoldi?: number };
       if (my !== seq.current) return;
       if (d.error) { setMsg(d.error); setEignir([]); return; }
-      const res = d.results || [];
+      const res = hreinsaEignir(d.results || [], t);
+      // Of breiður listi („Br" = 249 lóðir, Brekka lóð ×35) er bara bull efst — ekki sýndur, innslátturinn er of stuttur.
+      if (res.length > LISTI_HAMARK) {
+        setEignir([]);
+        setMsg(`${res.length} eignir passa — skrifaðu meira af götunni (og húsnúmerið).`);
+        return;
+      }
       setEignir(res);
       // Nákvæm samsvörun velst SJÁLFKRAFA (Agnar 28.08): "Skútuvogur 4" á að
       // fara á Skútuvogur 4 — ekki bjóða 4A líka og láta hann velja. Aðeins
@@ -374,6 +382,9 @@ export function HeimilisfangLeit({
         </div>
       )}
       <div>
+          {/* 14.10.2026: „Leita…" og villur fara EFST — áður stóð gamli listinn efst meðan beðið var eftir nýju
+              svari og skýringin leyndist fyrir neðan hann (Agnar: „random efst á lista en aðal alveg neðst"). */}
+          {msg && busy && <div className="px-2 py-1.5 text-[12px] text-stone-500">{msg}</div>}
           {!valin &&
             eignir.map((e) => (
               <button
@@ -404,7 +415,7 @@ export function HeimilisfangLeit({
             </div>
           )}
 
-          {msg && <div className="px-2 py-1.5 text-[12px] text-stone-500">{busy ? msg : msg}</div>}
+          {msg && !busy && <div className="px-2 py-1.5 text-[12px] text-stone-500">{msg}</div>}
 
           {/* Utan teikningasafnanna: hnitatengill á kortasjá sveitarfélagsins. */}
           {valin?.ytriSlod && teikningar.length === 0 && !busy && (

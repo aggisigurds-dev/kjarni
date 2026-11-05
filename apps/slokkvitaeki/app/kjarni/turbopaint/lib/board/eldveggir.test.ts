@@ -202,3 +202,13 @@ test("„Lita veggi“ er aðeins sýn: geymdi liturinn breytist ekki", () => {
   synilegurVegglitur(w.stroke, w.veggTegund, true);
   assert.equal(w.stroke, "#1c1917");
 });
+
+test("svalir og stigi: vistast með sinni tegund og koma eins til baka — ekki breytt í vegg", async () => {
+  const { erVeggTegund, tegundUrVistun, vistunarSnid } = await import("./teikning-veggir");
+  assert.deepEqual(vistunarSnid("svalir"), { tegund: "svalir" });
+  assert.equal(erVeggTegund("svalir"), true);
+  assert.equal(tegundUrVistun("svalir", undefined), "svalir");
+  assert.deepEqual(vistunarSnid("stigi"), { tegund: "stigi" });
+  assert.equal(erVeggTegund("stigi"), true);
+  assert.equal(tegundUrVistun("stigi", undefined), "stigi");
+});

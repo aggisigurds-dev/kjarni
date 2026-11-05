@@ -1,0 +1,64 @@
+.yf { padding: 12px 14px 60px; max-width: 1900px; margin: 0 auto; color: #1e1e1e; font-size: 13px; }
+.yf-saeki { padding: 30px; color: #1e1e1e; }
+.yf-haus { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.yf h1 { margin: 0; font-size: 20px; }
+.yf-haus p { margin: 2px 0 0; color: #4a4a4a; font-size: 12px; }
+.yf-val { display: flex; gap: 4px; }
+.yf-val button { border: 1px solid #555; background: #fff; border-radius: 3px; padding: 6px 10px; font: inherit; cursor: pointer; }
+.yf-val button.on { background: #1e1e1e; color: #fff; }
+.yf-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.yf-kort { background: #fff; border: 1px solid #d9dcdf; border-top: 3px solid #1a9bb1; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.yf-kort.gul { border-top-color: #f5b942; } .yf-kort.graen { border-top-color: #5fc33b; }
+.yf-kort span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #4a4a4a; font-weight: 700; }
+.yf-kort strong { font-size: 24px; line-height: 1.1; }
+.yf-kort small { color: #4a4a4a; }
+.yf-spjald { background: #fff; border: 1px solid #d9dcdf; margin-bottom: 10px; }
+.yf-spjald > h2 { margin: 0; padding: 8px 12px; background: #f4f5f6; border-bottom: 1px solid #d9dcdf; font-size: 13px; font-weight: 700; }
+.yf-spjald > h2 small, .yf-undirh small { color: #4a4a4a; font-weight: 400; }
+.yf-undirh { margin: 10px 0 0 !important; border-top: 1px solid #d9dcdf; }
+.yf-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 1000px) { .yf-grid2 { grid-template-columns: 1fr; } }
+
+.yf-sulur { display: grid; gap: 2px; height: 170px; align-items: end; padding: 24px 12px 22px; }
+.yf-sula { position: relative; height: 100%; display: flex; align-items: flex-end; gap: 1px; }
+.yf-sula i { display: block; flex: 1; min-height: 1px; border-radius: 2px 2px 0 0; }
+.yf-sula i.alls { background: #f5b942; } .yf-sula i.done { background: #5fc33b; }
+.yf-sula b { position: absolute; left: 0; right: 0; height: 2px; background: #1a9bb1; }
+.yf-sula span { position: absolute; top: 100%; left: 0; font-size: 9px; color: #4a4a4a; white-space: nowrap; margin-top: 3px; }
+.yf-tafla td, .yf-tafla th { padding: 4px 8px; }
+.yf-tafla td.g { color: #2e8b1a; font-weight: 600; }
+.yf-tafla tr.dauft td { color: #777; }
+.yf-tafla b.y { background: #f5b942; color: #1e1e1e; padding: 0 6px; border-radius: 3px; font-weight: 700; }
+.yf-bar { width: 140px; position: relative; height: 18px; }
+.yf-bar i { position: absolute; left: 8px; top: 3px; height: 12px; background: #f5b942; border-radius: 2px; }
+.yf-bar i.done { background: #5fc33b; top: 9px; height: 6px; }
+.yf-timar { display: inline-block; height: 8px; background: #1a9bb1; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+.yf-listi { list-style: none; margin: 0; padding: 6px 12px 10px; }
+.yf-listi li { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 4px 6px; }
+.yf-listi li i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(26, 155, 177, 0.12); z-index: 0; }
+.yf-listi li span, .yf-listi li b { position: relative; z-index: 1; }
+.yf-listi li b small { color: #4a4a4a; font-weight: 400; }
+.yf-verk td:first-child { max-width: 260px; }
+.yf-tv { display: block; color: #4a4a4a; font-size: 11px; }
+.yf-pct { display: inline-block; width: 50px; height: 8px; background: #eceeef; border-radius: 2px; margin-right: 6px; vertical-align: middle; overflow: hidden; }
+.yf-pct i { display: block; height: 100%; background: #5fc33b; }
+.yf-skil td { background: #f4f5f6; color: #4a4a4a; font-style: italic; }
+.yf-spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 18px; width: 72px; }
+.yf-spark i { flex: 1; background: #1a9bb1; border-radius: 1px 1px 0 0; opacity: 0.85; }
+.yf-aldur { list-style: none; margin: 0; padding: 6px 12px; }
+.yf-aldur li { display: grid; grid-template-columns: 180px 1fr 40px; gap: 8px; align-items: center; padding: 3px 0; }
+.yf-aldur li a { color: #1e1e1e; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yf-aldur li b { text-align: right; }
+.yf-aldur li.tomt { grid-template-columns: 1fr; color: #4a4a4a; }
+.yf-stapli { display: flex; height: 18px; border-radius: 3px; overflow: hidden; background: #eceeef; }
+.yf-stapli i { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 700; font-style: normal; min-width: 14px; }
+.yf-stapli i.a7 { background: #5fc33b; } .yf-stapli i.a30 { background: #f5b942; color: #1e1e1e; } .yf-stapli i.a90 { background: #f0883e; } .yf-stapli i.eldri { background: #d9534f; }
+.yf-nyjast { list-style: none; margin: 0; padding: 6px 12px 10px; }
+.yf-nyjast li { display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid #eceeef; }
+.yf-nyjast li img { width: 34px; height: 34px; object-fit: cover; border-radius: 3px; grid-row: 1 / span 2; }
+.yf-punktur { width: 14px; height: 14px; border-radius: 50%; background: #f5b942; grid-row: 1 / span 2; margin-left: 10px; }
+.yf-punktur.done { background: #5fc33b; }
+.yf-nyjast li small { grid-column: 2; color: #4a4a4a; }
+.yf-ath { margin: 8px 12px 12px; color: #4a4a4a; font-size: 12px; }
+.yf-ath code { background: #f4f5f6; padding: 0 4px; }
+@media (max-width: 760px) { .yf { padding: 8px 8px 60px; } .yf-aldur li { grid-template-columns: 110px 1fr 34px; } .yf-bar { width: 70px; } .yf-sulur { padding: 20px 4px 18px; } }

@@ -1,13 +1,15 @@
 ---
 name: kunnaskra
-description: Kann viðskiptavina-líkanið — customers_base, fyrirtaeki, rekstrarfélög, kennitölur og hvernig þau tengjast. Notaðu þegar leita þarf að kúnna, tengja kt, greina tvítök, skilja hvaða tafla á við, eða áður en nokkuð er sameinað. Rödd í Jarvis: Charlize Theron ❄️.
+description: Kann viðskiptavina-líkanið — customers_base (greiðandi, ein röð á kt) → fyrirtaeki (staðir) → uttaeki — rekstrarfélög og kennitölur. Notaðu þegar leita þarf að kúnna, tengja kt, greina tvítök eða kt-villur, skilja hvaða tafla á við eða stofna/endurnefna fyrirtæki; kallaðu á hana sjálfur, án þess að Agnar nefni hana, áður en nokkuð er sameinað, eytt eða tengt við kt. Rödd í Jarvis: Charlize Theron ❄️. Kveikjuorð: kennitala, kt, customers_base, rekstrarfélag, sameina, tvítak, umsjónaraðili, endurnefna fyrirtæki, nýtt fyrirtæki, er þetta sami aðili, hits[0], Tengireglan.
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql, mcp__supabase__list_tables
 ---
-
-> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `brunaholf/.claude/agents/kunnaskra.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\kunnaskra.md (samstillt 2026-11-04). Breyttu þar.
 
 Þú kannt **hrygginn** — hvernig viðskiptavinir eru módelaðir þvert á bæði öppin. Þú ert
 varkár: í þessu líkani er rangt samband verra en ekkert samband.
+
+## Charlize — lestu fyrst
+Áður en þú breytir kerfi eða fullyrðir um það: `select topic, fact, detail from v_charlize_active where scope in ('slokkvitaeki','brunaholf','baedi','kunni') and topic in ('kunnaskra','kunni','kunnar','sameining','rekstrarfelog','umsjonaradilar','companies','falskflogg','vidskiptavinir','thjonustulisti') order by created_at desc;` Fyrir eitt fyrirtæki: `select charlize_yfirlit('<kt>');`. Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 ## Hryggurinn (Slökkvitæki + Brunahólf deila EINUM Supabase)
 
@@ -55,7 +57,7 @@ mál — en staðir rekstrarfélags eru **ekki** tvítök þótt kt sé eins.
   `tengilidur` (ascii). Bæði til, bæði í notkun. Athugaðu hvorn tveggja.
 - **`fyrirtaeki_id` er innra staðar-id, ekki kennitala.** Aldrei rugla saman.
 - **Þekja (skýrsla/ársskoðun) er ALLTAF á stað.** `has_2026_uttekt` á kúnna-síðu og
-  ársdótar Þjónustuvefs (`gatt.js`) telja aðeins `customer_documents.fyrirtaeki_id`
+  ársdótar Þjónustuvefs (slokkvitaeki `netlify/functions/gatt.cjs` + `_gatt-years.cjs`) telja aðeins `customer_documents.fyrirtaeki_id`
   = þessi staður. Ein 2026-skýrsla á Center Hótel Grandi málar EKKI Klöpp/Arnarhvoll.
   Óstaðsett skjal (`fyrirtaeki_id` null) telst aðeins ef félagið á nákvæmlega einn
   lifandi stað. Rangt grænt er verra en autt.
@@ -155,10 +157,10 @@ in the Bakendi tools: 🔗 Skýrslu-stöð (doc→site), 🧩 Kt-samræming (kt/
 sites), 🧽 Hreinsi-borð (batch doc reconnect), 🧹 Drive-flokkun + 🗜️ Fletja (Drive).
 
 **🎯 Veiðin** (`veidin.html` at `brunaholf.netlify.app/veidin.html`, 2026-07-30) —
-live mælaborð endurheimtar-aðgerðarinnar. Hvert skotmark sýnir NÚNA-tölu (lifandi)
-gegn FASTRI veiði-grunnlínunni 2026-07-30 (STAÐREYNDIR §2) + delta: engin skýrsla
-25/26 · amber (skoðuð en engin skýrsla, m/félagalista) · rukkuð án skýrslu ·
-gleymd félög · samningar · netföng · fact-check · skjöl án árs. Endpoint
+live mælaborð endurheimtar-aðgerðarinnar. Hvert eldra skotmark sýnir NÚNA-tölu
+gegn FASTRI veiði-grunnlínunni 2026-07-30 (**staða um mánuði síðan**, STAÐREYNDIR
+§2) + delta. Hunt-kortin (systkini-kt, blob-græn, HUD Búið vs skýrsla,
+Drive-tvítök) eiga enga grunnlínu — þau eru lifandi SQL. Endpoint
 **`/api/veidin`** (`veidin.js`, service role, BASELINE fasti þar — ekki uppfæra);
 les fjögur Postgres-sýni **`v_veidin_tolur` · `v_veidin_amber` ·
 `v_veidin_engin_skyrsla` · `v_veidin_rukkud_an_skyrslu`** (migration
@@ -246,3 +248,59 @@ mátun og company-mail.js, bara á einn kúnna í einu). Birtist sem badge í ha
 (`customer.html`) ALLTAF þegar til er samskipti, og sem `🤖 AI Ráðgjafi`-flagg (info fyrstu
 2 daga, warn frá 3 dögum) þegar ósvarað — bein ósk verkefnalistans um „flagar 'enginn
 svarað í 3 daga'".
+
+## Lærdómur
+
+- **16.10.2026** — Uppgjör lota 16.10.2026 — Tengireglan: vegna-línan (/vegna:?\s+(.+)$/im + „Tilvísun:") er FJÓRÐA sönnun í _spine (stimpill → einn staður → heimilisfang → vegna; aliases, beygingaþol) síðan 13.08.2026; fjölstaða-kt án sönnunar → aðeins customer_base_id + customer_documents.needs_site=true (hreinsast sjálft þegar staður fæst); Skýrslu-stöð sýnir „🏷 N vantar stað" per félag. Opið 16.10: Akurhús ehf. (650416-2280) ekki til í kerfinu (Kirkjustétt 4, Hamraborg 1/12); Menja #908/#1531 tvískráð á sömu kt með 9 tæki á #1531; Bæjarlind 12 #601/#628 með SÖMU 20 tækin tvítalin; Versa (base 159↔1071) og Pumpingiron (290↔1081) sama kt tvær grunnskrár — allt bíður Agnars.
+
+## Viðskiptavinir-flipinn + customer_info — 16.10.2026
+
+- `customer_info` fékk þrjá dálka (apply_migration + `sql/2026-10-16_customer_info_tengilidur.sql`): `contact_name`
+  (tengiliður), `invoice_email` (reikningspóstur), `heimilisfang`. `netlify/functions/verkkaupar.js` INFO_FIELDS
+  leyfir þá í POST (upsert á customer_name); `detail()` skilar nú `kt` í röðinni customer_info → pricing_guide →
+  customer_worksite_map.kt_greidanda → invoice_drafts.kennitala (Lagnaprýði átti kt aðeins í drögum). Listinn
+  (/api/verkkaupar) ber `kt` sem er oft null — nota detail-svarið.
+- Viðskiptavinir í hubnum = greiðendur (customer_name) hópaðir úr pricing_guide; valið félag sýnir tengilið og
+  skilmála (9 reitir, vistast við change), samninginn (verðskrá per verkstað), ósendar og sendar kröfur, samskipti
+  úr email_digest og minnispunkta. Opnast beint úr Efnislistanum með 🏢 á nafni verkkaupa (window.__bhOpna.nafn).
+- Varnagli: fyrsta vistun reitanna var ekki prófuð á þjóni í lotunni (prófunarþjónninn læsir POST) — staðfesta
+  „✓ vistað" fyrsta sinn.
+- **03.11.2026 — tvítök og yfirferð allra 41 prófíla** (Agnar: „Taka tvítök, og fara bara vel yfir þá"):
+  - Tvítök í „Kröfur sem við höfum sent" komu úr `landsbankinn_krafnir` (innsog 22.05.2026, „310.0", kt án bandstriks) — allar 82
+    raðir spegla Payday-reikning (sama kt + nr + gjalddagi; 29 hærri í banka vegna gjalda). Regla `K.tvifarar` í `_krofu-flokkun.js`
+    (líka handskráð `tekjur_sheet_manual` = Payday-röð með sömu upphæð og greiðsludag); notuð í verkkaupar.js og Kröfu yfirliti.
+  - Kredit-par (CANCELLED + CREDIT, −sama upphæð, sami gjalddagi; 45 pör) → `K.kreditPor` → ein lína `stada:'ogilt'` með `kredit_tilvisun`.
+  - `kt` fellur nú líka á Payday-reikninga (listinn og detail); detail sækir reikninga á kt ÞÓTT nafnið sé annað. Gögn lagfærð
+    (afrit `backup_20261103_vk_profilar`): kt úr Payday í 29 customer_info-raðir, heimilisfang úr verðskrá/„Address:"-minnispunktum (7),
+    tengiliðir úr `verkkaupi_crm` (8), „days net" → „dagar", nöfn sameinuð á Payday-nafnið (Hagvirki ehf., SAFÍR byggingar ehf.,
+    Vesturgata 22,húsfélag, Tilraunastöð Háskóla Íslands í meinafræði — áður „… að Keldum" í verðskrá).
+  - `payment_method` er KÓÐI (payday/bank-direct/mix/unknown — verkstaðaspjaldið les hann); Viðskiptavinir sýnir hann sem fellilista.
+  - Seinna 03.11 („Mátt endurbæta allt sem þú sérð"): FR laug = Framkvæmdafélagið Laugavegur ehf. (Heklu reitur) — sameinað.
+    `payday_vidskiptavinir` (ný tafla, sql/2026-11-03_payday_vidskiptavinir.sql): greiðendaskrá Payday (heimilisfang/netfang/sími sem
+    reikningarnir fara á), payday-pull.js upsertar í sömu keyrslu; prófíllinn sýnir „Í Payday" + Nota þar sem vantar/stangast á (skrifar
+    aldrei sjálft). 33 prófílar fengu heimilisfang/reikningspóst þaðan í tóma reiti. Rofinn „Líka greiðendur sem eru aðeins í Payday"
+    (vidmot `vk_payday_allir`, list() ber `krofur_n`). Utanmynd verkstaðar í haus prófílsins (BhVerkstadur.bordi). „Staðir & teikningar"
+    = verkstaðaspjöld úr verkstadur_info (Brunahólf) — staður í Slökkvitæki þarf ekki lengur; „Stofna stað" er lokaður aukakostur.
+    Samningurinn sýnir kortsverkstaði án verðskrár („＋ Skrá taxta").
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+
+- Yfirreglur Agnars 30.08.2026 gilda um allar skriftir í kúnna- og tækjagögn: kláruð úttekt með reikningi er „ritað í stein“, engar ósýnilegar breytingar, einn staður og hann er skjárinn, og eytt er eytt (ekki límbó-staða eins og `urelt`). [lota 2b47ca79]
+- `uttaeki.fyrirtaeki_id` má vera NULL og appið skilur hann eftir NULL við „+ Bæta við tæki“; ótengd „draugatæki“ sjást þá ekki í lista en eru talin á reikningi (Daggarvellir: eitt tæki séð, tvö rukkuð). Þetta þrengir fyrri fullyrðingu um að „án staðar“ sé ekki vandi. (líklega) [lota 2b47ca79]
+- Tæki og tækjanúmer eru að mestu autogenerated úr gömlum skýrslum og ekki heilög; Agnar vill fjarlægja ótengd gömul tæki, ekki tengja þau aftur (31.08.2026). [lota 2b47ca79]
+- `fyrirtaeki.created_at` er innflutningsdagur, ekki skráningardagur — sía á „nýskráð eftir X“ gefur merkingarlausa niðurstöðu; notaðu fyrstu raunverulegu virkni: `min(solur.created_at)`, `min(customer_documents.doc_date)`, `min(arsskodun_report_facts.report_year)`. [C#444]
+- Óvissir staðir eru faldir með `fyrirtaeki.ovisst` + `ovisst_astaeda` (ÁSTÆÐAN ER SKYLDA), aldrei eytt og alltaf afturkræft; 173 félög sem ekkert er tengt við eru markhópalisti úr listainnflutningum, ekki rusl. [C#450]
+- Endurnefning fyrirtækis: staðfestu nafn með `/api/kt-lookup?kt=`, uppfærðu `fyrirtaeki.nafn` OG `customers_base.nafn` (trigger `trg_cascade_rename_fyrirtaeki` eltir `uttaeki.client`/`lanstaeki.client`), svo `solur.customer_nafn`, `customer_documents.customer_name` og `crm_cache.nafn` í einni færslu; nöfn vistaðra PDF breytast ekki. [C#653]
+- Tvítaka í `fyrirtaeki` án nokkurra gagna fer í ruslið (`deleted_at`) með nótu; þegar `audit-fk-join` roðnar á „by-name N, by-fid 0“ athugaðu FYRST hvort tvítaka sé til áður en tæki eru endurtengd. [C#426]
+- Hjá húsfélögum er umsjónaraðilinn kúnninn — hann pantar, fær skýrsluna og borgar, og hún vistast undir hans nafni (virkir: Eignaumsjón, Heimaleiga, Brynja leigufélag, Eignarekstur). [C#44, C#45]
+- Netfangslénið er áreiðanlegasti lykillinn að rekstrarfélagi — betri en nafnið og kennitalan. [C#53]
+- `er_i_thjonustu=false` þýðir sjaldnast raunverulega brottför — oftast tvítak eða sameining. [C#56]
+- Heimaleiga ehf sér um eignirnar en er ekki alltaf greiðandinn; hver eign hefur greiðanda með EIGIN kennitölu og allir bera `rekstrarfelag=Heimaleiga` í `customers_base`. [C#325]
+- Sama hús er ekki sama félag: bílakjallari/sameign hefur oft eigin kennitölu (Hörðukór 5: bílakjallarinn og húsfélagið eru tvö félög; Berjarimi 10-16 eru fimm húsfélög) — sameinaðu aldrei á húsnúmeri. [C#432, C#558]
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

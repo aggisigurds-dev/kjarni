@@ -1,4 +1,5 @@
 import { del, get, set } from "idb-keyval";
+import { erSkodun } from "./skodun";
 
 const urls = new Map<string, string>();
 const blobs = new Map<string, Blob>();
@@ -20,7 +21,17 @@ export async function putAsset(id: string, blob: Blob) {
   if (prev) URL.revokeObjectURL(prev);
   blobs.set(id, blob);
   urls.set(id, URL.createObjectURL(blob));
+  // Skoðunarhamur (skodun.ts): myndin lifir aðeins í minni flipans — ekkert í IndexedDB fyrr en „Vista sem borð".
+  if (erSkodun()) return;
   await set(assetKey(id), blob);
+}
+
+/** „Vista sem borð": myndir skoðunarinnar (í minni) skrifaðar í IndexedDB eins og innflutningur hefði gert. */
+export async function festaIGeymslu(ids: string[]) {
+  for (const id of new Set(ids)) {
+    const blob = blobs.get(id);
+    if (blob) await set(assetKey(id), blob);
+  }
 }
 
 export async function deleteAsset(id: string) {
@@ -28,6 +39,8 @@ export async function deleteAsset(id: string) {
   if (prev) URL.revokeObjectURL(prev);
   urls.delete(id);
   blobs.delete(id);
+  // Föst auðkenni (eignalykill.ts) geta átt við mynd venjulegs borðs — skoðun snertir aldrei IndexedDB.
+  if (erSkodun()) return;
   await del(assetKey(id));
 }
 

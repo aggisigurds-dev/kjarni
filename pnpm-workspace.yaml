@@ -10,4 +10,11 @@ allowBuilds:
   msgpackr-extract: true
   sharp: true
   supabase: true
+  protobufjs: false
   tesseract.js: false
+# @hookform/resolvers sækir zod af hífðu svæði; þegar annar pakki (t.d. @imgly/background-removal) dregur inn zod 3
+# lentu týpur apps/web á zod 3 ("_zod.version.minor 4 vs 0"). Jafningjatenging festir hann á zod appsins.
+packageExtensions:
+  "@hookform/resolvers":
+    peerDependencies:
+      zod: "^4.0.0"

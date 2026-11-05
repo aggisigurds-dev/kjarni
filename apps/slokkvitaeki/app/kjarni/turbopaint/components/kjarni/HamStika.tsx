@@ -25,7 +25,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
+import { GREININGAR_ADGERDIR, HAMIR, getHamur, hladaHam, useHamur, type HamAdgerd } from "../../lib/board/hamir";
 import { DRAEGI_LYKILL } from "../../lib/board/slt-brsl";
 
 export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: ReactNode }> = {
@@ -55,9 +55,9 @@ export const ADGERDIR: Record<HamAdgerd, { texti: string; titill: string; takn: 
   },
   thrividd: { texti: "3D", titill: "Hús í 3D — veggir og tæki á öllum hæðum", takn: <Box className="size-3.5" /> },
   "slt-brsl": {
-    texti: "SLT / BRSL af teikningu",
+    texti: "Búnaður af teikningu",
     titill:
-      "Lesa SLT og BRSL af teikningunni: slanga á tákni slöngukeflisins, slökkvitæki við hliðina — tengt við óstaðsett tæki staðarins (annars „ótengt“ → Nýtt við vistun), og skilti. Eldveggir ekki (EI-30 / EI-60). ⌘Z afturkallar.",
+      "Lesa búnaðinn af teikningunni: SLT / HSL / BRSL (slanga á tákni slöngukeflisins, slökkvitæki við hliðina), R í kassa = reykskynjari, S í hring = segulloki, H = hitaskynjari, B = bjalla, „30 m“ við spíral = slanga, BO = björgunarop, ÚT = flóttaleið. Tengt við óstaðsett tæki staðarins (annars Nýtt við vistun). Eldveggir ekki (EI-30 / EI-60). ⌘Z afturkallar.",
     takn: <ScanSearch className="size-3.5" />,
   },
   ei: { texti: "EI-30 / EI-60", titill: "Lesa EI-merkingar og merkja eldveggina", takn: <Flame className="size-3.5 text-[#FE653F]" /> },
@@ -72,10 +72,12 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
   const setHamur = useHamur((s) => s.setHamur);
   useEffect(() => hladaHam(), []);
   const h = getHamur(hamur);
+  // Greiningartólin eru í efstu stikunni / Greining-flipanum — hér aðeins teikni- og breytitól hamsins.
+  const adgerdir = h.adgerdir.filter((a) => !GREININGAR_ADGERDIR.includes(a));
   // Sjaldnotaðar aðgerðir hamsins (hamir.ts `sjaldan`) eru felldar; valið helst meðan borðið er opið.
   const [fleiri, setFleiri] = useState(false);
-  const sjaldan = h.adgerdir.filter((a) => h.sjaldan?.includes(a));
-  const oft = h.adgerdir.filter((a) => !sjaldan.includes(a));
+  const sjaldan = adgerdir.filter((a) => h.sjaldan?.includes(a));
+  const oft = adgerdir.filter((a) => !sjaldan.includes(a));
   const takki = (a: HamAdgerd) => {
     const d = ADGERDIR[a];
     return (
@@ -120,6 +122,8 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
           </button>
         ))}
       </div>
+      {adgerdir.length ? (
+      <>
       <div className="mt-1.5 flex flex-wrap gap-1">
         {oft.map(takki)}
         {sjaldan.length ? (
@@ -135,6 +139,8 @@ export function HamStika({ onAdgerd }: { onAdgerd: (a: HamAdgerd) => void }) {
         ) : null}
       </div>
       {fleiri && sjaldan.length ? <div className="mt-1 flex flex-wrap gap-1 opacity-80">{sjaldan.map(takki)}</div> : null}
+      </>
+      ) : null}
       {h.adgerdir.includes("slt-brsl") ? (
         <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[10.5px] text-stone-400" title="Teiknar 25 m drægi kringum hverja brunaslöngu næst þegar „SLT / BRSL af teikningu“ er keyrt">
           <input

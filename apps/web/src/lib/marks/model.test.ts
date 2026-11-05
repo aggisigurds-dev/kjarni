@@ -107,6 +107,9 @@ describe('organizer', () => {
     expect(seeded.links.find((link) => link.id === 'lnk_paint')?.url).toBe(
       'https://kjarni.vercel.app/kjarni/turbopaint'
     );
+    expect(seeded.links.find((link) => link.id === 'lnk_artcraft')?.url).toBe(
+      'https://kjarni.vercel.app/kjarni/artcraft'
+    );
 
     const withCat = addCategory(seeded, 'Personal');
     const personal = withCat.categories.find((category) => category.name === 'Personal');

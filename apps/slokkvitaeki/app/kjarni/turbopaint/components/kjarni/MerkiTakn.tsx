@@ -4,8 +4,8 @@
 // Teikning-glugganum (merkjasafn.ts teiknaTakn), eins og 434 teiknaISpan: platan fyllir ~90% reitsins svo hvíti kraginn
 // og skugginn komist fyrir.
 
-import { useEffect, useRef } from "react";
-import { lykillTakns, teiknaLykil } from "../../lib/board/merkjasafn";
+import { useEffect, useRef, useState } from "react";
+import { afskraRaunMyndir, lykillTakns, teiknaLykil } from "../../lib/board/merkjasafn";
 
 export function MerkiTakn({
   lykill,
@@ -22,6 +22,8 @@ export function MerkiTakn({
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const lyk = lykill ?? lykillTakns(symbolId) ?? "annad";
+  const [raunVersion, setRaunVersion] = useState(0);
+  useEffect(() => afskraRaunMyndir(() => setRaunVersion((n) => n + 1)), []);
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
@@ -35,7 +37,7 @@ export function MerkiTakn({
     ctx.clearRect(0, 0, px, px);
     ctx.scale(dpr, dpr);
     teiknaLykil(ctx, lyk, size / 2, size / 2, size * 0.9, 0, litur);
-  }, [lyk, size, litur]);
+  }, [lyk, size, litur, raunVersion]);
   return (
     <canvas
       ref={ref}

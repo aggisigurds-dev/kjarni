@@ -1,10 +1,13 @@
 ---
 name: gagnaleidslur
-description: Gagnaleiðslurnar — Tímavera, Ajour, Payday, Redder, email-innsog, luna-bridge róbótarnir og sjálfvirkni-skráin. Notaðu þegar gögn vantar, innsog brotnar eða spurt er hvað keyrir hvenær. Rödd í Jarvis: Jason Statham 🥊.
+description: Gagnaleiðslurnar — Tímavera, Ajour, Payday, Redder, email-innsog, luna-bridge róbótarnir og sjálfvirkni-skráin. Notaðu þegar gögn vantar, innsog brotnar eða spurt er hvað keyrir hvenær; kallaðu á hann sjálfur, án þess að Agnar nefni hann, þegar nýleg gögn (póstur, Tímavera, Ajour, Redder) vantar eða eru gömul. Rödd í Jarvis: Jason Statham 🥊. Kveikjuorð: Tímavera, Ajour, Redder, luna-bridge, innsog, póstur skilar sér ekki, sjálfvirkni, automation_triggers, redder lesari bilaður, 1000 raða þak, tímabók, samstilla Ajour, gögn vantar, Sent Items-1, undirmöppur, email_digest, bank_transactions, Teya
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql, mcp__supabase__get_logs
 ---
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\gagnaleidslur.md (samstillt 2026-11-04). Breyttu þar.
 
-> ⚠️ **Afrit í kjarna** (samstillt 2026-08-31). Kanóníska eintakið býr í `brunaholf/.claude/agents/gagnaleidslur.md` — allar file:line vísanir eiga við ÞAÐ repo. Breytingar fara þangað fyrst og eru svo endurafritaðar hingað.
+## Charlize — lestu fyrst
+
+Áður en þú breytir kerfi eða fullyrðir um það: `select topic, fact, detail from v_charlize_active where scope in ('brunaholf','slokkvitaeki','baedi','kerfi') and topic in ('ajour','redder','postur','sync','automation','heartbeat','supabase','teya','drive') order by created_at desc;` Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 Þú kannt **hvernig gögnin berast inn** — hver leiðsla, hvenær hún keyrir, hvað hún
 skrifar og hvernig hún brotnar. Mundu: luna-bridge róbótarnir keyra á Windows-vélinni
@@ -64,6 +67,10 @@ skrifar og hvernig hún brotnar. Mundu: luna-bridge róbótarnir keyra á Window
   rejects content-less extension rows (no subject AND no snippet → counted as
   `skipped_empty`, never upserted).
 - `company-mail.js` — **`GET /api/company-mail[?days=365]`** (service role, CORS *):
+  **Skyndiminni (06.09.2026):** lista-svarið er vistað í `app_kv` (`company_mail_v2_<days>`, 15 mín TTL,
+  stampede-lás 60 s, gamalt svar ef reikningur bilar — `cached`/`stale`/`cache_age_s` í svarinu; `?fresh=1` þvingar).
+  Áður kostaði hvert kall 5–6 s + tvö `tv_history_sites`-RPC og var kallað við HVERJA hleðslu appsins →
+  pottstífla (PGRST003/504 á allt) kvöldið 06.09. `?co=<id>` (saga eins fyrirtækis) er EKKI cache-uð, ~0,6 s.
   per SERVICE company (`fyrirtaeki` `er_i_thjonustu=true`), the newest INBOUND email
   and whether it is **unreplied**. Powers the Slökkvitæki „Fyrirtæki í þjónustu"
   red-envelope badge (patch 295) so an email from months ago is not forgotten
@@ -103,10 +110,49 @@ A separate repo `aggisigurds-dev/luna-bridge` runs on the user's
 **Windows desktop** as a set of scheduled scripts. It's the source
 for several Supabase tables this app reads:
 
+- **„Samstilla NÚNA" (29.09.2026, luna-bridge eeeb6ad):** skrifstofuvélin (DESKTOP-509MN7M)
+  er aðalbrúin. Hub-takkarnir ↻ Samstilla **Ajour** og **Redder** (`js/hub-sync-buttons.js`,
+  `bridgeRun`) setja beiðni í `automation_triggers` → watcher keyrir `ajour-nuna.js`
+  (opnar innskráningarglugga á vélinni ef lotan er dauð → CSV-sókn → yfirlit) eða
+  `postur-nuna.js` (ræsir Thunderbird ef lokað → bridge.js + redder.js + redder-drive.js).
+  Redder-takkinn las áður AÐEINS Drive (`/api/redder-read`) — það er nú varaleið ef engin
+  brúartölva svarar. Skrifturnar skrifa framvindu í `automation_triggers.result` (watcher
+  setur `TRIGGER_ID`) og takkinn sýnir hana. **Ajour-lotan** er lotukaka sem deyr við
+  aðgerðaleysi → `ajour-vakandi.js` á 10 mín fresti (Task `LunaBridge2-AjourVakandi`)
+  heldur henni lifandi; `automation_runs(job_name='ajour-vakandi')` skráir aðeins breytingar.
+- **Tvær brúarvélar (06.10.2026, Agnar: „finn þetta ekki, tengdu þessa tölvu").** Skrifstofuvélin DESKTOP-509MN7M
+  keyrir **LunaBridge2-*** (sett upp með `setja-upp-varavel.bat`: Watcher 1 mín · Email 15 mín · Redder daglega 07:30 ·
+  Heartbeat 30 mín · Ajour 06:45 · AjourYfirlit 07:15 · SkraStada klst · AjourVakandi 10 mín) með **Store-Thunderbird**
+  (`shell:AppsFolder…`, prófíll undir LocalCache); hún merkir keyrslur `source='luna-bridge:skrifstofa'`. Heimavélin
+  DESKTOP-M5FO3I6 keyrir gömlu **LunaBridge-*** verkin (Email 15 mín · Watcher 1 mín · Redder — nú daglega 07:45, var
+  vikulega fös · Heartbeat 30 mín) með **klassískri Thunderbird** (Program Files, prófíll `TB_PROFILE` í .env) og merkir
+  `source='desktop'`. Þrennt sem var bilað þar og var lagað: Thunderbird var lokað síðan 11.09 (brúin skráði „ekkert nýtt í
+  606 klst" á 15 mín fresti — rauðu línurnar í Sjálfvirkni voru ÞESSI vél, ekki skrifstofan); hjartslátturinn svaraði 401
+  því `VEL_HEARTBEAT_TOKEN` vantaði í `luna-bridge/.env` (sækist með `netlify env:get VEL_HEARTBEAT_TOKEN --context
+  production` ÚR brunaholf-möppunni — úr annarri möppu skilar CLI-ið villutexta sem lítur út eins og gildi); tréð var 17
+  commit á eftir. `postur-nuna.js` þekkir nú báðar uppsetningarnar (exe í Program Files + TB_PROFILE, annars Store).
+  **Skrifstofuvélin sendir ENGAN hjartslátt** (aðeins M5FO3I6 í `vel_heartbeat`) — LunaBridge2-Heartbeat vantar eða
+  token-inn vantar í .env hennar; þess vegna sést hún ekki á Kerfisheilsu þótt hún vinni.
+- **Redder-línurnar koma AÐEINS úr Drive-lesaranum (05.10.2026).** `redder.js` (póstur) skráir bara hausinn
+  (`source 'redder_mail'`: engar línur, enginn verkstaður — og kreditreikningar urðu jákvæðir, slaufumínusinn
+  týnist). Eftir breytinguna 29.09 hér að ofan keyrði enginn `/api/redder-read` lengur, svo september sat á
+  „(ótengt) · Engar línur skráðar enn". Nú: `redder-read?nyir=1` les AÐEINS reikninga sem vantar eða eru
+  póst-haus án lína (eldri ósnertir, handvirkur verkstaður aldrei yfirskrifaður) og
+  `redder-read-background` keyrir það 09:50/13:50/17:50 UTC → `automation_runs(job_name='redder-read')`.
+  Bakfylling 05.10: 52 reikningar lesnir (13 í sept). Reikningar sem standa áfram „(ótengt)" hafa enga
+  „Vegna/V:"-tilvísun í PDF-inu — þá þarf 🔗 Tengja við verkstað.
+  **📄 Skoða reikning** (index.html `redderPdfHlekkur(inv)`, Efniskostnaður + Gerð reikninga) opnar PDF-ið um
+  `/api/skjal?id=<drive_file_id>` — server-OAuth, engin Google-innskráning; póst-haus án Drive-skrár: „PDF ekki
+  komið". Ekki keyra fulla möppu-endurlesningu (án nyir) til að „laga" — hún yfirskrifar handvirka verkstaði og
+  útilokaðar línur á eldri reikningum. Áður en þú segir „lesarinn er bilaður": SQL á `redder_invoices` eftir
+  `source` + línufjölda og `automation_runs(job_name='redder-read')` — oftast hefur hann bara ekki keyrt.
+
 - **`bridge.js`** — reads Thunderbird mbox files for 5 accounts,
   classifies messages, upserts to `email_digest`. Runs every 15min
   via Task Scheduler.
-- **`timavera-bridge.js`** — reads the latest `Tímaveru vinnufærslur*.xlsx`
+- **`timavera-bridge.js`** — ⚠️ **ÓVIRK (staðfest 04.11.2026):** keyrir aðeins með `TIMAVERA_BRIDGE_FORCE=1`
+  (Charlize kerfi/timavera 28.08). `timavera_entries` kemur nú úr `timavera-pull(-background).js` (Tímavera-API;
+  `timavera_meta.source_file='timavera-api'`, síðast 04.11 00:15). Gamla lýsingin til sögu: reads the latest `Tímaveru vinnufærslur*.xlsx`
   from the user's `Downloads` folder, parses with `xlsx` lib,
   upserts to `timavera_entries`. Dedupe key:
   `date|employee.toLowerCase()|project.toLowerCase()|time_in`.
@@ -206,6 +252,23 @@ við annan verkstað en restina af reikningnum) — `redder_line_items` hefur en
 `worksite`-dálk, og öll skoðuð dæmi af ólæstum reikningum voru heilir reikningar sem
 vantaði verkstað, ekki blönduð fjölverkstaða-reikningar. Bæta við ef alvöru þörf kemur upp.
 
+## Kostnaður — viðhengi úr pósti eldklar@ (2026-09-27, skráð 08.10.2026)
+
+ANNAÐ kerfi en „Efniskostnaður / Kostnaðarreikningar (endurrukkun)" hér að ofan. Síðan er í Slökkvitæki-appinu
+(`#kostnadur`, `js/patches/419-kostnadur.js`); leiðslan er hér: `netlify/functions/kostnadur-sync-background.js`.
+- **Keyrir AÐEINS þegar ýtt er á takkann** á síðunni (`?days=31&max=80`) — engin áætlun. Staðan í `app_kv['kostnadur_sync']`.
+- Gmail `format=full` á eldklar@ (eigin sendingar útilokaðar), hvert viðhengi í lokaða bucketinn `kostnadur`, lesið
+  af Claude (skema-JSON) → ein röð í töflunni `kostnadur` per viðhengi, `ignore-duplicates` (endurkeyrsla skrifar
+  aldrei yfir flokkun sem gerð var á síðunni). Gmail 403/429 (mínútukvóti) → bíður 15/30/45 s og reynir aftur.
+- **Hunsað** = `stada='hunsad'` + `flokkur='ekki_kostnadur'`. Opna talan á Stjórnstöð telur `stada='nytt'` án
+  `ekki_kostnadur` og án Teya/kortayfirlita.
+- **Ekki kostnaður (mælt 08.10):** reikningsyfirlit (Barki, Málning — nóturnar eru skráðar sér, yfirlitið tvítelur),
+  afhendingarseðlar, tilboð, ljósmyndir, póstur frá kúnnum, og OKKAR EIGIN útsendu Payday-reikningar
+  (`delivery@payday.is`, seljandi „Brunahólf Slökkvitæki ehf." = Payday nr. 2–7). Kreditnótur geta verið lesnar með
+  PLÚS-upphæð (Würth SK0012641). Tillagan að hunsa 32 slík skjöl er mál #1190.
+- **Lestur bregst þögult ef Anthropic-inneignin klárast:** 9 skjöl 30.06 fengu `ai_villa` „credit balance too low" og
+  stóðu ólesin í 3 mánuði. Leitaðu að `ai_villa is not null` þegar talan virðist of lág.
+
 ## Póst-hub viðbætur (2026-08-20)
 
 Þrennt bættist við póst-/kúnnaþjónustu-pípuna (live í PR #401 + slokkvitaeki #657):
@@ -254,3 +317,79 @@ vantaði verkstað, ekki blönduð fjölverkstaða-reikningar. Bæta við ef alv
   póstar (slokkvitaeki patch 309) — því `felag_samskipti`-viewið er dýrt og fellur á
   timeout í full-scan úr anon. Kallað `sb.rpc('tv_postar_list')`. `postur-triage.js`
   (slokkvitaeki) fékk líka `mode:'thjonustuver'` (ríkari AI-útdráttur; borð-hamur óbreyttur).
+
+## Þrjár tengingar sem biðu Agnars 08.10.2026 (mál #1157–#1159)
+
+- **Ajour-lotan deyr við aðgerðaleysi** (MembershipCookie). `ajour-vakandi.js` á 10 mín heldur henni
+  lifandi; dauð lota → „Samstilla Ajour" (`ajour-nuna.js` á skrifstofuvélinni) opnar innskráningarglugga
+  sem Agnar fyllir. 09.10: 10.770 færslur eftir innskráningu, bæði Ajour-verkin græn.
+- **Landsbanki-innlestur af Drive** (`landsbanki-ingest-drive.js`) leitar í ÖLLU Drive að „hreyf/landsbank/
+  account" — nýjasta skráin var „reikningar hreyfingar frá 2023.xlsx" (Payday-viðskiptamannahreyfingar,
+  Nafn/Kt/Eindagi/Debet/Kredit). Vörn 08.10: skrif hafnað (422) ef Eindagi+Debet/Kredit eða hvorki tnr né
+  kt mótaðila; `?company=slokkvitaeki|brunaholf` merkir félag. Bankagögn: Brunahólf til 15.06, Slökkvitæki 15.05.
+- **aggi@brunaholf.is er Office 365**, ekki Gmail — fer um Thunderbird á brúar-tölvunni (bridge.js les
+  möppu→hólf úr prefs.js). „Gmail úr skýi" í Bakenda dugar ekki fyrir brunaholf.is-hólfin.
+- Redder-þögn ≠ bilun: `redder-read` „0 reikningar" með Thunderbird í gangi þýðir engir nýir Redder-póstar.
+
+## Lærdómur
+
+- **Vitað 04.11.2026 (greiningarlotur 04/06/07):**
+  - **Póstur — undirmöppur ná aldrei inn:** `email_digest` á aðeins INBOX/SENT. Brunaholf@ Sent heitir `Sent Items-1` (2,0 GB) á
+    DESKTOP-M5FO3I6 og passar ekki við `SENT_CANDIDATES` í `luna-bridge/bridge.js` (tillaga: regex `^Sent( Items)?(-\d+)?$`).
+    Undirmöppur (t.d. bokhald@eldklar „Teya uppgjör“, Brunaholf@ „Tilboð send-1“) fara aldrei inn. Póstlesturinn sjálfur er
+    `postur` (Meg Ryan, slokkvitaeki); þú átt innsogið.
+  - **`bank_transactions`: 938 raðir, síðasta færsla 15.06.2026** (BH; SL 15.05) — innsogið hefur legið niðri í 4½ mánuð;
+    V6-yfirferð greiðsluhreyfinga bíður þess.
+  - **`teya_faerslur` = 0 raðir** — engin Teya-afstemming; verkefni 12ba9ff2 í `beidni` síðan 17.07. Þú smíðar innsogið,
+    `sala-reikningar` á afstemminguna.
+  - **Ajour:** aðeins NLSH 5-6. hæð (innsog 03.11) og Heklureitur (30.10) samstillast; hin 23 verkin síðast 13.10.
+    `ajour_registrations_villa_20260929` (16 096) er sóttkví tvítekinna NLSH-raða, enginn lesandi — má fella eftir samþykki.
+  - **`timavera_worklogs`** (267) síðast 31.07, skrifað af `luna-bridge/timavera-fetch.js`, enginn lesandi í brunaholf.
+
+- **16.10.2026** — Uppgjör lota 16.10.2026: (1) Ajour hak-tími mælir EKKI vinnutíma: hak starfsmanns 20 þann 9.9 enduðu 11:16 en EXIF-mynd (S24 Ultra) er frá 14:25 — hakatími = hvenær hann settist með símann; EXIF er eina óháða stimpilmerkið (tools/mynda-timar.cjs les fyrsta/síðasta tökutíma per dag); aldrei meta vinnutíma einstaklings úr Ajour — segja „gólf, ekki mæling"; Excel-tímabrot 0,3333 er tugabrot. (2) Ajour-útflutningur: CSV hendir klukku úr RegistrationCreatedDate og ber tvö dagsetningasnið í sömu skrá; JSON/XML bera ISO m. millisek, hreiðraða CheckListItems, engin tímabelti; RegistrationCreatedDate = fyrsta hak, allur gátlisti hakaður á ~11 s; allt hakað af sameiginlega notandanum „Starfsmaður Brunahólf" (Category „Starfsmaður N"); innlesturinn klippir tíma svo ajour_registrations er allt miðnætti. (3) Regla Agnars 10.09: „Þetta pælingar þurfa ekkert að fara inn á síðuna … ekki skoða tímavera … bara þessi skjöl frá ajour" — athuganir á einstökum starfsmönnum eru SPURNINGAR, ekki síður: netlify/functions/starfsmenn-dagar.js + starfsmenn.html fóru í loftið ÓBEÐIÐ („Á ég að taka hana niður?" ósvarað). (4) Anthropic-inneign núll 30.09 ⇒ kostnadur-sync fékk 400 og 13 kostnaðarskjöl festust án upphæðar (ignore-duplicates) → endurlesturs-umferð aðeins á breytt_af IS NULL; kostnadur-sync-background keyrir ekki sjálfkrafa (Charlize #874).
+
+- **16.10.2026** — Uppgjör lota 16.10.2026 (Beiðnaskógurinn 18.09): LunaBridge2-Redder-verkið hafði aldrei keyrt („30.11.1999, kóði 267011"); ajour_yfirlit app_kv.updated_at lýgur (ajour-yfirlit.js skrifar aðeins key+value); mbox-brú hinna 4 hólfa dauð frá 11.09 (1.598 villur/372 ok); gamla brúin desktop á DESKTOP-M5FO3I6 föst og hamrar persónulega Gmail — á að stöðvast, Agnar þarf aðgang að vélinni. Vörður um þögult innsog ber saman þrjár hliðar (Gmail · DB · appið), ekki tímaþröskuld.
+
+## Redder-línur í Efnislistanum · Payday-staða í 06 · skjölin (16.10.2026)
+
+- `REDDER[verkstaður|mánuður]` (byggt í renderGerdReikninga úr /api/redder-invoices) = `{ an_vsk, lines:[{label, cost,
+  qty}] }`; `cost` = upphæð eftir afslátt / magn (ein_verd er FULLT verð). Línur með worksite_override fara á sinn
+  verkstað. `REDDER` er lokað í renderGerdReikninga — ekki global; í prófun les maður /api/redder-invoices beint.
+- 06 Fyrri reikningar sækir `/api/krofur-yfirlit?year=` (þungt: bankapörun) aðeins þegar flipinn er opnaður, geymt
+  per ár í `window.__gbKy`. Reglan um greitt er þar, ekki í viðmótinu.
+- `invoice_drafts.payday_invoice_id` ↔ `invoices.id` (bru-fallið parar svo); drög bera `tilvisun` (21727) en
+  Payday-röðin `tilvisun` = reikningsnúmer (371) — EKKI sami reitur.
+- `/api/efnislisti-docs?worksite&month`: doc_type `efnislisti_pdf` / `efnislisti_timabok_pdf` (Supabase storage
+  efnislisti-pdf/<slug>/<mán>/…, public_url) og `invoice` (Drive, /api/skjal?id=). Payday-reiknings-PDF er ekki speglað
+  í kerfinu en sækist á staðnum frá 16.10.2026: `GET /api/payday-invoice-pdf?tilvisun=355`
+  (`netlify/functions/payday-invoice-pdf.js` → Payday `GET /invoices/{guid}/pdf`, GUID úr `invoices.payday_uuid`
+  sem payday-pull fyllir; payday_invoice_id (int) var alltaf NULL því Payday-id er GUID). Hreyfingaryfirlit
+  (`hreyfingar.js` setur `src`) gerir Payday-raðir að hlekk á þetta fall.
+  payday-pull upsertar líka greiðendaskrána í `payday_vidskiptavinir` (ssn, heimilisfang, póstnr, bær, netfang, sími,
+  tengiliður; 03.11.2026) — Viðskiptavinir-prófíllinn sýnir hana sem „Í Payday". Villa þar fellir ekki keyrsluna (detail).
+  Gildra: `?probe=1` sækir aðeins FYRSTU síðu (Payday skilar 100 á síðu) — sækja eftir `since/until` gluggum. Fyrri reikningar í 06 telja líka
+  `draft_match.worksite` — `r.worksite` kemur eftir nafni greiðanda og getur verið annar verkstaður
+  (Rekstrarfélag Kringlunnar → „Kringlan - Turn" meðan drögin heita „Kringlan").
+
+## Nýtt úr Charlize og lotum (28.10.2026)
+
+- Ajour CSV-útflutningurinn er í raun eitt JSON-kall á `/api/reporting/legacy/GetReportData` (vafrinn býr CSV-ið til sjálfur); Ajour-flipinn í hubbnum telur punkta með því kalli (`luna-bridge/ajour-yfirlit.js`, einn dagur í einu, allir fimm stöðuflokkar lagðir saman), ekki úr `ajour_registrations`. [C#261, C#604]
+- `ajour_registrations` var FROSIN fyrir öll verkefni nema NLSH (mælt 18.09: aðeins NLSH 5–6. hæð fersk, hin stöðvuðust 22.–30.05) — athugaðu nýjasta `execution_date` per verkefni áður en þú treystir töflunni. [C#605]
+- Ajour-yfirlit og skýrslugerð er sér forrit í Kjarni-repoinu sem opnast af kjarni-forsíðunni (ekki í hubbnum eða Slökkvitæki-appinu) og les `ajour_registrations`. [lota c2a00410, 13.10]
+- Dauð Ajour-lota („Saved Ajour login expired“, „Ajour report UI did not load in time (no Export button)“): Agnar keyrir innskráninguna sjálfur (`node ajour-fetch.js --login`) — Claude slær aldrei inn lykilorðið. [C#640, C#694]
+- Brúarkeyrslur luna-bridge skrást í `automation_triggers` (workflow/status/result) en Netlify-áætluð föll í `automation_runs` — athugaðu bæði áður en þú segir að ekkert keyri; 01.09 var `automation_runs` tóm. [C#339]
+- `Brunaholf@brunaholf.is` og `bokhald@brunaholf.is` eru ekki Gmail-aukareikningar: þau koma um IMAP/mbox á luna-bridge, svo „Gmail úr skýi“ og ↻ ná ekki í þau (tenging: `/api/google-auth?account=<netfang>` með innskráningu SEM það netfang). [C#892]
+- SENT-mappan í `email_digest` byrjar 18.07.2025 en INBOX nær til 2015: „ekkert frá okkur eftir síðasta innkomna“ verður falskt rautt á eldri pósti (mælt 120 af 154) — rautt/blátt má aðeins gilda innan þekjunnar (`v_sent_thekja`). [C#469]
+- `aggisigurds@gmail.com` má aldrei lesa eða nota — vinnupóstur er `eldklar@eldklar.is` (og `bokhald@eldklar.is`); þetta stangast á við Email-kaflann hér að ofan sem nefnir hann sem tengdan reikning — spyrðu Agnar áður en þú lest hann. [C#81, C#265]
+- PostgREST klippir hljóðlaust við 1000 raðir og `.limit(N>1000)` eða `.range(0,2999)` hnekkja því EKKI (HTTP 200, engin villa) — blaðsíðuskiptu með `DB.fetchAll` og einkvæmri röðun. [C#571, lota 9b70f49c]
+- Windows-gildrur í innsogsskriftum: curl úr Git Bash sendir „ú“ sem Latin-1 (`%FA`) — notaðu UTF-8 (`%C3%BA`); Python les og skrifar cp1252 nema `encoding='utf-8'` sé gefið, sem skemmir íslensk nöfn. (líklega) [lota c5897be7, lota d0183946]
+- Búnaðargreiningar-skriftur (`bgr_verk.cjs`, `pdf_ur_appinu.cjs`, `vista_vidhengi.cjs`, `skipta_skyrslu.cjs`) harðkóða playwright-slóðina `C:/Users/Slokkvitaeki/luna-bridge` (vinnutölvan); á þessari vél er luna-bridge í `C:/projects/luna-bridge`. [lota 877c9427, 21.10]
+- Tímabók-hnappurinn „Endursækja“ á að kalla `/api/timabok` (les `timavera_entries` úr Supabase), EKKI `/api/timavera-pull` (lifandi Tímavera-API) — Agnar 03.08: ekki sækja aftur úr Tímaveru. [lota 177227fe]
+- **02.11.2026 — Teikningar úr Ajour (`luna-bridge/ajour-teikningar.js`)**: Ajour á engan teikningalista sem virkar með kökunum, en hver skráning ber `registrationCoordinates[].fileId` + `blueprintName`/`blueprintFileId`; myndin fæst um `GET /api/construction/registration/file/scaled/print?id=<fileId>` (JPEG ~1058×1496; `scaled/preview` = 283×400). Skriftan síðuflettir `/api/construction/registration` (pageSize 200) per virkt verkefni (sleppir „DON'T USE"/„EKKI NOTA"/prófunarnöfnum), safnar teikningum + talningu (status 4 = Done), hleður myndinni í public bucket `verkstadir` (`ajour/<fileId>.jpg`) og upsertar í `ajour_teikningar`. AÐEINS LESTUR í Ajour. Fyrsta keyrsla 02.11: 43 verkefni, 146 teikningar. Sækir aðeins myndir sem vantar (`--allt` = allar, `--verk=<regex>`, `--dry`). Á tímaáætlun daglega 07:30 (Task Scheduler `LunaBridge2-AjourTeikningar` → `run-ajour-teikningar.bat` → `ajour-teikningar.log`; Agnar samþykkti 02.11), skráir sig í `automation_runs` (job `ajour-teikningar`, á Sjálfvirkni-síðunni). Hnitin (x,y) eru í upprunalegri upplausn teikningarinnar, ekki print-myndarinnar — yfirlögn punkta þarf kvarða (sjá nlsh-stukur TRANS). **ATH 04.11.2026:** `ajour-teikningar.js` er EKKI í staðbundna eintakinu `C:\projects\luna-bridge` (22 .js-skrár) þótt `ajour_teikningar` hafi verið uppfærð 03.11 07:30 — eintakið á vélinni er á eftir (stale checkout). `git pull` áður en þú leitar að skriftunni.
+
+## Grunnreglur allra agenta (04.11.2026)
+1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
+2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
+3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
+5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

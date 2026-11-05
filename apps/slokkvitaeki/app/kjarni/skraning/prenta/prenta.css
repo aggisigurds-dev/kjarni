@@ -1,0 +1,30 @@
+.pr { font-family: "Open Sans", "Segoe UI", system-ui, Arial, sans-serif; color: #1e1e1e; background: #fff; padding: 14px 18px 40px; max-width: 1400px; margin: 0 auto; font-size: 12px; }
+.pr-stika { display: flex; align-items: center; gap: 14px; padding: 8px 12px; background: #eef0f2; border: 1px solid #d9dcdf; margin-bottom: 12px; }
+.pr-stika label { display: inline-flex; align-items: center; gap: 6px; }
+.pr-stika select { border: 1px solid #b9bec3; border-radius: 3px; padding: 4px 6px; font: inherit; }
+.pr-stika button { margin-left: auto; border: 1px solid #1a9bb1; border-radius: 3px; padding: 7px 14px; font: inherit; cursor: pointer; }
+.pr-haus { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; border-bottom: 2px solid #1e1e1e; padding-bottom: 8px; margin-bottom: 10px; }
+.pr h1 { margin: 0; font-size: 20px; }
+.pr-haus p { margin: 4px 0 0; color: #4a4a4a; }
+.pr-tolur { display: flex; gap: 14px; font-size: 13px; }
+.pr-tolur b { font-size: 18px; margin-right: 4px; }
+.pr-tolur .g b { color: #2e8b1a; } .pr-tolur .y b { color: #b07d00; }
+.pr-teikning { margin: 0 0 12px; border: 1px solid #d9dcdf; }
+.pr-teikning svg { display: block; width: 100%; height: auto; }
+.pr-teikning figcaption { padding: 4px 8px; color: #4a4a4a; font-size: 11px; background: #f4f5f6; }
+.pr h2 { font-size: 14px; margin: 12px 0 6px; }
+.pr-flokkar table td { padding: 2px 10px 2px 0; }
+.pr-flokkar td.t { text-align: right; font-weight: 700; }
+.pr-tafla { width: 100%; border-collapse: collapse; }
+.pr-tafla th { text-align: left; background: #f4f5f6; border-bottom: 2px solid #d9dcdf; padding: 5px 6px; font-size: 11px; text-transform: uppercase; }
+.pr-tafla td { border-bottom: 1px solid #e6e8ea; padding: 4px 6px; vertical-align: top; }
+.pr-nr { display: inline-block; min-width: 34px; text-align: center; color: #fff; font-weight: 700; border-radius: 3px; padding: 1px 6px; }
+.pr-nr.g { background: #5fc33b; } .pr-nr.y { background: #f5b942; color: #1e1e1e; }
+.pr-myndir img { width: 64px; height: 64px; object-fit: cover; margin: 0 3px 3px 0; border: 1px solid #ddd; }
+@media print {
+  @page { size: A3 landscape; margin: 10mm; }
+  .noprint { display: none !important; }
+  .pr { padding: 0; max-width: none; }
+  .pr-teikning { break-inside: avoid; }
+  .pr-tafla tr { break-inside: avoid; }
+}

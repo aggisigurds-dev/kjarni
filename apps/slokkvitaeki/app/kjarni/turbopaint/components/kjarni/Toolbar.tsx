@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
   ChevronUp,
+  ChevronRight,
   Circle,
   Crosshair,
   Eraser,
@@ -15,6 +16,7 @@ import {
   Hand,
   Minus,
   MousePointer2,
+  PanelLeftClose,
   Pencil,
   PencilRuler,
   Pentagon,
@@ -27,7 +29,7 @@ import {
 import { getSymbol, symbolColors } from "../../lib/board/symbols";
 import { SYMBOL_OPACITY_KEY, useBoardStore } from "../../lib/board/store";
 import { CustomColorSwatch } from "./ColorPicker";
-import { useCustomColors } from "../../lib/board/custom-colors";
+import { clearCustomColors, forgetCustomColor, useCustomColors } from "../../lib/board/custom-colors";
 import {
   getStampSize,
   setStampSize,
@@ -35,6 +37,7 @@ import {
   STAMP_SIZE_MAX,
   STAMP_SIZE_MIN,
 } from "../../lib/board/symbol-settings";
+import { lesaSulu, vistaSulu } from "../../lib/board/simi";
 import type { Tool } from "../../lib/board/types";
 import { useHamur, type HamurId } from "../../lib/board/hamir";
 import { finnaTengduMynd, medStaerdUmMidju } from "../../lib/board/uttekt";
@@ -105,6 +108,9 @@ const HAM_TOL: Record<HamurId, Tool[]> = {
   brunathettingar: ["select", "hand", "gegnumtak", "polyline", "ellipse", "text", "measure"],
   brunakerfi: ["select", "hand", "symbol", "text", "arrow", "line"],
   rymi: ["select", "hand", "rect", "checkbox", "text", "measure"],
+  // Veggir og Lagnir eru greiningarhamir (tólin búa í hægra spjaldinu) — á borðinu nægir að velja, færa og mæla.
+  veggir: ["select", "hand", "polyline", "eydalinu", "measure"],
+  lagnir: ["select", "hand", "gegnumtak", "ellipse", "text", "measure"],
 };
 
 const FLEIRI_LYKILL = "tp_tol_fleiri";
@@ -148,8 +154,55 @@ export function Toolbar() {
       </ToolButton>
     );
 
+  // Samanbrot (Agnar 09.10.2026: „collapse takka fyrir hliðarstikuna"): í síma byrjar súlan samanbrotin í einn hnapp,
+  // í tölvu opin — og vafrinn man síðasta val. Flýtilyklarnir virka áfram þó hún sé samanbrotin.
+  const [samanbrotin, setSamanbrotin] = useState(lesaSulu);
+  const breyta = (v: boolean) => {
+    setSamanbrotin(v);
+    vistaSulu(v);
+  };
+
+  if (samanbrotin) {
+    return (
+      <button
+        type="button"
+        data-sula-opna
+        aria-expanded={false}
+        aria-label="Opna verkfærasúluna"
+        title={`Opna verkfærasúluna${virkt ? ` — núna: ${virkt.label}` : tool === "symbol" ? ` — núna: Tákn` : ""}`}
+        onClick={() => breyta(false)}
+        className="tp-sula-opna pointer-events-auto relative flex size-10 shrink-0 items-center justify-center self-start rounded-xl border border-white/10 bg-[#1a1d2e]/95 text-[#FE653F] shadow-2xl shadow-black/40 active:translate-y-px"
+      >
+        {virkt ? (
+          virkt.icon
+        ) : tool === "symbol" ? (
+          <span
+            className="flex size-5 items-center justify-center rounded-sm text-[8px] font-bold"
+            style={{ background: symbolColors(symbol.kind).bg, color: symbolColors(symbol.kind).fg }}
+          >
+            {symbol.short.slice(0, 2)}
+          </span>
+        ) : (
+          <MousePointer2 className="size-4" />
+        )}
+        <ChevronRight className="absolute right-0 bottom-0.5 size-3 text-white/55" aria-hidden />
+      </button>
+    );
+  }
+
   return (
-    <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
+    <div className="tp-toolbar pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 p-1.5 shadow-2xl shadow-black/40">
+      <button
+        type="button"
+        data-sula-loka
+        aria-expanded
+        aria-label="Fella verkfærasúluna saman"
+        title="Fella verkfærasúluna saman í einn hnapp (teikningin fær plássið)"
+        onClick={() => breyta(true)}
+        className="tp-sula-loka flex h-6 w-full shrink-0 items-center justify-center rounded-lg text-stone-400 transition hover:bg-white/8 hover:text-white"
+      >
+        <PanelLeftClose className="size-3.5" />
+      </button>
       {synileg.map(takki)}
       {falin.length > 0 ? (
         <>
@@ -358,7 +411,7 @@ export function StyleStrip() {
 
   if (tool === "symbol") {
     return (
-      <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+      <div className="tp-strip-skrun pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
         {pipesOpen ? <LagPicker /> : null}
         <MerkingarStrip withSize />
       </div>
@@ -366,7 +419,7 @@ export function StyleStrip() {
   }
 
   return (
-    <div className="tp-stylestrip pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
+    <div className="tp-stylestrip tp-strip-skrun pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1a1d2e]/95 px-3 py-1.5 text-xs text-stone-300 shadow-2xl">
       {pipesOpen ? (
         <>
           <LagPicker />
@@ -388,6 +441,12 @@ export function StyleStrip() {
         <button
           key={color}
           type="button"
+          title={customColors.includes(color.toLowerCase()) ? "Hægri smellur eða löng snerting fjarlægir þennan lit" : undefined}
+          onContextMenu={(e) => {
+            if (!customColors.includes(color.toLowerCase())) return;
+            e.preventDefault();
+            forgetCustomColor(color);
+          }}
           onClick={() => {
             setStyle({ stroke: color });
             applyToSelection({ stroke: color });
@@ -399,6 +458,18 @@ export function StyleStrip() {
           style={{ background: color }}
         />
       ))}
+      {customColors.length ? (
+        <button
+          type="button"
+          data-hreinsa-liti
+          title="Fjarlægja alla sérsniðna liti úr stikunni"
+          aria-label="Fjarlægja sérsniðna liti"
+          onClick={clearCustomColors}
+          className="grid size-5 place-items-center rounded-full border border-white/20 text-[11px] leading-none text-stone-300 hover:bg-white/10"
+        >
+          ×
+        </button>
+      ) : null}
       <CustomColorSwatch
         value={style.stroke}
         className="size-5"
