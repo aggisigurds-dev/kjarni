@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { downscaleArea, icLightSize, motaFileName, padToAspect, restoreDetail, sameAspect } from "./detail.ts";
+import { downscaleArea, icLightSize, motaFileName, padToAspect, restoreDetail, sameAspect, transferLighting } from "./detail.ts";
 
 type R = { data: Uint8ClampedArray; width: number; height: number };
 
@@ -143,4 +143,53 @@ test("every save gets its own file name", () => {
   assert.equal(motaFileName("", "jpg", t), "mynd-mota-20261105-143012.jpg");
   const later = new Date(2026, 10, 5, 14, 30, 13);
   assert.notEqual(motaFileName("a.jpg", "jpg", t), motaFileName("a.jpg", "jpg", later));
+});
+
+test("relight transfer keeps the original person even when the model drew someone else", () => {
+  // Frumrit: áferð alls staðar. „IC-Light“-útkoman: dekkri hægra megin OG
+  // allt annað mynstur í miðjunni (önnur manneskja).
+  const src = make(240, 160, textured);
+  const low = shrink(src, 120, 80);
+  for (let y = 0; y < 80; y++)
+    for (let x = 0; x < 120; x++) {
+      const o = (y * 120 + x) * 4;
+      const g = 1.25 - (x / 120) * 0.8;
+      let r = low.data[o], gg = low.data[o + 1], b = low.data[o + 2];
+      if (x > 40 && x < 80 && y > 20 && y < 60) {
+        // önnur „manneskja“: láréttar rendur í stað frumritsins
+        const v = (y % 6) < 3 ? 60 : 200;
+        r = v; gg = v * 0.9; b = v * 0.7;
+      }
+      low.data[o] = Math.min(255, r * g);
+      low.data[o + 1] = Math.min(255, gg * g);
+      low.data[o + 2] = Math.min(255, b * g);
+    }
+  const out = transferLighting(src, low, { radius: 4 });
+  assert.equal(out.width, 240);
+  assert.equal(out.height, 160);
+  // 1) Ljósið kemst í gegn: vinstri bjartari en hægri.
+  const meanCol = (r: R, x0: number, x1: number) => {
+    let s = 0, c = 0;
+    for (let y = 0; y < r.height; y++) for (let x = x0; x < x1; x++) { s += r.data[(y * r.width + x) * 4 + 1]; c++; }
+    return s / c;
+  };
+  assert.ok(meanCol(out, 0, 40) > meanCol(out, 200, 240) * 1.4, `${meanCol(out, 0, 40)} vs ${meanCol(out, 200, 240)}`);
+  // 2) Í miðjunni er FRUMRITIÐ (lóðrétt 2 px mynstur), ekki láréttu rendurnar:
+  //    fylgni við frumritið há, við „nýju manneskjuna“ lág.
+  const corr = (a: number[], b: number[]) => {
+    const ma = a.reduce((s, v) => s + v, 0) / a.length;
+    const mb = b.reduce((s, v) => s + v, 0) / b.length;
+    let c = 0, va = 0, vb = 0;
+    for (let i = 0; i < a.length; i++) { c += (a[i] - ma) * (b[i] - mb); va += (a[i] - ma) ** 2; vb += (b[i] - mb) ** 2; }
+    return c / Math.sqrt(va * vb);
+  };
+  const o: number[] = [], s: number[] = [], fake: number[] = [];
+  for (let y = 50; y < 110; y++)
+    for (let x = 90; x < 150; x++) {
+      o.push(out.data[(y * 240 + x) * 4 + 1]);
+      s.push(src.data[(y * 240 + x) * 4 + 1]);
+      fake.push(((Math.floor(y / 2) % 6) < 3 ? 60 : 200));
+    }
+  assert.ok(corr(o, s) > 0.9, `corr with original ${corr(o, s)}`);
+  assert.ok(Math.abs(corr(o, fake)) < 0.3, `corr with model's person ${corr(o, fake)}`);
 });

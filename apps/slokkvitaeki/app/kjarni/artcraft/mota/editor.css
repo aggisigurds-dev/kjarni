@@ -644,6 +644,16 @@
   user-select: text;
 }
 
+.mx-textarea {
+  height: auto;
+  resize: none;
+  min-height: 56px;
+  line-height: 1.35;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-family: inherit;
+}
+
 .mx-input:focus {
   outline: 2px solid var(--mx-accent);
   outline-offset: 0;
@@ -711,6 +721,53 @@
   white-space: nowrap;
 }
 
+.mx-swatch-add {
+  display: grid !important;
+  place-items: center;
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--mx-accent-ink);
+  background: #fafafb;
+  border-style: dashed !important;
+}
+.mx-swatch-saved {
+  position: relative;
+}
+.mx-swatch-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.mx-swatch-hit em {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mx-swatch-saved span {
+  background-size: cover;
+  background-position: center;
+}
+.mx-swatch-del {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 20, 24, 0.72);
+  color: #fff;
+  font-size: 16px;
+  line-height: 26px;
+  padding: 0;
+}
 .mx-swatch.on em {
   color: var(--mx-accent-ink);
   font-weight: 600;
@@ -854,4 +911,113 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: var(--mx-soft);
+}
+
+/* ---------------------------------------------------------------- skurður */
+
+.mx-crop-root {
+  z-index: 2147483100;
+}
+.mx-crop-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+.mx-crop-img {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.mx-crop-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 200vmax rgba(18, 18, 24, 0.55);
+  cursor: move;
+  touch-action: none;
+}
+.mx-crop-grid {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+.mx-crop-grid.v1,
+.mx-crop-grid.v2 {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.mx-crop-grid.v1 { left: 33.333%; }
+.mx-crop-grid.v2 { left: 66.666%; }
+.mx-crop-grid.h1,
+.mx-crop-grid.h2 {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.mx-crop-grid.h1 { top: 33.333%; }
+.mx-crop-grid.h2 { top: 66.666%; }
+/* Handföng: 44 px snertiflötur, sýnilegt horn/strik inni í honum. */
+.mx-crop-handle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  touch-action: none;
+}
+.mx-crop-handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #fff;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.mx-crop-handle.nw { left: 0; top: 0; cursor: nwse-resize; }
+.mx-crop-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
+.mx-crop-handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.mx-crop-handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
+.mx-crop-handle.n { left: 50%; top: 0; cursor: ns-resize; }
+.mx-crop-handle.s { left: 50%; top: 100%; cursor: ns-resize; }
+.mx-crop-handle.e { left: 100%; top: 50%; cursor: ew-resize; }
+.mx-crop-handle.w { left: 0; top: 50%; cursor: ew-resize; }
+.mx-crop-handle.nw::after,
+.mx-crop-handle.ne::after,
+.mx-crop-handle.se::after,
+.mx-crop-handle.sw::after {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 4px;
+}
+.mx-crop-handle.n::after,
+.mx-crop-handle.s::after {
+  width: 26px;
+  height: 6px;
+  margin: -3px 0 0 -13px;
+}
+.mx-crop-handle.e::after,
+.mx-crop-handle.w::after {
+  width: 6px;
+  height: 26px;
+  margin: -13px 0 0 -3px;
+}
+.mx-crop-panel {
+  flex: none;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--mx-panel);
+  border-top: 1px solid var(--mx-line);
+}
+.mx-crop-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mx-crop-actions .mx-run {
+  flex: 1;
+  margin: 0;
 }

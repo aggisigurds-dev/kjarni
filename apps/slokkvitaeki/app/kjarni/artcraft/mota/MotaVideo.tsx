@@ -21,7 +21,6 @@ import { continueAt, defaultContinueTime, formatSeconds, globalTime, locate, seg
 import {
   ASPECT_CHOICES,
   LENGTHS,
-  MOTION_PRESETS,
   expectedSeconds,
   lengthsFor,
   nearestAspect,
@@ -30,6 +29,10 @@ import {
   type AspectId,
   type FitMode,
   type VideoModelId,
+  VIDEO_PROMPTS_KEY,
+  defaultVideoPromptSlots,
+  normalizeVideoPromptSlots,
+  type VideoPromptSlot,
 } from "../video/presets";
 import { throttleDelaySeconds } from "./aiPresets";
 import { motaFileName } from "./detail";
@@ -102,7 +105,31 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
   const seekingRef = useRef(false);
   const wantRef = useRef(0);
   const [panel, setPanel] = useState<Panel>(initialVideo ? null : "create");
-  const [prompt, setPrompt] = useState(MOTION_PRESETS[0].prompt);
+  // Fimm eigin hreyfiprompt (breytanleg, vistuð í vafranum). Reiturinn sýnir
+  // virka hólfið og hver breyting vistast í það.
+  const [slots, setSlots] = useState<VideoPromptSlot[]>(defaultVideoPromptSlots);
+  const [activeSlot, setActiveSlot] = useState(0);
+  const [editingLabel, setEditingLabel] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(VIDEO_PROMPTS_KEY);
+      if (raw) setSlots(normalizeVideoPromptSlots(JSON.parse(raw)));
+    } catch {
+      /* vafri án geymslu — sjálfgefin hólf */
+    }
+  }, []);
+  function updateSlot(i: number, patch: Partial<VideoPromptSlot>) {
+    setSlots((prev) => {
+      const next = prev.map((sl, j) => (j === i ? { ...sl, ...patch } : sl));
+      try {
+        window.localStorage.setItem(VIDEO_PROMPTS_KEY, JSON.stringify(next));
+      } catch {
+        /* geymsla full eða lokuð */
+      }
+      return next;
+    });
+  }
+  const prompt = slots[activeSlot]?.prompt ?? "";
   const [model, setModel] = useState<VideoModelId>("wan");
   const [lengthId, setLengthId] = useState("wan5");
   const [resolution, setResolution] = useState<"720p" | "480p">("720p");
@@ -721,20 +748,65 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
                 )}
               </div>
             )}
-            <div className="mx-prompt-row">
-              <input
-                className="mx-input"
-                value={prompt}
-                placeholder="Hvað á að gerast? (enska virkar best)"
-                onChange={(e) => setPrompt(e.target.value)}
-              />
-            </div>
-            <div className="mx-chips scroll">
-              {MOTION_PRESETS.map((m) => (
-                <button key={m.label} type="button" className={`mx-chip${prompt === m.prompt ? " on" : ""}`} onClick={() => setPrompt(m.prompt)}>
-                  {m.label}
+            <div className="mx-chips scroll" role="tablist" aria-label="Mín prompt">
+              {slots.map((sl, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeSlot === i}
+                  className={`mx-chip${activeSlot === i ? " on" : ""}`}
+                  onClick={() => {
+                    setActiveSlot(i);
+                    setEditingLabel(false);
+                  }}
+                >
+                  {sl.label}
                 </button>
               ))}
+              <button
+                type="button"
+                className={`mx-chip${editingLabel ? " on" : ""}`}
+                aria-pressed={editingLabel}
+                onClick={() => setEditingLabel((v) => !v)}
+              >
+                ✎ Heiti
+              </button>
+            </div>
+            {editingLabel && (
+              <div className="mx-prompt-row">
+                <input
+                  className="mx-input"
+                  value={slots[activeSlot]?.label ?? ""}
+                  maxLength={24}
+                  aria-label="Heiti hólfsins"
+                  placeholder="Heiti hólfsins"
+                  onChange={(e) => updateSlot(activeSlot, { label: e.target.value })}
+                  onBlur={(e) => {
+                    if (!e.target.value.trim()) updateSlot(activeSlot, { label: defaultVideoPromptSlots()[activeSlot].label });
+                  }}
+                />
+                <button
+                  type="button"
+                  className="mx-run small ghost"
+                  onClick={() => {
+                    updateSlot(activeSlot, defaultVideoPromptSlots()[activeSlot]);
+                    setEditingLabel(false);
+                  }}
+                >
+                  Sjálfgefið
+                </button>
+              </div>
+            )}
+            <div className="mx-prompt-row">
+              <textarea
+                className="mx-input mx-textarea"
+                rows={2}
+                value={prompt}
+                aria-label={`Prompt í „${slots[activeSlot]?.label ?? ""}“ — vistast sjálfkrafa`}
+                placeholder="Hvað á að gerast? (enska virkar best) — vistast í hólfið"
+                onChange={(e) => updateSlot(activeSlot, { prompt: e.target.value })}
+              />
             </div>
             <div className="mx-chips scroll">
               {(["wan", "kling"] as const).map((m) => (

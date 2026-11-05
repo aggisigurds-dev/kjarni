@@ -101,3 +101,20 @@ test("reframing: cover crops to the ratio, contain keeps the whole picture", asy
   const small = reframePlan(400, 300, 1, "cover", 1920);
   assert.deepEqual([small.width, small.height], [300, 300]);
 });
+
+test("video prompt slots: always five, editable, broken storage falls back", async () => {
+  const { defaultVideoPromptSlots, normalizeVideoPromptSlots, VIDEO_PROMPT_SLOTS } = await import("./presets.ts");
+  assert.equal(VIDEO_PROMPT_SLOTS, 5);
+  const d = defaultVideoPromptSlots();
+  assert.equal(d.length, 5);
+  assert.ok(d.every((s) => s.label && s.prompt));
+  assert.deepEqual(normalizeVideoPromptSlots(null), d);
+  assert.deepEqual(normalizeVideoPromptSlots("rugl"), d);
+  const edited = normalizeVideoPromptSlots([{ label: " Hoppar ", prompt: "the person jumps" }, { label: "", prompt: "" }, 7]);
+  assert.equal(edited.length, 5);
+  assert.deepEqual(edited[0], { label: "Hoppar", prompt: "the person jumps" });
+  assert.equal(edited[1].label, d[1].label, "empty label falls back");
+  assert.equal(edited[1].prompt, "", "an emptied prompt stays empty");
+  assert.deepEqual(edited[2], d[2]);
+  assert.equal(normalizeVideoPromptSlots([{ label: "x".repeat(50), prompt: "p" }])[0].label.length, 24);
+});

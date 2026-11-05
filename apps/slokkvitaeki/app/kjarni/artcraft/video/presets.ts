@@ -12,6 +12,29 @@ export const MOTION_PRESETS: Array<{ label: string; prompt: string }> = [
   { label: "Hringur um", prompt: "the camera slowly orbits around the subject, cinematic" },
 ];
 
+// ---------------------------------------------------------------- eigin prompt
+
+/** Fimm hólf fyrir hreyfiprompt sem notandinn breytir og geymast í vafranum. */
+export type VideoPromptSlot = { label: string; prompt: string };
+export const VIDEO_PROMPT_SLOTS = 5;
+export const VIDEO_PROMPTS_KEY = "kjarni_mota_video_prompts_v1";
+
+export function defaultVideoPromptSlots(): VideoPromptSlot[] {
+  return MOTION_PRESETS.slice(0, VIDEO_PROMPT_SLOTS).map((m) => ({ label: m.label, prompt: m.prompt }));
+}
+
+/** Les vistuð hólf; ógild eða vantandi hólf fá sjálfgefið efni. Alltaf 5. */
+export function normalizeVideoPromptSlots(raw: unknown): VideoPromptSlot[] {
+  const defs = defaultVideoPromptSlots();
+  const list = Array.isArray(raw) ? raw : [];
+  return defs.map((d, i) => {
+    const v = list[i] as Partial<VideoPromptSlot> | undefined;
+    const label = typeof v?.label === "string" && v.label.trim() ? v.label.trim().slice(0, 24) : d.label;
+    const prompt = typeof v?.prompt === "string" ? v.prompt.slice(0, 600) : d.prompt;
+    return { label, prompt };
+  });
+}
+
 export type LengthChoice = {
   id: string;
   label: string;

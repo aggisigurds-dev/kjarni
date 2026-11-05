@@ -292,6 +292,138 @@ export function restoreDetail(source: Raster, result: Raster, options: RestoreOp
   return { data: out, width: W, height: H };
 }
 
+// ---------------------------------------------------------------- ljós eingöngu
+
+/** Ljósið úr endurlýstri útkomu (`result`, minni) flutt á frumritið
+ *  (`source`) — en ALDREI lögun, andlit eða litir hluta. IC-Light teiknar alla
+ *  myndina upp á nýtt (önnur manneskja, rós sem verður græn); hér er aðeins
+ *  notað hvernig BIRTAN breyttist staðbundið og hvaða LITBLÆ ljósið hefur.
+ *
+ *  1) Birta: staðbundin línuleg vörpun (guided filter) á birtugildum,
+ *     L' ≈ a·L + b. Þar sem útkoman fylgir frumritinu nær hún skuggum og
+ *     glampa; þar sem líkanið teiknaði annað (lág fylgni) verður hún hreinn
+ *     styrkur a = meðal(L_ú)/meðal(L_f).
+ *  2) Litblær ljóssins: mjög mjúkt (≈20 % af myndinni) hlutfall litar/birtu,
+ *     svo hlýtt sólsetur litar myndina en einstakir hlutir halda sínum lit.
+ *  Útkoma: F · (L'/L) · litblær — sama myndin, ný lýsing. Reiknað í lágri
+ *  upplausn, beitt á fulla. */
+export function transferLighting(source: Raster, result: Raster, options: { radius?: number } = {}): Raster {
+  const W = source.width;
+  const H = source.height;
+  const w = result.width;
+  const h = result.height;
+  const n = w * h;
+  const r = Math.max(2, Math.round(options.radius ?? Math.max(w, h) * 0.008));
+  const rTint = Math.max(4, Math.round(Math.max(w, h) * 0.2));
+  const sLow = downscaleArea(source.data, W, H, w, h, 4);
+  const Ls = luminance(sLow, n, 4);
+  const rLow = Float32Array.from(result.data);
+  const Lr = luminance(rLow, n, 4);
+
+  // 1) Birta: a, b.
+  const II = new Float32Array(n);
+  const IP = new Float32Array(n);
+  const PP = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    II[i] = Ls[i] * Ls[i];
+    IP[i] = Ls[i] * Lr[i];
+    PP[i] = Lr[i] * Lr[i];
+  }
+  const mI = boxBlur(Ls, w, h, r);
+  const mP = boxBlur(Lr, w, h, r);
+  const mII = boxBlur(II, w, h, r);
+  const mIP = boxBlur(IP, w, h, r);
+  const mPP = boxBlur(PP, w, h, r);
+  const a = new Float32Array(n);
+  const b = new Float32Array(n);
+  const EPS = 25; // dreifni (5 gráþrep) — hindrar að suð í sléttum flötum ráði a
+  for (let i = 0; i < n; i++) {
+    const varI = Math.max(0, mII[i] - mI[i] * mI[i]);
+    const varP = Math.max(0, mPP[i] - mP[i] * mP[i]);
+    const cov = mIP[i] - mI[i] * mP[i];
+    const gain = Math.min(4, Math.max(0.05, (mP[i] + 4) / (mI[i] + 4)));
+    const fit = cov / (varI + EPS);
+    const rho = cov / Math.sqrt(varI * varP + 1);
+    const t0 = Math.min(1, Math.max(0, (rho - 0.4) / 0.4));
+    const t = t0 * t0 * (3 - 2 * t0);
+    // Andstæður mega ekki hverfa (a ≥ 35 % af styrknum) né springa (≤ 3×).
+    const av = Math.min(gain * 3, Math.max(gain * 0.35, t * fit + (1 - t) * gain));
+    a[i] = av;
+    b[i] = mP[i] - av * mI[i];
+  }
+  const A = boxBlur(a, w, h, r);
+  const B = boxBlur(b, w, h, r);
+
+  // 2) Litblær ljóssins (mjúkur).
+  const T: Float32Array[] = [];
+  const LsBig = boxBlur(Ls, w, h, rTint);
+  const LrBig = boxBlur(Lr, w, h, rTint);
+  const chan = new Float32Array(n);
+  for (let c = 0; c < 3; c++) {
+    for (let i = 0; i < n; i++) chan[i] = sLow[i * 4 + c];
+    const sBig = boxBlur(chan, w, h, rTint);
+    for (let i = 0; i < n; i++) chan[i] = rLow[i * 4 + c];
+    const rBig = boxBlur(chan, w, h, rTint);
+    const t = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const v = ((rBig[i] + 4) / (LrBig[i] + 4)) / ((sBig[i] + 4) / (LsBig[i] + 4));
+      t[i] = Math.min(1.25, Math.max(0.8, v));
+    }
+    T.push(t);
+  }
+
+  // Fullri upplausn: F · (a·L + b)/L · litblær, öll gildi brúuð línulega.
+  const out = new Uint8ClampedArray(W * H * 4);
+  const src = source.data;
+  const sx = w / W;
+  const sy = h / H;
+  const x0 = new Int32Array(W);
+  const x1 = new Int32Array(W);
+  const fx = new Float32Array(W);
+  for (let x = 0; x < W; x++) {
+    const g = Math.min(w - 1, Math.max(0, (x + 0.5) * sx - 0.5));
+    x0[x] = Math.floor(g);
+    x1[x] = Math.min(w - 1, x0[x] + 1);
+    fx[x] = g - x0[x];
+  }
+  const grids = [A, B, T[0], T[1], T[2]];
+  const rows = grids.map(() => new Float32Array(w));
+  const vals = new Float32Array(grids.length);
+  for (let y = 0; y < H; y++) {
+    const g = Math.min(h - 1, Math.max(0, (y + 0.5) * sy - 0.5));
+    const y0 = Math.floor(g);
+    const y1 = Math.min(h - 1, y0 + 1);
+    const fy = g - y0;
+    const o0 = y0 * w;
+    const o1 = y1 * w;
+    for (let k = 0; k < grids.length; k++) {
+      const grid = grids[k];
+      const row = rows[k];
+      for (let x = 0; x < w; x++) row[x] = grid[o0 + x] + (grid[o1 + x] - grid[o0 + x]) * fy;
+    }
+    let o = y * W * 4;
+    for (let x = 0; x < W; x++, o += 4) {
+      const i0 = x0[x];
+      const i1 = x1[x];
+      const f = fx[x];
+      for (let k = 0; k < grids.length; k++) {
+        const row = rows[k];
+        vals[k] = row[i0] + (row[i1] - row[i0]) * f;
+      }
+      const R = src[o];
+      const G = src[o + 1];
+      const Bl = src[o + 2];
+      const L = 0.299 * R + 0.587 * G + 0.114 * Bl;
+      const ratio = Math.min(6, Math.max(0.03, (vals[0] * L + vals[1] + 2) / (L + 2)));
+      out[o] = R * ratio * vals[2];
+      out[o + 1] = G * ratio * vals[3];
+      out[o + 2] = Bl * ratio * vals[4];
+      out[o + 3] = src[o + 3];
+    }
+  }
+  return { data: out, width: W, height: H };
+}
+
 // ---------------------------------------------------------------- IC-Light
 
 /** Stærðirnar sem IC-Light (zsxkib/ic-light og ic-light-background) tekur. */

@@ -19,6 +19,7 @@ import { DEFAULT_UTVIKKA_SETTINGS, outpaintImage, type UtvikkaAmount, type Utvik
 import { DEFAULT_LITUN_SETTINGS, colorizeImage } from "../litun/model";
 import type { BackgroundChoice } from "./aiPresets";
 import { icLightSize, padToAspect } from "./detail";
+import { placeOnBackground } from "./bgStore";
 
 export type AiRequest =
   | { tool: "vidgerd" }
@@ -26,7 +27,7 @@ export type AiRequest =
   | { tool: "clarity"; creativity: number }
   | { tool: "hradbreyta"; prompt: string; preserveFace: boolean }
   | { tool: "bakgrunnur"; choice: BackgroundChoice; prompt?: string }
-  | { tool: "endurljos"; prompt: string; light: LightSource; keepBackground: boolean }
+  | { tool: "endurljos"; prompt: string; light: LightSource }
   | { tool: "andlitsfegrun"; options: Pick<RetouchSettings, "skinSmooth" | "blemishes" | "teeth" | "underEye"> }
   | { tool: "andlit"; prompt: string }
   | { tool: "fjarlaegja"; mask: Blob }
@@ -200,6 +201,14 @@ export async function runAi(req: AiRequest, source: Blob, onStatus: (text: strin
       onStatus("Klippi manneskjuna út…");
       const cutout = await cutProductBackgroundViaCloud(source);
       if (choice.kind === "remove") return { blob: cutout, alpha: true };
+      if (choice.kind === "image") {
+        if (!choice.image) throw new Error("Bakgrunnsmyndin fannst ekki");
+        onStatus(`Set á ${choice.label}…`);
+        const bmp = await createImageBitmap(source);
+        const [w, h] = [bmp.width, bmp.height];
+        bmp.close();
+        return { blob: await placeOnBackground(cutout, choice.image, w, h), alpha: false };
+      }
       if (choice.kind === "white") return { blob: await placeOnWhite(cutout), alpha: false };
       onStatus("Geri bakgrunninn óskýran…");
       return { blob: await blurBehind(source, cutout), alpha: false };
@@ -215,7 +224,10 @@ export async function runAi(req: AiRequest, source: Blob, onStatus: (text: strin
             ...DEFAULT_ENDURLJOS_SETTINGS,
             prompt: req.prompt,
             lightSource: req.light,
-            preserveBackground: req.keepBackground,
+            // Alltaf bakgrunnslíkanið með myndina sjálfa sem bakgrunn: ritillinn
+            // tekur hvort sem er bara ljósið (transferLighting), og útkoma sem
+            // fylgir myndinni gefur nákvæmari skugga. Nýr bakgrunnur → Bakgrunnur.
+            preserveBackground: true,
             numResults: 1,
             // 2× í highres-skrefinu: ~1500 px á lengri hlið áður en ritillinn
             // setur smáatriði frumritsins aftur inn í fullri stærð.
