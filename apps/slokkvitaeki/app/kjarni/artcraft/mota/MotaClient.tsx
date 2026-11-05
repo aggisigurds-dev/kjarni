@@ -8,6 +8,8 @@ import { useStagedSource } from "../useStagedSource";
 import type { Raster } from "../studio/adjust";
 import "../artcraft.css";
 import { MAX_WORKING, loadRaster } from "./canvasUtil";
+import CropView from "./CropView";
+import type { CropRect } from "./crop";
 import MotaEditor from "./MotaEditor";
 import MotaVideo from "./MotaVideo";
 
@@ -21,6 +23,29 @@ function isPhotoFile(file: { type: string; name: string }): boolean {
 }
 
 type Loaded = { raster: Raster; name: string; mime: string; key: number };
+type Cropping = { file: File; url: string; width: number; height: number };
+
+/** Klippir `rect` úr skránni (í fullri upplausn, mest 4096 px á lengri hlið). */
+async function cropFile(file: File, rect: CropRect): Promise<File> {
+  const bmp = await createImageBitmap(file);
+  try {
+    const k = Math.min(1, 4096 / Math.max(rect.w, rect.h));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(rect.w * k));
+    c.height = Math.max(1, Math.round(rect.h * k));
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("Gat ekki teiknað mynd");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, rect.x, rect.y, rect.w, rect.h, 0, 0, c.width, c.height);
+    const png = file.type === "image/png";
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki klippt myndina"))), png ? "image/png" : "image/jpeg", 0.95),
+    );
+    return new File([blob], file.name || (png ? "mynd.png" : "mynd.jpg"), { type: blob.type });
+  } finally {
+    bmp.close();
+  }
+}
 type VideoSession = { image: Blob | null; video: Blob | null; name: string; key: number };
 
 /** Móta: upphafsskjár til að velja mynd; síðan opnast ritillinn á öllum
@@ -35,6 +60,30 @@ export default function MotaClient() {
   const [drag, setDrag] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [cropping, setCropping] = useState<Cropping | null>(null);
+
+  /** Skurður fyrst (hægt að sleppa), svo ritillinn. */
+  async function pick(file: File) {
+    if (!isPhotoFile(file)) {
+      setError("Veldu JPEG-, PNG- eða WebP-mynd.");
+      return;
+    }
+    setError("");
+    try {
+      const bmp = await createImageBitmap(file);
+      const size = { width: bmp.width, height: bmp.height };
+      bmp.close();
+      setCropping({ file, url: URL.createObjectURL(file), ...size });
+    } catch {
+      void open(file);
+    }
+  }
+
+  function endCrop() {
+    if (cropping) URL.revokeObjectURL(cropping.url);
+    setCropping(null);
+  }
 
   async function open(file: File) {
     if (!isPhotoFile(file)) {
@@ -74,7 +123,7 @@ export default function MotaClient() {
       return;
     }
     const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
-    await open(file);
+    await pick(file);
   });
 
   return (
@@ -105,7 +154,7 @@ export default function MotaClient() {
               e.preventDefault();
               setDrag(false);
               const file = e.dataTransfer.files?.[0];
-              if (file) void open(file);
+              if (file) void pick(file);
             }}
           >
             <p>{loading ? "Opna mynd…" : "Slepptu mynd hér, eða"}</p>
@@ -134,7 +183,7 @@ export default function MotaClient() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 e.target.value = "";
-                if (file) void open(file);
+                if (file) void pick(file);
               }}
             />
             <div style={{ marginTop: 8 }}>
@@ -142,7 +191,7 @@ export default function MotaClient() {
                 accepts="image"
                 onPick={async (blob, item) => {
                   const file = new File([blob], item.name || `from-${item.sourceTool}.png`, { type: blob.type || "image/png" });
-                  await open(file);
+                  await pick(file);
                 }}
               />
             </div>
@@ -151,6 +200,26 @@ export default function MotaClient() {
           {error && <p className="ac-error">{error}</p>}
         </div>
       </div>
+
+      {cropping && (
+        <CropView
+          url={cropping.url}
+          width={cropping.width}
+          height={cropping.height}
+          title="Skera myndina"
+          skipLabel="Sleppa"
+          onClose={endCrop}
+          onApply={async (rect) => {
+            const { file } = cropping;
+            endCrop();
+            try {
+              await open(rect ? await cropFile(file, rect) : file);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Gat ekki klippt myndina.");
+            }
+          }}
+        />
+      )}
 
       {loaded && (
         <MotaEditor
@@ -163,7 +232,7 @@ export default function MotaClient() {
             setLoaded(null);
             setVideo(null);
           }}
-          onReplace={(file) => void open(file)}
+          onReplace={(file) => void pick(file)}
           onVideoMode={(image) => {
             // Sama myndbandslota helst; myndin uppfærist fyrir „Hreyfa mynd“.
             setVideo((v) => (v ? { ...v, image } : { image, video: null, name: loaded.name, key: Date.now() }));

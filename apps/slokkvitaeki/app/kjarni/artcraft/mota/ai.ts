@@ -18,6 +18,8 @@ import { DEFAULT_SKY_SETTINGS, generateSky } from "../himinn/sky";
 import { DEFAULT_UTVIKKA_SETTINGS, outpaintImage, type UtvikkaAmount, type UtvikkaDirection } from "../utvikka/model";
 import { DEFAULT_LITUN_SETTINGS, colorizeImage } from "../litun/model";
 import type { BackgroundChoice } from "./aiPresets";
+import { icLightSize, padToAspect } from "./detail";
+import { placeOnBackground } from "./bgStore";
 
 export type AiRequest =
   | { tool: "vidgerd" }
@@ -25,7 +27,7 @@ export type AiRequest =
   | { tool: "clarity"; creativity: number }
   | { tool: "hradbreyta"; prompt: string; preserveFace: boolean }
   | { tool: "bakgrunnur"; choice: BackgroundChoice; prompt?: string }
-  | { tool: "endurljos"; prompt: string; light: LightSource; keepBackground: boolean }
+  | { tool: "endurljos"; prompt: string; light: LightSource }
   | { tool: "andlitsfegrun"; options: Pick<RetouchSettings, "skinSmooth" | "blemishes" | "teeth" | "underEye"> }
   | { tool: "andlit"; prompt: string }
   | { tool: "fjarlaegja"; mask: Blob }
@@ -82,6 +84,60 @@ async function blurBehind(source: Blob, cutout: Blob, radiusFraction = 0.012): P
   } finally {
     orig.close();
     cut.close();
+  }
+}
+
+function canvasBlob(c: HTMLCanvasElement, type = "image/jpeg", quality = 0.92): Promise<Blob> {
+  return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("Gat ekki vistað mynd"))), type, quality));
+}
+
+/** Endurljós í réttu hlutfalli: myndin er stækkuð (jaðrar endurteknir) í það
+ *  hlutfall sem IC-Light vinnur í, svo líkanið klippi ekkert af, og
+ *  útkoman er svo klippt aftur í upprunalega rammann. */
+async function relightKeepingFrame(
+  source: Blob,
+  run: (padded: Blob, size: { width: number; height: number }) => Promise<Blob>,
+): Promise<Blob> {
+  const bmp = await createImageBitmap(source);
+  try {
+    const sw = bmp.width;
+    const sh = bmp.height;
+    const size = icLightSize(sw, sh);
+    const pad = padToAspect(sw, sh, size.width, size.height);
+    const c = document.createElement("canvas");
+    c.width = pad.width;
+    c.height = pad.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("Gat ekki teiknað á striga");
+    // Jaðrarnir teygðir út í auða svæðið (betra fyrir líkanið en svartar rendur).
+    if (pad.x > 0) {
+      ctx.drawImage(bmp, 0, 0, 1, sh, 0, 0, pad.x, sh);
+      ctx.drawImage(bmp, sw - 1, 0, 1, sh, pad.x + sw, 0, pad.width - pad.x - sw, sh);
+    }
+    if (pad.y > 0) {
+      ctx.drawImage(bmp, 0, 0, sw, 1, 0, 0, sw, pad.y);
+      ctx.drawImage(bmp, 0, sh - 1, sw, 1, 0, pad.y + sh, sw, pad.height - pad.y - sh);
+    }
+    ctx.drawImage(bmp, pad.x, pad.y);
+    const relit = await createImageBitmap(await run(await canvasBlob(c), size));
+    try {
+      const kx = relit.width / pad.width;
+      const ky = relit.height / pad.height;
+      const cw = Math.max(1, Math.round(sw * kx));
+      const ch = Math.max(1, Math.round(sh * ky));
+      const out = document.createElement("canvas");
+      out.width = cw;
+      out.height = ch;
+      const octx = out.getContext("2d");
+      if (!octx) throw new Error("Gat ekki teiknað á striga");
+      octx.imageSmoothingQuality = "high";
+      octx.drawImage(relit, pad.x * kx, pad.y * ky, sw * kx, sh * ky, 0, 0, cw, ch);
+      return await canvasBlob(out, "image/png");
+    } finally {
+      relit.close();
+    }
+  } finally {
+    bmp.close();
   }
 }
 
@@ -145,20 +201,46 @@ export async function runAi(req: AiRequest, source: Blob, onStatus: (text: strin
       onStatus("Klippi manneskjuna út…");
       const cutout = await cutProductBackgroundViaCloud(source);
       if (choice.kind === "remove") return { blob: cutout, alpha: true };
+      if (choice.kind === "image") {
+        if (!choice.image) throw new Error("Bakgrunnsmyndin fannst ekki");
+        onStatus(`Set á ${choice.label}…`);
+        const bmp = await createImageBitmap(source);
+        const [w, h] = [bmp.width, bmp.height];
+        bmp.close();
+        return { blob: await placeOnBackground(cutout, choice.image, w, h), alpha: false };
+      }
       if (choice.kind === "white") return { blob: await placeOnWhite(cutout), alpha: false };
       onStatus("Geri bakgrunninn óskýran…");
       return { blob: await blurBehind(source, cutout), alpha: false };
     }
 
     case "endurljos": {
-      const image = await url();
-      onStatus("Lýsi myndina upp á nýtt…");
-      const blobs = await relightImage(
-        { ...DEFAULT_ENDURLJOS_SETTINGS, prompt: req.prompt, lightSource: req.light, preserveBackground: req.keepBackground, numResults: 1 },
-        image,
-        req.prompt,
-      );
-      return { blob: first(blobs, "Endurljós"), alpha: false };
+      const blob = await relightKeepingFrame(source, async (padded, size) => {
+        onStatus("Sendi myndina…");
+        const image = await uploadForReplicate(padded, "reference-images");
+        onStatus("Lýsi myndina upp á nýtt…");
+        const blobs = await relightImage(
+          {
+            ...DEFAULT_ENDURLJOS_SETTINGS,
+            prompt: req.prompt,
+            lightSource: req.light,
+            // Alltaf bakgrunnslíkanið með myndina sjálfa sem bakgrunn: ritillinn
+            // tekur hvort sem er bara ljósið (transferLighting), og útkoma sem
+            // fylgir myndinni gefur nákvæmari skugga. Nýr bakgrunnur → Bakgrunnur.
+            preserveBackground: true,
+            numResults: 1,
+            // 2× í highres-skrefinu: ~1500 px á lengri hlið áður en ritillinn
+            // setur smáatriði frumritsins aftur inn í fullri stærð.
+            highresScale: 2,
+            outputFormat: "png",
+          },
+          image,
+          req.prompt,
+          size,
+        );
+        return first(blobs, "Endurljós");
+      });
+      return { blob, alpha: false };
     }
 
     case "andlitsfegrun": {

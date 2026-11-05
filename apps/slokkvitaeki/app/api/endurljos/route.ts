@@ -23,6 +23,9 @@ const LIGHT_SOURCES = ["Left Light", "Right Light", "Top Light", "Bottom Light",
 type LightSource = (typeof LIGHT_SOURCES)[number];
 
 const OUTPUT_FORMATS = ["webp", "png", "jpg"] as const;
+
+// Stærðirnar sem ic-light og ic-light-background taka (schema-enum).
+const SIZES = [256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024];
 type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
 function bad(status: number, error: string) {
@@ -68,6 +71,9 @@ export async function POST(req: NextRequest) {
     outputFormat?: string;
     outputQuality?: number;
     autoUpscale?: boolean;
+    /** Stærð myndar sem IC-Light vinnur í (sjálfgefið 512×640 = klippt í 4:5). */
+    width?: number;
+    height?: number;
   };
   try {
     body = await req.json();
@@ -111,13 +117,19 @@ export async function POST(req: NextRequest) {
     number_of_images: clampInt(body.numResults, 1, 1, 4),
     cfg: clampFloat(body.cfg, 2, 1, 10),
     steps: clampInt(body.steps, 25, 10, 50),
-    highres_scale: clampFloat(body.highresScale, 1.5, 1.0, 1.5),
+    highres_scale: clampFloat(body.highresScale, 1.5, 1.0, 2.0),
     highres_denoise: clampFloat(body.highresDenoise, 0.3, 0, 1),
     lowres_denoise: clampFloat(body.lowresDenoise, 0.7, 0, 1),
     output_format: outputFormat,
     output_quality: clampInt(body.outputQuality, 95, 1, 100),
   };
   if (typeof body.seed === "number" && body.seed >= 0) commonInput.seed = Math.trunc(body.seed);
+  // Án stærðar vinnur líkanið í 512×640 og klippir myndina í 4:5 — Móta sendir
+  // stærð með sama hlutfalli og myndin.
+  if (typeof body.width === "number" && typeof body.height === "number" && SIZES.includes(body.width) && SIZES.includes(body.height)) {
+    commonInput.width = body.width;
+    commonInput.height = body.height;
+  }
   if (body.disableSafetyChecker === true) commonInput.disable_safety_checker = true;
 
   const input: Record<string, unknown> = useBackgroundModel

@@ -50,6 +50,10 @@ import {
   type AiToolId,
   type BackgroundChoice,
 } from "./aiPresets";
+import { motaFileName, restoreDetail, sameAspect, transferLighting } from "./detail";
+import { addBackground, listBackgrounds, removeBackground, type SavedBackground } from "./bgStore";
+import CropView from "./CropView";
+import { cropPixels, type CropRect } from "./crop";
 import { applyLooks, looksIsNeutral } from "./looks";
 import { applyRetouch, restoreRegion } from "./retouch";
 import {
@@ -205,6 +209,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
   const [picking, setPicking] = useState(false);
   const [refVersion, setRefVersion] = useState(0);
   const [sendBlob, setSendBlob] = useState<Blob | null>(null);
+  const [sendName, setSendName] = useState("");
   // Snjallt (gervigreind)
   const [aiTool, setAiTool] = useState<AiToolId>("vidgerd");
   const [aiText, setAiText] = useState({ hradbreyta: "", bakgrunnur: "", andlit: PORTRAIT_PRESETS[0].prompt });
@@ -213,9 +218,25 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
   const [creativity, setCreativity] = useState(3);
   const [lightPreset, setLightPreset] = useState(0);
   const [lightDir, setLightDir] = useState<(typeof LIGHT_DIRECTIONS)[number]["id"]>("Left Light");
-  const [keepBackground, setKeepBackground] = useState(true);
   const [retouchOpts, setRetouchOpts] = useState({ skinSmooth: true, blemishes: true, teeth: false, underEye: false });
   const [bgChoice, setBgChoice] = useState<string | null>(null);
+  // Eigin bakgrunnar (vistaðir í vafranum á þessu tæki).
+  const [savedBgs, setSavedBgs] = useState<SavedBackground[] | null>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (aiTool !== "bakgrunnur" || savedBgs !== null) return;
+    let gone = false;
+    listBackgrounds()
+      .then((list) => {
+        if (!gone) setSavedBgs(list);
+      })
+      .catch(() => {
+        if (!gone) setSavedBgs([]);
+      });
+    return () => {
+      gone = true;
+    };
+  }, [aiTool, savedBgs]);
   const [hasAlpha, setHasAlpha] = useState(mime === "image/png");
   const [busyCancel, setBusyCancel] = useState(false);
   const aiRunRef = useRef(0);
@@ -1094,6 +1115,37 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
     afterHistory(history.redo(workingRef.current));
   }
 
+  // ------------------------------------------------------------------ skurður
+
+  const [cropView, setCropView] = useState<{ url: string; width: number; height: number } | null>(null);
+
+  async function openCrop() {
+    setMenuOpen(false);
+    const c = main0.current;
+    if (!c || busy || session) return;
+    try {
+      const blob = await canvasToBlob(c, "image/jpeg", 0.9);
+      setCropView({ url: URL.createObjectURL(blob), width: workingRef.current.width, height: workingRef.current.height });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Gat ekki opnað skurð");
+    }
+  }
+
+  function closeCrop() {
+    if (cropView) URL.revokeObjectURL(cropView.url);
+    setCropView(null);
+  }
+
+  function applyCrop(rect: CropRect | null) {
+    closeCrop();
+    if (!rect) return;
+    history.pushFull(workingRef.current);
+    setWorking(cropPixels(workingRef.current, rect));
+    fitNow();
+    clearMask();
+    showToast(`Skorið í ${rect.w}×${rect.h} · afturkallanlegt`, 3000);
+  }
+
   function startOver() {
     const o = originalRef.current;
     if (!o) return;
@@ -1106,7 +1158,18 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
   // ------------------------------------------------------------------ vista
 
   const outType = hasAlpha ? "image/png" : "image/jpeg";
-  const outName = `${name.replace(/\.[^.]+$/, "") || "mynd"}-mota.${outType === "image/png" ? "png" : "jpg"}`;
+  const outExt = outType === "image/png" ? "png" : "jpg";
+  // Nýtt nafn í hvert sinn (tímastimpill) — áður var alltaf „<nafn>-mota.jpg“
+  // og hver vistun skrifaði yfir þá síðustu.
+  const lastNameRef = useRef<{ first: string; seq: number } | null>(null);
+  function nextOutName(suffix = "mota", ext = outExt): string {
+    const now = new Date();
+    const first = motaFileName(name, ext, now, suffix);
+    // Tvær vistanir á sömu sekúndu: -2, -3 …
+    const seq = lastNameRef.current?.first === first ? lastNameRef.current.seq + 1 : 1;
+    lastNameRef.current = { first, seq };
+    return motaFileName(name, ext, now, suffix, seq);
+  }
 
   async function exportBlob(): Promise<Blob> {
     const c = main0.current;
@@ -1120,11 +1183,12 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = outName;
+      const fileName = nextOutName();
+      a.download = fileName;
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
       dirtyRef.current = false;
-      showToast(`Vistað · ${working.width}×${working.height}`);
+      showToast(`Vistað sem ${fileName} · ${working.width}×${working.height}`, 3500);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Vistun mistókst");
     }
@@ -1136,12 +1200,13 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
     setMenuOpen(false);
     try {
       const blob = await exportBlob();
-      const file = new File([blob], outName, { type: outType });
+      const fileName = nextOutName();
+      const file = new File([blob], fileName, { type: outType });
       if (!navigator.canShare?.({ files: [file] })) {
         showToast("Þessi vafri getur ekki deilt myndum — notaðu Vista");
         return;
       }
-      await navigator.share({ files: [file], title: outName });
+      await navigator.share({ files: [file], title: fileName });
       dirtyRef.current = false;
     } catch (err) {
       if (err instanceof Error && err.name !== "AbortError") showToast(err.message);
@@ -1150,6 +1215,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
 
   async function prepareSend() {
     try {
+      setSendName(nextOutName());
       setSendBlob(await exportBlob());
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Gat ekki útbúið myndina");
@@ -1194,8 +1260,30 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
         if (aiRunRef.current !== run) return;
       }
       setBusy("Opna útkomuna…");
-      const raster = await loadRaster(result.blob, MAX_WORKING);
+      let raster = await loadRaster(result.blob, MAX_WORKING);
       if (aiRunRef.current !== run) return;
+      // Líkön sem skila minni mynd (IC-Light, Pruna …): aftur í fulla stærð
+      // með smáatriðum frumritsins þar sem myndin er enn sú sama.
+      const current = workingRef.current;
+      const strength = detailStrength(req);
+      if (req.tool === "endurljos") {
+        // Aðeins LJÓSIÐ úr útkomunni — IC-Light teiknar manneskjuna upp á nýtt
+        // (annað andlit, annað hár), svo lögun og litir koma úr frumritinu.
+        setBusy("Set nýja ljósið á myndina…");
+        await new Promise((r) => setTimeout(r, 30));
+        raster = transferLighting(current, raster);
+        if (aiRunRef.current !== run) return;
+      } else if (
+        strength > 0 &&
+        !result.alpha &&
+        raster.width < current.width * 0.98 &&
+        sameAspect(current.width, current.height, raster.width, raster.height)
+      ) {
+        setBusy("Set í fulla upplausn…");
+        await new Promise((r) => setTimeout(r, 30));
+        raster = restoreDetail(current, raster, { strength });
+        if (aiRunRef.current !== run) return;
+      }
       history.pushFull(workingRef.current);
       setWorking(raster);
       fitNow();
@@ -1209,6 +1297,22 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
         setBusy(null);
         setBusyCancel(false);
       }
+    }
+  }
+
+  /** Hversu mikið af smáatriðum frumritsins fer aftur inn eftir tól (0 = ekkert:
+   *  ný mynd eða önnur lögun). Andlitsfegrun fær minna svo sléttun haldist. */
+  function detailStrength(req: AiRequest): number {
+    switch (req.tool) {
+      case "andlit":
+      case "utvikka":
+      case "topaz":
+      case "clarity":
+        return 0;
+      case "andlitsfegrun":
+        return 0.5;
+      default:
+        return 1;
     }
   }
 
@@ -1240,7 +1344,7 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = outName.replace(/\.(jpg|png)$/, "-topaz.jpg");
+      a.download = nextOutName("mota-topaz", "jpg");
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
       const bmp = await createImageBitmap(blob);
@@ -1348,13 +1452,16 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
             )}
             <div className="mx-menu-send">
               {sendBlob ? (
-                <SendTo blob={sendBlob} mediaType="image" sourceTool="mota" sourceToolName="Móta" name={outName} />
+                <SendTo blob={sendBlob} mediaType="image" sourceTool="mota" sourceToolName="Móta" name={sendName} />
               ) : (
                 <button type="button" role="menuitem" onClick={() => void prepareSend()}>
                   Senda í annað tól…
                 </button>
               )}
             </div>
+            <button type="button" role="menuitem" onClick={() => void openCrop()} disabled={!!busy || !!session}>
+              Skera mynd…
+            </button>
             <button type="button" role="menuitem" onClick={() => fileRef.current?.click()}>
               Opna aðra mynd
             </button>
@@ -1662,6 +1769,68 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
                     </button>
                   ))}
                 </div>
+                <div className="mx-swatches" aria-label="Mínir bakgrunnar">
+                  <button type="button" className="mx-swatch" disabled={!!busy} onClick={() => bgFileRef.current?.click()}>
+                    <span className="mx-swatch-add" aria-hidden="true">+</span>
+                    <em>Eigin mynd</em>
+                  </button>
+                  {(savedBgs ?? []).map((bg) => (
+                    <div key={bg.id} className={`mx-swatch mx-swatch-saved${bgChoice === bg.id ? " on" : ""}`}>
+                      <button
+                        type="button"
+                        className="mx-swatch-hit"
+                        disabled={!!busy}
+                        title={bg.name}
+                        onClick={() => {
+                          setBgChoice(bg.id);
+                          void runAiNow({ tool: "bakgrunnur", choice: { id: bg.id, label: bg.name, kind: "image", image: bg.blob, swatch: "" } }, bg.name);
+                        }}
+                      >
+                        <span style={{ backgroundImage: `url(${bg.thumb})` }} />
+                        <em>{bg.name}</em>
+                      </button>
+                      <button
+                        type="button"
+                        className="mx-swatch-del"
+                        aria-label={`Eyða ${bg.name}`}
+                        onClick={async () => {
+                          if (!window.confirm(`Eyða bakgrunninum „${bg.name}“ úr þessu tæki?`)) return;
+                          try {
+                            await removeBackground(bg.id);
+                            setSavedBgs((list) => (list ?? []).filter((b) => b.id !== bg.id));
+                          } catch (err) {
+                            showToast(err instanceof Error ? err.message : "Gat ekki eytt");
+                          }
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <input
+                    ref={bgFileRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      e.target.value = "";
+                      if (files.length === 0) return;
+                      try {
+                        const added: SavedBackground[] = [];
+                        for (const f of files) added.push(await addBackground(f));
+                        setSavedBgs((list) => [...added.reverse(), ...(list ?? [])]);
+                        showToast(
+                          files.length === 1 ? "Bakgrunnur vistaður — ýttu á hann til að nota" : `${files.length} bakgrunnar vistaðir`,
+                          3000,
+                        );
+                      } catch (err) {
+                        showToast(err instanceof Error ? err.message : "Gat ekki vistað bakgrunninn");
+                      }
+                    }}
+                  />
+                </div>
                 <div className="mx-prompt-row">
                   <input
                     className="mx-input"
@@ -1700,16 +1869,13 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
                       {d.label}
                     </button>
                   ))}
-                  <button type="button" className={`mx-chip${keepBackground ? " on" : ""}`} aria-pressed={keepBackground} onClick={() => setKeepBackground((v) => !v)}>
-                    Halda bakgrunni
-                  </button>
                 </div>
                 <button
                   type="button"
                   className="mx-run"
                   disabled={!!busy}
                   onClick={() =>
-                    void runAiNow({ tool: "endurljos", prompt: LIGHT_PRESETS[lightPreset].prompt, light: lightDir, keepBackground }, "Endurljós")
+                    void runAiNow({ tool: "endurljos", prompt: LIGHT_PRESETS[lightPreset].prompt, light: lightDir }, "Endurljós")
                   }
                 >
                   Lýsa upp á nýtt
@@ -1944,7 +2110,21 @@ export default function MotaEditor({ initial, name, mime, onClose, onReplace, ac
     </div>
   );
 
-  return typeof document === "undefined" ? null : createPortal(editor, document.body);
+  return typeof document === "undefined" ? null : (
+    <>
+      {createPortal(editor, document.body)}
+      {cropView && (
+        <CropView
+          url={cropView.url}
+          width={cropView.width}
+          height={cropView.height}
+          title="Skera mynd"
+          onClose={closeCrop}
+          onApply={applyCrop}
+        />
+      )}
+    </>
+  );
 }
 
 function SliderRow({

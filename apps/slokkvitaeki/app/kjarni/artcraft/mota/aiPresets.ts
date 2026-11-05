@@ -27,7 +27,7 @@ export const AI_TOOLS: Array<{ id: AiToolId; label: string; icon: string; hint: 
   { id: "bakgrunnur", label: "Bakgrunnur", icon: "background", hint: "Fjarlægja, gera hvítan eða óskýran, eða velja nýjan bakgrunn", wait: "~15 sek" },
   { id: "himinn", label: "Himinn", icon: "sky", hint: "Málaðu yfir himininn og veldu nýjan", wait: "~20 sek" },
   { id: "hradbreyta", label: "Hraðbreyta", icon: "wand", hint: "Segðu hvað á að breyta og gervigreindin gerir það", wait: "~10 sek" },
-  { id: "endurljos", label: "Endurljós", icon: "relight", hint: "Ný lýsing á myndina — gluggaljós, sólsetur, stúdíó …", wait: "~1 mín" },
+  { id: "endurljos", label: "Endurljós", icon: "relight", hint: "Ný lýsing á sömu myndina — manneskjan og bakgrunnurinn haldast, bara ljósið breytist", wait: "~1 mín" },
   { id: "andlitsfegrun", label: "Andlitsfegrun", icon: "face", hint: "Jafnar húð, tekur bletti, hvíttar tennur — breytir engu öðru", wait: "~20 sek" },
   { id: "topaz", label: "Topaz", icon: "upscale", hint: "Skerpir og hreinsar alla myndina (Topaz) — eða vistar hana beint í tvöfaldri upplausn", wait: "~30 sek" },
   { id: "clarity", label: "Clarity", icon: "sparkle", hint: "Bætir við smáatriðum og skýrleika (Clarity) — skapandi upplyfting", wait: "1–2 mín" },
@@ -55,8 +55,10 @@ export const OUTPAINT_AMOUNTS: Array<{ id: 25 | 50 | 100; label: string }> = [
 export type BackgroundChoice = {
   id: string;
   label: string;
-  kind: "remove" | "white" | "blur" | "scene";
+  kind: "remove" | "white" | "blur" | "scene" | "image";
   prompt?: string;
+  /** Eigin bakgrunnsmynd (kind "image") — vistuð í vafranum. */
+  image?: Blob;
   /** CSS-bakgrunnur fyrir smámyndina í listanum. */
   swatch: string;
 };

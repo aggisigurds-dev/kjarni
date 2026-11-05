@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
     bg_prompt: prompt,
     negative_prompt: body.negativePrompt || "",
     num_results: clampNumber(body.numResults, 1, 1, 4),
+    // Sjálfgefið skalar Bria útkomuna í 1 MP (~300 KB) — halda upprunastærð.
+    original_quality: true,
   };
   if (typeof body.seed === "number" && body.seed >= 0) input.seed = Math.trunc(body.seed);
 
