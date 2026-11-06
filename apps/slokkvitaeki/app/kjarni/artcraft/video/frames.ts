@@ -155,10 +155,12 @@ export type StitchPart = { blob: Blob; inT: number; outT: number };
 /** Skeytir saman klipptum bútum í eitt myndband. Hver bútur er spilaður frá
  *  inT að outT og teiknaður á striga sem MediaRecorder tekur upp — í
  *  rauntíma, svo það tekur jafnlangan tíma og myndbandið. Stærð fyrsta
- *  bútsins ræður; aðrir eru fylltir inn (cover). */
+ *  bútsins ræður; aðrir eru fylltir inn (cover). Á samskeytum rennur næsti
+ *  bútur inn á `fadeSeconds` yfir hala þess fyrri (lengdin breytist ekki). */
 export async function stitchSegments(
   parts: StitchPart[],
   onProgress?: (fraction: number) => void,
+  fadeSeconds = 0.3,
 ): Promise<{ blob: Blob; mimeType: string }> {
   if (parts.length === 0) throw new Error("Engar klippur");
   const urls = parts.map((p) => URL.createObjectURL(p.blob));
@@ -180,13 +182,6 @@ export async function stitchSegments(
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, width, height);
     const mimeType = pickRecorderMime();
-    const stream = canvas.captureStream(30);
-    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-    const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
     const total = parts.reduce((s, p) => s + Math.max(0, p.outT - p.inT), 0) || 1;
     let doneSec = 0;
 
@@ -199,31 +194,61 @@ export async function stitchSegments(
       ctx.drawImage(v, (width - dw) / 2, (height - dh) / 2, dw, dh);
     };
 
-    // Fyrsti ramminn á strigann áður en upptaka byrjar.
-    await seekVideo(videos[0], parts[0].inT);
+    // Allir bútar tilbúnir á upphafsramma ÁÐUR en upptaka byrjar — annars
+    // leitar hver bútur á samskeytunum sjálfum og myndin frýs á meðan.
+    for (let i = 0; i < parts.length; i++) await seekVideo(videos[i], parts[i].inT);
     draw(videos[0]);
+    // Upptakan tengd striganum fyrst NÚNA, svo fyrsti ramminn sé myndin en ekki svartur strigi.
+    const stream = canvas.captureStream(30);
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
     recorder.start(500);
 
+    // Víxlun á samskeytum: næsti bútur rennur inn yfir framhald þess fyrri
+    // (fyrri búturinn heldur áfram að spila sinn hala undir).
+    const fade = Math.max(0, fadeSeconds);
+    await videos[0].play();
     for (let i = 0; i < parts.length; i++) {
       const v = videos[i];
       const { inT, outT } = parts[i];
-      await seekVideo(v, inT);
-      draw(v);
-      await v.play();
+      const next = i + 1 < parts.length ? videos[i + 1] : null;
       await new Promise<void>((resolve) => {
+        let fadeStart = -1;
         const tick = () => {
-          draw(v);
-          onProgress?.(Math.min(1, (doneSec + Math.max(0, v.currentTime - inT)) / total));
-          if (v.ended || v.currentTime >= outT - 0.01) {
-            v.pause();
-            resolve();
-            return;
+          if (fadeStart < 0) {
+            draw(v);
+            onProgress?.(Math.min(1, (doneSec + Math.max(0, v.currentTime - inT)) / total));
+            if (v.ended || v.currentTime >= outT - 0.01) {
+              if (!next || fade === 0) {
+                v.pause();
+                resolve();
+                return;
+              }
+              fadeStart = performance.now();
+              void next.play().catch(() => {});
+            }
+          } else {
+            const a = Math.min(1, (performance.now() - fadeStart) / (fade * 1000));
+            draw(v); // hali fyrri bútsins (eða síðasti rammi hans)
+            ctx.globalAlpha = a;
+            draw(next!);
+            ctx.globalAlpha = 1;
+            if (a >= 1) {
+              v.pause();
+              resolve();
+              return;
+            }
           }
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
       });
       doneSec += Math.max(0, outT - inT);
+      if (next && fade === 0) await next.play().catch(() => {});
     }
     recorder.stop();
     await stopped;

@@ -92,7 +92,14 @@ function waitLoaded(v: HTMLVideoElement): Promise<void> {
 }
 
 export default function MotaVideo({ active, initialImage, initialVideo, name, onClose, onImageMode }: MotaVideoProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // Tveir spilarar til skiptis: næsti bútur er hlaðinn í þann falda áður en
+  // samskeytin koma og rennur svo inn — engin svört skipti á milli búta.
+  const vidA = useRef<HTMLVideoElement>(null);
+  const vidB = useRef<HTMLVideoElement>(null);
+  const activeSlotRef = useRef(0);
+  const slotIdsRef = useRef<[string | null, string | null]>([null, null]);
+  const videoAt = (slot: number) => (slot === 0 ? vidA.current : vidB.current);
+  const activeVideo = () => videoAt(activeSlotRef.current);
   const trackRef = useRef<HTMLDivElement>(null);
   const [clips, setClipsState] = useState<VClip[]>([]);
   const clipsRef = useRef<VClip[]>([]);
@@ -102,7 +109,6 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
   const tRef = useRef(0);
   const [playing, setPlaying] = useState(false);
   const playingRef = useRef(false);
-  const shownIdRef = useRef<string | null>(null);
   const seekingRef = useRef(false);
   const wantRef = useRef(0);
   const [panel, setPanel] = useState<Panel>(initialVideo ? null : "create");
@@ -137,6 +143,8 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
   const [keepFace, setKeepFace] = useState(true);
   const faceRefRef = useRef<{ blob: Blob; url?: string } | null>(null);
   const [faceThumb, setFaceThumb] = useState("");
+  const [faceZoom, setFaceZoom] = useState(false);
+  const [facePulse, setFacePulse] = useState(false);
   function setFaceRef(blob: Blob | null) {
     faceRefRef.current = blob ? { blob } : null;
     setFaceThumb((old) => {
@@ -167,7 +175,10 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
     try {
       const { index, local } = locate(cl, tRef.current);
       setFaceRef(await extractFrameAt(cl[index].blob, local, "image/jpeg", 0.95));
-      showToast("Andlitið úr þessum ramma verður notað í framhöldum");
+      setKeepFace(true);
+      setFacePulse(true);
+      window.setTimeout(() => setFacePulse(false), 1200);
+      showToast("Nýja andlitið er valið — það fer á fyrsta ramma hvers framhalds");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Gat ekki tekið rammann");
     }
@@ -296,16 +307,41 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
 
   // ------------------------------------------------------------------ spilun
 
-  async function loadClipAt(index: number, local: number) {
-    const v = videoRef.current;
+  const SEAM_FADE_MS = 300;
+
+  /** Hleður búti `index` í spilara `slot` og leitar á `local`. */
+  async function loadInto(slot: number, index: number, local: number) {
+    const v = videoAt(slot);
     const c = clipsRef.current[index];
     if (!v || !c) return;
-    if (shownIdRef.current !== c.id) {
-      shownIdRef.current = c.id;
+    if (slotIdsRef.current[slot] !== c.id) {
+      slotIdsRef.current[slot] = c.id;
       v.src = c.url;
       await waitLoaded(v);
     }
     await seekVideo(v, local);
+  }
+
+  /** Sýnilegi spilarinn efst, hinn falinn undir. */
+  function showSlot(slot: number) {
+    const top = videoAt(slot);
+    const under = videoAt(1 - slot);
+    if (top) {
+      top.style.transition = "none";
+      top.style.opacity = "1";
+      top.style.zIndex = "1";
+    }
+    if (under) {
+      under.style.transition = "none";
+      under.style.opacity = "0";
+      under.style.zIndex = "0";
+      under.pause();
+    }
+  }
+
+  async function loadClipAt(index: number, local: number) {
+    showSlot(activeSlotRef.current);
+    await loadInto(activeSlotRef.current, index, local);
   }
 
   /** Sýnir rammann á tíma `time` (ein leit í einu; nýjasta gildið vinnur). */
@@ -334,13 +370,14 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
   function pause() {
     playingRef.current = false;
     setPlaying(false);
-    videoRef.current?.pause();
+    vidA.current?.pause();
+    vidB.current?.pause();
+    showSlot(activeSlotRef.current);
   }
 
   async function play() {
     const cl = clipsRef.current;
-    const v = videoRef.current;
-    if (!v || cl.length === 0) return;
+    if (!activeVideo() || cl.length === 0) return;
     if (tRef.current >= totalLength(cl) - 0.05) tRef.current = 0;
     playingRef.current = true;
     setPlaying(true);
@@ -348,25 +385,55 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
     let index = start.index;
     await loadClipAt(index, start.local);
     if (!playingRef.current) return;
-    await v.play().catch(() => {});
+    await activeVideo()?.play().catch(() => {});
     let lastUi = 0;
+    let preloaded: { index: number; ready: Promise<void> } | null = null;
     const tick = async () => {
       if (!playingRef.current) return;
       const list = clipsRef.current;
       const c = list[index];
-      if (!c) return pause();
+      const v = activeVideo();
+      if (!c || !v) return pause();
       const now = v.currentTime;
       tRef.current = globalTime(list, index, now);
       if (performance.now() - lastUi > 66) {
         lastUi = performance.now();
         setT(tRef.current);
       }
+      const hasNext = index + 1 < list.length;
+      // Næsti bútur hlaðinn í falda spilarann ~1,5 s fyrir samskeytin.
+      if (hasNext && (!preloaded || preloaded.index !== index + 1) && c.outT - now < 1.5) {
+        const slot = 1 - activeSlotRef.current;
+        preloaded = { index: index + 1, ready: loadInto(slot, index + 1, list[index + 1].inT).catch(() => undefined) };
+      }
       if (v.ended || now >= c.outT - 0.02) {
-        if (index + 1 < list.length) {
-          index += 1;
-          await loadClipAt(index, list[index].inT);
+        if (hasNext) {
+          if (!preloaded || preloaded.index !== index + 1) {
+            preloaded = { index: index + 1, ready: loadInto(1 - activeSlotRef.current, index + 1, list[index + 1].inT) };
+          }
+          await preloaded.ready;
           if (!playingRef.current) return;
-          await v.play().catch(() => {});
+          // Víxlun: nýi spilarinn rennur inn yfir hala þess gamla.
+          const oldSlot = activeSlotRef.current;
+          const newSlot = 1 - oldSlot;
+          const inc = videoAt(newSlot);
+          const out = videoAt(oldSlot);
+          if (inc) {
+            inc.style.zIndex = "2";
+            inc.style.transition = "none";
+            inc.style.opacity = "0";
+            void inc.offsetWidth; // virkja upphafsgildið áður en transition byrjar
+            inc.style.transition = `opacity ${SEAM_FADE_MS}ms linear`;
+            inc.style.opacity = "1";
+            await inc.play().catch(() => {});
+          }
+          activeSlotRef.current = newSlot;
+          index += 1;
+          window.setTimeout(() => {
+            if (activeSlotRef.current !== newSlot) return;
+            out?.pause();
+            showSlot(newSlot);
+          }, SEAM_FADE_MS + 30);
         } else {
           tRef.current = totalLength(list);
           setT(tRef.current);
@@ -539,7 +606,7 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
     const { index } = locate(cl, tRef.current);
     const next = cl.filter((_, i) => i !== index);
     commit(next);
-    shownIdRef.current = null;
+    slotIdsRef.current = [null, null];
     void showAt(Math.min(tRef.current, totalLength(next)));
   }
 
@@ -548,7 +615,7 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
     if (!prev) return;
     futureRef.current.push(clipsRef.current);
     setClips(prev);
-    shownIdRef.current = null;
+    slotIdsRef.current = [null, null];
     void showAt(Math.min(tRef.current, totalLength(prev)));
   }
 
@@ -557,7 +624,7 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
     if (!next) return;
     pastRef.current.push(clipsRef.current);
     setClips(next);
-    shownIdRef.current = null;
+    slotIdsRef.current = [null, null];
     void showAt(Math.min(tRef.current, totalLength(next)));
   }
 
@@ -680,20 +747,29 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
       </header>
 
       <div className="mx-stage mv-stage" onPointerDown={() => setMenuOpen(false)}>
-        {clips.length > 0 ? (
-          <video
-            ref={videoRef}
-            className="mv-video"
-            muted
-            playsInline
-            preload="auto"
-            onClick={() => (playing ? pause() : void play())}
-          />
-        ) : imageUrl ? (
+        {/* Báðir spilararnir eru ALLTAF á sama stað í trénu — annars býr React
+            til nýja (tóma) spilara þegar fyrsti búturinn bætist við. */}
+        <video
+          ref={vidA}
+          className="mv-video"
+          hidden={clips.length === 0}
+          muted
+          playsInline
+          preload="auto"
+          onClick={() => (playing ? pause() : void play())}
+        />
+        <video
+          ref={vidB}
+          className="mv-video mv-video-b"
+          hidden={clips.length === 0}
+          muted
+          playsInline
+          preload="auto"
+          onClick={() => (playing ? pause() : void play())}
+        />
+        {clips.length === 0 && imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="mv-video" src={framedUrl || imageUrl} alt="Myndin sem á að hreyfa" />
-        ) : (
-          <video ref={videoRef} className="mv-video" muted playsInline />
         )}
         {clips.length > 0 && !playing && !busy && (
           <button type="button" className="mv-play" onClick={() => void play()} aria-label="Spila">
@@ -701,6 +777,13 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
           </button>
         )}
         {toast && <div className="mx-toast">{toast}</div>}
+        {faceZoom && faceThumb && (
+          <button type="button" className="mv-face-zoom" onClick={() => setFaceZoom(false)} aria-label="Loka">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={faceThumb} alt="Andlitið sem er haldið" />
+            <span>Andlitið sem er haldið · ýttu til að loka</span>
+          </button>
+        )}
         {clips.length > 0 && (
           <div className="mx-float left" onPointerDown={(e) => e.stopPropagation()}>
             <button type="button" onClick={undo} disabled={!pastRef.current.length || !!busy} aria-label="Afturkalla">
@@ -765,23 +848,47 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
         {panel === "create" && (
           <div className="mx-controls">
             {clips.length > 0 && (
-              <div className="mx-chips">
+              <div className={`mv-face${keepFace ? " on" : ""}`}>
                 <button
                   type="button"
-                  className={`mx-chip${keepFace ? " on" : ""}`}
-                  aria-pressed={keepFace}
-                  title="Andlitið úr fyrsta bútnum er sett á upphafsramma framhaldsins"
-                  onClick={() => {
-                    setKeepFace((v) => !v);
-                    if (!faceRefRef.current) void getFaceRef().catch(() => undefined);
-                  }}
+                  className={`mv-face-pic${facePulse ? " pulse" : ""}`}
+                  onClick={() => faceThumb && setFaceZoom(true)}
+                  aria-label="Sjá andlitið sem er haldið í fullri stærð"
+                  disabled={!faceThumb}
                 >
-                  {faceThumb && <img className="mv-face-thumb" src={faceThumb} alt="" />}
-                  Halda andliti
+                  {faceThumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={faceThumb} alt="Andlitið sem er haldið" />
+                  ) : (
+                    <span className="mv-face-empty">Sæki…</span>
+                  )}
+                  {keepFace && faceThumb && <span className="mv-face-badge" aria-hidden="true">✓</span>}
                 </button>
-                <button type="button" className="mx-chip" onClick={() => void pickFaceFromFrame()}>
-                  Nota þennan ramma sem andlit
-                </button>
+                <div className="mv-face-text">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={keepFace}
+                    className={`mv-switch${keepFace ? " on" : ""}`}
+                    onClick={() => {
+                      setKeepFace((v) => !v);
+                      if (!faceRefRef.current) void getFaceRef().catch(() => undefined);
+                    }}
+                  >
+                    <span className="mv-switch-track" aria-hidden="true">
+                      <span className="mv-switch-knob" />
+                    </span>
+                    <strong>{keepFace ? "Andlitinu er haldið" : "Andlitslás af"}</strong>
+                  </button>
+                  <span className="mv-face-hint">
+                    {keepFace
+                      ? "Þetta andlit fer á fyrsta ramma hvers framhalds."
+                      : "Framhaldið byrjar á rammanum óbreyttum."}
+                  </span>
+                  <button type="button" className="mx-chip" onClick={() => void pickFaceFromFrame()}>
+                    Nota andlitið á skjánum núna
+                  </button>
+                </div>
               </div>
             )}
             {clips.length > 0 && (
@@ -803,7 +910,7 @@ export default function MotaVideo({ active, initialImage, initialVideo, name, on
                   1 s fyrir enda
                 </button>
                 <span className="mx-hint" style={{ alignSelf: "center" }}>
-                  {atEnd > 0.05 ? `síðustu ${formatSeconds(atEnd)} s bútsins detta út` : "frá enda bútsins"}
+                  {atEnd > 0.05 ? `framhaldið tekur við hér og rennur mjúklega inn` : "frá enda bútsins"}
                 </span>
               </div>
             )}
