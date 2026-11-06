@@ -1305,13 +1305,27 @@ function SkekkjaStilling() {
   // skrifaður á blaðið — handvirka gildið er eina heimildin sem vélin les (sjalfvirkt.ts).
   const [blad, setBlad] = useState<number | null>(null);
   const [maeli, setMaeli] = useState(false);
+  // Dílar á metra í FRUMMYNDINNI — þröskuldurinn fer eftir því hve langt blaðið er í metrum (sjá hallaThroskuldur).
+  const dpmFrum = useBoardStore((s) => {
+    const dpm = ritillDilarAMetra(s.objects, s.pixelsPerMeter);
+    const p = s.objects.find((o): o is ImageObject => o.type === "image" && !!o.uttekt) ?? null;
+    return dpm && p && p.width > 0 && p.uttekt?.frumB ? dpm * (p.uttekt.frumB / p.width) : null;
+  });
+  const skurdLykill = useBoardStore((s) => {
+    const p = s.objects.find((o): o is ImageObject => o.type === "image" && !!o.uttekt) ?? null;
+    const t = p?.uttekt;
+    return t ? JSON.stringify([t.skurdur ?? null, t.myndSkurdur ?? null]) : "";
+  });
   useEffect(() => {
     if (!opid || !plan) return;
     let lifandi = true;
+    // GAMALT GILDI MÁ ALDREI STANDA Á NÝJU BLAÐI (Lisbeth 05.11.2026): á meðan nýja blaðið mældist sýndi hausinn — og
+    // „Nota mælt" BAUÐ — halla fyrra blaðsins, sem einn smellur hefði skrifað á þetta blað.
+    setBlad(null);
     setMaeli(true);
-    maelaHallaBlads(plan)
+    maelaHallaBlads(plan, dpmFrum)
       .then((g) => {
-        if (lifandi) setBlad(Number.isFinite(g) ? g : 0);
+        if (lifandi) setBlad(typeof g === "number" && Number.isFinite(g) ? g : null);
       })
       .catch(() => {
         if (lifandi) setBlad(null);
@@ -1322,7 +1336,9 @@ function SkekkjaStilling() {
     return () => {
       lifandi = false;
     };
-  }, [opid, plan?.id, plan?.assetId]);
+    // SKURÐURINN ER MEÐ: greiningarSvaedi les uttekt.skurdur/myndSkurdur, svo cropi Agnar blaðið með spjaldið opið væri
+    // talan af gamla skurðinum. „Cropa blaðið OG snúa því" er eitt og sama verkið hjá honum.
+  }, [opid, plan?.id, plan?.assetId, dpmFrum, skurdLykill]);
   const maelt = useBoardStore((s) => {
     if (!opid) return 0;
     const dpm = ritillDilarAMetra(s.objects, s.pixelsPerMeter);
@@ -1392,8 +1408,8 @@ function SkekkjaStilling() {
               : blad
                 ? `Blaðið mælist ${tala(blad)}° skakkt.`
                 : blad === 0
-                  ? `Blaðið mælist hornrétt — halli undir ${tala(HALLA_THROSKULDUR)}° færir 40 m vegg minna en smellivikmörkin og breytir engu.`
-                  : "Náði ekki að mæla blaðið."}
+                  ? `Blaðið mælist hornrétt — minni halli en svo að hann færi nokkurn vegg á blaðinu meira en smellivikmörkin.`
+                  : "Náði ekki að mæla blaðið — opnaðu spjaldið aftur þegar blaðið er komið upp."}
             {maelt ? ` Veggirnir á borðinu mælast ${tala(maelt)}°.` : ""} Hallinn geymist á blaðinu og vistast með „Vista í úttekt". Blaðinu sjálfu er ekki
             snúið — merkin eru í dílum skjalasafnsblaðsins og Teikning sýnir sama blað.
           </div>
