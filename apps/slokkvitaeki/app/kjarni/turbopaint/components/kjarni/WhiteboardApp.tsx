@@ -93,6 +93,7 @@ import {
   taknEiningABladi,
   taknFyrirMerki,
   uttektBordNafn,
+  utlinaIBord,
   veggirIBord,
   veljaUttektHaed,
   vistaIUttekt,
@@ -1366,6 +1367,14 @@ export function WhiteboardApp() {
               stimpilStaerd: T,
               stimpilStaerdVid: T,
               taknEining,
+              // Húsið og hallinn sem Agnar setti sjálfur lifa milli lota: útlínan er vistuð í dílum frummyndar og fer hér
+              // um SÖMU vörpun og veggirnir (veggirIBord) — borðið er byggt upp á nýtt í hvert sinn sem hæðin er opnuð.
+              ...(Array.isArray(haed.husUtlina) && haed.husUtlina.length >= 6
+                ? { husUtlina: utlinaIBord(haed.husUtlina, mynd, frum) }
+                : {}),
+              ...(haed.skekkjaHandvirk === true && typeof haed.skekkja === "number" && Number.isFinite(haed.skekkja)
+                ? { skekkja: haed.skekkja, skekkjaHandvirk: true }
+                : {}),
             },
           } as Partial<BoardObject>,
           false

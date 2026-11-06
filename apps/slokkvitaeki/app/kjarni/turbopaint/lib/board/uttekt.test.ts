@@ -6,7 +6,10 @@ import {
   innflutningsSlod,
   merkiIBord,
   merkiLykill,
+  skrifaStillingarIHaed,
   skrifaVeggiIHaed,
+  utlinaIBord,
+  utlinaIFrum,
   skurdurIBord,
   stimpilStaerdABladi,
   symbolFyrirMerki,
@@ -202,4 +205,70 @@ test("Vista í úttekt: veggjaLinur + leidrett á einni hæð; tóm leiðréttin
   assert.deepEqual(tomt[0].veggjaLinur, []);
   assert.deepEqual(tomt[0].leidrett, { af: "turbopaint", kl: "x" });
   assert.equal(tomt[1], haedir[1]);
+});
+
+// ── húsið og hallinn lifa milli lota (Agnar 06.11.2026: „þoli ekki að hafa læst") ───────────────────────────────────────
+
+test("útlína hússins: borðhnit → frummynd → borðhnit skilar sama stað (líka á skorinni mynd)", () => {
+  const mynd = { x: 200, y: 80, width: 1200, height: 600 };
+  const frum = { b: 6006, h: 3003 };
+  const bord = [300, 150, 1300, 150, 1300, 600, 300, 600];
+  const f = utlinaIFrum(bord, mynd, frum);
+  // frummynd er fimmföld á við borðið (6006 / 1200) — horn (300,150) → ((300-200)·5,005, (150-80)·5,005)
+  assert.deepEqual(f.slice(0, 2), [Math.round(100 * 5.005), Math.round(70 * 5.005)]);
+  const aftur = utlinaIBord(f, mynd, frum);
+  aftur.forEach((n, i) => assert.ok(Math.abs(n - bord[i]) < 0.15, `hnit ${i}: ${n} á móti ${bord[i]}`));
+  // skorin mynd: aðeins svæðið x 1000..4000 af blaðinu sést á myndinni
+  const sv = { x: 1000, y: 500, w: 3000, h: 1500 };
+  const fs = utlinaIFrum(bord, mynd, frum, sv);
+  const aftur2 = utlinaIBord(fs, mynd, frum, sv);
+  aftur2.forEach((n, i) => assert.ok(Math.abs(n - bord[i]) < 0.15, `skorin: hnit ${i}`));
+});
+
+test("útlína er sama vörpun og veggirnir: veggur á horni útlínunnar lendir á horni útlínunnar", () => {
+  const mynd = { id: "m", x: 50, y: 40, width: 900, height: 450 };
+  const frum = { b: 4500, h: 2250 };
+  const hornBord: [number, number] = [150, 140];
+  const [fx, fy] = utlinaIFrum([...hornBord, 0, 0, 0, 0], mynd, frum).slice(0, 2);
+  const [vx, vy] = veggirIFrum(
+    [{ id: "v", type: "polyline", x: 0, y: 0, points: [...hornBord, 400, 140], stroke: "#000", strokeWidth: 10, dash: "solid", rotation: 0, opacity: 1, locked: false, hidden: false, parentId: "m", veggur: true } as BoardObject],
+    mynd,
+    frum
+  )[0].p;
+  assert.equal(fx, vx);
+  assert.equal(fy, vy);
+});
+
+test("skrifaStillingarIHaed: útlína og halli skrifast í hæðina í dílum frummyndar", () => {
+  const mynd = { x: 0, y: 0, width: 1000, height: 500 };
+  const frum = { b: 5000, h: 2500 };
+  const haedir = [{ id: "a" }, { id: "b", husUtlina: [1, 2, 3, 4, 5, 6] }];
+  const ut = skrifaStillingarIHaed(haedir, "a", { husUtlina: [100, 100, 900, 100, 900, 400], skekkja: -0.64, skekkjaHandvirk: true }, mynd, frum);
+  assert.deepEqual(ut[0].husUtlina, [500, 500, 4500, 500, 4500, 2000]);
+  assert.equal(ut[0].skekkja, -0.64);
+  assert.equal(ut[0].skekkjaHandvirk, true);
+  assert.deepEqual(ut[1], haedir[1], "önnur hæð ósnert");
+});
+
+test("skrifaStillingarIHaed: undefined = ósnert, null = hreinsað af notanda", () => {
+  const mynd = { x: 0, y: 0, width: 1000, height: 500 };
+  const frum = { b: 5000, h: 2500 };
+  const hae = [{ id: "a", husUtlina: [1, 2, 3, 4, 5, 6], skekkja: 0.5, skekkjaHandvirk: true }];
+  // tengingin vissi ekki um reitina (t.d. skorin mynd): hæðin heldur því sem hún hafði
+  const osnert = skrifaStillingarIHaed(hae, "a", {}, mynd, frum);
+  assert.deepEqual(osnert[0].husUtlina, [1, 2, 3, 4, 5, 6], "útlínan er EKKI eydd af tengingu sem vissi ekki um hana");
+  assert.equal(osnert[0].skekkja, 0.5);
+  // notandinn ýtti á „Sjálfvirkt": reiturinn fer
+  const hreinsad = skrifaStillingarIHaed(hae, "a", { husUtlina: null, skekkja: null }, mynd, frum);
+  assert.equal("husUtlina" in hreinsad[0], false);
+  assert.equal("skekkja" in hreinsad[0], false);
+  assert.equal("skekkjaHandvirk" in hreinsad[0], false);
+});
+
+test("skrifaStillingarIHaed: vélmæld skekkja (ekki handvirk) skrifast aldrei, og ógild útlína skrifast ekki", () => {
+  const mynd = { x: 0, y: 0, width: 1000, height: 500 };
+  const frum = { b: 5000, h: 2500 };
+  const ut = skrifaStillingarIHaed([{ id: "a" }], "a", { skekkja: -0.64, husUtlina: [1, 2, 3, 4] }, mynd, frum);
+  assert.equal("skekkja" in ut[0], false, "vélin skrifar aldrei hallann — aðeins handvirkt gildi");
+  assert.equal("husUtlina" in ut[0], false, "tvö horn eru ekki útlína");
 });

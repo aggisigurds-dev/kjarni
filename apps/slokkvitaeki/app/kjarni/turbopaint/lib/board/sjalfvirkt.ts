@@ -47,7 +47,7 @@ import type { BoardObject, ImageObject, LineObject } from "./types";
 import { bladIBordi, gilturSkurdur, saekjaUttekt, skurdurIBord, veggirIBord, veggirIFrum, vorpunMyndar, type LeidrettAf, type UttektHaed } from "./uttekt";
 import { useUttektGogn } from "./uttekt-gogn";
 import { hurdirBogarUrVegghjalpi, saekjaVegghjalp } from "./vegghjalp";
-import { husKassi, husUtlina, hreinsaVeggi, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
+import { husKassi, husUtlina, hreinsaVeggi, lesaHandUtlinu, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
 import { heimsPunktar, nyGreiningarLota, nyrVeggur, sameinaVidVeggi } from "./veggja-ritill";
 import { ritillDilarAMetra } from "./veggja-ritill-adgerdir";
 import { bladDilarAMetra, bladSlod, pdfDilarAMetra } from "./hus3d";
@@ -433,7 +433,9 @@ export async function vinnaLinur(
     const nyttGler: HLina[] = d.gler;
     // utan húss: útlína hússins (hurðargöt og gler loka henni) — allt nýtt utan hennar fer
     const allar = [...hreinar, ...hurdir, ...nyttGler, ...fastarH];
-    const u = husUtlina(allar, dpm, vik.lokunM, vik.husHlutur);
+    // Útlínan sem Agnar teiknaði (uttekt.husUtlina) GENGUR ALLTAF FYRIR — vélin reiknar ekki neitt þegar hún er til.
+    const handUtlina = lesaHandUtlinu(plan()?.uttekt?.husUtlina);
+    const u = husUtlina(allar, dpm, vik.lokunM, vik.husHlutur, handUtlina);
     const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
     hreinar = hreinar.filter((_, i) => !burtV.has(i));
     hurdir = hurdir.filter((_, i) => !burtH.has(i));
@@ -448,7 +450,7 @@ export async function vinnaLinur(
         (snunarHurdir.length ? ` · ${snunarHurdir.length} úr snúnum veggjum (staðfestur bogi)` : "") +
         (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
         (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
-        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
+        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.handvirk ? " (útlína hússins er handteiknuð)" : u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
         (d.talning.hafnad.kross || d.talning.hafnad.skavegg ? ` · hafnað: ${d.talning.hafnad.kross} í krossi` : "")
     );
   } catch (err) {

@@ -106,6 +106,12 @@ export type UttektHaed = {
   leidrett?: UttektLeidrett;
   /** Sjálfgefin stimpilstærð hæðarinnar í Teikning-glugganum (skjápunktar). */
   stimpilStaerd?: number;
+  /** HÚSIÐ teiknað í höndunum (TurboPaint „Húsið"): útlínan sem margstika í DÍLUM FRUMMYNDAR `[x0, y0, x1, y1, …]` — ekki
+   * borðhnitum, því borðið er byggt upp á nýtt í hvert sinn sem hæðin er opnuð. Gengur alltaf fyrir útreikningi vélarinnar. */
+  husUtlina?: number[];
+  /** Halli blaðsins í gráðum og hvort Agnar setti hann sjálfur (aðeins þá les vélin hann). */
+  skekkja?: number;
+  skekkjaHandvirk?: boolean;
   [k: string]: unknown;
 };
 export type UttektTaeki = { id: number; serial: string | null; type: string | null; status: string | null };
@@ -357,6 +363,21 @@ export function veggirIBord(
     });
 }
 
+/** Útlína hússins: borðhnit → dílar frummyndar. SÖMU vörpun og veggirnir (veggirIFrum) — útlínan og veggirnir verða að
+ * lenda á sama stað eftir að hæðin er opnuð aftur á nýju borði. Heiltölur, svo röðin haldist lítil. */
+export function utlinaIFrum(p: number[], mynd: Rammi, frum: { b: number; h: number }, svaedi?: Svaedi | null): number[] {
+  const b = bladIBordi(mynd, frum, svaedi);
+  const kx = frum.b / b.width, ky = frum.h / b.height;
+  return p.map((n, i) => Math.round(i % 2 === 0 ? (n - b.x) * kx : (n - b.y) * ky));
+}
+
+/** Útlína hússins: dílar frummyndar → borðhnit (öfugt við utlinaIFrum). */
+export function utlinaIBord(p: number[], mynd: Rammi, frum: { b: number; h: number }, svaedi?: Svaedi | null): number[] {
+  const b = bladIBordi(mynd, frum, svaedi);
+  const kx = b.width / frum.b, ky = b.height / frum.h;
+  return p.map((n, i) => (i % 2 === 0 ? b.x + n * kx : b.y + n * ky));
+}
+
 /** Skurður hæðarinnar (dílar frummyndar) → rammi á borðinu. null ef enginn nothæfur skurður. */
 export function skurdurIBord(
   sk: { x: number; y: number; w: number; h: number } | null | undefined,
@@ -376,6 +397,38 @@ export function skurdurIBord(
 export function skrifaVeggiIHaed<T extends UttektHaed>(haedir: T[], haedId: string, veggir: UttektVeggur[], kl: string, af: LeidrettAf = "turbopaint"): T[] {
   const leidrett: UttektLeidrett = { af, kl };
   return haedir.map((h) => (h.id === haedId ? { ...h, veggjaLinur: veggir, leidrett } : h));
+}
+
+/** Stillingar sem NOTANDINN setti á blaðið — húsið og hallinn — skrifast í hæðina svo þær lifi milli lota.
+ *
+ * ÞRÍSTIG, af ásettu ráði: `undefined` á tengingunni = ósnert (tengingin var ekki byggð með þessum reit, t.d. skorin mynd úr
+ * margar-haedir) og hæðin heldur því sem hún hafði; `null` / `false` = notandinn hreinsaði („Sjálfvirkt") og reiturinn er
+ * fjarlægður úr hæðinni; gildi = skrifað. Tvístig (reitur eða ekki) hefði eytt útlínu hæðar sem tengingin vissi ekki um.
+ *
+ * Fannst 06.11.2026: viðmótið sagði að hallinn „vistast með Vista í úttekt" en vistunin afritaði aðeins veggjaLinur, skurð,
+ * merki og stærð — hallinn lifði ekki lokun. */
+export function skrifaStillingarIHaed<T extends UttektHaed>(
+  haedir: T[],
+  haedId: string,
+  t: { husUtlina?: number[] | null; skekkja?: number | null; skekkjaHandvirk?: boolean },
+  mynd: Rammi,
+  frum: { b: number; h: number },
+  svaedi?: Svaedi | null
+): T[] {
+  return haedir.map((h) => {
+    if (h.id !== haedId) return h;
+    const n: T = { ...h };
+    if (t.husUtlina === null) delete n.husUtlina;
+    else if (Array.isArray(t.husUtlina) && t.husUtlina.length >= 6 && t.husUtlina.length % 2 === 0) n.husUtlina = utlinaIFrum(t.husUtlina, mynd, frum, svaedi);
+    if (t.skekkja === null || t.skekkjaHandvirk === false) {
+      delete n.skekkja;
+      delete n.skekkjaHandvirk;
+    } else if (typeof t.skekkja === "number" && Number.isFinite(t.skekkja) && t.skekkjaHandvirk) {
+      n.skekkja = t.skekkja;
+      n.skekkjaHandvirk = true;
+    }
+    return n;
+  });
 }
 
 /** Tákn á borðinu → punktar frummyndar (miðja táknsins, líka þegar því er snúið). Skorin mynd (`svaedi`): um skurðinn. */
@@ -1165,6 +1218,7 @@ export function utbuaVistun(
     // á myndinni; annars haldast þeir sem fyrir voru.
     const veggir = veggirIFrum(objects, m, lidir[i].frum, lidir[i].svaedi);
     hs = skrifaVeggiIHaed(hs, t.haedId, veggir, kl, opts.leidrettAf ?? "turbopaint");
+    hs = skrifaStillingarIHaed(hs, t.haedId, t, m, lidir[i].frum, lidir[i].svaedi);
     veggjaFjoldi.push(veggir.length);
     veggirAlls += veggir.length;
   });

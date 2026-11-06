@@ -16,6 +16,7 @@ import { getSymbol, symbolPaint } from "./symbols";
 import { dilarAMetraGisk } from "./teikning-veggir";
 import type { BoardObject, ImageObject, LineObject, SymbolObject } from "./types";
 import { innflutningsSlod } from "./uttekt";
+import { lesaHandUtlinu } from "./veggja-hreinsun";
 
 export type VeggTegund3D = "veggur" | "gler" | "hurd" | "svalir" | "stigi";
 /** Eldflokkur veggjar í mínútum: 60 = EI-60, 30 = EI-30, 0 = ekki brunaveggur (eða óþekktur flokkur). */
@@ -76,6 +77,15 @@ export interface Haed3D {
   /** Gólfið í 3D (miðjuð hnit): húsið (skurður úttektarinnar, með smá spássíu) eins og í Teikning-glugganum — annars
    * allt blaðið. */
   golf: { x0: number; y0: number; x1: number; y1: number };
+}
+
+/** Handteiknuð útlína hússins (uttekt.husUtlina, BORÐHNIT) → miðuð hnit 3D (miðja blaðsins = (0, 0)), sömu hnit og `veggir`
+ * í Haed3D (a = plan.x + width/2 hér að ofan). Hrein hliðrun. null ef engin gild útlína er á blaðinu. */
+export function handUtlinaMidjud(plan: Pick<ImageObject, "x" | "y" | "width" | "height" | "uttekt">): number[] | null {
+  const hand = lesaHandUtlinu(plan.uttekt?.husUtlina);
+  if (!hand) return null;
+  const a = plan.x + plan.width / 2, b = plan.y + plan.height / 2;
+  return hand.map((n, i) => (i % 2 === 0 ? n - a : n - b));
 }
 
 /** Gólfflötur hæðar: skurður úttektarmyndarinnar (svæði hússins á blaðinu) + 4 % spássía, klemmt við blaðið; án
