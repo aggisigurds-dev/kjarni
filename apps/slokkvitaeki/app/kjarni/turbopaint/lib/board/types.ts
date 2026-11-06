@@ -137,6 +137,12 @@ export interface UttektTenging {
   skekkja?: number | null;
   /** Skekkjan sett í höndunum — mælingin yfirskrifar hana þá ekki. */
   skekkjaHandvirk?: boolean;
+  /** HÚSIÐ, teiknað í höndunum (Agnar 06.11.2026: „ég vil að 2. hæð virki … þoli ekki að hafa læst"): útlína hússins sem
+   * margstika í BORÐHNITUM, `[x0, y0, x1, y1, …]`, ≥ 3 horn. Vélin getur mistekist að finna útlínuna (op án hurðar — á 2. hæð
+   * Breiðhöfða lokaðist hún ekki og aðeins kassinn var notaður), og þá fer allt hitt með: hvað er hent sem utanhúss, hvar
+   * gólfið liggur í 3D og hvar hurðirnar finnast. Gildi hér GENGUR ALLTAF FYRIR útreikningi vélarinnar og vélin skrifar það
+   * aldrei — sama regla og á `skekkja`. Vantar/null = vélin reiknar. */
+  husUtlina?: number[] | null;
 }
 
 export interface RectObject extends BaseObject {

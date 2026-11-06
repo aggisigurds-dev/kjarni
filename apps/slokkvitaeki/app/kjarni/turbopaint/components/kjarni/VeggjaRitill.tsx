@@ -93,6 +93,7 @@ import { hafnaTillogum, samthykkjaTillogur, tillagaVid, tillogurIKassa } from ".
 import { LITA_VEGGI_FLYTILYKILL, SKAERIR_VEGGLITIR, useVeggjaSyn } from "../../lib/board/veggja-syn";
 import { newId } from "../../lib/board/store";
 import { VeggjaGreining } from "./VeggjaGreining";
+import { HusUtlinaStilling, HusUtlinaYfirlag } from "./HusUtlina";
 
 /** Hamirnir þar sem ritillinn býr. Í Veggir-ham (10.10.2026) er hann alltaf opinn og annað dempað. */
 export const RITIL_HAMIR: HamurId[] = ["teikning", "veggir"];
@@ -226,6 +227,9 @@ export function VeggjaRitill() {
 
   return (
     <>
+      {/* HÚSIÐ: á undan RitilYfirlag svo lyklahlustun þess skráist FYRST — ritillinn eyðir völdum veggjum á Backspace/Delete og
+          mátti ekki gera það meðan útlína hússins er teiknuð. Yfirlagið liggur ofar (zIndex) og tekur bendilinn aðeins meðan teiknað er. */}
+      {virkur ? <HusUtlinaYfirlag /> : null}
       {virkur || forskodun ? <RitilYfirlag virkur={virkur} /> : null}
       {/* Þéttur hamur: ræman (RitilThettStika) býr neðst á borðinu hjá táknaborðinu — sjá WhiteboardApp */}
       {virkur ? thett ? null : <RitilSpjald /> : <RitilOpnari />}
@@ -1356,8 +1360,10 @@ function SkekkjaStilling() {
     b.commitHistory();
     const u = { ...plan.uttekt };
     if (g == null) {
-      delete u.skekkja;
-      delete u.skekkjaHandvirk;
+      // null (EKKI delete): „Sjálfvirkt" er ÁSETT hreinsun og verður að fjarlægja gildið úr hæðinni við vistun. `undefined`
+      // þýðir „tengingin vissi ekki um reitinn" og hæðin heldur þá hallanum (skrifaStillingarIHaed).
+      u.skekkja = null;
+      u.skekkjaHandvirk = false;
     } else {
       u.skekkja = g;
       u.skekkjaHandvirk = true;
@@ -2155,6 +2161,7 @@ export function VeggjaHamSpjald() {
         Smella á línu teikningarinnar
       </label>
       <SkekkjaStilling />
+      <HusUtlinaStilling />
       <div className="mt-1.5 text-[10.5px] leading-snug text-white/45" data-veggir-greining-visun>
         Finna veggi, Finna hurðir og Lesa EI eru í <b className="text-white/70">Greining</b>-flipanum efst til hægri.
       </div>

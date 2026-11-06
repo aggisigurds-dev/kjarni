@@ -6,8 +6,11 @@ import {
   maelaSkekkju,
   hreinsaVeggi,
   husKassi,
+  HAND_SPASSIA_M,
   husUtlina,
+  lesaHandUtlinu,
   lesaVikmork,
+  punktIFjolhyrningi,
   retta,
   sameinaSamlinur,
   SJALFGEFIN_VIKMORK,
@@ -349,4 +352,65 @@ test("skekkja: 45 % fastar ráða EKKI (miðgildið er vegið með lengd — þr
   // 55 %: 6 × 3000 = 18.000 á móti 15.000
   const f55 = [...f45, L(0, 2000, 3000, 2000), L(0, 2500, 3000, 2500)];
   assert.equal(hreinsaVeggi(nyjar, f55, dpm, { ...SJALFGEFIN_VIKMORK, hillurM: 0 }).talning.skekkja, 0, "55 % ráða");
+});
+
+// ── handteiknuð útlína hússins (Agnar 06.11.2026: „ég vil að 2. hæð virki … þoli ekki að hafa læst") ─────────────────────
+
+test("handteiknuð útlína: gild/ógild er lesin rétt, ógild fellur á vélina", () => {
+  assert.deepEqual(lesaHandUtlinu([0, 0, 10, 0, 10, 10]), [0, 0, 10, 0, 10, 10]);
+  assert.equal(lesaHandUtlinu([0, 0, 10, 0]), null, "tvö horn eru ekki útlína");
+  assert.equal(lesaHandUtlinu([0, 0, 10, 0, 10]), null, "oddatala er ekki hnit");
+  assert.equal(lesaHandUtlinu([0, 0, 10, NaN, 10, 10]), null);
+  assert.equal(lesaHandUtlinu(null), null);
+  assert.equal(lesaHandUtlinu("x"), null);
+});
+
+test("punktIFjolhyrningi: kúpt og íhvolf margstika", () => {
+  const ferningur2 = [0, 0, 100, 0, 100, 100, 0, 100];
+  assert.ok(punktIFjolhyrningi(50, 50, ferningur2));
+  assert.ok(!punktIFjolhyrningi(150, 50, ferningur2));
+  // L-laga hús: hornið uppi til hægri vantar
+  const el = [0, 0, 100, 0, 100, 40, 40, 40, 40, 100, 0, 100];
+  assert.ok(punktIFjolhyrningi(20, 80, el), "inni í leggnum");
+  assert.ok(!punktIFjolhyrningi(80, 80, el), "í hornskarðinu sem er utan húss");
+});
+
+test("handteiknuð útlína gengur ALLTAF fyrir — líka þegar vélin hefði getað lokað útlínunni", () => {
+  // lokað hús 0..1000 × 0..600, plús stakur veggur langt utan þess
+  const hus = ferningur(0, 0, 1000, 600);
+  const nagranni = L(2000, 0, 2400, 0);
+  const vel = husUtlina([...hus, nagranni], DPM);
+  assert.ok(vel.lokud && !vel.handvirk, "vélin finnur lokaða útlínu");
+  assert.ok(vel.inni(500, 300));
+  // Agnar teiknar útlínu utan um BARA vesturhelminginn (hann ræður hvað telst húsið)
+  const hand = husUtlina([...hus, nagranni], DPM, undefined, undefined, [0, 0, 500, 0, 500, 600, 0, 600]);
+  assert.ok(hand.handvirk && hand.lokud);
+  assert.ok(hand.inni(250, 300), "vesturhelmingur er inni");
+  assert.ok(!hand.inni(750, 300), "austurhelmingur er UTAN húss því Agnar sagði það, þótt vélin sæi hann sem hluta hússins");
+  assert.deepEqual(hand.kassi, { x0: 0, y0: 0, x1: 500, y1: 600 });
+});
+
+test("handteiknuð útlína: veggur á jaðrinum fer ekki þótt hann liggi örlítið utan við hana", () => {
+  const sp = HAND_SPASSIA_M * DPM; // 30 einingar
+  const hand = [0, 0, 1000, 0, 1000, 600, 0, 600];
+  const hus = husUtlina([], DPM, undefined, undefined, hand);
+  // útveggur 20 cm utan við útlínuna (teiknuð með augunum) — innan svigrúmsins
+  const utveggur = L(0, -20, 1000, -20);
+  // 2 m utan við — raunverulega utan húss
+  const lodarmork = L(0, -200, 1000, -200);
+  const burt = utanHuss([utveggur, lodarmork], hus);
+  assert.ok(!burt.has(0), "útveggurinn er EKKI fjarlægður");
+  assert.ok(burt.has(1), "lóðarmörk 2 m utan útlínunnar eru fjarlægð");
+  assert.ok(sp > 20 && sp < 200, "prófið mælir rétt svigrúm");
+});
+
+test("handteiknuð útlína: 2. hæðar-tilfellið — útlína vélarinnar lokast ekki, handteiknuð gerir það", () => {
+  // opið hús: vantar austurvegginn (stórt op án hurðar) — vélin getur ekki lokað útlínunni
+  const opid = [L(0, 0, 1000, 0), L(0, 600, 1000, 600), L(0, 0, 0, 600)];
+  const vel = husUtlina(opid, DPM);
+  assert.ok(!vel.lokud, "vélin: útlínan lokaðist ekki (aðeins kassinn)");
+  const hand = husUtlina(opid, DPM, undefined, undefined, [0, 0, 1000, 0, 1000, 600, 0, 600]);
+  assert.ok(hand.lokud && hand.handvirk, "handteiknuð: lokuð");
+  assert.ok(hand.inni(500, 300));
+  assert.ok(!hand.inni(1500, 300), "og það sem er utan hennar er utan húss");
 });

@@ -621,6 +621,8 @@ export interface Rammi {
 }
 
 export interface HusUtlina {
+  /** Útlínan er teiknuð í höndunum (uttekt.husUtlina) — vélin reiknaði hana ekki. */
+  handvirk?: boolean;
   /** Er punkturinn innan útlínu hússins (eða húskassans ef útlínan lokaðist ekki)? */
   inni: (x: number, y: number) => boolean;
   /** Lokaðist útlínan (rými inni ≥ fjórðungur kassans)? Annars er aðeins kassinn notaður. */
@@ -631,11 +633,71 @@ export interface HusUtlina {
   reitur: number;
 }
 
+/** Svigrúm handteiknaðrar útlínu: veggur á jaðrinum liggur oft nokkrum sentimetrum utan við útlínu sem er teiknuð með augunum,
+ * og miðlína hans mátti þá ekki lenda „utan húss" og fara. 0,3 m = tvöföld þykkt venjulegs útveggjar. */
+export const HAND_SPASSIA_M = 0.3;
+
+/** Gild handteiknuð útlína: jafn fjöldi endanlegra talna, ≥ 3 horn. Annars null (vélin reiknar þá). */
+export function lesaHandUtlinu(v: unknown): number[] | null {
+  if (!Array.isArray(v) || v.length < 6 || v.length % 2) return null;
+  for (const n of v) if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  return v as number[];
+}
+
+/** Punktur innan margstiku (geislaregla). */
+export function punktIFjolhyrningi(x: number, y: number, p: number[]): boolean {
+  let inni = false;
+  const n = p.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = p[2 * i], yi = p[2 * i + 1], xj = p[2 * j], yj = p[2 * j + 1];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inni = !inni;
+  }
+  return inni;
+}
+
+/** Stysta fjarlægð punkts frá jaðri margstiku. */
+export function fjarlaegdFraJadri(x: number, y: number, p: number[]): number {
+  let best = Infinity;
+  const n = p.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const ax = p[2 * j], ay = p[2 * j + 1], bx = p[2 * i], by = p[2 * i + 1];
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const u = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)) : 0;
+    best = Math.min(best, Math.hypot(x - (ax + u * dx), y - (ay + u * dy)));
+  }
+  return best;
+}
+
 /** Útlína hússins úr línunum: línurnar teiknaðar þykkar (lokunM / 2 hvoru megin, svo op ≤ lokunM lokist), flætt utan frá
  * og stærsti samfelldi hlutinn sem flóðið náði ekki = húsið (veggir + rými). Stakir hlutir utan þess (lóðarmörk,
  * nágrannahús, norðurör, titilreitur) eru utan húss. Leki útlínan (stórt op án hurðar) er aðeins kassinn notaður. */
-export function husUtlina(linur: HLina[], dpm: number, lokunM = SJALFGEFIN_VIKMORK.lokunM, hlutHus = SJALFGEFIN_VIKMORK.husHlutur): HusUtlina {
+export function husUtlina(
+  linur: HLina[],
+  dpm: number,
+  lokunM = SJALFGEFIN_VIKMORK.lokunM,
+  hlutHus = SJALFGEFIN_VIKMORK.husHlutur,
+  handvirk: number[] | null = null
+): HusUtlina {
   const reitur = Math.max(1e-6, 0.1 * dpm);
+  // HANDTEIKNUÐ ÚTLÍNA GENGUR ALLTAF FYRIR (Agnar 06.11.2026): vélin reiknar ekki neitt þegar hún er til.
+  const hand = lesaHandUtlinu(handvirk);
+  if (hand) {
+    const sv = HAND_SPASSIA_M * dpm;
+    let hx0 = Infinity, hy0 = Infinity, hx1 = -Infinity, hy1 = -Infinity;
+    for (let i = 0; i < hand.length; i += 2) {
+      hx0 = Math.min(hx0, hand[i]);
+      hx1 = Math.max(hx1, hand[i]);
+      hy0 = Math.min(hy0, hand[i + 1]);
+      hy1 = Math.max(hy1, hand[i + 1]);
+    }
+    return {
+      handvirk: true,
+      lokud: true,
+      kassi: { x0: hx0, y0: hy0, x1: hx1, y1: hy1 },
+      reitur,
+      inni: (x, y) => punktIFjolhyrningi(x, y, hand) || fjarlaegdFraJadri(x, y, hand) <= sv,
+    };
+  }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const l of linur)
     for (let i = 0; i + 1 < l.p.length; i += 2) {

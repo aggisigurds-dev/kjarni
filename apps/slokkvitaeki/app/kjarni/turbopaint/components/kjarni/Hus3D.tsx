@@ -19,6 +19,7 @@ import {
   festaAVegg,
   giskDilarAMetra,
   haedarNumer,
+  handUtlinaMidjud,
   husLengd,
   husUrBordi,
   pdfDilarAMetra,
@@ -109,8 +110,10 @@ function husGrima(T: Three, hd: Haed3D, metri: number) {
   const linur: HLina[] = hd.veggir
     .filter((v) => v.tegund === "veggur" || v.tegund === "gler" || v.tegund === "hurd")
     .map((v) => ({ p: [v.ax, v.ay, v.bx, v.by], t: v.thykkt }));
-  if (linur.length < 3 || !(metri > 0)) return null;
-  const u = husUtlina(linur, metri);
+  // Útlínan sem Agnar teiknaði er í BORÐHNITUM; 3D vinnur í hnitum miðuðum við miðju blaðsins (hus3d.ts: a = plan.x + width/2).
+  const handMidjud = handUtlinaMidjud(hd.plan);
+  if ((!handMidjud && linur.length < 3) || !(metri > 0)) return null;
+  const u = husUtlina(linur, metri, undefined, undefined, handMidjud);
   const w = hd.golf.x1 - hd.golf.x0, h = hd.golf.y1 - hd.golf.y0;
   if (!(w > 0 && h > 0)) return null;
   const s = 700 / Math.max(w, h);

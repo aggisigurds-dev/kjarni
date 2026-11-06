@@ -20,6 +20,7 @@ import {
   taknMidja,
   veljaDilarAMetra,
   type Veggbutur,
+  handUtlinaMidjud,
 } from "./hus3d";
 import type { BoardObject, SymbolObject } from "./types";
 
@@ -289,4 +290,18 @@ test("3D: vistaðir stuttir veggir mega ekki hverfa úr ítarlegri sýn", () => 
   assert.equal(gamal.veggir.length, 1, "eldra yfirlit felur stutta búta");
   assert.equal(itarleg.veggir.length, 10, "ítarlegt 3D heldur öllum vistuðum veggjum");
   assert.equal(itarleg.veggir.filter((v) => v.tegund === "veggur").length, 10);
+});
+
+test("handteiknuð útlína í 3D: borðhnit → hnit miðuð við miðju blaðsins (sömu hnit og veggirnir)", () => {
+  // blað 1000×500 á borðinu í (200, 100): miðjan er (700, 350)
+  const plan = { x: 200, y: 100, width: 1000, height: 500, uttekt: { husUtlina: [700, 350, 900, 350, 900, 450, 700, 450] } };
+  const m = handUtlinaMidjud(plan as never)!;
+  assert.deepEqual(m, [0, 0, 200, 0, 200, 100, 0, 100], "miðja blaðsins er (0, 0)");
+  // veggur sem liggur á horni útlínunnar fær SAMA hnit og hornið — ellegar stoppar gólfið ekki þar sem útlínan er
+  const a = plan.x + plan.width / 2, b = plan.y + plan.height / 2;
+  const veggur = { ax: 900 - a, ay: 350 - b };
+  assert.equal(veggur.ax, m[2]);
+  assert.equal(veggur.ay, m[3]);
+  assert.equal(handUtlinaMidjud({ ...plan, uttekt: {} } as never), null, "engin útlína → null");
+  assert.equal(handUtlinaMidjud({ ...plan, uttekt: { husUtlina: [1, 2, 3, 4] } } as never), null, "tvö horn eru ekki útlína");
 });
