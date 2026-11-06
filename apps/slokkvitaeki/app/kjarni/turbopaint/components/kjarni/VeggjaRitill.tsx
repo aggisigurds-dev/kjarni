@@ -38,6 +38,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useHamur, type HamAdgerd, type HamurId } from "../../lib/board/hamir";
+import { HALLA_THROSKULDUR, maelaHallaBlads } from "../../lib/board/skonnun-veggir-mynd";
 import { BoxSelect as BoxSelectTakn, Brush as BrushTakn, Magnet as MagnetTakn, Ruler as RulerTakn } from "lucide-react";
 import { LAYER_TEIKNING, LAYER_VEGGIR } from "../../lib/board/layers";
 import { useErSimi } from "../../lib/board/simi";
@@ -1284,6 +1285,11 @@ const TOL_TAKN: Record<RitilTol, ReactNode> = {
  * Teikning-glugginn sýnir sama blað, svo snúningur þar myndi færa allt úr stað. Í staðinn fylgir VÉLIN hallanum: hann er mældur á
  * löngu línunum (maelaSkekkju) og veggirnir réttast eftir blaðinu í stað þess að snúast í nákvæmlega 0°/90°.
  *
+ * TALAN SEM ER SÝND KEMUR ÚR BLAÐINU (maelaHallaBlads á myndinni), ekki úr veggjunum á borðinu. Fyrsta útgáfan mældi
+ * veggina — og þar sem Agnar teiknar sína ásrétta sagði stillingin „beint" á blaði sem er mælanlega 0,57° skakkt
+ * (staðfest á lifandi vefnum á Breiðhöfða 13 2. hæð, 05.11.2026). Veggjamælingin fylgir sem önnur lína því hún er
+ * gagnleg þegar hann hefur þegar teiknað eftir blaðinu, en hún er ekki það sem „Halli blaðsins" lofar.
+ *
  * GILDIÐ BÝR Á BLAÐINU (`uttekt.skekkja`), eins og skurðurinn — ekki sem hnattræn stilling vélarinnar, sem hefði elt næstu
  * teikningu (Lisbeth 05.11.2026). Reiturinn er textareitur með drögum sem eru þáttuð við blur/Enter: stýrður number-reitur
  * þurrkaði út mínusinn um leið og „−0" var slegið inn. */
@@ -1295,6 +1301,44 @@ function SkekkjaStilling() {
   const vistud = typeof plan?.uttekt?.skekkja === "number" && Number.isFinite(plan.uttekt.skekkja) ? plan.uttekt.skekkja : null;
   // Vélin skrifar ALDREI `uttekt.skekkja` (sjá sjalfvirkt.ts) — gildi á blaðinu er því alltaf handvirkt.
   const handvirk = !!plan?.uttekt?.skekkjaHandvirk;
+  // Hallinn á BLAÐINU: mældur aðeins þegar notandinn opnar stillinguna (1600 díla mynd, ~0,02° upplausn) og aldrei
+  // skrifaður á blaðið — handvirka gildið er eina heimildin sem vélin les (sjalfvirkt.ts).
+  const [blad, setBlad] = useState<number | null>(null);
+  const [maeli, setMaeli] = useState(false);
+  // Dílar á metra í FRUMMYNDINNI — þröskuldurinn fer eftir því hve langt blaðið er í metrum (sjá hallaThroskuldur).
+  const dpmFrum = useBoardStore((s) => {
+    const dpm = ritillDilarAMetra(s.objects, s.pixelsPerMeter);
+    const p = s.objects.find((o): o is ImageObject => o.type === "image" && !!o.uttekt) ?? null;
+    return dpm && p && p.width > 0 && p.uttekt?.frumB ? dpm * (p.uttekt.frumB / p.width) : null;
+  });
+  const skurdLykill = useBoardStore((s) => {
+    const p = s.objects.find((o): o is ImageObject => o.type === "image" && !!o.uttekt) ?? null;
+    const t = p?.uttekt;
+    return t ? JSON.stringify([t.skurdur ?? null, t.myndSkurdur ?? null]) : "";
+  });
+  useEffect(() => {
+    if (!opid || !plan) return;
+    let lifandi = true;
+    // GAMALT GILDI MÁ ALDREI STANDA Á NÝJU BLAÐI (Lisbeth 05.11.2026): á meðan nýja blaðið mældist sýndi hausinn — og
+    // „Nota mælt" BAUÐ — halla fyrra blaðsins, sem einn smellur hefði skrifað á þetta blað.
+    setBlad(null);
+    setMaeli(true);
+    maelaHallaBlads(plan, dpmFrum)
+      .then((g) => {
+        if (lifandi) setBlad(typeof g === "number" && Number.isFinite(g) ? g : null);
+      })
+      .catch(() => {
+        if (lifandi) setBlad(null);
+      })
+      .finally(() => {
+        if (lifandi) setMaeli(false);
+      });
+    return () => {
+      lifandi = false;
+    };
+    // SKURÐURINN ER MEÐ: greiningarSvaedi les uttekt.skurdur/myndSkurdur, svo cropi Agnar blaðið með spjaldið opið væri
+    // talan af gamla skurðinum. „Cropa blaðið OG snúa því" er eitt og sama verkið hjá honum.
+  }, [opid, plan?.id, plan?.assetId, dpmFrum, skurdLykill]);
   const maelt = useBoardStore((s) => {
     if (!opid) return 0;
     const dpm = ritillDilarAMetra(s.objects, s.pixelsPerMeter);
@@ -1335,7 +1379,9 @@ function SkekkjaStilling() {
     }
     setja(n);
   };
-  const synt = vistud ?? maelt;
+  const tillaga = blad ?? (maelt || 0); // „Nota mælt" tekur blaðið; veggirnir aðeins ef blaðið mældist ekki
+  const synt = vistud ?? blad ?? maelt;
+  const tala = (g: number) => g.toFixed(2).replace(".", ",");
   const reitur = simi ? "py-2 text-[13px]" : "py-0.5 text-[10.5px]";
   return (
     <div className="mt-1.5" data-veggir-skekkja>
@@ -1350,22 +1396,29 @@ function SkekkjaStilling() {
           Halli blaðsins
         </span>
         <span className="tabular-nums text-white/60">
-          {synt ? `${synt.toFixed(2).replace(".", ",")}°` : "beint"}
+          {synt ? `${tala(synt)}°` : opid && maeli ? "mæli…" : "beint"}
           {handvirk ? " · stillt" : ""}
         </span>
       </button>
       {opid ? (
         <div className="mt-1 rounded-md bg-white/5 p-1.5">
           <div className="text-[10.5px] leading-snug text-white/55">
-            {maelt ? `Veggirnir á borðinu mælast ${maelt.toFixed(2).replace(".", ",")}°.` : "Veggirnir á borðinu mælast beinir."} Hallinn geymist á blaðinu og vistast með
-            „Vista í úttekt". Blaðinu sjálfu er ekki snúið — merkin eru í dílum skjalasafnsblaðsins og Teikning sýnir sama blað.
+            {maeli
+              ? "Mæli hallann á blaðinu…"
+              : blad
+                ? `Blaðið mælist ${tala(blad)}° skakkt.`
+                : blad === 0
+                  ? `Blaðið mælist hornrétt — minni halli en svo að hann færi nokkurn vegg á blaðinu meira en smellivikmörkin.`
+                  : "Náði ekki að mæla blaðið — opnaðu spjaldið aftur þegar blaðið er komið upp."}
+            {maelt ? ` Veggirnir á borðinu mælast ${tala(maelt)}°.` : ""} Hallinn geymist á blaðinu og vistast með „Vista í úttekt". Blaðinu sjálfu er ekki
+            snúið — merkin eru í dílum skjalasafnsblaðsins og Teikning sýnir sama blað.
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <input
               type="text"
               inputMode="decimal"
               value={drog ?? (vistud != null ? String(vistud).replace(".", ",") : "")}
-              placeholder={maelt ? maelt.toFixed(2).replace(".", ",") : "0"}
+              placeholder={tillaga ? tala(tillaga) : "0"}
               onChange={(e) => setDrog(e.target.value)}
               onBlur={(e) => (drog != null ? thatta(e.target.value) : undefined)}
               onKeyDown={(e) => {
@@ -1379,7 +1432,14 @@ function SkekkjaStilling() {
               className={`w-20 rounded border border-white/15 bg-black/30 px-1.5 tabular-nums text-white ${reitur}`}
             />
             <span className="text-[11px] text-white/50">°</span>
-            <button type="button" data-veggir-skekkja-maelt onClick={() => setja(maelt)} disabled={!maelt} className={`rounded bg-white/10 px-2 hover:bg-white/15 disabled:opacity-40 ${reitur}`}>
+            <button
+              type="button"
+              data-veggir-skekkja-maelt
+              onClick={() => setja(tillaga)}
+              disabled={!tillaga}
+              title={blad ? "Nota hallann sem mældist á blaðinu" : "Nota hallann sem mældist á veggjunum á borðinu"}
+              className={`rounded bg-white/10 px-2 hover:bg-white/15 disabled:opacity-40 ${reitur}`}
+            >
               Nota mælt
             </button>
             <button type="button" data-veggir-skekkja-sjalf onClick={() => setja(null)} className={`rounded bg-white/10 px-2 hover:bg-white/15 ${reitur}`}>

@@ -53,7 +53,9 @@ export function bakgrunnsTonn(gra: Uint8Array): number {
  * skannar RAÐIR, svo blað sem liggur 0,65° skakkt dregur 40 m vegg um 45 díla yfir myndina og rákin finnst aldrei — mælt á
  * Nesdekk Breiðhöfða 13 2. hæð, þar sem ytri veggir lagersins fundust ekki. Hallinn er mældur eins og í vörpunarsniði: dökku
  * dílarnir eru lagðir saman eftir skáröðum fyrir hvert horn og það horn valið þar sem summurnar eru hvassastar (lárétt
- * mannvirki safnast þá öll í sömu röð). Skilar dy/dx; 0 ef ekkert sker sig úr. */
+ * mannvirki safnast þá öll í sömu röð). Skilar −dy/dx — ATH MERKIÐ: safnarinn er `acc[y + round(x·t)]`, svo lárétt lína
+ * blaðsins uppfyllir `y + t·x = c` og hallatala hennar er `−t` (sjá `skekkja()` hér neðar, sem fer rétt með þetta). Kommentið
+ * sagði áður „dy/dx“ og það er einmitt línan sem flettir merkinu hjá næsta manni (Lisbeth 05.11.2026). 0 ef ekkert sker sig úr. */
 export function maelaHallaMyndar(m: Uint8Array, W: number, H: number, hamark = 0.015): number {
   const sk = Math.max(1, Math.round(Math.max(W, H) / 1200)); // grófur rasti — hallinn er stórsæ stærð
   const w = Math.floor(W / sk), h = Math.floor(H / sk);
