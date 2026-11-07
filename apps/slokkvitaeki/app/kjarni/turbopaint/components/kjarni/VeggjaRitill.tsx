@@ -4,7 +4,7 @@
 // bætt nýjum við, ég þarf miklu meiri fídusa til að klára restina sjálfur").
 //
 // Sérstakur hamur í „Teikning og greining": yfirlag ofan á borðinu tekur við músinni svo smellur getur aldrei fært eða
-// valið teikninguna (lagið „Teikning" er auk þess læst meðan ritillinn er opinn). Aðeins veggir eru valdir og breytt.
+// valið teikninguna (lagið „Teikning" er ekki læst sjálfkrafa — „Læsa teikningu" er val). Aðeins veggir eru valdir og breytt.
 //   W teikna (smellt horn af horni, smellur á enda/línur, Shift = 0/45/90°) · R rétthyrningur → 4 veggir
 //   V velja (smellur, Shift+smellur, kassi; Ctrl+A) · Delete eyðir · B eyða í kassa
 //   dráttur: endapunktur (tengdir endar fylgja, Alt losar) eða heill veggur · S kljúfa · L lengja að · J sameina
@@ -1226,7 +1226,7 @@ function RitilOpnari() {
     >
       <button
         type="button"
-        title="Veggjaritill (W): teikna, velja, eyða, kljúfa, sameina og lengja veggi — teikningin læst á meðan"
+        title="Veggjaritill (W): teikna, velja, eyða, kljúfa, sameina og lengja veggi"
         onClick={() => useVeggjaRitill.getState().kveikja()}
         className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pr-3 pl-2.5 text-[12px] font-semibold text-stone-100 shadow-xl hover:bg-[#252a40]"
       >
@@ -1599,7 +1599,7 @@ function RitilSpjald() {
       <div className="mt-1 flex flex-wrap gap-1">
         <button
           type="button"
-          title="Teikningin læst: smellur getur hvorki fært né valið myndina"
+          title="Læsa teikningunni (valfrjálst): smellur getur þá hvorki fært né valið myndina"
           aria-pressed={teikningLaest}
           onClick={() => r.laesaTeikningu(!teikningLaest)}
           className={`${btn} bg-white/5`}
@@ -1907,7 +1907,7 @@ function RitilHjalp() {
         </tbody>
       </table>
       <p className="mt-2 text-[10.5px] text-white/45">
-        Teikningin er læst meðan ritillinn er opinn — smellur velur aðeins veggi. „💾 Vista í úttekt“ skrifar veggina (með tegund) í
+        Smellur velur aðeins veggi — teikningin hreyfist ekki. Þú getur læst henni með „Læsa teikningu“ ef þú vilt. „💾 Vista í úttekt“ skrifar veggina (með tegund) í
         úttektarteikninguna eins og áður.
       </p>
     </div>

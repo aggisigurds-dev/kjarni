@@ -167,15 +167,10 @@ export const useVeggjaRitill = create<RitilStada>((set, get) => ({
   tegund: "veggur",
   hornalas: true,
   kveikja: (tol = "velja") => {
-    const b = useBoardStore.getState();
     const vistad = typeof window !== "undefined" ? lesa() : null;
-    // Teikningin læst meðan veggjum er breytt — smellur getur þá aldrei fært eða valið myndina.
-    const teikning = b.layers.find((l) => l.id === LAYER_TEIKNING);
-    let laesti = get().virkur ? get().laestiTeikningu : false;
-    if (teikning && !teikning.locked) {
-      b.toggleLayerLocked(LAYER_TEIKNING);
-      laesti = true;
-    }
+    // Teikningin er EKKI læst sjálfkrafa (Agnar 07.11.2026: „þoli ekki þessar helvítis læsingar"): yfirlag ritilsins tekur við
+    // músinni, svo smellur getur ekki fært eða valið myndina þótt lagið sé ólæst. „Læsa teikningu" er val, ekki skylda.
+    const laesti = false;
     // Veggjalagið verður að sjást og vera ólæst til að breyta því
     const veggir = useBoardStore.getState().layers.find((l) => l.id === LAYER_VEGGIR);
     if (veggir && !veggir.visible) useBoardStore.getState().toggleLayerVisible(LAYER_VEGGIR);
