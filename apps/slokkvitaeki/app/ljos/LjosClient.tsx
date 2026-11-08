@@ -13,19 +13,28 @@ const SENUR = [
 
 const LITIR = ["#FF5A5A", "#FF9A3C", "#FFD84A", "#7CE07C", "#3FD6C8", "#5CC8FF", "#4C7DFF", "#B07CFF", "#FF6FC8", "#FFC27A"];
 
-// Herbergi úr teikningu Langamýri 22 (einfölduð, ekki í réttum mælikvarða).
+// Herbergi (smellusvæði) í hnitum teikningarinnar /ljos-grunnmynd.jpg (1080×1170). Röð skiptir máli.
 const HERBERGI = [
-  { key: "hjon", nafn: "Hjón", x: 185, y: 150, w: 265, h: 355 },
+  { key: "hjon", nafn: "Hjón", x: 180, y: 150, w: 270, h: 360 },
   { key: "barn1", nafn: "Barn", x: 455, y: 150, w: 195, h: 350 },
-  { key: "stofa", nafn: "Stofa", x: 655, y: 150, w: 305, h: 550 },
-  { key: "thvottur", nafn: "Þvottur", x: 185, y: 510, w: 160, h: 250 },
-  { key: "hol", nafn: "Sjónvarpshol", x: 350, y: 510, w: 300, h: 355 },
-  { key: "barn2", nafn: "Barn", x: 185, y: 770, w: 230, h: 325 },
-  { key: "bad", nafn: "Bað", x: 420, y: 870, w: 150, h: 225 },
-  { key: "anddyri", nafn: "Anddyri", x: 575, y: 870, w: 175, h: 225 },
-  { key: "eldhus", nafn: "Eldhús", x: 755, y: 710, w: 205, h: 385 },
-  { key: "svalir", nafn: "Svalir", x: 655, y: 20, w: 305, h: 125 },
+  { key: "stofa", nafn: "Stofa", x: 655, y: 150, w: 305, h: 565 },
+  { key: "thvottur", nafn: "Þvottur", x: 180, y: 510, w: 240, h: 255 },
+  { key: "hol", nafn: "Sjónvarpshol", x: 345, y: 505, w: 405, h: 360 },
+  { key: "barn2", nafn: "Barn", x: 180, y: 770, w: 240, h: 330 },
+  { key: "bad", nafn: "Bað", x: 420, y: 870, w: 155, h: 230 },
+  { key: "anddyri", nafn: "Anddyri", x: 575, y: 870, w: 180, h: 230 },
+  { key: "eldhus", nafn: "Eldhús", x: 755, y: 715, w: 205, h: 385 },
+  { key: "svalir", nafn: "Svalir", x: 650, y: 10, w: 335, h: 140 },
 ] as const;
+
+// Staðir þar sem ljós eru á teikningunni (merkt af eiganda). Ljós raðast á þessa staði eftir herbergi.
+const LJOSASTADIR: Record<string, { x: number; y: number }[]> = {
+  living: [{ x: 822, y: 312 }],
+  dining: [{ x: 826, y: 523 }],
+  hol: [{ x: 535, y: 588 }, { x: 557, y: 773 }, { x: 684, y: 769 }],
+  eldhus: [{ x: 861, y: 765 }, { x: 869, y: 881 }, { x: 869, y: 981 }],
+  anddyri: [{ x: 684, y: 973 }],
+};
 const NAFN: Record<string, string> = {
   hjon: "Hjón", barn1: "Barn (norður)", barn2: "Barn (suður)", stofa: "Stofa", thvottur: "Þvottur",
   hol: "Sjónvarpshol", bad: "Bað", anddyri: "Anddyri", eldhus: "Eldhús", svalir: "Svalir",
@@ -36,8 +45,8 @@ function herbergiLykill(nafn?: string): string | undefined {
   const n = (nafn ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ð/g, "d").replace(/þ/g, "th").replace(/æ/g, "ae");
   if (!n || n.includes("allt husid")) return undefined;
   const tbl: [string, string][] = [
-    ["eldhus", "eldhus"], ["anddyri", "anddyri"], ["bad", "bad"], ["living", "stofa"], ["stofa", "stofa"],
-    ["dining", "stofa"], ["svefn", "hjon"], ["hjon", "hjon"], ["iris", "barn1"], ["birta", "barn1"],
+    ["eldhus", "eldhus"], ["anddyri", "anddyri"], ["bad", "bad"], ["living", "living"], ["stofa", "living"],
+    ["dining", "dining"], ["svefn", "hjon"], ["hjon", "hjon"], ["iris", "barn1"], ["birta", "barn1"],
     ["barn", "barn2"], ["thvott", "thvottur"], ["sjonvarp", "hol"], ["hol", "hol"], ["svalir", "svalir"],
   ];
   return tbl.find(([k]) => n.includes(k))?.[1];
@@ -85,10 +94,16 @@ export default function LjosClient() {
     const p = stadir[l.id];
     if (p) return { ...p, auto: false };
     const k = herbergiLykill(l.room);
+    if (!k) return undefined;
+    const sama = ljos.filter((x) => !stadir[x.id] && herbergiLykill(x.room) === k);
+    const i = Math.max(0, sama.findIndex((x) => x.id === l.id));
+    const spots = LJOSASTADIR[k];
+    if (spots?.length) {
+      const sp = spots[i % spots.length];
+      return { x: sp.x + 30 * Math.floor(i / spots.length), y: sp.y, auto: true };
+    }
     const h = HERBERGI.find((x) => x.key === k);
     if (!h) return undefined;
-    const sama = ljos.filter((x) => !stadir[x.id] && herbergiLykill(x.room) === k);
-    const i = sama.findIndex((x) => x.id === l.id);
     return { x: Math.round(h.x + (h.w * (i + 1)) / (sama.length + 1)), y: Math.round(h.y + h.h * 0.28), auto: true };
   };
   const rymiLjoss = (id: string) => {
@@ -164,24 +179,21 @@ export default function LjosClient() {
             style={{ flex: 1, minHeight: 44, borderRadius: 12, border: "1px solid #2E323D", background: "#1A1D24", color: "#F2F2EE", padding: "0 12px", fontSize: 16 }} />
         </label>
 
-        <svg viewBox="170 0 810 1110" role="group" aria-label="Grunnmynd af Langamýri 22" onClick={smellaKort} style={{ width: "100%", background: "#14161C", borderRadius: 20, cursor: stadsetja ? "crosshair" : "default" }}>
+        <svg viewBox="160 0 850 1170" role="group" aria-label="Grunnmynd af Langamýri 22" onClick={smellaKort} style={{ width: "100%", background: "#E8E0EE", borderRadius: 20, cursor: stadsetja ? "crosshair" : "default" }}>
+          <image href="/ljos-grunnmynd.jpg" x={0} y={0} width={1080} height={1170} />
           {HERBERGI.map((h) => {
             const ls = ljosI(h.key);
             const lit = ls.filter((l) => l.on);
-            const fill = lit.length ? lit[0].color : "#1A1D24";
-            const op = lit.length ? 0.35 + (lit.reduce((a, l) => a + l.bri, 0) / lit.length / 100) * 0.6 : 1;
+            const fill = lit.length ? lit[0].color : "transparent";
+            const op = lit.length ? 0.25 + (lit.reduce((a, l) => a + l.bri, 0) / lit.length / 100) * 0.35 : 1;
             const merkt = val === h.key;
             return (
               <g key={h.key} role="button" tabIndex={0} aria-pressed={lit.length > 0}
                 aria-label={`${NAFN[h.key]}${ls.length ? "" : " (engin ljós skráð)"}`}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); haettaHerbergi(h.key); } }}
                 style={{ cursor: "pointer", outline: "none" }}>
-                <rect x={h.x} y={h.y} width={h.w} height={h.h} rx={10} fill={fill} fillOpacity={op}
-                  stroke={merkt ? "#F5B544" : "#5B3BC4"} strokeWidth={merkt ? 8 : 5} />
-                <text x={h.x + h.w / 2} y={h.y + h.h / 2} textAnchor="middle" fontSize={34} fontWeight={700}
-                  fill={lit.length ? "#101217" : "#C9CCD4"}>{h.nafn}</text>
-                <text x={h.x + h.w / 2} y={h.y + h.h / 2 + 38} textAnchor="middle" fontSize={26}
-                  fill={lit.length ? "#101217" : "#A3A8B4"}>{ls.length ? `${lit.length}/${ls.length} kveikt` : "–"}</text>
+                <rect x={h.x} y={h.y} width={h.w} height={h.h} rx={8} fill={fill} fillOpacity={op}
+                  stroke={merkt ? "#F5B544" : "none"} strokeWidth={merkt ? 8 : 0} />
               </g>
             );
           })}
@@ -194,9 +206,9 @@ export default function LjosClient() {
                 onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: { x: p.x, y: p.y } }); setStadsetja(null); } else if (l.reachable) senda([l.id], { on: !l.on }); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (l.reachable) senda([l.id], { on: !l.on }); } }}
                 style={{ cursor: "pointer", outline: "none" }}>
-                <circle cx={p.x} cy={p.y} r={26} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#F2F2EE" : "#F5A524"} strokeWidth={4}
+                <circle cx={p.x} cy={p.y} r={22} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#101217" : "#F5A524"} strokeWidth={5}
                   style={lit ? { filter: `drop-shadow(0 0 10px ${l.color})` } : undefined} />
-                <text x={p.x} y={p.y + 52} textAnchor="middle" fontSize={22} fill="#C9CCD4" style={{ pointerEvents: "none" }}>{l.name.slice(0, 14)}</text>
+                <text x={p.x} y={p.y + 52} textAnchor="middle" fontSize={20} fontWeight={700} fill="#101217" stroke="#FFFFFF" strokeWidth={5} paintOrder="stroke" style={{ pointerEvents: "none" }}>{l.name.slice(0, 14)}</text>
               </g>
             );
           })}
