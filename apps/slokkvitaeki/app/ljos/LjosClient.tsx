@@ -90,21 +90,29 @@ export default function LjosClient() {
   const herbergiAt = (x: number, y: number) =>
     HERBERGI.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.key;
   // Vistuð staðsetning gildir; annars sjálfvirk út frá herbergisnafni (dreift yfir herbergið).
-  const stadurLjoss = (l: Ljos): { x: number; y: number; auto: boolean } | undefined => {
+  const stadurLjoss = (l: Ljos): { x: number; y: number; auto: boolean; n: number; j: number } | undefined => {
     const p = stadir[l.id];
-    if (p) return { ...p, auto: false };
+    if (p) return { ...p, auto: false, n: 1, j: 0 };
     const k = herbergiLykill(l.room);
     if (!k) return undefined;
     const sama = ljos.filter((x) => !stadir[x.id] && herbergiLykill(x.room) === k);
     const i = Math.max(0, sama.findIndex((x) => x.id === l.id));
     const spots = LJOSASTADIR[k];
     if (spots?.length) {
-      const sp = spots[i % spots.length];
-      return { x: sp.x + 30 * Math.floor(i / spots.length), y: sp.y, auto: true };
+      // Mörg ljós á sama stað (t.d. ljósakróna með 12 perum) raðast í hring utan um staðinn.
+      const idx = i % spots.length;
+      const sp = spots[idx];
+      const hopur = sama.filter((_, q) => q % spots.length === idx);
+      const n = hopur.length;
+      const j = Math.max(0, hopur.findIndex((x) => x.id === l.id));
+      if (n <= 1) return { x: sp.x, y: sp.y, auto: true, n, j };
+      const R = n <= 3 ? 28 : 40;
+      const a = (2 * Math.PI * j) / n - Math.PI / 2;
+      return { x: Math.round(sp.x + R * Math.cos(a)), y: Math.round(sp.y + R * Math.sin(a)), auto: true, n, j };
     }
     const h = HERBERGI.find((x) => x.key === k);
     if (!h) return undefined;
-    return { x: Math.round(h.x + (h.w * (i + 1)) / (sama.length + 1)), y: Math.round(h.y + h.h * 0.28), auto: true };
+    return { x: Math.round(h.x + (h.w * (i + 1)) / (sama.length + 1)), y: Math.round(h.y + h.h * 0.28), auto: true, n: 1, j: 0 };
   };
   const rymiLjoss = (id: string) => {
     const l = ljos.find((x) => x.id === id);
@@ -206,9 +214,9 @@ export default function LjosClient() {
                 onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: { x: p.x, y: p.y } }); setStadsetja(null); } else if (l.reachable) senda([l.id], { on: !l.on }); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (l.reachable) senda([l.id], { on: !l.on }); } }}
                 style={{ cursor: "pointer", outline: "none" }}>
-                <circle cx={p.x} cy={p.y} r={22} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#101217" : "#F5A524"} strokeWidth={5}
+                <circle cx={p.x} cy={p.y} r={p.n <= 1 ? 22 : p.n <= 3 ? 15 : 9} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#101217" : "#F5A524"} strokeWidth={5}
                   style={lit ? { filter: `drop-shadow(0 0 10px ${l.color})` } : undefined} />
-                <text x={p.x} y={p.y + 52} textAnchor="middle" fontSize={20} fontWeight={700} fill="#101217" stroke="#FFFFFF" strokeWidth={5} paintOrder="stroke" style={{ pointerEvents: "none" }}>{l.name.slice(0, 14)}</text>
+                <text x={p.x} y={p.y + (p.n > 1 ? 70 : 52)} textAnchor="middle" fontSize={20} fontWeight={700} fill="#101217" stroke="#FFFFFF" strokeWidth={5} paintOrder="stroke" style={{ pointerEvents: "none" }}>{p.n > 1 ? (p.j === 0 ? `${l.name.slice(0, 12)} ×${p.n}` : "") : l.name.slice(0, 14)}</text>
               </g>
             );
           })}
