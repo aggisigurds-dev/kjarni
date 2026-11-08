@@ -10,3 +10,10 @@ Dirigera er bara aðgengilegt á heimanetinu, svo þessi litla þjónusta keyrir
 5. Í Vercel (slokkvitaeki): `LJOS_BRIDGE_URL=<https-slóð>` og `LJOS_BRIDGE_TOKEN=<sama leyndarmál>`.
 
 Brúin neitar öllu án `Authorization: Bearer <BRIDGE_TOKEN>`. Ekki opna hana án tunnels með auth.
+
+## Lærdómshamur (fjarstýringar)
+
+`node bridge.mjs --learn` (með sömu env-breytum) skrifar alla atburði frá Dirigera í gluggann.
+Ýttu á hnapp á fjarstýringu og sendu mér það sem birtist. **Óvíst enn** hvort Dirigera tilkynnir
+hnappaýtingar frá fjarstýringum sem eru tengdar beint við ljós; ótengd fjarstýring (t.d. „Hring")
+er líklegust til að sýna atburði. Skiptu um CR2032-rafhlöðu ef hún er offline.

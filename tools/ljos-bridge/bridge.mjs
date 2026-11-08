@@ -33,6 +33,13 @@ async function lights() {
   }));
 }
 
+// Lærdómshamur: `node bridge.mjs --learn` skrifar alla atburði frá Dirigera (t.d. hnappaýtingar).
+// Ýttu á hnapp á fjarstýringu og sjáðu hvað kemur — svo er hægt að tengja hnappa við aðgerðir.
+if (process.argv.includes("--learn")) {
+  console.log("Lærdómshamur: ýttu á hnappa á fjarstýringunum. Ctrl+C til að hætta.");
+  client.startListeningForUpdates((ev) => console.log(new Date().toISOString(), JSON.stringify(ev)));
+}
+
 const server = http.createServer(async (req, res) => {
   const send = (code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
   if (req.headers.authorization !== `Bearer ${BRIDGE_TOKEN}`) return send(401, { error: "unauthorized" });
