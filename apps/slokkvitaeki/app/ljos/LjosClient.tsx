@@ -31,7 +31,7 @@ const HERBERGI = [
 const LJOSASTADIR: Record<string, { x: number; y: number }[]> = {
   living: [{ x: 822, y: 312 }],
   dining: [{ x: 826, y: 523 }],
-  hol: [{ x: 535, y: 588 }, { x: 557, y: 773 }, { x: 684, y: 769 }],
+  hol: [{ x: 535, y: 588 }, { x: 530, y: 775 }, { x: 584, y: 772 }, { x: 684, y: 769 }],
   eldhus: [{ x: 861, y: 765 }, { x: 869, y: 881 }, { x: 869, y: 981 }],
   anddyri: [{ x: 684, y: 973 }],
 };
