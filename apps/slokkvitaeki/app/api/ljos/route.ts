@@ -2,9 +2,12 @@
 //  - Philips Hue: Remote API (skýið). Env: HUE_REMOTE_TOKEN, HUE_USERNAME.
 //  - IKEA Dirigera: aðeins á staðarneti → litla brúin í tools/ljos-bridge keyrir heima
 //    og er gerð aðgengileg með t.d. Cloudflare Tunnel. Env: LJOS_BRIDGE_URL, LJOS_BRIDGE_TOKEN.
-// Ljós-id eru með forskeyti: "h:" = Hue, "i:" = IKEA (brú).
+//  - Luminus (Tuya-app): Tuya Cloud OpenAPI, sjá tuya.ts. Env: TUYA_ACCESS_ID,
+//    TUYA_ACCESS_SECRET, TUYA_UID, TUYA_REGION.
+// Ljós-id eru með forskeyti: "h:" = Hue, "i:" = IKEA (brú), "t:" = Tuya/Luminus.
 // Án neinnar tengingar = sýnihamur. Skrif krefjast alltaf LJOS_PIN (fail closed).
 import { NextResponse } from "next/server";
+import { listTuya, setTuya, tuyaCfg } from "./tuya";
 
 export const dynamic = "force-dynamic";
 
@@ -87,8 +90,9 @@ async function bridgeCall(path: string, init?: RequestInit) {
 export async function GET() {
   const c = cfg();
   const b = bridge();
-  if (!c && !b) return NextResponse.json({ demo: true, lights: DEMO });
-  const [hueRes, ikeaRes] = await Promise.allSettled([
+  const ty = tuyaCfg();
+  if (!c && !b && !ty) return NextResponse.json({ demo: true, lights: DEMO });
+  const [hueRes, ikeaRes, tuyaRes] = await Promise.allSettled([
     c
       ? (hue(`/${c.user}/lights`, c.token) as Promise<Record<string, HueLight>>).then((raw) =>
           Object.entries(raw).map(([id, l]): Ljos => ({
@@ -105,14 +109,17 @@ export async function GET() {
     b
       ? (bridgeCall("/lights") as Promise<Ljos[]>).then((ls) => ls.map((l) => ({ ...l, id: `i:${l.id}` })))
       : Promise.resolve([] as Ljos[]),
+    ty ? listTuya().then((ls) => ls.map((l) => ({ ...l, id: `t:${l.id}` }))) : Promise.resolve([] as Ljos[]),
   ]);
   const lights = [
     ...(hueRes.status === "fulfilled" ? hueRes.value : []),
     ...(ikeaRes.status === "fulfilled" ? ikeaRes.value : []),
+    ...(tuyaRes.status === "fulfilled" ? tuyaRes.value : []),
   ];
   const errors = [
     hueRes.status === "rejected" ? "Hue" : "",
     ikeaRes.status === "rejected" ? "IKEA-brú" : "",
+    tuyaRes.status === "rejected" ? "Luminus" : "",
   ].filter(Boolean);
   if (lights.length === 0 && errors.length) {
     return NextResponse.json({ error: `Næ ekki sambandi: ${errors.join(", ")}` }, { status: 502 });
@@ -134,7 +141,7 @@ export async function PUT(req: Request) {
   if (!body || !Array.isArray(body.ids) || body.ids.length === 0 || body.ids.length > 50) {
     return NextResponse.json({ error: "Ógild beiðni" }, { status: 400 });
   }
-  const ids = body.ids.map(String).filter((i) => /^[hi]:[A-Za-z0-9_-]{1,80}$/.test(i));
+  const ids = body.ids.map(String).filter((i) => /^[hit]:[A-Za-z0-9_-]{1,80}$/.test(i));
   const state: { on?: boolean; bri?: number; color?: string } = {};
   if (typeof body.on === "boolean") state.on = body.on;
   if (typeof body.bri === "number") {
@@ -150,9 +157,11 @@ export async function PUT(req: Request) {
   }
   const c = cfg();
   const b = bridge();
-  if (!c && !b) return NextResponse.json({ ok: true, demo: true });
+  const ty = tuyaCfg();
+  if (!c && !b && !ty) return NextResponse.json({ ok: true, demo: true });
   const hueIds = ids.filter((i) => i.startsWith("h:")).map((i) => i.slice(2));
   const ikeaIds = ids.filter((i) => i.startsWith("i:")).map((i) => i.slice(2));
+  const tuyaIds = ids.filter((i) => i.startsWith("t:")).map((i) => i.slice(2));
   const hueState: Record<string, unknown> = {};
   if (state.on !== undefined) hueState.on = state.on;
   if (state.bri !== undefined) hueState.bri = Math.round((state.bri / 100) * 254);
@@ -162,6 +171,7 @@ export async function PUT(req: Request) {
       ...(c ? hueIds : []).map((id) =>
         hue(`/${c!.user}/lights/${id}/state`, c!.token, { method: "PUT", body: JSON.stringify(hueState) }),
       ),
+      ...(ty && tuyaIds.length ? [setTuya(tuyaIds, state)] : []),
       ...(b && ikeaIds.length ? [bridgeCall("/state", { method: "PUT", body: JSON.stringify({ ids: ikeaIds, ...state }) })] : []),
     ]);
     return NextResponse.json({ ok: true });

@@ -252,7 +252,7 @@ export default function LjosClient() {
         )}
 
         <p style={{ margin: 0, fontSize: 12, color: "#6B7080" }}>
-          Staðsetningar ljósa eru geymdar í þessum vafra. Hue stýrist úr skýinu, IKEA í gegnum brú heima (tools/ljos-bridge); Luminus er ekki með.
+          Staðsetningar ljósa eru geymdar í þessum vafra. Hue og Luminus (Tuya) stýrast úr skýinu, IKEA í gegnum brú heima (tools/ljos-bridge).
         </p>
       </div>
     </main>
