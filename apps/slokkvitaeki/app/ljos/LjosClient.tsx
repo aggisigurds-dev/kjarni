@@ -7,6 +7,7 @@ const SENUR = [
   { key: "kosy10", label: "Kósý 10%", swatch: "#FFB066", on: true, bri: 10, color: "#FFB066" },
   { key: "kosy", label: "Kósý", swatch: "#FFC27A", on: true, bri: 40, color: "#FFC27A" },
   { key: "bjart", label: "Bjart", swatch: "#FFF4E0", on: true, bri: 100, color: "#FFF4E0" },
+  { key: "hvitt", label: "Hvítt", swatch: "#FBFBFF", on: true, bri: 80, white: "neutral" as const },
   { key: "slokkt", label: "Slökkt", swatch: "#2E323D", on: false },
 ] as const;
 
@@ -85,8 +86,9 @@ export default function LjosClient() {
     if (k) haettaHerbergi(k);
   }
 
-  async function senda(ids: string[], body: { on?: boolean; bri?: number; color?: string }) {
-    setLjos((cur) => cur.map((l) => (ids.includes(l.id) ? { ...l, ...body, color: body.color ?? l.color } : l)));
+  async function senda(ids: string[], body: { on?: boolean; bri?: number; color?: string; white?: "warm" | "neutral" | "cool" }) {
+    const WHITE = { warm: "#FFC27A", neutral: "#FFF1DE", cool: "#E2ECFF" };
+    setLjos((cur) => cur.map((l) => (ids.includes(l.id) ? { ...l, on: body.on ?? l.on, bri: body.bri ?? l.bri, color: body.white ? WHITE[body.white] : body.color ?? l.color } : l)));
     const r = await fetch("/api/ljos", {
       method: "PUT",
       headers: { "Content-Type": "application/json", "x-ljos-pin": pin },
@@ -188,10 +190,23 @@ export default function LjosClient() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
           {SENUR.map((s) => (
-            <button key={s.key} onClick={() => senda(nåanleg, s.on ? { on: true, bri: s.bri, color: s.color } : { on: false })}
+            <button key={s.key} onClick={() => senda(nåanleg, s.on ? { on: true, bri: s.bri, ..."white" in s ? { white: s.white } : { color: s.color } } : { on: false })}
               style={{ minHeight: 76, borderRadius: 18, border: "1px solid #262A33", background: "#1A1D24", color: "#F2F2EE", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
               <span style={{ width: 28, height: 28, borderRadius: 14, background: s.swatch }} />
               {s.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ flex: 1, fontSize: 13, color: "#A3A8B4", fontWeight: 700 }}>
+            BIRTA {val ? NAFN[val].toUpperCase() : "ALLS"}
+          </span>
+          {([-10, 10] as const).map((d) => (
+            <button key={d} aria-label={d > 0 ? "Hækka birtu" : "Lækka birtu"}
+              onClick={() => synd.filter((l) => l.on && l.reachable).forEach((l) => senda([l.id], { bri: Math.min(100, Math.max(1, l.bri + d)) }))}
+              style={{ minWidth: 64, minHeight: 48, borderRadius: 24, border: "1px solid #2E323D", background: "#1A1D24", color: "#F2F2EE", fontSize: 22, fontWeight: 700, cursor: "pointer" }}>
+              {d > 0 ? "+" : "−"}
             </button>
           ))}
         </div>
@@ -235,6 +250,14 @@ export default function LjosClient() {
                       onPointerUp={(e) => senda([l.id], { bri: Number((e.target as HTMLInputElement).value) })}
                       onKeyUp={(e) => senda([l.id], { bri: Number((e.target as HTMLInputElement).value) })} />
                     <span style={{ width: 38, textAlign: "right", fontSize: 13, fontWeight: 700 }}>{l.bri}%</span>
+                  </div>
+                )}
+                {lit && (
+                  <div style={{ display: "flex", gap: 6, paddingLeft: 52 }}>
+                    {([["warm", "Heitt hvítt"], ["neutral", "Hvítt"], ["cool", "Kalt hvítt"]] as const).map(([k, t]) => (
+                      <button key={k} onClick={() => senda([l.id], { white: k })}
+                        style={{ flex: 1, minHeight: 44, borderRadius: 22, border: "1px solid #2E323D", background: "#101217", color: "#F2F2EE", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{t}</button>
+                    ))}
                   </div>
                 )}
               </li>

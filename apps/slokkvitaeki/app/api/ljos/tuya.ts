@@ -101,7 +101,10 @@ function hexToHsv(hex: string) {
   return { h: Math.round((h * 60 + 360) % 360), s: max ? Math.round((d / max) * 1000) : 0, v: 1000 };
 }
 
-export async function setTuya(ids: string[], state: { on?: boolean; bri?: number; color?: string }) {
+export async function setTuya(
+  ids: string[],
+  state: { on?: boolean; bri?: number; color?: string; white?: "warm" | "neutral" | "cool" },
+) {
   const tk = await token();
   await Promise.all(
     ids.map(async (id) => {
@@ -109,12 +112,19 @@ export async function setTuya(ids: string[], state: { on?: boolean; bri?: number
       const onCode = get(st, "switch_led", "switch_1", "switch")?.code ?? "switch_led";
       const commands: Status[] = [];
       if (state.on !== undefined) commands.push({ code: onCode, value: state.on });
-      if (state.color && get(st, "colour_data_v2", "colour_data")) {
+      if (state.white) {
+        const temp = { warm: 0, neutral: 500, cool: 1000 }[state.white];
+        commands.push({ code: "work_mode", value: "white" });
+        if (get(st, "temp_value_v2")) commands.push({ code: "temp_value_v2", value: temp });
+        else if (get(st, "temp_value")) commands.push({ code: "temp_value", value: Math.round(temp / 4) });
+      }
+      if (state.color && !state.white && get(st, "colour_data_v2", "colour_data")) {
         const v2 = Boolean(get(st, "colour_data_v2"));
         commands.push({ code: "work_mode", value: "colour" });
         const hsv = hexToHsv(state.color);
         commands.push({ code: v2 ? "colour_data_v2" : "colour_data", value: v2 ? hsv : { h: hsv.h, s: Math.round(hsv.s / 4), v: 255 } });
-      } else if (state.bri !== undefined) {
+      }
+      if (state.bri !== undefined && !(state.color && !state.white)) {
         const v2 = Boolean(get(st, "bright_value_v2"));
         commands.push({
           code: v2 ? "bright_value_v2" : "bright_value",

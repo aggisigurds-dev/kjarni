@@ -137,12 +137,13 @@ export async function PUT(req: Request) {
     on?: unknown;
     bri?: unknown;
     color?: unknown;
+    white?: unknown;
   } | null;
   if (!body || !Array.isArray(body.ids) || body.ids.length === 0 || body.ids.length > 50) {
     return NextResponse.json({ error: "Ógild beiðni" }, { status: 400 });
   }
   const ids = body.ids.map(String).filter((i) => /^[hit]:[A-Za-z0-9_-]{1,80}$/.test(i));
-  const state: { on?: boolean; bri?: number; color?: string } = {};
+  const state: { on?: boolean; bri?: number; color?: string; white?: "warm" | "neutral" | "cool" } = {};
   if (typeof body.on === "boolean") state.on = body.on;
   if (typeof body.bri === "number") {
     state.bri = Math.min(100, Math.max(1, Math.round(body.bri)));
@@ -150,6 +151,10 @@ export async function PUT(req: Request) {
   }
   if (typeof body.color === "string" && /^#[0-9a-fA-F]{6}$/.test(body.color)) {
     state.color = body.color;
+    state.on = true;
+  }
+  if (body.white === "warm" || body.white === "neutral" || body.white === "cool") {
+    state.white = body.white;
     state.on = true;
   }
   if (Object.keys(state).length === 0 || ids.length === 0) {
@@ -165,7 +170,8 @@ export async function PUT(req: Request) {
   const hueState: Record<string, unknown> = {};
   if (state.on !== undefined) hueState.on = state.on;
   if (state.bri !== undefined) hueState.bri = Math.round((state.bri / 100) * 254);
-  if (state.color) hueState.xy = hexToXy(state.color);
+  if (state.white) hueState.ct = { warm: 400, neutral: 300, cool: 200 }[state.white];
+  else if (state.color) hueState.xy = hexToXy(state.color);
   try {
     await Promise.all([
       ...(c ? hueIds : []).map((id) =>

@@ -48,10 +48,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "PUT" && req.url === "/state") {
       let raw = "";
       for await (const c of req) { raw += c; if (raw.length > 10_000) return send(413, { error: "too large" }); }
-      const { ids, on, bri, color } = JSON.parse(raw);
+      const { ids, on, bri, color, white } = JSON.parse(raw);
       for (const id of ids) {
         if (typeof on === "boolean") await client.lights.setIsOn({ id, isOn: on });
         if (typeof bri === "number") await client.lights.setLightLevel({ id, lightLevel: bri });
+        if (white === "warm" || white === "neutral" || white === "cool") {
+          await client.lights.setLightTemperature({ id, colorTemperature: { warm: 2700, neutral: 3300, cool: 4000 }[white] });
+        }
         if (typeof color === "string" && /^#[0-9a-fA-F]{6}$/.test(color)) await client.lights.setLightColor({ id, ...hexToHs(color) });
       }
       return send(200, { ok: true });
