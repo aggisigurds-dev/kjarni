@@ -1,0 +1,19 @@
+{
+  "name": "ljos-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "IKEA Dirigera -> /api/ljos brú (keyrir heima á sama neti og Dirigera)",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env bridge.mjs",
+    "learn": "node --env-file=.env bridge.mjs --learn",
+    "auth": "node --env-file=.env auth.mjs",
+    "discover": "node discover.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dirigera": "^2.0.2"
+  }
+}

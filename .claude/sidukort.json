@@ -1649,6 +1649,28 @@
     "bókamerki"
    ],
    "app": "web"
+  },
+  {
+   "id": "slokkvitaeki:/ljos",
+   "titill": "Ljósastýring Langamýri 22 (Hue Remote API)",
+   "tegund": "sida",
+   "leid": "/ljos",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/ljos/page.tsx",
+    "apps/slokkvitaeki/app/api/ljos/route.ts"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "oryggi"
+   ],
+   "kveikjuord": [
+    "ljós",
+    "ljósastýring",
+    "Langamýri",
+    "Hue"
+   ],
+   "app": "slokkvitaeki"
   }
  ]
 }
