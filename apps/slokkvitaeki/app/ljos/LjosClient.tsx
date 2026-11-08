@@ -90,7 +90,7 @@ export default function LjosClient() {
   const herbergiAt = (x: number, y: number) =>
     HERBERGI.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.key;
   // Vistuð staðsetning gildir; annars sjálfvirk út frá herbergisnafni (dreift yfir herbergið).
-  const stadurLjoss = (l: Ljos): { x: number; y: number; auto: boolean; n: number; j: number } | undefined => {
+  const stadurLjoss = (l: Ljos): { x: number; y: number; auto: boolean; n: number; j: number; g?: string } | undefined => {
     const p = stadir[l.id];
     if (p) return { ...p, auto: false, n: 1, j: 0 };
     const k = herbergiLykill(l.room);
@@ -105,10 +105,10 @@ export default function LjosClient() {
       const hopur = sama.filter((_, q) => q % spots.length === idx);
       const n = hopur.length;
       const j = Math.max(0, hopur.findIndex((x) => x.id === l.id));
-      if (n <= 1) return { x: sp.x, y: sp.y, auto: true, n, j };
+      if (n <= 1) return { x: sp.x, y: sp.y, auto: true, n, j, g: `${k}:${idx}` };
       const R = n <= 3 ? 28 : 40;
       const a = (2 * Math.PI * j) / n - Math.PI / 2;
-      return { x: Math.round(sp.x + R * Math.cos(a)), y: Math.round(sp.y + R * Math.sin(a)), auto: true, n, j };
+      return { x: Math.round(sp.x + R * Math.cos(a)), y: Math.round(sp.y + R * Math.sin(a)), auto: true, n, j, g: `${k}:${idx}` };
     }
     const h = HERBERGI.find((x) => x.key === k);
     if (!h) return undefined;
@@ -211,7 +211,11 @@ export default function LjosClient() {
             const lit = l.on && l.reachable;
             return (
               <g key={l.id} role="button" tabIndex={0} aria-label={`${l.name}: ${lit ? "kveikt" : "slökkt"}`}
-                onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: { x: p.x, y: p.y } }); setStadsetja(null); } else if (l.reachable) senda([l.id], { on: !l.on }); }}
+                onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: { x: p.x, y: p.y } }); setStadsetja(null); } else if (p.g && p.n > 1) {
+                  // Hringur af mörgum perum (t.d. borðstofukróna): kveikja/slökkva á öllum í einu.
+                  const hopur = ljos.filter((x) => x.reachable && stadurLjoss(x)?.g === p.g);
+                  senda(hopur.map((x) => x.id), { on: !hopur.some((x) => x.on) });
+                } else if (l.reachable) senda([l.id], { on: !l.on }); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (l.reachable) senda([l.id], { on: !l.on }); } }}
                 style={{ cursor: "pointer", outline: "none" }}>
                 <circle cx={p.x} cy={p.y} r={p.n <= 1 ? 22 : p.n <= 3 ? 15 : 9} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#101217" : "#F5A524"} strokeWidth={5}
