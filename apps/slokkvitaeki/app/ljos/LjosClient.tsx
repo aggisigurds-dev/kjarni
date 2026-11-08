@@ -31,6 +31,18 @@ const NAFN: Record<string, string> = {
   hol: "Sjónvarpshol", bad: "Bað", anddyri: "Anddyri", eldhus: "Eldhús", svalir: "Svalir",
 };
 
+// Herbergisnöfn úr IKEA-appinu → herbergi á teikningunni (ágiskun; hægt að færa hvert ljós).
+function herbergiLykill(nafn?: string): string | undefined {
+  const n = (nafn ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ð/g, "d").replace(/þ/g, "th").replace(/æ/g, "ae");
+  if (!n || n.includes("allt husid")) return undefined;
+  const tbl: [string, string][] = [
+    ["eldhus", "eldhus"], ["anddyri", "anddyri"], ["bad", "bad"], ["living", "stofa"], ["stofa", "stofa"],
+    ["dining", "stofa"], ["svefn", "hjon"], ["hjon", "hjon"], ["iris", "barn1"], ["birta", "barn1"],
+    ["barn", "barn2"], ["thvott", "thvottur"], ["sjonvarp", "hol"], ["hol", "hol"], ["svalir", "svalir"],
+  ];
+  return tbl.find(([k]) => n.includes(k))?.[1];
+}
+
 export default function LjosClient() {
   const [ljos, setLjos] = useState<Ljos[]>([]);
   const [demo, setDemo] = useState(false);
@@ -68,8 +80,20 @@ export default function LjosClient() {
   }
   const herbergiAt = (x: number, y: number) =>
     HERBERGI.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.key;
+  // Vistuð staðsetning gildir; annars sjálfvirk út frá herbergisnafni (dreift yfir herbergið).
+  const stadurLjoss = (l: Ljos): { x: number; y: number; auto: boolean } | undefined => {
+    const p = stadir[l.id];
+    if (p) return { ...p, auto: false };
+    const k = herbergiLykill(l.room);
+    const h = HERBERGI.find((x) => x.key === k);
+    if (!h) return undefined;
+    const sama = ljos.filter((x) => !stadir[x.id] && herbergiLykill(x.room) === k);
+    const i = sama.findIndex((x) => x.id === l.id);
+    return { x: Math.round(h.x + (h.w * (i + 1)) / (sama.length + 1)), y: Math.round(h.y + h.h * 0.28), auto: true };
+  };
   const rymiLjoss = (id: string) => {
-    const p = stadir[id];
+    const l = ljos.find((x) => x.id === id);
+    const p = l && stadurLjoss(l);
     return p ? herbergiAt(p.x, p.y) : undefined;
   };
   function smellaKort(e: React.MouseEvent<SVGSVGElement>) {
@@ -162,12 +186,12 @@ export default function LjosClient() {
             );
           })}
           {ljos.map((l) => {
-            const p = stadir[l.id];
+            const p = stadurLjoss(l);
             if (!p) return null;
             const lit = l.on && l.reachable;
             return (
               <g key={l.id} role="button" tabIndex={0} aria-label={`${l.name}: ${lit ? "kveikt" : "slökkt"}`}
-                onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: p }); setStadsetja(null); } else if (l.reachable) senda([l.id], { on: !l.on }); }}
+                onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: { x: p.x, y: p.y } }); setStadsetja(null); } else if (l.reachable) senda([l.id], { on: !l.on }); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (l.reachable) senda([l.id], { on: !l.on }); } }}
                 style={{ cursor: "pointer", outline: "none" }}>
                 <circle cx={p.x} cy={p.y} r={26} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#F2F2EE" : "#F5A524"} strokeWidth={4}
@@ -240,7 +264,7 @@ export default function LjosClient() {
                   <span style={{ flex: 1 }}>{rymiLjoss(l.id) ? NAFN[rymiLjoss(l.id)!] : "Óstaðsett"}</span>
                   <button onClick={() => setStadsetja(stadsetja === l.id ? null : l.id)}
                     style={{ minHeight: 44, padding: "0 14px", borderRadius: 22, border: "1px solid #2E323D", background: stadsetja === l.id ? "#F5B544" : "#101217", color: stadsetja === l.id ? "#101217" : "#F2F2EE", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                    {stadir[l.id] ? "Færa á teikningu" : "Staðsetja á teikningu"}
+                    {stadurLjoss(l) ? "Færa á teikningu" : "Staðsetja á teikningu"}
                   </button>
                 </div>
                 {lit && (

@@ -27,6 +27,7 @@ export type Ljos = {
   reachable: boolean;
   color: string; // hex, áætlað
   canColor: boolean;
+  room?: string; // herbergisnafn úr upprunakerfi (IKEA), ef til
 };
 
 const DEMO: Ljos[] = [
