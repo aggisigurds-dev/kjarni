@@ -36,7 +36,8 @@ export default function LjosClient() {
   const [villa, setVilla] = useState("");
   const [pin, setPin] = useState("");
   const [opid, setOpid] = useState<string | null>(null);
-  const [rym, setRym] = useState<Record<string, string>>({}); // ljós-id -> herbergi
+  const [stadir, setStadir] = useState<Record<string, { x: number; y: number }>>({});
+  const [stadsetja, setStadsetja] = useState<string | null>(null); // ljós sem er verið að staðsetja
   const [val, setVal] = useState<string | null>(null);
 
   const lesa = useCallback(async () => {
@@ -55,16 +56,33 @@ export default function LjosClient() {
   useEffect(() => {
     try {
       setPin(sessionStorage.getItem("ljos-pin") ?? "");
-      setRym(JSON.parse(localStorage.getItem("ljos-herbergi") ?? "{}"));
+      setStadir(JSON.parse(localStorage.getItem("ljos-stadir") ?? "{}"));
     } catch {}
     lesa();
   }, [lesa]);
 
-  function setHerbergi(id: string, key: string) {
-    const nytt = { ...rym, [id]: key };
-    if (!key) delete nytt[id];
-    setRym(nytt);
-    try { localStorage.setItem("ljos-herbergi", JSON.stringify(nytt)); } catch {}
+  function vistaStadi(nytt: Record<string, { x: number; y: number }>) {
+    setStadir(nytt);
+    try { localStorage.setItem("ljos-stadir", JSON.stringify(nytt)); } catch {}
+  }
+  const herbergiAt = (x: number, y: number) =>
+    HERBERGI.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.key;
+  const rymiLjoss = (id: string) => {
+    const p = stadir[id];
+    return p ? herbergiAt(p.x, p.y) : undefined;
+  };
+  function smellaKort(e: React.MouseEvent<SVGSVGElement>) {
+    const svg = e.currentTarget;
+    const m = svg.getScreenCTM();
+    if (!m) return;
+    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+    if (stadsetja) {
+      vistaStadi({ ...stadir, [stadsetja]: { x: Math.round(pt.x), y: Math.round(pt.y) } });
+      setStadsetja(null);
+      return;
+    }
+    const k = herbergiAt(pt.x, pt.y);
+    if (k) haettaHerbergi(k);
   }
 
   async function senda(ids: string[], body: { on?: boolean; bri?: number; color?: string }) {
@@ -80,7 +98,7 @@ export default function LjosClient() {
     } else setVilla("");
   }
 
-  const ljosI = (key: string) => ljos.filter((l) => rym[l.id] === key && l.reachable);
+  const ljosI = (key: string) => ljos.filter((l) => rymiLjoss(l.id) === key && l.reachable);
   function haettaHerbergi(key: string) {
     const ls = ljosI(key);
     setVal(key);
@@ -91,7 +109,7 @@ export default function LjosClient() {
   const kveikt = ljos.filter((l) => l.on && l.reachable).length;
   const nåanleg = ljos.filter((l) => l.reachable).map((l) => l.id);
   const opna = ljos.find((l) => l.id === opid);
-  const synd = val ? ljos.filter((l) => rym[l.id] === val) : ljos;
+  const synd = val ? ljos.filter((l) => rymiLjoss(l.id) === val) : ljos;
 
   return (
     <main style={{ minHeight: "100vh", background: "#101217", color: "#F2F2EE", fontFamily: "system-ui, sans-serif" }}>
@@ -120,7 +138,7 @@ export default function LjosClient() {
             style={{ flex: 1, minHeight: 44, borderRadius: 12, border: "1px solid #2E323D", background: "#1A1D24", color: "#F2F2EE", padding: "0 12px", fontSize: 16 }} />
         </label>
 
-        <svg viewBox="170 0 810 1110" role="group" aria-label="Grunnmynd af Langamýri 22" style={{ width: "100%", background: "#14161C", borderRadius: 20 }}>
+        <svg viewBox="170 0 810 1110" role="group" aria-label="Grunnmynd af Langamýri 22" onClick={smellaKort} style={{ width: "100%", background: "#14161C", borderRadius: 20, cursor: stadsetja ? "crosshair" : "default" }}>
           {HERBERGI.map((h) => {
             const ls = ljosI(h.key);
             const lit = ls.filter((l) => l.on);
@@ -130,7 +148,6 @@ export default function LjosClient() {
             return (
               <g key={h.key} role="button" tabIndex={0} aria-pressed={lit.length > 0}
                 aria-label={`${NAFN[h.key]}${ls.length ? "" : " (engin ljós skráð)"}`}
-                onClick={() => haettaHerbergi(h.key)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); haettaHerbergi(h.key); } }}
                 style={{ cursor: "pointer", outline: "none" }}>
                 <rect x={h.x} y={h.y} width={h.w} height={h.h} rx={10} fill={fill} fillOpacity={op}
@@ -142,7 +159,27 @@ export default function LjosClient() {
               </g>
             );
           })}
+          {ljos.map((l) => {
+            const p = stadir[l.id];
+            if (!p) return null;
+            const lit = l.on && l.reachable;
+            return (
+              <g key={l.id} role="button" tabIndex={0} aria-label={`${l.name}: ${lit ? "kveikt" : "slökkt"}`}
+                onClick={(e) => { e.stopPropagation(); if (stadsetja) { vistaStadi({ ...stadir, [stadsetja]: p }); setStadsetja(null); } else if (l.reachable) senda([l.id], { on: !l.on }); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (l.reachable) senda([l.id], { on: !l.on }); } }}
+                style={{ cursor: "pointer", outline: "none" }}>
+                <circle cx={p.x} cy={p.y} r={26} fill={lit ? l.color : "#23262F"} stroke={l.reachable ? "#F2F2EE" : "#F5A524"} strokeWidth={4}
+                  style={lit ? { filter: `drop-shadow(0 0 10px ${l.color})` } : undefined} />
+                <text x={p.x} y={p.y + 52} textAnchor="middle" fontSize={22} fill="#C9CCD4" style={{ pointerEvents: "none" }}>{l.name.slice(0, 14)}</text>
+              </g>
+            );
+          })}
         </svg>
+        {stadsetja && (
+          <p role="status" style={{ margin: 0, padding: 12, borderRadius: 12, background: "#2A2216", color: "#F5B544", fontSize: 14 }}>
+            Ýttu á teikninguna þar sem „{ljos.find((l) => l.id === stadsetja)?.name}" er. <button onClick={() => setStadsetja(null)} style={{ marginLeft: 8, minHeight: 44, background: "transparent", border: 0, color: "#F2F2EE", textDecoration: "underline", cursor: "pointer" }}>Hætta við</button>
+          </p>
+        )}
         {val && (
           <button onClick={() => setVal(null)} style={{ minHeight: 44, borderRadius: 22, border: "1px solid #2E323D", background: "#1A1D24", color: "#F2F2EE", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
             Sýna öll ljós (nú: {NAFN[val]})
@@ -184,14 +221,13 @@ export default function LjosClient() {
                     </button>
                   )}
                 </div>
-                <label style={{ paddingLeft: 52, fontSize: 13, color: "#A3A8B4", display: "flex", gap: 8, alignItems: "center" }}>
-                  Herbergi
-                  <select value={rym[l.id] ?? ""} onChange={(e) => setHerbergi(l.id, e.target.value)}
-                    style={{ flex: 1, minHeight: 44, borderRadius: 12, border: "1px solid #2E323D", background: "#101217", color: "#F2F2EE", padding: "0 8px", fontSize: 15 }}>
-                    <option value="">Óskráð</option>
-                    {HERBERGI.map((h) => <option key={h.key} value={h.key}>{NAFN[h.key]}</option>)}
-                  </select>
-                </label>
+                <div style={{ paddingLeft: 52, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#A3A8B4" }}>
+                  <span style={{ flex: 1 }}>{rymiLjoss(l.id) ? NAFN[rymiLjoss(l.id)!] : "Óstaðsett"}</span>
+                  <button onClick={() => setStadsetja(stadsetja === l.id ? null : l.id)}
+                    style={{ minHeight: 44, padding: "0 14px", borderRadius: 22, border: "1px solid #2E323D", background: stadsetja === l.id ? "#F5B544" : "#101217", color: stadsetja === l.id ? "#101217" : "#F2F2EE", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                    {stadir[l.id] ? "Færa á teikningu" : "Staðsetja á teikningu"}
+                  </button>
+                </div>
                 {lit && (
                   <div style={{ display: "flex", alignItems: "center", gap: 12, paddingLeft: 52 }}>
                     <input type="range" min={1} max={100} value={l.bri} aria-label={`Birta ${l.name}`} style={{ flex: 1 }}
@@ -216,7 +252,7 @@ export default function LjosClient() {
         )}
 
         <p style={{ margin: 0, fontSize: 12, color: "#6B7080" }}>
-          Herbergjaskráning er geymd í þessum vafra. Aðeins Philips Hue er stýrt úr skýinu; IKEA Dirigera og Luminus eru ekki með.
+          Staðsetningar ljósa eru geymdar í þessum vafra. Hue stýrist úr skýinu, IKEA í gegnum brú heima (tools/ljos-bridge); Luminus er ekki með.
         </p>
       </div>
     </main>
