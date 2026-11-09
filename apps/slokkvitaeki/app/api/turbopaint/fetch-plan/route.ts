@@ -20,6 +20,9 @@ const ALLOWED_HOSTS = new Set([
   ...MAPIS_TEIKNINGA_HOSTS,
   // Skrár Gagnalands (landsskrá teikninga, t.d. Hveragerði svf 8716): beinar PDF-slóðir á skrar.gagnaland.is.
   "skrar.gagnaland.is",
+  // Eigin geymsla (Supabase Storage, opna fatan turbopaint): sameinuð blöð og upphlaðnar teikningar sem Teikning-glugginn
+  // sýnir þegar — án þessa gat TurboPaint ekki opnað hæð með slíkri mynd (Krókháls 9, 09.11.2026).
+  "osfdzskyvisifcwyjkuk.supabase.co",
 ]);
 const MAX_BYTES = 80 * 1024 * 1024;
 const OK_TYPES = /^(image\/|application\/pdf)/i;
