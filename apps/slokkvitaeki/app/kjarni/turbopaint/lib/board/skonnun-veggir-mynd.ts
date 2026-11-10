@@ -174,8 +174,16 @@ export async function maelaHallaBlads(plan: ImageObject, dpmFrum?: number | null
   // BROSTINN LESTUR ER EKKI „HORNRÉTT" (Lisbeth 05.11.2026): hydrateAssets fyllir blob-mapið ósamhverft úr IndexedDB, svo
   // blaðið getur verið ólesið þegar spjaldið opnast. Skilaði þetta 0 sagði viðmótið „blaðið mælist hornrétt" um mælingu
   // sem var aldrei gerð. `null` = náðist ekki að mæla; 0 = mælt og beint.
-  const blob = getAssetBlob(plan.assetId);
-  if (!blob || !(plan.width > 0)) return null;
+  if (!(plan.width > 0)) return null;
+  // Blaðið er oft ekki komið í minni þegar spjaldið opnast (hydrateAssets / skörp TIF-skönnun í gangi): mælt 10.11.2026 á
+  // Breiðhöfða 13 — „Náði ekki að mæla“ eftir 17 s, rétt mæling 10 s síðar þegar áhrifið keyrði aftur. Bíðum eftir blobinu
+  // (allt að 20 s) í stað þess að segja ósatt um mælingu sem var aldrei gerð.
+  let blob = getAssetBlob(plan.assetId);
+  for (let i = 0; !blob && i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    blob = getAssetBlob(plan.assetId);
+  }
+  if (!blob) return null;
   // Allt í vinnuþræðinum þegar hann býður upp á OffscreenCanvas (afkóðun + minnkun + grátónun + mæling) — aðalþráðurinn
   // snertir þá ekki 25 MP blaðið. Gamla leiðin hér að neðan er varaleið (gamall vafri, þráður fæst ekki).
   const iThraedi = await hallaBladsIThraedi(blob, plan);
