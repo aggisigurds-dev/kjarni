@@ -48,8 +48,8 @@ import {
   type SeamFx,
 } from "./arrange";
 import { STEADY_ENOUGH, liveliestWindow } from "./analyze";
-import { ALL_ELEMENTS } from "./elements";
-import { MAX_CLOUD_BYTES, type Clip, type Media, type Song } from "./library";
+import { ElementField } from "./ElementField";
+import { MAX_CLOUD_BYTES, MAX_CLOUD_LABEL, type Clip, type Media, type Song } from "./library";
 import { bestMatches } from "./match";
 import { SongPicker } from "./Parts";
 import { Player, RATE, mixToBuffer, saveBlob, trackWindowBuffer } from "./audio";
@@ -102,7 +102,6 @@ const FX: Array<[SeamFx | undefined, string]> = [
   ["impact", "Högg"],
   ["both", "Bæði"],
 ];
-const MARKER_WORDS = ALL_ELEMENTS;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const comma = (n: number, digits = 1) => n.toFixed(digits).replace(".", ",");
@@ -1204,12 +1203,12 @@ export default function TonklippaEditor({
                 <Music size={18} /> Ný skrá
               </button>
               <button type="button" className="tk-cta ghost" onClick={() => videoRef.current?.click()}>
-                <Film size={18} /> Úr myndbandi
+                <Film size={18} /> Lag úr myndbandi
               </button>
             </div>
             <p className="tk-hint">
-              MP3, M4A, WAV og fleiri snið. Ný lög fara líka í safnið þitt, svo þú getur notað þau aftur. Hver bútur er kafli úr
-              einu lagi; sama lagið má nota í marga búta.
+              MP3, M4A, WAV og fleiri snið — eða hljóðið úr myndbandi (t.d. skjáupptöku). Ný lög fara líka í safnið þitt, svo þú
+              getur notað þau aftur. Hver bútur er kafli úr einu lagi; sama lagið má nota í marga búta.
             </p>
           </div>
         )}
@@ -1222,11 +1221,6 @@ export default function TonklippaEditor({
               ekki.
             </p>
             {arr.markers.length === 0 && <p className="tk-muted">Engir hápunktar enn.</p>}
-            <datalist id="tk-marker-words">
-              {MARKER_WORDS.map((w) => (
-                <option key={w} value={w} />
-              ))}
-            </datalist>
             {arr.markers.map((m) => (
               <div className={`tk-marker${focusMarker === m.id ? " focus" : ""}`} key={m.id}>
                 <input
@@ -1244,15 +1238,7 @@ export default function TonklippaEditor({
                     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   }}
                 />
-                <input
-                  className="tk-word"
-                  value={m.label}
-                  list="tk-marker-words"
-                  placeholder="Hvað gerist? (t.d. Stökk)"
-                  aria-label="Lýsing hápunkts"
-                  maxLength={60}
-                  onChange={(e) => apply((a) => updateMarker(a, m.id, { label: e.target.value }), `label:${m.id}`)}
-                />
+                <ElementField value={m.label} onChange={(label) => apply((a) => updateMarker(a, m.id, { label }), `label:${m.id}`)} />
                 <button type="button" className="tk-btn icon danger" onClick={() => apply((a) => removeMarker(a, m.id))} aria-label="Eyða hápunkti">
                   <Trash2 size={17} />
                 </button>
@@ -1324,7 +1310,7 @@ export default function TonklippaEditor({
                     Hljóðið úr myndbandinu
                   </button>
                 </div>
-                {videoMeta && videoMeta.size > MAX_CLOUD_BYTES && <p className="tk-muted">Myndbandið er yfir 48 MB og er því bara geymt í þessu tæki.</p>}
+                {videoMeta && videoMeta.size > MAX_CLOUD_BYTES && <p className="tk-muted">Myndbandið er yfir {MAX_CLOUD_LABEL} og er því bara geymt í þessu tæki.</p>}
                 <div className="tk-row tk-actions">
                   <button type="button" className="tk-btn" onClick={() => danceInput.current?.click()}>
                     <Video size={16} /> Skipta um myndband

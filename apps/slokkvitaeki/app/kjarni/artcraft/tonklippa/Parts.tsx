@@ -167,7 +167,7 @@ export function SongPicker({ title, songs, clips = [], fit, first = [], onSong, 
               )}
               {onVideo && (
                 <button type="button" className="tk-cta ghost" onClick={onVideo}>
-                  <Film size={18} /> Úr myndbandi
+                  <Film size={18} /> Lag úr myndbandi
                 </button>
               )}
             </div>

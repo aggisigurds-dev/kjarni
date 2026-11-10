@@ -32,7 +32,12 @@ import {
 import { analyzeTrack, buildPeaks, columnPeaks, liveliestWindow } from "./analyze.ts";
 import { addDays, eventsOn, greeting, longDate, monthGrid, shortDate, timeRange, upcoming, weekdayIndex, ymd } from "./calendar.ts";
 import {
+  CLOUD_PART_BYTES,
+  CLOUD_WHOLE_BYTES,
+  MAX_CLOUD_BYTES,
   clearDone,
+  cloudPartRange,
+  cloudParts,
   emptyDoc,
   mergeDocs,
   normalizeDoc,
@@ -54,7 +59,7 @@ import {
 } from "./library.ts";
 import { bestMatches, songFit } from "./match.ts";
 import { artAt, confidentCover, coverQuery, parseItunes, plain } from "./covers.ts";
-import { focusList, groupOf, needsWork, splitTurns, withTurns } from "./elements.ts";
+import { ALL_ELEMENTS, ELEMENTS, codeOf, focusList, fromCode, groupOf, joinCombo, jumpParts, needsWork, searchElements, splitSpin, splitTurns, withSpin, withTurns } from "./elements.ts";
 import { encodeMp3 } from "./mp3.ts";
 import { extract, renderMix, type TrackAudio } from "./render.ts";
 import { timeStretch } from "./stretch.ts";
@@ -586,11 +591,117 @@ test("photos and videos follow the same merge rules, and a skater keeps her danc
   assert.deepEqual([loaded.skaters[0].videoId, loaded.skaters[0].videoStart], ["m2", 2.5]);
 });
 
+test("cloud: big videos go up in parts that add back up to the whole file", () => {
+  const MB = 1024 * 1024;
+  // Litlar skrár (lög, myndir, stutt myndbönd) fara upp í heilu lagi, eins og áður.
+  assert.equal(cloudParts(0), 1);
+  assert.equal(cloudParts(5 * MB), 1);
+  assert.equal(cloudParts(CLOUD_WHOLE_BYTES), 1);
+  assert.deepEqual(cloudPartRange(5 * MB, 0), [0, 5 * MB]);
+  // Stærri skrár í hlutum sem hver um sig er undir mörkum geymslunnar (50 MB).
+  assert.ok(CLOUD_PART_BYTES < CLOUD_WHOLE_BYTES && CLOUD_WHOLE_BYTES < 50 * MB);
+  assert.equal(cloudParts(CLOUD_WHOLE_BYTES + 1), 4);
+  assert.equal(cloudParts(160 * MB), 10);
+  assert.equal(cloudParts(160 * MB + 1), 11);
+  for (const size of [CLOUD_WHOLE_BYTES + 1, 90 * MB + 123, 160 * MB, 600 * MB + 7, MAX_CLOUD_BYTES]) {
+    const n = cloudParts(size);
+    let at = 0;
+    for (let i = 0; i < n; i++) {
+      const [from, to] = cloudPartRange(size, i);
+      assert.equal(from, at);
+      assert.ok(to > from && to - from <= CLOUD_PART_BYTES);
+      at = to;
+    }
+    assert.equal(at, size);
+    // Heiti hlutanna („<auðkenni>-p63“) rúmast í slóðarreglunni (mest 40 stafir).
+    assert.ok(`abcdefgh-p${n - 1}`.length <= 40);
+  }
+  assert.ok(MAX_CLOUD_BYTES >= 1024 * MB);
+});
+
+test("elements: the ISU list — codes, combinations, flying and change-foot spins, search", () => {
+  // Engin tvítekin heiti, og gömlu heitin sem þegar eru í notkun eru enn á listanum.
+  assert.equal(new Set(ALL_ELEMENTS.map((n) => n.toLowerCase())).size, ALL_ELEMENTS.length);
+  for (const old of ["Valshopp", "Salchow", "Toe loop", "Loop", "Flip", "Lutz", "Axel", "Stökksamsetning", "Uppréttur snúningur", "Sitjandi snúningur", "Vogarsnúningur", "Layback", "Samsettur snúningur", "Skrefaröð", "Spírall", "Ina Bauer", "Byrjunarstaða", "Lokastaða"]) {
+    assert.ok(ALL_ELEMENTS.includes(old), old);
+  }
+  assert.ok(ALL_ELEMENTS.length >= 70);
+  assert.ok(ELEMENTS.every((g) => g.items.every((i) => i.name.length <= 30)));
+
+  // Stökk: skammstöfun með snúningafjölda, líka í samsetningu.
+  assert.equal(codeOf("Lutz"), "1Lz");
+  assert.equal(codeOf("2× Axel"), "2A");
+  assert.equal(codeOf("4× Toe loop"), "4T");
+  assert.equal(codeOf("2× Lutz + 2× Toe loop"), "2Lz+2T");
+  assert.equal(codeOf("3× Axel + Euler + 3× Salchow"), "3A+1Eu+3S");
+  assert.equal(groupOf("2× Lutz + 2× Toe loop"), "stokk");
+  assert.deepEqual(jumpParts("2x lutz+toe loop"), [
+    { turns: "2×", name: "Lutz" },
+    { turns: "", name: "Toe loop" },
+  ]);
+  assert.equal(jumpParts("Lutz + Spírall"), null);
+  assert.equal(jumpParts("Stökksamsetning"), null);
+  assert.equal(groupOf("Valshopp"), "hopp");
+  assert.equal(joinCombo(["2× Flip", " ", "Loop"]), "2× Flip + Loop");
+  assert.equal(joinCombo(["Axel", "Axel", "Axel", "Axel", "Axel"]).split("+").length, 4);
+
+  // Skammstöfun → heiti (þjálfari getur slegið inn „2lz+2t“).
+  assert.equal(fromCode("2lz+2t"), "2× Lutz + 2× Toe loop");
+  assert.equal(fromCode("1A"), "Axel");
+  assert.equal(fromCode("3A+1Eu+3S"), "3× Axel + Euler + 3× Salchow");
+  assert.equal(fromCode("Lz"), "Lutz");
+  assert.equal(fromCode("s"), null);
+  assert.equal(fromCode("spírall"), null);
+  assert.equal(fromCode("StSq"), "Skrefaröð");
+  assert.equal(fromCode("chsq"), "Kóreógrafísk röð");
+
+  // Snúningar: flug (F) og fótaskipti (C) fyrir framan grunnstöðuna.
+  assert.equal(codeOf("Sitjandi snúningur"), "SSp");
+  assert.equal(codeOf("Vogarsnúningur"), "CSp");
+  assert.equal(withSpin("Sitjandi snúningur", true, false), "Sitjandi snúningur með flugi");
+  assert.equal(codeOf("Sitjandi snúningur með flugi"), "FSSp");
+  assert.equal(codeOf("Vogarsnúningur með fótaskiptum"), "CCSp");
+  assert.equal(codeOf("Samsettur snúningur með flugi og fótaskiptum"), "FCCoSp");
+  assert.deepEqual(splitSpin("layback með fótaskiptum"), { base: "Layback", fly: false, change: true });
+  assert.equal(splitSpin("Biellmann"), null);
+  assert.equal(groupOf("Samsettur snúningur með fótaskiptum"), "snuningar");
+  for (const [code, label] of [
+    ["USp", "Uppréttur snúningur"],
+    ["CSp", "Vogarsnúningur"],
+    ["CCSp", "Vogarsnúningur með fótaskiptum"],
+    ["FCSp", "Vogarsnúningur með flugi"],
+    ["FCCSp", "Vogarsnúningur með flugi og fótaskiptum"],
+    ["CSSp", "Sitjandi snúningur með fótaskiptum"],
+    ["FCSSp", "Sitjandi snúningur með flugi og fótaskiptum"],
+    ["CoSp", "Samsettur snúningur"],
+    ["CCoSp", "Samsettur snúningur með fótaskiptum"],
+    ["FCoSp", "Samsettur snúningur með flugi"],
+    ["FCCoSp", "Samsettur snúningur með flugi og fótaskiptum"],
+    ["CLSp", "Layback með fótaskiptum"],
+  ]) {
+    assert.equal(fromCode(code), label, code);
+    assert.equal(codeOf(label), code, label);
+  }
+  assert.equal(codeOf("Spírall"), null);
+  assert.equal(codeOf("Eitthvað annað"), null);
+
+  // Leit: án brodda, eftir öðru heiti og eftir skammstöfun.
+  const names = (q: string) => searchElements(q).flatMap((g) => g.items.map((i) => i.name));
+  assert.equal(searchElements("").length, ELEMENTS.length);
+  assert.ok(names("spirall").includes("Spírall"));
+  assert.ok(names("waltz").includes("Valshopp"));
+  assert.ok(names("camel").includes("Vogarsnúningur"));
+  assert.deepEqual(names("lz"), ["Lutz"]);
+  assert.ok(names("STSQ").includes("Skrefaröð"));
+  assert.deepEqual(names("þristur"), ["Three-turn"]);
+  assert.deepEqual(names("zzzz"), []);
+});
+
 test("elements: names, jump rotations, and what to practise first", () => {
   assert.equal(groupOf("Lutz"), "stokk");
   assert.equal(groupOf("2× salchow"), "stokk");
   assert.equal(groupOf("Sitjandi snúningur"), "snuningar");
-  assert.equal(groupOf("Skrefaröð"), "annad");
+  assert.equal(groupOf("Skrefaröð"), "skref");
   assert.equal(groupOf("Eitthvað annað"), null);
   assert.deepEqual(splitTurns("3x Toe loop"), { turns: "3×", name: "Toe loop" });
   assert.deepEqual(splitTurns("Axel"), { turns: "", name: "Axel" });

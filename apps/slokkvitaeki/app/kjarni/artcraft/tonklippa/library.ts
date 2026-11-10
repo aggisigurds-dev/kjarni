@@ -83,8 +83,25 @@ export type Media = {
   projectId?: string;
 };
 
-/** Stærri skrár en þetta fara ekki í skýið (geymslan tekur mest 50 MB á skrá). */
-export const MAX_CLOUD_BYTES = 48 * 1024 * 1024;
+/** Geymslan tekur mest 50 MB á skrá. Skrár upp að þessari stærð fara upp í heilu lagi … */
+export const CLOUD_WHOLE_BYTES = 48 * 1024 * 1024;
+/** … en stærri skrár (myndbönd) eru sendar í hlutum af þessari stærð, sem eru
+ *  settir saman aftur þegar skráin er sótt. Litlir hlutar þola betur slitrótt net. */
+export const CLOUD_PART_BYTES = 16 * 1024 * 1024;
+/** Stærri skrár en þetta fara ekki í skýið; þær eru bara í tækinu. */
+export const MAX_CLOUD_BYTES = 1024 * 1024 * 1024;
+export const MAX_CLOUD_LABEL = "1 GB";
+
+/** Í hve mörgum hlutum skrá af þessari stærð liggur í skýinu (1 = í heilu lagi). */
+export function cloudParts(size: number): number {
+  return size > CLOUD_WHOLE_BYTES ? Math.ceil(size / CLOUD_PART_BYTES) : 1;
+}
+
+/** Bætabil hluta `index` í skrá af stærð `size`: [frá, til). */
+export function cloudPartRange(size: number, index: number): [number, number] {
+  if (cloudParts(size) === 1) return [0, size];
+  return [index * CLOUD_PART_BYTES, Math.min(size, (index + 1) * CLOUD_PART_BYTES)];
+}
 
 export type Gone = { id: string; at: number };
 

@@ -3,7 +3,7 @@
  *  kemur niður. */
 
 import { KEY_PATTERN, cloudDelete, cloudGetBlob, cloudGetJson, cloudList, cloudPutBlob, cloudPutJson, newLockerKey, projectPath, trackPath } from "./cloud";
-import { MAX_CLOUD_BYTES, normalizeDoc, sameDoc, type LibraryDoc, type Media, type Skater } from "./library";
+import { MAX_CLOUD_BYTES, cloudPartRange, cloudParts, normalizeDoc, sameDoc, type LibraryDoc, type Media, type Skater } from "./library";
 import {
   changeUploaded,
   deleteMediaBlob,
@@ -54,6 +54,11 @@ const DOC_ID = "x-safn";
 const songPath = (songId: string) => trackPath("safn", songId);
 const photoPath = (skaterId: string) => trackPath("myndir", skaterId);
 const mediaPath = (mediaId: string) => trackPath("midlar", mediaId);
+/** Slóðir skrárinnar í skýinu: ein ef hún er lítil, annars einn hluti á slóð (…-p0, …-p1 …). */
+export function mediaPaths(media: Pick<Media, "id" | "size">): string[] {
+  const n = cloudParts(media.size);
+  return n === 1 ? [mediaPath(media.id)] : Array.from({ length: n }, (_, i) => `${mediaPath(media.id)}-p${i}`);
+}
 
 /** Lykill skúffunnar: úr slóðinni (?k=…), annars úr tækinu, annars nýr.
  *  Lykillinn er hafður í slóðinni svo „Setja á heimaskjá“ á iPhone taki hann
@@ -123,9 +128,11 @@ export async function syncDoc(key: string): Promise<LibraryDoc> {
     await changeUploaded([mark]);
   }
 
+  // Litlar skrár fara upp strax; stór myndbönd fara í hlutum á eftir (pushMediaPart),
+  // svo safnið sjálft bíði ekki eftir þeim.
   for (const m of local.media) {
     const path = mediaPath(m.id);
-    if (up.has(path) || m.size > MAX_CLOUD_BYTES) continue;
+    if (up.has(path) || cloudParts(m.size) > 1) continue;
     const blob = await loadMediaBlob(m.id);
     if (!blob) continue;
     await cloudPutBlob(key, path, blob);
@@ -149,13 +156,42 @@ export async function syncDoc(key: string): Promise<LibraryDoc> {
   // Sama fyrir myndir og myndbönd sem hefur verið eytt.
   const liveMedia = new Set(merged.media.map((m) => m.id));
   const deadMedia = merged.gone.map((g) => g.id).filter((id) => !liveMedia.has(id));
-  const dropMedia = deadMedia.map(mediaPath).filter((p) => up.has(p));
+  const deadPaths = deadMedia.map(mediaPath);
+  const dropMedia = [...up].filter((p) => deadPaths.some((d) => p === d || p.startsWith(`${d}-p`)));
   if (dropMedia.length) {
     await cloudDelete(key, dropMedia);
     await changeUploaded([], dropMedia);
   }
   for (const id of deadMedia) await deleteMediaBlob(id).catch(() => undefined);
   return merged;
+}
+
+/** Hlutar sem þessi keyrsla appsins hefur þegar sent. */
+const sentParts = new Set<string>();
+
+/** Sendir næsta hluta af stóru myndbandi upp. Skilar true ef hluti fór upp (þá
+ *  geta fleiri beðið), false ef ekkert bíður. Einn hluti í einu, svo aðrar
+ *  breytingar komist að á milli og upphleðslan haldi áfram þar sem frá var horfið. */
+export async function pushMediaPart(key: string, onStart?: () => void): Promise<boolean> {
+  const doc = await loadDoc();
+  const up = await loadUploaded();
+  for (const m of doc.media) {
+    if (cloudParts(m.size) === 1 || m.size > MAX_CLOUD_BYTES) continue;
+    const paths = mediaPaths(m);
+    // `sentParts` ver gegn endalausri endursendingu ef tækið nær ekki að muna hvað er farið upp.
+    const index = paths.findIndex((p) => !up.has(p) && !sentParts.has(`${key}:${p}`));
+    if (index < 0) continue;
+    const blob = await loadMediaBlob(m.id);
+    // Skráin er ekki í þessu tæki (eða önnur en lýsingin segir): annað tæki sér um hana.
+    if (!blob || blob.size !== m.size) continue;
+    const [from, to] = cloudPartRange(m.size, index);
+    onStart?.();
+    await cloudPutBlob(key, paths[index], blob.slice(from, to, "application/octet-stream"));
+    sentParts.add(`${key}:${paths[index]}`);
+    await changeUploaded([paths[index]]);
+    return true;
+  }
+  return false;
 }
 
 /** Sendir lýsingu einnar rútínu upp (lögin sjálf fara með safninu). */
@@ -236,11 +272,18 @@ export async function fetchMediaBlob(key: string | null, media: Media): Promise<
   const local = await loadMediaBlob(media.id).catch(() => undefined);
   if (local) return local;
   if (!key || media.size > MAX_CLOUD_BYTES) return null;
-  const remote = await cloudGetBlob(key, mediaPath(media.id));
-  if (!remote) return null;
-  const blob = new Blob([remote], { type: media.type || remote.type });
+  const paths = mediaPaths(media);
+  const parts: Blob[] = [];
+  for (const path of paths) {
+    const part = await cloudGetBlob(key, path);
+    // Hluta vantar: skráin er ekki komin öll upp enn (eða alls ekki).
+    if (!part) return null;
+    parts.push(part);
+  }
+  const blob = new Blob(parts, { type: media.type || parts[0].type });
+  if (paths.length > 1 && blob.size !== media.size) return null;
   await saveMediaBlob(media.id, blob).catch(() => undefined);
-  await changeUploaded([mediaPath(media.id)]).catch(() => undefined);
+  await changeUploaded(paths).catch(() => undefined);
   return blob;
 }
 
@@ -303,32 +346,42 @@ export class CloudSync {
     this.timer = setTimeout(() => void this.flush(), delay);
   }
 
-  /** Sendir allt sem bíður núna (t.d. þegar ritlinum er lokað eða netið kemur aftur). */
+  /** Er upphleðsla í gangi (t.d. stórt myndband á leiðinni upp)? */
+  get busy(): boolean {
+    return this.running;
+  }
+
+  /** Sendir allt sem bíður núna (t.d. þegar ritlinum er lokað eða netið kemur aftur).
+   *  Stór myndbönd fara síðast, einn hluti í einu, og annað kemst að á milli hluta. */
   async flush(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     if (this.running || this.stopped) return;
     this.running = true;
     try {
-      while (this.docDirty || this.dirty.size) {
-        if (this.docDirty) {
-          this.docDirty = false;
+      for (;;) {
+        while (this.docDirty || this.dirty.size) {
+          if (this.docDirty) {
+            this.docDirty = false;
+            try {
+              this.onDoc(await syncDoc(this.key));
+            } catch (err) {
+              this.docDirty = true;
+              throw err;
+            }
+            continue;
+          }
+          const id = this.dirty.values().next().value as string;
+          this.dirty.delete(id);
           try {
-            this.onDoc(await syncDoc(this.key));
+            await pushProject(this.key, id);
           } catch (err) {
-            this.docDirty = true;
+            this.dirty.add(id);
             throw err;
           }
-          continue;
         }
-        const id = this.dirty.values().next().value as string;
-        this.dirty.delete(id);
-        try {
-          await pushProject(this.key, id);
-        } catch (err) {
-          this.dirty.add(id);
-          throw err;
-        }
+        if (this.stopped) break;
+        if (!(await pushMediaPart(this.key, () => this.set("syncing")))) break;
       }
       this.set("synced");
     } catch {

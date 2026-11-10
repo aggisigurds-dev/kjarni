@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Ellipsis, Film, ImageIcon, Music, Pause, Play, Plus, Star, Timer, Trash2, UserPlus, Video, X } from "lucide-react";
 import { formatTime, parseTime } from "./arrange";
 import { searchCovers, type CoverHit } from "./covers";
-import { COVERS, COVER_LABEL, putSkater, type Clip, type CoverStyle, type LibraryDoc, type Media, type Skater, type SkaterMarker, type Song } from "./library";
+import { COVERS, COVER_LABEL, MAX_CLOUD_LABEL, putSkater, type Clip, type CoverStyle, type LibraryDoc, type Media, type Skater, type SkaterMarker, type Song } from "./library";
 import { ElementField, Stars } from "./ElementField";
 import { needsWork } from "./elements";
 import { DanceMarker, Gallery } from "./Media";
@@ -91,9 +91,14 @@ export function LibraryTab({
           <Plus size={20} /> Bæta við lagi
         </button>
         <button type="button" className="tk-cta ghost" onClick={onAddVideo}>
-          <Film size={18} /> Úr myndbandi
+          <Film size={18} /> Lag úr myndbandi
         </button>
       </div>
+      {doc.songs.length < 4 && (
+        <p className="tk-hint">
+          „Lag úr myndbandi“ tekur hljóðið úr myndbandi í símanum — t.d. skjáupptöku eða upptöku af æfingu — og bætir því í safnið sem lagi.
+        </p>
+      )}
 
       {doc.clips.length > 0 && (
         <>
@@ -680,7 +685,7 @@ export function SkaterSheet({
               await onAddMedia(skater, files);
             }} open={onOpenMedia} onDelete={onDeleteMedia} />
           <p className="tk-hint">
-            Geymt í tækinu og í lokuðu skúffunni þinni. Myndbönd yfir 48 MB verða bara í þessu tæki. Fáðu leyfi áður en þú geymir myndir
+            Geymt í tækinu og í lokuðu skúffunni þinni. Stór myndbönd fara upp í bakgrunni; yfir {MAX_CLOUD_LABEL} verða þau bara í þessu tæki. Fáðu leyfi áður en þú geymir myndir
             af öðrum.
           </p>
 

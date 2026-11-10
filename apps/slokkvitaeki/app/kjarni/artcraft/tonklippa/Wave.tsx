@@ -16,6 +16,7 @@ import {
 import { Flag } from "lucide-react";
 import { MIN_SEAM, formatTime, layout, type Arrangement } from "./arrange";
 import { columnPeaks, type Highlight, type Peaks } from "./analyze";
+import { codeOf } from "./elements";
 import type { TrackView } from "./tracks";
 
 /** Litur hvers lags (bakgrunnur búts, bylgja) — á dökkum grunni. */
@@ -265,7 +266,8 @@ export function TimelineView({ arr, tracks, trackIndex, sel, span, playheadRef, 
             }}
           >
             <Flag size={12} fill="currentColor" aria-hidden="true" />
-            {m.label && room >= 44 && <span className="tk-flag-text">{m.label}</span>}
+            {/* Á fánanum er pláss fyrir lítið: skammstöfunin (2Lz+2T) ef heitið á sér eina. */}
+            {m.label && room >= 44 && <span className="tk-flag-text">{codeOf(m.label) ?? m.label}</span>}
           </button>
         );
       })}

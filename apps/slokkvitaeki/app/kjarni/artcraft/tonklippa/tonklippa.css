@@ -2063,12 +2063,18 @@
   color: #ffcf5c !important;
 }
 
-/* Tegund hápunkts og einkunn. */
+/* Tegund hápunkts og einkunn. Löng heiti (samsetningar, snúningar með flugi)
+   mega taka tvær línur. */
 .tk-element {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  height: auto;
+  min-height: 44px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  line-height: 1.2;
   text-align: left;
   font-weight: 700;
 }
@@ -2076,6 +2082,104 @@
 .tk-element.empty {
   color: var(--tk-faint) !important;
   font-weight: 500;
+}
+
+.tk-element .tk-ellipsis {
+  flex: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+/* ISU-skammstöfun (2Lz, FCSSp …) við hlið heitisins. */
+.tk-code {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--tk-soft);
+}
+
+.tk-chip.on .tk-code {
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+}
+
+.tk-chip small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tk-soft);
+}
+
+.tk-chip.on small {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.tk-sheet-scroll h3 small {
+  font-size: inherit;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.tk-element-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  margin: 0 6px 8px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--tk-line);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--tk-soft);
+}
+
+.tk-element-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  outline: none;
+}
+
+.tk-element-search:focus-within {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.tk-element-now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 4px 12px;
+  padding: 10px 6px 10px 14px;
+  border-radius: 16px;
+  background: rgba(255, 207, 92, 0.12);
+}
+
+.tk-element-now > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.tk-element-now .tk-link {
+  flex: none;
+  width: auto;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 10px;
 }
 
 .tk-stars {

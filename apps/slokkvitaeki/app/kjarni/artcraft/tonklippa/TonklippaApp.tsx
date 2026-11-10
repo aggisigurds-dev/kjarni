@@ -13,7 +13,9 @@ import { ymd } from "./calendar";
 import { confidentCover, searchCovers } from "./covers";
 import { EventSheet, HomeTab, PlanTab, blankEvent } from "./Coach";
 import {
+  CLOUD_WHOLE_BYTES,
   MAX_CLOUD_BYTES,
+  MAX_CLOUD_LABEL,
   clearDone,
   emptyDoc,
   mergeDocs,
@@ -210,7 +212,9 @@ export default function TonklippaApp() {
         pullAgain.current = false;
         adoptDoc(await syncAll(key));
       } while (pullAgain.current);
-      setSyncState("synced");
+      // Stór myndbönd sem eru hálfnuð upp halda áfram í bakgrunni.
+      void syncRef.current?.flush();
+      setSyncState(syncRef.current?.busy ? "syncing" : "synced");
     } catch {
       setSyncState("offline");
     } finally {
@@ -553,7 +557,8 @@ export default function TonklippaApp() {
       await saveMediaBlob(id, blob);
       const item: Media = { id, at: Date.now(), kind: video ? "myndband" : "mynd", name: file.name.slice(0, 120), size: blob.size, type: blob.type || (video ? "video/mp4" : "image/jpeg"), ...owner };
       updateDoc((d) => putMedia(d, item));
-      if (item.size > MAX_CLOUD_BYTES) say("Myndbandið er of stórt fyrir skýið (yfir 48 MB) — það er geymt í þessu tæki", 6000);
+      if (item.size > MAX_CLOUD_BYTES) say(`Myndbandið er of stórt fyrir skýið (yfir ${MAX_CLOUD_LABEL}) — það er geymt í þessu tæki`, 6000);
+      else if (item.size > CLOUD_WHOLE_BYTES) say("Stórt myndband — það fer upp í skýið í bakgrunni. Hafðu appið opið á meðan.", 6000);
       return item;
     } catch (err) {
       say(err instanceof Error && err.name === "QuotaExceededError" ? "Tækið er fullt — ekki pláss fyrir skrána" : "Gat ekki vistað skrána", 5000);

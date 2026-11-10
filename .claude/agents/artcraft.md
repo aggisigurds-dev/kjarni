@@ -38,7 +38,7 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit, hápunktar lags), `match.ts` („besti
   kaflinn“: hvar hápunktar lags falla að hápunktum dansins), `library.ts` (safn/iðkendur/dagatal/
   verkefni/myndir og myndbönd — eitt skjal, sameinað atriði fyrir atriði milli tækja),
-  `calendar.ts`, `elements.ts` (heiti stökka og snúninga, einkunnir, æfingaáherslur), `covers.ts`
+  `calendar.ts`, `elements.ts` (ISU-listinn yfir stökk og snúninga með skammstöfunum, samsetningar, leit, einkunnir, æfingaáherslur), `covers.ts`
   (umslög fundin eftir heiti lags í opinni leit iTunes, beint úr vafranum; sjálfvirkt aðeins
   þegar heitið passar örugglega, annars valið úr lista — aðeins slóðin er geymd).
   Myndir og myndbönd (`Media.tsx`): gallerí á iðkanda, hápunktar merktir í upptöku af dansinum
@@ -49,7 +49,7 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   `x-tk-key`) og RLS hleypir aðeins í möppuna `sha256(lykill)`; sjá
   `apps/database/supabase/schemas/tonklippa.sql`, `cloud.ts`, `sync.ts` og `cloud.live.test.ts`
   (handvirkt RLS-próf). Í skúffunni: `p/<rútína>.json`, `p/x-safn.json` (safnið allt),
-  `t/safn/<lag>`, `t/myndir/<iðkandi>`, `t/midlar/<mynd eða myndband>` (yfir 48 MB: bara í tækinu). Lykillinn fer í manifest `start_url`, því uppsett
+  `t/safn/<lag>`, `t/myndir/<iðkandi>`, `t/midlar/<mynd eða myndband>` (yfir 48 MB: í 16 MB hlutum, `<auðkenni>-p0`, `-p1` …, settir saman við niðurhal; yfir 1 GB: bara í tækinu). Lykillinn fer í manifest `start_url`, því uppsett
   iPhone-app og Safari deila ekki geymslu. Spotify kemur ekki til greina sem hljóðgjafi (dulkóðað
   streymi; forskoðun og hljóðgreining tekin úr API 27.11.2024) — appið vinnur með skrár.
 - **Ástand:** aðeins localStorage (`kjarni_staging_`, `kjarni_pending_`, `kjarni_result_`,

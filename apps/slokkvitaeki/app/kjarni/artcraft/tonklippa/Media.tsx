@@ -1,8 +1,8 @@
 "use client";
 
 /** Myndir og myndbönd: gallerí á blaði iðkanda og skoðari á öllum skjánum.
- *  Skrárnar eru í tækinu (og í lokuðu skúffunni í skýinu ef þær eru undir
- *  48 MB); smámyndir eru búnar til úr skránni sjálfri þegar hún er við höndina. */
+ *  Skrárnar eru í tækinu og í lokuðu skúffunni í skýinu (stór myndbönd í
+ *  hlutum); smámyndir eru búnar til úr skránni sjálfri þegar hún er við höndina. */
 
 import { useEffect, useRef, useState } from "react";
 import { CloudDownload, Film, ImagePlus, Play, Trash2, X } from "lucide-react";
@@ -178,7 +178,7 @@ export function Gallery({ media, onAdd, open, onDelete }: GalleryProps) {
               <p className="tk-blank">
                 {viewing.media.size > MAX_CLOUD_BYTES
                   ? "Þetta myndband var of stórt fyrir skýið og er bara í tækinu sem það var sett inn í."
-                  : "Náði ekki í skrána — ertu á netinu?"}
+                  : "Náði ekki í skrána. Ertu á netinu? Stórt myndband getur líka enn verið á leiðinni upp úr hinu tækinu."}
               </p>
             ) : viewing.media.kind === "mynd" ? (
               // eslint-disable-next-line @next/next/no-img-element
