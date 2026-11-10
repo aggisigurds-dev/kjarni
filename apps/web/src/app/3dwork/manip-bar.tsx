@@ -229,7 +229,7 @@ export function ManipBar({
         </div>
       )}
 
-      {/* pipe (hollow) vs rod (solid) + outer Ø / wall → inner Ø */}
+      {/* pipe (hollow) vs rod (solid) + outer Ø / wall / inner Ø — the inner one sets the wall */}
       {tube && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-slate-200 pt-1.5">
           <label className="flex items-center gap-1" title="On: hollow pipe. Off: solid rod / cylinder.">
@@ -251,9 +251,16 @@ export function ManipBar({
                 <span className="text-[0.64rem] font-bold text-slate-500">wall</span>
                 <MiniNum value={tube.wall} onCommit={(n) => onTube({ wall: Math.max(0.05, n) })} />
               </label>
-              <span className="text-[0.62rem] text-slate-500">
-                inner ⌀ <b className="font-mono text-slate-700">{inner}</b> mm
-              </span>
+              <label
+                className="flex items-center gap-0.5"
+                title="Inside diameter (mm) — changes the wall, the outside stays"
+              >
+                <span className="text-[0.64rem] font-bold text-slate-500">inner ⌀</span>
+                <MiniNum
+                  value={inner}
+                  onCommit={(n) => onTube({ wall: Math.max(0.05, (tube.outer - Math.max(0, n)) / 2) })}
+                />
+              </label>
             </>
           )}
         </div>
