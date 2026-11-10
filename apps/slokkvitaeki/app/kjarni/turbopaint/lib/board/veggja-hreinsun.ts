@@ -659,6 +659,49 @@ export function kassiUtlinu(utlina: number[], spassia = 0.025): Rammi | null {
   return { x0: x0 - sp, y0: y0 - sp, x1: x1 + sp, y1: y1 + sp };
 }
 
+/** Hliðar handteiknaðrar útlínu sem enginn veggur liggur þegar eftir — útveggirnir sem vantar (Agnar 10.11.2026: 2. hæð
+ * Breiðhöfða 13, vöruhús með hárfínum tvöföldum útveggjalínum sem hvorki veggjavélin né þunnveggjaleitin sér: vélin fann
+ * aðeins efri útvegginn). Hlið telst þakin ef ≥ `thekja` af sýnishornum hennar eru innan `nandM` frá veggbút sem liggur
+ * samsíða henni (±20°). Skilar hverri óþakinni hlið sem [ax, ay, bx, by] í sömu hnitum og útlínan. */
+export function utveggirSemVantar(utlina: number[], veggir: HLina[], dpm: number, st: { nandM?: number; thekja?: number } = {}): number[][] {
+  const p = lesaHandUtlinu(utlina);
+  if (!p || !(dpm > 0)) return [];
+  const nand = (st.nandM ?? 0.6) * dpm, thekja = st.thekja ?? 0.7;
+  const butar: number[][] = [];
+  for (const l of veggir) {
+    if (l.tegund === "hurd") continue;
+    for (let i = 0; i + 3 < l.p.length; i += 2) butar.push([l.p[i], l.p[i + 1], l.p[i + 2], l.p[i + 3]]);
+  }
+  const COS20 = Math.cos((20 * Math.PI) / 180);
+  const ut: number[][] = [];
+  const n = p.length / 2;
+  for (let i = 0; i < n; i++) {
+    const ax = p[2 * i], ay = p[2 * i + 1], bx = p[2 * ((i + 1) % n)], by = p[2 * ((i + 1) % n) + 1];
+    const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+    if (!(len > 0.5 * dpm)) continue; // styttri en hálfur metri: ekki veggur
+    const ux = dx / len, uy = dy / len;
+    const samsida = butar.filter((b) => {
+      const bl = Math.hypot(b[2] - b[0], b[3] - b[1]);
+      return bl > 0 && Math.abs(((b[2] - b[0]) * ux + (b[3] - b[1]) * uy) / bl) >= COS20;
+    });
+    const syni = Math.max(8, Math.ceil(len / (0.5 * dpm)));
+    let thakin = 0;
+    for (let k = 0; k < syni; k++) {
+      const t = (k + 0.5) / syni, x = ax + dx * t, y = ay + dy * t;
+      for (const b of samsida) {
+        const ex = b[2] - b[0], ey = b[3] - b[1], l2 = ex * ex + ey * ey;
+        const s = l2 > 0 ? Math.max(0, Math.min(1, ((x - b[0]) * ex + (y - b[1]) * ey) / l2)) : 0;
+        if (Math.hypot(x - (b[0] + ex * s), y - (b[1] + ey * s)) <= nand) {
+          thakin++;
+          break;
+        }
+      }
+    }
+    if (thakin / syni < thekja) ut.push([ax, ay, bx, by]);
+  }
+  return ut;
+}
+
 /** Punktur innan margstiku (geislaregla). */
 export function punktIFjolhyrningi(x: number, y: number, p: number[]): boolean {
   let inni = false;
