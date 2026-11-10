@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Analytics } from "@vercel/analytics/react";
 import { sbSelect } from "./lib/supabase";
 
@@ -10,12 +11,15 @@ type Row = { lykill: string; gildi: string };
 // in /stjorn — analytics is on by default; Meta Pixel and chat wait for an ID.
 export function Tools() {
   const [s, setS] = useState<Record<string, string>>({});
+  // Sjálfstæðu öppin (THE COACH á /coach) fá hvorki spjall, pixel né mælingar.
+  const standalone = /^\/(coach|tonklippa)(\/|$)/.test(usePathname() ?? "");
 
   useEffect(() => {
+    if (standalone) return;
     sbSelect<Row[]>("kjarni_stillingar?select=lykill,gildi")
       .then((rows) => setS(Object.fromEntries(rows.map((r) => [r.lykill, r.gildi]))))
       .catch(() => {});
-  }, []);
+  }, [standalone]);
 
   // Meta Pixel
   useEffect(() => {
@@ -44,5 +48,6 @@ export function Tools() {
     document.body.appendChild(sc);
   }, [s.chat_id, s.chat_virkt]);
 
+  if (standalone) return null;
   return s.analytics_virk !== "false" ? <Analytics /> : null;
 }

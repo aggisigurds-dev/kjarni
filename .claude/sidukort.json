@@ -2,7 +2,7 @@
  "utgafa": 1,
  "vefur": "kjarni",
  "vefagent": "kjarni-vefur",
- "uppfaert": "2026-11-05",
+ "uppfaert": "2026-11-10",
  "_skyring": "Síðukort Kjarna (apps/slokkvitaeki → kjarni.vercel.app, apps/web → kjarni-3dwork.vercel.app). eigandi = agent sem ber ábyrgð; forskeyti sl:/bh: = agent sem býr í slokkvitaeki/brunaholf, skill: = skill. Án forskeytis = frumrit í kjarna/.claude/agents. Ný leið = ný færsla með eiganda í sama commit. Uppruni: tools/sidukort-fraedi.cjs-drög + greining 09-kjarni.md (Agentakerfið 2.0, fasi 2, 04.11.2026).",
  "svaedi": [
   {
@@ -938,6 +938,50 @@
    "kveikjuord": [
     "Tónsmíð",
     "jingill"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/kjarni/artcraft/tonklippa",
+   "titill": "Tónklippa (vísar á /coach)",
+   "tegund": "sida",
+   "leid": "/kjarni/artcraft/tonklippa",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/artcraft/tonklippa/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "Tónklippa"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/coach",
+   "titill": "THE COACH — þjálfaraapp (PWA) með Tónklippu",
+   "tegund": "sida",
+   "leid": "/coach",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/coach/page.tsx",
+    "apps/slokkvitaeki/app/coach/manifest.webmanifest/route.ts",
+    "apps/slokkvitaeki/app/tonklippa/page.tsx",
+    "apps/slokkvitaeki/public/coach-sw.js",
+    "apps/database/supabase/schemas/tonklippa.sql"
+   ],
+   "yfir": null,
+   "eigandi": "artcraft",
+   "undiragentar": [],
+   "kveikjuord": [
+    "THE COACH",
+    "þjálfaraapp",
+    "Tónklippa",
+    "klippa tónlist",
+    "skautarútína",
+    "dansrútína",
+    "iðkendur",
+    "heimaskjár",
+    "skúffa"
    ],
    "app": "slokkvitaeki"
   },
