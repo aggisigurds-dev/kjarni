@@ -584,7 +584,7 @@ export async function clearBoard() {
 
 /** Opnar tómt skoðunarborð í minni. Síðasta borðið, borðalistinn og samstillingin eru ósnert. */
 export function opnaSkodun(titill: string, slod: string) {
-  useSkodun.setState({ virk: true, titill, slod, grunnur: null, vistar: false, drog: null });
+  useSkodun.setState({ virk: true, titill, slod, grunnur: null, vistar: false, drog: null, uttekt: false });
   if (typeof window !== "undefined") window.clearTimeout(pushTimer);
   currentBoardId = null;
   lastContentJson = "";
@@ -605,7 +605,7 @@ export function opnaSkodun(titill: string, slod: string) {
 /** Skoðun lýkur (vistuð, eða skipt yfir á annað borð) — venjuleg vistun tekur við. */
 function haettaSkodun() {
   if (!erSkodun()) return;
-  useSkodun.setState({ virk: false, grunnur: null, vistar: false, drog: null });
+  useSkodun.setState({ virk: false, grunnur: null, vistar: false, drog: null, uttekt: false });
   installSyncListeners();
 }
 

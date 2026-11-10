@@ -50,7 +50,6 @@ import { drawingScaleFromWords, pixelsPerMeterFromScale } from "../../lib/board/
 import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
 import {
   clearBoard,
-  createBoard,
   listBoards,
   loadBoard,
   migrateBoardObjects,
@@ -1329,7 +1328,14 @@ export function WhiteboardApp() {
         if (!slod) throw new Error("Teikning hæðarinnar er upphlaðin mynd, ekki úr skjalasafni — flyttu hana inn handvirkt.");
         const til = (await listBoards()).find((b) => b.name === nafn);
         if (til) await switchBoard(til.id);
-        else await createBoard(nafn);
+        else {
+          // 10.11.2026: ekkert borð við opnun (Agnar 06.11.2026: „helling af vistast af teikningunum sem á ekkert að vistast …
+          // ef maður opnar eitthvað, þá verður borð sem er bara þarna“). Hæðin opnast í SKOÐUN (skodun.ts): borðið er aðeins í
+          // minni, engin röð í turbopaint_boards, engin mynd í geymsluna. Fyrsta breytingin (teiknað, fært, merkt) eða
+          // „Vista í úttekt“ gerir skoðunina að borði — sjá vistaUttekt og áhrifið hér að neðan.
+          opnaSkodun(nafn, slod);
+          useSkodun.setState({ uttekt: true });
+        }
         useBoardStore.getState().replaceBoard({
           name: nafn,
           objects: [],
@@ -1393,6 +1399,8 @@ export function WhiteboardApp() {
           useBoardStore.getState().setCamera(cameraFit(ramma, view.clientWidth, view.clientHeight));
         }
         await persistBoard();
+        // Grunnlínan í skoðun: allt sem kom inn við opnun. Breytist `objects` eftir þetta hefur notandinn gert eitthvað.
+        if (erSkodun()) useSkodun.setState({ grunnur: useBoardStore.getState().objects });
         toast.success(
           `${nafn}: ${takn.length} merki á teikningunni` +
             (vh.heimild === "teikning"
@@ -1479,6 +1487,23 @@ export function WhiteboardApp() {
     })();
   }, [skodunBeidni, hydrated, runUrlImport, runImport]);
 
+  // Úttektarteikning í skoðun: FYRSTA breytingin (teiknað, fært, merkt) gerir skoðunina að borði — fyrr er ekkert til.
+  const skodunUttekt = useSkodun((s) => s.virk && s.uttekt);
+  useEffect(() => {
+    if (!skodunUttekt) return;
+    let iGangi = false;
+    return useBoardStore.subscribe((st) => {
+      if (iGangi || !erSkodun() || !useSkodun.getState().uttekt || !skodunBreytt(st.objects)) return;
+      iGangi = true;
+      void vistaSkodunSemBord()
+        .then(() => toast.message("Borðið varð til við fyrstu breytingu — vistast héðan í frá", { duration: 2500 }))
+        .catch((err) => {
+          iGangi = false;
+          toast.error(err instanceof Error ? err.message : "Gat ekki búið til borðið");
+        });
+    });
+  }, [skodunUttekt]);
+
   // Lokun/endurhleðsla: ekkert er eftir á þjóninum — en hafi eitthvað verið teiknað spyr vafrinn fyrst.
   useEffect(() => {
     if (!skodunVirk) return;
@@ -1510,6 +1535,8 @@ export function WhiteboardApp() {
   const vistaUttekt = useCallback(async (opts?: { leidrettAf?: LeidrettAf }): Promise<{ ok: true; texti: string } | { ok: false; villa: string }> => {
     setUttektVistar(true);
     try {
+      // Opnað í skoðun (ekkert borð enn): „Vista í úttekt“ festir borðið líka — vistun þýðir vistað, líka borðið.
+      if (erSkodun()) await vistaSkodunSemBord();
       const r = await vistaIUttekt(useBoardStore.getState().objects, getStampSize(), { leidrettAf: opts?.leidrettAf });
       const st = useBoardStore.getState();
       // Nýir stimplar fá unitId sitt á borðinu — næsta vistun færir þá í stað þess að bæta öðrum við.
