@@ -176,6 +176,14 @@ export async function maelaHallaBlads(plan: ImageObject, dpmFrum?: number | null
   // sem var aldrei gerð. `null` = náðist ekki að mæla; 0 = mælt og beint.
   const blob = getAssetBlob(plan.assetId);
   if (!blob || !(plan.width > 0)) return null;
+  // Allt í vinnuþræðinum þegar hann býður upp á OffscreenCanvas (afkóðun + minnkun + grátónun + mæling) — aðalþráðurinn
+  // snertir þá ekki 25 MP blaðið. Gamla leiðin hér að neðan er varaleið (gamall vafri, þráður fæst ekki).
+  const iThraedi = await hallaBladsIThraedi(blob, plan);
+  if (iThraedi) {
+    const gradurT = iThraedi.halli ? -(Math.atan(iThraedi.halli) * 180) / Math.PI : 0;
+    const metrarT = dpmFrum && dpmFrum > 0 ? Math.max(iThraedi.sk.w, iThraedi.sk.h) / dpmFrum : 0;
+    return Math.abs(gradurT) < hallaThroskuldur(metrarT) ? 0 : gradurT;
+  }
   let bmp: ImageBitmap;
   try {
     bmp = await createImageBitmap(blob);
@@ -199,6 +207,32 @@ export async function maelaHallaBlads(plan: ImageObject, dpmFrum?: number | null
   // viðmiðið 45 cm færslu — þrefalt smellivikmarkið — á meðan viðmótið lofaði „minna en smellivikmörkin".
   const metrar = dpmFrum && dpmFrum > 0 ? Math.max(g0.sk.w, g0.sk.h) / dpmFrum : 0;
   return Math.abs(gradur) < hallaThroskuldur(metrar) ? 0 : gradur;
+}
+
+/** Halli blaðsins reiknaður að ÖLLU leyti í vinnuþræðinum úr blobinu (skonnun-veggir-verk „halliblad"). `null` = þráðurinn
+ * eða OffscreenCanvas fæst ekki, eða mælingin brást — þá tekur gamla leiðin við. */
+function hallaBladsIThraedi(blob: Blob, plan: ImageObject): Promise<{ halli: number; sk: { x: number; y: number; w: number; h: number } } | null> {
+  if (typeof OffscreenCanvas === "undefined" || typeof Worker === "undefined") return Promise.resolve(null);
+  let w: Worker | null = null;
+  try {
+    w = new Worker(new URL("./skonnun-veggir-verk.ts", import.meta.url));
+  } catch {
+    return Promise.resolve(null);
+  }
+  const verk = w;
+  const t = plan.uttekt;
+  const lett = t ? { frumB: t.frumB, frumH: t.frumH, skurdur: t.skurdur ?? null, myndSkurdur: t.myndSkurdur ?? null } : null;
+  return new Promise((res) => {
+    verk.onmessage = (e: MessageEvent<{ halli?: number; sk?: { x: number; y: number; w: number; h: number }; villa?: string }>) => {
+      verk.terminate();
+      res(typeof e.data.halli === "number" && e.data.sk ? { halli: e.data.halli, sk: e.data.sk } : null);
+    };
+    verk.onerror = () => {
+      verk.terminate();
+      res(null);
+    };
+    verk.postMessage({ verk: "halliblad", id: 1, blob, plan: { uttekt: lett } });
+  });
 }
 
 /** Hallamælingin í vinnuþræði; á aðalþræðinum aðeins ef þráðurinn fæst ekki (gamall vafri). Skilar `null` ef hvorugt gekk. */
