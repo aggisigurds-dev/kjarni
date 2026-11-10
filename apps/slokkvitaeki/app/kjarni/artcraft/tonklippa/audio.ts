@@ -50,6 +50,8 @@ type AudioCtor = typeof AudioContext;
  *  hvar hann er staddur. */
 export class Player {
   private ctx: AudioContext | null = null;
+  private gain: GainNode | null = null;
+  private volume = 1;
   private node: AudioBufferSourceNode | null = null;
   private startedAt = 0;
   private offset = 0;
@@ -93,7 +95,12 @@ export class Player {
     const end = Math.max(start, Math.min(to ?? buffer.duration, buffer.duration));
     const node = ctx.createBufferSource();
     node.buffer = buffer;
-    node.connect(ctx.destination);
+    if (!this.gain) {
+      this.gain = ctx.createGain();
+      this.gain.connect(ctx.destination);
+    }
+    this.gain.gain.value = this.volume;
+    node.connect(this.gain);
     const token = ++this.token;
     node.onended = () => {
       if (this.token !== token) return;
@@ -106,6 +113,12 @@ export class Player {
     this.until = end;
     this.startedAt = ctx.currentTime;
     node.start(0, start, Math.max(0.01, end - start));
+  }
+
+  /** 0 = þögn, 1 = fullur styrkur (tekur gildi strax). */
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.gain) this.gain.gain.value = this.volume;
   }
 
   stop(): void {
@@ -127,6 +140,7 @@ export class Player {
     this.stop();
     void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
+    this.gain = null;
   }
 }
 

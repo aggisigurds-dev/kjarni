@@ -38,10 +38,12 @@ import {
   normalizeDoc,
   putClip,
   putEvent,
+  putMedia,
   putSkater,
   putSong,
   putTodo,
   removeEvent,
+  removeMedia,
   removeSkater,
   removeSong,
   sortedTodos,
@@ -51,6 +53,7 @@ import {
   type Song,
 } from "./library.ts";
 import { bestMatches, songFit } from "./match.ts";
+import { focusList, groupOf, needsWork, splitTurns, withTurns } from "./elements.ts";
 import { encodeMp3 } from "./mp3.ts";
 import { extract, renderMix, type TrackAudio } from "./render.ts";
 import { timeStretch } from "./stretch.ts";
@@ -565,4 +568,47 @@ test("song names are tidied from file names", () => {
   assert.equal(trackNameFromFile("99 Luftballons.mp3"), "99 Luftballons", "a number that is part of the title stays");
   assert.equal(trackNameFromFile("7.mp3"), "7");
   assert.equal(trackNameFromFile(".mp3"), "Lag");
+});
+
+test("photos and videos follow the same merge rules, and a skater keeps her dance video", () => {
+  const photo = { id: "m1", at: 3, kind: "mynd" as const, name: "a.jpg", size: 1000, type: "image/jpeg", skaterId: "s1" };
+  const video = { id: "m2", at: 5, kind: "myndband" as const, name: "dans.mov", size: 9e6, type: "video/quicktime", skaterId: "s1" };
+  let phone = putMedia(putMedia(emptyDoc(), photo), video);
+  assert.deepEqual(phone.media.map((m) => m.id), ["m2", "m1"], "newest first");
+  const tablet = removeMedia(phone, "m1", 8);
+  phone = putSkater(phone, skater("s1", 6, { videoId: "m2", videoStart: 2.5 }));
+  const merged = mergeDocs(phone, tablet);
+  assert.deepEqual(merged.media.map((m) => m.id), ["m2"], "the deleted photo stays deleted");
+  assert.deepEqual([merged.skaters[0].videoId, merged.skaters[0].videoStart], ["m2", 2.5]);
+  const loaded = normalizeDoc(JSON.parse(JSON.stringify({ ...merged, media: [...merged.media, { id: "x", at: 1, kind: "skjal", size: 1 }, { id: "y", at: 1, kind: "mynd" }] })));
+  assert.deepEqual(loaded.media, [video]);
+  assert.deepEqual([loaded.skaters[0].videoId, loaded.skaters[0].videoStart], ["m2", 2.5]);
+});
+
+test("elements: names, jump rotations, and what to practise first", () => {
+  assert.equal(groupOf("Lutz"), "stokk");
+  assert.equal(groupOf("2× salchow"), "stokk");
+  assert.equal(groupOf("Sitjandi snúningur"), "snuningar");
+  assert.equal(groupOf("Skrefaröð"), "annad");
+  assert.equal(groupOf("Eitthvað annað"), null);
+  assert.deepEqual(splitTurns("3x Toe loop"), { turns: "3×", name: "Toe loop" });
+  assert.deepEqual(splitTurns("Axel"), { turns: "", name: "Axel" });
+  assert.equal(withTurns("Flip", "2×"), "2× Flip");
+  assert.equal(withTurns("Flip", ""), "Flip");
+  const marks = [
+    { label: "Lutz", grade: 2 },
+    { label: "Axel", grade: 5 },
+    { label: "lutz", grade: 3 },
+    { label: "Sitjandi snúningur", grade: 3 },
+    { label: "Skrefaröð" },
+    { label: "", grade: 1 },
+  ];
+  assert.deepEqual(focusList(marks), [
+    { label: "Lutz", grade: 2.5, count: 2 },
+    { label: "Sitjandi snúningur", grade: 3, count: 1 },
+    { label: "Axel", grade: 5, count: 1 },
+  ]);
+  assert.deepEqual(needsWork(marks).map((f) => f.label), ["Lutz", "Sitjandi snúningur"], "only grade 3 and below");
+  const doc = putSkater(emptyDoc(), skater("s", 1, { markers: [{ t: 5, label: "Lutz", grade: 2 }, { t: 9, label: "Axel", grade: 9 }, { t: 12, label: "Loop", grade: 2.5 }] }));
+  assert.deepEqual(doc.skaters[0].markers.map((m) => m.grade), [2, undefined, undefined], "grades are whole numbers 1–5");
 });

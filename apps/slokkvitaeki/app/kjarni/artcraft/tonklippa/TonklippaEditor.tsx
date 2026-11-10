@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Copy, Download, Film, Flag, Library, Maximize2, Minus, Music, Pause, Play, Plus, Redo2, Scissors, Share, SkipBack, Sparkles, SquareSplitHorizontal, Star, Target, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Download, Film, Flag, Library, Maximize2, Minus, Music, Pause, Play, Plus, Redo2, Scissors, Share, SkipBack, Sparkles, SquareSplitHorizontal, Star, Target, Trash2, Undo2, Video, X } from "lucide-react";
 import {
   GAIN_MAX,
   GAIN_MIN,
@@ -48,7 +48,8 @@ import {
   type SeamFx,
 } from "./arrange";
 import { STEADY_ENOUGH, liveliestWindow } from "./analyze";
-import type { Clip, Song } from "./library";
+import { ALL_ELEMENTS } from "./elements";
+import { MAX_CLOUD_BYTES, type Clip, type Media, type Song } from "./library";
 import { bestMatches } from "./match";
 import { SongPicker } from "./Parts";
 import { Player, RATE, mixToBuffer, saveBlob, trackWindowBuffer } from "./audio";
@@ -75,13 +76,20 @@ type Props = {
   importSong: (file: File) => Promise<TrackView>;
   openSong: (songId: string) => Promise<TrackView>;
   onSaveClip: (clip: Clip) => void;
+  /** Upptaka af dansinum sem spilast undir tónlistinni, og hvar í henni dansinn byrjar. */
+  initialVideoId?: string;
+  initialVideoOffset?: number;
+  media: Media[];
+  onAddVideo: (file: File) => Promise<Media | null>;
+  onOpenMedia: (m: Media) => Promise<Blob | null>;
+  onDeleteMedia: (m: Media) => void;
   /** Skýjasamstillingin (null ef hún er ekki í boði) og staða hennar. */
   sync: CloudSync | null;
   syncState: SyncState;
   onClose: () => void;
 };
 
-type Panel = "butur" | "log" | "merki" | "vista";
+type Panel = "butur" | "log" | "merki" | "myndband" | "vista";
 type Rendered = { key: string; buffer: AudioBuffer; mix: Mix };
 type Format = "mp3-192" | "mp3-320" | "wav";
 
@@ -94,7 +102,7 @@ const FX: Array<[SeamFx | undefined, string]> = [
   ["impact", "Högg"],
   ["both", "Bæði"],
 ];
-const MARKER_WORDS = ["Stökk", "Snúningur", "Spírall", "Skrefaröð", "Lyfta", "Lokastaða"];
+const MARKER_WORDS = ALL_ELEMENTS;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const comma = (n: number, digits = 1) => n.toFixed(digits).replace(".", ",");
@@ -119,6 +127,12 @@ export default function TonklippaEditor({
   importSong,
   openSong,
   onSaveClip,
+  initialVideoId,
+  initialVideoOffset,
+  media,
+  onAddVideo,
+  onOpenMedia,
+  onDeleteMedia,
   sync,
   syncState,
   onClose,
@@ -145,6 +159,20 @@ export default function TonklippaEditor({
   const [saved, setSaved] = useState<"saved" | "saving" | "error">("saved");
   const [focusMarker, setFocusMarker] = useState("");
   const [picker, setPicker] = useState(false);
+  const [videoId, setVideoId] = useState(initialVideoId);
+  const [videoOffset, setVideoOffset] = useState(initialVideoOffset ?? 0);
+  /** Slóð á upptökuna: undefined = verið að sækja, null = ekki til í þessu tæki. */
+  const [videoUrl, setVideoUrl] = useState<string | null | undefined>(undefined);
+  const [videoLen, setVideoLen] = useState(0);
+  const [videoSound, setVideoSound] = useState(false);
+  const danceEl = useRef<HTMLVideoElement>(null);
+  const danceInput = useRef<HTMLInputElement>(null);
+  const priming = useRef(false);
+  const videoIdRef = useRef(videoId);
+  videoIdRef.current = videoId;
+  const videoOffsetRef = useRef(videoOffset);
+  videoOffsetRef.current = videoOffset;
+  const videoMeta = videoId ? media.find((m) => m.id === videoId) : undefined;
   const matchTurn = useRef<{ part: string; turn: number }>({ part: "", turn: 0 });
 
   const arrRef = useRef(arr);
@@ -219,11 +247,37 @@ export default function TonklippaEditor({
     return playerRef.current;
   }
 
-  const placeHead = useCallback((t: number) => {
-    tRef.current = t;
-    if (headRef.current) headRef.current.style.left = `${clamp((t / spanRef.current) * 100, 0, 100)}%`;
-    if (timeRef.current) timeRef.current.textContent = formatTime(t, true);
+  /** Upptakan af dansinum fylgir spilhausnum: spilast með tónlistinni og
+   *  stendur á réttum ramma þegar stöðvað er eða flett. */
+  const syncVideo = useCallback((t: number) => {
+    const v = danceEl.current;
+    if (!v || !v.currentSrc) return;
+    const want = Math.max(0, videoOffsetRef.current + t);
+    if (modeRef.current === "mix") {
+      if (v.paused) {
+        if (!(want >= v.duration)) {
+          v.currentTime = want;
+          void v.play().catch(() => undefined);
+        }
+      } else if (Math.abs(v.currentTime - want) > 0.3) {
+        v.currentTime = want;
+      }
+    } else if (!priming.current) {
+      if (!v.paused) v.pause();
+      const at = Number.isFinite(v.duration) ? Math.min(want, v.duration) : want;
+      if (Math.abs(v.currentTime - at) > 0.04) v.currentTime = at;
+    }
   }, []);
+
+  const placeHead = useCallback(
+    (t: number) => {
+      tRef.current = t;
+      if (headRef.current) headRef.current.style.left = `${clamp((t / spanRef.current) * 100, 0, 100)}%`;
+      if (timeRef.current) timeRef.current.textContent = formatTime(t, true);
+      syncVideo(t);
+    },
+    [syncVideo],
+  );
   // Spilhausinn er færður beint (ekki í gegnum React) — rétta hann af eftir hverja teikningu.
   useLayoutEffect(() => {
     placeHead(tRef.current);
@@ -278,13 +332,22 @@ export default function TonklippaEditor({
     }
     stopAll();
     const token = ++playToken.current;
+    // Myndbandið er ræst strax (á meðan snertingin er enn „gild“ í iPhone);
+    // það er svo rétt af þegar tónlistin fer af stað.
+    const v = danceEl.current;
+    if (v?.currentSrc && v.paused) {
+      priming.current = true;
+      void v.play().catch(() => undefined);
+    }
     let made: Rendered;
     try {
       made = await getMix();
     } catch (err) {
+      priming.current = false;
       say(err instanceof Error ? err.message : "Gat ekki blandað rútínuna");
       return;
     }
+    priming.current = false;
     if (playToken.current !== token) return;
     const duration = made.buffer.duration;
     let start = Math.max(0, from ?? tRef.current);
@@ -382,6 +445,64 @@ export default function TonklippaEditor({
     [],
   );
 
+  // ------------------------------------------------------------------ upptaka af dansinum
+
+  const videoMetaId = videoMeta?.id;
+  useEffect(() => {
+    if (!videoMeta) {
+      setVideoUrl(undefined);
+      return;
+    }
+    let alive = true;
+    let made = "";
+    setVideoUrl(undefined);
+    void onOpenMedia(videoMeta)
+      .catch(() => null)
+      .then((blob) => {
+        if (!alive) return;
+        if (!blob) {
+          setVideoUrl(null);
+          return;
+        }
+        made = URL.createObjectURL(blob);
+        setVideoUrl(made);
+      });
+    return () => {
+      alive = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoMetaId]);
+
+  // Hlustað á hljóðið úr upptökunni: nýja tónlistin þagnar á meðan.
+  useEffect(() => {
+    player().setVolume(videoSound && videoUrl ? 0 : 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoSound, videoUrl]);
+
+  async function attachVideo(file: File) {
+    stopAll();
+    setBusy("Vista myndbandið…");
+    await breathe();
+    const added = await onAddVideo(file);
+    setBusy("");
+    if (!added) return;
+    // Eldri upptaka sem tilheyrði bara þessari rútínu fer; upptaka iðkanda helst á prófílnum.
+    if (videoMeta && videoMeta.projectId === projectId) onDeleteMedia(videoMeta);
+    setVideoId(added.id);
+    setVideoOffset(0);
+    setPanel("myndband");
+  }
+
+  function detachVideo() {
+    if (!window.confirm("Taka myndbandið úr rútínunni?")) return;
+    stopAll();
+    if (videoMeta && videoMeta.projectId === projectId) onDeleteMedia(videoMeta);
+    setVideoId(undefined);
+    setVideoOffset(0);
+    setVideoSound(false);
+  }
+
   // ------------------------------------------------------------------ vistun
 
   useEffect(() => {
@@ -395,6 +516,7 @@ export default function TonklippaEditor({
         arrangement: arr,
         tracks: tracks.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
         ...(skaterId ? { skaterId } : {}),
+        ...(videoId ? { videoId, videoOffset } : {}),
       }).then(
         () => {
           setSaved("saved");
@@ -404,7 +526,7 @@ export default function TonklippaEditor({
       );
     }, 600);
     return () => window.clearTimeout(id);
-  }, [arr, name, tracks, projectId, skaterId, sync]);
+  }, [arr, name, tracks, projectId, skaterId, videoId, videoOffset, sync]);
 
   async function close() {
     stopAll();
@@ -417,6 +539,7 @@ export default function TonklippaEditor({
         arrangement: arrRef.current,
         tracks: tracksRef.current.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
         ...(skaterId ? { skaterId } : {}),
+        ...(videoIdRef.current ? { videoId: videoIdRef.current, videoOffset: videoOffsetRef.current } : {}),
       });
       sync?.touch(projectId, 0);
     } catch {
@@ -1156,6 +1279,82 @@ export default function TonklippaEditor({
           </div>
         )}
 
+        {panel === "myndband" && (
+          <div className="tk-pane">
+            {videoId && videoUrl ? (
+              <>
+                <video
+                  ref={danceEl}
+                  className="tk-dance"
+                  src={videoUrl}
+                  muted={!videoSound}
+                  playsInline
+                  preload="auto"
+                  onLoadedMetadata={(e) => {
+                    setVideoLen(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0);
+                    placeHead(tRef.current);
+                  }}
+                />
+                <p className="tk-hint">
+                  Ýttu á ▶ hér fyrir ofan: upptakan spilast með nýju tónlistinni. Ýttu á „Hápunktur“ þegar eitthvað gerist í dansinum,
+                  og sjáðu hvort slögin í laginu lenda á réttum stað.
+                </p>
+                <div className="tk-field">
+                  <span className="tk-label">Dansinn byrjar</span>
+                  <input
+                    className="tk-range"
+                    type="range"
+                    min={0}
+                    max={Math.max(1, Math.floor(videoLen * 10) / 10)}
+                    step={0.1}
+                    value={Math.min(videoOffset, videoLen || videoOffset)}
+                    onChange={(e) => setVideoOffset(Number(e.target.value))}
+                    aria-label="Hvar í myndbandinu dansinn byrjar"
+                  />
+                  <span className="tk-value plain">{formatTime(videoOffset, true)}</span>
+                </div>
+                <div className="tk-row">
+                  <button type="button" className="tk-btn" onClick={() => setVideoOffset((o) => Math.max(0, Math.round((o - 0.1) * 10) / 10))}>
+                    − 0,1 s
+                  </button>
+                  <button type="button" className="tk-btn" onClick={() => setVideoOffset((o) => Math.round((o + 0.1) * 10) / 10)}>
+                    + 0,1 s
+                  </button>
+                  <button type="button" className={`tk-chip${videoSound ? " on" : ""}`} role="switch" aria-checked={videoSound} onClick={() => setVideoSound((s) => !s)}>
+                    Hljóðið úr myndbandinu
+                  </button>
+                </div>
+                {videoMeta && videoMeta.size > MAX_CLOUD_BYTES && <p className="tk-muted">Myndbandið er yfir 48 MB og er því bara geymt í þessu tæki.</p>}
+                <div className="tk-row tk-actions">
+                  <button type="button" className="tk-btn" onClick={() => danceInput.current?.click()}>
+                    <Video size={16} /> Skipta um myndband
+                  </button>
+                  <button type="button" className="tk-btn danger" onClick={detachVideo}>
+                    <Trash2 size={15} /> Taka úr rútínunni
+                  </button>
+                </div>
+              </>
+            ) : videoId && videoMeta && videoUrl === undefined ? (
+              <p className="tk-muted">Sæki myndbandið…</p>
+            ) : (
+              <>
+                {videoId && (
+                  <p className="tk-status long">
+                    Upptakan er ekki í þessu tæki{videoMeta && videoMeta.size > MAX_CLOUD_BYTES ? " (hún var of stór fyrir skýið)" : ""}.
+                  </p>
+                )}
+                <p className="tk-hint">
+                  Taktu upp dansinn (eða veldu upptöku) og horfðu á hann með nýju tónlistinni undir. Þá sérðu strax hvort slögin lenda á
+                  stökkunum, og getur merkt hápunktana á meðan þú horfir.
+                </p>
+                <button type="button" className="tk-cta" onClick={() => danceInput.current?.click()}>
+                  <Video size={20} /> Velja eða taka upp myndband
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {panel === "vista" && (
           <div className="tk-pane">
             <h3>Lengd</h3>
@@ -1291,6 +1490,7 @@ export default function TonklippaEditor({
             ["butur", Scissors, "Bútur"],
             ["log", Music, "Lög"],
             ["merki", Flag, "Hápunktar"],
+            ["myndband", Video, "Myndband"],
             ["vista", Download, "Vista"],
           ] as const
         ).map(([id, Icon, label]) => (
@@ -1323,6 +1523,17 @@ export default function TonklippaEditor({
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
           void addFiles(files);
+        }}
+      />
+      <input
+        ref={danceInput}
+        type="file"
+        accept="video/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void attachVideo(file);
         }}
       />
       {picker && (

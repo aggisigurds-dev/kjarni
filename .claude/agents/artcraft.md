@@ -37,14 +37,17 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   miðjuð jafnafls-samskeyti, áhrifshljóð), `stretch.ts` (WSOLA — hraði ±12% án
   tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit, hápunktar lags), `match.ts` („besti
   kaflinn“: hvar hápunktar lags falla að hápunktum dansins), `library.ts` (safn/iðkendur/dagatal/
-  verkefni — eitt skjal, sameinað atriði fyrir atriði milli tækja), `calendar.ts`.
+  verkefni/myndir og myndbönd — eitt skjal, sameinað atriði fyrir atriði milli tækja),
+  `calendar.ts`, `elements.ts` (heiti stökka og snúninga, einkunnir, æfingaáherslur).
+  Myndir og myndbönd (`Media.tsx`): gallerí á iðkanda, hápunktar merktir í upptöku af dansinum
+  (`DanceMarker`), og upptakan spilast í takt við tónlistina í ritlinum (flipinn „Myndband“).
   MP3 = `wasm-media-encoders` (LAME í WASM). Unnið er í IndexedDB (`kjarni-tonklippa`, virkar án
   nets með `public/coach-sw.js`) og afritað í Supabase Storage, bucket `tonklippa` (EINA
   Supabase-notkun ArtCraft): engin innskráning — tækið á leynilykil (`?k=` í slóð + haus
   `x-tk-key`) og RLS hleypir aðeins í möppuna `sha256(lykill)`; sjá
   `apps/database/supabase/schemas/tonklippa.sql`, `cloud.ts`, `sync.ts` og `cloud.live.test.ts`
   (handvirkt RLS-próf). Í skúffunni: `p/<rútína>.json`, `p/x-safn.json` (safnið allt),
-  `t/safn/<lag>`, `t/myndir/<iðkandi>`. Lykillinn fer í manifest `start_url`, því uppsett
+  `t/safn/<lag>`, `t/myndir/<iðkandi>`, `t/midlar/<mynd eða myndband>` (yfir 48 MB: bara í tækinu). Lykillinn fer í manifest `start_url`, því uppsett
   iPhone-app og Safari deila ekki geymslu. Spotify kemur ekki til greina sem hljóðgjafi (dulkóðað
   streymi; forskoðun og hljóðgreining tekin úr API 27.11.2024) — appið vinnur með skrár.
 - **Ástand:** aðeins localStorage (`kjarni_staging_`, `kjarni_pending_`, `kjarni_result_`,

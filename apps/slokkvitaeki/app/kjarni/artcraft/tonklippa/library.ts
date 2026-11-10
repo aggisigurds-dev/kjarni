@@ -28,7 +28,8 @@ export type Song = {
 /** Uppáhaldsbútur: kafli úr lagi sem má setja beint í rútínu. */
 export type Clip = { id: string; songId: string; name: string; start: number; end: number; at: number };
 
-export type SkaterMarker = { t: number; label: string };
+/** Hápunktur í dansi iðkanda: hvenær, hvað (t.d. "2× Salchow") og einkunn 1–5. */
+export type SkaterMarker = { t: number; label: string; grade?: number };
 
 export type Skater = {
   id: string;
@@ -43,6 +44,9 @@ export type Skater = {
   /** Lög úr safninu sem gætu passað. */
   songIds: string[];
   note?: string;
+  /** Upptaka af dansinum (auðkenni myndbands í safninu) og hvar í henni dansinn byrjar. */
+  videoId?: string;
+  videoStart?: number;
 };
 
 /** Viðburður í dagatali þjálfarans. */
@@ -64,6 +68,22 @@ export type CoachEvent = {
 
 export type Todo = { id: string; at: number; text: string; done: boolean };
 
+/** Mynd eða myndband: á iðkanda (gallerí) eða á rútínu (upptaka af dansinum). */
+export type Media = {
+  id: string;
+  at: number;
+  kind: "mynd" | "myndband";
+  name: string;
+  /** Stærð í bætum og skráartegund (til að opna rétt). */
+  size: number;
+  type: string;
+  skaterId?: string;
+  projectId?: string;
+};
+
+/** Stærri skrár en þetta fara ekki í skýið (geymslan tekur mest 50 MB á skrá). */
+export const MAX_CLOUD_BYTES = 48 * 1024 * 1024;
+
 export type Gone = { id: string; at: number };
 
 export type LibraryDoc = {
@@ -72,12 +92,13 @@ export type LibraryDoc = {
   skaters: Skater[];
   events: CoachEvent[];
   todos: Todo[];
+  media: Media[];
   /** Það sem hefur verið eytt (svo það komi ekki aftur úr öðru tæki). */
   gone: Gone[];
 };
 
 export function emptyDoc(): LibraryDoc {
-  return { songs: [], clips: [], skaters: [], events: [], todos: [], gone: [] };
+  return { songs: [], clips: [], skaters: [], events: [], todos: [], media: [], gone: [] };
 }
 
 type Stamped = { id: string; at: number };
@@ -107,6 +128,7 @@ export function mergeDocs(a: LibraryDoc, b: LibraryDoc): LibraryDoc {
     skaters: mergeList(a.skaters, b.skaters, gone).sort((x, y) => x.name.localeCompare(y.name, "is")),
     events: mergeList(a.events, b.events, gone).sort(byWhen),
     todos: mergeList(a.todos, b.todos, gone).sort((x, y) => (x.id < y.id ? -1 : 1)),
+    media: mergeList(a.media, b.media, gone).sort((x, y) => y.at - x.at || (x.id < y.id ? -1 : 1)),
     gone: [...gone].map(([id, at]) => ({ id, at })).sort((x, y) => (x.id < y.id ? -1 : 1)),
   };
 }
@@ -142,6 +164,7 @@ export function removeSong(doc: LibraryDoc, id: string, now: number): LibraryDoc
     skaters: doc.skaters.map((k) => (k.songIds.includes(id) ? { ...k, songIds: k.songIds.filter((x) => x !== id), at: now } : k)),
     events: doc.events,
     todos: doc.todos,
+    media: doc.media,
     gone: [...doc.gone.filter((g) => g.id !== id && !clips.some((c) => c.id === g.id)), { id, at: now }, ...clips.map((c) => ({ id: c.id, at: now }))],
   };
 }
@@ -154,13 +177,18 @@ export function removeClip(doc: LibraryDoc, id: string, now: number): LibraryDoc
   return { ...doc, clips: doc.clips.filter((c) => c.id !== id), gone: [...doc.gone.filter((g) => g.id !== id), { id, at: now }] };
 }
 
+/** Gild einkunn (heil tala 1–5), annars undefined. */
+function gradeOf(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 5 ? v : undefined;
+}
+
 export function putSkater(doc: LibraryDoc, skater: Skater): LibraryDoc {
   const clean: Skater = {
     ...skater,
     name: skater.name.trim().slice(0, 60),
     markers: skater.markers
       .filter((m) => Number.isFinite(m.t) && m.t >= 0)
-      .map((m) => ({ t: Math.round(m.t * 10) / 10, label: m.label.slice(0, 60) }))
+      .map((m) => ({ t: Math.round(m.t * 10) / 10, label: m.label.slice(0, 60), ...(gradeOf(m.grade) ? { grade: gradeOf(m.grade) } : {}) }))
       .sort((x, y) => x.t - y.t),
     songIds: [...new Set(skater.songIds)],
     targetMax: Math.max(skater.targetMin, skater.targetMax),
@@ -190,6 +218,14 @@ export function putTodo(doc: LibraryDoc, todo: Todo): LibraryDoc {
 
 export function removeTodo(doc: LibraryDoc, id: string, now: number): LibraryDoc {
   return { ...doc, todos: doc.todos.filter((t) => t.id !== id), gone: [...doc.gone.filter((g) => g.id !== id), { id, at: now }] };
+}
+
+export function putMedia(doc: LibraryDoc, item: Media): LibraryDoc {
+  return { ...doc, media: put(doc.media, item).sort((x, y) => y.at - x.at || (x.id < y.id ? -1 : 1)), gone: doc.gone.filter((g) => g.id !== item.id) };
+}
+
+export function removeMedia(doc: LibraryDoc, id: string, now: number): LibraryDoc {
+  return { ...doc, media: doc.media.filter((m) => m.id !== id), gone: [...doc.gone.filter((g) => g.id !== id), { id, at: now }] };
 }
 
 /** Eyðir öllum verkefnum sem er búið að haka við. */
@@ -224,9 +260,12 @@ export function normalizeDoc(raw: unknown): LibraryDoc {
         photoAt: num(k.photoAt) ? k.photoAt : 0,
         targetMin: num(k.targetMin) ? k.targetMin : 72,
         targetMax: num(k.targetMax) ? k.targetMax : 84,
-        markers: (Array.isArray(k.markers) ? k.markers : []).filter((m) => m && num(m.t)).map((m) => ({ t: m.t, label: typeof m.label === "string" ? m.label : "" })),
+        markers: (Array.isArray(k.markers) ? k.markers : [])
+          .filter((m) => m && num(m.t))
+          .map((m) => ({ t: m.t, label: typeof m.label === "string" ? m.label : "", ...(gradeOf(m.grade) ? { grade: gradeOf(m.grade) } : {}) })),
         songIds: (Array.isArray(k.songIds) ? k.songIds : []).filter(str),
         ...(typeof k.note === "string" && k.note ? { note: k.note.slice(0, 400) } : {}),
+        ...(str(k.videoId) ? { videoId: k.videoId, videoStart: num(k.videoStart) ? Math.max(0, k.videoStart as number) : 0 } : {}),
       })),
     events: (Array.isArray(r.events) ? r.events : [])
       .filter((e) => e && str(e.id) && num(e.at) && typeof e.title === "string" && typeof e.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
@@ -245,6 +284,18 @@ export function normalizeDoc(raw: unknown): LibraryDoc {
     todos: (Array.isArray(r.todos) ? r.todos : [])
       .filter((t) => t && str(t.id) && num(t.at) && typeof t.text === "string")
       .map((t) => ({ id: t.id, at: t.at, text: t.text, done: t.done === true })),
+    media: (Array.isArray(r.media) ? r.media : [])
+      .filter((m) => m && str(m.id) && num(m.at) && (m.kind === "mynd" || m.kind === "myndband") && num(m.size))
+      .map((m) => ({
+        id: m.id,
+        at: m.at,
+        kind: m.kind,
+        name: typeof m.name === "string" ? m.name.slice(0, 120) : "",
+        size: m.size,
+        type: typeof m.type === "string" ? m.type : "",
+        ...(str(m.skaterId) ? { skaterId: m.skaterId } : {}),
+        ...(str(m.projectId) ? { projectId: m.projectId } : {}),
+      })),
     gone: (Array.isArray(r.gone) ? r.gone : []).filter((g) => g && str(g.id) && num(g.at)),
   };
 }

@@ -12,36 +12,55 @@ import { emptyArrangement, formatTime, normalizeArrangement, type Arrangement, t
 import { ymd } from "./calendar";
 import { EventSheet, HomeTab, PlanTab, blankEvent } from "./Coach";
 import {
+  MAX_CLOUD_BYTES,
   clearDone,
   emptyDoc,
   mergeDocs,
   patchSong,
   putClip,
   putEvent,
+  putMedia,
   putSkater,
   putSong,
   putTodo,
   removeClip,
   removeEvent,
+  removeMedia,
   removeSkater,
   removeSong,
   removeTodo,
   type Clip,
   type CoachEvent,
   type LibraryDoc,
+  type Media,
   type Skater,
   type Song,
 } from "./library";
 import { bestMatches } from "./match";
+import { fitPhoto } from "./Media";
 import { Avatar, SongPicker } from "./Parts";
-import { deletePhoto, deleteProject, deleteSongBlob, isSynced, listProjects, loadDoc, mergeIntoDoc, saveProject, savePhoto, saveSongBlob, type ProjectRecord } from "./store";
-import { CloudSync, KEY_PARAM, applyManifestKey, fetchPhoto, fetchSongBlob, resolveLockerKey, syncAll, type SyncState } from "./sync";
+import {
+  deleteMediaBlob,
+  deletePhoto,
+  deleteProject,
+  deleteSongBlob,
+  isSynced,
+  listProjects,
+  loadDoc,
+  mergeIntoDoc,
+  saveMediaBlob,
+  saveProject,
+  savePhoto,
+  saveSongBlob,
+  type ProjectRecord,
+} from "./store";
+import { CloudSync, KEY_PARAM, applyManifestKey, fetchMediaBlob, fetchPhoto, fetchSongBlob, resolveLockerKey, syncAll, type SyncState } from "./sync";
 import { LibraryTab, SkaterSheet, SkatersTab, blankSkater, fitsFor, squarePhoto } from "./Tabs";
 import { buildTrackView, newId, songSummary, trackNameFromFile, type TrackView } from "./tracks";
 import TonklippaEditor, { AUDIO_ACCEPT, VIDEO_ACCEPT } from "./TonklippaEditor";
 import "./tonklippa.css";
 
-type Open = { id: string; name: string; arr: Arrangement; tracks: TrackView[]; skaterId?: string; key: number };
+type Open = { id: string; name: string; arr: Arrangement; tracks: TrackView[]; skaterId?: string; videoId?: string; videoOffset?: number; key: number };
 type Tab = "heim" | "skipulag" | "idkendur" | "rutinur" | "safn";
 /** Hvað á að gera við skrárnar sem verða valdar næst. */
 type Intent = { kind: "routine"; skaterId?: string } | { kind: "library" } | { kind: "resolve"; done: (song: Song | null) => void };
@@ -381,12 +400,14 @@ export default function TonklippaApp() {
       arrangement: arr,
       tracks: tracks.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
       ...(skater ? { skaterId: skater.id } : {}),
+      // Upptakan af dansinum fylgir með í ritilinn og spilast undir tónlistinni.
+      ...(skater?.videoId ? { videoId: skater.videoId, videoOffset: skater.videoStart ?? 0 } : {}),
     }).catch(() => undefined);
     syncRef.current?.touch(id, 800);
     stopPreview();
     setNewFor(null);
     setSkaterOpen(null);
-    setOpen({ id, name, arr, tracks, skaterId: skater?.id, key: Date.now() });
+    setOpen({ id, name, arr, tracks, skaterId: skater?.id, videoId: skater?.videoId, videoOffset: skater?.videoStart ?? 0, key: Date.now() });
   }
 
   async function routineFromLibrary(songId: string, skaterId?: string, clip?: Clip) {
@@ -432,7 +453,16 @@ export default function TonklippaApp() {
     const durations = Object.fromEntries(tracks.map((t) => [t.id, t.duration]));
     stopPreview();
     setSkaterOpen(null);
-    setOpen({ id: rec.id, name: rec.name, arr: normalizeArrangement(rec.arrangement, durations), tracks, skaterId: rec.skaterId, key: Date.now() });
+    setOpen({
+      id: rec.id,
+      name: rec.name,
+      arr: normalizeArrangement(rec.arrangement, durations),
+      tracks,
+      skaterId: rec.skaterId,
+      videoId: rec.videoId,
+      videoOffset: rec.videoOffset,
+      key: Date.now(),
+    });
   }
 
   async function removeProject(rec: ProjectRecord) {
@@ -487,6 +517,32 @@ export default function TonklippaApp() {
     setSkaterOpen(null);
     updateDoc((d) => removeSkater(d, skater.id, Date.now()));
     void deletePhoto(skater.id).catch(() => undefined);
+  }
+
+  /** Mynd eða myndband inn í safnið (á iðkanda eða rútínu). Myndir eru minnkaðar. */
+  async function addMedia(file: File, owner: { skaterId?: string; projectId?: string }): Promise<Media | null> {
+    const video = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/i.test(file.name);
+    if (!video && !file.type.startsWith("image/")) {
+      say("Veldu mynd eða myndband");
+      return null;
+    }
+    try {
+      const blob = video ? file : await fitPhoto(file);
+      const id = newId();
+      await saveMediaBlob(id, blob);
+      const item: Media = { id, at: Date.now(), kind: video ? "myndband" : "mynd", name: file.name.slice(0, 120), size: blob.size, type: blob.type || (video ? "video/mp4" : "image/jpeg"), ...owner };
+      updateDoc((d) => putMedia(d, item));
+      if (item.size > MAX_CLOUD_BYTES) say("Myndbandið er of stórt fyrir skýið (yfir 48 MB) — það er geymt í þessu tæki", 6000);
+      return item;
+    } catch (err) {
+      say(err instanceof Error && err.name === "QuotaExceededError" ? "Tækið er fullt — ekki pláss fyrir skrána" : "Gat ekki vistað skrána", 5000);
+      return null;
+    }
+  }
+  const openMedia = (m: Media) => fetchMediaBlob(keyRef.current, m);
+  function deleteMedia(m: Media) {
+    updateDoc((d) => removeMedia(d, m.id, Date.now()));
+    void deleteMediaBlob(m.id).catch(() => undefined);
   }
 
   /** Lætur notandann velja skrá og skilar laginu þegar það er komið í safnið. */
@@ -800,6 +856,16 @@ export default function TonklippaApp() {
           onOpenProject={(rec) => void openProject(rec)}
           onNewRoutine={(k) => setNewFor({ skaterId: k.id })}
           onImport={importOne}
+          onAddMedia={async (k, files) => {
+            const added: Media[] = [];
+            for (const file of files) {
+              const m = await addMedia(file, { skaterId: k.id });
+              if (m) added.push(m);
+            }
+            return added;
+          }}
+          onOpenMedia={openMedia}
+          onDeleteMedia={deleteMedia}
           onDelete={deleteSkater}
           onClose={() => {
             // Tómur, nýr iðkandi sem ekkert var skráð á: hverfur aftur.
@@ -931,6 +997,12 @@ export default function TonklippaApp() {
           importSong={importSong}
           openSong={openSong}
           onSaveClip={(clip) => updateDoc((d) => putClip(d, clip))}
+          initialVideoId={open.videoId}
+          initialVideoOffset={open.videoOffset}
+          media={doc.media}
+          onAddVideo={(file) => addMedia(file, { projectId: open.id })}
+          onOpenMedia={openMedia}
+          onDeleteMedia={deleteMedia}
           sync={syncRef.current}
           syncState={syncState}
           onClose={() => {

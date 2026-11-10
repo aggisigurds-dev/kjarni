@@ -5,15 +5,17 @@
  *  sem gætu passað. */
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Ellipsis, Film, Music, Pause, Play, Plus, Star, Timer, Trash2, UserPlus, X } from "lucide-react";
+import { Camera, Ellipsis, Film, Music, Pause, Play, Plus, Star, Timer, Trash2, UserPlus, Video, X } from "lucide-react";
 import { formatTime, parseTime } from "./arrange";
-import { COVERS, COVER_LABEL, putSkater, type Clip, type CoverStyle, type LibraryDoc, type Skater, type SkaterMarker, type Song } from "./library";
+import { COVERS, COVER_LABEL, putSkater, type Clip, type CoverStyle, type LibraryDoc, type Media, type Skater, type SkaterMarker, type Song } from "./library";
+import { ElementField, Stars } from "./ElementField";
+import { needsWork } from "./elements";
+import { DanceMarker, Gallery } from "./Media";
 import { songFit, type Match } from "./match";
 import { Avatar, Cover, MiniWave, SongPicker, fitLabel } from "./Parts";
 import type { ProjectRecord } from "./store";
 import { newId } from "./tracks";
 
-const MARKER_WORDS = ["Stökk", "Snúningur", "Spírall", "Skrefaröð", "Lyfta", "Lokastaða"];
 const LENGTHS = [60, 80, 90, 120, 150];
 
 /** Hversu vel hvert lag í safninu passar við hápunkta iðkandans. */
@@ -238,17 +240,78 @@ type SheetProps = {
   onOpenProject: (rec: ProjectRecord) => void;
   onNewRoutine: (skater: Skater) => void;
   onImport: (kind: "audio" | "video") => Promise<Song | null>;
+  onAddMedia: (skater: Skater, files: File[]) => Promise<Media[]>;
+  onOpenMedia: (m: Media) => Promise<Blob | null>;
+  onDeleteMedia: (m: Media) => void;
   onDelete: (skater: Skater) => void;
   onClose: () => void;
 };
 
 /** Blað iðkanda. Hver breyting vistast strax. */
-export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, onPhoto, onOpenProject, onNewRoutine, onImport, onDelete, onClose }: SheetProps) {
+export function SkaterSheet({
+  skater,
+  isNew,
+  doc,
+  photoUrl,
+  projects,
+  onChange,
+  onPhoto,
+  onOpenProject,
+  onNewRoutine,
+  onImport,
+  onAddMedia,
+  onOpenMedia,
+  onDeleteMedia,
+  onDelete,
+  onClose,
+}: SheetProps) {
   const photoInput = useRef<HTMLInputElement>(null);
   const [picker, setPicker] = useState(false);
   const [watch, setWatch] = useState<{ since: number; now: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const nameInput = useRef<HTMLInputElement>(null);
+  const danceInput = useRef<HTMLInputElement>(null);
+  const [marking, setMarking] = useState<{ url: string } | "loading" | null>(null);
+  const [note, setNote] = useState("");
+  const markUrl = useRef("");
+  useEffect(
+    () => () => {
+      if (markUrl.current) URL.revokeObjectURL(markUrl.current);
+    },
+    [],
+  );
+  const openMarker = (blob: Blob) => {
+    if (markUrl.current) URL.revokeObjectURL(markUrl.current);
+    markUrl.current = URL.createObjectURL(blob);
+    setMarking({ url: markUrl.current });
+  };
+  /** Opnar upptökuna af dansinum til að merkja hápunkta; án upptöku er beðið um myndband. */
+  async function markInVideo() {
+    setNote("");
+    const existing = skater.videoId ? doc.media.find((m) => m.id === skater.videoId) : undefined;
+    if (!existing) {
+      danceInput.current?.click();
+      return;
+    }
+    setMarking("loading");
+    const blob = await onOpenMedia(existing).catch(() => null);
+    if (blob) openMarker(blob);
+    else {
+      setMarking(null);
+      setNote("Upptakan er ekki í þessu tæki. Veldu myndbandið aftur til að merkja í því.");
+      danceInput.current?.click();
+    }
+  }
+  async function newDanceVideo(file: File) {
+    setMarking("loading");
+    const [m] = await onAddMedia(skater, [file]);
+    if (!m) {
+      setMarking(null);
+      return;
+    }
+    save({ videoId: m.id, videoStart: 0 });
+    openMarker(file);
+  }
 
   useEffect(() => {
     if (isNew) nameInput.current?.focus();
@@ -268,6 +331,7 @@ export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, 
   const chosen = skater.songIds.map((id) => doc.songs.find((s) => s.id === id)).filter((s): s is Song => !!s);
   const middle = Math.round((skater.targetMin + skater.targetMax) / 2);
   const elapsed = watch ? (watch.now - watch.since) / 1000 : 0;
+  const focus = needsWork(skater.markers);
 
   return (
     <div className="tk-root tk-full" role="dialog" aria-modal="true" aria-label={skater.name || "Nýr iðkandi"}>
@@ -366,14 +430,9 @@ export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, 
 
           <h3>Hápunktar í dansinum</h3>
           <p className="tk-hint">
-            Hvenær gerist eitthvað í dansinum — stökk, snúningur, lokastaða? Sláðu tímana inn, eða farðu í gegnum dansinn með
-            skeiðklukkunni og ýttu í hvert sinn.
+            Hvenær gerist eitthvað í dansinum — stökk, snúningur, lokastaða? Taktu upp alla rútínuna og merktu í myndbandinu, notaðu
+            skeiðklukkuna, eða sláðu tímana inn. Veldu svo tegund og gefðu einkunn, þá sést hvað þarf að æfa.
           </p>
-          <datalist id="tk-skater-words">
-            {MARKER_WORDS.map((w) => (
-              <option key={w} value={w} />
-            ))}
-          </datalist>
           {skater.markers.map((m, i) => (
             <div className="tk-marker" key={`${i}:${m.t}`}>
               <input
@@ -387,18 +446,15 @@ export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, 
                   else if (Math.abs(t - m.t) > 0.04) setMarkers(skater.markers.map((x, j) => (j === i ? { ...x, t } : x)));
                 }}
               />
-              <input
-                className="tk-word"
-                defaultValue={m.label}
-                list="tk-skater-words"
-                placeholder="Hvað gerist?"
-                aria-label="Lýsing hápunkts"
-                maxLength={60}
-                onBlur={(e) => e.target.value !== m.label && setMarkers(skater.markers.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-              />
+              <ElementField value={m.label} onChange={(label) => setMarkers(skater.markers.map((x, j) => (j === i ? { ...x, label } : x)))} />
               <button type="button" className="tk-btn icon danger" onClick={() => setMarkers(skater.markers.filter((_, j) => j !== i))} aria-label="Eyða hápunkti">
                 <Trash2 size={17} />
               </button>
+              <Stars
+                value={m.grade}
+                label={m.label || formatTime(m.t, true)}
+                onChange={(grade) => setMarkers(skater.markers.map((x, j) => (j === i ? { t: x.t, label: x.label, ...(grade ? { grade } : {}) } : x)))}
+              />
             </div>
           ))}
           {watch ? (
@@ -419,6 +475,41 @@ export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, 
               <button type="button" className="tk-btn" onClick={() => setWatch({ since: Date.now(), now: Date.now() })}>
                 <Timer size={16} /> Skeiðklukka
               </button>
+              <button type="button" className="tk-btn flag" onClick={() => void markInVideo()} disabled={marking === "loading"}>
+                <Video size={16} /> {marking === "loading" ? "Opna…" : skater.videoId ? "Merkja í myndbandinu" : "Merkja í myndbandi"}
+              </button>
+              {skater.videoId && (
+                <button type="button" className="tk-btn" onClick={() => danceInput.current?.click()}>
+                  Nýtt myndband
+                </button>
+              )}
+            </div>
+          )}
+          {note && <p className="tk-status long">{note}</p>}
+          <input
+            ref={danceInput}
+            type="file"
+            accept="video/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void newDanceVideo(file);
+            }}
+          />
+
+          {focus.length > 0 && (
+            <div className="tk-focus">
+              <strong>Æfingaáherslur</strong>
+              <span>Það sem fékk lægstu einkunnina — best að byrja hér:</span>
+              <ul>
+                {focus.map((f) => (
+                  <li key={f.label}>
+                    <b>{String(f.grade).replace(".", ",")}</b> {f.label}
+                    {f.count > 1 ? ` (${f.count}×)` : ""}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -465,6 +556,15 @@ export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, 
             <Plus size={20} /> Ný rútína{skater.name ? ` – ${skater.name.split(/\s+/)[0]}` : ""}
           </button>
 
+          <h3>Myndir og myndbönd</h3>
+          <Gallery media={doc.media.filter((m) => m.skaterId === skater.id)} onAdd={async (files) => {
+              await onAddMedia(skater, files);
+            }} open={onOpenMedia} onDelete={onDeleteMedia} />
+          <p className="tk-hint">
+            Geymt í tækinu og í lokuðu skúffunni þinni. Myndbönd yfir 48 MB verða bara í þessu tæki. Fáðu leyfi áður en þú geymir myndir
+            af öðrum.
+          </p>
+
           <div className="tk-row tk-actions">
             <button type="button" className="tk-btn danger" onClick={() => onDelete(skater)}>
               <Trash2 size={15} /> Eyða iðkanda
@@ -472,6 +572,17 @@ export function SkaterSheet({ skater, isNew, doc, photoUrl, projects, onChange, 
           </div>
         </div>
       </div>
+
+      {marking && marking !== "loading" && (
+        <DanceMarker
+          url={marking.url}
+          start={skater.videoStart ?? 0}
+          markers={skater.markers}
+          onChange={setMarkers}
+          onStart={(videoStart) => save({ videoStart })}
+          onClose={() => setMarking(null)}
+        />
+      )}
 
       {picker && (
         <SongPicker

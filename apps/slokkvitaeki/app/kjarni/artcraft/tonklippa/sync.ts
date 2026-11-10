@@ -3,15 +3,17 @@
  *  kemur niður. */
 
 import { KEY_PATTERN, cloudDelete, cloudGetBlob, cloudGetJson, cloudList, cloudPutBlob, cloudPutJson, newLockerKey, projectPath, trackPath } from "./cloud";
-import { normalizeDoc, sameDoc, type LibraryDoc, type Skater } from "./library";
+import { MAX_CLOUD_BYTES, normalizeDoc, sameDoc, type LibraryDoc, type Media, type Skater } from "./library";
 import {
   changeUploaded,
+  deleteMediaBlob,
   deleteProject,
   deleteSongBlob,
   forgetDelete,
   isSynced,
   listProjects,
   loadDoc,
+  loadMediaBlob,
   loadPhoto,
   loadProject,
   loadSongBlob,
@@ -20,6 +22,7 @@ import {
   mergeIntoDoc,
   pendingDeletes,
   putProject,
+  saveMediaBlob,
   savePhoto,
   saveSongBlob,
   type ProjectRecord,
@@ -38,6 +41,8 @@ type CloudProject =
       arrangement: ProjectRecord["arrangement"];
       tracks: TrackMeta[];
       skaterId?: string;
+      videoId?: string;
+      videoOffset?: number;
     };
 
 const KEY_STORAGE = "tonklippa_lykill_v1";
@@ -48,6 +53,7 @@ export const KEY_PARAM = "k";
 const DOC_ID = "x-safn";
 const songPath = (songId: string) => trackPath("safn", songId);
 const photoPath = (skaterId: string) => trackPath("myndir", skaterId);
+const mediaPath = (mediaId: string) => trackPath("midlar", mediaId);
 
 /** Lykill skúffunnar: úr slóðinni (?k=…), annars úr tækinu, annars nýr.
  *  Lykillinn er hafður í slóðinni svo „Setja á heimaskjá“ á iPhone taki hann
@@ -117,6 +123,15 @@ export async function syncDoc(key: string): Promise<LibraryDoc> {
     await changeUploaded([mark]);
   }
 
+  for (const m of local.media) {
+    const path = mediaPath(m.id);
+    if (up.has(path) || m.size > MAX_CLOUD_BYTES) continue;
+    const blob = await loadMediaBlob(m.id);
+    if (!blob) continue;
+    await cloudPutBlob(key, path, blob);
+    await changeUploaded([path]);
+  }
+
   const raw = await cloudGetJson<unknown>(key, projectPath(DOC_ID));
   const remote = normalizeDoc(raw);
   const merged = await mergeIntoDoc(remote);
@@ -131,6 +146,15 @@ export async function syncDoc(key: string): Promise<LibraryDoc> {
     await changeUploaded([], drop);
   }
   for (const id of dead) await deleteSongBlob(id).catch(() => undefined);
+  // Sama fyrir myndir og myndbönd sem hefur verið eytt.
+  const liveMedia = new Set(merged.media.map((m) => m.id));
+  const deadMedia = merged.gone.map((g) => g.id).filter((id) => !liveMedia.has(id));
+  const dropMedia = deadMedia.map(mediaPath).filter((p) => up.has(p));
+  if (dropMedia.length) {
+    await cloudDelete(key, dropMedia);
+    await changeUploaded([], dropMedia);
+  }
+  for (const id of deadMedia) await deleteMediaBlob(id).catch(() => undefined);
   return merged;
 }
 
@@ -146,6 +170,7 @@ export async function pushProject(key: string, id: string): Promise<void> {
     arrangement: rec.arrangement,
     tracks: rec.tracks.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
     ...(rec.skaterId ? { skaterId: rec.skaterId } : {}),
+    ...(rec.videoId ? { videoId: rec.videoId, videoOffset: rec.videoOffset ?? 0 } : {}),
   };
   await cloudPutJson(key, projectPath(rec.id), body);
   await markSynced(rec.id, rec.updatedAt);
@@ -184,6 +209,7 @@ export async function syncAll(key: string): Promise<LibraryDoc> {
         arrangement: remote.arrangement,
         tracks: remote.tracks.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
         ...(remote.skaterId ? { skaterId: remote.skaterId } : {}),
+        ...(remote.videoId ? { videoId: remote.videoId, videoOffset: remote.videoOffset ?? 0 } : {}),
         syncedAt: remote.updatedAt,
       });
     }
@@ -203,6 +229,19 @@ export async function fetchSongBlob(key: string | null, songId: string): Promise
     await changeUploaded([songPath(songId)]).catch(() => undefined);
   }
   return remote;
+}
+
+/** Mynd eða myndband: úr tækinu, annars sótt úr skýinu (ef það komst þangað) og geymt í tækinu. */
+export async function fetchMediaBlob(key: string | null, media: Media): Promise<Blob | null> {
+  const local = await loadMediaBlob(media.id).catch(() => undefined);
+  if (local) return local;
+  if (!key || media.size > MAX_CLOUD_BYTES) return null;
+  const remote = await cloudGetBlob(key, mediaPath(media.id));
+  if (!remote) return null;
+  const blob = new Blob([remote], { type: media.type || remote.type });
+  await saveMediaBlob(media.id, blob).catch(() => undefined);
+  await changeUploaded([mediaPath(media.id)]).catch(() => undefined);
+  return blob;
 }
 
 /** Prófílmynd iðkanda: úr tækinu ef hún er ný, annars úr skýinu. */

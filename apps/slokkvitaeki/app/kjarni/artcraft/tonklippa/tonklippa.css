@@ -1817,6 +1817,305 @@
   background: var(--tk-card-2);
 }
 
+/* ---------------------------------------------------------------- myndir og myndbönd */
+
+.tk-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tk-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--tk-line);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.tk-tile img,
+.tk-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.tk-tile.add,
+.tk-tile-cloud {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--tk-soft) !important;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.tk-tile.add {
+  border-style: dashed;
+  background: transparent;
+}
+
+.tk-tile-play {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(15, 10, 30, 0.8);
+  color: #fff;
+}
+
+.tk-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  background: #0b0716;
+}
+
+.tk-viewer-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tk-viewer-bar > span {
+  flex: 1;
+}
+
+.tk-viewer-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+
+.tk-viewer-stage img,
+.tk-viewer-stage video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.tk-marker-video {
+  flex: none;
+  display: grid;
+  place-items: center;
+  height: 38dvh;
+  background: #000;
+}
+
+.tk-marker-video {
+  overflow: hidden;
+}
+
+/* Föst hæð: annars tekur hátt (lóðrétt) myndband alla hæðina og leggst yfir takkana. */
+.tk-marker-video video {
+  width: 100%;
+  height: 38dvh;
+  object-fit: contain;
+  background: #000;
+}
+
+.tk-dance {
+  width: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.tk-dance {
+  display: block;
+  height: auto;
+  max-height: 40dvh;
+  border-radius: 16px;
+}
+
+.tk-marker-controls {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 14px calc(18px + env(safe-area-inset-bottom));
+}
+
+.tk-scrub {
+  position: relative;
+  display: flex;
+}
+
+.tk-scrub-marks {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 4px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.tk-scrub-marks i {
+  position: absolute;
+  top: 0;
+  width: 3px;
+  height: 10px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: #ffcf5c;
+}
+
+.tk-scrub-marks i.start {
+  background: var(--tk-ok);
+}
+
+.tk-row.center {
+  justify-content: center;
+}
+
+.tk-round.play.small {
+  width: 52px;
+  height: 52px;
+}
+
+.tk-pause-bars {
+  width: 16px;
+  height: 18px;
+  border-left: 6px solid currentColor;
+  border-right: 6px solid currentColor;
+}
+
+.tk-marker-clock {
+  display: flex;
+  flex-direction: column;
+  min-width: 86px;
+  margin-left: 6px;
+  line-height: 1.1;
+}
+
+.tk-marker-clock strong {
+  font-size: 22px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-marker-clock small {
+  font-size: 11px;
+  color: var(--tk-soft);
+}
+
+.tk-time.as-button {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: #ffcf5c !important;
+}
+
+/* Tegund hápunkts og einkunn. */
+.tk-element {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+  font-weight: 700;
+}
+
+.tk-element.empty {
+  color: var(--tk-faint) !important;
+  font-weight: 500;
+}
+
+.tk-stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.tk-stars button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tk-faint) !important;
+}
+
+.tk-stars button.on {
+  color: #ffcf5c !important;
+}
+
+.tk-stars small {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--tk-soft);
+}
+
+.tk-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 14px 0 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 207, 92, 0.45);
+  border-radius: 20px;
+  background: rgba(255, 207, 92, 0.1);
+}
+
+.tk-focus > span {
+  font-size: 13px;
+  color: var(--tk-soft);
+}
+
+.tk-focus ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-focus li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.tk-focus b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  height: 28px;
+  border-radius: 10px;
+  background: #ffcf5c;
+  color: #2a1a05;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Blað sem opnast ofan á skoðara (t.d. val á tegund í myndbandsmerkingu). */
+.tk-sheet-back.up {
+  z-index: 9;
+}
+
 /* ---------------------------------------------------------------- þjálfarinn: forsíða, dagatal, verkefni */
 
 .tk-hero {

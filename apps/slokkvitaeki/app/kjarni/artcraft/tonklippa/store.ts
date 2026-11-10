@@ -20,6 +20,9 @@ export type ProjectRecord = {
   tracks: TrackMeta[];
   /** Iðkandinn sem rútínan er fyrir. */
   skaterId?: string;
+  /** Upptaka af dansinum (auðkenni í safninu) og hvar í henni dansinn byrjar (sek). */
+  videoId?: string;
+  videoOffset?: number;
   /** `updatedAt` þeirrar útgáfu sem er komin í skýið (vantar = aldrei). */
   syncedAt?: number;
 };
@@ -34,6 +37,7 @@ function store(): UseStore {
 const projectKey = (id: string) => `p:${id}`;
 const songKey = (id: string) => `s:${id}`;
 const photoKey = (id: string) => `ph:${id}`;
+const mediaKey = (id: string) => `m:${id}`;
 const deletedKey = (id: string) => `d:${id}`;
 const DOC = "doc";
 const UPLOADED = "up";
@@ -152,6 +156,18 @@ export function loadPhoto(skaterId: string): Promise<StoredPhoto | undefined> {
 
 export function deletePhoto(skaterId: string): Promise<void> {
   return del(photoKey(skaterId), store());
+}
+
+export function saveMediaBlob(mediaId: string, blob: Blob): Promise<void> {
+  return set(mediaKey(mediaId), blob, store());
+}
+
+export function loadMediaBlob(mediaId: string): Promise<Blob | undefined> {
+  return get<Blob>(mediaKey(mediaId), store());
+}
+
+export function deleteMediaBlob(mediaId: string): Promise<void> {
+  return del(mediaKey(mediaId), store());
 }
 
 /** Skrár sem þetta tæki veit að eru komnar í skýið (slóðir innan skúffunnar). */
