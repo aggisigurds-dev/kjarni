@@ -125,13 +125,13 @@ export function teiknaGolfAferd(x: Ctx, id: GolfAferd, px: number): void {
     const radir = 8;
     const h = px / radir;
     const lengd = px / 2.5;
-    fylla("#8a6239");
+    fylla("#7d6243");
     for (let j = 0; j < radir; j++) {
       const hl = (j % 3) * (lengd / 3);
       for (let k = -1; k < 4; k++) {
         const x0 = k * lengd + hl;
         const t = r();
-        x.fillStyle = `rgb(${176 + t * 30},${122 + t * 26},${74 + t * 20})`;
+        x.fillStyle = `rgb(${Math.round(166 + t * 26)},${Math.round(132 + t * 22)},${Math.round(94 + t * 18)})`;
         x.fillRect(x0 + 1, j * h + 1, lengd - 2, h - 2);
         for (let g = 0; g < 3; g++) lina(x0 + 2, j * h + 2 + r() * (h - 4), x0 + lengd - 2, j * h + 2 + r() * (h - 4), "rgba(90,55,25,0.25)", 0.8);
       }

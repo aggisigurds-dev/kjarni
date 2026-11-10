@@ -446,7 +446,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           const gE = golfTx
             ? erGlansAferd(golfAferdId)
               ? new T.MeshPhongMaterial({ ...golfStillingar, shininess: 110, specular: 0x8a8f96 })
-              : new T.MeshLambertMaterial(golfStillingar)
+              : new T.MeshBasicMaterial(golfStillingar) // réttir litir áferðarinnar — Lambert + tvö ljós oflýsti parketið í appelsínugult (skjáskot 10.11.2026)
             : new T.MeshBasicMaterial(golfStillingar);
           if (golfTx) losa.push(golfTx);
           const g = new T.Mesh(gG, gE);
