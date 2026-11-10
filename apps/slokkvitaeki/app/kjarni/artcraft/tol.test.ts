@@ -39,6 +39,7 @@ test("auto tools live on their own Kjarni page", () => {
       "myndband-portret-andlit",
       "video-upplyfting",
       "tonsmid",
+      "tonklippa",
       "leidarvisir",
     ],
   );

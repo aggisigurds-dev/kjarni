@@ -27,8 +27,22 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   utvikka (Flux Fill outpaint).
 - **Staðbundið:** ComfyUI 127.0.0.1:8188 (comfy, hreyfimynd/Wan 2.1), A1111/Forge 127.0.0.1:7860
   (studio), í vafra (bakgrunnur/@imgly, kastljós, móta, myndbanda-saumur/ffmpeg.wasm).
+- **Tónklippa** (10.11.2026): sjálfstætt app á `/tonklippa` (PWA — má setja á heimaskjá í síma;
+  `/kjarni/artcraft/tonklippa` vísar þangað). Tónlist klippt saman fyrir dans- og skautarútínur,
+  öll hljóðvinnsla í vafra (ekkert Replicate, engin API-leið nema manifest). Kóðinn býr í
+  `app/kjarni/artcraft/tonklippa/`; hreinn kjarni prófaður í node (`tonklippa.test.ts`):
+  `arrange.ts` (bútar, hápunktar, marklengd), `render.ts` (blöndun, miðjuð jafnafls-samskeyti),
+  `stretch.ts` (WSOLA — hraði ±12% án tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit,
+  toppar). MP3 = `wasm-media-encoders` (LAME í WASM). Unnið er í IndexedDB (`kjarni-tonklippa`,
+  virkar án nets með `public/tonklippa-sw.js`) og afritað í Supabase Storage, bucket `tonklippa`
+  (EINA Supabase-notkun ArtCraft): engin innskráning — tækið á leynilykil (`?k=` í slóð + haus
+  `x-tk-key`) og RLS hleypir aðeins í möppuna `sha256(lykill)`; sjá
+  `apps/database/supabase/schemas/tonklippa.sql`, `cloud.ts`, `sync.ts` og `cloud.live.test.ts`
+  (handvirkt RLS-próf). Lykillinn fer í manifest `start_url`, því uppsett iPhone-app og Safari
+  deila ekki geymslu.
 - **Ástand:** aðeins localStorage (`kjarni_staging_`, `kjarni_pending_`, `kjarni_result_`,
-  `kjarni_private_*`) — Verkbók (`/vinnslur`) les það. ArtCraft vistar EKKERT í Supabase.
+  `kjarni_private_*`) — Verkbók (`/vinnslur`) les það. ArtCraft vistar EKKERT í Supabase nema
+  Tónklippa (sjá að ofan).
 - **13 forrit:** `scripts/install-artcraft.mjs` (prebuild) sækir GitHub-útgáfur með sha256 í
   `public/artcraft`; leið `/kjarni/artcraft/[app]`.
 - **RunPod:** „Vakna" bætt við c7ec8ad og hent cd011f8 29.10 (Wan 2.2 workers brotnir);
