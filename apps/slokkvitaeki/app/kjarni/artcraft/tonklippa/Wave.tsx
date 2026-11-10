@@ -15,7 +15,7 @@ import {
 } from "react";
 import { Flag } from "lucide-react";
 import { MIN_SEAM, formatTime, layout, type Arrangement } from "./arrange";
-import { columnPeaks, type Peaks } from "./analyze";
+import { columnPeaks, type Highlight, type Peaks } from "./analyze";
 import type { TrackView } from "./tracks";
 
 /** Litur hvers lags (bakgrunnur búts, bylgja) — á dökkum grunni. */
@@ -31,6 +31,8 @@ export const TRACK_COLORS = [
 export function trackColor(index: number) {
   return TRACK_COLORS[((index % TRACK_COLORS.length) + TRACK_COLORS.length) % TRACK_COLORS.length];
 }
+
+const GOLD = "#ffcf5c";
 
 function useSize(ref: RefObject<HTMLElement | null>) {
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -151,6 +153,21 @@ export function TimelineView({ arr, tracks, trackIndex, sel, span, playheadRef, 
         ctx.strokeStyle = "#ffffff";
         ctx.stroke();
       }
+      // Hápunktar lagsins innan bútsins: gylltir þríhyrningar efst.
+      if (tv) {
+        ctx.fillStyle = GOLD;
+        for (const hl of tv.analysis.highlights) {
+          if (hl.score < 0.4 || hl.t < p.start || hl.t > p.end) continue;
+          const hx = px(lay.pos[i] + (hl.t - p.start) / p.tempo);
+          const r = 2.5 + 2 * hl.score;
+          ctx.beginPath();
+          ctx.moveTo(hx - r, top + 1);
+          ctx.lineTo(hx + r, top + 1);
+          ctx.lineTo(hx, top + 1 + r * 1.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
       if (x1 - x0 > 22) {
         ctx.fillStyle = "rgba(255,255,255,0.9)";
         ctx.font = "700 11px system-ui, sans-serif";
@@ -213,40 +230,45 @@ export function TimelineView({ arr, tracks, trackIndex, sel, span, playheadRef, 
     <div ref={boxRef} className="tk-tl">
       <canvas ref={canvasRef} className="tk-tl-canvas" />
       <div className="tk-tl-hit" style={{ top: LANE }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
-      {arr.markers.map((m) => (
-        <button
-          key={m.id}
-          type="button"
-          className="tk-flag"
-          style={{ left: `${Math.min(100, (m.t / span) * 100)}%` }}
-          title={`${formatTime(m.t, true)}${m.label ? ` · ${m.label}` : ""}`}
-          aria-label={`Hápunktur á ${formatTime(m.t, true)}${m.label ? `: ${m.label}` : ""}`}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-            markerDrag.current = { id: m.id, pointer: e.pointerId, x: e.clientX, moved: false };
-          }}
-          onPointerMove={(e) => {
-            const d = markerDrag.current;
-            if (!d || d.pointer !== e.pointerId) return;
-            if (!d.moved && Math.abs(e.clientX - d.x) < 5) return;
-            d.moved = true;
-            onMarkerMove(m.id, timeAt(e.clientX));
-          }}
-          onPointerUp={(e) => {
-            const d = markerDrag.current;
-            if (!d || d.pointer !== e.pointerId) return;
-            markerDrag.current = null;
-            if (!d.moved) onMarkerTap(m.id);
-          }}
-          onPointerCancel={() => {
-            markerDrag.current = null;
-          }}
-        >
-          <Flag size={12} fill="currentColor" aria-hidden="true" />
-          {m.label && <span className="tk-flag-text">{m.label}</span>}
-        </button>
-      ))}
+      {arr.markers.map((m, mi) => {
+        // Merki sem standa þétt: textinn styttist (eða hverfur) svo þau skarist ekki.
+        const next = arr.markers[mi + 1];
+        const room = next && w > 0 ? ((next.t - m.t) / span) * w - 3 : 120;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            className="tk-flag"
+            style={{ left: `${Math.min(100, (m.t / span) * 100)}%`, maxWidth: Math.max(22, Math.min(120, room)) }}
+            title={`${formatTime(m.t, true)}${m.label ? ` · ${m.label}` : ""}`}
+            aria-label={`Hápunktur á ${formatTime(m.t, true)}${m.label ? `: ${m.label}` : ""}`}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+              markerDrag.current = { id: m.id, pointer: e.pointerId, x: e.clientX, moved: false };
+            }}
+            onPointerMove={(e) => {
+              const d = markerDrag.current;
+              if (!d || d.pointer !== e.pointerId) return;
+              if (!d.moved && Math.abs(e.clientX - d.x) < 5) return;
+              d.moved = true;
+              onMarkerMove(m.id, timeAt(e.clientX));
+            }}
+            onPointerUp={(e) => {
+              const d = markerDrag.current;
+              if (!d || d.pointer !== e.pointerId) return;
+              markerDrag.current = null;
+              if (!d.moved) onMarkerTap(m.id);
+            }}
+            onPointerCancel={() => {
+              markerDrag.current = null;
+            }}
+          >
+            <Flag size={12} fill="currentColor" aria-hidden="true" />
+            {m.label && room >= 44 && <span className="tk-flag-text">{m.label}</span>}
+          </button>
+        );
+      })}
       <div ref={playheadRef} className="tk-playhead" aria-hidden="true" />
     </div>
   );
@@ -274,6 +296,8 @@ type SourceProps = {
   cursor: number;
   /** Slög til að sýna sem strik (þegar smellt er á takt). */
   beats: Float32Array | null;
+  /** Hápunktar lagsins (gylltir þríhyrningar efst á bylgjunni). */
+  highlights: Highlight[];
   view: SourceViewport;
   onView: (v: SourceViewport) => void;
   onCursor: (t: number) => void;
@@ -282,7 +306,7 @@ type SourceProps = {
 };
 
 export const SourceView = forwardRef<SourceHandle, SourceProps>(function SourceView(
-  { track, color, start, end, cursor, beats, view, onView, onCursor, onStart, onEnd },
+  { track, color, start, end, cursor, beats, highlights, view, onView, onCursor, onStart, onEnd },
   ref,
 ) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -348,6 +372,20 @@ export const SourceView = forwardRef<SourceHandle, SourceProps>(function SourceV
       drawWave(ctx, track.peaks, view.t0, view.t0 + view.span, 0, w, h / 2, h / 2 - 6, color.wave);
       ctx.restore();
     }
+    ctx.fillStyle = GOLD;
+    for (const hl of highlights) {
+      const hx = px(hl.t);
+      if (hx < -6 || hx > w + 6) continue;
+      const r = 3 + 3 * hl.score;
+      ctx.globalAlpha = 0.45 + 0.55 * hl.score;
+      ctx.beginPath();
+      ctx.moveTo(hx - r, 0);
+      ctx.lineTo(hx + r, 0);
+      ctx.lineTo(hx, r * 1.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     // Tímamerki neðst.
     const step = view.span > 240 ? 60 : view.span > 100 ? 30 : view.span > 40 ? 10 : view.span > 16 ? 5 : view.span > 6 ? 2 : 1;
     ctx.fillStyle = "#a59cc4";
@@ -357,7 +395,7 @@ export const SourceView = forwardRef<SourceHandle, SourceProps>(function SourceV
       ctx.fillRect(x, h - 5, 1, 5);
       if (x + 26 < w) ctx.fillText(formatTime(t), x + 3, h - 3);
     }
-  }, [track, color, start, end, beats, view, w, h]);
+  }, [track, color, start, end, beats, highlights, view, w, h]);
 
   const timeAt = (clientX: number) => {
     const r = boxRef.current?.getBoundingClientRect();

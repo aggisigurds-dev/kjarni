@@ -1,10 +1,10 @@
-/* Þjónustuþráður Tónklippu (/tonklippa): appið opnast líka án nets, t.d. á
+/* Þjónustuþráður THE COACH (/coach): appið opnast líka án nets, t.d. á
    svellinu. Forritsskrár Next eru með efnisbundin heiti (óbreytanlegar) og
    koma úr skyndiminni; síðan sjálf er sótt af netinu fyrst og skyndiminnið
    notað þegar netið vantar. Annað (Supabase o.fl.) er látið ósnert. */
 
-const CACHE = "tonklippa-v1";
-const PAGE = "/tonklippa";
+const CACHE = "coach-v1";
+const PAGE = "/coach";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -14,7 +14,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       for (const name of await caches.keys()) {
-        if (name.startsWith("tonklippa-") && name !== CACHE) await caches.delete(name);
+        if ((name.startsWith("coach-") || name.startsWith("tonklippa-")) && name !== CACHE) await caches.delete(name);
       }
       await self.clients.claim();
     })(),
@@ -53,7 +53,7 @@ self.addEventListener("fetch", (event) => {
     if (url.pathname === PAGE || url.pathname === PAGE + "/") event.respondWith(pageNetworkFirst(request));
     return;
   }
-  if (url.pathname.startsWith("/_next/static/") || (url.pathname.startsWith("/tonklippa/") && !url.pathname.endsWith(".webmanifest"))) {
+  if (url.pathname.startsWith("/_next/static/") || (url.pathname.startsWith("/coach/") && !url.pathname.endsWith(".webmanifest"))) {
     event.respondWith(fromCacheFirst(request));
   }
 });

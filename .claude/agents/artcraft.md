@@ -27,19 +27,26 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   utvikka (Flux Fill outpaint).
 - **Staðbundið:** ComfyUI 127.0.0.1:8188 (comfy, hreyfimynd/Wan 2.1), A1111/Forge 127.0.0.1:7860
   (studio), í vafra (bakgrunnur/@imgly, kastljós, móta, myndbanda-saumur/ffmpeg.wasm).
-- **Tónklippa** (10.11.2026): sjálfstætt app á `/tonklippa` (PWA — má setja á heimaskjá í síma;
-  `/kjarni/artcraft/tonklippa` vísar þangað). Tónlist klippt saman fyrir dans- og skautarútínur,
-  öll hljóðvinnsla í vafra (ekkert Replicate, engin API-leið nema manifest). Kóðinn býr í
-  `app/kjarni/artcraft/tonklippa/`; hreinn kjarni prófaður í node (`tonklippa.test.ts`):
-  `arrange.ts` (bútar, hápunktar, marklengd), `render.ts` (blöndun, miðjuð jafnafls-samskeyti),
-  `stretch.ts` (WSOLA — hraði ±12% án tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit,
-  toppar). MP3 = `wasm-media-encoders` (LAME í WASM). Unnið er í IndexedDB (`kjarni-tonklippa`,
-  virkar án nets með `public/tonklippa-sw.js`) og afritað í Supabase Storage, bucket `tonklippa`
-  (EINA Supabase-notkun ArtCraft): engin innskráning — tækið á leynilykil (`?k=` í slóð + haus
+- **THE COACH / Tónklippa** (10.11.2026): sjálfstætt þjálfaraapp á `/coach` (PWA — má setja á
+  heimaskjá í síma; `/tonklippa` og `/kjarni/artcraft/tonklippa` vísa þangað). Kóðinn býr í
+  `app/kjarni/artcraft/tonklippa/`. Fimm flipar (`TonklippaApp.tsx`): Heim og Skipulag (`Coach.tsx`
+  — dagatal, verkefnalisti), Iðkendur og Safn (`Tabs.tsx` — nafn, mynd, lengd rútínu, hápunktar í
+  dansinum; lög, umslög, uppáhaldsbútar), Rútínur; ritillinn er `TonklippaEditor.tsx`.
+  Öll hljóðvinnsla í vafra (ekkert Replicate, engin API-leið nema manifest). Hreinn kjarni prófaður
+  í node (`tonklippa.test.ts`): `arrange.ts` (bútar, hápunktar, marklengd), `render.ts` (blöndun,
+  miðjuð jafnafls-samskeyti, áhrifshljóð), `stretch.ts` (WSOLA — hraði ±12% án
+  tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit, hápunktar lags), `match.ts` („besti
+  kaflinn“: hvar hápunktar lags falla að hápunktum dansins), `library.ts` (safn/iðkendur/dagatal/
+  verkefni — eitt skjal, sameinað atriði fyrir atriði milli tækja), `calendar.ts`.
+  MP3 = `wasm-media-encoders` (LAME í WASM). Unnið er í IndexedDB (`kjarni-tonklippa`, virkar án
+  nets með `public/coach-sw.js`) og afritað í Supabase Storage, bucket `tonklippa` (EINA
+  Supabase-notkun ArtCraft): engin innskráning — tækið á leynilykil (`?k=` í slóð + haus
   `x-tk-key`) og RLS hleypir aðeins í möppuna `sha256(lykill)`; sjá
   `apps/database/supabase/schemas/tonklippa.sql`, `cloud.ts`, `sync.ts` og `cloud.live.test.ts`
-  (handvirkt RLS-próf). Lykillinn fer í manifest `start_url`, því uppsett iPhone-app og Safari
-  deila ekki geymslu.
+  (handvirkt RLS-próf). Í skúffunni: `p/<rútína>.json`, `p/x-safn.json` (safnið allt),
+  `t/safn/<lag>`, `t/myndir/<iðkandi>`. Lykillinn fer í manifest `start_url`, því uppsett
+  iPhone-app og Safari deila ekki geymslu. Spotify kemur ekki til greina sem hljóðgjafi (dulkóðað
+  streymi; forskoðun og hljóðgreining tekin úr API 27.11.2024) — appið vinnur með skrár.
 - **Ástand:** aðeins localStorage (`kjarni_staging_`, `kjarni_pending_`, `kjarni_result_`,
   `kjarni_private_*`) — Verkbók (`/vinnslur`) les það. ArtCraft vistar EKKERT í Supabase nema
   Tónklippa (sjá að ofan).

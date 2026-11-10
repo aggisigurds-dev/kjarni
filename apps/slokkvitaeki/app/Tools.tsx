@@ -11,8 +11,8 @@ type Row = { lykill: string; gildi: string };
 // in /stjorn — analytics is on by default; Meta Pixel and chat wait for an ID.
 export function Tools() {
   const [s, setS] = useState<Record<string, string>>({});
-  // Sjálfstæðu öppin (t.d. /tonklippa) fá hvorki spjall, pixel né mælingar.
-  const standalone = (usePathname() ?? "").startsWith("/tonklippa");
+  // Sjálfstæðu öppin (THE COACH á /coach) fá hvorki spjall, pixel né mælingar.
+  const standalone = /^\/(coach|tonklippa)(\/|$)/.test(usePathname() ?? "");
 
   useEffect(() => {
     if (standalone) return;

@@ -345,7 +345,7 @@ export const AUTO_TOOLS = [
     id: "tonklippa",
     name: "Tónklippa",
     role: "Tónlist í rútínu",
-    desc: "Klippir saman tónlist fyrir dans- og skautarútínur: kaflar úr lögum, nákvæm lengd, samskeyti á takti, hápunktar og MP3. Sjálfstætt app (/tonklippa) sem má setja á heimaskjá í síma.",
+    desc: "Klippir saman tónlist fyrir dans- og skautarútínur: kaflar úr lögum, nákvæm lengd, samskeyti á takti, hápunktar og MP3. Hluti af THE COACH (/coach), þjálfaraappi sem má setja á heimaskjá í síma.",
     icon: "✂️",
     href: "/kjarni/artcraft/tonklippa",
     ready: true,

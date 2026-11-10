@@ -1,21 +1,53 @@
 "use client";
 
-/** Tónklippa — appið sjálft (á /tonklippa, má setja á heimaskjá): heimaskjár
- *  með rútínunum og ritillinn ofan á. Unnið er í tækinu (virkar án nets) og
- *  allt afritast í skýið í lokaða skúffu sem lykill tækisins opnar. */
+/** THE COACH — þjálfaraappið (á /coach, má setja á heimaskjá): forsíða,
+ *  skipulag (dagatal og verkefni), iðkendur, rútínur og safn, og Tónklippu-
+ *  ritillinn ofan á. Unnið er í tækinu
+ *  (virkar án nets) og allt afritast í skýið í lokaða skúffu sem lykill
+ *  tækisins opnar. */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Cloud, CloudOff, Download, Ellipsis, Film, Flag, Link2, LoaderCircle, Music, Plus, RefreshCw, Scissors, Share, Trash2, X } from "lucide-react";
-import { emptyArrangement, formatTime, normalizeArrangement, type Arrangement, type Part } from "./arrange";
-import { deleteProject, isSynced, listProjects, saveProject, saveTrackBlob, type ProjectRecord } from "./store";
-import { CloudSync, KEY_PARAM, applyManifestKey, fetchTrackBlob, resolveLockerKey, syncAll, type SyncState } from "./sync";
-import { buildTrackView, newId, trackNameFromFile, type TrackView } from "./tracks";
+import { CalendarDays, Cloud, CloudOff, Download, Ellipsis, Film, Flag, House, Library, Link2, ListMusic, LoaderCircle, Music, Plus, RefreshCw, Scissors, Share, Trash2, Users, X } from "lucide-react";
+import { emptyArrangement, formatTime, normalizeArrangement, type Arrangement, type Marker, type Part } from "./arrange";
+import { ymd } from "./calendar";
+import { EventSheet, HomeTab, PlanTab, blankEvent } from "./Coach";
+import {
+  clearDone,
+  emptyDoc,
+  mergeDocs,
+  patchSong,
+  putClip,
+  putEvent,
+  putSkater,
+  putSong,
+  putTodo,
+  removeClip,
+  removeEvent,
+  removeSkater,
+  removeSong,
+  removeTodo,
+  type Clip,
+  type CoachEvent,
+  type LibraryDoc,
+  type Skater,
+  type Song,
+} from "./library";
+import { bestMatches } from "./match";
+import { Avatar, SongPicker } from "./Parts";
+import { deletePhoto, deleteProject, deleteSongBlob, isSynced, listProjects, loadDoc, mergeIntoDoc, saveProject, savePhoto, saveSongBlob, type ProjectRecord } from "./store";
+import { CloudSync, KEY_PARAM, applyManifestKey, fetchPhoto, fetchSongBlob, resolveLockerKey, syncAll, type SyncState } from "./sync";
+import { LibraryTab, SkaterSheet, SkatersTab, blankSkater, fitsFor, squarePhoto } from "./Tabs";
+import { buildTrackView, newId, songSummary, trackNameFromFile, type TrackView } from "./tracks";
 import TonklippaEditor, { AUDIO_ACCEPT, VIDEO_ACCEPT } from "./TonklippaEditor";
 import "./tonklippa.css";
 
-type Open = { id: string; name: string; arr: Arrangement; tracks: TrackView[]; key: number };
+type Open = { id: string; name: string; arr: Arrangement; tracks: TrackView[]; skaterId?: string; key: number };
+type Tab = "heim" | "skipulag" | "idkendur" | "rutinur" | "safn";
+/** Hvað á að gera við skrárnar sem verða valdar næst. */
+type Intent = { kind: "routine"; skaterId?: string } | { kind: "library" } | { kind: "resolve"; done: (song: Song | null) => void };
 
 const HINT_KEY = "tonklippa_heimaskjar_falid";
+const CACHE_MAX = 4;
 
 /** Litur rútínukortsins, fastur fyrir hvert auðkenni. */
 function hueOf(id: string): number {
@@ -27,19 +59,33 @@ function hueOf(id: string): number {
 export default function TonklippaApp() {
   const audioInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  const intent = useRef<Intent>({ kind: "routine" });
   const keyRef = useRef<string | null>(null);
   const syncRef = useRef<CloudSync | null>(null);
   const pulling = useRef(false);
   const pullAgain = useRef(false);
   const toastTimer = useRef(0);
+  const docRef = useRef<LibraryDoc>(emptyDoc());
+  const cache = useRef(new Map<string, TrackView>());
+  const photoAt = useRef<Record<string, number>>({});
+  const player = useRef<HTMLAudioElement | null>(null);
+  const playerUrl = useRef("");
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null);
+  const [doc, setDoc] = useState<LibraryDoc>(docRef.current);
+  const [photos, setPhotos] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<Open | null>(null);
+  const [tab, setTab] = useState<Tab>("heim");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [syncState, setSyncState] = useState<SyncState>("syncing");
   const [menu, setMenu] = useState(false);
   const [installHint, setInstallHint] = useState(false);
+  const [filter, setFilter] = useState<"all" | "fav">("all");
+  const [playing, setPlaying] = useState("");
+  const [newFor, setNewFor] = useState<{ skaterId?: string } | null>(null);
+  const [skaterOpen, setSkaterOpen] = useState<{ id: string; isNew: boolean; draft: Skater } | null>(null);
+  const [eventOpen, setEventOpen] = useState<{ event: CoachEvent; isNew: boolean } | null>(null);
 
   const say = useCallback((text: string, ms = 3500) => {
     setToast(text);
@@ -56,6 +102,73 @@ export default function TonklippaApp() {
     [],
   );
 
+  // ------------------------------------------------------------------ safnið
+
+  /** Tekur við útgáfu safnsins úr tækinu eða skýinu (sameinað við það sem er á skjánum). */
+  const adoptDoc = useCallback((incoming: LibraryDoc) => {
+    const merged = mergeDocs(docRef.current, incoming);
+    docRef.current = merged;
+    setDoc(merged);
+  }, []);
+
+  /** Breytir safninu: strax á skjánum, svo í tækið og þaðan í skýið. */
+  const updateDoc = useCallback((fn: (d: LibraryDoc) => LibraryDoc) => {
+    const next = fn(docRef.current);
+    if (next === docRef.current) return;
+    docRef.current = next;
+    setDoc(next);
+    void mergeIntoDoc(next).then(
+      () => syncRef.current?.touchDoc(),
+      () => undefined,
+    );
+  }, []);
+
+  const remember = (tv: TrackView) => {
+    cache.current.delete(tv.id);
+    cache.current.set(tv.id, tv);
+    while (cache.current.size > CACHE_MAX) cache.current.delete(cache.current.keys().next().value as string);
+  };
+
+  /** Lag úr safninu, afkóðað og greint (geymt í minni á meðan appið er opið). */
+  const openSong = useCallback(
+    async (songId: string): Promise<TrackView> => {
+      const hit = cache.current.get(songId);
+      if (hit) {
+        remember(hit);
+        return hit;
+      }
+      const song = docRef.current.songs.find((s) => s.id === songId);
+      const blob = await fetchSongBlob(keyRef.current, songId);
+      if (!blob) throw new Error(navigator.onLine ? "Lagið fannst hvorki í tækinu né í skýinu" : "Lagið er í skýinu — tengstu netinu til að sækja það");
+      const tv = await buildTrackView(songId, song?.name ?? "Lag", blob);
+      remember(tv);
+      if (song && (!song.wave?.length || !song.highlights)) updateDoc((d) => patchSong(d, songId, songSummary(tv), Date.now()));
+      return tv;
+    },
+    [updateDoc],
+  );
+
+  /** Ný skrá úr símanum: fer í safnið (nema sama lag sé þar fyrir). */
+  const importSong = useCallback(
+    async (file: File): Promise<TrackView> => {
+      const name = trackNameFromFile(file.name);
+      const fresh = await buildTrackView(newId(), name, file);
+      const same = docRef.current.songs.find((s) => s.name === name && Math.abs(s.duration - fresh.duration) < 0.15);
+      if (same) {
+        const tv = { ...fresh, id: same.id };
+        remember(tv);
+        return tv;
+      }
+      await saveSongBlob(fresh.id, file).catch(() => say("Gat ekki geymt lagið í tækinu — það virkar samt núna", 5000));
+      updateDoc((d) => putSong(d, { id: fresh.id, name, at: Date.now(), ...songSummary(fresh) }));
+      remember(fresh);
+      return fresh;
+    },
+    [say, updateDoc],
+  );
+
+  // ------------------------------------------------------------------ ský
+
   /** Sækir og sendir allt sem vantar á milli tækis og skýs. */
   const pull = useCallback(async () => {
     const key = keyRef.current;
@@ -70,7 +183,7 @@ export default function TonklippaApp() {
     try {
       do {
         pullAgain.current = false;
-        await syncAll(key);
+        adoptDoc(await syncAll(key));
       } while (pullAgain.current);
       setSyncState("synced");
     } catch {
@@ -79,7 +192,7 @@ export default function TonklippaApp() {
       pulling.current = false;
       void refresh();
     }
-  }, [refresh]);
+  }, [adoptDoc, refresh]);
 
   useEffect(() => {
     let key: string | null = null;
@@ -89,14 +202,17 @@ export default function TonklippaApp() {
       key = null;
     }
     keyRef.current = key;
-    const sync = key ? new CloudSync(key, setSyncState) : null;
+    const sync = key ? new CloudSync(key, setSyncState, adoptDoc) : null;
     syncRef.current = sync;
-    void refresh().then(() => (key ? pull() : setSyncState("offline")));
+    void loadDoc()
+      .then(adoptDoc, () => undefined)
+      .then(refresh)
+      .then(() => (key ? pull() : setSyncState("offline")));
 
     // Þjónustuþráðurinn lætur appið opnast án nets; MP3-kóðarinn er sóttur
     // fyrir fram svo útflutningur virki líka þá.
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/tonklippa-sw.js", { scope: "/tonklippa" }).catch(() => undefined);
+      navigator.serviceWorker.register("/coach-sw.js", { scope: "/coach" }).catch(() => undefined);
     }
     const warm = window.setTimeout(() => void import("./mp3wasm").catch(() => undefined), 5000);
     const relink = [300, 1500, 5000].map((ms) => window.setTimeout(() => key && applyManifestKey(key), ms));
@@ -121,6 +237,7 @@ export default function TonklippaApp() {
     };
     window.addEventListener("online", online);
     document.addEventListener("visibilitychange", visible);
+    const audio = player;
     return () => {
       window.clearTimeout(warm);
       relink.forEach((id) => window.clearTimeout(id));
@@ -128,48 +245,134 @@ export default function TonklippaApp() {
       window.removeEventListener("online", online);
       document.removeEventListener("visibilitychange", visible);
       sync?.stop();
+      audio.current?.pause();
     };
-  }, [pull, refresh]);
+  }, [adoptDoc, pull, refresh]);
 
   // Þegar skýið hefur náð í skottið á okkur: sýna það á kortunum.
   useEffect(() => {
     if (syncState === "synced") void refresh();
   }, [syncState, refresh]);
 
-  async function create(files: File[]) {
-    if (!files.length || status) return;
+  // Prófílmyndir: úr tækinu, annars úr skýinu.
+  useEffect(() => {
+    for (const k of doc.skaters) {
+      if (!k.photoAt || photoAt.current[k.id] === k.photoAt) continue;
+      photoAt.current[k.id] = k.photoAt;
+      void fetchPhoto(keyRef.current, k).then((blob) => {
+        if (blob) setPhotos((p) => ({ ...p, [k.id]: URL.createObjectURL(blob) }));
+      });
+    }
+  }, [doc.skaters]);
+
+  // ------------------------------------------------------------------ hlustun í listum
+
+  function stopPreview() {
+    player.current?.pause();
+    setPlaying("");
+  }
+
+  /** Spilar lag (eða bút) beint úr skránni; `seek` hoppar þótt sama lag sé í gangi. */
+  async function preview(id: string, songId: string, from = 0, to?: number, seek = false) {
+    const a = player.current ?? (player.current = new Audio());
+    if (playing === id && !seek) {
+      stopPreview();
+      return;
+    }
+    a.pause();
+    const blob = await fetchSongBlob(keyRef.current, songId).catch(() => null);
+    if (!blob) {
+      say(navigator.onLine ? "Lagið fannst ekki" : "Lagið er í skýinu — tengstu netinu");
+      return;
+    }
+    if (playerUrl.current) URL.revokeObjectURL(playerUrl.current);
+    playerUrl.current = URL.createObjectURL(blob);
+    a.src = playerUrl.current;
+    a.ontimeupdate = () => {
+      if (to != null && a.currentTime >= to) stopPreview();
+    };
+    a.onended = () => setPlaying("");
+    a.onloadedmetadata = () => {
+      a.currentTime = from;
+    };
+    setPlaying(id);
+    try {
+      await a.play();
+    } catch {
+      setPlaying("");
+    }
+  }
+
+  // ------------------------------------------------------------------ skrár
+
+  function pickFiles(kind: "audio" | "video", what: Intent) {
+    intent.current = what;
+    (kind === "audio" ? audioInput : videoInput).current?.click();
+  }
+
+  async function handleFiles(files: File[]) {
+    const what = intent.current;
+    if (!files.length || status) {
+      if (what.kind === "resolve") what.done(null);
+      return;
+    }
     setError("");
-    const id = newId();
     const tracks: TrackView[] = [];
     const failed: string[] = [];
     for (const file of files) {
       setStatus(`Les ${file.name}…`);
       try {
-        const tid = newId();
-        const tv = await buildTrackView(tid, trackNameFromFile(file.name), file);
-        tracks.push(tv);
-        await saveTrackBlob(id, tid, file).catch(() => undefined);
+        tracks.push(await importSong(file));
       } catch (err) {
         failed.push(err instanceof Error ? `${file.name}: ${err.message}` : file.name);
       }
     }
     setStatus("");
     if (failed.length) setError(failed.join(" · "));
+    if (what.kind === "resolve") {
+      what.done(tracks[0] ? (docRef.current.songs.find((s) => s.id === tracks[0].id) ?? null) : null);
+      return;
+    }
     if (!tracks.length) return;
-    // Eitt lag fyllir marklengdina; fleiri lög skipta henni jafnt á milli sín.
+    if (what.kind === "library") {
+      say(tracks.length === 1 ? `„${tracks[0].name}“ er komið í safnið` : `${tracks.length} lög komin í safnið`);
+      return;
+    }
+    await createRoutine(
+      tracks,
+      docRef.current.skaters.find((k) => k.id === what.skaterId),
+    );
+  }
+
+  // ------------------------------------------------------------------ rútínur
+
+  /** Ný rútína: lengd og hápunktar koma frá iðkandanum (ef valinn), og með
+   *  einu lagi byrjar hún á kaflanum sem hittir best á hápunktana. */
+  async function createRoutine(tracks: TrackView[], skater?: Skater, clip?: Clip) {
     const base = emptyArrangement();
-    const each = Math.max(10, base.targetMax / tracks.length);
-    const parts: Part[] = tracks.map((tv, i) => ({
-      id: newId(),
-      trackId: tv.id,
-      start: 0,
-      end: Math.min(tv.duration, each),
-      tempo: 1,
-      gainDb: 0,
-      xfade: i ? 0.5 : 0,
-    }));
-    const arr = { ...base, parts };
-    const name = tracks[0].name.slice(0, 60);
+    const targetMin = skater?.targetMin ?? base.targetMin;
+    const targetMax = skater?.targetMax ?? base.targetMax;
+    const want = (targetMin + targetMax) / 2;
+    const each = Math.max(10, want / tracks.length);
+    const times = skater?.markers.map((m) => m.t) ?? [];
+    const parts: Part[] = tracks.map((tv, i) => {
+      const length = Math.min(tv.duration, each);
+      let start = 0;
+      let end = length;
+      if (clip && i === 0) {
+        start = clip.start;
+        end = Math.min(tv.duration, clip.end);
+      } else if (tracks.length === 1 && times.length) {
+        start = bestMatches(tv.analysis.highlights, times, length, tv.duration)[0]?.start ?? 0;
+        end = Math.min(tv.duration, start + length);
+      }
+      return { id: newId(), trackId: tv.id, start, end, tempo: 1, gainDb: 0, xfade: i ? 0.5 : 0 };
+    });
+    const markers: Marker[] = (skater?.markers ?? []).map((m) => ({ id: newId(), t: m.t, label: m.label }));
+    const arr: Arrangement = { ...base, targetMin, targetMax, parts, markers };
+    const id = newId();
+    const title = (clip?.name ?? tracks[0].name).slice(0, 50);
+    const name = skater?.name ? `${skater.name.split(/\s+/)[0]} – ${title}` : title;
     await saveProject({
       id,
       name,
@@ -177,9 +380,32 @@ export default function TonklippaApp() {
       length: parts.reduce((s, p) => s + (p.end - p.start), 0),
       arrangement: arr,
       tracks: tracks.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
+      ...(skater ? { skaterId: skater.id } : {}),
     }).catch(() => undefined);
     syncRef.current?.touch(id, 800);
-    setOpen({ id, name, arr, tracks, key: Date.now() });
+    stopPreview();
+    setNewFor(null);
+    setSkaterOpen(null);
+    setOpen({ id, name, arr, tracks, skaterId: skater?.id, key: Date.now() });
+  }
+
+  async function routineFromLibrary(songId: string, skaterId?: string, clip?: Clip) {
+    if (status) return;
+    setError("");
+    setStatus("Opna lagið…");
+    try {
+      const tv = await openSong(songId);
+      setStatus("");
+      await createRoutine(
+        [tv],
+        docRef.current.skaters.find((k) => k.id === skaterId),
+        clip,
+      );
+    } catch (err) {
+      setStatus("");
+      setNewFor(null);
+      setError(err instanceof Error ? err.message : "Gat ekki opnað lagið");
+    }
   }
 
   async function openProject(rec: ProjectRecord) {
@@ -190,9 +416,7 @@ export default function TonklippaApp() {
     for (const meta of rec.tracks) {
       setStatus(`Opna ${meta.name}…`);
       try {
-        const blob = await fetchTrackBlob(keyRef.current, rec.id, meta.id);
-        if (!blob) throw new Error("vantar");
-        tracks.push(await buildTrackView(meta.id, meta.name, blob));
+        tracks.push(await openSong(meta.id));
       } catch {
         missing.push(meta.name);
       }
@@ -206,23 +430,77 @@ export default function TonklippaApp() {
       if (!navigator.onLine || missing.length === rec.tracks.length) return;
     }
     const durations = Object.fromEntries(tracks.map((t) => [t.id, t.duration]));
-    setOpen({ id: rec.id, name: rec.name, arr: normalizeArrangement(rec.arrangement, durations), tracks, key: Date.now() });
+    stopPreview();
+    setSkaterOpen(null);
+    setOpen({ id: rec.id, name: rec.name, arr: normalizeArrangement(rec.arrangement, durations), tracks, skaterId: rec.skaterId, key: Date.now() });
   }
 
-  async function remove(rec: ProjectRecord) {
-    if (!window.confirm(`Eyða rútínunni „${rec.name}“? Hún hverfur úr símanum og úr skýinu.`)) return;
+  async function removeProject(rec: ProjectRecord) {
+    if (!window.confirm(`Eyða rútínunni „${rec.name}“? Hún hverfur úr símanum og úr skýinu. Lögin verða áfram í safninu.`)) return;
     await deleteProject(rec.id, !!keyRef.current).catch(() => undefined);
     await refresh();
     void pull();
   }
 
+  // ------------------------------------------------------------------ safn og iðkendur
+
+  function deleteSong(song: Song) {
+    const used = (projects ?? []).filter((p) => p.tracks.some((t) => t.id === song.id));
+    if (used.length) {
+      say(`„${song.name}“ er notað í rútínunni „${used[0].name}“. Eyddu henni fyrst, eða taktu lagið úr henni.`, 6000);
+      return;
+    }
+    if (!window.confirm(`Eyða laginu „${song.name}“ úr safninu? Bútar úr því hverfa líka.`)) return;
+    if (playing === song.id) stopPreview();
+    cache.current.delete(song.id);
+    updateDoc((d) => removeSong(d, song.id, Date.now()));
+    void deleteSongBlob(song.id).catch(() => undefined);
+  }
+
+  async function setPhoto(skater: Skater, file: Blob | null) {
+    const cur = docRef.current.skaters.find((k) => k.id === skater.id) ?? skater;
+    if (!file) {
+      await deletePhoto(skater.id).catch(() => undefined);
+      delete photoAt.current[skater.id];
+      setPhotos((p) => {
+        const { [skater.id]: gone, ...rest } = p;
+        if (gone) URL.revokeObjectURL(gone);
+        return rest;
+      });
+      updateDoc((d) => putSkater(d, { ...cur, photoAt: 0, at: Date.now() }));
+      return;
+    }
+    try {
+      const blob = await squarePhoto(file);
+      const at = Date.now();
+      await savePhoto(skater.id, blob, at);
+      photoAt.current[skater.id] = at;
+      setPhotos((p) => ({ ...p, [skater.id]: URL.createObjectURL(blob) }));
+      updateDoc((d) => putSkater(d, { ...cur, photoAt: at, at }));
+    } catch (err) {
+      say(err instanceof Error ? err.message : "Gat ekki notað myndina");
+    }
+  }
+
+  function deleteSkater(skater: Skater) {
+    if (!window.confirm(`Eyða ${skater.name || "iðkandanum"}? Rútínurnar verða áfram til.`)) return;
+    setSkaterOpen(null);
+    updateDoc((d) => removeSkater(d, skater.id, Date.now()));
+    void deletePhoto(skater.id).catch(() => undefined);
+  }
+
+  /** Lætur notandann velja skrá og skilar laginu þegar það er komið í safnið. */
+  const importOne = (kind: "audio" | "video") => new Promise<Song | null>((done) => pickFiles(kind, { kind: "resolve", done }));
+
+  // ------------------------------------------------------------------ valmynd
+
   async function copyDeviceLink() {
     const key = keyRef.current;
     if (!key) return;
-    const link = `${window.location.origin}/tonklippa?${KEY_PARAM}=${key}`;
+    const link = `${window.location.origin}/coach?${KEY_PARAM}=${key}`;
     try {
       await navigator.clipboard.writeText(link);
-      say("Tengill afritaður. Opnaðu hann í hinu tækinu — og ekki senda hann öðrum, hann opnar rútínurnar þínar.", 7000);
+      say("Tengill afritaður. Opnaðu hann í hinu tækinu — og ekki senda hann öðrum, hann opnar allt þitt.", 7000);
     } catch {
       window.prompt("Afritaðu tengilinn og opnaðu hann í hinu tækinu:", link);
     }
@@ -230,10 +508,10 @@ export default function TonklippaApp() {
   }
 
   async function shareApp() {
-    const url = `${window.location.origin}/tonklippa`;
+    const url = `${window.location.origin}/coach`;
     setMenu(false);
     try {
-      if (navigator.share) await navigator.share({ title: "Tónklippa", text: "Klipptu tónlist fyrir rútínuna þína", url });
+      if (navigator.share) await navigator.share({ title: "THE COACH", text: "Þjálfaraappið: skipulag, iðkendur og tónlist fyrir rútínur", url });
       else {
         await navigator.clipboard.writeText(url);
         say("Tengill á appið afritaður");
@@ -245,34 +523,51 @@ export default function TonklippaApp() {
 
   const syncLabel =
     syncState === "synced" ? "Allt vistað í skýinu" : syncState === "syncing" ? "Samstilli…" : "Án nets — vistað í símanum";
+  const syncBadge = (
+    <span className={`tk-sync ${syncState}`} role="status">
+      {syncState === "synced" ? <Cloud size={15} /> : syncState === "syncing" ? <LoaderCircle size={15} className="tk-spin" /> : <CloudOff size={15} />}
+      {syncLabel}
+    </span>
+  );
+  const skaterOf = (id?: string) => (id ? doc.skaters.find((k) => k.id === id) : undefined);
+  const openSkater = skaterOpen ? (doc.skaters.find((k) => k.id === skaterOpen.id) ?? skaterOpen.draft) : null;
+  const newSkater = skaterOf(newFor?.skaterId);
+  const today = ymd(new Date());
+  const newSkaterSheet = () => {
+    const draft = blankSkater();
+    updateDoc((d) => putSkater(d, draft));
+    setSkaterOpen({ id: draft.id, isNew: true, draft });
+  };
+  const coach = {
+    doc,
+    photos,
+    today,
+    onOpenEvent: (event: CoachEvent) => setEventOpen({ event, isNew: false }),
+    onAddEvent: (date: string) => setEventOpen({ event: blankEvent(date), isNew: true }),
+    onTodoAdd: (text: string) => updateDoc((d) => putTodo(d, { id: newId(), at: Date.now(), text, done: false })),
+    onTodoToggle: (t: { id: string; text: string; done: boolean }) => updateDoc((d) => putTodo(d, { ...t, done: !t.done, at: Date.now() })),
+    onTodoDelete: (t: { id: string }) => updateDoc((d) => removeTodo(d, t.id, Date.now())),
+  };
+  const startNew = () => {
+    // Fyrsta skiptið (ekkert safn, engir iðkendur): beint í skráaval.
+    if (!doc.songs.length && !doc.skaters.length) pickFiles("audio", { kind: "routine" });
+    else setNewFor({});
+  };
 
   return (
     <div className="tk-root tk-home">
       <div className="tk-home-scroll">
         <header className="tk-home-top">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="tk-logo" src="/tonklippa/icon-192.png" alt="" width={52} height={52} />
+          <img className="tk-logo" src="/coach/icon-192.png" alt="" width={52} height={52} />
           <div className="tk-brand">
-            <h1>Tónklippa</h1>
-            <p>Tónlistin fyrir rútínuna þína</p>
+            <h1>THE COACH</h1>
+            <p>{tab === "heim" ? "Þjálfaraappið þitt" : tab === "skipulag" ? "Skipulag" : tab === "idkendur" ? "Iðkendur" : tab === "rutinur" ? "Tónlist fyrir rútínur" : "Tónlistarsafnið"}</p>
           </div>
           <button type="button" className="tk-iconbtn" onClick={() => setMenu(true)} aria-label="Meira">
             <Ellipsis size={22} />
           </button>
         </header>
-
-        <button type="button" className="tk-new" onClick={() => audioInput.current?.click()} disabled={!!status}>
-          <span className="tk-new-plus" aria-hidden="true">
-            <Plus size={30} strokeWidth={2.6} />
-          </span>
-          <span className="tk-new-text">
-            <strong>Ný rútína</strong>
-            <small>Veldu lag úr símanum til að byrja</small>
-          </span>
-        </button>
-        <button type="button" className="tk-link" onClick={() => videoInput.current?.click()} disabled={!!status}>
-          <Film size={17} /> Nota hljóð úr myndbandi
-        </button>
 
         {error && (
           <p className="tk-error" role="alert">
@@ -280,103 +575,194 @@ export default function TonklippaApp() {
           </p>
         )}
 
-        <div className="tk-section">
-          <h2>Rútínurnar mínar</h2>
-          <span className={`tk-sync ${syncState}`} role="status">
-            {syncState === "synced" ? <Cloud size={15} /> : syncState === "syncing" ? <LoaderCircle size={15} className="tk-spin" /> : <CloudOff size={15} />}
-            {syncLabel}
-          </span>
-        </div>
-
-        {projects === null ? (
-          <div className="tk-skeleton" aria-hidden="true" />
-        ) : projects.length === 0 ? (
-          <ol className="tk-steps-intro">
-            <li>
-              <Music size={22} />
-              <div>
-                <strong>Veldu lag</strong>
-                <span>MP3 eða M4A úr Skrám (Files) — eða hljóðið úr myndbandi.</span>
-              </div>
-            </li>
-            <li>
-              <Scissors size={22} />
-              <div>
-                <strong>Klipptu kaflann</strong>
-                <span>Hlustaðu og ýttu á „Byrja hér“ og „Enda hér“. Lengdin sést allan tímann.</span>
-              </div>
-            </li>
-            <li>
-              <Flag size={22} />
-              <div>
-                <strong>Merktu hápunktana</strong>
-                <span>Stökk, snúningur, lokastaða — og láttu tónlistina hitta á þá.</span>
-              </div>
-            </li>
-            <li>
-              <Download size={22} />
-              <div>
-                <strong>Vistaðu MP3</strong>
-                <span>Tilbúið til að spila á svellinu eða senda áfram.</span>
-              </div>
-            </li>
-          </ol>
-        ) : (
-          <ul className="tk-cards">
-            {projects.map((rec) => (
-              <li key={rec.id} style={{ ["--tk-hue" as string]: hueOf(rec.id) }}>
-                <button type="button" className="tk-card" onClick={() => void openProject(rec)} disabled={!!status}>
-                  <span className="tk-card-art" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span className="tk-card-text">
-                    <strong>{rec.name}</strong>
-                    <small>
-                      {formatTime(rec.length)} · {rec.tracks.length === 1 ? "1 lag" : `${rec.tracks.length} lög`} ·{" "}
-                      {new Date(rec.updatedAt).toLocaleDateString("is-IS", { day: "numeric", month: "short" })}
-                      {!isSynced(rec) && <CloudOff size={13} className="tk-card-unsynced" aria-label="Ekki komið í skýið" />}
-                    </small>
-                  </span>
-                </button>
-                <button type="button" className="tk-card-del" onClick={() => void remove(rec)} aria-label={`Eyða rútínunni ${rec.name}`}>
-                  <Trash2 size={18} />
-                </button>
-              </li>
-            ))}
-          </ul>
+        {tab === "heim" && (
+          <HomeTab
+            {...coach}
+            projects={projects ?? []}
+            onNewRoutine={startNew}
+            onOpenProject={(rec) => void openProject(rec)}
+            onOpenSkater={(k) => setSkaterOpen({ id: k.id, isNew: false, draft: k })}
+            onNewSkater={newSkaterSheet}
+            onGo={setTab}
+          />
         )}
 
-        {installHint && (
-          <aside className="tk-install">
-            <div>
-              <strong>Settu Tónklippu á heimaskjáinn</strong>
-              <span>
-                Ýttu á <Share size={15} className="tk-inline" aria-label="Deila" /> neðst í Safari og veldu „Setja á heimaskjá“. Þá opnast
-                appið eins og hvert annað app, með rútínunum þínum.
+        {tab === "skipulag" && <PlanTab {...coach} onClearDone={() => updateDoc((d) => clearDone(d, Date.now()))} />}
+
+        {tab === "rutinur" && (
+          <>
+            <button type="button" className="tk-new" onClick={startNew} disabled={!!status}>
+              <span className="tk-new-plus" aria-hidden="true">
+                <Plus size={30} strokeWidth={2.6} />
               </span>
-            </div>
-            <button
-              type="button"
-              className="tk-iconbtn small"
-              aria-label="Fela"
-              onClick={() => {
-                setInstallHint(false);
-                try {
-                  window.localStorage.setItem(HINT_KEY, "1");
-                } catch {
-                  /* einkagluggi */
-                }
-              }}
-            >
-              <X size={18} />
+              <span className="tk-new-text">
+                <strong>Ný rútína</strong>
+                <small>Veldu lag til að byrja</small>
+              </span>
             </button>
-          </aside>
+            {!doc.songs.length && (
+              <button type="button" className="tk-link" onClick={() => pickFiles("video", { kind: "routine" })} disabled={!!status}>
+                <Film size={17} /> Nota hljóð úr myndbandi
+              </button>
+            )}
+
+            <div className="tk-section">
+              <h2>Rútínurnar mínar</h2>
+              {syncBadge}
+            </div>
+
+            {projects === null ? (
+              <div className="tk-skeleton" aria-hidden="true" />
+            ) : projects.length === 0 ? (
+              <ol className="tk-steps-intro">
+                <li>
+                  <Music size={22} />
+                  <div>
+                    <strong>Veldu lag</strong>
+                    <span>MP3 eða M4A úr Skrám (Files) — eða hljóðið úr myndbandi.</span>
+                  </div>
+                </li>
+                <li>
+                  <Scissors size={22} />
+                  <div>
+                    <strong>Klipptu kaflann</strong>
+                    <span>Hlustaðu og ýttu á „Byrja hér“ og „Enda hér“. Lengdin sést allan tímann.</span>
+                  </div>
+                </li>
+                <li>
+                  <Flag size={22} />
+                  <div>
+                    <strong>Merktu hápunktana</strong>
+                    <span>Stökk, snúningur, lokastaða — og láttu tónlistina hitta á þá.</span>
+                  </div>
+                </li>
+                <li>
+                  <Download size={22} />
+                  <div>
+                    <strong>Vistaðu MP3</strong>
+                    <span>Tilbúið til að spila á svellinu eða senda áfram.</span>
+                  </div>
+                </li>
+              </ol>
+            ) : (
+              <ul className="tk-cards">
+                {projects.map((rec) => {
+                  const who = skaterOf(rec.skaterId);
+                  return (
+                    <li key={rec.id} style={{ ["--tk-hue" as string]: hueOf(rec.id) }}>
+                      <button type="button" className="tk-card" onClick={() => void openProject(rec)} disabled={!!status}>
+                        {who ? (
+                          <Avatar skater={who} url={photos[who.id]} size={52} />
+                        ) : (
+                          <span className="tk-card-art" aria-hidden="true">
+                            <i />
+                            <i />
+                            <i />
+                            <i />
+                            <i />
+                          </span>
+                        )}
+                        <span className="tk-card-text">
+                          <strong>{rec.name}</strong>
+                          <small>
+                            {formatTime(rec.length)} · {rec.tracks.length === 1 ? "1 lag" : `${rec.tracks.length} lög`} ·{" "}
+                            {new Date(rec.updatedAt).toLocaleDateString("is-IS", { day: "numeric", month: "short" })}
+                            {!isSynced(rec) && <CloudOff size={13} className="tk-card-unsynced" aria-label="Ekki komið í skýið" />}
+                          </small>
+                        </span>
+                      </button>
+                      <button type="button" className="tk-card-del" onClick={() => void removeProject(rec)} aria-label={`Eyða rútínunni ${rec.name}`}>
+                        <Trash2 size={18} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {installHint && (
+              <aside className="tk-install">
+                <div>
+                  <strong>Settu appið á heimaskjáinn</strong>
+                  <span>
+                    Ýttu á <Share size={15} className="tk-inline" aria-label="Deila" /> neðst í Safari og veldu „Setja á heimaskjá“. Þá
+                    opnast THE COACH eins og hvert annað app, með öllu þínu.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="tk-iconbtn small"
+                  aria-label="Fela"
+                  onClick={() => {
+                    setInstallHint(false);
+                    try {
+                      window.localStorage.setItem(HINT_KEY, "1");
+                    } catch {
+                      /* einkagluggi */
+                    }
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </aside>
+            )}
+          </>
+        )}
+
+        {tab === "idkendur" && (
+          <SkatersTab
+            doc={doc}
+            photos={photos}
+            projects={projects ?? []}
+            onOpen={(k) => setSkaterOpen({ id: k.id, isNew: false, draft: k })}
+            onNew={newSkaterSheet}
+          />
+        )}
+
+        {tab === "safn" && (
+          <LibraryTab
+            doc={doc}
+            filter={filter}
+            onFilter={setFilter}
+            playing={playing}
+            onPlay={(id, songId, from, to, seek) => void preview(id, songId, from, to, seek)}
+            onFav={(s) => updateDoc((d) => patchSong(d, s.id, { fav: !s.fav }, Date.now()))}
+            onCover={(s, cover) => updateDoc((d) => patchSong(d, s.id, { cover }, Date.now()))}
+            onDeleteSong={deleteSong}
+            onDeleteClip={(c) => {
+              if (window.confirm(`Eyða bútnum „${c.name}“?`)) updateDoc((d) => removeClip(d, c.id, Date.now()));
+            }}
+            onAddFile={() => pickFiles("audio", { kind: "library" })}
+            onAddVideo={() => pickFiles("video", { kind: "library" })}
+          />
         )}
       </div>
+
+      <nav className="tk-tabs" aria-label="Aðalvalmynd">
+        {(
+          [
+            ["heim", House, "Heim"],
+            ["skipulag", CalendarDays, "Skipulag"],
+            ["idkendur", Users, "Iðkendur"],
+            ["rutinur", ListMusic, "Rútínur"],
+            ["safn", Library, "Safn"],
+          ] as const
+        ).map(([id, Icon, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={tab === id ? "on" : ""}
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => {
+              if (id !== "safn") stopPreview();
+              setTab(id);
+            }}
+          >
+            <Icon size={21} aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </nav>
 
       <input
         ref={audioInput}
@@ -387,7 +773,7 @@ export default function TonklippaApp() {
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          void create(files);
+          void handleFiles(files);
         }}
       />
       <input
@@ -398,29 +784,108 @@ export default function TonklippaApp() {
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          void create(files);
+          void handleFiles(files);
         }}
       />
+
+      {openSkater && skaterOpen && (
+        <SkaterSheet
+          skater={openSkater}
+          isNew={skaterOpen.isNew}
+          doc={doc}
+          photoUrl={photos[openSkater.id]}
+          projects={projects ?? []}
+          onChange={updateDoc}
+          onPhoto={setPhoto}
+          onOpenProject={(rec) => void openProject(rec)}
+          onNewRoutine={(k) => setNewFor({ skaterId: k.id })}
+          onImport={importOne}
+          onDelete={deleteSkater}
+          onClose={() => {
+            // Tómur, nýr iðkandi sem ekkert var skráð á: hverfur aftur.
+            const k = docRef.current.skaters.find((x) => x.id === skaterOpen.id);
+            if (skaterOpen.isNew && k && !k.name && !k.photoAt && !k.markers.length && !k.songIds.length) updateDoc((d) => removeSkater(d, k.id, Date.now()));
+            setSkaterOpen(null);
+          }}
+        />
+      )}
+
+      {newFor && (
+        <SongPicker
+          title={newSkater?.name ? `Ný rútína – ${newSkater.name.split(/\s+/)[0]}` : "Ný rútína"}
+          songs={doc.songs}
+          clips={doc.clips}
+          fit={newSkater ? fitsFor(doc.songs, newSkater.markers, newSkater.targetMin, newSkater.targetMax) : undefined}
+          first={newSkater?.songIds}
+          onSong={(s) => void routineFromLibrary(s.id, newFor.skaterId)}
+          onClip={(c) => void routineFromLibrary(c.songId, newFor.skaterId, c)}
+          onFile={() => pickFiles("audio", { kind: "routine", skaterId: newFor.skaterId })}
+          onVideo={() => pickFiles("video", { kind: "routine", skaterId: newFor.skaterId })}
+          onClose={() => setNewFor(null)}
+        >
+          {doc.skaters.length > 0 && (
+            <>
+              <h3>Fyrir hvern?</h3>
+              <div className="tk-who">
+                <button type="button" className={`tk-chip${!newFor.skaterId ? " on" : ""}`} onClick={() => setNewFor({})}>
+                  Engan sérstakan
+                </button>
+                {doc.skaters.map((k) => (
+                  <button key={k.id} type="button" className={`tk-chip who${newFor.skaterId === k.id ? " on" : ""}`} onClick={() => setNewFor({ skaterId: k.id })}>
+                    <Avatar skater={k} url={photos[k.id]} size={26} /> {k.name || "Ónefndur"}
+                  </button>
+                ))}
+              </div>
+              {newSkater && (
+                <p className="tk-hint">
+                  Rútínan verður {formatTime(newSkater.targetMin)}–{formatTime(newSkater.targetMax)}
+                  {newSkater.markers.length ? ` með ${newSkater.markers.length} hápunktum, og byrjar á þeim kafla lagsins sem hittir best á þá.` : "."}
+                </p>
+              )}
+            </>
+          )}
+        </SongPicker>
+      )}
+
+      {eventOpen && (
+        <EventSheet
+          key={eventOpen.event.id}
+          event={eventOpen.event}
+          isNew={eventOpen.isNew}
+          skaters={doc.skaters}
+          photos={photos}
+          onSave={(e) => {
+            updateDoc((d) => putEvent(d, e));
+            setEventOpen(null);
+          }}
+          onDelete={(e) => {
+            updateDoc((d) => removeEvent(d, e.id, Date.now()));
+            setEventOpen(null);
+          }}
+          onClose={() => setEventOpen(null)}
+        />
+      )}
 
       {menu && (
         <div className="tk-sheet-back" onClick={() => setMenu(false)}>
           <div className="tk-sheet" role="dialog" aria-modal="true" aria-label="Meira" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => void copyDeviceLink()} disabled={!keyRef.current}>
+            <button type="button" className="tk-sheet-item" onClick={() => void copyDeviceLink()} disabled={!keyRef.current}>
               <Link2 size={20} />
               <span>
-                <strong>Opna rútínurnar mínar í öðru tæki</strong>
+                <strong>Opna allt mitt í öðru tæki</strong>
                 <small>Afritar leynitengil — bara fyrir þig</small>
               </span>
             </button>
-            <button type="button" onClick={() => void shareApp()}>
+            <button type="button" className="tk-sheet-item" onClick={() => void shareApp()}>
               <Share size={20} />
               <span>
                 <strong>Deila appinu með vini</strong>
-                <small>Vinurinn fær appið tómt, ekki rútínurnar þínar</small>
+                <small>Vinurinn fær appið tómt, ekkert af þínu</small>
               </span>
             </button>
             <button
               type="button"
+              className="tk-sheet-item"
               onClick={() => {
                 setMenu(false);
                 void pull();
@@ -433,7 +898,7 @@ export default function TonklippaApp() {
                 <small>{syncLabel}</small>
               </span>
             </button>
-            <button type="button" className="tk-sheet-close" onClick={() => setMenu(false)}>
+            <button type="button" className="tk-sheet-item tk-sheet-close" onClick={() => setMenu(false)}>
               Loka
             </button>
           </div>
@@ -459,6 +924,13 @@ export default function TonklippaApp() {
           initialName={open.name}
           initialArr={open.arr}
           initialTracks={open.tracks}
+          skaterId={open.skaterId}
+          skaterName={skaterOf(open.skaterId)?.name}
+          songs={doc.songs}
+          clips={doc.clips}
+          importSong={importSong}
+          openSong={openSong}
+          onSaveClip={(clip) => updateDoc((d) => putClip(d, clip))}
           sync={syncRef.current}
           syncState={syncState}
           onClose={() => {

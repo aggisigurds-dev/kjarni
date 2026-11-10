@@ -1,17 +1,14 @@
-/** Rútínur Tónklippu í tækinu (IndexedDB): lýsingin (bútar, hápunktar, lengd)
- *  og upprunalegu lagaskrárnar. Tækið er alltaf heimildin sem unnið er á —
- *  skýið (sync.ts) er afrit sem fylgir á eftir, svo appið virkar líka án nets. */
+/** Gögn Tónklippu í tækinu (IndexedDB): rútínur, safnið (lög, uppáhaldsbútar,
+ *  iðkendur) og skrárnar sjálfar (lög og prófílmyndir). Tækið er alltaf
+ *  heimildin sem unnið er á — skýið (sync.ts) er afrit sem fylgir á eftir, svo
+ *  appið virkar líka án nets. */
 
 import { createStore, del, get, keys, set, type UseStore } from "idb-keyval";
 import type { Arrangement } from "./arrange";
+import { emptyDoc, mergeDocs, normalizeDoc, type LibraryDoc } from "./library";
 
-export type TrackMeta = {
-  id: string;
-  name: string;
-  duration: number;
-  /** Lagaskráin er komin í skýið. */
-  cloud?: boolean;
-};
+/** Lag í rútínu; `id` er auðkenni lagsins í safninu. */
+export type TrackMeta = { id: string; name: string; duration: number };
 
 export type ProjectRecord = {
   id: string;
@@ -21,6 +18,8 @@ export type ProjectRecord = {
   length: number;
   arrangement: Arrangement;
   tracks: TrackMeta[];
+  /** Iðkandinn sem rútínan er fyrir. */
+  skaterId?: string;
   /** `updatedAt` þeirrar útgáfu sem er komin í skýið (vantar = aldrei). */
   syncedAt?: number;
 };
@@ -33,8 +32,11 @@ function store(): UseStore {
 }
 
 const projectKey = (id: string) => `p:${id}`;
-const trackKey = (projectId: string, trackId: string) => `t:${projectId}:${trackId}`;
+const songKey = (id: string) => `s:${id}`;
+const photoKey = (id: string) => `ph:${id}`;
 const deletedKey = (id: string) => `d:${id}`;
+const DOC = "doc";
+const UPLOADED = "up";
 
 // Lesa-breyta-skrifa aðgerðir fara í röð, svo sjálfvirk vistun og samstilling
 // skrifi ekki yfir hvor aðra.
@@ -45,8 +47,10 @@ function inOrder<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// ------------------------------------------------------------------ rútínur
+
 export function isSynced(rec: ProjectRecord): boolean {
-  return rec.syncedAt === rec.updatedAt && rec.tracks.every((t) => t.cloud);
+  return rec.syncedAt === rec.updatedAt;
 }
 
 export async function listProjects(): Promise<ProjectRecord[]> {
@@ -65,49 +69,23 @@ export function putProject(rec: ProjectRecord): Promise<void> {
   return inOrder(() => set(projectKey(rec.id), rec, store()));
 }
 
-/** Vistar vinnu notandans; heldur utan um hvað er þegar komið í skýið. */
+/** Vistar vinnu notandans; man hvaða útgáfa er þegar komin í skýið. */
 export function saveProject(next: Omit<ProjectRecord, "syncedAt">): Promise<ProjectRecord> {
   return inOrder(async () => {
     const prev = await loadProject(next.id);
-    const inCloud = new Set((prev?.tracks ?? []).filter((t) => t.cloud).map((t) => t.id));
-    const rec: ProjectRecord = {
-      ...next,
-      tracks: next.tracks.map((t) => (inCloud.has(t.id) || t.cloud ? { ...t, cloud: true } : { id: t.id, name: t.name, duration: t.duration })),
-      syncedAt: prev?.syncedAt,
-    };
+    const rec: ProjectRecord = { ...next, syncedAt: prev?.syncedAt };
     await set(projectKey(rec.id), rec, store());
     return rec;
   });
 }
 
-/** Merkir hvað tókst að senda: lögin `uploaded` og (ef ekkert breyttist á meðan) útgáfuna `version`. */
-export function markSynced(id: string, version: number, uploaded: string[]): Promise<void> {
+/** Merkir útgáfuna `version` sem komna í skýið (ef ekkert breyttist á meðan). */
+export function markSynced(id: string, version: number): Promise<void> {
   return inOrder(async () => {
     const cur = await loadProject(id);
-    if (!cur) return;
-    const up = new Set(uploaded);
-    await set(
-      projectKey(id),
-      {
-        ...cur,
-        tracks: cur.tracks.map((t) => (up.has(t.id) ? { ...t, cloud: true } : t)),
-        syncedAt: cur.updatedAt === version ? version : cur.syncedAt,
-      } satisfies ProjectRecord,
-      store(),
-    );
+    if (!cur || cur.updatedAt !== version) return;
+    await set(projectKey(id), { ...cur, syncedAt: version } satisfies ProjectRecord, store());
   });
-}
-
-export function saveTrackBlob(projectId: string, trackId: string, blob: Blob): Promise<void> {
-  return set(trackKey(projectId, trackId), blob, store());
-}
-
-export function loadTrackBlob(projectId: string, trackId: string): Promise<Blob | undefined> {
-  return get<Blob>(trackKey(projectId, trackId), store());
-}
-
-export function deleteTrackBlob(projectId: string, trackId: string): Promise<void> {
-  return del(trackKey(projectId, trackId), store());
 }
 
 /** Eyðir rútínunni úr tækinu. Með `remember` er eyðingin geymd þar til hún
@@ -115,9 +93,6 @@ export function deleteTrackBlob(projectId: string, trackId: string): Promise<voi
 export function deleteProject(id: string, remember = false): Promise<void> {
   return inOrder(async () => {
     const s = store();
-    const prefix = `t:${id}:`;
-    const mine = (await keys(s)).filter((k) => typeof k === "string" && k.startsWith(prefix));
-    await Promise.all(mine.map((k) => del(k, s)));
     await del(projectKey(id), s);
     if (remember) await set(deletedKey(id), Date.now(), s);
   });
@@ -133,4 +108,63 @@ export async function pendingDeletes(): Promise<Array<{ id: string; at: number }
 
 export function forgetDelete(id: string): Promise<void> {
   return del(deletedKey(id), store());
+}
+
+// ------------------------------------------------------------------ safnið
+
+export async function loadDoc(): Promise<LibraryDoc> {
+  return normalizeDoc(await get(DOC, store()));
+}
+
+/** Sameinar `incoming` við það sem er í tækinu (atriði fyrir atriði, nýjasta
+ *  vinnur) og skilar útkomunni. Öll skrif í safnið fara hér í gegn, svo
+ *  breyting í appinu og samstilling við skýið skrifi aldrei yfir hvor aðra. */
+export function mergeIntoDoc(incoming: LibraryDoc): Promise<LibraryDoc> {
+  return inOrder(async () => {
+    const s = store();
+    const merged = mergeDocs(normalizeDoc(await get(DOC, s)) ?? emptyDoc(), incoming);
+    await set(DOC, merged, s);
+    return merged;
+  });
+}
+
+export function saveSongBlob(songId: string, blob: Blob): Promise<void> {
+  return set(songKey(songId), blob, store());
+}
+
+export function loadSongBlob(songId: string): Promise<Blob | undefined> {
+  return get<Blob>(songKey(songId), store());
+}
+
+export function deleteSongBlob(songId: string): Promise<void> {
+  return del(songKey(songId), store());
+}
+
+export type StoredPhoto = { blob: Blob; at: number };
+
+export function savePhoto(skaterId: string, blob: Blob, at: number): Promise<void> {
+  return set(photoKey(skaterId), { blob, at } satisfies StoredPhoto, store());
+}
+
+export function loadPhoto(skaterId: string): Promise<StoredPhoto | undefined> {
+  return get<StoredPhoto>(photoKey(skaterId), store());
+}
+
+export function deletePhoto(skaterId: string): Promise<void> {
+  return del(photoKey(skaterId), store());
+}
+
+/** Skrár sem þetta tæki veit að eru komnar í skýið (slóðir innan skúffunnar). */
+export async function loadUploaded(): Promise<Set<string>> {
+  return new Set((await get<string[]>(UPLOADED, store())) ?? []);
+}
+
+export function changeUploaded(add: string[], remove: string[] = []): Promise<void> {
+  return inOrder(async () => {
+    const s = store();
+    const cur = new Set((await get<string[]>(UPLOADED, s)) ?? []);
+    for (const p of add) cur.add(p);
+    for (const p of remove) cur.delete(p);
+    await set(UPLOADED, [...cur], s);
+  });
 }

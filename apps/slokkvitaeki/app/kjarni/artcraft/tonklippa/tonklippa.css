@@ -289,6 +289,7 @@
 .tk-home-scroll {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: calc(14px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom));
@@ -453,6 +454,7 @@
 
 .tk-steps-intro {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   list-style: none;
@@ -489,6 +491,7 @@
 
 .tk-cards {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   list-style: none;
@@ -644,7 +647,7 @@
   box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5);
 }
 
-.tk-sheet > button {
+.tk-sheet-item {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -657,22 +660,22 @@
   text-align: left;
 }
 
-.tk-sheet > button:active:not(:disabled) {
+.tk-sheet-item:active:not(:disabled) {
   background: var(--tk-card-2);
 }
 
-.tk-sheet > button span {
+.tk-sheet-item span {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 
-.tk-sheet > button small {
+.tk-sheet-item small {
   font-size: 13px;
   color: var(--tk-soft);
 }
 
-.tk-sheet > .tk-sheet-close {
+.tk-sheet-item.tk-sheet-close {
   justify-content: center;
   margin-top: 6px;
   background: var(--tk-card);
@@ -963,6 +966,7 @@
 .tk-body {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -1384,6 +1388,926 @@
   border-right-color: var(--tk-cyan);
   border-radius: 50%;
   animation: tk-spin 0.8s linear infinite;
+}
+
+/* ---------------------------------------------------------------- safn, iðkendur, lagaval */
+
+.tk-gold {
+  color: #ffcf5c;
+}
+
+.tk-mini {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: 5px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.tk-mini.seek {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tk-mini-wave {
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.tk-mini-flat {
+  fill: rgba(255, 255, 255, 0.25);
+}
+
+.tk-mini-region {
+  fill: rgba(162, 107, 255, 0.5);
+}
+
+.tk-mini-high {
+  fill: #ffcf5c;
+}
+
+.tk-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: linear-gradient(135deg, hsl(var(--tk-hue) 90% 64%), hsl(calc(var(--tk-hue) + 70) 85% 58%));
+  color: #fff;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.tk-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tk-blank {
+  margin: 18px 4px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--tk-soft);
+}
+
+.tk-seg {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--tk-line);
+  border-radius: 999px;
+  background: var(--tk-card);
+}
+
+.tk-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tk-soft) !important;
+}
+
+.tk-seg button.on {
+  background: var(--tk-card-2);
+  color: #fff !important;
+}
+
+.tk-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-rows li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--tk-line);
+  border-radius: 20px;
+  background: var(--tk-card);
+}
+
+.tk-rows li.song {
+  align-items: flex-start;
+}
+
+.tk-rows.flat {
+  gap: 0;
+  margin-bottom: 8px;
+}
+
+.tk-rows.flat li {
+  padding: 9px 0;
+  border: 0;
+  border-bottom: 1px solid var(--tk-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.tk-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-row-text strong,
+.tk-pick-text strong {
+  font-size: 16px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-row-text small,
+.tk-pick-text small {
+  font-size: 13px;
+  color: var(--tk-soft);
+}
+
+.tk-round.small {
+  width: 44px;
+  height: 44px;
+}
+
+.tk-iconbtn.quiet {
+  width: 44px;
+  height: 44px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--tk-faint) !important;
+}
+
+.tk-iconbtn.gold {
+  color: #ffcf5c !important;
+}
+
+.tk-sheet.tall {
+  display: flex;
+  flex-direction: column;
+  max-height: 86dvh;
+  padding-bottom: 0;
+}
+
+.tk-sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 10px 10px;
+  font-size: 19px;
+}
+
+.tk-sheet-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 6px calc(18px + env(safe-area-inset-bottom));
+}
+
+.tk-sheet-scroll h3 {
+  margin: 16px 4px 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tk-faint);
+}
+
+.tk-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  margin-bottom: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--tk-line);
+  border-radius: 18px;
+  background: var(--tk-card);
+  text-align: left;
+}
+
+.tk-pick:active {
+  background: var(--tk-card-2);
+}
+
+.tk-pick-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-rows.flat .tk-pick {
+  margin: 0;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+}
+
+.tk-who {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.tk-who .tk-chip {
+  flex: none;
+}
+
+.tk-chip.who {
+  padding-left: 6px;
+}
+
+/* Blað iðkanda: yfir heimaskjánum og flipunum, en undir blöðum sem opnast
+   ofan á það (lagaval, ný rútína), tilkynningum og biðskjá. */
+.tk-full {
+  z-index: 7;
+}
+
+.tk-full-title {
+  font-size: 19px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tk-photo {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.tk-photo-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 3px solid #1b1232;
+  border-radius: 50%;
+  background: var(--tk-grad);
+  color: #fff;
+}
+
+.tk-profile-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tk-word.big {
+  flex: none;
+  width: 100%;
+  height: 52px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.tk-link.left {
+  justify-content: flex-start;
+  width: auto;
+  min-height: 36px;
+  margin: 0;
+}
+
+.tk-watch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 207, 92, 0.45);
+  border-radius: 20px;
+  background: rgba(255, 207, 92, 0.1);
+}
+
+.tk-watch strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.tk-watch .tk-cta {
+  flex: 1;
+  width: auto;
+  margin: 0;
+}
+
+.tk-home .tk-tabs {
+  position: relative;
+  z-index: 1;
+}
+
+/* Umslög laga: tilbúin útlit, engar myndskrár. */
+.tk-cover {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: #fff !important;
+  background: linear-gradient(135deg, hsl(var(--tk-hue) 90% 62%), hsl(calc(var(--tk-hue) + 70) 85% 56%));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.tk-cover.eldur {
+  background:
+    radial-gradient(90% 70% at 50% 108%, #ffe14d 0%, #ff8a00 38%, rgba(255, 61, 0, 0) 72%),
+    linear-gradient(180deg, #1a0503 0%, #5c0c05 45%, #ff3d00 100%);
+  box-shadow: 0 0 16px rgba(255, 94, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.tk-cover.eldur > svg {
+  filter: drop-shadow(0 0 6px #ffb300);
+}
+
+.tk-cover.is {
+  background: linear-gradient(160deg, #dff6ff 0%, #7fd6ff 45%, #2f7de1 100%);
+  color: #0b3a66 !important;
+}
+
+.tk-cover.neon {
+  background: linear-gradient(135deg, #12002e 0%, #3a0a6e 100%);
+  color: #7dff5a !important;
+  box-shadow: 0 0 14px rgba(125, 255, 90, 0.4), inset 0 0 0 2px rgba(255, 60, 220, 0.8);
+}
+
+.tk-cover.gull {
+  background: linear-gradient(135deg, #fff3b0 0%, #f4c430 45%, #b8860b 100%);
+  color: #4a3200 !important;
+}
+
+.tk-cover-play {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 46%;
+  height: 46%;
+  border-radius: 50%;
+  background: #1b1232;
+  color: #fff;
+  font-style: normal;
+}
+
+.tk-covers {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tk-covers button {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 72px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tk-covers button.on {
+  border-color: var(--tk-line);
+  background: var(--tk-card-2);
+}
+
+/* ---------------------------------------------------------------- þjálfarinn: forsíða, dagatal, verkefni */
+
+.tk-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 20px 18px;
+  border-radius: 28px;
+  background: var(--tk-grad);
+  color: #fff;
+  box-shadow: 0 16px 40px rgba(162, 107, 255, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.tk-hero::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -50px;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.34), transparent 68%);
+  pointer-events: none;
+}
+
+.tk-hero p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+
+.tk-hero p::first-letter {
+  text-transform: uppercase;
+}
+
+.tk-hero h2 {
+  margin: 2px 0 14px;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.tk-hero-stats {
+  display: flex;
+  gap: 8px;
+}
+
+.tk-hero-stats span {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tk-hero-stats b {
+  display: block;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.tk-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tk-cyan) !important;
+  white-space: nowrap;
+}
+
+.tk-blank.card,
+.tk-box {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--tk-line);
+  border-radius: 22px;
+  background: var(--tk-card);
+}
+
+.tk-events {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tk-event {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 14px 10px 18px;
+  border: 1px solid var(--tk-line);
+  border-radius: 20px;
+  background: var(--tk-card);
+  text-align: left;
+  --tk-kind: var(--tk-cyan);
+}
+
+.tk-event.keppni {
+  --tk-kind: var(--tk-pink);
+}
+
+.tk-event.annad {
+  --tk-kind: var(--tk-violet);
+}
+
+.tk-event::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--tk-kind);
+  box-shadow: 0 0 10px var(--tk-kind);
+}
+
+.tk-event:active {
+  background: var(--tk-card-2);
+}
+
+.tk-event-time {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: 86px;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.tk-event-time b {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tk-kind);
+}
+
+.tk-event-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-event-text strong {
+  font-size: 16px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-event-text small {
+  font-size: 12px;
+  color: var(--tk-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-event-who {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.tk-event-who .tk-avatar {
+  margin-left: -8px;
+  box-shadow: 0 0 0 2px #1b1232;
+}
+
+.tk-event-who i {
+  margin-left: 4px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--tk-soft);
+}
+
+.tk-todo-add {
+  display: flex;
+  gap: 8px;
+}
+
+.tk-todos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-todo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-top: 1px solid var(--tk-line);
+}
+
+.tk-todo > span {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.tk-todo.done > span {
+  color: var(--tk-faint);
+  text-decoration: line-through;
+}
+
+.tk-check {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: 7px 0;
+  border: 2px solid var(--tk-soft);
+  border-radius: 10px;
+  background: transparent;
+  color: #fff !important;
+}
+
+/* Stærri snertiflötur en sýnilegi kassinn. */
+.tk-check::before {
+  content: "";
+  position: absolute;
+  width: 44px;
+  height: 44px;
+}
+
+.tk-todo.done .tk-check {
+  border-color: transparent;
+  background: var(--tk-grad);
+}
+
+.tk-people {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: none;
+}
+
+.tk-people::-webkit-scrollbar,
+.tk-who::-webkit-scrollbar {
+  display: none;
+}
+
+.tk-people button {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 68px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tk-people button span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-people-add {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border: 2px dashed var(--tk-line);
+  border-radius: 50%;
+  color: var(--tk-soft);
+}
+
+.tk-new.compact {
+  min-height: 82px;
+  padding: 12px 16px;
+  border-radius: 22px;
+}
+
+.tk-new.compact .tk-new-plus {
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+}
+
+.tk-new.compact .tk-new-text strong {
+  font-size: 20px;
+}
+
+.tk-card.alone {
+  width: 100%;
+  min-height: 68px;
+  margin-top: 8px;
+}
+
+.tk-card-go {
+  color: var(--tk-faint);
+}
+
+.tk-cal {
+  padding: 12px;
+}
+
+.tk-cal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tk-cal-head strong {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.tk-cal-head strong::first-letter {
+  text-transform: uppercase;
+}
+
+.tk-cal-head .tk-chip {
+  min-height: 36px;
+}
+
+.tk-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.tk-cal-wd {
+  padding: 4px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--tk-faint);
+}
+
+.tk-cal-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 46px;
+  padding: 0 0 8px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-cal-day.out {
+  color: var(--tk-faint) !important;
+  opacity: 0.55;
+}
+
+.tk-cal-day.today {
+  box-shadow: inset 0 0 0 2px var(--tk-cyan);
+}
+
+.tk-cal-day.on {
+  background: var(--tk-grad);
+  color: #fff !important;
+  opacity: 1;
+  box-shadow: none;
+}
+
+.tk-cal-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+}
+
+.tk-cal-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tk-cyan);
+}
+
+.tk-cal-dots i.keppni {
+  background: var(--tk-pink);
+}
+
+.tk-cal-dots i.annad {
+  background: var(--tk-violet);
+}
+
+.tk-cal-day.on .tk-cal-dots i {
+  background: #fff;
+}
+
+.tk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tk-form-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.tk-form-row label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tk-soft);
+}
+
+.tk-form-row .tk-word {
+  width: 100%;
+  min-width: 0;
+  color-scheme: dark;
+}
+
+.tk-label.wide {
+  width: auto;
+  margin-top: 10px;
+}
+
+.tk-word.wide {
+  flex: none;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.tk-btn.wide {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.tk-chip.kind.on.aefing {
+  background: linear-gradient(135deg, #2bb8e6, #4fd8ff);
+  color: #06222d !important;
+}
+
+.tk-chip.kind.on.keppni {
+  background: linear-gradient(135deg, #ff5fa2, #ff8ac0);
+}
+
+.tk-chip.kind.on.annad {
+  background: linear-gradient(135deg, #8a55f0, #a26bff);
+}
+
+/* Fimm flipar á heimaskjánum: aðeins þéttara letur í mjóum síma. */
+@media (max-width: 430px) {
+  .tk-home .tk-tabs {
+    gap: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .tk-home .tk-tabs button {
+    font-size: 11px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

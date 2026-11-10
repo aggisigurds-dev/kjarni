@@ -2,7 +2,7 @@
  *  reiknuð í eina steríóupptöku. Sama fall er notað fyrir hlustun og
  *  útflutning, svo það sem heyrist er það sem er vistað. Prófað í node. */
 
-import { MIN_SEAM, layout, type Arrangement } from "./arrange";
+import { MIN_SEAM, layout, type Arrangement, type SeamFx } from "./arrange";
 import type { Samples } from "./analyze";
 import { timeStretch } from "./stretch";
 
@@ -90,6 +90,69 @@ function stretched(
 
 export const HEADROOM = 0.98;
 
+/** Áhrifshljóð á samskeytum, búin til úr suði og sínusbylgju (engar skrár):
+ *  „svúss“ sem rís síðustu 1,6 sek fyrir skilin og/eða högg á skilunum. Sama
+ *  fræ gefur sama hljóð, svo hlustun og útflutningur eru eins. */
+export function addSeamFx(L: Float32Array, R: Float32Array, at: number, sampleRate: number, fx: SeamFx, seed = 1): void {
+  const n = L.length;
+  let state = (seed * 2654435761) >>> 0 || 1;
+  const noise = () => {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    return state / 2147483648 - 1;
+  };
+  if (fx === "riser" || fx === "both") {
+    // Suð í gegnum bandsíu sem sópar upp úr 300 Hz í 9 kHz, styrkur rís.
+    const len = Math.round(1.6 * sampleRate);
+    const cut = Math.round(0.006 * sampleRate);
+    let lowL = 0;
+    let bandL = 0;
+    let lowR = 0;
+    let bandR = 0;
+    for (let k = 0; k < len; k++) {
+      const j = at - len + k;
+      const x = k / len;
+      const f = 2 * Math.sin((Math.PI * Math.min(0.24 * sampleRate, 300 * Math.pow(30, x))) / sampleRate);
+      const q = 0.35;
+      const inL = noise();
+      const inR = noise();
+      lowL += f * bandL;
+      bandL += f * (inL - lowL - q * bandL);
+      lowR += f * bandR;
+      bandR += f * (inR - lowR - q * bandR);
+      if (j < 0 || j >= n) continue;
+      const g = 0.2 * x * x * (k > len - cut ? (len - k) / cut : 1);
+      L[j] += bandL * g;
+      R[j] += bandR * g;
+    }
+  }
+  if (fx === "impact" || fx === "both") {
+    // Djúpur dynkur sem fellur úr 95 í 38 Hz + suðskvetta + langur hali.
+    const len = Math.round(1.5 * sampleRate);
+    let phase = 0;
+    let lp = 0;
+    for (let k = 0; k < len; k++) {
+      const j = at + k;
+      if (j >= n) break;
+      const t = k / sampleRate;
+      phase += (2 * Math.PI * (38 + 57 * Math.exp(-t / 0.09))) / sampleRate;
+      const boom = 0.5 * Math.exp(-t / 0.22) * Math.sin(phase);
+      const a = noise();
+      const b = noise();
+      lp += 0.25 * ((a + b) / 2 - lp);
+      const burst = 0.26 * Math.exp(-t / 0.07) * lp;
+      const tail = 0.07 * Math.exp(-t / 0.45);
+      const ramp = Math.min(1, k / (0.002 * sampleRate));
+      if (j < 0) continue;
+      L[j] += (boom + burst + tail * a) * ramp;
+      R[j] += (boom + burst + tail * b) * ramp;
+    }
+  }
+}
+
 export function renderMix(
   arr: Arrangement,
   tracks: ReadonlyMap<string, TrackAudio>,
@@ -133,6 +196,10 @@ export function renderMix(
       L[j] += seg[0][k] * g;
       R[j] += seg[1][k] * g;
     }
+  });
+
+  arr.parts.forEach((p, i) => {
+    if (i > 0 && p.fx) addSeamFx(L, R, Math.round(lay.pos[i] * sampleRate), sampleRate, p.fx, i);
   });
 
   // Mjúk byrjun og endir (alltaf að minnsta kosti örstutt, svo ekki smelli).

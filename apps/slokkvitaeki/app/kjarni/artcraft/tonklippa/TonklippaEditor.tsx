@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Copy, Download, Film, Flag, Maximize2, Minus, Music, Pause, Play, Plus, Redo2, Scissors, Share, SkipBack, SquareSplitHorizontal, Target, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Download, Film, Flag, Library, Maximize2, Minus, Music, Pause, Play, Plus, Redo2, Scissors, Share, SkipBack, Sparkles, SquareSplitHorizontal, Star, Target, Trash2, Undo2, X } from "lucide-react";
 import {
   GAIN_MAX,
   GAIN_MIN,
@@ -30,6 +30,7 @@ import {
   removeTrack,
   safeFileName,
   setEnd,
+  setFx,
   setGain,
   setRegion,
   setStart,
@@ -44,14 +45,18 @@ import {
   type Arrangement,
   type Marker,
   type Part,
+  type SeamFx,
 } from "./arrange";
 import { STEADY_ENOUGH, liveliestWindow } from "./analyze";
+import type { Clip, Song } from "./library";
+import { bestMatches } from "./match";
+import { SongPicker } from "./Parts";
 import { Player, RATE, mixToBuffer, saveBlob, trackWindowBuffer } from "./audio";
 import { encodeMp3 } from "./mp3";
 import { renderMix, type Mix, type StretchCache } from "./render";
-import { deleteTrackBlob, saveProject, saveTrackBlob } from "./store";
+import { saveProject } from "./store";
 import type { CloudSync, SyncState } from "./sync";
-import { breathe, buildTrackView, newId, trackNameFromFile, type TrackView } from "./tracks";
+import { breathe, newId, type TrackView } from "./tracks";
 import { SourceView, TimelineView, clampViewport, trackColor, type SourceHandle, type SourceViewport } from "./Wave";
 import { encodeWav } from "./wav";
 import "./tonklippa.css";
@@ -61,6 +66,15 @@ type Props = {
   initialName: string;
   initialArr: Arrangement;
   initialTracks: TrackView[];
+  /** Iðkandinn sem rútínan er fyrir (ef einhver). */
+  skaterId?: string;
+  skaterName?: string;
+  /** Safnið: lög og uppáhaldsbútar sem má sækja í, og leiðir til að bæta í það. */
+  songs: Song[];
+  clips: Clip[];
+  importSong: (file: File) => Promise<TrackView>;
+  openSong: (songId: string) => Promise<TrackView>;
+  onSaveClip: (clip: Clip) => void;
   /** Skýjasamstillingin (null ef hún er ekki í boði) og staða hennar. */
   sync: CloudSync | null;
   syncState: SyncState;
@@ -74,6 +88,12 @@ type Format = "mp3-192" | "mp3-320" | "wav";
 export const AUDIO_ACCEPT = "audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.flac,.opus";
 export const VIDEO_ACCEPT = "video/mp4,video/quicktime,.mp4,.mov,.m4v";
 const SEAMS = [0, 0.2, 0.5, 1, 2, 4];
+const FX: Array<[SeamFx | undefined, string]> = [
+  [undefined, "Engin"],
+  ["riser", "Svúss"],
+  ["impact", "Högg"],
+  ["both", "Bæði"],
+];
 const MARKER_WORDS = ["Stökk", "Snúningur", "Spírall", "Skrefaröð", "Lyfta", "Lokastaða"];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -87,7 +107,22 @@ export function defaultPart(arr: Arrangement, track: { id: string; duration: num
   return { id: newId(), trackId: track.id, start: 0, end: length, tempo: 1, gainDb: 0, xfade: arr.parts.length ? 0.5 : 0 };
 }
 
-export default function TonklippaEditor({ projectId, initialName, initialArr, initialTracks, sync, syncState, onClose }: Props) {
+export default function TonklippaEditor({
+  projectId,
+  initialName,
+  initialArr,
+  initialTracks,
+  skaterId,
+  skaterName,
+  songs,
+  clips,
+  importSong,
+  openSong,
+  onSaveClip,
+  sync,
+  syncState,
+  onClose,
+}: Props) {
   const [name, setName] = useState(initialName);
   const [tracks, setTracks] = useState(initialTracks);
   const [hist, setHist] = useState<{ past: Arrangement[]; now: Arrangement; future: Arrangement[] }>({
@@ -109,6 +144,8 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
   const [exported, setExported] = useState<{ key: string; blob: Blob; fileName: string } | null>(null);
   const [saved, setSaved] = useState<"saved" | "saving" | "error">("saved");
   const [focusMarker, setFocusMarker] = useState("");
+  const [picker, setPicker] = useState(false);
+  const matchTurn = useRef<{ part: string; turn: number }>({ part: "", turn: 0 });
 
   const arrRef = useRef(arr);
   arrRef.current = arr;
@@ -357,6 +394,7 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
         length: totalLength(arr),
         arrangement: arr,
         tracks: tracks.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
+        ...(skaterId ? { skaterId } : {}),
       }).then(
         () => {
           setSaved("saved");
@@ -366,7 +404,7 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
       );
     }, 600);
     return () => window.clearTimeout(id);
-  }, [arr, name, tracks, projectId, sync]);
+  }, [arr, name, tracks, projectId, skaterId, sync]);
 
   async function close() {
     stopAll();
@@ -378,6 +416,7 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
         length: totalLength(arrRef.current),
         arrangement: arrRef.current,
         tracks: tracksRef.current.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
+        ...(skaterId ? { skaterId } : {}),
       });
       sync?.touch(projectId, 0);
     } catch {
@@ -456,13 +495,40 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
     const delta = stepTime(part.start, dir, big) - part.start;
     apply((a) => slip(a, selIndex, delta, track.duration), `slip:${part.id}`);
   }
-  function liveliest() {
+  /** Besti kaflinn: ef hápunktar dansins lenda í þessum bút er leitað að
+   *  kaflanum þar sem hápunktar lagsins hitta á þá (ýtt aftur = næsti kostur);
+   *  annars líflegasti kaflinn. */
+  function bestHere() {
     if (!part || !track) return;
     const len = part.end - part.start;
-    const s = snapT(liveliestWindow(track.peaks, len));
+    const from = lay.pos[selIndex];
+    const span = lay.len[selIndex];
+    const inside = arr.markers.map((m) => m.t - from).filter((t) => t >= 0 && t <= span);
+    const options = bestMatches(track.analysis.highlights, inside, span, track.duration, part.tempo);
+    let s: number;
+    if (options.length) {
+      const turn = matchTurn.current.part === part.id ? (matchTurn.current.turn + 1) % options.length : 0;
+      matchTurn.current = { part: part.id, turn };
+      const m = options[turn];
+      s = m.start;
+      say(
+        `${options.length > 1 ? `Kostur ${turn + 1} af ${options.length}: ` : ""}${m.hits} af ${m.total} hápunktum lenda á hápunkti í laginu${options.length > 1 ? " — ýttu aftur fyrir næsta" : ""}`,
+        4500,
+      );
+    } else {
+      s = snapT(liveliestWindow(track.peaks, len));
+      say(arr.markers.length ? "Engir hápunktar dansins eru í þessum bút — valdi líflegasta kaflann" : "Valdi líflegasta kaflann. Merktu hápunkta í dansinum til að láta lagið hitta á þá.", 4500);
+    }
     apply((a) => setRegion(a, selIndex, s, s + len, track.duration));
     fitRegion({ ...part, start: s, end: s + len }, track);
     setCursor(s);
+  }
+  function saveClip() {
+    if (!part || !track) return;
+    const name = window.prompt("Heiti á uppáhaldsbútnum:", `${track.name} ${formatTime(part.start)}–${formatTime(part.end)}`);
+    if (!name?.trim()) return;
+    onSaveClip({ id: newId(), songId: track.id, name: name.trim().slice(0, 60), start: part.start, end: part.end, at: Date.now() });
+    say("Búturinn er kominn í uppáhald í safninu");
   }
   function zoom(k: number) {
     if (!track) return;
@@ -498,6 +564,17 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
 
   // ------------------------------------------------------------------ lög
 
+  /** Bætir laginu í rútínuna (ef það er ekki þar fyrir) og nýjum bút úr því. */
+  function addTrack(tv: TrackView, region?: { start: number; end: number }) {
+    setTracks((ts) => (ts.some((t) => t.id === tv.id) ? ts : [...ts, tv]));
+    apply((a) => {
+      const p = defaultPart(a, tv);
+      return addPart(a, region ? { ...p, start: region.start, end: Math.min(tv.duration, region.end) } : p);
+    });
+    setSel(Number.MAX_SAFE_INTEGER);
+    setPanel("butur");
+  }
+
   async function addFiles(files: File[]) {
     if (!files.length) return;
     stopAll();
@@ -505,16 +582,23 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
       setBusy(`Les ${file.name}…`);
       await breathe();
       try {
-        const id = newId();
-        const tv = await buildTrackView(id, trackNameFromFile(file.name), file);
-        await saveTrackBlob(projectId, id, file).catch(() => say("Gat ekki geymt lagið í vafranum — rútínan virkar samt núna", 5000));
-        setTracks((ts) => [...ts, tv]);
-        apply((a) => addPart(a, defaultPart(a, tv)));
-        setSel(Number.MAX_SAFE_INTEGER);
-        setPanel("butur");
+        addTrack(await importSong(file));
       } catch (err) {
         say(err instanceof Error ? err.message : `Gat ekki opnað ${file.name}`, 5000);
       }
+    }
+    setBusy("");
+  }
+
+  async function addFromLibrary(songId: string, region?: { start: number; end: number }) {
+    setPicker(false);
+    stopAll();
+    setBusy("Opna lagið…");
+    await breathe();
+    try {
+      addTrack(await openSong(songId), region);
+    } catch (err) {
+      say(err instanceof Error ? err.message : "Gat ekki opnað lagið", 5000);
     }
     setBusy("");
   }
@@ -527,11 +611,10 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
 
   function removeTrackById(tv: TrackView) {
     const used = arr.parts.filter((p) => p.trackId === tv.id).length;
-    if (used && !window.confirm(`Fjarlægja „${tv.name}“ og ${used === 1 ? "bútinn" : `${used} búta`} úr því?`)) return;
+    if (used && !window.confirm(`Taka „${tv.name}“ og ${used === 1 ? "bútinn" : `${used} búta`} úr því úr rútínunni? Lagið verður áfram í safninu.`)) return;
     stopAll();
     apply((a) => removeTrack(a, tv.id));
     setTracks((ts) => ts.filter((t) => t.id !== tv.id));
-    void deleteTrackBlob(projectId, tv.id).catch(() => undefined);
   }
 
   // ------------------------------------------------------------------ hápunktar
@@ -696,6 +779,7 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
             maxLength={80}
           />
           <span className={`tk-saved ${saved === "error" ? "error" : saved === "saved" ? syncState : "saving"}`}>
+            {skaterName ? `${skaterName.split(/\s+/)[0]} · ` : ""}
             {saved === "error"
               ? "Ekki vistað!"
               : saved === "saving"
@@ -799,6 +883,7 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
                 end={part.end}
                 cursor={cursor}
                 beats={snapOn ? beats : null}
+                highlights={track.analysis.highlights}
                 view={view}
                 onView={setView}
                 onCursor={(t) => {
@@ -832,7 +917,7 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
               </div>
               <p className="tk-hint">
                 Ýttu á bylgjuna til að setja bendilinn, dragðu til að fletta og klíptu til að stækka. Handföngin tvö afmarka kaflann
-                sem er notaður úr laginu.
+                sem er notaður. Gylltu þríhyrningarnir eru hápunktar lagsins.
               </p>
 
               {nudge("Byrjun", part.start, changeStart)}
@@ -855,8 +940,11 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
                 ) : (
                   <span className="tk-muted">Enginn jafn taktur fannst í laginu — klippt frjálst.</span>
                 )}
-                <button type="button" className="tk-chip" onClick={liveliest}>
-                  Finna líflegasta kaflann
+                <button type="button" className="tk-chip" onClick={bestHere}>
+                  <Sparkles size={15} /> Besti kaflinn
+                </button>
+                <button type="button" className="tk-chip" onClick={saveClip}>
+                  <Star size={15} /> Vista bút
                 </button>
               </div>
 
@@ -912,6 +1000,14 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
                         onClick={() => apply((a) => setXfade(a, selIndex, s))}
                       >
                         {s === 0 ? "Hreinn skurður" : `${comma(s, s < 1 ? 1 : 0)} s`}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="tk-label">Áhrifshljóð á samskeytunum</span>
+                  <div className="tk-row">
+                    {FX.map(([fx, label]) => (
+                      <button key={label} type="button" className={`tk-chip${part.fx === fx ? " on" : ""}`} onClick={() => apply((a) => setFx(a, selIndex, fx))}>
+                        {label}
                       </button>
                     ))}
                     <button type="button" className="tk-btn" onClick={playSeam}>
@@ -977,17 +1073,20 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
                 </div>
               );
             })}
+            <button type="button" className="tk-cta" onClick={() => setPicker(true)}>
+              <Library size={18} /> Bæta við úr safninu
+            </button>
             <div className="tk-cta-row">
               <button type="button" className="tk-cta ghost" onClick={() => fileRef.current?.click()}>
-                <Music size={18} /> Bæta við lagi
+                <Music size={18} /> Ný skrá
               </button>
               <button type="button" className="tk-cta ghost" onClick={() => videoRef.current?.click()}>
-                <Film size={18} /> Hljóð úr myndbandi
+                <Film size={18} /> Úr myndbandi
               </button>
             </div>
             <p className="tk-hint">
-              MP3, M4A, WAV og fleiri snið. Lögin eru aðeins lesin og geymd í þessu tæki — ekkert er sent á netið. Hver bútur er kafli
-              úr einu lagi; sama lagið má nota í marga búta.
+              MP3, M4A, WAV og fleiri snið. Ný lög fara líka í safnið þitt, svo þú getur notað þau aftur. Hver bútur er kafli úr
+              einu lagi; sama lagið má nota í marga búta.
             </p>
           </div>
         )}
@@ -1226,6 +1325,16 @@ export default function TonklippaEditor({ projectId, initialName, initialArr, in
           void addFiles(files);
         }}
       />
+      {picker && (
+        <SongPicker
+          title="Bæta við úr safninu"
+          songs={songs}
+          clips={clips}
+          onSong={(song) => void addFromLibrary(song.id)}
+          onClip={(clip) => void addFromLibrary(clip.songId, { start: clip.start, end: clip.end })}
+          onClose={() => setPicker(false)}
+        />
+      )}
       {toast && (
         <div className="tk-toast" role="status">
           {toast}

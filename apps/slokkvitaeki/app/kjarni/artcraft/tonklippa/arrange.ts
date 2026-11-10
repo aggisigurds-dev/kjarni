@@ -13,7 +13,13 @@ export type Part = {
   gainDb: number;
   /** Lengd samskeyta við bútinn á undan (sek), miðjuð á skilunum. 0 = hreinn skurður. */
   xfade: number;
+  /** Áhrifshljóð á samskeytunum við bútinn á undan (felur skiptin milli laga). */
+  fx?: SeamFx;
 };
+
+/** riser = „svúss“ sem rís að skilunum; impact = högg á skilunum. */
+export type SeamFx = "riser" | "impact" | "both";
+export const SEAM_FX: SeamFx[] = ["riser", "impact", "both"];
 
 export type Marker = { id: string; t: number; label: string };
 
@@ -164,6 +170,14 @@ export function setXfade(arr: Arrangement, index: number, xfade: number): Arrang
   return withPart(arr, index, (p) => ({ ...p, xfade: clamp(xfade, 0, XFADE_MAX) }));
 }
 
+export function setFx(arr: Arrangement, index: number, fx: SeamFx | undefined): Arrangement {
+  return withPart(arr, index, (p) => {
+    const { fx: _old, ...rest } = p;
+    void _old;
+    return fx ? { ...rest, fx } : rest;
+  });
+}
+
 export function addPart(arr: Arrangement, part: Part, index = arr.parts.length): Arrangement {
   const parts = arr.parts.slice();
   parts.splice(clamp(index, 0, parts.length), 0, part);
@@ -201,6 +215,7 @@ export function splitAt(arr: Arrangement, t: number, newId: string): { arr: Arra
   if (cut - p.start < MIN_PART * p.tempo || p.end - cut < MIN_PART * p.tempo) return null;
   const first: Part = { ...p, end: cut };
   const second: Part = { ...p, id: newId, start: cut, xfade: 0 };
+  delete second.fx;
   const parts = arr.parts.slice();
   parts.splice(at.index, 1, first, second);
   return { arr: { ...arr, parts }, index: at.index + 1 };
@@ -366,6 +381,7 @@ export function normalizeArrangement(raw: unknown, trackDurations: Record<string
       tempo,
       gainDb: num(p.gainDb, 0, GAIN_MIN, GAIN_MAX),
       xfade: num(p.xfade, 0, 0, XFADE_MAX),
+      ...(SEAM_FX.includes(p.fx as SeamFx) ? { fx: p.fx as SeamFx } : {}),
     });
   }
   const markers: Marker[] = [];

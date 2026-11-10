@@ -70,19 +70,28 @@ export type Analysis = {
   beats: Float32Array;
   /** Sterk slög / áherslur, raðað eftir tíma. */
   accents: Accent[];
+  /** Hápunktar lagsins: stór högg og staðir þar sem lagið „lyftist“ (t.d.
+   *  viðlag byrjar), raðað eftir tíma; score 0–1. */
+  highlights: Highlight[];
 };
+
+export type Highlight = { t: number; score: number };
 
 export const STEADY_ENOUGH = 0.12;
 
 /** „Nýtt hljóð“-ferill, 100 gildi á sek: hversu mikið orkan stekkur upp í
  *  bassa, diskanti og heild. */
-export function onsetEnvelope(channels: Samples[], scale: number, sampleRate: number): { env: Float32Array; fps: number } {
+export function onsetEnvelope(
+  channels: Samples[],
+  scale: number,
+  sampleRate: number,
+): { env: Float32Array; fps: number; energy: Float32Array } {
   const len = channels[0]?.length ?? 0;
   const hop = Math.max(1, Math.round(sampleRate / 100));
   const fps = sampleRate / hop;
   const frames = Math.floor(len / hop);
   const env = new Float32Array(frames);
-  if (frames < 4) return { env, fps };
+  if (frames < 4) return { env, fps, energy: new Float32Array(frames) };
   const nch = channels.length || 1;
   const aLow = 1 - Math.exp((-2 * Math.PI * 150) / sampleRate);
   const aHigh = 1 - Math.exp((-2 * Math.PI * 2500) / sampleRate);
@@ -139,7 +148,7 @@ export function onsetEnvelope(channels: Samples[], scale: number, sampleRate: nu
   for (let f = 0; f < frames; f++) sq += out[f] * out[f];
   const sd = Math.sqrt(sq / frames);
   if (sd > 1e-9) for (let f = 0; f < frames; f++) out[f] /= sd;
-  return { env: out, fps };
+  return { env: out, fps, energy: eAll };
 }
 
 /** Lengd slags (í römmum) úr sjálffylgni ferilsins, 60–200 slög/mín. */
@@ -258,11 +267,55 @@ export function findAccents(env: Float32Array, fps: number): Accent[] {
   return out;
 }
 
+/** Hápunktar lagsins: sterk slög sem vega þyngra ef lagið er háværara á eftir
+ *  en á undan (viðlag eða „drop“ byrjar) og ef kaflinn er hávær. Mest `max`,
+ *  með minnst `spacing` sek á milli. */
+export function findHighlights(env: Float32Array, energy: Float32Array, fps: number, max = 40, spacing = 1.5): Highlight[] {
+  const n = Math.min(env.length, energy.length);
+  if (n < 8) return [];
+  const prefix = new Float64Array(n + 1);
+  let maxEnv = 0;
+  for (let f = 0; f < n; f++) {
+    prefix[f + 1] = prefix[f] + energy[f];
+    if (env[f] > maxEnv) maxEnv = env[f];
+  }
+  if (maxEnv <= 0) return [];
+  const mean = (a: number, b: number) => {
+    const lo = Math.max(0, a);
+    const hi = Math.min(n, b);
+    return hi > lo ? (prefix[hi] - prefix[lo]) / (hi - lo) : 0;
+  };
+  const win = Math.max(1, Math.round(3 * fps));
+  let loudest = 0;
+  for (let f = 0; f < n; f += win) loudest = Math.max(loudest, mean(f, f + win));
+  if (loudest <= 0) return [];
+  const raw: Highlight[] = [];
+  for (const a of findAccents(env, fps)) {
+    const f = Math.round(a.t * fps);
+    // Upphaf og endir lagsins eru ekki hápunktar: þar er ekkert á undan / eftir til að bera saman við.
+    if (f < fps || f > n - 2 * fps) continue;
+    const before = mean(f - win, f);
+    const after = mean(f, f + win);
+    const lift = Math.max(0, Math.min(3, Math.log2((after + loudest * 1e-4) / (before + loudest * 1e-4))));
+    const loud = Math.sqrt(after / loudest);
+    raw.push({ t: a.t, score: a.strength * (1 + 0.9 * lift) * (0.45 + 0.55 * loud) });
+  }
+  raw.sort((x, y) => y.score - x.score);
+  const picked: Highlight[] = [];
+  for (const h of raw) {
+    if (picked.length >= max) break;
+    if (picked.every((p) => Math.abs(p.t - h.t) >= spacing)) picked.push(h);
+  }
+  const top = picked[0]?.score ?? 1;
+  return picked.map((h) => ({ t: h.t, score: h.score / top })).sort((x, y) => x.t - y.t);
+}
+
 export function analyzeTrack(channels: Samples[], scale: number, sampleRate: number): Analysis {
-  const { env, fps } = onsetEnvelope(channels, scale, sampleRate);
+  const { env, fps, energy } = onsetEnvelope(channels, scale, sampleRate);
   const accents = findAccents(env, fps);
+  const highlights = findHighlights(env, energy, fps);
   const { period, steady } = estimatePeriod(env, fps);
-  if (!period) return { bpm: 0, steady: 0, beats: new Float32Array(0), accents };
+  if (!period) return { bpm: 0, steady: 0, beats: new Float32Array(0), accents, highlights };
   const frames = trackBeats(env, period);
   const beats = Float32Array.from(frames, (f) => f / fps);
   // Slög/mín úr miðgildi bilanna (fylgir því sem slagaleitin fann í raun).
@@ -272,7 +325,7 @@ export function analyzeTrack(channels: Samples[], scale: number, sampleRate: num
     const med = gaps[gaps.length >> 1];
     if (med > 0) bpm = 60 / med;
   }
-  return { bpm, steady, beats, accents };
+  return { bpm, steady, beats, accents, highlights };
 }
 
 /** Byrjun (sek) á líflegasta samfellda kaflanum af lengdinni `seconds`. */

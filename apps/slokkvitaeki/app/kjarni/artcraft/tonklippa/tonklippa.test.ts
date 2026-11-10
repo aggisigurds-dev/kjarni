@@ -16,6 +16,7 @@ import {
   parseTime,
   removeTrack,
   setEnd,
+  setFx,
   setStart,
   setTempo,
   slip,
@@ -29,9 +30,31 @@ import {
   type Part,
 } from "./arrange.ts";
 import { analyzeTrack, buildPeaks, columnPeaks, liveliestWindow } from "./analyze.ts";
+import { addDays, eventsOn, greeting, longDate, monthGrid, shortDate, timeRange, upcoming, weekdayIndex, ymd } from "./calendar.ts";
+import {
+  clearDone,
+  emptyDoc,
+  mergeDocs,
+  normalizeDoc,
+  putClip,
+  putEvent,
+  putSkater,
+  putSong,
+  putTodo,
+  removeEvent,
+  removeSkater,
+  removeSong,
+  sortedTodos,
+  waveSummary,
+  type CoachEvent,
+  type Skater,
+  type Song,
+} from "./library.ts";
+import { bestMatches, songFit } from "./match.ts";
 import { encodeMp3 } from "./mp3.ts";
 import { extract, renderMix, type TrackAudio } from "./render.ts";
 import { timeStretch } from "./stretch.ts";
+import { trackNameFromFile } from "./tracks.ts";
 import { encodeWav } from "./wav.ts";
 
 const SR = 44100;
@@ -341,4 +364,205 @@ test("MP3 export produces a real MPEG stream of the right length", async () => {
   let at = 0;
   while (at < mp3.length - 1 && !(mp3[at] === 0xff && (mp3[at + 1] & 0xe0) === 0xe0)) at++;
   assert.ok(at < 2000, "found an MPEG frame sync near the start");
+});
+
+// ------------------------------------------------------------------ hápunktar lags og besti kaflinn
+
+test("song highlights: the big hits and the place where the song lifts stand out", () => {
+  // 0–12 s: lágvært með mjúkum slögum; á 12,0 s byrjar hávær kafli; stór högg á 20 og 27 s.
+  const seconds = 34;
+  const x = new Float32Array(seconds * SR);
+  let seed = 3;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x3fffffff) - 1;
+  for (let i = 0; i < x.length; i++) x[i] = (i / SR < 12 ? 0.03 : 0.16) * Math.sin((2 * Math.PI * 220 * i) / SR);
+  for (let t = 0.5; t < seconds - 0.2; t += 0.5) {
+    const at = Math.round(t * SR);
+    const amp = t < 12 ? 0.12 : 0.4;
+    for (let i = 0; i < 2000; i++) x[at + i] += amp * Math.exp(-i / 320) * Math.sin((2 * Math.PI * 80 * i) / SR);
+  }
+  for (const t of [20, 27]) {
+    const at = Math.round(t * SR);
+    for (let i = 0; i < 26000; i++) x[at + i] += 0.5 * Math.exp(-i / 5000) * rnd();
+  }
+  const { highlights } = analyzeTrack([x], 1, SR);
+  assert.ok(highlights.length >= 3 && highlights.length <= 40);
+  const top = highlights.slice().sort((a, b) => b.score - a.score).slice(0, 3).map((h) => h.t).sort((a, b) => a - b);
+  near(top[0], 12, 0.06, "lift");
+  near(top[1], 20, 0.06, "hit 1");
+  near(top[2], 27, 0.06, "hit 2");
+  for (let i = 1; i < highlights.length; i++) assert.ok(highlights[i].t - highlights[i - 1].t >= 1.49, "spaced out");
+  assert.equal(Math.max(...highlights.map((h) => h.score)), 1);
+});
+
+test("best match: the stretch of the song whose highlights land on the dance's highlights", () => {
+  const highlights = [8, 10, 25, 40.5, 62, 71].map((t) => ({ t, score: t === 8 || t === 71 ? 0.3 : 1 }));
+  const dance = [5, 20, 35.5];
+  const [best, second] = bestMatches(highlights, dance, 50, 90);
+  near(best.start, 5);
+  assert.deepEqual([best.hits, best.total], [3, 3]);
+  assert.ok(best.score > 0.95);
+  assert.ok(second.hits < 3 && Math.abs(second.start - best.start) >= 2);
+  // Hraðari bútur: sami staður í dansinum er lengra inni í laginu.
+  near(bestMatches([{ t: 11, score: 1 }, { t: 27.5, score: 1 }], [5, 20], 40, 90, 1.1)[0].start, 5.5);
+  assert.deepEqual(bestMatches(highlights, [], 50, 90), [], "no dance highlights → nothing to match");
+  assert.deepEqual(bestMatches(highlights, dance, 50, 30), [], "song shorter than the routine");
+  near(bestMatches(highlights, [1], 50, 90)[0].start + 50 <= 90 ? 1 : 0, 1, 0, "stays inside the song");
+  assert.equal(songFit(undefined, dance, 50, 90), null);
+  assert.ok(songFit(highlights, dance, 50, 90)!.score > songFit([{ t: 3, score: 1 }], dance, 50, 90)!.score);
+});
+
+test("seam effects: a riser before the seam and an impact on it, the same every time", () => {
+  const a = sine(300, 20, 0.2);
+  const tracks = new Map([["A", track([a])]]);
+  const plain = routine(part("a", "A", 0, 5), part("b", "A", 10, 15));
+  const dry = renderMix(plain, tracks, SR).channels[0];
+  const riser = renderMix(setFx(plain, 1, "riser"), tracks, SR).channels[0];
+  const impact = renderMix(setFx(plain, 1, "impact"), tracks, SR).channels;
+  const diff = (x: Float32Array, from: number, to: number) => {
+    let s = 0;
+    for (let i = Math.round(from * SR); i < Math.round(to * SR); i++) s += (x[i] - dry[i]) ** 2;
+    return Math.sqrt(s / ((to - from) * SR));
+  };
+  assert.ok(diff(riser, 4.5, 5) > 0.02, "riser is loud just before the seam");
+  assert.ok(diff(riser, 4.5, 5) > 3 * diff(riser, 3.4, 3.9), "and builds up");
+  assert.equal(diff(riser, 5.05, 6), 0, "nothing after the seam");
+  assert.equal(diff(impact[0], 3, 4.99), 0, "impact starts on the seam");
+  assert.ok(diff(impact[0], 5, 5.3) > 0.1);
+  assert.ok(diff(impact[0], 6.2, 6.5) < diff(impact[0], 5, 5.3) / 4, "and dies away");
+  assert.deepEqual(renderMix(setFx(plain, 1, "both"), tracks, SR).channels[1], renderMix(setFx(plain, 1, "both"), tracks, SR).channels[1]);
+  assert.equal(setFx(setFx(plain, 1, "both"), 1, undefined).parts[1].fx, undefined);
+  assert.equal(splitAt(setFx(plain, 1, "riser"), 7, "c")!.arr.parts[2].fx, undefined, "only the first half keeps the effect");
+  assert.equal(normalizeArrangement({ parts: [{ id: "a", trackId: "A", start: 0, end: 5, fx: "bull" }] }, { A: 20 }).parts[0].fx, undefined);
+});
+
+// ------------------------------------------------------------------ safn og iðkendur
+
+const song = (id: string, at: number, extra: Partial<Song> = {}): Song => ({ id, name: `Lag ${id}`, duration: 180, at, ...extra });
+const skater = (id: string, at: number, extra: Partial<Skater> = {}): Skater => ({ id, name: `Iðkandi ${id}`, at, photoAt: 0, targetMin: 80, targetMax: 100, markers: [], songIds: [], ...extra });
+
+test("library merge: the newest change to each item wins, and deletions stick", () => {
+  let phone = putSong(putSong(emptyDoc(), song("a", 1)), song("b", 1));
+  let tablet = phone;
+  phone = putSong(phone, song("a", 5, { fav: true }));
+  tablet = putSong(tablet, song("a", 3, { name: "Gamalt heiti" }));
+  tablet = putSong(tablet, song("c", 4));
+  tablet = removeSong(tablet, "b", 6);
+  const merged = mergeDocs(phone, tablet);
+  assert.deepEqual(merged.songs.map((s) => s.id), ["a", "c"]);
+  assert.equal(merged.songs[0].fav, true, "newer edit of a wins");
+  assert.ok(sameDocIds(mergeDocs(tablet, phone), merged), "order of merging does not matter");
+  // Eytt en svo bætt við aftur seinna: kemur til baka.
+  assert.deepEqual(mergeDocs(merged, putSong(emptyDoc(), song("b", 9))).songs.map((s) => s.id), ["a", "b", "c"]);
+});
+function sameDocIds(a: ReturnType<typeof emptyDoc>, b: ReturnType<typeof emptyDoc>) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+test("removing a song takes its clips and skater links with it; skaters are cleaned on save", () => {
+  let doc = putSong(putSong(emptyDoc(), song("a", 1)), song("b", 1));
+  doc = putClip(doc, { id: "k1", songId: "a", name: "Viðlagið", start: 40, end: 70, at: 2 });
+  doc = putClip(doc, { id: "k2", songId: "b", name: "Byrjun", start: 0, end: 20, at: 2 });
+  doc = putSkater(doc, skater("s1", 2, { name: "  Anna  ", songIds: ["a", "b", "a"], markers: [{ t: 30.04, label: "Stökk" }, { t: 5, label: "" }, { t: -1, label: "x" }], targetMin: 90, targetMax: 80 }));
+  const anna = doc.skaters[0];
+  assert.equal(anna.name, "Anna");
+  assert.deepEqual(anna.songIds, ["a", "b"]);
+  assert.deepEqual(anna.markers, [{ t: 5, label: "" }, { t: 30, label: "Stökk" }]);
+  assert.equal(anna.targetMax, 90);
+  doc = removeSong(doc, "a", 5);
+  assert.deepEqual(doc.clips.map((c) => c.id), ["k2"]);
+  assert.deepEqual(doc.skaters[0].songIds, ["b"]);
+  assert.ok(doc.gone.some((g) => g.id === "k1") && doc.gone.some((g) => g.id === "a"));
+  // Annað tæki á enn búta úr eydda laginu: þeir koma ekki aftur.
+  const stale = putClip(putSong(emptyDoc(), song("a", 1)), { id: "k1", songId: "a", name: "Viðlagið", start: 40, end: 70, at: 2 });
+  assert.deepEqual(mergeDocs(doc, stale).clips.map((c) => c.id), ["k2"]);
+  assert.equal(removeSkater(doc, "s1", 9).skaters.length, 0);
+});
+
+test("stored library data is cleaned, and waveforms shrink for lists", () => {
+  const doc = normalizeDoc({
+    songs: [song("a", 1), { id: "bad" }, null],
+    clips: [{ id: "k", songId: "a", name: "x", start: 5, end: 9, at: 1 }, { id: "k2", songId: "gone", start: 0, end: 1, at: 1 }, { id: "k3", songId: "a", start: 9, end: 5, at: 1 }],
+    skaters: [{ id: "s", name: "Eva", at: 3, markers: [{ t: 4 }, { t: "x" }], songIds: ["a", 7] }],
+    gone: [{ id: "z", at: 2 }, { id: 5 }],
+  });
+  assert.deepEqual([doc.songs.length, doc.clips.length, doc.skaters.length, doc.gone.length], [1, 1, 1, 1]);
+  assert.deepEqual([doc.events, doc.todos], [[], []], "older data without a calendar still loads");
+  assert.deepEqual(doc.skaters[0], { id: "s", name: "Eva", at: 3, photoAt: 0, targetMin: 72, targetMax: 84, markers: [{ t: 4, label: "" }], songIds: ["a"] });
+  assert.deepEqual(normalizeDoc("rusl"), emptyDoc());
+  const wave = waveSummary(Uint8Array.from([0, 255, 128, 0, 0, 64, 0, 0]), 4);
+  assert.deepEqual(wave, [99, 50, 25, 0]);
+});
+
+// ------------------------------------------------------------------ dagatal og verkefni
+
+const event = (id: string, date: string, extra: Partial<CoachEvent> = {}): CoachEvent => ({ id, at: 1, title: `Æfing ${id}`, date, kind: "aefing", skaterIds: [], ...extra });
+
+test("calendar: month grid starts on Monday and dates never slip", () => {
+  // Nóvember 2026 byrjar á sunnudegi → fyrsta vikan er 26. okt.–1. nóv.
+  const nov = monthGrid(2026, 10);
+  assert.equal(nov.length, 6);
+  assert.deepEqual(nov[0].map((d) => d.day), [26, 27, 28, 29, 30, 31, 1]);
+  assert.deepEqual(nov[0].map((d) => d.inMonth), [false, false, false, false, false, false, true]);
+  assert.equal(nov[5][0].date, "2026-11-30");
+  assert.equal(nov[5][6].date, "2026-12-06");
+  // Febrúar 2027 byrjar á mánudegi og er nákvæmlega fjórar vikur.
+  const feb = monthGrid(2027, 1);
+  assert.equal(feb.length, 4);
+  assert.ok(feb.flat().every((d) => d.inMonth));
+  assert.equal(monthGrid(2028, 1).flat().filter((d) => d.inMonth).length, 29, "leap year");
+  assert.equal(weekdayIndex("2026-11-10"), 1, "a Tuesday");
+  assert.equal(addDays("2026-12-31", 1), "2027-01-01");
+  assert.equal(addDays("2026-03-01", -1), "2026-02-28");
+  assert.equal(ymd(new Date(2026, 10, 9, 23, 59)), "2026-11-09");
+});
+
+test("calendar: Icelandic dates, time ranges and what is coming up", () => {
+  assert.equal(longDate("2026-11-10"), "þriðjudagur 10. nóvember");
+  assert.equal(shortDate("2026-11-10", "2026-11-10"), "í dag");
+  assert.equal(shortDate("2026-11-11", "2026-11-10"), "á morgun");
+  assert.equal(shortDate("2026-11-14", "2026-11-10"), "lau 14. nóv.");
+  assert.equal(timeRange({ time: "16:30", minutes: 45 }), "16:30–17:15");
+  assert.equal(timeRange({ time: "23:30", minutes: 60 }), "23:30–00:30");
+  assert.equal(timeRange({ time: "09:00" }), "09:00");
+  assert.equal(timeRange({}), "allan daginn");
+  assert.deepEqual([greeting(7), greeting(14), greeting(21)], ["Góðan daginn", "Góðan dag", "Gott kvöld"]);
+  let doc = emptyDoc();
+  doc = putEvent(doc, event("c", "2026-11-12", { time: "17:00" }));
+  doc = putEvent(doc, event("a", "2026-11-10", { time: "16:00", title: "  Svellið  ", skaterIds: ["s1", "s1"], minutes: 0, note: " " }));
+  doc = putEvent(doc, event("b", "2026-11-10"));
+  doc = putEvent(doc, event("d", "2026-11-12", { time: "09:00", kind: "keppni" }));
+  assert.deepEqual(doc.events.map((e) => e.id), ["b", "a", "d", "c"], "by day, all-day first, then by time");
+  const a = doc.events[1];
+  assert.deepEqual([a.title, a.skaterIds, a.minutes, a.note], ["Svellið", ["s1"], undefined, undefined]);
+  assert.deepEqual(eventsOn(doc.events, "2026-11-10").map((e) => e.id), ["b", "a"]);
+  assert.deepEqual(upcoming(doc.events, "2026-11-10").map((e) => e.id), ["d", "c"]);
+  assert.deepEqual(removeEvent(doc, "a", 9).events.map((e) => e.id), ["b", "d", "c"]);
+});
+
+test("todos and events merge across devices like everything else", () => {
+  let phone = putTodo(putTodo(emptyDoc(), { id: "t1", at: 1, text: " Panta svellið ", done: false }), { id: "t2", at: 2, text: "Prenta lista", done: false });
+  let tablet = phone;
+  phone = putTodo(phone, { id: "t1", at: 5, text: "Panta svellið", done: true });
+  tablet = putTodo(tablet, { id: "t3", at: 4, text: "Kaupa límband", done: false });
+  tablet = putEvent(tablet, event("e1", "2026-11-20"));
+  const merged = mergeDocs(phone, tablet);
+  assert.deepEqual(sortedTodos(merged.todos).map((t) => [t.id, t.done]), [["t3", false], ["t2", false], ["t1", true]]);
+  assert.equal(merged.todos.find((t) => t.id === "t1")!.text, "Panta svellið");
+  assert.equal(merged.events.length, 1);
+  const cleared = clearDone(merged, 9);
+  assert.deepEqual(cleared.todos.map((t) => t.id).sort(), ["t2", "t3"]);
+  assert.deepEqual(mergeDocs(cleared, phone).todos.map((t) => t.id).sort(), ["t2", "t3"], "a cleared todo does not come back from the other device");
+  assert.equal(clearDone(cleared, 10), cleared);
+  const loaded = normalizeDoc({ events: [event("ok", "2026-01-05", { time: "8:00" }), { id: "x", at: 1, title: "t", date: "5. jan" }], todos: [{ id: "t", at: 1, text: "a", done: "yes" }, { id: 4 }] });
+  assert.deepEqual(loaded.events.map((e) => [e.id, e.time]), [["ok", undefined]]);
+  assert.deepEqual(loaded.todos, [{ id: "t", at: 1, text: "a", done: false }]);
+});
+
+test("song names are tidied from file names", () => {
+  assert.equal(trackNameFromFile("04.Kickstart_My_Heart.mp3"), "Kickstart My Heart");
+  assert.equal(trackNameFromFile("01 - Lagið mitt.m4a"), "Lagið mitt");
+  assert.equal(trackNameFromFile("Ramstein_-_Du_Hast_Techno_Remix.mp3"), "Ramstein - Du Hast Techno Remix");
+  assert.equal(trackNameFromFile("99 Luftballons.mp3"), "99 Luftballons", "a number that is part of the title stays");
+  assert.equal(trackNameFromFile("7.mp3"), "7");
+  assert.equal(trackNameFromFile(".mp3"), "Lag");
 });
