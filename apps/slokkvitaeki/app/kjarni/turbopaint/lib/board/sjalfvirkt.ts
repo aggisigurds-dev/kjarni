@@ -47,7 +47,7 @@ import type { BoardObject, ImageObject, LineObject } from "./types";
 import { bladIBordi, gilturSkurdur, saekjaUttekt, skurdurIBord, veggirIBord, veggirIFrum, vorpunMyndar, type LeidrettAf, type UttektHaed } from "./uttekt";
 import { useUttektGogn } from "./uttekt-gogn";
 import { hurdirBogarUrVegghjalpi, saekjaVegghjalp } from "./vegghjalp";
-import { husKassi, husUtlina, hreinsaVeggi, lesaHandUtlinu, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
+import { husKassi, husUtlina, hreinsaVeggi, kassiUtlinu, lesaHandUtlinu, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
 import { heimsPunktar, nyGreiningarLota, nyrVeggur, sameinaVidVeggi } from "./veggja-ritill";
 import { ritillDilarAMetra } from "./veggja-ritill-adgerdir";
 import { bladDilarAMetra, bladSlod, pdfDilarAMetra } from "./hus3d";
@@ -592,6 +592,12 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   try {
     const skH = gilturSkurdur(t.skurdur ?? null);
     const heilt = !skH || skH.w * skH.h >= 0.9 * frum.b * frum.h;
+    // Húsið sem Agnar teiknaði (uttekt.husUtlina) ræður skurðinum. Fyrri skurður hæðarinnar víkur — líka „handvalinn“
+    // (sjalf === false), því sjálfvirka verkferlið sjálft skrifar skurð sinn þannig (uttekt.ts) og Breiðhöfði 13 bar þá
+    // 10.11.2026 án þess að nokkur hefði skorið í höndunum. Útlínan er nýjasta og skýrasta handverkið; aðeins skorin mynd
+    // (myndSkurdur, fyrsta greinin) og leiðrétt hæð (veggir Agnars) standa framar.
+    const handKassi = t.husUtlina ? kassiUtlinu(t.husUtlina) : null;
+    const maSkeraAdHusi = !!handKassi;
     if (!veggjaHopur) {
       ljuka("skurdur", SLEPPT, "sleppt");
     } else if (t.myndSkurdur) {
@@ -599,6 +605,17 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
     } else if (handLeidrett) {
       // Leiðrétt hæð: nýr skurður gæti klippt veggi Agnars í 3D (383 klippaButa) — hann er aldrei snertur.
       ljuka("skurdur", "Hæðin er leiðrétt í höndunum — skurðurinn heldur sér", "sleppt");
+    } else if (maSkeraAdHusi) {
+      const k = handKassi!;
+      const blad = bladIBordi(p0, frum);
+      const fx = (x: number) => Math.max(0, Math.min(frum.b, ((x - blad.x) / blad.width) * frum.b));
+      const fy = (y: number) => Math.max(0, Math.min(frum.h, ((y - blad.y) / blad.height) * frum.h));
+      const sk = { x: Math.round(fx(k.x0)), y: Math.round(fy(k.y0)), w: Math.round(fx(k.x1) - fx(k.x0)), h: Math.round(fy(k.y1) - fy(k.y0)) };
+      bord().patchObject(planId, { uttekt: { ...t, skurdur: sk, skurdurSjalfvirkt: true } } as Partial<BoardObject>, false);
+      skurdurFundinn = true;
+      const r = skurdurIBord(sk, p0, frum, null);
+      if (r && deps.ramma) deps.ramma(r);
+      ljuka("skurdur", `Skorið að húsinu sem þú teiknaðir: ${m2((k.x1 - k.x0) / dpm)} × ${m2((k.y1 - k.y0) / dpm)} m (2,5 % spássía)`);
     } else if (!heilt) {
       ljuka("skurdur", `Skurður hæðarinnar heldur sér (${m2((skH!.w / frum.b) * (bladIBordi(p0, frum).width / dpm))} × ${m2((skH!.h / frum.h) * (bladIBordi(p0, frum).height / dpm))} m)`, "sleppt");
     } else {

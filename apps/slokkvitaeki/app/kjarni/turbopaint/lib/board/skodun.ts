@@ -178,9 +178,13 @@ interface SkodunState {
   vistar: boolean;
   /** Drögin sem skoðunin opnaðist með (fingur + myndin sem tillögurnar fóru á) — „Vista sem borð" merkir myndina. */
   drog: { fingur: string; planId: string } | null;
+  /** Úttektarteikning (`?uttekt=`) opnuð í skoðun (Agnar 06.11.2026: „ef maður opnar eitthvað, þá verður borð sem er bara
+   * þarna … tekur smá tíma að fara inn í og eyða“): ekkert borð verður til fyrr en eitthvað er teiknað/fært/merkt eða
+   * „Vista í úttekt“ ýtt — þá verður skoðunin að borði sjálfkrafa (WhiteboardApp). */
+  uttekt: boolean;
 }
 
-export const useSkodun = create<SkodunState>(() => ({ virk: false, titill: "", slod: "", grunnur: null, vistar: false, drog: null }));
+export const useSkodun = create<SkodunState>(() => ({ virk: false, titill: "", slod: "", grunnur: null, vistar: false, drog: null, uttekt: false }));
 
 export function erSkodun(): boolean {
   return useSkodun.getState().virk;
