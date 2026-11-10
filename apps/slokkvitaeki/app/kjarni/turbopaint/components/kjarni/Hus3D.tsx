@@ -400,19 +400,36 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           if (!lifir) return;
           let golfTx: Three | null = null;
           if (golfAferdId) {
+            // Áferðin er BÖKUÐ á einn striga yfir allt gólfið (flísin endurtekin með createPattern) í stað texture.repeat:
+            // three r128 (cdnjs) notar uv-vörpun `map` líka á `alphaMap`, svo endurtekin áferð endurtók húsgrímuna og
+            // gólfið hvarf (mælt 10.11.2026 á framleiðslu: parket valið → ekkert gólf).
+            const gw = hd.golf.x1 - hd.golf.x0, gh = hd.golf.y1 - hd.golf.y0;
+            const sk = Math.min(hamarkAferdar, 2048) / Math.max(gw, gh, 1);
             const c = document.createElement("canvas");
-            c.width = 512;
-            c.height = 512;
+            c.width = Math.max(1, Math.round(gw * sk));
+            c.height = Math.max(1, Math.round(gh * sk));
+            const flis = document.createElement("canvas");
+            flis.width = 512;
+            flis.height = 512;
+            const xf = flis.getContext("2d");
             const x2 = c.getContext("2d");
-            if (x2) {
-              teiknaGolfAferd(x2, golfAferdId, 512);
+            if (x2 && xf) {
+              teiknaGolfAferd(xf, golfAferdId, 512);
+              const mynstur = x2.createPattern(flis, "repeat");
+              // ein flís nær yfir `aferdarMetrar` metra: borðdílar → strigadílar → hlutfall af 512 px flísinni
+              const k = Math.max(0.02, (aferdarMetrar(golfAferdId) * Math.max(1, metri) * sk) / 512);
+              if (mynstur) {
+                x2.save();
+                x2.scale(k, k);
+                x2.fillStyle = mynstur;
+                x2.fillRect(0, 0, c.width / k + 1, c.height / k + 1);
+                x2.restore();
+              }
               golfTx = new T.CanvasTexture(c);
-              golfTx.wrapS = T.RepeatWrapping;
-              golfTx.wrapT = T.RepeatWrapping;
-              const am = aferdarMetrar(golfAferdId) * Math.max(1, metri);
-              golfTx.repeat.set((hd.golf.x1 - hd.golf.x0) / am, (hd.golf.y1 - hd.golf.y0) / am);
               golfTx.anisotropy = 4;
             }
+            flis.width = 0;
+            flis.height = 0;
           }
           const grima = aferd ? null : husGrima(T, hd, metri);
           const gG = new T.PlaneGeometry(hd.golf.x1 - hd.golf.x0, hd.golf.y1 - hd.golf.y0);
