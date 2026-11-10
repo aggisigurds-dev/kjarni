@@ -18,6 +18,9 @@ type Skilabod =
       h: number;
       frum: { b: number; h: number };
       vorpun: { kpx: number; kpy: number; fx: number; fy: number };
+      /** Birtuskilasía blaðsins (sheet-contrast.ts). Sé hún gefin og OffscreenCanvas til er myndin síuð og þjöppuð í JPEG HÉR
+       * og skilað sem `blob` — annars fara dílarnir (`px`) á aðalþráðinn eins og áður. */
+      sia?: string;
     };
 
 const svid = self as unknown as {
@@ -76,7 +79,32 @@ svid.onmessage = (e) => {
         svid.postMessage({ id: q.id, framvinda: hl })
       );
       M = null; // frumritið þarf ekki meir — losar ~35–70 MB
-      svid.postMessage({ id: q.id, w: q.w, h: q.h, px: px.buffer }, [px.buffer]);
+      const skilaPx = () => svid.postMessage({ id: q.id, w: q.w, h: q.h, px: px.buffer }, [px.buffer]);
+      // Lokaskrefið hér (mælt 10.11.2026 á Breiðhöfða 13: 258/1041/538 ms verk á aðalþræði við putImageData + síu + JPEG).
+      if (q.sia && typeof OffscreenCanvas !== "undefined") {
+        const sia = q.sia;
+        void (async () => {
+          try {
+            const c = new OffscreenCanvas(q.w, q.h);
+            const cx = c.getContext("2d");
+            const tmp = new OffscreenCanvas(q.w, q.h);
+            const tx = tmp.getContext("2d");
+            if (!cx || !tx || !("filter" in tx)) throw new Error("sía ekki í boði í þræði");
+            cx.putImageData(new ImageData(new Uint8ClampedArray(px.buffer as ArrayBuffer), q.w, q.h), 0, 0);
+            // sama og boostSheetCanvas (sheet-contrast.ts): sían á afrit, afritið aftur á strigann
+            tx.filter = sia;
+            tx.drawImage(c, 0, 0);
+            cx.filter = "none";
+            cx.drawImage(tmp, 0, 0);
+            const blob = await c.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+            svid.postMessage({ id: q.id, w: q.w, h: q.h, blob });
+          } catch {
+            skilaPx();
+          }
+        })();
+        return;
+      }
+      skilaPx();
       return;
     }
   } catch (x) {
