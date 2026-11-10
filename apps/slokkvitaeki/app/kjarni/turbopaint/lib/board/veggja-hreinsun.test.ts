@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { kassiUtlinu } from "./veggja-hreinsun";
+
+test("kassiUtlinu: kassi handteiknaðrar útlínu með 2,5 % spássíu af lengri hlið; ógild útlína → null", () => {
+  const k = kassiUtlinu([100, 100, 300, 100, 300, 180, 100, 180]);
+  assert.ok(k);
+  assert.deepEqual(k, { x0: 95, y0: 95, x1: 305, y1: 185 });
+  assert.equal(kassiUtlinu([1, 2, 3]), null);
+  assert.equal(kassiUtlinu([5, 5, 5, 5, 5, 5]), null);
+});
 import {
   hillurButar,
   maelaSkekkju,
