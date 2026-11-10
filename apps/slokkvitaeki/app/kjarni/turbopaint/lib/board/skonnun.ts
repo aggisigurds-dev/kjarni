@@ -14,7 +14,7 @@
 
 import { canvasToBlob } from "./assets";
 import { PDF_SAFE_AREA } from "./import-limits";
-import { boostSheetCanvas } from "./sheet-contrast";
+import { boostSheetCanvas, SHEET_CONTRAST_FILTER } from "./sheet-contrast";
 import { fylgni, midgildi, rammaStaerd, snuningsKostir, type SnuningsKostur } from "./skonnun-kjarni";
 import { SLOKKVITAEKI_ROT } from "./teikn-thjonusta";
 import { IMPORT_MAX_PX, type ImportQuality } from "./types";
@@ -356,23 +356,29 @@ export async function saekjaSkarpaSkonnun(
     const stofn = rammaStaerd(b.dW, frum, IMPORT_MAX_PX[quality], PDF_SAFE_AREA);
     fv(65, `Teikna skarpa mynd ${stofn.w}×${stofn.h}…`);
     const t = await verk.senda(
-      { cmd: "teikna", o: b.o, w: stofn.w, h: stofn.h, frum, vorpun: { kpx: b.kp, kpy: b.kp, fx: hl.fx, fy: hl.fy } },
+      { cmd: "teikna", o: b.o, w: stofn.w, h: stofn.h, frum, vorpun: { kpx: b.kp, kpy: b.kp, fx: hl.fx, fy: hl.fy }, sia: SHEET_CONTRAST_FILTER },
       [],
       (h) => fv(65 + Math.round(h * 25), `Teikna skarpa mynd ${stofn.w}×${stofn.h}…`)
     );
     verk.loka();
     verk = null;
     fv(92, "Vista mynd…");
-    const c = document.createElement("canvas");
-    c.width = stofn.w;
-    c.height = stofn.h;
-    const cx = c.getContext("2d");
-    if (!cx) return vara("Gat ekki opnað canvas — JPEG notað");
-    cx.putImageData(new ImageData(new Uint8ClampedArray(t.px as ArrayBuffer), stofn.w, stofn.h), 0, 0);
-    boostSheetCanvas(c);
-    const blob = await canvasToBlob(c, "image/jpeg", 0.9);
-    c.width = 0;
-    c.height = 0;
+    let blob: Blob;
+    if (t.blob instanceof Blob) {
+      // þráðurinn síaði og þjappaði sjálfur (OffscreenCanvas) — aðalþráðurinn snertir ekki dílana
+      blob = t.blob;
+    } else {
+      const c = document.createElement("canvas");
+      c.width = stofn.w;
+      c.height = stofn.h;
+      const cx = c.getContext("2d");
+      if (!cx) return vara("Gat ekki opnað canvas — JPEG notað");
+      cx.putImageData(new ImageData(new Uint8ClampedArray(t.px as ArrayBuffer), stofn.w, stofn.h), 0, 0);
+      boostSheetCanvas(c);
+      blob = await canvasToBlob(c, "image/jpeg", 0.9);
+      c.width = 0;
+      c.height = 0;
+    }
     return {
       ok: true,
       blob,

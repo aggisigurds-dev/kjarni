@@ -50,6 +50,7 @@ import { drawingScaleFromWords, pixelsPerMeterFromScale } from "../../lib/board/
 import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
 import {
   clearBoard,
+  haettaBidOgHlada,
   listBoards,
   loadBoard,
   migrateBoardObjects,
@@ -57,6 +58,7 @@ import {
   persistBoard,
   schedulePersist,
   switchBoard,
+  takaVidBordi,
   vistaSkodunSemBord,
 } from "../../lib/board/persistence";
 import {
@@ -119,6 +121,7 @@ import {
   selectableIds,
   withLayerId,
 } from "../../lib/board/layers";
+import { lesaUtlit3D } from "../../lib/board/golfaferdir";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
 import type { BoardDocument, BoardObject, ImageObject, UttektTenging } from "../../lib/board/types";
@@ -260,11 +263,21 @@ export function WhiteboardApp() {
   // Skoðunarhamur (`?skoda=<slóð teikningar>&titill=<heiti>`, lib/board/skodun.ts): teikningin opnast í minni, ekkert
   // borð verður til fyrr en „Vista sem borð". Lesið einu sinni við ræsingu (síðan er aðeins teiknuð í vafranum).
   const [skodunBeidni] = useState(() => (typeof window === "undefined" ? null : lesaSkodunarBeidni(window.location.search, window.location.hash)));
+  // `?uttekt=<félag>&haed=<hæð>` (eða &plan=): lesið einu sinni við ræsingu — opnunarleiðin hreinsar slóðina á eftir.
+  const [uttektBeidni] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const q = new URLSearchParams(window.location.search);
+    return Number(q.get("uttekt") || 0) > 0 && !!(q.get("haed") || q.get("plan"));
+  });
   const skodunVirk = useSkodun((s) => s.virk);
   const skodunVistar = useSkodun((s) => s.vistar);
 
   useEffect(() => {
     if (skodunBeidni) opnaSkodun(skodunBeidni.titill, skodunBeidni.slod);
+    // Úttektarhæð úr Slökkvitæki-appinu: síðasta borðið er EKKI hlaðið fyrst (mælt 10.11.2026 á framleiðslu: 3,2 s frost á
+    // aðalþræðinum + niðurhal mynda borðs sem er svo hent). Biðstaða í minni; opnunarleiðin hér að neðan skiptir yfir á borð
+    // hæðarinnar (switchBoard) eða opnar hana í skoðun — og hleður síðasta borðinu aðeins ef opnunin bregst.
+    else if (uttektBeidni) opnaSkodun("Opna teikningu…", "");
     else void loadBoard();
     // Prófunar-krókur: reykprófin (tools/turbopaint-smoke.cjs) lesa raun-stöðu
     // borðsins gegnum window.__tpStore í stað þess að giska út frá DOM.
@@ -1327,7 +1340,7 @@ export function WhiteboardApp() {
         const slod = planUrl || innflutningsSlod(haed.image_url);
         if (!slod) throw new Error("Teikning hæðarinnar er upphlaðin mynd, ekki úr skjalasafni — flyttu hana inn handvirkt.");
         const til = (await listBoards()).find((b) => b.name === nafn);
-        if (til) await switchBoard(til.id);
+        if (til) await takaVidBordi(til.id, nafn);
         else {
           // 10.11.2026: ekkert borð við opnun (Agnar 06.11.2026: „helling af vistast af teikningunum sem á ekkert að vistast …
           // ef maður opnar eitthvað, þá verður borð sem er bara þarna“). Hæðin opnast í SKOÐUN (skodun.ts): borðið er aðeins í
@@ -1375,6 +1388,7 @@ export function WhiteboardApp() {
               taknEining,
               // Húsið og hallinn sem Agnar setti sjálfur lifa milli lota: útlínan er vistuð í dílum frummyndar og fer hér
               // um SÖMU vörpun og veggirnir (veggirIBord) — borðið er byggt upp á nýtt í hvert sinn sem hæðin er opnuð.
+              ...(lesaUtlit3D(haed.utlit3d) ? { utlit3d: lesaUtlit3D(haed.utlit3d) } : {}),
               ...(Array.isArray(haed.husUtlina) && haed.husUtlina.length >= 6
                 ? { husUtlina: utlinaIBord(haed.husUtlina, mynd, frum) }
                 : {}),
@@ -1434,6 +1448,8 @@ export function WhiteboardApp() {
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gat ekki opnað úttektina");
+        // Opnunin brást áður en hæðin kom á borðið: biðstaðan lögð niður og síðasta borðið hlaðið (ekki tómt „Opna teikningu…“).
+        if (erSkodun() && !useBoardStore.getState().objects.some((o) => o.type === "image")) void haettaBidOgHlada();
         if (sjalfvirkt) useSjalfvirkt.getState().set({ synilegt: true, keyrir: false, yfirlit: "Gat ekki opnað hæðina: " + (err instanceof Error ? err.message : String(err)) });
       }
     })();

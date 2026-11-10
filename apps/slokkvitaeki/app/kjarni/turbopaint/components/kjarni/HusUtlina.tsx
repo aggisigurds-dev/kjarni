@@ -18,8 +18,9 @@ import { useErSimi } from "../../lib/board/simi";
 import { useBoardStore } from "../../lib/board/store";
 import type { BoardObject, ImageObject } from "../../lib/board/types";
 import { heimsPunktar } from "../../lib/board/veggja-ritill";
-import { ritillDilarAMetra, ritillVeggir } from "../../lib/board/veggja-ritill-adgerdir";
-import { husKassi, lesaHandUtlinu, type HLina } from "../../lib/board/veggja-hreinsun";
+import { cmIDila, nyirVeggir, ritillDilarAMetra, ritillVeggir, skiptaUt } from "../../lib/board/veggja-ritill-adgerdir";
+import { useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
+import { husKassi, lesaHandUtlinu, utveggirSemVantar, type HLina } from "../../lib/board/veggja-hreinsun";
 
 type P = [number, number];
 
@@ -316,6 +317,25 @@ export function HusUtlinaStilling() {
 
   const reitur = simi ? "py-2 text-[13px]" : "py-0.5 text-[10.5px]";
 
+  // Útveggir úr útlínunni: hver hlið sem enginn veggur liggur eftir verður veggur (þykktin úr ritlinum). Eitt ⌘Z-skref.
+  const utveggirUrUtlinu = () => {
+    if (!hand) return;
+    const b = useBoardStore.getState();
+    const d = ritillDilarAMetra(b.objects, b.pixelsPerMeter);
+    // án kvarða: 1:100 á blaðinu er ágiskun ritilsins líka — þá duga 40 dílar á metra til að meta „nálægt“
+    const dpm = d && d > 0 ? d : 40;
+    const linur: HLina[] = ritillVeggir().map((o) => ({ p: heimsPunktar(o), t: o.strokeWidth, tegund: o.veggTegund }));
+    const vantar = utveggirSemVantar(hand, linur, dpm);
+    if (!vantar.length) {
+      toast.message("Veggur liggur þegar eftir öllum hliðum útlínunnar");
+      return;
+    }
+    const thykkt = cmIDila(Math.max(20, useVeggjaRitill.getState().thykktCm), d);
+    const nyir = nyirVeggir(vantar, "veggur", thykkt);
+    skiptaUt([], nyir, nyir.map((o) => o.id));
+    toast.success(`${nyir.length} ${nyir.length === 1 ? "útveggur" : "útveggir"} úr útlínunni — valdir, ⌘Z tekur þá aftur`, { duration: 3200 });
+  };
+
   const kassiVelarinnar = () => {
     const b = useBoardStore.getState();
     const d = ritillDilarAMetra(b.objects, b.pixelsPerMeter);
@@ -376,6 +396,17 @@ export function HusUtlinaStilling() {
                 <button type="button" data-veggir-hus-sjalf onClick={() => vistaUtlinu(null) && toast.message("Vélin reiknar útlínuna aftur", { duration: 1800 })} disabled={!hand} className={`rounded bg-white/10 px-2 hover:bg-white/15 disabled:opacity-40 ${reitur}`}>
                   Sjálfvirkt
                 </button>
+                {hand ? (
+                  <button
+                    type="button"
+                    data-veggir-hus-utveggir
+                    onClick={utveggirUrUtlinu}
+                    className={`rounded bg-amber-400/20 px-2 text-amber-100 hover:bg-amber-400/30 ${reitur}`}
+                    title="Býr til útveggi eftir hliðum útlínunnar þar sem enginn veggur er fyrir — fyrir hús þar sem vélin finnur ekki útveggina (hárfínar línur). Eitt skref, ⌘Z tekur það aftur."
+                  >
+                    Útveggir úr útlínu
+                  </button>
+                ) : null}
               </>
             )}
           </div>

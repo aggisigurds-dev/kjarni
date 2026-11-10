@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { kassiUtlinu } from "./veggja-hreinsun";
+import { kassiUtlinu, utveggirSemVantar } from "./veggja-hreinsun";
+
+test("utveggirSemVantar: hlið sem veggur liggur eftir er sleppt, hinar verða útveggir; hurð og þverveggur þekja ekki", () => {
+  const dpm = 50; // 50 dílar á metra
+  const utlina = [0, 0, 1000, 0, 1000, 600, 0, 600]; // 20 × 12 m
+  const veggir = [
+    { p: [10, 8, 990, 12], t: 8 }, // efri hliðin: veggur 0,2 m innan við útlínuna → þakin
+    { p: [1000, 0, 1000, 150], t: 8 }, // hægri hliðin: aðeins fjórðungur þakinn → vantar
+    { p: [500, 590, 500, 300], t: 8 }, // þverveggur sem snertir neðri hliðina — ekki samsíða → þekur ekki
+    { p: [0, 100, 0, 500], t: 8, tegund: "hurd" as const }, // hurð á vinstri hlið → þekur ekki
+  ];
+  const ut = utveggirSemVantar(utlina, veggir, dpm);
+  assert.deepEqual(ut, [
+    [1000, 0, 1000, 600],
+    [1000, 600, 0, 600],
+    [0, 600, 0, 0],
+  ]);
+  assert.deepEqual(utveggirSemVantar(utlina, [], dpm).length, 4, "engir veggir → allar fjórar hliðar");
+  assert.deepEqual(utveggirSemVantar([1, 2, 3], veggir, dpm), [], "ógild útlína");
+  assert.deepEqual(utveggirSemVantar(utlina, veggir, 0), [], "enginn kvarði");
+});
 
 test("kassiUtlinu: kassi handteiknaðrar útlínu með 2,5 % spássíu af lengri hlið; ógild útlína → null", () => {
   const k = kassiUtlinu([100, 100, 300, 100, 300, 180, 100, 180]);
