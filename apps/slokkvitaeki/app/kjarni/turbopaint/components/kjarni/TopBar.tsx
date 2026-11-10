@@ -115,6 +115,7 @@ export function TopBar({
   const quality = useBoardStore((s) => s.importQuality);
   const syncState = useBoardStore((s) => s.syncState);
   const skodun = useSkodun((s) => s.virk);
+  const skodunUttekt = useSkodun((s) => s.uttekt);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
@@ -136,7 +137,9 @@ export function TopBar({
   };
 
   const syncLook = skodun
-    ? { color: "text-amber-300", label: "Skoðun — ekki vistað (hverfur þegar glugganum er lokað)" }
+    ? skodunUttekt
+      ? { color: "text-stone-400", label: "Ekkert borð enn — verður til við fyrstu breytingu eða „Vista í úttekt“" }
+      : { color: "text-amber-300", label: "Skoðun — ekki vistað (hverfur þegar glugganum er lokað)" }
     : syncState === "synced"
       ? { color: "text-emerald-400", label: "Vistað í ský — opnast á öllum tækjum" }
       : syncState === "saving"
