@@ -16,6 +16,8 @@ export type Song = {
   name: string;
   duration: number;
   cover?: CoverStyle;
+  /** Slóð á mynd af umslagi lagsins (fundin sjálfkrafa eða valin); gengur fyrir `cover`. */
+  art?: string;
   /** Síðast breytt (ms) — ræður við sameiningu. */
   at: number;
   fav?: boolean;

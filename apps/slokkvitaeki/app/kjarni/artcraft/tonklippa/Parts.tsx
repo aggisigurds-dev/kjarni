@@ -3,7 +3,7 @@
 /** Smærri byggingareiningar Tónklippu: smátt bylgjuform með hápunktum,
  *  prófílmynd iðkanda og lagaval úr safninu. */
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Crown, Film, Flame, Music, Pause, Play, Snowflake, Star, X, Zap } from "lucide-react";
 import type { Highlight } from "./analyze";
 import { formatTime } from "./arrange";
@@ -87,12 +87,18 @@ export function Avatar({ skater, url, size = 48 }: { skater: Pick<Skater, "id" |
 const COVER_ICON: Record<CoverStyle, typeof Flame> = { eldur: Flame, is: Snowflake, neon: Zap, gull: Crown };
 
 /** Umslag lags: logi, ískristall … eða litur lagsins. Með `onPlay` er það líka spilunarhnappur. */
-export function Cover({ song, size = 52, playing, onPlay }: { song: Pick<Song, "id" | "name" | "cover">; size?: number; playing?: boolean; onPlay?: () => void }) {
+export function Cover({ song, size = 52, playing, onPlay }: { song: Pick<Song, "id" | "name" | "cover" | "art">; size?: number; playing?: boolean; onPlay?: () => void }) {
+  // Myndin af umslaginu kemur af netinu; ef hún næst ekki sést tilbúna útlitið.
+  const [failed, setFailed] = useState("");
+  const photo = song.art && failed !== song.art ? song.art : "";
+  const plainStyle = !song.cover && !photo;
   const Icon = playing ? Pause : song.cover ? COVER_ICON[song.cover] : onPlay ? Play : Music;
   const art = (
     <>
-      <Icon size={size * 0.46} fill={playing || (!song.cover && onPlay) ? "currentColor" : "none"} strokeWidth={2.2} />
-      {song.cover && onPlay && !playing && (
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {photo && <img src={photo} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(photo)} />}
+      {(!photo || playing) && <Icon size={size * 0.46} fill={playing || (plainStyle && onPlay) ? "currentColor" : "none"} strokeWidth={2.2} />}
+      {!plainStyle && onPlay && !playing && (
         <i className="tk-cover-play">
           <Play size={size * 0.24} fill="currentColor" />
         </i>
@@ -100,7 +106,7 @@ export function Cover({ song, size = 52, playing, onPlay }: { song: Pick<Song, "
     </>
   );
   const style = { width: size, height: size, borderRadius: size * 0.3, ["--tk-hue" as string]: hueOf(song.id) };
-  const cls = `tk-cover ${song.cover ?? "auto"}`;
+  const cls = `tk-cover ${song.cover ?? "auto"}${photo ? " photo" : ""}`;
   return onPlay ? (
     <button type="button" className={cls} style={style} onClick={onPlay} aria-label={playing ? "Stöðva" : `Hlusta á ${song.name}`}>
       {art}

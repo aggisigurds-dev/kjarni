@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, Cloud, CloudOff, Download, Ellipsis, Film, Flag, House, Library, Link2, ListMusic, LoaderCircle, Music, Plus, RefreshCw, Scissors, Share, Trash2, Users, X } from "lucide-react";
 import { emptyArrangement, formatTime, normalizeArrangement, type Arrangement, type Marker, type Part } from "./arrange";
 import { ymd } from "./calendar";
+import { confidentCover, searchCovers } from "./covers";
 import { EventSheet, HomeTab, PlanTab, blankEvent } from "./Coach";
 import {
   MAX_CLOUD_BYTES,
@@ -181,6 +182,11 @@ export default function TonklippaApp() {
       await saveSongBlob(fresh.id, file).catch(() => say("Gat ekki geymt lagið í tækinu — það virkar samt núna", 5000));
       updateDoc((d) => putSong(d, { id: fresh.id, name, at: Date.now(), ...songSummary(fresh) }));
       remember(fresh);
+      // Umslag fundið sjálfkrafa — aðeins sett ef heitið passar örugglega.
+      void searchCovers(name).then((hits) => {
+        const hit = confidentCover(name, hits);
+        if (hit) updateDoc((d) => (d.songs.find((s) => s.id === fresh.id && !s.art && !s.cover) ? patchSong(d, fresh.id, { art: hit.art }, Date.now()) : d));
+      });
       return fresh;
     },
     [say, updateDoc],
@@ -487,6 +493,21 @@ export default function TonklippaApp() {
     void deleteSongBlob(song.id).catch(() => undefined);
   }
 
+  /** Umslög fyrir lög sem hafa ekkert: sett þegar heitið passar örugglega. */
+  async function findCovers() {
+    const todo = docRef.current.songs.filter((s) => !s.art && !s.cover);
+    if (!todo.length) return;
+    say(todo.length === 1 ? "Leita að umslagi…" : `Leita að umslögum á ${todo.length} lög…`, 8000);
+    let found = 0;
+    for (const s of todo) {
+      const hit = confidentCover(s.name, await searchCovers(s.name));
+      if (!hit) continue;
+      found++;
+      updateDoc((d) => patchSong(d, s.id, { art: hit.art }, Date.now()));
+    }
+    say(found ? `Fann umslag á ${found} af ${todo.length}. Hin má velja undir ⋯ við lagið.` : "Fann ekkert sem passar örugglega. Veldu sjálf undir ⋯ við lagið.", 6000);
+  }
+
   async function setPhoto(skater: Skater, file: Blob | null) {
     const cur = docRef.current.skaters.find((k) => k.id === skater.id) ?? skater;
     if (!file) {
@@ -783,7 +804,18 @@ export default function TonklippaApp() {
             playing={playing}
             onPlay={(id, songId, from, to, seek) => void preview(id, songId, from, to, seek)}
             onFav={(s) => updateDoc((d) => patchSong(d, s.id, { fav: !s.fav }, Date.now()))}
-            onCover={(s, cover) => updateDoc((d) => patchSong(d, s.id, { cover }, Date.now()))}
+            onCover={(s, cover) => updateDoc((d) => patchSong(d, s.id, { cover, art: undefined }, Date.now()))}
+            onArt={(s, art) => updateDoc((d) => patchSong(d, s.id, { art }, Date.now()))}
+            onLink={(s, k) =>
+              updateDoc((d) => {
+                const cur = d.skaters.find((x) => x.id === k.id);
+                if (!cur) return d;
+                const songIds = cur.songIds.includes(s.id) ? cur.songIds.filter((id) => id !== s.id) : [...cur.songIds, s.id];
+                return putSkater(d, { ...cur, songIds, at: Date.now() });
+              })
+            }
+            onFindCovers={() => void findCovers()}
+            photos={photos}
             onDeleteSong={deleteSong}
             onDeleteClip={(c) => {
               if (window.confirm(`Eyða bútnum „${c.name}“?`)) updateDoc((d) => removeClip(d, c.id, Date.now()));

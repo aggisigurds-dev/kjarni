@@ -53,6 +53,7 @@ import {
   type Song,
 } from "./library.ts";
 import { bestMatches, songFit } from "./match.ts";
+import { artAt, confidentCover, coverQuery, parseItunes, plain } from "./covers.ts";
 import { focusList, groupOf, needsWork, splitTurns, withTurns } from "./elements.ts";
 import { encodeMp3 } from "./mp3.ts";
 import { extract, renderMix, type TrackAudio } from "./render.ts";
@@ -611,4 +612,32 @@ test("elements: names, jump rotations, and what to practise first", () => {
   assert.deepEqual(needsWork(marks).map((f) => f.label), ["Lutz", "Sitjandi snúningur"], "only grade 3 and below");
   const doc = putSkater(emptyDoc(), skater("s", 1, { markers: [{ t: 5, label: "Lutz", grade: 2 }, { t: 9, label: "Axel", grade: 9 }, { t: 12, label: "Loop", grade: 2.5 }] }));
   assert.deepEqual(doc.skaters[0].markers.map((m) => m.grade), [2, undefined, undefined], "grades are whole numbers 1–5");
+});
+
+test("covers: only a sure match is picked automatically", () => {
+  const art = (n: number) => `https://is1-ssl.mzstatic.com/image/thumb/Music/v4/${n}/100x100bb.jpg`;
+  const hits = parseItunes({
+    results: [
+      { trackName: "Enter Sandman (Hard Rock Remix)", artistName: "Power Music Workout", collectionName: "Workout", artworkUrl100: art(1) },
+      { trackName: "Kickstart My Heart", artistName: "Mötley Crüe", collectionName: "Dr. Feelgood", artworkUrl100: art(2) },
+      { trackName: "Kickstart My Heart", artistName: "Mötley Crüe", collectionName: "Dr. Feelgood", artworkUrl100: art(2) },
+      { trackName: "Du hast", artistName: "Rammstein", collectionName: "Sehnsucht", artworkUrl100: art(3) },
+      { trackName: "Illt", artistName: "x", artworkUrl100: "http://evil.example/100x100bb.jpg" },
+      { trackName: "Án myndar", artistName: "x" },
+    ],
+  });
+  assert.equal(hits.length, 3, "duplicates and anything not from the artwork host are dropped");
+  assert.equal(hits[1].art, "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/2/300x300bb.jpg");
+  assert.equal(plain("Mötley Crüe – Kickstart (Live)!"), "motley crue kickstart");
+  assert.equal(coverQuery("Rammstein – Du Hast (Techno Remix)"), "rammstein du hast");
+  assert.equal(coverQuery("Ramstein - Du Hast Techno Remix"), "ramstein du hast");
+  assert.equal(confidentCover("Kickstart My Heart", hits)?.artist, "Mötley Crüe");
+  assert.equal(confidentCover("Mötley Crüe - Kickstart My Heart (Remastered)", hits)?.album, "Dr. Feelgood");
+  assert.equal(confidentCover("Rammstein – Du Hast (Techno Remix)", hits)?.title, "Du hast");
+  assert.equal(confidentCover("Rock Remix", hits), null, "a vague name gets no cover on its own");
+  assert.equal(confidentCover("Anna keppni lag 2", hits), null);
+  assert.equal(confidentCover("Kickstart My Heart æfing", hits), null, "extra words that are not the artist → not sure");
+  assert.equal(confidentCover("", hits), null);
+  assert.equal(artAt("https://x.mzstatic.com/a/100x100bb.jpg", 600), "https://x.mzstatic.com/a/600x600bb.jpg");
+  assert.deepEqual(parseItunes(null), []);
 });

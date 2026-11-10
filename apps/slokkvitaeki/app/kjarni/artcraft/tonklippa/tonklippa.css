@@ -1628,6 +1628,7 @@
   display: flex;
   gap: 7px;
   overflow-x: auto;
+  margin-bottom: 8px;
   padding-bottom: 4px;
   scrollbar-width: none;
 }
@@ -1775,10 +1776,47 @@
   color: #4a3200 !important;
 }
 
+.tk-cover {
+  overflow: hidden;
+}
+
+.tk-cover > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tk-cover.photo > svg {
+  position: relative;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.9));
+}
+
+.tk-art-list {
+  margin-top: 8px;
+}
+
+.tk-art-list img {
+  flex: none;
+  border-radius: 12px;
+}
+
+.tk-row-who {
+  display: inline-flex;
+  margin-left: 8px;
+  vertical-align: -5px;
+}
+
+.tk-row-who .tk-avatar {
+  margin-left: -5px;
+  box-shadow: 0 0 0 2px #1b1232;
+}
+
 .tk-cover-play {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
+  right: 3px;
+  bottom: 3px;
   display: grid;
   place-items: center;
   width: 46%;

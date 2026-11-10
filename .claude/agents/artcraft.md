@@ -38,7 +38,9 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit, hápunktar lags), `match.ts` („besti
   kaflinn“: hvar hápunktar lags falla að hápunktum dansins), `library.ts` (safn/iðkendur/dagatal/
   verkefni/myndir og myndbönd — eitt skjal, sameinað atriði fyrir atriði milli tækja),
-  `calendar.ts`, `elements.ts` (heiti stökka og snúninga, einkunnir, æfingaáherslur).
+  `calendar.ts`, `elements.ts` (heiti stökka og snúninga, einkunnir, æfingaáherslur), `covers.ts`
+  (umslög fundin eftir heiti lags í opinni leit iTunes, beint úr vafranum; sjálfvirkt aðeins
+  þegar heitið passar örugglega, annars valið úr lista — aðeins slóðin er geymd).
   Myndir og myndbönd (`Media.tsx`): gallerí á iðkanda, hápunktar merktir í upptöku af dansinum
   (`DanceMarker`), og upptakan spilast í takt við tónlistina í ritlinum (flipinn „Myndband“).
   MP3 = `wasm-media-encoders` (LAME í WASM). Unnið er í IndexedDB (`kjarni-tonklippa`, virkar án

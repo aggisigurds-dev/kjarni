@@ -5,8 +5,9 @@
  *  sem gætu passað. */
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Ellipsis, Film, Music, Pause, Play, Plus, Star, Timer, Trash2, UserPlus, Video, X } from "lucide-react";
+import { Camera, Ellipsis, Film, ImageIcon, Music, Pause, Play, Plus, Star, Timer, Trash2, UserPlus, Video, X } from "lucide-react";
 import { formatTime, parseTime } from "./arrange";
+import { searchCovers, type CoverHit } from "./covers";
 import { COVERS, COVER_LABEL, putSkater, type Clip, type CoverStyle, type LibraryDoc, type Media, type Skater, type SkaterMarker, type Song } from "./library";
 import { ElementField, Stars } from "./ElementField";
 import { needsWork } from "./elements";
@@ -36,16 +37,52 @@ type LibraryProps = {
   onPlay: (id: string, songId: string, from?: number, to?: number, seek?: boolean) => void;
   onFav: (song: Song) => void;
   onCover: (song: Song, cover: CoverStyle | undefined) => void;
+  /** Mynd af umslaginu valin (eða tekin af). */
+  onArt: (song: Song, art: string | undefined) => void;
+  /** Lag tengt við iðkanda (eða tekið af honum). */
+  onLink: (song: Song, skater: Skater) => void;
+  /** Leitar að umslögum fyrir öll lög sem hafa ekkert. */
+  onFindCovers: () => void;
+  photos: Record<string, string>;
   onDeleteSong: (song: Song) => void;
   onDeleteClip: (clip: Clip) => void;
   onAddFile: () => void;
   onAddVideo: () => void;
 };
 
-export function LibraryTab({ doc, filter, onFilter, playing, onPlay, onFav, onCover, onDeleteSong, onDeleteClip, onAddFile, onAddVideo }: LibraryProps) {
+export function LibraryTab({
+  doc,
+  filter,
+  onFilter,
+  playing,
+  onPlay,
+  onFav,
+  onCover,
+  onArt,
+  onLink,
+  onFindCovers,
+  photos,
+  onDeleteSong,
+  onDeleteClip,
+  onAddFile,
+  onAddVideo,
+}: LibraryProps) {
   const [menuId, setMenuId] = useState("");
+  const [who, setWho] = useState("");
+  const [hits, setHits] = useState<{ songId: string; list: CoverHit[] | null } | null>(null);
   const menu = doc.songs.find((s) => s.id === menuId);
-  const songs = filter === "fav" ? doc.songs.filter((s) => s.fav) : doc.songs;
+  const whoSkater = doc.skaters.find((k) => k.id === who);
+  const songs = doc.songs.filter((s) => (filter === "fav" ? s.fav : true) && (whoSkater ? whoSkater.songIds.includes(s.id) : true));
+  const linkedTo = (songId: string) => doc.skaters.filter((k) => k.songIds.includes(songId));
+  const closeMenu = () => {
+    setMenuId("");
+    setHits(null);
+  };
+  async function findArt(song: Song) {
+    setHits({ songId: song.id, list: null });
+    const list = await searchCovers(song.name);
+    setHits((h) => (h && h.songId === song.id ? { songId: song.id, list } : h));
+  }
   const nameOf = (id: string) => doc.songs.find((s) => s.id === id)?.name ?? "";
   return (
     <>
@@ -95,9 +132,23 @@ export function LibraryTab({ doc, filter, onFilter, playing, onPlay, onFav, onCo
           </button>
         </div>
       </div>
+      {doc.skaters.length > 0 && doc.songs.length > 0 && (
+        <div className="tk-who">
+          <button type="button" className={`tk-chip${!whoSkater ? " on" : ""}`} onClick={() => setWho("")}>
+            Allir
+          </button>
+          {doc.skaters.map((k) => (
+            <button key={k.id} type="button" className={`tk-chip who${who === k.id ? " on" : ""}`} onClick={() => setWho(who === k.id ? "" : k.id)}>
+              <Avatar skater={k} url={photos[k.id]} size={26} /> {k.name.split(/\s+/)[0] || "Ónefndur"}
+            </button>
+          ))}
+        </div>
+      )}
       {songs.length === 0 ? (
         <p className="tk-blank">
-          {filter === "fav"
+          {whoSkater
+            ? `Ekkert lag er tengt við ${whoSkater.name || "iðkandann"} enn. Ýttu á ⋯ við lag til að tengja það.`
+            : filter === "fav"
             ? "Ekkert lag er merkt sem uppáhald enn. Ýttu á stjörnuna við lag."
             : "Safnið er tómt. Lög sem þú bætir við geymast hér og má nota aftur í hvaða rútínu sem er."}
         </p>
@@ -111,6 +162,15 @@ export function LibraryTab({ doc, filter, onFilter, playing, onPlay, onFav, onCo
                 <small>
                   {formatTime(s.duration)}
                   {s.bpm ? ` · ≈ ${s.bpm} slög/mín` : ""}
+                  {linkedTo(s.id).length > 0 && (
+                    <span className="tk-row-who" aria-label={`Tengt við: ${linkedTo(s.id).map((k) => k.name).join(", ")}`}>
+                      {linkedTo(s.id)
+                        .slice(0, 4)
+                        .map((k) => (
+                          <Avatar key={k.id} skater={k} url={photos[k.id]} size={20} />
+                        ))}
+                    </span>
+                  )}
                 </small>
                 <MiniWave song={s} onSeek={(t) => onPlay(s.id, s.id, t, undefined, true)} />
               </div>
@@ -124,40 +184,99 @@ export function LibraryTab({ doc, filter, onFilter, playing, onPlay, onFav, onCo
           ))}
         </ul>
       )}
+      {doc.songs.some((s) => !s.art && !s.cover) && (
+        <button type="button" className="tk-btn wide" onClick={onFindCovers}>
+          <ImageIcon size={16} /> Finna umslög á lög sem vantar
+        </button>
+      )}
       {doc.songs.length > 0 && <p className="tk-hint">Gylltu strikin á bylgjunni eru hápunktar lagsins — stór högg og staðir þar sem lagið lyftist. Ýttu á bylgjuna til að hlusta þaðan.</p>}
 
       {menu && (
-        <div className="tk-sheet-back" onClick={() => setMenuId("")}>
-          <div className="tk-sheet" role="dialog" aria-modal="true" aria-label={menu.name} onClick={(e) => e.stopPropagation()}>
+        <div className="tk-sheet-back" onClick={closeMenu}>
+          <div className="tk-sheet tall" role="dialog" aria-modal="true" aria-label={menu.name} onClick={(e) => e.stopPropagation()}>
             <div className="tk-sheet-head">
               <strong className="tk-ellipsis">{menu.name}</strong>
-              <button type="button" className="tk-iconbtn small" onClick={() => setMenuId("")} aria-label="Loka">
+              <button type="button" className="tk-iconbtn small" onClick={closeMenu} aria-label="Loka">
                 <X size={18} />
               </button>
             </div>
-            <span className="tk-label wide">Umslag</span>
-            <div className="tk-covers">
-              <button type="button" className={!menu.cover ? "on" : ""} onClick={() => onCover(menu, undefined)}>
-                <Cover song={{ ...menu, cover: undefined }} size={56} />
-                Litur
-              </button>
-              {COVERS.map((c) => (
-                <button type="button" key={c} className={menu.cover === c ? "on" : ""} onClick={() => onCover(menu, c)}>
-                  <Cover song={{ ...menu, cover: c }} size={56} />
-                  {COVER_LABEL[c]}
+            <div className="tk-sheet-scroll">
+              {doc.skaters.length > 0 && (
+                <>
+                  <h3>Tengt við iðkendur</h3>
+                  <div className="tk-row">
+                    {doc.skaters.map((k) => {
+                      const on = k.songIds.includes(menu.id);
+                      return (
+                        <button key={k.id} type="button" className={`tk-chip who${on ? " on" : ""}`} aria-pressed={on} onClick={() => onLink(menu, k)}>
+                          <Avatar skater={k} url={photos[k.id]} size={26} /> {k.name.split(/\s+/)[0] || "Ónefndur"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              <h3>Umslag</h3>
+              <div className="tk-covers">
+                {menu.art && (
+                  <button type="button" className="on" onClick={() => onArt(menu, undefined)} aria-label="Taka myndina af">
+                    <Cover song={menu} size={56} />
+                    Mynd ✕
+                  </button>
+                )}
+                <button type="button" className={!menu.cover && !menu.art ? "on" : ""} onClick={() => onCover(menu, undefined)}>
+                  <Cover song={{ ...menu, cover: undefined, art: undefined }} size={56} />
+                  Litur
                 </button>
-              ))}
+                {COVERS.map((c) => (
+                  <button type="button" key={c} className={menu.cover === c && !menu.art ? "on" : ""} onClick={() => onCover(menu, c)}>
+                    <Cover song={{ ...menu, cover: c, art: undefined }} size={56} />
+                    {COVER_LABEL[c]}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="tk-btn wide" onClick={() => void findArt(menu)} disabled={hits?.songId === menu.id && hits.list === null}>
+                <ImageIcon size={16} /> {hits?.songId === menu.id && hits.list === null ? "Leita…" : "Leita að mynd af umslaginu"}
+              </button>
+              {hits?.songId === menu.id && hits.list && (
+                <div className="tk-art-list">
+                  {hits.list.length === 0 && <p className="tk-muted">Fann ekkert sem passar við heitið. Þú getur breytt heiti lagsins eða valið útlit hér að ofan.</p>}
+                  {hits.list.map((h) => (
+                    <button
+                      type="button"
+                      key={h.art}
+                      className="tk-pick"
+                      onClick={() => {
+                        onArt(menu, h.art);
+                        setHits(null);
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={h.art} alt="" width={52} height={52} loading="lazy" referrerPolicy="no-referrer" />
+                      <span className="tk-pick-text">
+                        <strong>{h.title}</strong>
+                        <small>
+                          {h.artist}
+                          {h.album ? ` · ${h.album}` : ""}
+                        </small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="tk-row tk-actions">
+                <button
+                  type="button"
+                  className="tk-btn danger"
+                  onClick={() => {
+                    closeMenu();
+                    onDeleteSong(menu);
+                  }}
+                >
+                  <Trash2 size={15} /> Eyða laginu úr safninu
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              className="tk-btn danger wide"
-              onClick={() => {
-                setMenuId("");
-                onDeleteSong(menu);
-              }}
-            >
-              <Trash2 size={15} /> Eyða laginu úr safninu
-            </button>
           </div>
         </div>
       )}
