@@ -119,6 +119,7 @@ import {
   selectableIds,
   withLayerId,
 } from "../../lib/board/layers";
+import { lesaUtlit3D } from "../../lib/board/golfaferdir";
 import { newId, useBoardStore } from "../../lib/board/store";
 import { parseClipboard, serializeClipboard } from "../../lib/board/clipboard";
 import type { BoardDocument, BoardObject, ImageObject, UttektTenging } from "../../lib/board/types";
@@ -1375,6 +1376,7 @@ export function WhiteboardApp() {
               taknEining,
               // Húsið og hallinn sem Agnar setti sjálfur lifa milli lota: útlínan er vistuð í dílum frummyndar og fer hér
               // um SÖMU vörpun og veggirnir (veggirIBord) — borðið er byggt upp á nýtt í hvert sinn sem hæðin er opnuð.
+              ...(lesaUtlit3D(haed.utlit3d) ? { utlit3d: lesaUtlit3D(haed.utlit3d) } : {}),
               ...(Array.isArray(haed.husUtlina) && haed.husUtlina.length >= 6
                 ? { husUtlina: utlinaIBord(haed.husUtlina, mynd, frum) }
                 : {}),

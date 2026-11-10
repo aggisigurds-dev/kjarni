@@ -41,6 +41,7 @@ import { husUtlina, type HLina } from "../../lib/board/veggja-hreinsun";
 import { SVALIR_HAED_M } from "../../lib/board/teikning-veggir";
 import type { BoardObject } from "../../lib/board/types";
 import { useBoardStore } from "../../lib/board/store";
+import { GOLFAFERDIR, aferdarMetrar, erGlansAferd, lesaUtlit3D, teiknaGolfAferd, type Utlit3D } from "../../lib/board/golfaferdir";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 
 const THREE_SLOD = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
@@ -175,6 +176,25 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
   );
   const [syna, setSyna] = useState<number | "allar">("allar");
   const [teikningAGolfi, setTeikningAGolfi] = useState(true);
+  // Útlit (litir veggja/hurða, gólfáferð) — lesið af úttektarmyndinni, skrifað á allar úttektarmyndir borðsins svo það
+  // vistist á hæðirnar með „Vista í úttekt“ (uttekt.utlit3d → haedir[].utlit3d).
+  const [utlit, setUtlitStada] = useState<Utlit3D>(() => {
+    const m = objects.find((o) => o.type === "image" && (o as { uttekt?: { utlit3d?: unknown } }).uttekt?.utlit3d) as { uttekt?: { utlit3d?: unknown } } | undefined;
+    return lesaUtlit3D(m?.uttekt?.utlit3d) ?? {};
+  });
+  const setjaUtlit = (n: Utlit3D) => {
+    const hreint = lesaUtlit3D(n) ?? {};
+    setUtlitStada(hreint);
+    const st = useBoardStore.getState();
+    for (const o of st.objects) {
+      if (o.type !== "image" || !(o as { uttekt?: unknown }).uttekt) continue;
+      const t = (o as unknown as { uttekt: Record<string, unknown> }).uttekt;
+      st.patchObject(o.id, { uttekt: { ...t, utlit3d: Object.keys(hreint).length ? hreint : null } } as Partial<BoardObject>, false);
+    }
+  };
+  const vegglitur = utlit.veggir ? parseInt(utlit.veggir.slice(1), 16) : null;
+  const hurdalitur = utlit.hurdir ? parseInt(utlit.hurdir.slice(1), 16) : 0xc4a17a;
+  const golfAferdId = utlit.golf;
   // Agnar 05.11.2026: „hak … hvort sýna á teikningu á gólfi … auk þess að geta valið að sjá rauðu brunaveggina eða ekki"
   const [synaBrunaveggi, setSynaBrunaveggi] = useState(true);
   const [glerSemGluggar, setGlerSemGluggar] = useState(true);
@@ -375,20 +395,43 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           svid.add(hopur);
 
           // gólf: teikningin sem áferð (efri hæðir hálfgagnsæjar svo neðri sjáist), annars grá plata
-          const aferd = teikningAGolfi ? await golfAferd(T, hd, hamarkAferdar) : null;
+          // Gólfáferð (golfaferdir.ts) gengur fyrir teikningunni á gólfinu; hún er teiknuð á striga og endurtekin í metrum.
+          const aferd = !golfAferdId && teikningAGolfi ? await golfAferd(T, hd, hamarkAferdar) : null;
           if (!lifir) return;
+          let golfTx: Three | null = null;
+          if (golfAferdId) {
+            const c = document.createElement("canvas");
+            c.width = 512;
+            c.height = 512;
+            const x2 = c.getContext("2d");
+            if (x2) {
+              teiknaGolfAferd(x2, golfAferdId, 512);
+              golfTx = new T.CanvasTexture(c);
+              golfTx.wrapS = T.RepeatWrapping;
+              golfTx.wrapT = T.RepeatWrapping;
+              const am = aferdarMetrar(golfAferdId) * Math.max(1, metri);
+              golfTx.repeat.set((hd.golf.x1 - hd.golf.x0) / am, (hd.golf.y1 - hd.golf.y0) / am);
+              golfTx.anisotropy = 4;
+            }
+          }
           const grima = aferd ? null : husGrima(T, hd, metri);
           const gG = new T.PlaneGeometry(hd.golf.x1 - hd.golf.x0, hd.golf.y1 - hd.golf.y0);
-          const gE = new T.MeshBasicMaterial({
-            map: aferd,
+          const golfStillingar = {
+            map: golfTx ?? aferd,
             alphaMap: grima,
             alphaTest: grima ? 0.5 : 0,
-            color: aferd ? 0xffffff : 0xc9c4ba,
+            color: golfTx || aferd ? 0xffffff : 0xc9c4ba,
             side: T.DoubleSide,
             transparent: nr > 0,
             opacity: nr > 0 ? 0.42 : 1,
             depthWrite: nr === 0,
-          });
+          };
+          const gE = golfTx
+            ? erGlansAferd(golfAferdId)
+              ? new T.MeshPhongMaterial({ ...golfStillingar, shininess: 110, specular: 0x8a8f96 })
+              : new T.MeshLambertMaterial(golfStillingar)
+            : new T.MeshBasicMaterial(golfStillingar);
+          if (golfTx) losa.push(golfTx);
           const g = new T.Mesh(gG, gE);
           g.rotation.x = -Math.PI / 2;
           g.position.set((hd.golf.x0 + hd.golf.x1) / 2, 0, (hd.golf.y0 + hd.golf.y1) / 2);
@@ -407,7 +450,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           losa.push(kE, kTopp);
           veggEfni.push(kE, kTopp);
           const veggLitur = (v: Haed3D["veggir"][number]) =>
-            synaBrunaveggi && v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : VEGGLITUR_3D;
+            synaBrunaveggi && v.eld && ELDLITIR_3D[v.eld] ? ELDLITIR_3D[v.eld] : v.merking ? lit.set(v.litur).getHex() : vegglitur ?? VEGGLITUR_3D;
           const sjalfg = Math.max(metri * 0.12, lengd * 0.004);
           const kassi = (v: Haed3D["veggir"][number], y: number, hH: number, lengdAuki: number, thykktK = 1) => {
             q.setFromAxisAngle(ofan, -Math.atan2(v.by - v.ay, v.bx - v.ax));
@@ -593,7 +636,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
                 return l >= metri * 0.45 && l <= metri * 2.4;
               });
               if (venjulegar.length) {
-                const bladE = new T.MeshLambertMaterial({ color: 0xc4a17a, side: T.DoubleSide });
+                const bladE = new T.MeshLambertMaterial({ color: hurdalitur, side: T.DoubleSide });
                 const blod = new T.InstancedMesh(kG, bladE, venjulegar.length);
                 const bladH = veggH * 0.73;
                 const opn = Math.PI / 3.5;
@@ -1048,7 +1091,7 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
       lifir = false;
       hreinsa();
     };
-  }, [haedir, syna, teikningAGolfi, synaBrunaveggi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil]);
+  }, [haedir, syna, teikningAGolfi, synaBrunaveggi, kvardar, glerSemGluggar, synaHurdarblod, tengjaSmaBil, utlit]);
 
   // Esc áður en sviðið er tilbúið (three.js eða kvarðinn á leiðinni) lokar líka — sviðið tekur við þegar það kemur.
   useEffect(() => {
@@ -1129,6 +1172,30 @@ export default function Hus3D({ objects, pixelsPerMeter, onClose }: Props) {
           <input type="checkbox" checked={teikningAGolfi} onChange={(e) => setTeikningAGolfi(e.target.checked)} />
           Teikning á gólfi
         </label>
+        <span className="ml-2 text-[10.5px] font-semibold tracking-wide text-stone-400 uppercase">Útlit</span>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Litur veggja í 3D — vistast á hæðina með „Vista í úttekt“ og er eins á öllum vélum">
+          <input type="color" data-utlit3d-veggir value={utlit.veggir ?? "#" + VEGGLITUR_3D.toString(16).padStart(6, "0")} onChange={(e) => setjaUtlit({ ...utlit, veggir: e.target.value })} className="h-5 w-7 cursor-pointer rounded border border-white/20 bg-transparent p-0" />
+          Veggir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Litur hurðarblaða í 3D">
+          <input type="color" data-utlit3d-hurdir value={utlit.hurdir ?? "#c4a17a"} onChange={(e) => setjaUtlit({ ...utlit, hurdir: e.target.value })} className="h-5 w-7 cursor-pointer rounded border border-white/20 bg-transparent p-0" />
+          Hurðir
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px]" title="Gólfáferð: steypa, epoxy, flísar, parket — í stað teikningarinnar á gólfinu">
+          Gólf
+          <select data-utlit3d-golf value={utlit.golf ?? "teikning"} onChange={(e) => setjaUtlit({ ...utlit, golf: e.target.value as Utlit3D["golf"] })} className="rounded border border-white/20 bg-[#1a1d2e] px-1 py-0.5 text-[12px] text-stone-100">
+            {GOLFAFERDIR.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.heiti}
+              </option>
+            ))}
+          </select>
+        </label>
+        {Object.keys(utlit).length ? (
+          <button type="button" data-utlit3d-sjalfgefid onClick={() => setjaUtlit({})} className="rounded border border-white/20 px-1.5 py-0.5 text-[11px] text-stone-300 hover:bg-white/10" title="Sjálfgefið útlit (hreinsar vistað útlit hæðarinnar við næstu vistun)">
+            Sjálfgefið
+          </button>
+        ) : null}
         <label className="flex items-center gap-1.5 text-[12px]" title="Rauðir eldveggir (EI-60 og EI-30) og appelsínugular brunahurðir. Slökktu til að sýna alla veggi eins. Aðeins 3D-birting.">
           <input type="checkbox" checked={synaBrunaveggi} onChange={(e) => setSynaBrunaveggi(e.target.checked)} />
           Rauðir brunaveggir

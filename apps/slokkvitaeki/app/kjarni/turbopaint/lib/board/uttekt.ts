@@ -23,6 +23,7 @@
  * vistast sem stimpill (`kind:'sign'`, `unitId:'s:<merki>:<id>'`) svo Teikning-glugginn sýnir það; tákn án samsvörunar
  * vistast ekki. Tæki/merki sem var á borðinu (`uttekt.merki`) en er horfið af því fer úr hæðinni. */
 
+import { lesaUtlit3D } from "./golfaferdir";
 import { newId } from "./ids";
 import { getSupabase } from "./supabase";
 import {
@@ -109,6 +110,8 @@ export type UttektHaed = {
   /** HÚSIÐ teiknað í höndunum (TurboPaint „Húsið"): útlínan sem margstika í DÍLUM FRUMMYNDAR `[x0, y0, x1, y1, …]` — ekki
    * borðhnitum, því borðið er byggt upp á nýtt í hvert sinn sem hæðin er opnuð. Gengur alltaf fyrir útreikningi vélarinnar. */
   husUtlina?: number[];
+  /** Útlit í 3D (golfaferdir.ts). */
+  utlit3d?: { veggir?: string; hurdir?: string; golf?: string };
   /** Halli blaðsins í gráðum og hvort Agnar setti hann sjálfur (aðeins þá les vélin hann). */
   skekkja?: number;
   skekkjaHandvirk?: boolean;
@@ -410,7 +413,7 @@ export function skrifaVeggiIHaed<T extends UttektHaed>(haedir: T[], haedId: stri
 export function skrifaStillingarIHaed<T extends UttektHaed>(
   haedir: T[],
   haedId: string,
-  t: { husUtlina?: number[] | null; skekkja?: number | null; skekkjaHandvirk?: boolean },
+  t: { husUtlina?: number[] | null; skekkja?: number | null; skekkjaHandvirk?: boolean; utlit3d?: { veggir?: string; hurdir?: string; golf?: string } | null },
   mynd: Rammi,
   frum: { b: number; h: number },
   svaedi?: Svaedi | null
@@ -418,6 +421,12 @@ export function skrifaStillingarIHaed<T extends UttektHaed>(
   return haedir.map((h) => {
     if (h.id !== haedId) return h;
     const n: T = { ...h };
+    if (t.utlit3d === null) delete n.utlit3d;
+    else if (t.utlit3d !== undefined) {
+      const u3 = lesaUtlit3D(t.utlit3d);
+      if (u3) n.utlit3d = u3;
+      else delete n.utlit3d;
+    }
     if (t.husUtlina === null) delete n.husUtlina;
     else if (Array.isArray(t.husUtlina) && t.husUtlina.length >= 6 && t.husUtlina.length % 2 === 0) n.husUtlina = utlinaIFrum(t.husUtlina, mynd, frum, svaedi);
     if (t.skekkja === null || t.skekkjaHandvirk === false) {

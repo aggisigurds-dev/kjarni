@@ -143,6 +143,8 @@ export interface UttektTenging {
    * gólfið liggur í 3D og hvar hurðirnar finnast. Gildi hér GENGUR ALLTAF FYRIR útreikningi vélarinnar og vélin skrifar það
    * aldrei — sama regla og á `skekkja`. Vantar/null = vélin reiknar. */
   husUtlina?: number[] | null;
+  /** Útlit í 3D (litir veggja/hurða, gólfáferð — golfaferdir.ts): vistast á hæðina með „Vista í úttekt“. `null` = hreinsað. */
+  utlit3d?: { veggir?: string; hurdir?: string; golf?: string } | null;
 }
 
 export interface RectObject extends BaseObject {
