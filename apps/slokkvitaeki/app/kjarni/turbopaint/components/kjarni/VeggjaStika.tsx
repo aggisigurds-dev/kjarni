@@ -252,6 +252,8 @@ export function VeggjaTegundSimaStika() {
     // Annað tól valið (Texti, Hringur, Setja gegnumtak …) slekkur á ritlinum — þá má hann EKKI kvikna aftur strax,
     // því kveikja() skilar tólinu í „Velja" og ekkert annað tól festist. Hann kviknar þegar „Velja" er aftur valið.
     if (!veggjaHamur || ritillVirkur || virktTol !== "select") return;
+    // Esc + flýtilykill tóls (t.d. J) í einni bunu: virktTol er þá úr eldri render (enn „select") — lesa tólið úr store-inu.
+    if (useBoardStore.getState().tool !== "select") return;
     const r = useVeggjaRitill.getState();
     r.kveikja("velja");
     r.setThett(true);
