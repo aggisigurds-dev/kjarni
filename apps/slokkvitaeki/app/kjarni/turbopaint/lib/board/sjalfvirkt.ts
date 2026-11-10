@@ -592,9 +592,12 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
   try {
     const skH = gilturSkurdur(t.skurdur ?? null);
     const heilt = !skH || skH.w * skH.h >= 0.9 * frum.b * frum.h;
-    // Húsið sem Agnar teiknaði (uttekt.husUtlina) ræður skurðinum — nema hæðin beri handvalinn skurð (sjalf === false).
+    // Húsið sem Agnar teiknaði (uttekt.husUtlina) ræður skurðinum. Fyrri skurður hæðarinnar víkur — líka „handvalinn“
+    // (sjalf === false), því sjálfvirka verkferlið sjálft skrifar skurð sinn þannig (uttekt.ts) og Breiðhöfði 13 bar þá
+    // 10.11.2026 án þess að nokkur hefði skorið í höndunum. Útlínan er nýjasta og skýrasta handverkið; aðeins skorin mynd
+    // (myndSkurdur, fyrsta greinin) og leiðrétt hæð (veggir Agnars) standa framar.
     const handKassi = t.husUtlina ? kassiUtlinu(t.husUtlina) : null;
-    const maSkeraAdHusi = !!handKassi && (heilt || haed?.sjalf === true);
+    const maSkeraAdHusi = !!handKassi;
     if (!veggjaHopur) {
       ljuka("skurdur", SLEPPT, "sleppt");
     } else if (t.myndSkurdur) {
