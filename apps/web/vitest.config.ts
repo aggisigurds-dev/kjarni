@@ -12,5 +12,8 @@ export default defineConfig({
     },
     test: {
         environment: 'jsdom',
+        // Node 25+ ships its own localStorage global, which is undefined without
+        // --localstorage-file and hides jsdom's. Turn it off so tests get jsdom's.
+        execArgv: Number(process.versions.node.split('.')[0]) >= 25 ? ['--no-webstorage'] : [],
     },
 })

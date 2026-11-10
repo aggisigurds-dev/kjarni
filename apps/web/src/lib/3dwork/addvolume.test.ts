@@ -48,4 +48,60 @@ describe('addvolume', () => {
   it('returns nothing for an empty cluster', () => {
     expect(buildCornerWedge([], 2).length).toBe(0);
   });
+
+  const axis = (soup: Float32Array, which: 0 | 1 | 2) => [...soup].filter((_, i) => i % 3 === which);
+
+  it('finds a long corner from a tap near its end', () => {
+    // The corner is one 10 mm edge whose middle is at y = 5; the tap is at y = 9.
+    const edges = concaveEdgesNear(lCornerSoup(), [0.4, 9, 0.3], 2.6);
+    expect(edges.length).toBe(1);
+    // Past the end of the edge is still not the corner.
+    expect(concaveEdgesNear(lCornerSoup(), [0.4, 13, 0.3], 2.6).length).toBe(0);
+  });
+
+  it('fills a straight corner from end to end, and no further', () => {
+    const edges = concaveEdgesNear(lCornerSoup(), [0.4, 9, 0.3], 2.6);
+    const wedge = buildCornerWedge(edges, 2);
+    const along = axis(wedge, 1);
+    expect(Math.min(...along)).toBeCloseTo(0, 6);
+    expect(Math.max(...along)).toBeCloseTo(10, 6);
+    // 2 mm up each face from the corner.
+    expect(Math.max(...axis(wedge, 0))).toBeCloseTo(2, 6);
+    expect(Math.max(...axis(wedge, 2))).toBeCloseTo(2, 6);
+  });
+
+  it('keeps to the nearer corner of a narrow slot', () => {
+    // A 4 mm slot: floor in z=0 between walls at x=0 and x=4, corners 4 mm apart.
+    const tri = (a: number[], b: number[], c: number[]) => [...a, ...b, ...c];
+    const slot = Float32Array.from([
+      ...tri([0, 0, 0], [4, 0, 0], [4, 10, 0]),
+      ...tri([0, 0, 0], [4, 10, 0], [0, 10, 0]), // floor, +Z
+      ...tri([0, 0, 0], [0, 10, 0], [0, 10, 10]),
+      ...tri([0, 0, 0], [0, 10, 10], [0, 0, 10]), // wall at x=0, +X
+      ...tri([4, 0, 0], [4, 0, 10], [4, 10, 10]),
+      ...tri([4, 0, 0], [4, 10, 10], [4, 10, 0]), // wall at x=4, −X
+    ]);
+    expect(findConcaveEdges(slot).length).toBe(2);
+    // On the floor, 1.5 mm from one corner and 2.5 mm from the other: both in reach.
+    const edges = concaveEdgesNear(slot, [1.5, 5, 0], 2.6);
+    expect(edges.length).toBe(1);
+    expect(edges[0].a[0]).toBe(0);
+    expect(edges[0].b[0]).toBe(0);
+  });
+
+  it('builds the same wedge whichever face each edge lists first', () => {
+    const floor: [number, number, number] = [0, 0, 1];
+    const wall: [number, number, number] = [1, 0, 0];
+    const wedge = buildCornerWedge(
+      [
+        { a: [0, 0, 0], b: [0, 5, 0], n1: wall, n2: floor },
+        { a: [0, 5, 0], b: [0, 10, 0], n1: floor, n2: wall },
+      ],
+      2
+    );
+    expect(Math.max(...axis(wedge, 0))).toBeCloseTo(2, 6);
+    expect(Math.max(...axis(wedge, 2))).toBeCloseTo(2, 6);
+    expect(Math.min(...axis(wedge, 1))).toBeCloseTo(0, 6);
+    expect(Math.max(...axis(wedge, 1))).toBeCloseTo(10, 6);
+  });
 });
