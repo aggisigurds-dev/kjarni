@@ -58,3 +58,17 @@ test("Vista í úttekt: „Sjálfvirkt“ (null) fjarlægir útlínu og halla ú
   assert.equal("husUtlina" in h, false);
   assert.equal("skekkja" in h, false);
 });
+
+test("Vista í úttekt skrifar útlit 3D (litir, gólfáferð) í hæðina; ógild gildi hreinsast; null fjarlægir", () => {
+  const r = utbuaVistun(bord({ utlit3d: { veggir: "#FFEEDD", hurdir: "#102030", golf: "parket" } }), haedir(), "2026-11-10 10:00");
+  const h = r.haedir.find((x) => x.id === "h1")!;
+  assert.deepEqual(h.utlit3d, { veggir: "#ffeedd", hurdir: "#102030", golf: "parket" });
+  const hae = haedir();
+  hae[0].utlit3d = { golf: "steypa" };
+  const r2 = utbuaVistun(bord(), hae, "2026-11-10 10:00");
+  assert.deepEqual(r2.haedir[0].utlit3d, { golf: "steypa" }, "borð sem veit ekkert um útlitið eyðir því ekki");
+  const r3 = utbuaVistun(bord({ utlit3d: null }), hae, "2026-11-10 10:00");
+  assert.equal("utlit3d" in r3.haedir[0], false, "null = hreinsað");
+  const r4 = utbuaVistun(bord({ utlit3d: { golf: "marmari", veggir: "blue" } }), hae, "2026-11-10 10:00");
+  assert.equal("utlit3d" in r4.haedir[0], false, "ógilt útlit hreinsast");
+});
