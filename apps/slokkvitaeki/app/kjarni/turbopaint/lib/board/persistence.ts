@@ -506,6 +506,23 @@ export async function switchBoard(id: string) {
   await openBoardId(id);
 }
 
+/** Tekur við borði ÁN þess að hlaða efni þess eða myndum — fyrir kallara sem endurbyggir borðið strax (úttektaropnun:
+ * FloorPlan er sannleikurinn, WhiteboardApp kallar replaceBoard + innflutning beint á eftir). `switchBoard` sótti áður allt
+ * gamla efnið og myndir þess til þess eins að henda því. Staðbundið efni telst rétthærra (dirtySincePush) svo pullIfNewer
+ * dragi ekki gamla skýjaeintakið yfir borðið á meðan það er byggt upp. */
+export async function takaVidBordi(id: string, nafn: string) {
+  if (id === currentBoardId) return;
+  await persistBoard();
+  haettaSkodun();
+  installSyncListeners();
+  useBoardStore.getState().setSyncState("idle");
+  currentBoardId = id;
+  lastContentJson = "";
+  lastUpdatedAt = "";
+  dirtySincePush = true;
+  await rememberBoard({ id, name: nafn, updatedAt: new Date().toISOString() }, true);
+}
+
 export async function createBoard(name = "Nýtt borð") {
   await persistBoard();
   haettaSkodun();
@@ -600,6 +617,15 @@ export function opnaSkodun(titill: string, slod: string) {
   });
   useBoardStore.getState().setSyncState("idle");
   useBoardStore.getState().setHydrated(true);
+}
+
+/** Úttektaropnunin (`?uttekt=`) brást áður en hæðin kom á borðið: biðstaðan er lögð niður og síðasta borðið hlaðið eins og
+ * við venjulega ræsingu — notandinn situr ekki eftir á tómu „Opna teikningu…“-borði. */
+export async function haettaBidOgHlada() {
+  if (!erSkodun()) return;
+  useBoardStore.getState().setHydrated(false);
+  haettaSkodun();
+  await loadBoard();
 }
 
 /** Skoðun lýkur (vistuð, eða skipt yfir á annað borð) — venjuleg vistun tekur við. */
