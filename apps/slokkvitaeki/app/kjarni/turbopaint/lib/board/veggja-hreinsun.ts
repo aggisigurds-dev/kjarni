@@ -644,6 +644,21 @@ export function lesaHandUtlinu(v: unknown): number[] | null {
   return v as number[];
 }
 
+/** Kassi handteiknaðrar útlínu (flat [x,y,…]) með `spassia` (hlutfall lengri hliðar) hvoru megin — skurður hæðar þegar
+ * Agnar hefur teiknað Húsið: hann ræður, vélin giskar ekki á kassa úr veggjum (Agnar 06.11.2026: „ráðið hvað telst vera húsið“). */
+export function kassiUtlinu(utlina: number[], spassia = 0.025): Rammi | null {
+  const p = lesaHandUtlinu(utlina);
+  if (!p) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < p.length; i += 2) {
+    x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]);
+    y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]);
+  }
+  if (!(x1 > x0) || !(y1 > y0)) return null;
+  const sp = spassia * Math.max(x1 - x0, y1 - y0);
+  return { x0: x0 - sp, y0: y0 - sp, x1: x1 + sp, y1: y1 + sp };
+}
+
 /** Punktur innan margstiku (geislaregla). */
 export function punktIFjolhyrningi(x: number, y: number, p: number[]): boolean {
   let inni = false;
