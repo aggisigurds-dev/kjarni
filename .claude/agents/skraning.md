@@ -75,7 +75,25 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   (bakkar sem svartar línur) eru komin sem lög (`vatn` „Vatnslagnir í lit", `rafmagn` „Raflagnaleiðir"), falin sjálfgefið.
   M-blöðin stillast af eftir ásamerkjum; R-blöðin hafa ENGIN ásamerki og eru borin saman við loftræsiblað sama hlutanúmers með
   `tools/skraning-gatakort-fylgni.py`. Samskeyting: `tools/skraning-gatakort-skeyta-lit.py litur|dokkt`. PDF: `Documents\NLSH\procore-hlutablod`.
-  Miro-rammarnir „6H2S Vatnslagnakerfi" o.fl. (handteiknuð merki Agnars) eru EKKI komnir inn sem áætluð göt.
+- **Áætluð göt úr Miro (11.11.2026):** 55 rafmagnsraufar á 6H S2 (grænir tíglar í rammanum „6H2S Rafmagnsraufar", borð
+  `uXjVJ1jKBnY=`) eru í `skr_aaetlud` (fag `rafmagn`, fjoldi 2 = báðar hliðar, `uppruni` = `miro:<borð>:<id>`). Ferlið:
+  `canvas_read_as_svg` → `tools/skraning-gatakort-miro-lesa.cjs` (dregur SVG úr lotuskrá) → `-miro-varpa.cjs` (borðhnit →
+  grunnmynd; hver 6H2S-rammi er fjórar flísar, skráðar með `-miro-skra.py`, niðurstaðan í `-miro-6h2s-skra.json`: s = 1,602) →
+  `-miro-festa.py` (festir merki við skurðpunkt lags og rauðs brunaveggs, annars lags og vegglínu, innan 45 px ≈ 1,3 m; Agnar
+  leyfði 11.11 að færa merkin því þau voru sett ónákvæmt í síma) → `tools/skraning-gatakort-aaetlud.cjs --write`.
+  Útkoma: 26 fest á brunavegg, 18 á vegglínu, 11 ófest. **Gildrur:** Miro-myndirnar eru af ELDRI útgáfu brunayfirlitsins — margir
+  gangveggir (E30-S) eru ekki rauðir á Rev.A. 361 af 717 rafmagnsskráningum eru á blöðum sem varpast ekki á yfirlitið
+  (`6H 2S-1S Rafmagnsþéttingar.jpg` o.fl.) og koma ekki fram í samanburði.
+- **Allir Miro-rammar 6. hæðar komnir inn (11.11.2026): 744 áætluð göt á teikningu 4.** 6H2S: rafmagnsraufar 55, loftræsing 159
+  (þar af 27 kantaðir stokkar → flokkur 41), sprinkler 83, vatnslagnir 154, regnvatn 28. 6H1S: loftræsing 131, vatnslagnir 134
+  (engir rammar til fyrir 6H1S rafmagn/sprinkler/regnvatn). Flokkun í `tools/skraning-gatakort-miro-flokka.cjs`: `fjoldi` = stök verk
+  (2 per gegnumtak; vatnsský með tölunni n = n lagnir = 2·n — stemmir við yfirlitstöflu rammans: gólfhiti 136, neysluvatn Ø40-50 104,
+  plast 76). Litir vatnsskýja (úr skýringatöflu 6H2S): ljósblátt = neysluvatn Ø15-35, dökkrautt = gólfhiti Ø15-35, appelsínugult =
+  ofnakerfi Ø40-50, dökkblátt = neysluvatn Ø40-50, gul ör „2pl hvitt" = plast Ø20-34; á 6H1S er rautt (#ff6464) TÚLKAÐ sem gólfhiti
+  (engin skýringatafla þar — óstaðfest). 6H1S-rammar voru stilltir af ÁN skjámyndar með `-miro-hough.py` (merki kjósa hliðrun á móti
+  skurðpunktum lags og brunaveggja; báðar flísar loftræsirammans gáfu sömu hliðrun innan 3 px; s = 0,296 loft, 0,336 vatn).
+  Stórir rammar: `canvas_read_as_svg` vistar svarið í `tool-results/*.txt` (undiragent kallar, aðallota les skrána); `image_get_data`
+  skilar aðeins 46×120 px smámynd — ónothæft til afstillingar. Miro-talningin er margra mánaða gömul (fyrir baðherbergin).
 
 ## Tengsl
 - **bokari** (bh) — NLSH/gata-uppgjör les `skr_hub_skraningar`; samanburður fyrir/eftir.
