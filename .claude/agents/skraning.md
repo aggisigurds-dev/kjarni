@@ -117,6 +117,15 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Reglur:** sjálfgefin markmið eru SAMA aðferð og Landspítalasíða hubsins (`brunaholf/js/nlsh-sections.js` hopStada: 6H = klárað,
   5H = 6H á sömu deild með loft kvarðað við Miro, milliloft 110) — breyta á báðum stöðum. Einingar: 2 stök verk = 1 lokun, gólf 1.
   Liður 2.11 er í metrum (ekki reiknað úr fjölda). Ajour hefur aðeins einn gólfflokk → allt gólf telst á 1.2.
+- **Rafmagn telst með í heild (11.11.2026, Agnar):** markmið `RAF_MARK` = 104 stök verk á hverja deild á 5H og 6H (aldrei minna en
+  klárað + opið, svo 6H S2 = 256). Heildin fór við það úr 91 % í 86 % (6H 100 → 95 %, því S4/S5 hafa enga rafmagnsskráningu og
+  188 kláraðar á `6H 2S-1S Rafmagnsþéttingar` eru „Án deildar" og teljast ekki á álmu). Raufar við kantaða stokka eru enn án markmiðs.
+  Hub-síðan (`nlsh-sections.js`) hefur EKKI þessa reglu enn.
+- **Aukaverk sér (11.11.2026):** skráningar á teikningu sem heitir „…Viðbótarverkefni" (`AUKA_RE`, teikning 12: 81 kláruð, 4 opin)
+  eru í sér kafla, utan stöðutaflna og — sjálfgefið — utan útboðssamanburðar. Hakið „Telja aukaverk með í útboðssamanburði"
+  (`gogn.aukaverk_med`) setur þau aftur inn í flokkatalninguna.
+- **Hlutar deildar:** hver skráning ber `ajour_gogn.svaedi` = N | C | S (Norðurhlið, Center, Suðurhlið). Skýrslusíðan sýnir þá ekki
+  enn; hönnunin í Claude Design (Stöðuskýrsla NLSH) gerir það (skil við 27,5 % og 72,5 % af lengd álmu, mælt úr hnitum).
 - ALDREI senda tölur úr þessari sýn sem „gildandi magn" án staðfestingar Agnars — útboðstölurnar eru upphafstölur.
 
 ## Tengsl
