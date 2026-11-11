@@ -176,6 +176,14 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Ekki til enn:** sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (sama aðferð og `-miro-festa.py` fyrir merki).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
+- **Hæðakortið (11.11.2026, Agnar: „skýrsluna byggða í kringum punktahæðina“, „filterkerfi og tölur“):** efsti kafli síðunnar,
+  `skyrsla/Haedir.tsx`. Hver hæð = yfirlitsmyndin með ÖLLUM skráningum á sínum stað (`skr_haedarhnit`; færðir punktar ráða), hver
+  deild skipt í Norður/Center/Suður með stöðulit og prósentu, flögg per deild og tafla með sömu tölum. Síur: flokkahópur
+  (fjölval), stærð (þegar einn hópur er valinn), staða (allt/klárað/opið/eftir), hæð, deild, tímabil (mánuður `framkvaemt_til`).
+  Prósenta birtist AÐEINS án stærðar- og tímabilssíu (markmið eru á flokkahóp). „Eftir“ = áætluð göt án skráningar
+  (`skr_aaetlud.parad` tómt eða vantar). Markmið deildar = sama tala og í töflunni fyrir neðan (með leiðréttingum, `markDeild`);
+  markmið hluta = `markmidHluta` (sama regla á hlutann, föst deildarmarkmið í þriðjungum). Punktar teiknaðir á canvas í minnst
+  tvöfaldri upplausn svo prentun verði skörp; síurnar hverfa í prentun og ein lína lýsir þeim. Aðeins lestur.
 - **Hvað:** skýrsla til Landspítalans: staða per hæð og deild (stök verk, markmið, %) og samanburður við UPPRUNALEGT útboð
   (liðir 1.1–3.1, magn úr mynd Agnars 11.11 — hann segir magnið hafa breyst). Allt reiknað úr `skr_skraningar` við opnun;
   Klárað, Markmið, Gildandi magn, „stök per ein.", Lokið og athugasemdir eru yfirskrifanleg og vistast í `skr_skyrslur.gogn`

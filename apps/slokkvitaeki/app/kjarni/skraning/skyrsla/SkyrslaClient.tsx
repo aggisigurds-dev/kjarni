@@ -12,10 +12,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sb } from "../lib/sb";
+import Haedir, { type HkPunktur, type HkEftir, type HkYfirlit } from "./Haedir";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { id: number; flokkur_id: number | null; teikning_id: number | null; stada: string; haed: string | null; deild: string | null };
+type Skr = { id: number; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null };
+/** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
+type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number };
+type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string } | null };
+const HLUTAR = ["N", "C", "S"];
+const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), Math.floor(m / 3)][i];   // fast deildarmarkmið skipt á hlutana þrjá
+const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
 type Gogn = { an_staerda?: boolean; aukaverk_med?: boolean; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
@@ -65,6 +72,9 @@ export default function SkyrslaClient() {
   const [verk, setVerk] = useState<Verk | null>(null);
   const [flokkar, setFlokkar] = useState<Flokkur[]>([]);
   const [skr, setSkr] = useState<Skr[]>([]);
+  const [hnit, setHnit] = useState<Map<number, Hnit>>(new Map());
+  const [yfirlit, setYfirlit] = useState<HkYfirlit[]>([]);
+  const [aaetlud, setAaetlud] = useState<Aaetlad[]>([]);
   const [aukaTeikn, setAukaTeikn] = useState<Map<number, string>>(new Map()); // teikningar aukaverka: id → heiti
   const [teiknHaed, setTeiknHaed] = useState<Map<number, string>>(new Map()); // hæð úr heiti teikningar („6H 2S-1S Rafmagnsþéttingar")
   const [skyrslaId, setSkyrslaId] = useState<number | null>(null);
@@ -84,28 +94,38 @@ export default function SkyrslaClient() {
         const [f, sk, tk] = await Promise.all([
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_skyrslur").select("id,gogn").eq("verk_id", vk.id).eq("eytt", false).order("id", { ascending: false }).limit(1),
-          s.from("skr_teikningar").select("id,heiti").eq("verk_id", vk.id).eq("eytt", false),
+          s.from("skr_teikningar").select("id,heiti,tegund,haed,mynd_path,breidd_px,haed_px").eq("verk_id", vk.id).eq("eytt", false),
         ]);
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = [];
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("id,flokkur_id,teikning_id,stada,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,flokkur_id,teikning_id,stada,framkvaemt_til,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           allt.push(...(r.data as unknown as Skr[]));
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
           if (!r.data || r.data.length < 1000) break;
         }
         // hæðarhnit (sýnin skr_haedarhnit): hæð og deild úr STÖÐU punktsins á yfirlitsblaðinu — ræður þar sem hún er til, svo færðir punktar fylgi nýja staðnum
-        const hn = new Map<number, { haed: string | null; deild: string | null }>();
+        const hn = new Map<number, Hnit>();
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_haedarhnit").select("skraning_id,haed,deild").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
+          const r = await s.from("skr_haedarhnit").select("skraning_id,haed,deild,hluti,x_px,y_px").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
-          for (const q of (r.data || []) as { skraning_id: number; haed: string | null; deild: string | null }[]) hn.set(q.skraning_id, q);
+          for (const q of (r.data || []) as Hnit[]) hn.set(q.skraning_id, q);
           if (lifir) setStadaTexti(`Sæki staðsetningar… ${num(hn.size)}`);
           if (!r.data || r.data.length < 1000) break;
         }
         for (const q of allt) { const h = hn.get(q.id); if (h) { q.haed = h.haed || q.haed; q.deild = h.deild || q.deild; } }
+        // áætluð göt gatakortsins: þau sem engin skráning parast við birtast sem „eftir“ á hæðakortinu
+        const aa: Aaetlad[] = [];
+        for (let i = 0; ; i += 1000) {
+          const r = await s.from("skr_aaetlud").select("teikning_id,x_px,y_px,fag,flokkur_id,fjoldi,parad").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          if (r.error) throw new Error(r.error.message);
+          aa.push(...((r.data || []) as Aaetlad[]));
+          if (!r.data || r.data.length < 1000) break;
+        }
         if (!lifir) return;
+        setHnit(hn); setAaetlud(aa);
+        setYfirlit(((tk.data || []) as { id: number; tegund?: string; haed?: string | null; mynd_path?: string | null; breidd_px?: number | null; haed_px?: number | null }[]).filter((t) => t.tegund === "yfirlit" && t.haed && t.breidd_px && t.haed_px).map((t) => ({ id: t.id, haed: t.haed as string, mynd: t.mynd_path ?? null, w: Number(t.breidd_px), h: Number(t.haed_px) })));
         setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt);
         setTeiknHaed(new Map(((tk.data || []) as { id: number; heiti: string }[]).flatMap((t) => { const m = /^\s*([456])\s*H/i.exec(t.heiti); return m ? [[t.id, `${m[1]}H`] as [number, string]] : []; })));
         setAukaTeikn(new Map(((tk.data || []) as { id: number; heiti: string }[]).filter((t) => AUKA_RE.test(t.heiti)).map((t) => [t.id, t.heiti] as [number, string])));
@@ -120,7 +140,7 @@ export default function SkyrslaClient() {
   const heitiAf = useMemo(() => new Map(flokkar.map((f) => [f.id, f.heiti])), [flokkar]);
   /** Talning per hæð|deild|hópur og per flokk (allt verkið). */
   const taln = useMemo(() => {
-    const hd = new Map<string, { done: number; open: number }>(), fl = new Map<string, { done: number; open: number }>(), st = new Map<string, { done: number; open: number }>(), auka = new Map<string, { done: number; open: number }>();
+    const hd = new Map<string, { done: number; open: number }>(), fl = new Map<string, { done: number; open: number }>(), st = new Map<string, { done: number; open: number }>(), auka = new Map<string, { done: number; open: number }>(), hp = new Map<string, { done: number; open: number }>();
     let utan = 0, utanDone = 0;
     for (const s of skr) {
       const h = (s.flokkur_id != null && heitiAf.get(s.flokkur_id)) || "", done = s.stada === "done";
@@ -136,9 +156,11 @@ export default function SkyrslaClient() {
       const dd = s.deild || "—";
       const k = `${haed}|${dd}|${hop[0]}`, x = hd.get(k) || { done: 0, open: 0 }; if (done) x.done++; else x.open++; hd.set(k, x);
       const k2 = `${haed}|${dd}|${h}`, y = st.get(k2) || { done: 0, open: 0 }; if (done) y.done++; else y.open++; st.set(k2, y);
+      const hl = hnit.get(s.id)?.hluti;   // hluti deildar (N/C/S) úr stöðu punktsins — fyrir markmið hluta á hæðakortinu
+      if (hl) { const k3 = `${haed}|${dd}|${hl}|${hop[0]}`, z = hp.get(k3) || { done: 0, open: 0 }; if (done) z.done++; else z.open++; hp.set(k3, z); }
     }
-    return { hd, fl, st, auka, utan, utanDone };
-  }, [skr, heitiAf, teiknHaed, aukaTeikn, gogn.aukaverk_med]);
+    return { hd, fl, st, auka, hp, utan, utanDone };
+  }, [skr, heitiAf, teiknHaed, aukaTeikn, gogn.aukaverk_med, hnit]);
 
   /** Sjálfgefið markmið hóps (sama aðferð og Landspítalasíða hubsins). */
   const markmidReiknad = useCallback((haed: string, deild: string, hop: string): number | null => {
@@ -162,6 +184,48 @@ export default function SkyrslaClient() {
     return Math.max(mark, x.done + x.open);
   }, [taln]);
 
+  /** Markmið hóps á HLUTA deildar (Norður/Center/Suður): sama regla og deildin, reiknuð á hlutann; föstu deildarmarkmiðin (milliloft,
+   *  rafmagn) skiptast jafnt á hlutana þrjá. Summa hluta getur því vikið lítillega frá markmiði deildar. */
+  const markmidHluta = useCallback((haed: string, deild: string, i: number, hop: string): number | null => {
+    if (AN_MARKMIDS.has(hop)) return null;
+    const t = (h: string, k: string) => taln.hp.get(`${h}|${deild}|${HLUTAR[i]}|${k}`) || { done: 0, open: 0 };
+    const x = t(haed, hop);
+    let mark: number;
+    if (hop === "Gólf") mark = haed === "6H" ? 0 : thridj(GOLF_MARK, i);
+    else if (hop === "Rafmagn") mark = haed === "4H" ? 0 : thridj(RAF_MARK, i);
+    else if (haed === "4H") mark = 0;
+    else if (haed === "6H") mark = x.done;
+    else {
+      const ref = t("6H", hop); let studull = 1;
+      if (hop === "Loft") {
+        const l6 = (d: string) => (taln.hd.get(`6H|${d}|Loft`) || { done: 0 }).done, kv = l6("S2") ? l6("S2") / MIRO_LOFT.vidmid : 1;
+        const fw = (d: string) => (l6(d) ? Math.min(1, (MIRO_LOFT[d] * kv) / l6(d)) : 1);
+        studull = MIRO_LOFT[deild] ? fw(deild) : (fw("S1") + fw("S2")) / 2;
+      }
+      mark = Math.round((ref.done + ref.open) * studull);
+    }
+    return Math.max(mark, x.done + x.open);
+  }, [taln]);
+  /** Punktar hæðakortsins: skráningar með hæðarhnit (aukaverk eru sér). */
+  const hkPunktar = useMemo<HkPunktur[]>(() => {
+    const ut: HkPunktur[] = [];
+    for (const s of skr) {
+      const h = hnit.get(s.id); if (!h || !h.haed || !h.deild || !h.hluti) continue;
+      if (s.teikning_id != null && aukaTeikn.has(s.teikning_id)) continue;
+      const fl = (s.flokkur_id != null && heitiAf.get(s.flokkur_id)) || "", hop = HOPAR.find((x) => x[2].test(fl));
+      ut.push({ haed: h.haed, deild: h.deild, hluti: h.hluti, x: Number(h.x_px), y: Number(h.y_px), hop: hop ? hop[0] : null, fl, done: s.stada === "done", man: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 7) : null });
+    }
+    return ut;
+  }, [skr, hnit, heitiAf, aukaTeikn]);
+  /** Áætluð göt án skráningar („eftir“): deild og hluti úr stöðu gatsins á yfirlitinu (sömu skil og skr_haedarhnit). */
+  const hkEftir = useMemo<HkEftir[]>(() => aaetlud.flatMap((a) => {
+    if (a.parad && a.parad.stada !== "vantar") return [];
+    const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y) return [];
+    const fl = (a.flokkur_id != null && heitiAf.get(a.flokkur_id)) || "", hf = HOPAR.find((x) => x[2].test(fl));
+    const hop = hf ? hf[0] : a.fag in FAG_HOP ? FAG_HOP[a.fag] : "Stál", fx = Number(a.x_px) / y.w, fy = Number(a.y_px) / y.h;
+    return [{ haed: y.haed, deild: fx < 0.179 ? "S1" : fx < 0.5 ? "S2" : fx < 0.812 ? "S4" : "S5", hluti: fy < 0.288 ? "N" : fy < 0.7116 ? "C" : "S", x: Number(a.x_px), y: Number(a.y_px), hop, n: a.fjoldi || 1 }];
+  }), [aaetlud, yfirlit, heitiAf]);
+
   const radir = useMemo(() => HAEDIR.map((haed) => ({
     haed,
     deildir: DEILDIR.map((deild) => ({
@@ -179,6 +243,9 @@ export default function SkyrslaClient() {
   /** Samtala: aðeins línur með markmið (reiknað eða innslegið) teljast, svo heildarprósentan breytist ekki við hópa án markmiðs. */
   const summa = (hs: { klar: number; mark: number | null }[]) => hs.reduce<{ klar: number; mark: number }>((a, h) => (h.mark == null ? a : { klar: a.klar + Math.min(h.klar, Math.max(h.mark, h.klar)), mark: a.mark + Math.max(h.mark, h.klar) }), { klar: 0, mark: 0 });
   const alls = summa(radir.flatMap((r) => r.deildir.flatMap((d) => d.hopar)));
+  /** Markmið hóps á deild eins og það stendur í töflunni (með leiðréttingum) — hæðakortið notar sömu tölu. */
+  const markDeild = useCallback((haed: string, deild: string, hop: string) => radir.find((r) => r.haed === haed)?.deildir.find((d) => d.deild === deild)?.hopar.find((h) => h.k === hop)?.mark ?? null, [radir]);
+  const hkHopar = useMemo(() => HOPAR.map(([k, nafn]) => [k, nafn] as [string, string]), []);
 
   const utbod = useMemo(() => UTBOD.map((u) => {
     let stok = 0, opid = 0;
@@ -223,6 +290,13 @@ export default function SkyrslaClient() {
         <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? ""} onChange={(e) => breyta({ inngangur: e.target.value })} />
         <p className="sk-prent sk-malsgr">{gogn.inngangur}</p>
       </header>
+
+      {yfirlit.length > 0 && (
+        <section>
+          <h2>Staðan á hæðunum</h2>
+          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} markDeild={markDeild} markHluta={markmidHluta} />
+        </section>
+      )}
 
       <section>
         <h2>Staða eftir hæð og deild</h2>
