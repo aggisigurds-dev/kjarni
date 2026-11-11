@@ -15,13 +15,15 @@ import { sb } from "../lib/sb";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { flokkur_id: number | null; stada: string; haed: string | null; deild: string | null };
+type Skr = { flokkur_id: number | null; teikning_id: number | null; stada: string; haed: string | null; deild: string | null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
 type Gogn = { an_staerda?: boolean; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
-const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5"];
-const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i]];
+const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5", "—"];   // „—" = skráningar á hæðinni sem skiptast ekki á deild (rafmagn á sérteikningum)
+const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i], ["Raufar", "Raufar við kantaða stokka", /^Raufar/i], ["Rafmagn", "Rafmagn", /^Raf/i]];
+/** Hópar án reiknaðs markmiðs: þar er prósenta aðeins sýnd ef markmið er slegið inn. */
+const AN_MARKMIDS = new Set(["Raufar", "Rafmagn"]);
 const GOLF_MARK = 110;                                   // rúmlega 100 gólfgöt á deild á 4H og 5H (eitt verk á gat)
 const MIRO_LOFT: Record<string, number> = { vidmid: 272, S1: 230, S2: 244 };   // Miro-talning lofts: 6H S2 viðmið; 5H S1 og S2 í stökum verkum
 /** Upprunalega útboðsblaðið (mynd frá Agnari 11.11.2026). per = stök verk í Ajour per einingu tilboðs. */
@@ -60,6 +62,7 @@ export default function SkyrslaClient() {
   const [verk, setVerk] = useState<Verk | null>(null);
   const [flokkar, setFlokkar] = useState<Flokkur[]>([]);
   const [skr, setSkr] = useState<Skr[]>([]);
+  const [teiknHaed, setTeiknHaed] = useState<Map<number, string>>(new Map()); // hæð úr heiti teikningar („6H 2S-1S Rafmagnsþéttingar")
   const [skyrslaId, setSkyrslaId] = useState<number | null>(null);
   const [gogn, setGogn] = useState<Gogn>({});
   const [ovistad, setOvistad] = useState(false);
@@ -74,14 +77,15 @@ export default function SkyrslaClient() {
         const v = vid ? await s.from("skr_verk").select("id,heiti").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
         if (v.error || !v.data) throw new Error(v.error?.message || "Ekkert verk fannst");
         const vk = v.data as Verk;
-        const [f, sk] = await Promise.all([
+        const [f, sk, tk] = await Promise.all([
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_skyrslur").select("id,gogn").eq("verk_id", vk.id).eq("eytt", false).order("id", { ascending: false }).limit(1),
+          s.from("skr_teikningar").select("id,heiti").eq("verk_id", vk.id).eq("eytt", false),
         ]);
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = [];
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("flokkur_id,stada,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("flokkur_id,teikning_id,stada,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           allt.push(...(r.data as unknown as Skr[]));
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
@@ -89,6 +93,7 @@ export default function SkyrslaClient() {
         }
         if (!lifir) return;
         setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt);
+        setTeiknHaed(new Map(((tk.data || []) as { id: number; heiti: string }[]).flatMap((t) => { const m = /^\s*([456])\s*H/i.exec(t.heiti); return m ? [[t.id, `${m[1]}H`] as [number, string]] : []; })));
         const row = sk.data?.[0] as { id: number; gogn: Gogn } | undefined;
         if (row) { setSkyrslaId(row.id); setGogn(row.gogn || {}); }
         setStadaTexti("");
@@ -106,16 +111,19 @@ export default function SkyrslaClient() {
       const h = (s.flokkur_id != null && heitiAf.get(s.flokkur_id)) || "", done = s.stada === "done";
       const f = fl.get(h) || { done: 0, open: 0 }; if (done) f.done++; else f.open++; fl.set(h, f);
       const hop = HOPAR.find((x) => x[2].test(h));
-      if (!s.haed || !s.deild) { utan++; if (done) utanDone++; continue; }
+      const haed = s.haed || (s.teikning_id != null ? teiknHaed.get(s.teikning_id) : undefined);
+      if (!haed || (!s.deild && !hop)) { utan++; if (done) utanDone++; continue; }
       if (!hop) continue;
-      const k = `${s.haed}|${s.deild}|${hop[0]}`, x = hd.get(k) || { done: 0, open: 0 }; if (done) x.done++; else x.open++; hd.set(k, x);
-      const k2 = `${s.haed}|${s.deild}|${h}`, y = st.get(k2) || { done: 0, open: 0 }; if (done) y.done++; else y.open++; st.set(k2, y);
+      const dd = s.deild || "—";
+      const k = `${haed}|${dd}|${hop[0]}`, x = hd.get(k) || { done: 0, open: 0 }; if (done) x.done++; else x.open++; hd.set(k, x);
+      const k2 = `${haed}|${dd}|${h}`, y = st.get(k2) || { done: 0, open: 0 }; if (done) y.done++; else y.open++; st.set(k2, y);
     }
     return { hd, fl, st, utan, utanDone };
-  }, [skr, heitiAf]);
+  }, [skr, heitiAf, teiknHaed]);
 
   /** Sjálfgefið markmið hóps (sama aðferð og Landspítalasíða hubsins). */
-  const markmidReiknad = useCallback((haed: string, deild: string, hop: string) => {
+  const markmidReiknad = useCallback((haed: string, deild: string, hop: string): number | null => {
+    if (deild === "—" || AN_MARKMIDS.has(hop)) return null;
     const t = (h: string, d: string, k: string) => taln.hd.get(`${h}|${d}|${k}`) || { done: 0, open: 0 };
     const x = t(haed, deild, hop);
     let mark: number;
@@ -141,13 +149,15 @@ export default function SkyrslaClient() {
       hopar: HOPAR.map(([k, nafn]) => {
         const x = taln.hd.get(`${haed}|${deild}|${k}`) || { done: 0, open: 0 }, lykill = `${haed}|${deild}|${k}`, br = gogn.stada?.[lykill] || {};
         const markR = markmidReiknad(haed, deild, k), mark = br.markmid ?? markR, klar = br.klarad ?? x.done;
+        const prosenta = mark == null ? null : pros(Math.min(klar, Math.max(mark, klar)), Math.max(mark, klar));
         // stærðarflokkar hópsins á þessari deild, með sama flokki á 6. hæð sem viðmið (aðeins til upplýsingar)
-        const staerdir = flokkar.filter((f) => HOPAR.find((y) => y[0] === k)![2].test(f.heiti)).map((f) => { const a = taln.st.get(`${haed}|${deild}|${f.heiti}`) || { done: 0, open: 0 }, r6 = taln.st.get(`6H|${deild}|${f.heiti}`) || { done: 0, open: 0 }; return { heiti: f.heiti.replace(/^(Loft|Stál|Plast|Gólf)\s*/i, "").replace(/\s*L[Vv]\b.*$/, "").trim() || f.heiti, done: a.done, open: a.open, vidmid: haed === "5H" ? r6.done + r6.open : 0 }; }).filter((z) => z.done + z.open + z.vidmid > 0).sort((a, b) => (parseInt(a.heiti.replace(/^\D+/, ""), 10) || 0) - (parseInt(b.heiti.replace(/^\D+/, ""), 10) || 0));
-        return { k, nafn, lykill, done: x.done, open: x.open, markR, mark, klar, br, staerdir: staerdir.length > 1 ? staerdir : [] };
-      }).filter((h) => h.mark > 0 || h.done + h.open > 0),
+        const staerdir = flokkar.filter((f) => HOPAR.find((y) => y[0] === k)![2].test(f.heiti)).map((f) => { const a = taln.st.get(`${haed}|${deild}|${f.heiti}`) || { done: 0, open: 0 }, r6 = taln.st.get(`6H|${deild}|${f.heiti}`) || { done: 0, open: 0 }; return { heiti: f.heiti.replace(/^(Loft|Stál|Plast|Gólf)\s*/i, "").replace(/\s*L[Vv]\b.*$/, "").trim() || f.heiti, done: a.done, open: a.open, vidmid: haed === "5H" && markR != null ? r6.done + r6.open : 0 }; }).filter((z) => z.done + z.open + z.vidmid > 0).sort((a, b) => (parseInt(a.heiti.replace(/^\D+/, ""), 10) || 0) - (parseInt(b.heiti.replace(/^\D+/, ""), 10) || 0));
+        return { k, nafn, lykill, done: x.done, open: x.open, markR, mark, klar, prosenta, br, staerdir: staerdir.length > 1 ? staerdir : [] };
+      }).filter((h) => (h.mark ?? 0) > 0 || h.done + h.open > 0),
     })),
   })), [taln, gogn.stada, markmidReiknad, flokkar]);
-  const summa = (hs: { klar: number; mark: number }[]) => hs.reduce((a, h) => ({ klar: a.klar + Math.min(h.klar, Math.max(h.mark, h.klar)), mark: a.mark + Math.max(h.mark, h.klar) }), { klar: 0, mark: 0 });
+  /** Samtala: aðeins línur með markmið (reiknað eða innslegið) teljast, svo heildarprósentan breytist ekki við hópa án markmiðs. */
+  const summa = (hs: { klar: number; mark: number | null }[]) => hs.reduce<{ klar: number; mark: number }>((a, h) => (h.mark == null ? a : { klar: a.klar + Math.min(h.klar, Math.max(h.mark, h.klar)), mark: a.mark + Math.max(h.mark, h.klar) }), { klar: 0, mark: 0 });
   const alls = summa(radir.flatMap((r) => r.deildir.flatMap((d) => d.hopar)));
 
   const utbod = useMemo(() => UTBOD.map((u) => {
@@ -208,12 +218,12 @@ export default function SkyrslaClient() {
                     return d.hopar.length ? [
                       ...d.hopar.flatMap((h, i) => [
                         <tr key={h.lykill}>
-                          {i === 0 && <td rowSpan={nRod} className="sk-deild">{d.deild}</td>}
+                          {i === 0 && <td rowSpan={nRod} className="sk-deild">{d.deild === "—" ? "Án deildar" : d.deild}</td>}
                           <td className="sk-v">{h.nafn}</td><td>{num(h.done)}</td><td>{h.open ? num(h.open) : ""}</td>
                           <td><Tala gildi={h.br.klarad} reiknad={h.done} onChange={(v) => breytaStodu(h.lykill, { klarad: v })} /></td>
                           <td><Tala gildi={h.br.markmid} reiknad={h.markR} onChange={(v) => breytaStodu(h.lykill, { markmid: v })} /></td>
-                          <td>{pros(Math.min(h.klar, Math.max(h.mark, h.klar)), Math.max(h.mark, h.klar))} %</td>
-                          <td className="sk-stikud"><i style={{ width: `${pros(Math.min(h.klar, Math.max(h.mark, h.klar)), Math.max(h.mark, h.klar))}%` }} /></td>
+                          <td>{h.prosenta == null ? "—" : `${h.prosenta} %`}</td>
+                          <td className="sk-stikud">{h.prosenta == null ? null : <i style={{ width: `${h.prosenta}%` }} />}</td>
                           <td className="sk-ath"><input value={h.br.ath ?? ""} onChange={(e) => breytaStodu(h.lykill, { ath: e.target.value })} aria-label="Athugasemd" /><span className="sk-prent">{h.br.ath}</span></td>
                         </tr>,
                         ...(synaSt ? h.staerdir.map((z) => (
@@ -223,7 +233,7 @@ export default function SkyrslaClient() {
                           </tr>
                         )) : []),
                       ]),
-                      <tr key={d.deild + "-s"} className="sk-sum"><td className="sk-v">Deild alls</td><td></td><td></td><td>{num(ds.klar)}</td><td>{num(ds.mark)}</td><td>{pros(ds.klar, ds.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(ds.klar, ds.mark)}%` }} /></td><td></td></tr>,
+                      <tr key={d.deild + "-s"} className="sk-sum"><td className="sk-v">Deild alls</td><td></td><td></td><td>{ds.mark ? num(ds.klar) : "—"}</td><td>{ds.mark ? num(ds.mark) : "—"}</td><td>{ds.mark ? `${pros(ds.klar, ds.mark)} %` : "—"}</td><td className="sk-stikud">{ds.mark ? <i style={{ width: `${pros(ds.klar, ds.mark)}%` }} /> : null}</td><td></td></tr>,
                     ] : null;
                   })}
                 </tbody>
@@ -231,7 +241,7 @@ export default function SkyrslaClient() {
             </div>
           );
         })}
-        <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Stærðarlínurnar (inndregnar) sýna skráningar per stærð; á 5. hæð er sama stærð á sömu deild á 6. hæð sýnd sem viðmið — stærðaflokkun er ekki alltaf eins milli hæða, svo prósentan á við hópinn í heild. Utan deilda (rafmagn á sérteikningum, viðbótarverk og skráningar án teikningar): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.</p>
+        <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Rafmagn og raufar við kantaða stokka hafa ekkert reiknað markmið: þar birtist prósenta aðeins ef markmið er slegið inn, og þær línur teljast þá fyrst með í samtölum. „Án deildar" eru skráningar á teikningum sem skiptast ekki á deildir. Stærðarlínurnar (inndregnar) sýna skráningar per stærð; á 5. hæð er sama stærð á sömu deild á 6. hæð sýnd sem viðmið — stærðaflokkun er ekki alltaf eins milli hæða, svo prósentan á við hópinn í heild. Utan hæða og hópa (viðbótarverk, skráningar án teikningar, Annað og Guide point): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.</p>
       </section>
 
       <section>
