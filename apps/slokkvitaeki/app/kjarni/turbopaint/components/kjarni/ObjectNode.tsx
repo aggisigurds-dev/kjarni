@@ -51,14 +51,19 @@ function FloorplanImage({ obj }: { obj: Extract<BoardObject, { type: "image" }> 
   const image = useAsset(obj.assetId);
   return (
     <>
+      {/* ENGINN SKUGGI Á BLAÐINU (10.11.2026, Agnar: „fínstilltu allt, svo það sé ekki hökt“). Blaðið er í sama Konva-lagi og
+          veggirnir, svo hver breyting á vegg endurteiknar það — og mjúkur skuggi (shadowBlur 18) á allt að 6000 px mynd var
+          langdýrasti hluti hverrar teikningar: CPU-prófíll af drætti á veggenda sýndi 6,1 s í `restore` + 2,5 s í `drawImage`
+          af 12 s (80 hreyfingar), 150 löng verk, versta 300 ms. Þunn rammalína afmarkar blaðið í staðinn. */}
       <KonvaImage
         image={image}
         width={obj.width}
         height={obj.height}
-        shadowColor="rgba(28,25,23,0.18)"
-        shadowBlur={18}
-        shadowOffsetY={6}
-        shadowEnabled
+        stroke="rgba(28,25,23,0.22)"
+        strokeWidth={1}
+        strokeScaleEnabled={false}
+        shadowEnabled={false}
+        perfectDrawEnabled={false}
       />
       {/* Vigur-PDF: sýnilegi hlutinn teiknaður skarpt þegar þysjað er nær en myndin dugar (aðeins á skjánum). */}
       <SkarptPdfLag obj={obj} raster={image} />
