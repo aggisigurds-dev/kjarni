@@ -356,3 +356,9 @@ create policy skr_skyrslur_update on public.skr_skyrslur for update using (true)
 drop trigger if exists skr_skyrslur_touch on public.skr_skyrslur;
 create trigger skr_skyrslur_touch before update on public.skr_skyrslur for each row execute function public.skr_touch();
 grant select, insert, update on public.skr_skyrslur to anon, authenticated;
+
+-- ---------------------------------------------------------------- gatakort: skarpar flísar (11.11.2026, migration skr_gatakort_flisar)
+-- flisar = {kvardi, bx, by, dalkar, radir, slod, ending, til:["d_r",…]}: flísar í kvardi × upplausn grunnmyndar, hlaðnar af kortinu
+-- aðeins fyrir sýnilegt svæði þegar stækkað er inn (tools/skraning-gatakort-flisar.py og -flisar-upp.cjs).
+alter table public.skr_teikningar add column if not exists flisar jsonb;
+alter table public.skr_log add column if not exists flisar jsonb;

@@ -12,12 +12,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sb, publicUrl, hladaUpp } from "../lib/sb";
 
 type Vorpun = { a: number; e: number; f: number; b?: number; c?: number; d?: number };
+/** Skarpar flísar (kvardi × upplausn grunnmyndar), hlaðið aðeins fyrir það sem sést þegar stækkað er inn. */
+type Flisar = { kvardi: number; bx: number; by: number; dalkar: number; radir: number; slod: string; ending: string; til: string[] };
+const FLISA_MORK = 1.15;   // skjápixlar per grunnmyndarpixil: þar yfir eru flísar notaðar
+const FLISA_HAMARK = 24;   // mest þetta margar flísar í minni (hver ~15 MB afkóðuð)
 type Verk = { id: number; heiti: string };
-type Teikning = { id: number; heiti: string; haed: string | null; tegund: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; yfirlit_id: number | null; vorpun: Vorpun | null; deildir: string[] | null };
+type Teikning = { id: number; heiti: string; haed: string | null; tegund: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; yfirlit_id: number | null; vorpun: Vorpun | null; deildir: string[] | null; flisar: Flisar | null };
 type Skr = { id: number; radnr: number; ajour_serial: number | null; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stada: string; framkvaemt_til: string | null; deild: string | null; lagf: string | null; tvitak_af: number | null };
 type Flokkur = { id: number; heiti: string };
 type Starfsm = { id: number; numer: number | null; nafn: string | null };
-type Lag = { id: number; teikning_id: number; heiti: string; fag: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; vorpun: Vorpun | null; gegnsaei: number; synilegt: boolean };
+type Lag = { id: number; teikning_id: number; heiti: string; fag: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; vorpun: Vorpun | null; gegnsaei: number; synilegt: boolean; flisar: Flisar | null };
 type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fag: string; fjoldi: number; athugasemd: string | null; flokkur_id: number | null; parad: Parad | null };
 /** Pörun áætlaðs gats við skráningar — reiknuð af tools/skraning-gatakort-para.cjs. */
 type Parad = { ids: number[]; radnr: number[]; n: number; stada: "fullt" | "hluti" | "vantar"; reiknad?: string };
@@ -80,7 +84,7 @@ export default function KortClient() {
   const [syn, setSyn] = useState<number | null>(null); // teikning.id sem er sýnd (yfirlit eða stök)
   // síur
   const [afTakn, setAfTakn] = useState<Record<string, boolean>>({});
-  const [stada, setStada] = useState<"allt" | "done" | "opid">("allt");
+  const [stada, setStada] = useState<"allt" | "done" | "opid" | "eftir">("allt");
   const [afDeild, setAfDeild] = useState<Record<string, boolean>>({});
   const [madur, setMadur] = useState("");
   const [fra, setFra] = useState(""); const [til, setTil] = useState("");
@@ -109,10 +113,10 @@ export default function KortClient() {
         if (v.error || !v.data) throw new Error(v.error?.message || "Verk fannst ekki");
         const vk = v.data as Verk; setVerk(vk);
         const [t, f, m, l, a] = await Promise.all([
-          s.from("skr_teikningar").select("id,heiti,haed,tegund,mynd_path,breidd_px,haed_px,yfirlit_id,vorpun,deildir").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
+          s.from("skr_teikningar").select("id,heiti,haed,tegund,mynd_path,breidd_px,haed_px,yfirlit_id,vorpun,deildir,flisar").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_starfsmenn").select("id,numer,nafn").order("numer"),
-          s.from("skr_log").select("id,teikning_id,heiti,fag,mynd_path,breidd_px,haed_px,vorpun,gegnsaei,synilegt").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
+          s.from("skr_log").select("id,teikning_id,heiti,fag,mynd_path,breidd_px,haed_px,vorpun,gegnsaei,synilegt,flisar").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
           s.from("skr_aaetlud").select(AA_SEL).eq("verk_id", vk.id).eq("eytt", false),
         ]);
         const err = t.error || f.error || m.error || l.error || a.error; if (err) throw new Error(err.message);
@@ -152,10 +156,8 @@ export default function KortClient() {
   /** Skráningar sem eru paraðar við eitthvert áætlað gat á þessu blaði. */
   const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
   /** Sía án táknasíunnar — skýringarnar sýna þá réttan fjölda per tákn. */
-  const grunnsia = useCallback((p: Punktur) => {
+  const siaAn = useCallback((p: Punktur) => {
     const s = p.s;
-    if (stada === "done" && s.stada !== "done") return false;
-    if (stada === "opid" && s.stada === "done") return false;
     if (s.deild && afDeild[s.deild]) return false;
     if (madur && String(s.starfsmadur_id) !== madur) return false;
     if (fra && (!s.framkvaemt_til || s.framkvaemt_til.slice(0, 7) < fra)) return false;
@@ -165,18 +167,37 @@ export default function KortClient() {
     if (tvitok && !s.tvitak_af) return false;
     if (oparad && paradIds.has(s.id)) return false;
     return true;
-  }, [stada, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds]);
+  }, [afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds]);
+  /** Staða: Tilbúin = kláraðar skráningar · Í vinnslu = ókláraðar skráningar · Eftir = engar skráningar sýndar (aðeins rauðir punktar áætlaðra gata). */
+  const grunnsia = useCallback((p: Punktur) => siaAn(p) && (stada === "allt" || (stada === "done" ? p.s.stada === "done" : stada === "opid" ? p.s.stada !== "done" : false)), [siaAn, stada]);
   const grunn = useMemo(() => punktar.filter(grunnsia), [punktar, grunnsia]);
   const syndir = useMemo(() => grunn.filter((p) => !afTakn[p.t.heiti]), [grunn, afTakn]);
-  const taknTal = useMemo(() => { const m = new Map<string, { t: Takn; n: number }>(); for (const p of grunn) { const x = m.get(p.t.heiti); if (x) x.n++; else m.set(p.t.heiti, { t: p.t, n: 1 }); } return [...m.values()].sort((a, b) => ROD.indexOf(a.t.heiti) - ROD.indexOf(b.t.heiti)); }, [grunn]);
+  const aaetludBlads = useMemo(() => aaetlud.filter((a) => a.teikning_id === syn), [aaetlud, syn]);
+  /** Tákn (stærðarflokkur) áætlaðs gats — sama flokkun og skráningar, svo stærðarsían gildir um hvort tveggja. */
+  const aaTakn = useCallback((a: Aaetlad) => (a.flokkur_id != null && taknAf.get(a.flokkur_id)) || takn(a.fag === "rafmagn" ? "Raf" : a.fag === "golf" ? "Gólf" : "Annað"), [taknAf]);
+  const aaEftir = (a: Aaetlad) => !a.parad || a.parad.stada === "vantar";   // engin skráning parast: handvirkur punktur eða merki án skráningar
+  const aaStodusia = useCallback((a: Aaetlad) => {
+    if (aaStada !== "allt" && (a.parad?.stada ?? "oreiknad") !== aaStada) return false;
+    if (stada === "done") return false;
+    if (stada === "opid") return a.parad?.stada === "hluti";
+    if (stada === "eftir") return aaEftir(a);
+    return true;
+  }, [aaStada, stada]);
+  const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti]), [aaetludBlads, aaStodusia, afTakn, aaTakn]);
+  const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn]);
+  const taknTal = useMemo(() => {
+    const m = new Map<string, { t: Takn; n: number }>();
+    for (const q of punktar) if (siaAn(q) && !m.has(q.t.heiti)) m.set(q.t.heiti, { t: q.t, n: 0 });
+    for (const q of grunn) m.get(q.t.heiti)!.n++;
+    if (stada !== "allt") for (const a of aaetludBlads) if (aaStodusia(a)) { const t = aaTakn(a), x = m.get(t.heiti); if (x) x.n++; else m.set(t.heiti, { t, n: 1 }); }
+    return [...m.values()].sort((a, b) => ROD.indexOf(a.t.heiti) - ROD.indexOf(b.t.heiti));
+  }, [punktar, siaAn, grunn, stada, aaetludBlads, aaStodusia, aaTakn]);
   const samantekt = useMemo(() => {
     const rod = new Map<string, { kl: number[]; op: number[] }>();
     for (const p of syndir) { const d = p.s.deild || "—"; let r = rod.get(d); if (!r) { r = { kl: HOPAR.map(() => 0), op: HOPAR.map(() => 0) }; rod.set(d, r); } const i = HOPAR.indexOf(p.t.hopur); (p.s.stada === "done" ? r.kl : r.op)[i]++; }
     return [...rod.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [syndir]);
   const logSynar = useMemo(() => log.filter((l) => l.teikning_id === syn), [log, syn]);
-  const aaetludBlads = useMemo(() => aaetlud.filter((a) => a.teikning_id === syn), [aaetlud, syn]);
-  const aaetludSynar = useMemo(() => (aaStada === "allt" ? aaetludBlads : aaetludBlads.filter((a) => (a.parad?.stada ?? "oreiknad") === aaStada)), [aaetludBlads, aaStada]);
   const manudir = useMemo(() => [...new Set(skr.map((s) => (s.framkvaemt_til || "").slice(0, 7)).filter(Boolean))].sort(), [skr]);
   const utanKorts = useMemo(() => skr.filter((s) => s.teikning_id == null).length, [skr]);
 
@@ -185,6 +206,16 @@ export default function KortClient() {
     if (!slodin) return null;
     const til_ = myndir.current.get(slodin); if (til_) return til_.complete && til_.naturalWidth ? til_ : null;
     const im = new Image(); im.onload = () => setMyndTeljari((n) => n + 1); im.src = publicUrl(slodin); myndir.current.set(slodin, im); return null;
+  }, []);
+
+  /** Flís úr minni (LRU): skilar mynd ef hún er hlaðin, annars null og setur hleðslu af stað. */
+  const flisMinni = useRef(new Map<string, HTMLImageElement>());
+  const flis = useCallback((slodin: string) => {
+    const m = flisMinni.current, til_ = m.get(slodin);
+    if (til_) { m.delete(slodin); m.set(slodin, til_); return til_.complete && til_.naturalWidth ? til_ : null; }
+    const im = new Image(); im.onload = () => setMyndTeljari((n) => n + 1); im.src = publicUrl(slodin); m.set(slodin, im);
+    while (m.size > FLISA_HAMARK) { const elst = m.keys().next().value as string; const g = m.get(elst); if (g) g.src = ""; m.delete(elst); }
+    return null;
   }, []);
 
   // ---------------------------------------------------------------- teikna
@@ -197,9 +228,24 @@ export default function KortClient() {
     const { k, tx, ty, k0 } = sjon.current;
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cnv.width, cnv.height);
     cx.setTransform(dpr * k, 0, 0, dpr * k, dpr * tx, dpr * ty);
+    // Skarpar flísar: sýnilegt svæði í grunnmyndarhnitum → flísar sem þarf; teiknað aðeins þegar ALLAR sýnilegar flísar lags eru
+    // hlaðnar (annars grófa myndin áfram), svo gegnsæ lög teiknist aldrei tvisvar.
+    const skarpt = k * dpr >= FLISA_MORK, sx0 = -tx / k, sy0 = -ty / k, sx1 = (cw - tx) / k, sy1 = (ch - ty) / k;
+    const teiknaFlisar = (f: Flisar | null, alfa: number): boolean => {
+      if (!skarpt || !f || !f.til?.length) return false;
+      const bw = f.bx / f.kvardi, bh = f.by / f.kvardi, tilSett = new Set(f.til), hlada: [HTMLImageElement | null, number, number][] = [];
+      for (let r = Math.max(0, Math.floor(sy0 / bh)); r <= Math.min(f.radir - 1, Math.floor(sy1 / bh)); r++) for (let c = Math.max(0, Math.floor(sx0 / bw)); c <= Math.min(f.dalkar - 1, Math.floor(sx1 / bw)); c++) if (tilSett.has(`${c}_${r}`)) hlada.push([flis(`${f.slod}/${c}_${r}.${f.ending}`), c, r]);
+      if (hlada.length > 12 || hlada.some((h) => !h[0])) return false;
+      cx.save(); cx.globalAlpha = alfa; for (const [im, c, r] of hlada) cx.drawImage(im!, c * bw, r * bh, bw + 0.4 / k, bh + 0.4 / k); cx.restore();
+      return true;
+    };
     const grunnur = mynd(teikning.mynd_path); if (grunnur) cx.drawImage(grunnur, 0, 0, W, H);
+    teiknaFlisar(teikning.flisar, 1);
     for (const l of logSynar) {
-      if (!l.synilegt) continue; const im = mynd(l.mynd_path); if (!im) continue;
+      if (!l.synilegt) continue;
+      const eins = !l.vorpun || (l.vorpun.a === 1 && !l.vorpun.e && !l.vorpun.f && !l.vorpun.b && !l.vorpun.c && (l.vorpun.d ?? 1) === 1);
+      if (eins && l.vorpun && teiknaFlisar(l.flisar, Number(l.gegnsaei))) continue;
+      const im = mynd(l.mynd_path); if (!im) continue;
       const v = l.vorpun || { a: W / (l.breidd_px || im.naturalWidth), e: 0, f: 0 };
       cx.save(); cx.globalAlpha = Number(l.gegnsaei); cx.transform(v.a, v.b || 0, v.c || 0, v.d ?? v.a, v.e, v.f); cx.drawImage(im, 0, 0); cx.restore();
     }
@@ -215,12 +261,13 @@ export default function KortClient() {
       if (p.s.lagf) { cx.beginPath(); cx.arc(p.x, p.y, r + 2.2 * zs, 0, 6.2832); cx.lineWidth = 1.3 / k; cx.strokeStyle = p.s.lagf === "B" ? "#b45309" : p.s.lagf === "A" ? "#111827" : "#6b7280"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); }
     }
     if (synaAaetlud) for (const a of aaetludSynar) {
+      if (aaEftir(a)) { slod(cx, "o", +a.x_px, +a.y_px, 5.6 * zs); cx.fillStyle = "#dc2626"; cx.fill(); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#ffffff"; cx.stroke(); continue; }
       const r = 6.5 * zs; slod(cx, "d", +a.x_px, +a.y_px, r);
-      cx.fillStyle = (a.parad ? PARAD[a.parad.stada]?.[1] ?? "#ffffff" : "#ffffff") + "dd"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle = (PARAD[a.parad!.stada]?.[1] ?? "#ffffff") + "dd"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
     }
     const v = valinn?.p ? { x: valinn.p.x, y: valinn.p.y } : valinn?.a ? { x: +valinn.a.x_px, y: +valinn.a.y_px } : null;
     if (v) { cx.beginPath(); cx.arc(v.x, v.y, 11 * zs, 0, 6.2832); cx.lineWidth = 2.5 / k; cx.strokeStyle = "#111827"; cx.stroke(); }
-  }, [teikning, W, H, mynd, logSynar, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn]);
+  }, [teikning, W, H, mynd, flis, logSynar, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -300,7 +347,7 @@ export default function KortClient() {
       const sp = `verk/${verk.id}/lag-${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]+/g, "_")}`;
       await hladaUpp(sp, file, file.type || "image/png");
       const a = W / w;
-      const r = await sb().from("skr_log").insert({ verk_id: verk.id, teikning_id: teikning.id, heiti: file.name.replace(/\.[^.]+$/, ""), fag, mynd_path: sp, breidd_px: w, haed_px: h, vorpun: { a, e: 0, f: 0 }, gegnsaei: 0.55, uppruni: "upphlaðið" }).select("id,teikning_id,heiti,fag,mynd_path,breidd_px,haed_px,vorpun,gegnsaei,synilegt").single();
+      const r = await sb().from("skr_log").insert({ verk_id: verk.id, teikning_id: teikning.id, heiti: file.name.replace(/\.[^.]+$/, ""), fag, mynd_path: sp, breidd_px: w, haed_px: h, vorpun: { a, e: 0, f: 0 }, gegnsaei: 0.55, uppruni: "upphlaðið" }).select("id,teikning_id,heiti,fag,mynd_path,breidd_px,haed_px,vorpun,gegnsaei,synilegt,flisar").single();
       if (r.error) throw new Error(r.error.message);
       setLog((x) => [...x, r.data as Lag]);
     } catch (e) { setVilla(e instanceof Error ? e.message : String(e)); }
@@ -367,7 +414,7 @@ export default function KortClient() {
 
         <section>
           <h2>Síur</h2>
-          <div className="gk-hnappar">{([["allt", "Allt"], ["done", "Klárað"], ["opid", "Opið"]] as const).map((x) => <button key={x[0]} type="button" className={stada === x[0] ? "on" : ""} onClick={() => setStada(x[0])}>{x[1]}</button>)}</div>
+          <div className="gk-hnappar">{([["allt", "Allt"], ["done", "Tilbúin"], ["opid", "Í vinnslu"], ["eftir", "Eftir"]] as const).map((x) => <button key={x[0]} type="button" className={stada === x[0] ? "on" : ""} onClick={() => setStada(x[0])}>{x[0] === "eftir" && <i className="gk-raudur" />}{x[1]} <small>{num(stoduTal[x[0]])}</small></button>)}</div>
           {deildir.length > 1 && <div className="gk-hnappar">{deildir.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}</div>}
           <div className="gk-takn">{taknTal.map(({ t, n }) => <button key={t.heiti} type="button" className={afTakn[t.heiti] ? "af" : ""} aria-pressed={!afTakn[t.heiti]} onClick={() => setAfTakn((x) => ({ ...x, [t.heiti]: !x[t.heiti] }))}><TaknSvg t={t} />{t.heiti} <small>{num(n)}</small></button>)}</div>
           <label className="gk-rod">Starfsmaður<select value={madur} onChange={(e) => setMadur(e.target.value)}><option value="">Allir</option>{menn.filter((m) => skr.some((s) => s.starfsmadur_id === m.id)).map((m) => <option key={m.id} value={m.id}>{m.nafn || `Starfsmaður ${m.numer}`}</option>)}</select></label>

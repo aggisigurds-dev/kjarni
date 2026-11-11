@@ -101,6 +101,14 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   **Endurkeyra eftir hverja Ajour-sókn og eftir handbreytingar á merkjum** — `parad` uppfærist ekki sjálft. Ópöruð skráning er
   EKKI sönnun um tvítekningu: S1 hefur enga sprinkler-/regnvatns-/rafmagnsramma og Miro-talningin er eldri en baðherbergin.
 
+- **Skarpar flísar (11.11.2026):** grunnmyndir og öll lög eiga flísar í 4× upplausn (12 px/pt, 12×6 flísar à 1930×1900) í
+  `flisar`-dálki `skr_teikningar`/`skr_log`. Kortið hleður þeim aðeins þegar stækkað er inn (≥ 1,15 skjápixlar per grunnpixil),
+  aðeins sýnilegar flísar, mest 24 í minni, og teiknar lag úr flísum aðeins þegar allar sýnilegar eru hlaðnar. Gerð:
+  `tools/skraning-gatakort-flisar.py <stilling.json> <mappa>` (teiknar hverja flís beint úr PDF, ~1,5 mín per lag) →
+  `tools/skraning-gatakort-flisar-upp.cjs <mappa> --write`. Nýtt lag eða ný útgáfa blaðs → búa til flísar aftur.
+- **Stöðusía (11.11.2026):** Allt / Tilbúin (kláraðar skráningar) / Í vinnslu (ókláraðar skráningar + merki að hluta) / Eftir
+  (áætluð göt án skráningar og handvirkir punktar, teiknaðir RAUÐIR). Stærðarsían (táknin) gildir líka um áætluð göt.
+
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
 - **Hvað:** skýrsla til Landspítalans: staða per hæð og deild (stök verk, markmið, %) og samanburður við UPPRUNALEGT útboð
   (liðir 1.1–3.1, magn úr mynd Agnars 11.11 — hann segir magnið hafa breyst). Allt reiknað úr `skr_skraningar` við opnun;

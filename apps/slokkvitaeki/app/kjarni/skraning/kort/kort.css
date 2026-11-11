@@ -74,3 +74,6 @@
 .gk-takn button i { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, .25); flex: none; }
 .gk-takn button.af-val { opacity: .55; }
 .gk-takn button[aria-pressed="true"] { border-color: var(--aj-black); font-weight: 600; }
+/* stöðusía: teljarar í hnöppum og rauður punktur fyrir „Eftir" */
+.gk-hnappar button small { font-weight: 400; opacity: .75; font-variant-numeric: tabular-nums; margin-left: 2px; }
+.gk-raudur { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #dc2626; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #dc2626; margin-right: 5px; vertical-align: 0; }
