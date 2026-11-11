@@ -209,12 +209,13 @@ export default function KortClient() {
   }, []);
 
   /** Flís úr minni (LRU): skilar mynd ef hún er hlaðin, annars null og setur hleðslu af stað. */
-  const flisMinni = useRef(new Map<string, HTMLImageElement>());
+  const flisMinni = useRef(new Map<string, { im: HTMLImageElement; rammi: number }>());
+  const flisRammi = useRef(0); // hækkar við hverja teikningu; flís sem núverandi rammi notar er aldrei hent
   const flis = useCallback((slodin: string) => {
-    const m = flisMinni.current, til_ = m.get(slodin);
-    if (til_) { m.delete(slodin); m.set(slodin, til_); return til_.complete && til_.naturalWidth ? til_ : null; }
-    const im = new Image(); im.onload = () => setMyndTeljari((n) => n + 1); im.src = publicUrl(slodin); m.set(slodin, im);
-    while (m.size > FLISA_HAMARK) { const elst = m.keys().next().value as string; const g = m.get(elst); if (g) g.src = ""; m.delete(elst); }
+    const m = flisMinni.current, r = flisRammi.current, til_ = m.get(slodin);
+    if (til_) { til_.rammi = r; m.delete(slodin); m.set(slodin, til_); return til_.im.complete && til_.im.naturalWidth ? til_.im : null; }
+    const im = new Image(); im.onload = () => setMyndTeljari((n) => n + 1); im.src = publicUrl(slodin); m.set(slodin, { im, rammi: r });
+    if (m.size > FLISA_HAMARK) for (const [lykill, v] of m) { if (m.size <= FLISA_HAMARK) break; if (v.rammi !== r) { v.im.src = ""; m.delete(lykill); } }
     return null;
   }, []);
 
@@ -230,12 +231,15 @@ export default function KortClient() {
     cx.setTransform(dpr * k, 0, 0, dpr * k, dpr * tx, dpr * ty);
     // Skarpar flísar: sýnilegt svæði í grunnmyndarhnitum → flísar sem þarf; teiknað aðeins þegar ALLAR sýnilegar flísar lags eru
     // hlaðnar (annars grófa myndin áfram), svo gegnsæ lög teiknist aldrei tvisvar.
+    flisRammi.current++;
     const skarpt = k * dpr >= FLISA_MORK, sx0 = -tx / k, sy0 = -ty / k, sx1 = (cw - tx) / k, sy1 = (ch - ty) / k;
     const teiknaFlisar = (f: Flisar | null, alfa: number): boolean => {
       if (!skarpt || !f || !f.til?.length) return false;
-      const bw = f.bx / f.kvardi, bh = f.by / f.kvardi, tilSett = new Set(f.til), hlada: [HTMLImageElement | null, number, number][] = [];
-      for (let r = Math.max(0, Math.floor(sy0 / bh)); r <= Math.min(f.radir - 1, Math.floor(sy1 / bh)); r++) for (let c = Math.max(0, Math.floor(sx0 / bw)); c <= Math.min(f.dalkar - 1, Math.floor(sx1 / bw)); c++) if (tilSett.has(`${c}_${r}`)) hlada.push([flis(`${f.slod}/${c}_${r}.${f.ending}`), c, r]);
-      if (hlada.length > 12 || hlada.some((h) => !h[0])) return false;
+      const bw = f.bx / f.kvardi, bh = f.by / f.kvardi, tilSett = new Set(f.til), tharf: [number, number][] = [];
+      for (let r = Math.max(0, Math.floor(sy0 / bh)); r <= Math.min(f.radir - 1, Math.floor(sy1 / bh)); r++) for (let c = Math.max(0, Math.floor(sx0 / bw)); c <= Math.min(f.dalkar - 1, Math.floor(sx1 / bw)); c++) if (tilSett.has(`${c}_${r}`)) tharf.push([c, r]);
+      if (tharf.length > 12) return false;   // of stórt svæði fyrir flísar: grófa myndin dugar
+      const hlada = tharf.map(([c, r]) => [flis(`${f.slod}/${c}_${r}.${f.ending}`), c, r] as [HTMLImageElement | null, number, number]);
+      if (hlada.some((h) => !h[0])) return false;
       cx.save(); cx.globalAlpha = alfa; for (const [im, c, r] of hlada) cx.drawImage(im!, c * bw, r * bh, bw + 0.4 / k, bh + 0.4 / k); cx.restore();
       return true;
     };
