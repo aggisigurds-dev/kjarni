@@ -270,6 +270,9 @@ export function WhiteboardApp() {
     return Number(q.get("uttekt") || 0) > 0 && !!(q.get("haed") || q.get("plan"));
   });
   const skodunVirk = useSkodun((s) => s.virk);
+  // Úttektarhæð opnuð án borðs (skoðun með `uttekt`): viðmótið er eins og á venjulegu úttektarborði — „Vista í úttekt“ sést
+  // og skoðunarborðinn („Vista sem borð“) ekki. Borðið verður til við fyrstu breytingu eða vistun.
+  const skodunUttekt = useSkodun((s) => s.virk && s.uttekt);
   const skodunVistar = useSkodun((s) => s.vistar);
 
   useEffect(() => {
@@ -1297,7 +1300,7 @@ export function WhiteboardApp() {
   // (ofan við magntöfluna) — borðinn með textanum fyllti breiddina og lá ofan á veggjaritlinum og verkfærasúlunni.
   const simi = useErSimi();
   // Í skoðun er „Vista í úttekt" falið — skoðun skrifar hvergi (aðeins „Vista sem borð").
-  const vistaSyn = !skodunVirk && (!!tengdMynd?.uttekt || hlutarABordi > 0);
+  const vistaSyn = (!skodunVirk || skodunUttekt) && (!!tengdMynd?.uttekt || hlutarABordi > 0);
   const uttektFromQuery = useRef(false);
   const planFromQuery = useRef(false);
   useEffect(() => {
@@ -1504,7 +1507,6 @@ export function WhiteboardApp() {
   }, [skodunBeidni, hydrated, runUrlImport, runImport]);
 
   // Úttektarteikning í skoðun: FYRSTA breytingin (teiknað, fært, merkt) gerir skoðunina að borði — fyrr er ekkert til.
-  const skodunUttekt = useSkodun((s) => s.virk && s.uttekt);
   useEffect(() => {
     if (!skodunUttekt) return;
     let iGangi = false;
@@ -2044,7 +2046,7 @@ export function WhiteboardApp() {
         viewSize={size}
       />
       <VeggjaYfirlit />
-      {skodunVirk ? (
+      {skodunVirk && !skodunUttekt ? (
         <div
           data-skodun-bordi
           className="flex shrink-0 items-center gap-2 border-b border-amber-300/25 bg-[#2b2513] py-1.5 pr-1.5 pl-3 text-[12.5px] text-amber-100"
