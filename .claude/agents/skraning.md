@@ -176,6 +176,13 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Ekki til enn:** sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (sama aðferð og `-miro-festa.py` fyrir merki).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
+- **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
+  (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
+  (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með
+  hetjuhaus (heildarprósenta), hæðaspjöldum, hæðakorti, „Heild eftir flokkum“, töflum og útboðsstikum (strik = útboðsmagn,
+  stikan nær 150 %). Kaflar faldir með `gogn.kaflar[lykill] === false` (`KAFLAR`; vistast með „Vista“). Útboðsliðir án gagna
+  (enginn flokkur í Ajour: 1.1, 1.3) sjást aðeins í töflunni. Einingarofinn (stök verk / lokanir) úr hönnuninni er EKKI smíðaður.
+  Yfirflæði á símabreidd eftir gluggabreytingu kemur frá `.aj-nav` (sameiginleg leiðarstika), ekki skýrslunni.
 - **Hæðakortið (11.11.2026, Agnar: „skýrsluna byggða í kringum punktahæðina“, „filterkerfi og tölur“):** efsti kafli síðunnar,
   `skyrsla/Haedir.tsx`. Hver hæð = yfirlitsmyndin með ÖLLUM skráningum á sínum stað (`skr_haedarhnit`; færðir punktar ráða), hver
   deild skipt í Norður/Center/Suður með stöðulit og prósentu, flögg per deild og tafla með sömu tölum. Síur: flokkahópur

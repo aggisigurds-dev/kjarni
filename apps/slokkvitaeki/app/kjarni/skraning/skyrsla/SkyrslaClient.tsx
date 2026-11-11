@@ -25,8 +25,11 @@ const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), M
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = { an_staerda?: boolean; aukaverk_med?: boolean; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
+/** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
+const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["utbod", "Samanburður við útboð"]];
+const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5", "—"];   // „—" = skráningar á hæðinni sem skiptast ekki á deild (rafmagn á sérteikningum)
 const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i], ["Raufar", "Raufar við kantaða stokka", /^Raufar/i], ["Rafmagn", "Rafmagn", /^Raf/i]];
 /** Hópar án reiknaðs markmiðs: þar er prósenta aðeins sýnd ef markmið er slegið inn. */
@@ -270,11 +273,25 @@ export default function SkyrslaClient() {
     setOvistad(false);
   };
   const nBr = Object.keys(gogn.stada || {}).length + Object.keys(gogn.utbod || {}).length;
+  const synaKafla = (k: string) => gogn.kaflar?.[k] !== false;
+  const skiptaKafla = (k: string) => breyta({ kaflar: { ...(gogn.kaflar || {}), [k]: !synaKafla(k) } });
+  const dags = gogn.dags ?? new Date().toISOString().slice(0, 10);
+  const dagsTexti = `${Number(dags.slice(8, 10))}. ${MAN[Number(dags.slice(5, 7)) - 1] || ""} ${dags.slice(0, 4)}`;
+  /** Lykiltölur hverrar hæðar (sömu tölur og í töflunum). */
+  const haedaspjold = radir.map((r) => { const hs = summa(r.deildir.flatMap((d) => d.hopar)); return { haed: r.haed, klar: hs.klar, mark: hs.mark, p: pros(hs.klar, hs.mark) }; }).filter((h) => h.mark > 0);
+  /** Heild hvers flokkahóps yfir allar hæðir og deildir. */
+  const flokkaheild = HOPAR.map(([k, nafn]) => {
+    let done = 0, open = 0, klar = 0, mark = 0, erM = false;
+    for (const r of radir) for (const d of r.deildir) for (const h of d.hopar) if (h.k === k) { done += h.done; open += h.open; if (h.mark != null) { erM = true; klar += Math.min(h.klar, Math.max(h.mark, h.klar)); mark += Math.max(h.mark, h.klar); } }
+    return { k, nafn, done, open, klar, mark: erM ? mark : null };
+  }).filter((x) => x.done + x.open > 0 || x.mark);
+  const utbodStikur = utbod.filter((u) => u.lokid != null && u.magn > 0 && (u.re != null || u.br.lokid != null))   // liðir án gagna (enginn flokkur í Ajour) sjást aðeins í töflunni
+   .map((u) => ({ nr: u.nr, heiti: u.heiti, lokid: u.lokid as number, magn: u.magn, p: pros(u.lokid as number, u.magn), ein: u.ein }));
 
   if (stadaTexti) return <p className="sk-hl">{stadaTexti}</p>;
   if (villa && !verk) return <p className="sk-hl">Villa: {villa}</p>;
   return (
-    <div className="sk">
+    <div className="sk sk-v2">
       <div className="sk-stika">
         <span>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</span>
         <button type="button" onClick={vista} disabled={!ovistad}>Vista</button>
@@ -284,21 +301,77 @@ export default function SkyrslaClient() {
         {villa && <em>Villa: {villa}</em>}
       </div>
 
-      <header className="sk-haus">
-        <input className="sk-titill" value={gogn.heiti ?? "Brunaþéttingar — staða verks"} onChange={(e) => breyta({ heiti: e.target.value })} aria-label="Heiti skýrslu" />
-        <p>{verk?.heiti} · <input type="date" value={gogn.dags ?? new Date().toISOString().slice(0, 10)} onChange={(e) => breyta({ dags: e.target.value })} aria-label="Dagsetning" /><b className="sk-prent">{dmy(gogn.dags ?? new Date().toISOString().slice(0, 10))}</b> · Brunahólf ehf</p>
+      <div className="sk-rammi">
+      <aside className="sk-hlid sk-skjar">
+        <div className="sk-spjald">
+          <h3>Stillingar skýrslu</h3>
+          <div className="sk-spjald-efni">
+            <div className="sk-merki">Kaflar</div>
+            {KAFLAR.map(([k, nafn]) => <label key={k} className="sk-rofi"><input type="checkbox" checked={synaKafla(k)} onChange={() => skiptaKafla(k)} /><i /><span>{nafn}</span></label>)}
+            <label className="sk-rofi"><input type="checkbox" checked={!gogn.an_staerda} onChange={(e) => breyta({ an_staerda: !e.target.checked })} /><i /><span>Stærðir undir hverjum flokki</span></label>
+            <div className="sk-merki">Dagsetning skýrslu</div>
+            <input type="date" value={dags} onChange={(e) => breyta({ dags: e.target.value })} aria-label="Dagsetning" />
+            <div className="sk-merki">Einingar</div>
+            <p>Tölur eru stök verk eins og Ajour telur þau. Tvö stök verk eru ein lokun; gólfgöt: eitt verk er ein þétting. Samanburður við útboð er í einingum tilboðsins.</p>
+            <div className="sk-merki">Markmið</div>
+            <p>6. hæð: það sem er klárað. 5. hæð: sami flokkur á sömu deild á 6. hæð. Milliloft {GOLF_MARK} og rafmagn {RAF_MARK} á deild. Markmið og klárað má leiðrétta í töflunni „Tölur eftir hæð og deild“.</p>
+          </div>
+        </div>
+        <div className="sk-spjald">
+          <div className="sk-spjald-efni">
+            <div className="sk-merki">Vistun</div>
+            <p className={ovistad ? "sk-ovistad" : ""}>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Allt vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</p>
+            <button type="button" className="sk-adal" onClick={vista} disabled={!ovistad}>Vista</button>
+            <button type="button" onClick={() => window.print()}>Prenta / PDF</button>
+          </div>
+        </div>
+      </aside>
+      <div className="sk-blad">
+      <header className="sk-hetja">
+        <div className="sk-hetja-v">
+          <div className="sk-kicker">Stöðuskýrsla · {dagsTexti}</div>
+          <input className="sk-titill" value={gogn.heiti ?? "Brunaþéttingar — staða verks"} onChange={(e) => breyta({ heiti: e.target.value })} aria-label="Heiti skýrslu" />
+          <p>{verk?.heiti} · Brunahólf ehf</p>
+        </div>
+        <div className="sk-hetja-h"><b>{pros(alls.klar, alls.mark)}<i> %</i></b><span>{num(alls.klar)} af {num(alls.mark)} stökum verkum</span></div>
+      </header>
+      <div className="sk-efni">
+      {synaKafla("texti") && <div className="sk-inngangur">
         <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? ""} onChange={(e) => breyta({ inngangur: e.target.value })} />
         <p className="sk-prent sk-malsgr">{gogn.inngangur}</p>
-      </header>
+      </div>}
+      {synaKafla("spjold") && <div className="sk-haedaspjold">
+        {haedaspjold.map((h) => <div key={h.haed}>
+          <div><span>{h.haed.replace("H", ". hæð")}</span><em className={h.p >= 95 ? "ok" : h.p >= 75 ? "vinna" : "eftir"}>{h.p >= 95 ? "Lokið" : "Í vinnslu"}</em></div>
+          <b>{h.p} %</b>
+          <i><u style={{ width: `${Math.min(100, h.p)}%` }} className={h.p >= 95 ? "ok" : ""} /></i>
+          <small>{num(h.klar)} af {num(h.mark)} stökum verkum</small>
+        </div>)}
+      </div>}
 
-      {yfirlit.length > 0 && (
+      {synaKafla("kort") && yfirlit.length > 0 && (
         <section>
-          <h2>Staðan á hæðunum</h2>
+          <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
           <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} markDeild={markDeild} markHluta={markmidHluta} />
         </section>
       )}
 
-      <section>
+      {synaKafla("flokkar") && (
+        <section>
+          <h2>Heild eftir flokkum <small>Allar hæðir og deildir · markmið eru summa deildanna</small></h2>
+          <table className="sk-tafla sk-flokkar">
+            <thead><tr><th>Flokkur</th><th>Klárað</th><th>Opið</th><th>Markmið</th><th>%</th><th className="sk-stikud">Staða</th></tr></thead>
+            <tbody>
+              {flokkaheild.map((x) => { const p = x.mark ? pros(x.klar, x.mark) : null; return (
+                <tr key={x.k}><td className="sk-v"><b>{x.nafn}</b></td><td>{num(x.done)}</td><td>{x.open ? num(x.open) : ""}</td><td>{x.mark ? num(x.mark) : "—"}</td><td><b>{p == null ? "—" : `${p} %`}</b></td><td className="sk-stikud">{p == null ? null : <i style={{ width: `${p}%` }} className={p < 75 ? "lagt" : ""} />}</td></tr>
+              ); })}
+              <tr className="sk-sum"><td className="sk-v">Heild með markmið</td><td>{num(alls.klar)}</td><td></td><td>{num(alls.mark)}</td><td>{pros(alls.klar, alls.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(alls.klar, alls.mark)}%` }} /></td></tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <section className={synaKafla("tafla") ? "" : "sk-falinn"}>
         <h2>Staða eftir hæð og deild</h2>
         <p className="sk-smatt">Tölur eru stök verk eins og þau eru skráð. Heild: <b>{num(alls.klar)}</b> af <b>{num(alls.mark)}</b> = <b>{pros(alls.klar, alls.mark)} %</b>.<span className="sk-skjar"> Reitirnir Klárað og Markmið eru breytanlegir; tómur reitur notar reiknaða gildið.</span></p>
         {radir.map((r) => {
@@ -341,7 +414,7 @@ export default function SkyrslaClient() {
         <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Rafmagn: {RAF_MARK} stök verk á deild á 5. og 6. hæð, og telst með í samtölum. Raufar við kantaða stokka hafa ekkert reiknað markmið: þar birtist prósenta aðeins ef markmið er slegið inn, og sú lína telst þá fyrst með í samtölum. „Án deildar" eru skráningar á teikningum sem skiptast ekki á deildir. Stærðarlínurnar (inndregnar) sýna skráningar per stærð; á 5. hæð er sama stærð á sömu deild á 6. hæð sýnd sem viðmið — stærðaflokkun er ekki alltaf eins milli hæða, svo prósentan á við hópinn í heild. Utan hæða og hópa (skráningar án hæðar, Annað og Guide point{gogn.aukaverk_med ? ", aukaverk" : ""}): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.{aukaRadir.length ? " Aukaverk eru í sér kafla hér að neðan." : ""}</p>
       </section>
 
-      {aukaRadir.length > 0 && (
+      {aukaRadir.length > 0 && synaKafla("aukaverk") && (
         <section>
           <h2>Aukaverk</h2>
           <p className="sk-smatt">Skráningar á teikningunni „{[...aukaTeikn.values()].map((n) => n.replace(/\.(jpe?g|png|pdf)$/i, "")).join("“, „")}“ í Ajour: <b>{num(aukaAlls.done)}</b> kláraðar{aukaAlls.open ? <> og {num(aukaAlls.open)} opnar</> : null}. Þær eru ekki í stöðutöflunum að ofan{gogn.aukaverk_med ? ", en teljast með í samanburði við útboð" : " og teljast ekki með í samanburði við útboð"}.<span className="sk-skjar"> <label className="sk-val"><input type="checkbox" checked={!!gogn.aukaverk_med} onChange={(e) => breyta({ aukaverk_med: e.target.checked || undefined })} /> Telja aukaverk með í útboðssamanburði</label></span></p>
@@ -355,8 +428,15 @@ export default function SkyrslaClient() {
         </section>
       )}
 
-      <section>
-        <h2>Samanburður við upprunalegt útboð</h2>
+      <section className={synaKafla("utbod") ? "" : "sk-falinn"}>
+        <h2>Samanburður við upprunalegt útboð <small>Lokið í einingum tilboðs · strikið er útboðsmagnið</small></h2>
+        <div className="sk-ustikur">
+          {utbodStikur.map((u) => <div key={u.nr}>
+            <span>{u.nr}</span>
+            <div><b>{u.heiti}</b><i><u style={{ width: `${Math.min(100, u.p / 1.5)}%` }} className={u.p > 100 ? "yfir" : u.p >= 75 ? "ok" : ""} /><s /></i></div>
+            <em><b>{u.p} %</b><small>{num(u.lokid, 1)} af {num(u.magn)} {u.ein}</small></em>
+          </div>)}
+        </div>
         <p className="sk-smatt">Skráð stök verk eru kláraðar skráningar í öllu verkinu{aukaRadir.length && !gogn.aukaverk_med ? ", án aukaverka" : ""}. Lokið = stök verk ÷ „stök per ein." (tvö stök verk eru ein lokun; gólfgöt eitt).<span className="sk-skjar"> Gildandi magn, stök per ein., Lokið og athugasemd eru breytanleg.</span></p>
         <table className="sk-tafla sk-utbod">
           <thead><tr><th>Nr.</th><th>Verkþáttur</th><th>Ein.</th><th>Útboð</th><th>Gildandi magn</th><th>Skráð stök verk</th><th>Stök per ein.</th><th>Lokið</th><th>% af magni</th><th>Mismunur</th><th>Athugasemd</th></tr></thead>
@@ -379,10 +459,13 @@ export default function SkyrslaClient() {
         <p className="sk-smatt">Liðir 1.1 og 1.3: Ajour hefur aðeins einn gólfflokk (Ø160-200), svo öll gólfgöt teljast á 1.2. Liður 2.11 er í metrum og reiknast ekki úr fjölda skráninga — metrarnir eru slegnir inn í „Lokið". Utan útboðsliða: {num(utanUtbods.n)} kláraðar skráningar{utanUtbods.nofn.length ? ` (${utanUtbods.nofn.join(", ")})` : ""}.</p>
       </section>
 
-      <section>
+      <section className={synaKafla("texti") ? "" : "sk-falinn"}>
         <textarea className="sk-texti" rows={3} placeholder="Lokaorð / næstu skref (valfrjálst) …" value={gogn.lok ?? ""} onChange={(e) => breyta({ lok: e.target.value })} />
         <p className="sk-prent sk-malsgr">{gogn.lok}</p>
       </section>
+      </div>
+      </div>
+      </div>
     </div>
   );
 }

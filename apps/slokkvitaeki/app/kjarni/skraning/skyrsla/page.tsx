@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { Poppins } from "next/font/google";
 import SkyrslaClient from "./SkyrslaClient";
 import "../skraning.css";
 import "./skyrsla.css";
+
+// Skýrslan fylgir útliti Brunahólfs V2 (hönnunin í Claude Design): Poppins, dökkblár haus, appelsínugul áhersla.
+const poppins = Poppins({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "600", "700"], variable: "--font-poppins", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Skráning — stöðuskýrsla",
@@ -10,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function SkyrslaPage() {
   return (
-    <div className="aj">
+    <div className={`aj ${poppins.variable}`}>
       <header className="aj-top">
         <a className="aj-logo" href="/kjarni" title="Kjarni" aria-label="Kjarni"><span>⌂</span></a>
         <nav className="aj-nav" aria-label="Skráning">

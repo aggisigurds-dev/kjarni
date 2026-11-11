@@ -116,3 +116,125 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
   td.sk-stikud i, td.sk-stikud::before, .sk-sum td, .sk-kafli td, .sk-tafla th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { margin: 14mm 12mm; }
 }
+
+/* =====================================================================================================================
+   Snið hönnunarinnar (Claude Design „Stöðuskýrsla NLSH“, Brunahólf V2): dökkblár haus, appelsínugul áhersla, Poppins, spjöld.
+   .sk-v2 yfirskrifar litabreytur Ajour-eftirlíkingarinnar innan skýrslunnar, svo töflur og hnappar fylgja sama litakerfi.
+   ===================================================================================================================== */
+.aj:has(.sk-v2) { background: #e9f0fa; }
+.sk-v2 { --bh-navy: #02193c; --bh-navy2: #011f40; --bh-navy3: #0b2d5f; --bh-or: #ff6702; --bh-or2: #ff8a1f; --bh-flotur: #f3f6fb; --bh-lina: #e7ecf3; --bh-lina2: #d8dee9;
+  --aj-black: #0b2d5f; --aj-ink: #101e43; --aj-dim: #5a6882; --aj-line: #e7ecf3; --aj-head: #f3f6fb;
+  max-width: 1480px; padding: 0 24px 60px; font-family: var(--font-poppins), system-ui, sans-serif; font-size: 13.5px; line-height: 1.5; color: #101e43; }
+.sk-v2 .sk-stika { margin: 0 -24px 20px; padding: 8px 24px; background: var(--bh-navy2); border-bottom: 0; }
+.sk-v2 .sk-stika span { color: #c9d3e3; }
+.sk-v2 .sk-stika .sk-val { color: #fff; }
+.sk-v2 .sk-stika button { border-radius: 10px; border-color: rgba(255, 255, 255, .22); background: transparent; color: #fff; }
+.sk-v2 .sk-stika button:first-of-type { border: 0; background: linear-gradient(#ff8a1f, #ec5300); box-shadow: 0 6px 16px rgba(255, 103, 2, .35); }
+.sk-v2 .sk-stika em { color: #fecaca; }
+.sk-rammi { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+.sk-hlid { position: sticky; top: 62px; display: flex; flex-direction: column; gap: 20px; }
+.sk-spjald { background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(2, 25, 60, .06), 0 8px 24px rgba(2, 25, 60, .08); overflow: hidden; }
+.sk-spjald h3 { margin: 0; height: 40px; display: flex; align-items: center; padding: 0 16px; background: linear-gradient(#012548, #011f40); color: #fff; font-size: 15px; font-weight: 600; }
+.sk-spjald-efni { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.sk-spjald-efni p { margin: 0; font-size: 12.5px; color: #5a6882; }
+.sk-spjald-efni p.sk-ovistad { color: #c2410c; font-weight: 600; }
+.sk-spjald-efni input[type="date"] { font: inherit; padding: 6px 8px; border: 1px solid var(--bh-lina2); border-radius: 10px; color: #101e43; }
+.sk-spjald-efni button { height: 40px; border-radius: 10px; border: 1px solid var(--bh-lina2); background: #fff; color: #101e43; font: inherit; font-weight: 600; cursor: pointer; }
+.sk-spjald-efni button.sk-adal { border: 0; background: linear-gradient(#ff8a1f, #ec5300); color: #fff; box-shadow: 0 6px 16px rgba(255, 103, 2, .3); }
+.sk-spjald-efni button:disabled { opacity: .45; cursor: default; box-shadow: none; }
+.sk-merki { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #2e4064; }
+.sk-merki:first-child { margin-top: 0; }
+.sk-rofi { display: flex; align-items: center; gap: 10px; min-height: 28px; cursor: pointer; }
+.sk-rofi input { position: absolute; opacity: 0; pointer-events: none; }
+.sk-rofi i { flex: none; position: relative; width: 34px; height: 20px; border-radius: 999px; background: #c3ccd9; transition: background .15s; }
+.sk-rofi i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.sk-rofi input:checked + i { background: var(--bh-or); }
+.sk-rofi input:checked + i::after { left: 16px; }
+.sk-rofi input:focus-visible + i { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+.sk-blad { min-width: 0; background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(2, 25, 60, .06), 0 8px 24px rgba(2, 25, 60, .08); overflow: hidden; }
+.sk-hetja { display: flex; align-items: flex-end; gap: 32px; padding: 28px 32px 30px; background: linear-gradient(120deg, #02193c 55%, #0b2d5f); color: #fff; }
+.sk-hetja-v { flex: 1 1 auto; min-width: 0; }
+.sk-kicker { font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--bh-or2); }
+.sk-v2 .sk-titill { margin: 6px 0 4px -4px; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; color: #fff; background: none; }
+.sk-v2 .sk-titill:hover, .sk-v2 .sk-titill:focus { border-color: rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .06); }
+.sk-hetja p { margin: 0; color: #c9d3e3; }
+.sk-hetja-h { flex: none; text-align: right; }
+.sk-hetja-h b { display: block; font-size: 64px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sk-hetja-h b i { font-style: normal; font-size: 30px; color: var(--bh-or2); }
+.sk-hetja-h span { font-size: 12.5px; color: #c9d3e3; }
+.sk-efni { padding: 22px 32px 30px; }
+.sk-v2 .sk-texti { border-color: var(--bh-lina2); border-radius: 10px; }
+.sk-inngangur { margin-bottom: 18px; }
+.sk-haedaspjold { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.sk-haedaspjold > div { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border-radius: 14px; background: var(--bh-flotur); }
+.sk-haedaspjold > div > div { display: flex; align-items: baseline; gap: 10px; }
+.sk-haedaspjold span { flex: 1 1 auto; font-size: 16px; font-weight: 600; }
+.sk-haedaspjold em { font-style: normal; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #feecd2; color: #9a3412; }
+.sk-haedaspjold em.ok { background: #ddfada; color: #166534; }
+.sk-haedaspjold em.eftir { background: #fee2de; color: #b91c1c; }
+.sk-haedaspjold b { font-size: 28px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sk-haedaspjold > div > i { display: block; height: 8px; border-radius: 999px; background: var(--bh-lina2); overflow: hidden; }
+.sk-haedaspjold u { display: block; height: 100%; border-radius: 999px; background: var(--bh-or); }
+.sk-haedaspjold u.ok { background: #16a34a; }
+.sk-haedaspjold small { font-size: 12.5px; color: #5a6882; font-variant-numeric: tabular-nums; }
+.sk-v2 h2 { margin: 30px 0 10px; font-size: 20px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.sk-v2 h2 small { font-size: 12.5px; font-weight: 400; color: #5a6882; }
+.sk-falinn { display: none !important; }
+.sk-v2 .sk-efni > section { overflow-x: auto; }   /* breiðar töflur skruna innan kaflans, ekki út fyrir blaðið */
+.sk-v2 .sk-tafla th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #2e4064; padding: 9px 10px; }
+.sk-v2 .sk-tafla td { padding: 6px 10px; }
+.sk-v2 .sk-sum td, .sk-v2 .sk-kafli td { background: var(--bh-flotur); }
+.sk-v2 td.sk-stikud::before { background: var(--bh-lina); }
+.sk-v2 td.sk-stikud i { background: #16a34a; }
+.sk-v2 td.sk-stikud i.lagt { background: var(--bh-or); }
+.sk-v2 .sk-tala input { border-color: var(--bh-lina2); border-radius: 6px; }
+.sk-v2 .sk-tala.br input { background: #fde5a4; border-color: #d9a400; color: #7a4b00; }
+.sk-flokkar td:first-child { width: 34%; }
+.sk-v2 .sk-sia { border-color: var(--bh-lina); border-radius: 12px; background: var(--bh-flotur); }
+.sk-v2 .sk-sia button { border-color: var(--bh-lina2); color: #2e4064; }
+.sk-v2 .sk-sia button.on { background: var(--bh-navy3); border-color: var(--bh-navy3); color: #fff; }
+.sk-v2 .sk-hk-tolur div { border: 0; border-radius: 12px; background: var(--bh-flotur); }
+.sk-v2 .sk-hk-tolur .sk-hk-pros { background: var(--bh-navy3); }
+.sk-v2 .sk-hk-mynd { border-color: var(--bh-lina); border-radius: 10px; }
+.sk-v2 .sk-hk-flogg div { border-radius: 10px; }
+.sk-ustikur { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 36px; margin: 4px 0 18px; }
+.sk-ustikur > div { display: grid; grid-template-columns: 40px minmax(0, 1fr) 128px; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+.sk-ustikur > div > span { font-size: 12.5px; color: #5a6882; }
+.sk-ustikur > div > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sk-ustikur > div > div b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-ustikur i { position: relative; display: block; height: 10px; border-radius: 999px; background: var(--bh-lina); }
+.sk-ustikur u { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--bh-or); }
+.sk-ustikur u.ok { background: #16a34a; }
+.sk-ustikur u.yfir { background: var(--bh-navy3); }
+.sk-ustikur s { position: absolute; left: 66.6%; top: -3px; width: 2px; height: 16px; background: #101e43; }
+.sk-ustikur em { font-style: normal; text-align: right; }
+.sk-ustikur em b { display: block; font-weight: 700; }
+.sk-ustikur em small { display: block; font-size: 12px; color: #5a6882; }
+
+@media (max-width: 1100px) {
+  .sk-rammi { grid-template-columns: minmax(0, 1fr); }
+  .sk-hlid { position: static; }
+  .sk-hetja { flex-direction: column; align-items: flex-start; gap: 14px; padding: 22px 20px; }
+  .sk-hetja-h { text-align: left; }
+  .sk-hetja-h b { font-size: 48px; }
+  .sk-v2 .sk-titill { font-size: 26px; }
+  .sk-efni { padding: 16px 16px 24px; }
+  .sk-haedaspjold, .sk-ustikur { grid-template-columns: minmax(0, 1fr); }
+  .sk-v2 { padding: 0 12px 40px; }
+  .sk-v2 .sk-stika { margin: 0 -12px 12px; padding: 8px 12px; }
+}
+
+@media print {
+  .aj:has(.sk-v2) { background: #fff !important; }
+  .sk-v2 { padding: 0; }
+  .sk-rammi { display: block; }
+  .sk-blad { box-shadow: none; border-radius: 0; overflow: visible; }
+  .sk-hetja { padding: 18pt 20pt; border-radius: 8pt; }
+  .sk-v2 .sk-titill { font-size: 22pt; color: #fff; }
+  .sk-hetja-h b { font-size: 40pt; }
+  .sk-efni { padding: 12pt 0 0; }
+  .sk-v2 h2 { margin: 18pt 0 6pt; font-size: 14pt; break-after: avoid; }
+  .sk-haedaspjold { gap: 10pt; }
+  .sk-ustikur > div, .sk-haedaspjold > div { break-inside: avoid; }
+  .sk-hetja, .sk-kicker, .sk-hetja-h b i, .sk-haedaspjold > div, .sk-haedaspjold em, .sk-haedaspjold > div > i, .sk-haedaspjold u, .sk-ustikur i, .sk-ustikur u, .sk-ustikur s, .sk-v2 td.sk-stikud i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
