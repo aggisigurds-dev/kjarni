@@ -66,3 +66,7 @@
   .gk-kort { grid-row: 1; height: 58vh; }
   .gk-hlid { grid-row: 2; border-right: 0; border-top: 1px solid var(--aj-line); overflow: visible; }
 }
+
+/* spjald áætlaðs gats: stærð, stök verk og athugasemd breytanleg */
+.gk-spjald .gk-rod { margin-bottom: 8px; }
+.gk textarea { width: 100%; min-width: 0; font: inherit; font-size: 12.5px; padding: 5px 6px; border: 1px solid #b9bec4; border-radius: 4px; background: #fff; color: var(--aj-ink); resize: vertical; }

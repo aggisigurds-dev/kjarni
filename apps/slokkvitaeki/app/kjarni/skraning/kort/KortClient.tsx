@@ -18,7 +18,10 @@ type Skr = { id: number; radnr: number; ajour_serial: number | null; teikning_id
 type Flokkur = { id: number; heiti: string };
 type Starfsm = { id: number; numer: number | null; nafn: string | null };
 type Lag = { id: number; teikning_id: number; heiti: string; fag: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; vorpun: Vorpun | null; gegnsaei: number; synilegt: boolean };
-type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fag: string; fjoldi: number; athugasemd: string | null };
+type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fag: string; fjoldi: number; athugasemd: string | null; flokkur_id: number | null };
+const AA_SEL = "id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd,flokkur_id";
+// Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
+const FAG_FLOKKAR: Record<string, RegExp> = { loftraesting: /^(Loft|Raufar)/i, sprinkler: /^Stál/i, vatn: /^(Stál|Plast)/i, hiti: /^(Stál|Plast)/i, fravatn: /^(Stál|Plast)/i, gas: /^(Stál|Plast)/i, rafmagn: /^Raf/i, golf: /^Gólf/i };
 type Nanar = { lysing: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string };
 type Punktur = { s: Skr; x: number; y: number; t: Takn };
 type Takn = { logun: "x" | "o" | "t" | "s" | "d"; litur: string; r: number; heiti: string; hopur: string };
@@ -82,6 +85,7 @@ export default function KortClient() {
   const [tvitok, setTvitok] = useState(false);
   const [synaSkr, setSynaSkr] = useState(true); const [synaAaetlud, setSynaAaetlud] = useState(true);
   const [baetaFag, setBaetaFag] = useState(""); // fag áætlaðs gats sem er verið að setja (tómt = ekki í setja-ham)
+  const [baetaFlokkur, setBaetaFlokkur] = useState<number | "">(""); const [baetaFjoldi, setBaetaFjoldi] = useState(2); // stærð (flokkur) og stök verk nýs gats
   const [valinn, setValinn] = useState<{ p?: Punktur; a?: Aaetlad; nanar?: Nanar | null } | null>(null);
   const [myndTeljari, setMyndTeljari] = useState(0); // hækkar þegar mynd hleðst → endurteikna
 
@@ -104,7 +108,7 @@ export default function KortClient() {
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_starfsmenn").select("id,numer,nafn").order("numer"),
           s.from("skr_log").select("id,teikning_id,heiti,fag,mynd_path,breidd_px,haed_px,vorpun,gegnsaei,synilegt").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
-          s.from("skr_aaetlud").select("id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd").eq("verk_id", vk.id).eq("eytt", false),
+          s.from("skr_aaetlud").select(AA_SEL).eq("verk_id", vk.id).eq("eytt", false),
         ]);
         const err = t.error || f.error || m.error || l.error || a.error; if (err) throw new Error(err.message);
         const tt = t.data as Teikning[];
@@ -255,7 +259,7 @@ export default function KortClient() {
     const p = stadur(e), s = sjon.current, wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k;
     if (baetaFag) {
       if (wx < 0 || wy < 0 || wx > W || wy > H) return;
-      const r = await sb().from("skr_aaetlud").insert({ verk_id: verk.id, teikning_id: teikning.id, x_px: Math.round(wx * 10) / 10, y_px: Math.round(wy * 10) / 10, fag: baetaFag, uppruni: "handvirkt" }).select("id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd").single();
+      const r = await sb().from("skr_aaetlud").insert({ verk_id: verk.id, teikning_id: teikning.id, x_px: Math.round(wx * 10) / 10, y_px: Math.round(wy * 10) / 10, fag: baetaFag, flokkur_id: baetaFlokkur === "" ? null : baetaFlokkur, fjoldi: baetaFjoldi > 0 ? baetaFjoldi : 1, uppruni: "handvirkt" }).select(AA_SEL).single();
       if (r.error) { setVilla(r.error.message); return; }
       setAaetlud((a) => [...a, r.data as Aaetlad]); return;
     }
@@ -270,6 +274,11 @@ export default function KortClient() {
   };
 
   // ---------------------------------------------------------------- lög og áætluð göt (skrif aðeins við smell)
+  const breytaAaetludu = async (a: Aaetlad, breyting: Partial<Pick<Aaetlad, "flokkur_id" | "fjoldi" | "athugasemd" | "fag">>, vista = true) => {
+    const nytt = { ...a, ...breyting };
+    setAaetlud((x) => x.map((y) => (y.id === a.id ? nytt : y))); setValinn((v) => (v?.a?.id === a.id ? { ...v, a: nytt } : v));
+    if (vista) { const r = await sb().from("skr_aaetlud").update(breyting).eq("id", a.id); if (r.error) setVilla(r.error.message); }
+  };
   const fjarlaegjaAaetlad = async (a: Aaetlad) => { const r = await sb().from("skr_aaetlud").update({ eytt: true }).eq("id", a.id); if (r.error) { setVilla(r.error.message); return; } setAaetlud((x) => x.filter((y) => y.id !== a.id)); setValinn(null); };
   const breytaLagi = async (l: Lag, breyting: Partial<Lag>, vista = true) => {
     setLog((x) => x.map((y) => (y.id === l.id ? { ...y, ...breyting } : y)));
@@ -296,6 +305,7 @@ export default function KortClient() {
   const kl = syndir.filter((p) => p.s.stada === "done").length;
   const nafn = (id: number | null) => { const m = menn.find((x) => x.id === id); return m ? (m.nafn || `Starfsmaður ${m.numer}`) : "—"; };
   const fl = (id: number | null) => flokkar.find((f) => f.id === id)?.heiti || "—";
+  const flokkarFags = (fag: string) => { const r = FAG_FLOKKAR[fag]; const m = r ? flokkar.filter((f) => r.test(f.heiti)) : []; return (m.length ? m : flokkar).slice().sort((a, b) => a.heiti.localeCompare(b.heiti, "is")); };
   const LAGF: Record<string, string> = { A: "Lagfæring skráð sem nýtt verk", B: "Lagfæring aðeins sem athugasemd", "?": "Lagfæring, óflokkuð" };
 
   return (
@@ -333,7 +343,13 @@ export default function KortClient() {
 
         <section>
           <h2>Áætluð göt</h2>
-          <div className="gk-rod"><select value={baetaFag} onChange={(e) => setBaetaFag(e.target.value)} aria-label="Fag áætlaðs gats"><option value="">Setja áætlað gat: slökkt</option>{FOG.filter((f) => f[0] !== "annad").map((f) => <option key={f[0]} value={f[0]}>Setja: {f[1]}</option>)}<option value="annad">Setja: Annað</option></select></div>
+          <div className="gk-rod"><select value={baetaFag} onChange={(e) => { setBaetaFag(e.target.value); setBaetaFlokkur(""); }} aria-label="Fag áætlaðs gats"><option value="">Setja áætlað gat: slökkt</option>{FOG.filter((f) => f[0] !== "annad").map((f) => <option key={f[0]} value={f[0]}>Setja: {f[1]}</option>)}<option value="annad">Setja: Annað</option></select></div>
+          {baetaFag && (
+            <div className="gk-rod gk-tvo">
+              <label>Stærð / flokkur<select value={baetaFlokkur} onChange={(e) => setBaetaFlokkur(e.target.value === "" ? "" : Number(e.target.value))}><option value="">— óvalið —</option>{flokkarFags(baetaFag).map((f) => <option key={f.id} value={f.id}>{f.heiti}</option>)}</select></label>
+              <label style={{ flex: "0 0 30%" }}>Stök verk<input type="number" min={1} step={1} value={baetaFjoldi} onChange={(e) => setBaetaFjoldi(Number(e.target.value))} /></label>
+            </div>
+          )}
           {baetaFag ? <p className="gk-smatt gk-virkt">Smelltu á teikninguna þar sem lögnin fer gegnum brunavegg. Slökktu á hamnum þegar þú ert búinn.</p> : <p className="gk-smatt">{FOG.map((f) => [f, aaetludSynar.filter((a) => a.fag === f[0]).length] as const).filter((x) => x[1]).map(([f, n]) => `${f[1]} ${n}`).join(" · ") || "Engin áætluð göt skráð á þetta blað."}</p>}
         </section>
 
@@ -390,6 +406,11 @@ export default function KortClient() {
           <div className="gk-spjald">
             <button type="button" className="gk-x" onClick={() => setValinn(null)} aria-label="Loka">×</button>
             <h3>Áætlað gat <span style={{ color: fagLitur(valinn.a.fag) }}>{fagHeiti(valinn.a.fag)}</span></h3>
+            <div className="gk-rod gk-tvo">
+              <label>Stærð / flokkur<select value={valinn.a.flokkur_id ?? ""} onChange={(e) => breytaAaetludu(valinn.a!, { flokkur_id: e.target.value === "" ? null : Number(e.target.value) })}><option value="">— óvalið —</option>{(valinn.a.flokkur_id && !flokkarFags(valinn.a.fag).some((f) => f.id === valinn.a!.flokkur_id) ? [...flokkarFags(valinn.a.fag), ...flokkar.filter((f) => f.id === valinn.a!.flokkur_id)] : flokkarFags(valinn.a.fag)).map((f) => <option key={f.id} value={f.id}>{f.heiti}</option>)}</select></label>
+              <label style={{ flex: "0 0 30%" }}>Stök verk<input type="number" min={1} step={1} value={valinn.a.fjoldi} onChange={(e) => breytaAaetludu(valinn.a!, { fjoldi: Math.max(1, Number(e.target.value) || 1) })} /></label>
+            </div>
+            <label className="gk-rod">Athugasemd<textarea rows={3} value={valinn.a.athugasemd ?? ""} onChange={(e) => breytaAaetludu(valinn.a!, { athugasemd: e.target.value }, false)} onBlur={(e) => breytaAaetludu(valinn.a!, { athugasemd: e.target.value || null })} /></label>
             <button type="button" onClick={() => fjarlaegjaAaetlad(valinn.a!)}>Fjarlægja</button>
           </div>
         )}
