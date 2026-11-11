@@ -148,6 +148,21 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Ógert:** „NLSH - Viðbótarverkefni“ (85) sýnir 6H efst og 5H neðst á sama blaði; þarf hluta eftir y með sitt yfirlit hvor.
   Hub-kortið (`brunaholf/tools/nlsh-stukur.cjs` TRANS) notar enn gömlu vörpunina fyrir 4H S1-S2.
 
+## Sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (11.11.2026, Agnar: „já endilega“)
+- **Tól:** `tools/skraning-gatakort-skr-festa.cjs --haed 6H|5H --yfirlit <mappa> --log <mappa> [--radius 45] [--write] [--afturkalla]`
+  (kallar `-skr-festa.py`). Þurrkeyrsla nema `--write`. Þarf yfirlitsmyndirnar (5790 × 2850) og lagamyndirnar í sömu stærð
+  (`lag-6h-<fag>-<blað>.png`) á diski. Hópar: Loft + Raufar → loftræsting; Stál + Plast → vatnslagnir, vatnsúði, lyfjaloft;
+  Raf → raflagnaleiðir. Milliloft er ekki fært (göt í gólfi liggja ekki við vegg).
+- **Regla:** skurðpunktur = klasi þar sem lag liggur innan 4 px frá RAUÐUM brunavegg; punktur fær næsta slíkan innan 45 px (1,35 m).
+  Margir punktar mega eiga sama skurðpunkt. Finnist enginn: svört vegglína, en aðeins innan 20 px. Punkturinn lendir 4 px + 20 % af
+  upphaflegri fjarlægð frá skurðpunktinum, SÍN megin við vegginn (mest 12 px), svo stök verk við sama gat leggist ekki saman.
+- **Skrif:** `skr_faerslur` með `uppruni = sjalfvirkt` og `fra_x/fra_y` = vörpuð staða. Handvirkar færslur eru aldrei snertar;
+  endurkeyrsla reiknar frá `fra_x/fra_y`. `--afturkalla --write` merkir allar sjálfvirkar færslur hæðar eytt.
+- **Útkoma 11.11:** 6H 3.947 færðar af 5.510 (loft 1.008 af 1.200, rör 3.090 af 3.826, rafmagn 257 af 484); 5H 3.063 af 4.238.
+  Miðgildi færslu 0,18–0,29 m (rafmagn 0,53–0,59 m), mest 0,96 m. Fjarlægð paraðra skráninga í áætlað gat: 6H miðgildi
+  0,53 → 0,33 m (innan 0,3 m: 402 → 859 af 1.859), 5H 0,37 → 0,20 m (172 → 341 af 458). Deild breyttist hjá engri skráningu.
+- **Eftir færslu:** keyra `-para.cjs --write` aftur (gert 11.11).
+
 ## Færðir punktar á gatakortinu (11.11.2026) — tafla `skr_faerslur`
 - **Hvað:** hnappurinn „Færa punkta" (efst til hægri, aðeins á yfirlitsblöðum) kveikir á færsluham: bendill niður á sýndan punkt
   grípur hann (innan 14 skjápixla), dráttur færir, slepping vistar. Síur og lög gilda eins og venjulega, svo Agnar síar fyrst á
