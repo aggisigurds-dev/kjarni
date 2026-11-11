@@ -132,6 +132,22 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - Upplausn: hnitin eru í pixlum yfirlitsins (5790 × 2850, 1 px ≈ 29 mm) með einum aukastaf (≈ 3 mm); skörpu flísarnar (12 px/pt) eru
   aðeins fyrir myndina. Hærri upplausn á hæðinni þarf því ekki vegna hnitanna.
 
+## Endurstilling teikninga og talning eftir stöðu (11.11.2026, Agnar: „eins nákvæmt og hægt er“)
+- **Talning eftir stöðu:** kortið (`deildAf`, `Punktur.d`) og stöðuskýrslan (les `skr_haedarhnit`) telja deild eftir STÖÐU punktsins á
+  yfirlitsblaðinu; `ajour_gogn.deild` er aðeins varaleið fyrir punkta sem eru ekki á yfirliti. Færður punktur fylgir því nýja staðnum.
+- **Mæling á vörpun** (`ser_stilla.py`/`allar_stilla.py` í lotumöppu: FFT-fylgni veggja per álmuhelming, borið við núverandi vörpun):
+  6H.pdf, Brunayfirlit 6H og „5H. Ceiling“ sitja innan 0,03–0,19 m og voru látin vera. „5H 1S og 2S“ er samsett → sér vörpun per
+  helming (færsla ≤ 0,11 m, fylgni 0,40 → 0,50). S4+S5-blöðin (4H og 5H): kvarði 0,9328 (færsla 0,07–0,14 m, fylgni 0,55 → 0,64).
+- **„4H. S1-S2.jpg“ var RANGT stillt** (a 0,625; punktar allt að nokkrum metrum frá). Blaðið er SKÖNNUÐ 4. hæðar grunnmynd, snúin um
+  0,31°, og veggjafylgni við 5H-yfirlitið virkar ekki (annað herbergjaskipulag). Ný vörpun úr þremur ásamótum sem eru eins á öllum
+  hæðum, lesin af báðum myndum: A∩1 (532,5; 1155,8 → 68,5; 86,8), I∩13 (3431,8; 4900,7 → 2131,2; 2780,0), D∩13 (1538,8; 4910,8 →
+  776,2; 2780,0) → full affín vörpun (a 0,71578, b 0,00382, c −0,00335, d 0,71621, e −308,78, f −743,03). `varpa()`, para-tólið og
+  sýnin styðja nú b, c, d (sama röð og canvas.transform). Óháð athugun (fjarlægð í hreinlætistæki 5H): miðgildi 1,74 → 1,15 m.
+- **„6H4S“ og „6H5S“** eru komin á yfirlit (fylgni 0,50): 10.655 af 10.740 skráningum með pinna hafa nú hæðarhnit.
+- **Gildra:** FFT-hliðrun sem er stór og jákvæð (álma hægra megin) má ekki vefja við W/2 — vefja aðeins það sem er utan yfirlitsins.
+- **Ógert:** „NLSH - Viðbótarverkefni“ (85) sýnir 6H efst og 5H neðst á sama blaði; þarf hluta eftir y með sitt yfirlit hvor.
+  Hub-kortið (`brunaholf/tools/nlsh-stukur.cjs` TRANS) notar enn gömlu vörpunina fyrir 4H S1-S2.
+
 ## Færðir punktar á gatakortinu (11.11.2026) — tafla `skr_faerslur`
 - **Hvað:** hnappurinn „Færa punkta" (efst til hægri, aðeins á yfirlitsblöðum) kveikir á færsluham: bendill niður á sýndan punkt
   grípur hann (innan 14 skjápixla), dráttur færir, slepping vistar. Síur og lög gilda eins og venjulega, svo Agnar síar fyrst á
