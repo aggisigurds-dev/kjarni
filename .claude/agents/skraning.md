@@ -59,6 +59,23 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Gildrur:** (1) `5H. Ceiling` er heilt hæðarblað með fjórum deildum, ekki S1+S2. (2) Ajour á tvær skráningar með raðnúmer
   5786 — sú yngri fær `radnr` 1005786, rétta númerið er í `ajour_serial`. (3) Ljósmyndir eru EKKI fluttar inn; `ajour_gogn.myndir`
   geymir Ajour-fileId. (4) 466 skráningar eru án teikningar og sjást ekki á korti.
+- **Lög (11.11.2026):** sex fagblöð úr Procore eru komin í `skr_log` — vatnsúðakerfi (M395/M396, fag `sprinkler`), þrifa-, hita- og
+  kælikerfi (M195/M196, `vatn`) og lyfjaloft (M795/M796, `gas`) á 5H (teikning 5) og 6H (teikning 4). Ferlið: PDF úr Procore →
+  `tools/skraning-gatakort-stilla.py` (hliðrun með FFT-fylgni við brunayfirlitið; `-kvardi.py` ef kvarðinn er annar) →
+  `tools/skraning-gatakort-lagmynd.py` (gegnsæ PNG í hnitum grunnmyndar, vörpun 1:1) → `tools/skraning-gatakort-log.cjs --write`.
+  Mæld afstilling er í haus `-log.cjs` og í `skr_log.uppruni`. **Gildra:** blöðin eru öll A1 en húsið situr EKKI á sama stað á
+  blaðinu (hliðrun 10–90 pt) og M396 er teiknað 10 % minna (q = 1,1) — aldrei leggja fagblað beint yfir án mælingar.
+  PDF-skrárnar: `Documents\NLSH\procore-yfirlit`. Raflagnaleiðir (R1150/R1160) eru ókomnar.
+- **Loftræsing (11.11.2026):** engin yfirlitsmynd er til, aðeins 36 hlutablöð í 1:50 (M215-01…20 á 5H; M216-01…08 og 13…20 á 6H,
+  S3 er aðeins á 5H). Hvert blað er stillt af eftir ásamerkjum (A–X, 1–13) með `tools/skraning-gatakort-asar.py` (q = 0,2, frávik
+  ≤ 0,06 pt) og skeytt í eitt lag á hæð með `tools/skraning-gatakort-skeyta.py`; lagið geymir aðeins fyllta stokka (gráar fyllingar
+  180/200 dökkir, 214–215/230 ljósir — útveggjafylling er 211–212 og má ekki slæðast með). Fag `loftraesting`, `skr_log.uppruni`
+  byrjar á `Procore M215 ` / `Procore M216 `. PDF-skrárnar og `skra.json` (útgáfa hvers blaðs): `Documents\NLSH\procore-loftraesing`.
+- **Vatnslagnir í lit og raflagnaleiðir (11.11.2026):** hlutablöð M115/M116 (litkóðuð: rautt, blátt, brúnt, grænt) og R1150/R1160
+  (bakkar sem svartar línur) eru komin sem lög (`vatn` „Vatnslagnir í lit", `rafmagn` „Raflagnaleiðir"), falin sjálfgefið.
+  M-blöðin stillast af eftir ásamerkjum; R-blöðin hafa ENGIN ásamerki og eru borin saman við loftræsiblað sama hlutanúmers með
+  `tools/skraning-gatakort-fylgni.py`. Samskeyting: `tools/skraning-gatakort-skeyta-lit.py litur|dokkt`. PDF: `Documents\NLSH\procore-hlutablod`.
+  Miro-rammarnir „6H2S Vatnslagnakerfi" o.fl. (handteiknuð merki Agnars) eru EKKI komnir inn sem áætluð göt.
 
 ## Tengsl
 - **bokari** (bh) — NLSH/gata-uppgjör les `skr_hub_skraningar`; samanburður fyrir/eftir.

@@ -211,12 +211,15 @@ export default function KortClient() {
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
+  // passa má EKKI hanga á teiknifallinu: það breytist við hverja síu og hvert lag, og þá núllstilltist stækkunin (11.11.2026).
+  const bidjaRef = useRef(bidjaUmTeikningu);
+  useEffect(() => { bidjaRef.current = bidjaUmTeikningu; }, [bidjaUmTeikningu]);
   const passa = useCallback(() => {
     const kassi = kassiRef.current; if (!kassi) return;
     const k = Math.min(kassi.clientWidth / W, kassi.clientHeight / H);
     sjon.current = { k, k0: k, tx: (kassi.clientWidth - W * k) / 2, ty: (kassi.clientHeight - H * k) / 2 };
-    bidjaUmTeikningu();
-  }, [W, H, bidjaUmTeikningu]);
+    bidjaRef.current();
+  }, [W, H]);
   useEffect(() => { passa(); }, [passa, syn]);
   useEffect(() => { const f = () => { const kassi = kassiRef.current; if (kassi) sjon.current.k0 = Math.min(kassi.clientWidth / W, kassi.clientHeight / H); bidjaUmTeikningu(); }; window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, [W, H, bidjaUmTeikningu]);
 
