@@ -12,7 +12,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sb, publicUrl, hladaUpp } from "../lib/sb";
 
-type Vorpun = { a: number; e: number; f: number; b?: number; c?: number; d?: number };
+type Vorpun = { a: number; e: number; f: number; b?: number; c?: number; d?: number; hlutar?: { fra_x: number; a: number; e: number; f: number }[] };
+/** Varpar hnitum Ajour-teikningar á yfirlitsblað. `hlutar`: blað sem er sett saman úr fleiri en einni mynd (t.d. tvær álmur hlið
+ *  við hlið, „6H 2S-1S Rafmagnsþéttingar“) — síðasti hluti með fra_x ≤ x ræður, annars grunnvörpunin. */
+const varpa = (v: Vorpun, x: number, y: number): [number, number] => { let h: { a: number; e: number; f: number } = v; if (v.hlutar) for (const q of v.hlutar) if (x >= q.fra_x) h = q; return [h.a * x + h.e, h.a * y + h.f]; };
 /** Skarpar flísar (kvardi × upplausn grunnmyndar), hlaðið aðeins fyrir það sem sést þegar stækkað er inn. */
 type Flisar = { kvardi: number; bx: number; by: number; dalkar: number; radir: number; slod: string; ending: string; til: string[] };
 const FLISA_MORK = 1.15;   // skjápixlar per grunnmyndarpixil: þar yfir eru flísar notaðar
@@ -169,7 +172,7 @@ export default function KortClient() {
     for (const s of skr) {
       if (s.teikning_id == null || s.x_px == null || s.y_px == null || !born.has(s.teikning_id)) continue;
       const v = born.get(s.teikning_id);
-      const x0 = v ? v.a * +s.x_px + v.e : +s.x_px, y0 = v ? v.a * +s.y_px + v.f : +s.y_px, f = fm.get(s.id);
+      const [x0, y0] = v ? varpa(v, +s.x_px, +s.y_px) : [+s.x_px, +s.y_px], f = fm.get(s.id);
       out.push({ s, x: f ? +f.x_px : x0, y: f ? +f.y_px : y0, x0, y0, faersla: f, t: (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
     }
     return out;

@@ -35,7 +35,7 @@ const FAG_HOPUR = { loftraesting: 'loft', rafmagn: 'rafmagn', sprinkler: 'ror', 
   const faerslur = new Map((await allt(`skr_faerslur?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&select=skraning_id,x_px,y_px&order=id`)).map((f) => [f.skraning_id, f]));
   const skr = (await allt(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.false&teikning_id=in.(${[...born.keys()].join(',')})&select=id,radnr,teikning_id,x_px,y_px,flokkur_id,framkvaemt_til,deild:ajour_gogn->>deild&order=id`))
     .filter((s) => s.x_px != null && s.y_px != null)
-    .map((s) => { const v = born.get(s.teikning_id), f = faerslur.get(s.id); return { ...s, X: f ? +f.x_px : v.a * s.x_px + v.e, Y: f ? +f.y_px : (v.d ?? v.a) * s.y_px + v.f, hopur: hopur(flokkar.get(s.flokkur_id) || '') }; })
+    .map((s) => { const v = born.get(s.teikning_id), f = faerslur.get(s.id); const h = (v.hlutar || []).reduce((m, q) => (s.x_px >= q.fra_x ? q : m), v); return { ...s, X: f ? +f.x_px : h.a * s.x_px + h.e, Y: f ? +f.y_px : (h.d ?? h.a) * s.y_px + h.f, hopur: hopur(flokkar.get(s.flokkur_id) || '') }; })
     .filter((s) => s.hopur);
   const merki = aa.map((a) => ({ ...a, x: +a.x_px, y: +a.y_px, hopur: (a.flokkur_id && hopur(flokkar.get(a.flokkur_id) || '')) || FAG_HOPUR[a.fag] || null, par: [] }));
   // rist til að finna nágranna hratt

@@ -109,6 +109,19 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Stöðusía (11.11.2026):** Allt / Tilbúin (kláraðar skráningar) / Í vinnslu (ókláraðar skráningar + merki að hluta) / Eftir
   (áætluð göt án skráningar og handvirkir punktar, teiknaðir RAUÐIR). Stærðarsían (táknin) gildir líka um áætluð göt.
 
+## Rafmagn á sérteikningum telst á deild og sést á yfirlitinu (11.11.2026)
+- `6H 2S-1S Rafmagnsþéttingar.jpg` (teikning 11, 240 skráningar) og `5H1S OG 5H2S - Rafmagnsþéttingar.jpg` (teikning 14, 72) voru „án deildar“.
+  Báðar sýna S1 vinstra megin (ásar A–D) og S2 hægra megin (F–I). Nú fá skráningarnar `ajour_gogn.haed/deild/svaedi` með SÖMU aðferð
+  og önnur blöð (stærsta bilið í x skiptir í deildir; y-svið punkta blaðsins í N/C/S): 6H S1 117 (109 kláruð), S2 123 (121);
+  5H S1 12, S2 60 (0 kláruð). Reglan er í `RULES` í `tools/skraning-gatakort-innflutningur.cjs` (DRY-keyrsla gaf sömu tölur og
+  SQL-uppfærslan sem var keyrð 11.11). Heild skýrslunnar: 87 % (10.291 af 11.889); 6H 96 %.
+- **Vörpun á yfirlit:** fundin með FFT-fylgni rauðra/bleikra brunaveggja (styrkur 0,54–0,66, sannreynt með yfirlögn). Teikning 14:
+  a 0,4536, e −158, f −172. Teikning 11 er SAMSETT úr tveimur myndum (bilið milli álma ekki í kvarða): vinstri a 0,46475, e −58,
+  f −40; hægri (x ≥ 2180) a 0,46775, e 194,3, f −50 → `vorpun.hlutar` (síðasti hluti með `fra_x` ≤ x ræður; `varpa()` í KortClient,
+  sama í para-tólinu). `SER_VORPUN` í innflutningstólinu heldur þessu við endurinnflutning.
+- Enn án deildar: `NLSH - Viðbótarverkefni` (aukaverk, 85) og skráningar án teikningar (466). `6H4S`/`6H5S` (9) hafa deild en eru ekki á yfirliti.
+- Hub-síðan (`brunaholf/tools/nlsh-stukur.cjs`) hefur EKKI þessar reglur enn — þar er rafmagn sérteikninga áfram „utan deilda“.
+
 ## Færðir punktar á gatakortinu (11.11.2026) — tafla `skr_faerslur`
 - **Hvað:** hnappurinn „Færa punkta" (efst til hægri, aðeins á yfirlitsblöðum) kveikir á færsluham: bendill niður á sýndan punkt
   grípur hann (innan 14 skjápixla), dráttur færir, slepping vistar. Síur og lög gilda eins og venjulega, svo Agnar síar fyrst á

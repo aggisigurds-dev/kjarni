@@ -39,6 +39,14 @@ const RULES = [
   [/^6H\.pdf/i, '6H', ['S1', 'S2']], [/Brunayfirlit 6H/i, '6H', ['S4', 'S5']], [/^6H4S/i, '6H', ['S4']], [/^6H5S/i, '6H', ['S5']],
   [/^5H 1S og 2S/i, '5H', ['S1', 'S2']], [/^5H\. Ceiling/i, '5H', ['S1', 'S2', 'S4', 'S5']], [/^5H\s+S4 \+ S5/i, '5H', ['S4', 'S5']],
   [/^4H\. S1-S2/i, '4H', ['S1', 'S2']], [/^4H\s+4S \+ 5S/i, '4H', ['S4', 'S5']],
+  // Rafmagn á sérteikningum (11.11.2026): S1 vinstra megin (ásar A–D), S2 hægra megin (F–I) — skipt við stærsta bilið í x
+  [/^6H 2S-1S Rafmagns/i, '6H', ['S1', 'S2']], [/^5H1S OG 5H2S/i, '5H', ['S1', 'S2']],
+];
+// Sérteikningar stilltar af á yfirlitið með fylgni brunaveggja (11.11.2026): yfirlit_px = a·px + (e, f). „6H 2S-1S“ er sett saman úr
+// tveimur myndum (S1 og S2 hlið við hlið, bilið á milli ekki í kvarða) og fær því sér vörpun fyrir hægri hlutann (x ≥ fra_x).
+const SER_VORPUN = [
+  [/^6H 2S-1S Rafmagns/i, '6H', { a: 0.46475, e: -58, f: -40, hlutar: [{ fra_x: 2180, a: 0.46775, e: 194.3, f: -50 }] }],
+  [/^5H1S OG 5H2S/i, '5H', { a: 0.4536, e: -158, f: -172 }],
 ];
 // Ajour px → PDF-punktar brunayfirlitsblaðsins (A285-31 5H / A286-31 6H Rev.A): pt = px / k + d. Yfirlitsmyndin = CROP í S px/pt.
 const CROP = { x: 230, y: 265, w: 1930, h: 950 }, S = 3;
@@ -117,9 +125,9 @@ const flokkTegund = (h) => (/^(Stál|Plast|Loft|Gólf|Gat)/i.test(h) ? 'gat' : /
     const jpg = path.join(DIR, mappa, 'teikningar', `${t.fileId}.jpg`); if (!fs.existsSync(jpg)) { console.log('  ! vantar', t.nafn); continue; }
     const buf = fs.readFileSync(jpg), dims = jpegDims(buf), sp = `verk/${verk.id}/ajour-${t.fileId}.jpg`;
     if (!til.some((x) => x.ajour_file_id === t.fileId)) await upload(sp, buf, 'image/jpeg');
-    const tr = TRANS.find((x) => x[0].test(t.nafn || '')), rule = RULES.find((x) => x[0].test(t.nafn || ''));
+    const tr = TRANS.find((x) => x[0].test(t.nafn || '')), rule = RULES.find((x) => x[0].test(t.nafn || '')), ser = SER_VORPUN.find((x) => x[0].test(t.nafn || ''));
     const [row] = await upsert('skr_teikningar', [{ verk_id: verk.id, heiti: t.nafn || t.fileId, haed: rule ? rule[1] : ((t.nafn || '').match(/^(\dH)/) || [])[1] || null, tegund: 'teikning', mynd_path: sp, breidd_px: dims.w || null, haed_px: dims.h || null, ajour_file_id: t.fileId, rod: 10,
-      yfirlit_id: tr ? yfirlit[tr[1]] : null, vorpun: tr ? { a: S / tr[2], e: (tr[3] - CROP.x) * S, f: (tr[4] - CROP.y) * S } : null, deildir: rule ? rule[2] : null }], 'ajour_file_id');
+      yfirlit_id: tr ? yfirlit[tr[1]] : ser ? yfirlit[ser[1]] : null, vorpun: tr ? { a: S / tr[2], e: (tr[3] - CROP.x) * S, f: (tr[4] - CROP.y) * S } : ser ? ser[2] : null, deildir: rule ? rule[2] : null }], 'ajour_file_id');
     teiknId.set(t.fileId, row.id);
   }
   console.log('  teikningar', teiknId.size, '+ yfirlit', Object.keys(yfirlit).length);
