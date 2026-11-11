@@ -122,6 +122,16 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - Enn án deildar: `NLSH - Viðbótarverkefni` (aukaverk, 85) og skráningar án teikningar (466). `6H4S`/`6H5S` (9) hafa deild en eru ekki á yfirliti.
 - Hub-síðan (`brunaholf/tools/nlsh-stukur.cjs`) hefur EKKI þessar reglur enn — þar er rafmagn sérteikninga áfram „utan deilda“.
 
+## Hæðarhnit: hver punktur með eigin hnit á hæðinni (11.11.2026) — sýnin `skr_haedarhnit`
+- Agnar: „hver punktur verði í raun sjálfstæður, fær sín hnit miðað við alla hæðina“. Sýnin gefur fyrir hverja skráningu `yfirlit_id`, `haed`,
+  `x_px`/`y_px` á yfirlitsblaðinu (vörpun teikningar með hlutum; færður punktur ræður), `faerdur`, og `deild`/`hluti` reiknað úr
+  STÖÐUNNI (x < 17,9 % S1, < 50 % S2, < 81,2 % S4, annars S5; y < 28,8 % N, < 71,16 % C, annars S).
+- Mælt 11.11: 10.646 af 10.740 skráningum með pinna hafa hæðarhnit (vantar: Viðbótarverkefni 85, 6H4S 4, 6H5S 5). Deild úr stöðu =
+  `ajour_gogn.deild` í ÖLLUM tilvikum; hluti víkur í 35 (0,3 %) við mörkin. Skýrslan og kortið nota enn `ajour_gogn` — skipta má yfir á
+  sýnina ef færðir punktar eiga að flytjast milli hluta.
+- Upplausn: hnitin eru í pixlum yfirlitsins (5790 × 2850, 1 px ≈ 29 mm) með einum aukastaf (≈ 3 mm); skörpu flísarnar (12 px/pt) eru
+  aðeins fyrir myndina. Hærri upplausn á hæðinni þarf því ekki vegna hnitanna.
+
 ## Færðir punktar á gatakortinu (11.11.2026) — tafla `skr_faerslur`
 - **Hvað:** hnappurinn „Færa punkta" (efst til hægri, aðeins á yfirlitsblöðum) kveikir á færsluham: bendill niður á sýndan punkt
   grípur hann (innan 14 skjápixla), dráttur færir, slepping vistar. Síur og lög gilda eins og venjulega, svo Agnar síar fyrst á

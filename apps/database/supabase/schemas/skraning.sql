@@ -393,3 +393,29 @@ create policy skr_faerslur_update on public.skr_faerslur for update using (true)
 drop trigger if exists skr_faerslur_touch on public.skr_faerslur;
 create trigger skr_faerslur_touch before update on public.skr_faerslur for each row execute function public.skr_touch();
 grant select, insert, update on public.skr_faerslur to anon, authenticated;
+
+-- ---------------------------------------------------------------- gatakort: hæðarhnit (11.11.2026, migration skr_haedarhnit)
+-- skr_haedarhnit  staða hverrar skráningar á yfirlitsblaði hæðarinnar, óháð því á hvaða Ajour-teikningu punkturinn var settur:
+--                 vörpun teikningar (vorpun, með hlutum fyrir samsett blöð) og færður punktur (skr_faerslur) ráða.
+--                 deild og hluti reiknast úr stöðunni sjálfri (x-/y-hlutfall af blaðinu), svo færður punktur fylgir nýja staðnum.
+create or replace view public.skr_haedarhnit with (security_invoker = true) as
+select s.id as skraning_id, s.verk_id, s.teikning_id, y.id as yfirlit_id, y.haed,
+       round(coalesce(f.x_px, (v.h->>'a')::numeric * s.x_px + (v.h->>'e')::numeric), 1) as x_px,
+       round(coalesce(f.y_px, (v.h->>'a')::numeric * s.y_px + (v.h->>'f')::numeric), 1) as y_px,
+       (f.id is not null) as faerdur,
+       case when p.fx < 0.179 then 'S1' when p.fx < 0.5 then 'S2' when p.fx < 0.812 then 'S4' else 'S5' end as deild,
+       case when p.fy < 0.288 then 'N' when p.fy < 0.7116 then 'C' else 'S' end as hluti
+from public.skr_skraningar s
+join public.skr_teikningar t on t.id = s.teikning_id and t.yfirlit_id is not null and t.vorpun is not null and not t.eytt
+join public.skr_teikningar y on y.id = t.yfirlit_id
+left join public.skr_faerslur f on f.skraning_id = s.id and f.teikning_id = y.id and not f.eytt
+cross join lateral (
+  select coalesce((select q from jsonb_array_elements(coalesce(t.vorpun->'hlutar', '[]'::jsonb)) q
+                   where s.x_px >= (q->>'fra_x')::numeric order by (q->>'fra_x')::numeric desc limit 1), t.vorpun) as h
+) v
+cross join lateral (
+  select coalesce(f.x_px, (v.h->>'a')::numeric * s.x_px + (v.h->>'e')::numeric) / nullif(y.breidd_px, 0) as fx,
+         coalesce(f.y_px, (v.h->>'a')::numeric * s.y_px + (v.h->>'f')::numeric) / nullif(y.haed_px, 0) as fy
+) p
+where not s.eytt and s.x_px is not null and s.y_px is not null;
+grant select on public.skr_haedarhnit to anon, authenticated;
