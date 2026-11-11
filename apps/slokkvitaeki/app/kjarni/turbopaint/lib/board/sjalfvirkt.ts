@@ -4,7 +4,8 @@
 // síðan aftur inn í Teikningar". Markmið hans: ~200 hreinar 2D-teikningar og ~40 3D fyrir tilboð — mælikvarðinn er hve
 // mikið hann þarf að laga sjálfur.
 //
-// Teikning (slokkvitaeki 383) „Sjálfvirkt" → TurboPaint ?uttekt=…&haed=…&sjalfvirkt=1 → hæðin opnast í hæstu gæðum
+// Teikning (slokkvitaeki 383) „Sjálfvirkt" → TurboPaint ?uttekt=…&haed=…&sjalfvirkt=1, eða takkinum „Sjálfvirkt" við hlið
+// Greining í TurboPaint (Agnar 11.11.2026) → hæðin opnast í hæstu gæðum
 // (TIF-frumrit / vigur-PDF) og þetta ferli keyrir:
 //   a) gæði      hvaðan teikningin kom (TIF-frumrit, vigur-PDF, JPEG)
 //   b) skurður   engan skurð / allt blaðið → húsið fundið (stærsti veggjaklasinn, veggja-hreinsun.ts husKassi) + 2,5 %

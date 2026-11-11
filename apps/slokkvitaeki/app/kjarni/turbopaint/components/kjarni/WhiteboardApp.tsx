@@ -140,8 +140,10 @@ import { HamValSimi, SIMA_VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika } fro
 import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
 import { useErSimi } from "../../lib/board/simi";
 import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
+import { SjalfvirktTakki } from "./SjalfvirktTakki";
 import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
 import { useSjalfvirkt, type SkrefId } from "../../lib/board/sjalfvirkt-stada";
+import { planTilSjalfvirks } from "../../lib/board/sjalfvirkt-takki";
 import { teiknaEldvegg, useVeggjaRitill } from "../../lib/board/veggja-ritill-stada";
 import { teikningTilGreiningar } from "../../lib/board/greining-teikning";
 import { Button } from "../ui/button";
@@ -1277,22 +1279,36 @@ export function WhiteboardApp() {
   const tengdMynd = useBoardStore((st) => finnaTengduMynd(st.objects));
   const hefurMyndGr = useBoardStore((st) => st.objects.some((o) => o.type === "image"));
   // „Keyra valin" í Greining-flipanum: sjálfvirka verkferlið á opnu úttektarhæðinni, aðeins valdir hópar (veggir · ei · taeki).
+  const sjalfvirktDeps = useCallback(
+    () => ({
+      vista: (o: { leidrettAf: LeidrettAf }) => vistaRef.current(o),
+      gaedi: gaediRef.current,
+      ramma: (r: { x: number; y: number; width: number; height: number }) => {
+        const v = shellRef.current;
+        if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
+      },
+    }),
+    []
+  );
   const keyraGreiningu = useCallback((valin: SkrefId[]) => {
     const m = finnaTengduMynd(useBoardStore.getState().objects);
     if (!m) {
       toast.error("Opnaðu hæð úr úttekt fyrst — combo vistar til baka á hæðina");
       return;
     }
-    void keyraSjalfvirkt(m.id, {
-      valin,
-      vista: (o) => vistaRef.current(o),
-      gaedi: gaediRef.current,
-      ramma: (r) => {
-        const v = shellRef.current;
-        if (v) useBoardStore.getState().setCamera(cameraFit(r, v.clientWidth, v.clientHeight));
-      },
-    });
-  }, []);
+    void keyraSjalfvirkt(m.id, { valin, ...sjalfvirktDeps() });
+  }, [sjalfvirktDeps]);
+  // Takkinum „Sjálfvirkt" við hlið Greining: allt verkferlið (8 skref) án hópavals — sama vél og ?sjalfvirkt=1.
+  const keyraSjalfvirktAllt = useCallback(() => {
+    if (useSjalfvirkt.getState().keyrir) return;
+    const st = useBoardStore.getState();
+    const r = planTilSjalfvirks(st.objects, st.selectedIds);
+    if (!r.ok) {
+      toast.error(r.villa);
+      return;
+    }
+    void keyraSjalfvirkt(r.plan.id, sjalfvirktDeps());
+  }, [sjalfvirktDeps]);
   // „Croppa oft": hlutar blaðs á borðinu og hve margir eru tengdir hæð.
   const hlutarABordi = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti).length);
   const tengdirHlutar = useBoardStore((st) => st.objects.filter((o) => o.type === "image" && o.bladhluti && o.uttekt).length);
@@ -2042,7 +2058,7 @@ export function WhiteboardApp() {
         on3d={() => setThrividd(true)}
         onHamAdgerd={hamAdgerd}
         onOpenLayers={() => setPanelOpen(true)}
-        greining={hefurMyndGr ? { onAdgerd: hamAdgerd, keyraCombo: keyraGreiningu, uttekt: !!tengdMynd?.uttekt } : null}
+        greining={hefurMyndGr ? { onAdgerd: hamAdgerd, keyraCombo: keyraGreiningu, keyraAllt: keyraSjalfvirktAllt, uttekt: !!tengdMynd?.uttekt } : null}
         viewSize={size}
       />
       <VeggjaYfirlit />
@@ -2183,7 +2199,12 @@ export function WhiteboardApp() {
               {/* Sími (Agnar 04.11.2026): hamrofi Tæki ↔ Veggir og greiningartólin efst til hægri undir „Vista" — ekki fyrir á borðinu */}
               {simi && tengdMynd?.uttekt ? <HamValSimi /> : null}
               {/* Greining: einn samanbrotinn flipi með öllum greiningartólunum — combo (valdir hópar í röð) eða stök tól */}
-              {simi && hefurMyndGr ? <GreiningTolSpjald onAdgerd={hamAdgerd} keyraCombo={keyraGreiningu} uttekt={!!tengdMynd?.uttekt} /> : null}
+              {simi && hefurMyndGr ? (
+                <>
+                  <GreiningTolSpjald onAdgerd={hamAdgerd} keyraCombo={keyraGreiningu} keyraAllt={keyraSjalfvirktAllt} uttekt={!!tengdMynd?.uttekt} />
+                  <SjalfvirktTakki onKeyra={keyraSjalfvirktAllt} uttekt={!!tengdMynd?.uttekt} />
+                </>
+              ) : null}
               {hamur === "slokkvitaeki" || hamur === "brunakerfi" ? (
                 <div className="pointer-events-auto" data-magntafla>
                   <CountTable />
