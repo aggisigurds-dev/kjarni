@@ -14,14 +14,14 @@ for (const m of d.merki) {
   let x = null;
   if (teg === 'loft') {
     if (m.logun === 'cross') {
-      const kant = /\d\s*x\s*\d/i.test(m.texti), n = tala(m.texti);
+      const kant = /\d\s*[x*]\s*\d/i.test(m.texti), n = tala(m.texti);
       if (kant) x = { flokkur_id: 41, heiti: `Kantaður stokkur ${m.texti.replace(/\s+/g, '')}` };
       else {
         let f = n && n <= 160 ? 40 : n && n <= 315 ? 39 : n && n <= 630 ? 42 : null;
         if (!f) f = m.stroke === '#659df2' ? 40 : m.stroke === '#6631d7' ? 39 : 42;   // stærð vantar/ólæsileg → eftir lit krossins
         x = { flokkur_id: f, heiti: `Loftstokkur Ø${m.texti || '?'}` };
       }
-    } else if (!m.logun && m.teg === 'rect' && /\d\s*x\s*\d/i.test(m.texti)) x = { flokkur_id: 41, heiti: `Kantaður stokkur ${m.texti.replace(/\s+/g, '')}` };
+    } else if (!m.logun && m.teg === 'rect' && /\d\s*[x*]\s*\d/i.test(m.texti)) x = { flokkur_id: 41, heiti: `Kantaður stokkur ${m.texti.replace(/\s+/g, '')}` };
     if (x) x = { ...x, fag: 'loftraesting', fjoldi: 2 };
   } else if (teg === 'sprinkler') {
     if (m.logun === 'star') { const n = tala(m.texti); x = { fag: 'sprinkler', fjoldi: 2, flokkur_id: n == null ? null : n <= 35 ? 32 : n <= 50 ? 33 : 37, heiti: `Sprinklerlögn ${n ?? '?'} mm` }; }

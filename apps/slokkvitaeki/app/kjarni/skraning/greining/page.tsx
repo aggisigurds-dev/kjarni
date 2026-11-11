@@ -17,6 +17,7 @@ export default function GreiningPage() {
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a className="on" href="/kjarni/skraning/greining">Greining</a>
           <a href="/kjarni/skraning/kort">Gatakort</a>
+          <a href="/kjarni/skraning/skyrsla">Skýrsla</a>
           <a href="/kjarni/skraning">Skráning &amp; QA</a>
           <a href="/kjarni/skraning/vinna">Vinna</a>
           <a href="/kjarni/skraning/verk">Byggingar</a>

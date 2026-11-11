@@ -22,6 +22,7 @@ export default function VinnaPage() {
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>
           <a href="/kjarni/skraning/kort">Gatakort</a>
+          <a href="/kjarni/skraning/skyrsla">Skýrsla</a>
           <a href="/kjarni/skraning">Yfirlit</a>
           <a className="on" href="/kjarni/skraning/vinna">Vinna</a>
         </nav>

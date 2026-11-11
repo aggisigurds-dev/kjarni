@@ -1,0 +1,64 @@
+/* Stöðuskýrsla — /kjarni/skraning/skyrsla. Skjár: breytanlegir reitir; prentun: hrein skýrsla án stjórntækja. */
+.sk { max-width: 1120px; margin: 0 auto; padding: 0 20px 60px; font-size: 13.5px; color: var(--aj-ink); }
+.sk-hl { padding: 24px; color: var(--aj-dim); }
+.sk-stika { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; margin-bottom: 8px; background: #fff; border-bottom: 1px solid var(--aj-line); }
+.sk-stika span { flex: 1 1 200px; color: var(--aj-dim); font-size: 12.5px; }
+.sk-stika em { flex: 1 1 100%; color: #b91c1c; font-style: normal; font-size: 12.5px; }
+.sk-stika button { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #8a9199; border-radius: 5px; background: #fff; color: var(--aj-ink); cursor: pointer; }
+.sk-stika button:first-of-type { background: var(--aj-black); border-color: var(--aj-black); color: #fff; }
+.sk-stika button:disabled { opacity: .45; cursor: default; }
+.sk-haus { margin: 14px 0 6px; }
+.sk-titill { width: 100%; font: inherit; font-size: 24px; font-weight: 700; border: 1px solid transparent; border-radius: 4px; padding: 2px 4px; margin-left: -4px; color: var(--aj-ink); background: none; }
+.sk-titill:hover, .sk-titill:focus { border-color: #b9bec4; background: #fff; }
+.sk-haus p { margin: 4px 0 10px; color: var(--aj-dim); }
+.sk-haus input[type="date"] { font: inherit; border: 1px solid #b9bec4; border-radius: 4px; padding: 2px 4px; }
+.sk-texti { width: 100%; font: inherit; line-height: 1.5; border: 1px solid #b9bec4; border-radius: 5px; padding: 8px 10px; resize: vertical; color: var(--aj-ink); background: #fff; }
+.sk h2 { margin: 28px 0 6px; font-size: 17px; }
+.sk-haed h3 { margin: 18px 0 6px; font-size: 15px; display: flex; align-items: baseline; gap: 12px; }
+.sk-haed h3 span { font-size: 13px; font-weight: 600; color: var(--aj-dim); font-variant-numeric: tabular-nums; }
+.sk-smatt { margin: 6px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--aj-dim); max-width: 100ch; }
+.sk-tafla { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.sk-tafla th, .sk-tafla td { padding: 4px 8px; border-bottom: 1px solid var(--aj-line); text-align: right; vertical-align: middle; white-space: nowrap; }
+.sk-tafla th { font-size: 11.5px; font-weight: 600; color: var(--aj-dim); background: var(--aj-head); }
+.sk-tafla th:nth-child(-n+2), .sk-tafla td.sk-deild, .sk-tafla td.sk-v, .sk-tafla td.sk-ath, .sk-tafla th:last-child { text-align: left; }
+.sk-utbod th:first-child, .sk-utbod td:first-child { text-align: left; }
+.sk-utbod td.sk-v { white-space: normal; min-width: 180px; }
+.sk-deild { font-weight: 700; font-size: 15px; vertical-align: top !important; border-right: 1px solid var(--aj-line); }
+.sk-sum td { font-weight: 700; background: #f6f7f8; }
+.sk-kafli td { text-align: left !important; font-weight: 700; background: #f6f7f8; padding-top: 10px; }
+.sk-yfir { color: #b45309; font-weight: 600; }
+.sk-stikud { width: 110px; padding-right: 0 !important; }
+td.sk-stikud { position: relative; }
+td.sk-stikud::before { content: ""; position: absolute; left: 8px; right: 0; top: 50%; height: 8px; margin-top: -4px; background: #e5e7eb; border-radius: 4px; }
+td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0; background: #15803d; border-radius: 4px; max-width: 100%; }
+.sk-tala { display: inline-block; }
+.sk-tala input { width: 74px; font: inherit; font-variant-numeric: tabular-nums; text-align: right; padding: 3px 6px; border: 1px solid #c9ced4; border-radius: 4px; background: #fff; color: var(--aj-ink); }
+.sk-tala input::placeholder { color: var(--aj-ink); opacity: 1; }
+.sk-tala.br input { background: #fef9c3; border-color: #ca8a04; font-weight: 700; }
+.sk-ath { min-width: 150px; white-space: normal !important; }
+.sk-ath input { width: 100%; min-width: 130px; font: inherit; font-size: 12.5px; padding: 3px 6px; border: 1px solid #e2e5e8; border-radius: 4px; background: #fff; color: var(--aj-ink); }
+.sk-prent { display: none; }
+.sk-malsgr { white-space: pre-wrap; line-height: 1.5; }
+.sk-tafla small { color: var(--aj-dim); font-size: 11px; }
+
+@media (max-width: 860px) {
+  .sk { padding: 0 12px 40px; }
+  .sk-haed, .sk section { overflow-x: auto; }
+}
+
+@media print {
+  .aj-top, .sk-stika, .sk-tala input, .sk-ath input, .sk-texti, .sk-haus input[type="date"] { display: none !important; }
+  .sk-skjar { display: none !important; }
+  html, body, .aj { background: #fff !important; }
+  .sk-prent { display: inline !important; }
+  p.sk-prent { display: block !important; }
+  b.sk-prent { font-weight: inherit; }
+  .sk-tala.br b.sk-prent { font-weight: 700; }
+  .sk { max-width: none; padding: 0; font-size: 10.5pt; }
+  .sk-titill { border: 0; padding: 0; margin: 0; font-size: 18pt; }
+  .sk-tafla th, .sk-tafla td { padding: 2.5pt 5pt; }
+  .sk-haed { break-inside: avoid; }
+  .sk-utbod { break-inside: auto; }
+  td.sk-stikud i, td.sk-stikud::before, .sk-sum td, .sk-kafli td, .sk-tafla th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 14mm 12mm; }
+}

@@ -101,6 +101,16 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   **Endurkeyra eftir hverja Ajour-sókn og eftir handbreytingar á merkjum** — `parad` uppfærist ekki sjálft. Ópöruð skráning er
   EKKI sönnun um tvítekningu: S1 hefur enga sprinkler-/regnvatns-/rafmagnsramma og Miro-talningin er eldri en baðherbergin.
 
+## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
+- **Hvað:** skýrsla til Landspítalans: staða per hæð og deild (stök verk, markmið, %) og samanburður við UPPRUNALEGT útboð
+  (liðir 1.1–3.1, magn úr mynd Agnars 11.11 — hann segir magnið hafa breyst). Allt reiknað úr `skr_skraningar` við opnun;
+  Klárað, Markmið, Gildandi magn, „stök per ein.", Lokið og athugasemdir eru yfirskrifanleg og vistast í `skr_skyrslur.gogn`
+  (ein röð per verk, nýjasta notuð). Tómur reitur = reiknað gildi. „Prenta / PDF" notar prentsnið (stjórntæki falin).
+- **Reglur:** sjálfgefin markmið eru SAMA aðferð og Landspítalasíða hubsins (`brunaholf/js/nlsh-sections.js` hopStada: 6H = klárað,
+  5H = 6H á sömu deild með loft kvarðað við Miro, milliloft 110) — breyta á báðum stöðum. Einingar: 2 stök verk = 1 lokun, gólf 1.
+  Liður 2.11 er í metrum (ekki reiknað úr fjölda). Ajour hefur aðeins einn gólfflokk → allt gólf telst á 1.2.
+- ALDREI senda tölur úr þessari sýn sem „gildandi magn" án staðfestingar Agnars — útboðstölurnar eru upphafstölur.
+
 ## Tengsl
 - **bokari** (bh) — NLSH/gata-uppgjör les `skr_hub_skraningar`; samanburður fyrir/eftir.
 - **gagnaleidslur** (bh) — Ajour/Tímavera-innsog (luna-bridge).

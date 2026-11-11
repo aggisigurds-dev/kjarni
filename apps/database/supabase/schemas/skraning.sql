@@ -332,3 +332,27 @@ end $$;
 --   {ids:[skr_skraningar.id], radnr:[…], n, stada: 'fullt' | 'hluti' | 'vantar', radius_px, reiknad}
 --   Endurreiknað í heild við hverja keyrslu; skráningum sjálfum er ekki breytt.
 alter table public.skr_aaetlud add column if not exists parad jsonb;
+
+-- ---------------------------------------------------------------- stöðuskýrsla (11.11.2026, migration skr_skyrslur)
+-- /kjarni/skraning/skyrsla: staða per hæð og deild + samanburður við útboð, reiknað úr skráningum; handleiðréttingar og textar í gogn:
+--   {heiti, dags, inngangur, lok, stada:{"<hæð>|<deild>|<hópur>":{markmid,klarad,ath}}, utbod:{"<liður>":{magn,per,lokid,ath}}}
+create table if not exists public.skr_skyrslur (
+  id          bigint generated always as identity primary key,
+  verk_id     bigint not null references public.skr_verk(id),
+  heiti       text not null default 'Stöðuskýrsla',
+  gogn        jsonb not null default '{}'::jsonb,
+  eytt        boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists skr_skyrslur_verk_idx on public.skr_skyrslur (verk_id, eytt);
+alter table public.skr_skyrslur enable row level security;
+drop policy if exists skr_skyrslur_select on public.skr_skyrslur;
+create policy skr_skyrslur_select on public.skr_skyrslur for select using (true);
+drop policy if exists skr_skyrslur_insert on public.skr_skyrslur;
+create policy skr_skyrslur_insert on public.skr_skyrslur for insert with check (true);
+drop policy if exists skr_skyrslur_update on public.skr_skyrslur;
+create policy skr_skyrslur_update on public.skr_skyrslur for update using (true) with check (true);
+drop trigger if exists skr_skyrslur_touch on public.skr_skyrslur;
+create trigger skr_skyrslur_touch before update on public.skr_skyrslur for each row execute function public.skr_touch();
+grant select, insert, update on public.skr_skyrslur to anon, authenticated;

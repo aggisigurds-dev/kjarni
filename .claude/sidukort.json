@@ -1113,6 +1113,28 @@
    "app": "slokkvitaeki"
   },
   {
+   "id": "slokkvitaeki:/kjarni/skraning/skyrsla",
+   "titill": "Skráning — stöðuskýrsla",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/skyrsla",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/skyrsla/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur",
+    "bokari"
+   ],
+   "kveikjuord": [
+    "Stöðuskýrsla",
+    "skýrsla til Landspítalans",
+    "útboðsmagn",
+    "staða per deild"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
    "id": "slokkvitaeki:/kjarni/skraning/kort",
    "titill": "Skráning — gatakort",
    "tegund": "sida",
