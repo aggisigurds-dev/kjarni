@@ -24,6 +24,11 @@
 .sk-utbod th:first-child, .sk-utbod td:first-child { text-align: left; }
 .sk-utbod td.sk-v { white-space: normal; min-width: 180px; }
 .sk-deild { font-weight: 700; font-size: 15px; vertical-align: top !important; border-right: 1px solid var(--aj-line); }
+.sk-undir td { font-size: 12px; color: var(--aj-dim); padding-top: 2px; padding-bottom: 2px; border-bottom-color: #eef0f2; }
+.sk-undir td.sk-v { padding-left: 26px; }
+.sk-undir td.sk-stikud i { background: #9ca3af; height: 5px; }
+.sk-undir td.sk-stikud::before { height: 5px; margin-top: -2.5px; }
+.sk-val { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .sk-sum td { font-weight: 700; background: #f6f7f8; }
 .sk-kafli td { text-align: left !important; font-weight: 700; background: #f6f7f8; padding-top: 10px; }
 .sk-yfir { color: #b45309; font-weight: 600; }

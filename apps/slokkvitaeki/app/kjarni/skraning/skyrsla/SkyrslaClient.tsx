@@ -18,7 +18,7 @@ type Flokkur = { id: number; heiti: string };
 type Skr = { flokkur_id: number | null; stada: string; haed: string | null; deild: string | null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = { heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = { an_staerda?: boolean; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5"];
 const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i]];
@@ -100,7 +100,7 @@ export default function SkyrslaClient() {
   const heitiAf = useMemo(() => new Map(flokkar.map((f) => [f.id, f.heiti])), [flokkar]);
   /** Talning per hæð|deild|hópur og per flokk (allt verkið). */
   const taln = useMemo(() => {
-    const hd = new Map<string, { done: number; open: number }>(), fl = new Map<string, { done: number; open: number }>();
+    const hd = new Map<string, { done: number; open: number }>(), fl = new Map<string, { done: number; open: number }>(), st = new Map<string, { done: number; open: number }>();
     let utan = 0, utanDone = 0;
     for (const s of skr) {
       const h = (s.flokkur_id != null && heitiAf.get(s.flokkur_id)) || "", done = s.stada === "done";
@@ -109,8 +109,9 @@ export default function SkyrslaClient() {
       if (!s.haed || !s.deild) { utan++; if (done) utanDone++; continue; }
       if (!hop) continue;
       const k = `${s.haed}|${s.deild}|${hop[0]}`, x = hd.get(k) || { done: 0, open: 0 }; if (done) x.done++; else x.open++; hd.set(k, x);
+      const k2 = `${s.haed}|${s.deild}|${h}`, y = st.get(k2) || { done: 0, open: 0 }; if (done) y.done++; else y.open++; st.set(k2, y);
     }
-    return { hd, fl, utan, utanDone };
+    return { hd, fl, st, utan, utanDone };
   }, [skr, heitiAf]);
 
   /** Sjálfgefið markmið hóps (sama aðferð og Landspítalasíða hubsins). */
@@ -140,10 +141,12 @@ export default function SkyrslaClient() {
       hopar: HOPAR.map(([k, nafn]) => {
         const x = taln.hd.get(`${haed}|${deild}|${k}`) || { done: 0, open: 0 }, lykill = `${haed}|${deild}|${k}`, br = gogn.stada?.[lykill] || {};
         const markR = markmidReiknad(haed, deild, k), mark = br.markmid ?? markR, klar = br.klarad ?? x.done;
-        return { k, nafn, lykill, done: x.done, open: x.open, markR, mark, klar, br };
+        // stærðarflokkar hópsins á þessari deild, með sama flokki á 6. hæð sem viðmið (aðeins til upplýsingar)
+        const staerdir = flokkar.filter((f) => HOPAR.find((y) => y[0] === k)![2].test(f.heiti)).map((f) => { const a = taln.st.get(`${haed}|${deild}|${f.heiti}`) || { done: 0, open: 0 }, r6 = taln.st.get(`6H|${deild}|${f.heiti}`) || { done: 0, open: 0 }; return { heiti: f.heiti.replace(/^(Loft|Stál|Plast|Gólf)\s*/i, "").replace(/\s*L[Vv]\b.*$/, "").trim() || f.heiti, done: a.done, open: a.open, vidmid: haed === "5H" ? r6.done + r6.open : 0 }; }).filter((z) => z.done + z.open + z.vidmid > 0).sort((a, b) => (parseInt(a.heiti.replace(/^\D+/, ""), 10) || 0) - (parseInt(b.heiti.replace(/^\D+/, ""), 10) || 0));
+        return { k, nafn, lykill, done: x.done, open: x.open, markR, mark, klar, br, staerdir: staerdir.length > 1 ? staerdir : [] };
       }).filter((h) => h.mark > 0 || h.done + h.open > 0),
     })),
-  })), [taln, gogn.stada, markmidReiknad]);
+  })), [taln, gogn.stada, markmidReiknad, flokkar]);
   const summa = (hs: { klar: number; mark: number }[]) => hs.reduce((a, h) => ({ klar: a.klar + Math.min(h.klar, Math.max(h.mark, h.klar)), mark: a.mark + Math.max(h.mark, h.klar) }), { klar: 0, mark: 0 });
   const alls = summa(radir.flatMap((r) => r.deildir.flatMap((d) => d.hopar)));
 
@@ -175,6 +178,7 @@ export default function SkyrslaClient() {
       <div className="sk-stika">
         <span>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</span>
         <button type="button" onClick={vista} disabled={!ovistad}>Vista</button>
+        <label className="sk-val"><input type="checkbox" checked={!gogn.an_staerda} onChange={(e) => breyta({ an_staerda: !e.target.checked })} /> Sýna stærðir</label>
         <button type="button" onClick={() => window.print()}>Prenta / PDF</button>
         <button type="button" onClick={() => { if (nBr && window.confirm("Hreinsa allar leiðréttingar á tölum? Textar haldast. Breytingin vistast ekki fyrr en þú velur Vista.")) breyta({ stada: {}, utbod: {} }); }} disabled={!nBr}>Hreinsa leiðréttingar</button>
         {villa && <em>Villa: {villa}</em>}
@@ -200,18 +204,25 @@ export default function SkyrslaClient() {
                 <tbody>
                   {r.deildir.map((d) => {
                     const ds = summa(d.hopar);
+                    const synaSt = !gogn.an_staerda, nRod = d.hopar.length + 1 + (synaSt ? d.hopar.reduce((a, h) => a + h.staerdir.length, 0) : 0);
                     return d.hopar.length ? [
-                      ...d.hopar.map((h, i) => (
+                      ...d.hopar.flatMap((h, i) => [
                         <tr key={h.lykill}>
-                          {i === 0 && <td rowSpan={d.hopar.length + 1} className="sk-deild">{d.deild}</td>}
+                          {i === 0 && <td rowSpan={nRod} className="sk-deild">{d.deild}</td>}
                           <td className="sk-v">{h.nafn}</td><td>{num(h.done)}</td><td>{h.open ? num(h.open) : ""}</td>
                           <td><Tala gildi={h.br.klarad} reiknad={h.done} onChange={(v) => breytaStodu(h.lykill, { klarad: v })} /></td>
                           <td><Tala gildi={h.br.markmid} reiknad={h.markR} onChange={(v) => breytaStodu(h.lykill, { markmid: v })} /></td>
                           <td>{pros(Math.min(h.klar, Math.max(h.mark, h.klar)), Math.max(h.mark, h.klar))} %</td>
                           <td className="sk-stikud"><i style={{ width: `${pros(Math.min(h.klar, Math.max(h.mark, h.klar)), Math.max(h.mark, h.klar))}%` }} /></td>
                           <td className="sk-ath"><input value={h.br.ath ?? ""} onChange={(e) => breytaStodu(h.lykill, { ath: e.target.value })} aria-label="Athugasemd" /><span className="sk-prent">{h.br.ath}</span></td>
-                        </tr>
-                      )),
+                        </tr>,
+                        ...(synaSt ? h.staerdir.map((z) => (
+                          <tr key={h.lykill + z.heiti} className="sk-undir">
+                            <td className="sk-v">{z.heiti}</td><td>{num(z.done)}</td><td>{z.open ? num(z.open) : ""}</td><td></td>
+                            <td>{z.vidmid ? num(z.vidmid) : ""}</td><td>{z.vidmid ? `${pros(z.done, z.vidmid)} %` : ""}</td><td className="sk-stikud">{z.vidmid ? <i style={{ width: `${Math.min(100, pros(z.done, z.vidmid))}%` }} /> : null}</td><td></td>
+                          </tr>
+                        )) : []),
+                      ]),
                       <tr key={d.deild + "-s"} className="sk-sum"><td className="sk-v">Deild alls</td><td></td><td></td><td>{num(ds.klar)}</td><td>{num(ds.mark)}</td><td>{pros(ds.klar, ds.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(ds.klar, ds.mark)}%` }} /></td><td></td></tr>,
                     ] : null;
                   })}
@@ -220,7 +231,7 @@ export default function SkyrslaClient() {
             </div>
           );
         })}
-        <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Utan deilda (rafmagn á sérteikningum, viðbótarverk og skráningar án teikningar): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.</p>
+        <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Stærðarlínurnar (inndregnar) sýna skráningar per stærð; á 5. hæð er sama stærð á sömu deild á 6. hæð sýnd sem viðmið — stærðaflokkun er ekki alltaf eins milli hæða, svo prósentan á við hópinn í heild. Utan deilda (rafmagn á sérteikningum, viðbótarverk og skráningar án teikningar): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.</p>
       </section>
 
       <section>
