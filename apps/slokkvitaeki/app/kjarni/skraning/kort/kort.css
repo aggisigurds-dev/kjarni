@@ -1,0 +1,68 @@
+/* Gatakort — /kjarni/skraning/kort. Hliðarstika (teikning, lög, síur, samantekt) + strigi með teikningu og táknum. */
+.gk { display: grid; grid-template-columns: 330px minmax(0, 1fr); height: calc(100vh - 50px); min-height: 480px; font-size: 13px; color: var(--aj-ink); }
+.gk-hl { padding: 24px; color: var(--aj-dim); }
+.gk-hlid { overflow-y: auto; background: var(--aj-panel); border-right: 1px solid var(--aj-line); padding: 0 0 24px; }
+.gk-haus { padding: 12px 14px 10px; border-bottom: 1px solid var(--aj-line); background: var(--aj-head); }
+.gk-haus h1 { margin: 0; font-size: 15px; font-weight: 700; }
+.gk-haus p { margin: 3px 0 0; color: var(--aj-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.gk-hlid section { padding: 12px 14px 4px; border-bottom: 1px solid var(--aj-line); }
+.gk-hlid h2 { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--aj-dim); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.gk-hlid h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.gk-smatt { margin: 6px 0 8px; font-size: 11.5px; line-height: 1.45; color: var(--aj-dim); overflow-wrap: anywhere; }
+.gk-virkt { color: #92400e; background: #fef3c7; border-radius: 4px; padding: 6px 8px; }
+.gk select, .gk input[type="number"] { width: 100%; min-width: 0; font: inherit; font-size: 12.5px; padding: 5px 6px; border: 1px solid #b9bec4; border-radius: 4px; background: #fff; color: var(--aj-ink); }
+.gk button { font: inherit; font-size: 12.5px; cursor: pointer; }
+.gk-hnappar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.gk-hnappar button { flex: 1 1 auto; padding: 6px 10px; border: 1px solid #b9bec4; border-radius: 4px; background: #fff; color: var(--aj-ink); font-weight: 600; }
+.gk-hnappar button.on { background: var(--aj-black); border-color: var(--aj-black); color: #fff; }
+.gk-rod { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; font-size: 11.5px; color: var(--aj-dim); }
+.gk-tvo { flex-direction: row; gap: 8px; }
+.gk-tvo label { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gk-lag { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 12.5px; }
+.gk-lag span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gk-lag small { color: var(--aj-dim); font-variant-numeric: tabular-nums; }
+.gk-lag-mynd { flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 8px; border: 1px solid var(--aj-line); border-radius: 5px; }
+.gk-lag-mynd label { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.gk-lag-mynd i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.gk-lag-mynd input[type="range"] { width: 100%; }
+.gk-lag-mynd summary { font-size: 11.5px; color: var(--aj-dim); cursor: pointer; }
+.gk-vorpun { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 6px; font-size: 11px; color: var(--aj-dim); }
+.gk-upp { flex-direction: row; gap: 6px; align-items: stretch; }
+.gk-upp select { flex: 0 0 42%; }
+.gk-skra { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed #8a9199; border-radius: 4px; padding: 5px 6px; cursor: pointer; color: var(--aj-ink); font-size: 12px; text-align: center; }
+.gk-skra input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gk-skra:focus-within { outline: 2px solid var(--aj-teal); }
+.gk-takn { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.gk-takn button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--aj-line); background: #fff; color: var(--aj-ink); border-radius: 20px; padding: 3px 9px 3px 7px; line-height: 1.3; }
+.gk-takn button small { color: var(--aj-dim); font-variant-numeric: tabular-nums; font-size: 11px; }
+.gk-takn button.af { opacity: .38; text-decoration: line-through; }
+.gk-tafla { overflow-x: auto; }
+.gk-tafla table { border-collapse: collapse; width: 100%; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.gk-tafla th, .gk-tafla td { padding: 3px 4px; text-align: right; border-bottom: 1px solid var(--aj-line); white-space: nowrap; }
+.gk-tafla th { font-weight: 600; color: var(--aj-dim); }
+.gk-tafla th:first-child, .gk-tafla td:first-child { text-align: left; }
+.gk-tafla em { font-style: normal; color: #b91c1c; font-size: 10.5px; }
+
+.gk-kort { position: relative; min-width: 0; min-height: 0; background: #dfe2e5; }
+.gk-strigi { position: absolute; inset: 0; overflow: hidden; touch-action: none; cursor: grab; }
+.gk-strigi:active { cursor: grabbing; }
+.gk-strigi.setja { cursor: crosshair; }
+.gk-strigi canvas { width: 100%; height: 100%; display: block; }
+.gk-stjorn { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; }
+.gk-stjorn button { min-width: 34px; height: 34px; padding: 0 10px; border: 1px solid #8a9199; border-radius: 5px; background: #fff; color: var(--aj-ink); font-weight: 700; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
+.gk-spjald { position: absolute; left: 12px; bottom: 12px; width: min(340px, calc(100% - 24px)); background: #fff; border: 1px solid #8a9199; border-radius: 8px; padding: 12px 14px; box-shadow: 0 4px 18px rgba(0, 0, 0, .22); }
+.gk-spjald h3 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: baseline; gap: 10px; }
+.gk-spjald h3 span { font-size: 12px; font-weight: 600; }
+.gk-spjald h3 .g { color: #15803d; } .gk-spjald h3 .r { color: #b91c1c; }
+.gk-spjald dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 8px; font-size: 12.5px; }
+.gk-spjald dt { color: var(--aj-dim); } .gk-spjald dd { margin: 0; overflow-wrap: anywhere; }
+.gk-merki { margin: 0 0 6px; font-size: 12px; background: #fef3c7; color: #92400e; border-radius: 4px; padding: 4px 8px; }
+.gk-lysing { margin: 0; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; border-top: 1px solid var(--aj-line); padding-top: 8px; }
+.gk-spjald > button:not(.gk-x) { border: 1px solid #b91c1c; color: #b91c1c; background: #fff; border-radius: 4px; padding: 5px 10px; }
+.gk-x { position: absolute; right: 8px; top: 6px; border: 0; background: none; font-size: 20px; line-height: 1; color: var(--aj-dim); }
+
+@media (max-width: 860px) {
+  .gk { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58vh auto; height: auto; }
+  .gk-kort { grid-row: 1; height: 58vh; }
+  .gk-hlid { grid-row: 2; border-right: 0; border-top: 1px solid var(--aj-line); overflow: visible; }
+}

@@ -17,6 +17,7 @@ export default function VerkPage() {
         <nav className="aj-nav" aria-label="Skráning">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>
+          <a href="/kjarni/skraning/kort">Gatakort</a>
           <a href="/kjarni/skraning">Yfirlit</a>
           <a href="/kjarni/skraning/vinna">Vinna</a>
           <a className="on" href="/kjarni/skraning/verk">Byggingar &amp; teikningar</a>

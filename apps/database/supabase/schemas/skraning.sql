@@ -252,3 +252,77 @@ where not exists (select 1 from public.skr_gatlisti g where g.verk_id is null an
 -- svo yfirlitið sæki EINA röð per verk í stað 25 þús. raða. Skilgreiningarnar eru í migration-skránni.
 -- 14.10 02:50: skr_yfirlit sleppir Ajour-röðum fyrir verk sem eiga innfluttar skráningar (skr_verk.ajour_nafn = project_name
 -- og skr_skraningar.ajour_registration_id ekki null) — migration skr_yfirlit_an_tvitekningar.
+
+-- ---------------------------------------------------------------- gatakort (11.11.2026, migration skr_gatakort_log_og_aaetlud)
+-- /kjarni/skraning/kort: skráningar á YFIRLITSTEIKNINGU (brunayfirlit með rauðum brunaveggjum) með lögum og síum.
+--   skr_teikningar.tegund   'teikning' (Ajour-blað / upphlaðin grunnmynd) | 'yfirlit' (sameiginlegt hæðarblað)
+--   skr_teikningar.yfirlit_id + vorpun {a,e,f}: pinnar blaðsins varpast á yfirlitið með X = a·x + e, Y = a·y + f (px yfirlitsmyndar)
+--   skr_teikningar.deildir  deildir blaðsins frá vinstri til hægri, t.d. ["S1","S2"] eða ["S1","S2","S4","S5"]
+--   skr_skraningar.ajour_gogn  greining úr tools/skraning-gatakort-innflutningur.cjs: deild, svaedi, lagf (A|B|?), lagf_dags,
+--                              a_stad, tvitak_af, upd, myndir[], teikning, radnr_tvitekid
+--   skr_log      lag á teikningu: fagteikning (loftræsting, sprinkler, vatn …) sem mynd með vörpun og gegnsæi
+--   skr_aaetlud  áætlað gat: þar sem lögn fer gegnum brunavegg (handvirkt eða sjálfvirkt), má para við skráningu síðar
+alter table public.skr_teikningar add column if not exists tegund text not null default 'teikning';
+alter table public.skr_teikningar add column if not exists yfirlit_id bigint references public.skr_teikningar(id);
+alter table public.skr_teikningar add column if not exists vorpun jsonb;
+alter table public.skr_teikningar add column if not exists deildir jsonb;
+alter table public.skr_skraningar add column if not exists ajour_gogn jsonb;
+
+create table if not exists public.skr_log (
+  id            bigint generated always as identity primary key,
+  verk_id       bigint not null references public.skr_verk(id),
+  teikning_id   bigint not null references public.skr_teikningar(id),
+  heiti         text not null,
+  fag           text not null default 'annad' check (fag in ('grunnur','loftraesting','sprinkler','vatn','fravatn','rafmagn','hiti','gas','annad')),
+  mynd_path     text,
+  pdf_path      text,
+  breidd_px     integer,
+  haed_px       integer,
+  vorpun        jsonb,                        -- {a,b,c,d,e,f}: px lagsins → px teikningarinnar (b,c valfrjálst; d = a ef vantar)
+  gegnsaei      numeric not null default 0.6,
+  litur         text,
+  synilegt      boolean not null default true,
+  rod           integer not null default 0,
+  uppruni       text,
+  eytt          boolean not null default false,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index if not exists skr_log_teikning_idx on public.skr_log (teikning_id, eytt, rod);
+
+create table if not exists public.skr_aaetlud (
+  id            bigint generated always as identity primary key,
+  verk_id       bigint not null references public.skr_verk(id),
+  teikning_id   bigint not null references public.skr_teikningar(id),
+  lag_id        bigint references public.skr_log(id),
+  x_px          numeric not null,
+  y_px          numeric not null,
+  fag           text not null default 'annad' check (fag in ('loftraesting','sprinkler','vatn','fravatn','rafmagn','hiti','gas','golf','annad')),
+  flokkur_id    bigint references public.skr_flokkar(id),
+  fjoldi        integer not null default 1,
+  uppruni       text not null default 'handvirkt',
+  skraning_id   bigint references public.skr_skraningar(id),
+  athugasemd    text,
+  eytt          boolean not null default false,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index if not exists skr_aaetlud_teikning_idx on public.skr_aaetlud (teikning_id, eytt);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['skr_log','skr_aaetlud']
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_select', t);
+    execute format('create policy %I on public.%I for select using (true)', t || '_select', t);
+    execute format('drop policy if exists %I on public.%I', t || '_insert', t);
+    execute format('create policy %I on public.%I for insert with check (true)', t || '_insert', t);
+    execute format('drop policy if exists %I on public.%I', t || '_update', t);
+    execute format('create policy %I on public.%I for update using (true) with check (true)', t || '_update', t);
+    execute format('drop trigger if exists %I on public.%I', t || '_touch', t);
+    execute format('create trigger %I before update on public.%I for each row execute function public.skr_touch()', t || '_touch', t);
+    execute format('grant select, insert, update on public.%I to anon, authenticated', t);
+  end loop;
+end $$;

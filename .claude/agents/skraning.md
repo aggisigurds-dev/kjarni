@@ -45,6 +45,21 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - Staðbundið `main` var 7 commits á eftir origin 04.11 — `git fetch` áður en þú treystir skrám.
 - Schema-rek: skr-viewin/RPC-in eru ekki í `apps/database/supabase/schemas` (brýtur AGENTS.md).
 
+## Gatakort (11.11.2026) — `/kjarni/skraning/kort`
+- **Hvað:** allar NLSH-skráningar (11.206) á brunayfirlitsblöðum 6H/5H/4H (A286-31 / A285-31 Rev.A, rauðir brunaveggir) eða á
+  stakri Ajour-teikningu; tákn eftir tegund og stærð; síur: staða, deild, tegund, starfsmaður, tímabil, lagfæringar, tvítök;
+  lög (`skr_log`: fagteikningar sem myndir með vörpun og gegnsæi) og áætluð göt (`skr_aaetlud`). Skráningum er ekki breytt þar.
+- **Gögnin:** `skr_verk` id 4 „NLSH 5-6. hæð · gatakort" með **`ajour_nafn = NULL`**. Þess vegna heldur `skr_yfirlit` áfram
+  að lesa NLSH úr `ajour_registrations` og uppgjör hubsins er óbreytt (sannreynt 11.11: nlsh-uppgjor, nlsh-dashboard og
+  gata-uppgjor skiluðu sama JSON fyrir og eftir). Greiningarverkið birtist í `skr_yfirlit`/`skr_maelabord` undir eigin heiti,
+  svo NLSH telst þar tvisvar (Ajour + gatakort) — Kjarna-yfirlitin eru ekki notuð í uppgjör.
+- **Endurnýjun:** `node luna-bridge/ajour-export-allt.js --project NLSH --no-photos` → `node apps/slokkvitaeki/tools/skraning-gatakort-innflutningur.cjs`
+  (DRY) → `--write`. Endurkeyranlegt (upsert á `ajour_registration_id`). Greiningin í `ajour_gogn`: deild, svaedi, lagf (A/B/?),
+  a_stad, tvitak_af. Sama RULES/TRANS/CROP og `brunaholf/tools/nlsh-stukur.cjs` — breyta á báðum stöðum.
+- **Gildrur:** (1) `5H. Ceiling` er heilt hæðarblað með fjórum deildum, ekki S1+S2. (2) Ajour á tvær skráningar með raðnúmer
+  5786 — sú yngri fær `radnr` 1005786, rétta númerið er í `ajour_serial`. (3) Ljósmyndir eru EKKI fluttar inn; `ajour_gogn.myndir`
+  geymir Ajour-fileId. (4) 466 skráningar eru án teikningar og sjást ekki á korti.
+
 ## Tengsl
 - **bokari** (bh) — NLSH/gata-uppgjör les `skr_hub_skraningar`; samanburður fyrir/eftir.
 - **gagnaleidslur** (bh) — Ajour/Tímavera-innsog (luna-bridge).
@@ -63,5 +78,5 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - ALDREI breyta dálkum/rökum `skr_yfirlit` eða `skr_hub_skraningar` án samanburðar á NLSH- og gata-uppgjöri fyrir/eftir (bokari).
 - ALDREI skrifa í `ajour_registrations` eða gegnum `skr_ajour_lesid` — það er lesgluggi.
 - ALDREI hard-delete skráningu, mynd eða teikningu — `eytt=true`.
-- ALDREI `ajour-import.js --write` án dry-keyrslu og samþykkis Agnars.
+- ALDREI `ajour-import.js --write` án dry-keyrslu og samþykkis Agnars — og ALDREI fyrir NLSH: það setur `ajour_nafn` og snýr uppgjöri hubsins á skr_*. NLSH fer inn með `tools/skraning-gatakort-innflutningur.cjs`.
 - ALDREI handskrifa migration — `apps/database/supabase/schemas/skraning.sql` + `supabase db diff`.

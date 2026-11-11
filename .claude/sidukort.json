@@ -1113,6 +1113,27 @@
    "app": "slokkvitaeki"
   },
   {
+   "id": "slokkvitaeki:/kjarni/skraning/kort",
+   "titill": "Skráning — gatakort",
+   "tegund": "sida",
+   "leid": "/kjarni/skraning/kort",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/kjarni/skraning/kort/page.tsx"
+   ],
+   "yfir": null,
+   "eigandi": "skraning",
+   "undiragentar": [
+    "gagnaleidslur"
+   ],
+   "kveikjuord": [
+    "Gatakort",
+    "áætluð göt",
+    "lög á teikningu",
+    "brunayfirlit"
+   ],
+   "app": "slokkvitaeki"
+  },
+  {
    "id": "slokkvitaeki:/kjarni/skraning/greining",
    "titill": "Skráning — greining",
    "tegund": "sida",
