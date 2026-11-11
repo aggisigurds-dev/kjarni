@@ -1267,6 +1267,56 @@ export function BoardCanvas({
 
   const cursor = spacePan ? "grab" : selectLike ? "default" : "crosshair";
 
+  // TEIKNINGIN Í EIGIN LAGI (11.11.2026, Agnar: „fínstilltu allt, svo það sé ekki hökt“). Áður voru blöðin í sama Konva-lagi
+  // og veggir og tákn, svo hver breyting á vegg endurteiknaði allt að 6000 px mynd (mælt á framleiðslu: 150 löng verk á 150
+  // hreyfingum við drátt á veggenda, líka eftir að skugginn fór). Myndir eru alltaf fremst í `objects` (store.addObjects
+  // raðar þeim þannig), svo teikniröðin er óbreytt: myndalagið undir, allt annað ofan á.
+  const teiknaHlut = (obj: BoardObject) => (
+            <ObjectNode
+              key={obj.id}
+              obj={obj}
+              isSelected={selectedIds.includes(obj.id)}
+              pixelsPerMeter={pixelsPerMeter}
+              draggable={selectLike && !spacePan && !isDrawnLocked(obj, layers)}
+              listening={
+                (selectLike || tool === "eraser") &&
+                !spacePan &&
+                isDrawnVisible(obj, layers) &&
+                (obj.type === "image" || !isDrawnLocked(obj, layers))
+              }
+              onDragStart={(id) => {
+                if (panRef.current || pinchRef.current) {
+                  stageRef.current?.findOne(`#${id}`)?.stopDrag();
+                  return;
+                }
+                beginDocumentDrag(id);
+              }}
+              onDragMove={(id, x, y) => moveDocumentFollowers(id, x, y)}
+              onDragEnd={(id, x, y) => endDocumentDrag(id, x, y)}
+              onTransformEnd={applyTransform}
+              onClick={(id, shift) => {
+                if (!selectLike) return;
+                const current = useBoardStore.getState().selectedIds;
+                const unit = new Set(expandGroups([id]));
+                if (shift) {
+                  useBoardStore
+                    .getState()
+                    .setSelected(
+                      current.includes(id)
+                        ? current.filter((x) => !unit.has(x))
+                        : expandGroups([...current, id])
+                    );
+                } else {
+                  useBoardStore.getState().setSelected([...unit]);
+                }
+              }}
+              onDblClick={(id) => {
+                const obj = useBoardStore.getState().objects.find((o) => o.id === id);
+                if (obj?.type === "text" || obj?.type === "sticky") onEditText(id);
+              }}
+            />
+  );
+
   return (
     <div
       ref={wrapRef}
@@ -1311,52 +1361,9 @@ export function BoardCanvas({
         <Layer listening={false}>
           {grid ? <GridLayer camera={camera} width={width} height={height} /> : null}
         </Layer>
+        <Layer>{objects.filter((o) => o.type === "image").map(teiknaHlut)}</Layer>
         <Layer>
-          {objects.map((obj) => (
-            <ObjectNode
-              key={obj.id}
-              obj={obj}
-              isSelected={selectedIds.includes(obj.id)}
-              pixelsPerMeter={pixelsPerMeter}
-              draggable={selectLike && !spacePan && !isDrawnLocked(obj, layers)}
-              listening={
-                (selectLike || tool === "eraser") &&
-                !spacePan &&
-                isDrawnVisible(obj, layers) &&
-                (obj.type === "image" || !isDrawnLocked(obj, layers))
-              }
-              onDragStart={(id) => {
-                if (panRef.current || pinchRef.current) {
-                  stageRef.current?.findOne(`#${id}`)?.stopDrag();
-                  return;
-                }
-                beginDocumentDrag(id);
-              }}
-              onDragMove={(id, x, y) => moveDocumentFollowers(id, x, y)}
-              onDragEnd={(id, x, y) => endDocumentDrag(id, x, y)}
-              onTransformEnd={applyTransform}
-              onClick={(id, shift) => {
-                if (!selectLike) return;
-                const current = useBoardStore.getState().selectedIds;
-                const unit = new Set(expandGroups([id]));
-                if (shift) {
-                  useBoardStore
-                    .getState()
-                    .setSelected(
-                      current.includes(id)
-                        ? current.filter((x) => !unit.has(x))
-                        : expandGroups([...current, id])
-                    );
-                } else {
-                  useBoardStore.getState().setSelected([...unit]);
-                }
-              }}
-              onDblClick={(id) => {
-                const obj = useBoardStore.getState().objects.find((o) => o.id === id);
-                if (obj?.type === "text" || obj?.type === "sticky") onEditText(id);
-              }}
-            />
-          ))}
+          {objects.filter((o) => o.type !== "image").map(teiknaHlut)}
           {draft &&
           draft.kind !== "marquee" &&
           draft.kind !== "crop" && draft.kind !== "fjolcrop" &&
