@@ -10,7 +10,8 @@ import { formatTime, parseTime } from "./arrange";
 import { searchCovers, type CoverHit } from "./covers";
 import { COVERS, COVER_LABEL, MAX_CLOUD_LABEL, putSkater, type Clip, type CoverStyle, type LibraryDoc, type Media, type Skater, type SkaterMarker, type Song } from "./library";
 import { ElementField, Stars } from "./ElementField";
-import { needsWork } from "./elements";
+import { labelIn, needsWork } from "./elements";
+import { useElementLang } from "./lang";
 import { DanceMarker, Gallery } from "./Media";
 import { songFit, type Match } from "./match";
 import { Avatar, Cover, MiniWave, SongPicker, fitLabel } from "./Parts";
@@ -456,6 +457,7 @@ export function SkaterSheet({
   const middle = Math.round((skater.targetMin + skater.targetMax) / 2);
   const elapsed = watch ? (watch.now - watch.since) / 1000 : 0;
   const focus = needsWork(skater.markers);
+  const lang = useElementLang();
 
   return (
     <div className="tk-root tk-full" role="dialog" aria-modal="true" aria-label={skater.name || "Nýr iðkandi"}>
@@ -629,7 +631,7 @@ export function SkaterSheet({
               <ul>
                 {focus.map((f) => (
                   <li key={f.label}>
-                    <b>{String(f.grade).replace(".", ",")}</b> {f.label}
+                    <b>{String(f.grade).replace(".", ",")}</b> {labelIn(f.label, lang)}
                     {f.count > 1 ? ` (${f.count}×)` : ""}
                   </li>
                 ))}
