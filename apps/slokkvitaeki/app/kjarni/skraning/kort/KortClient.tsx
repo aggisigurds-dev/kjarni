@@ -12,10 +12,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sb, publicUrl, hladaUpp } from "../lib/sb";
 
-type Vorpun = { a: number; e: number; f: number; b?: number; c?: number; d?: number; hlutar?: { fra_x: number; a: number; e: number; f: number }[] };
+type Vorpun = { a: number; e: number; f: number; b?: number; c?: number; d?: number; hlutar?: { fra_x: number; a: number; e: number; f: number; b?: number; c?: number; d?: number }[] };
 /** Varpar hnitum Ajour-teikningar á yfirlitsblað. `hlutar`: blað sem er sett saman úr fleiri en einni mynd (t.d. tvær álmur hlið
- *  við hlið, „6H 2S-1S Rafmagnsþéttingar“) — síðasti hluti með fra_x ≤ x ræður, annars grunnvörpunin. */
-const varpa = (v: Vorpun, x: number, y: number): [number, number] => { let h: { a: number; e: number; f: number } = v; if (v.hlutar) for (const q of v.hlutar) if (x >= q.fra_x) h = q; return [h.a * x + h.e, h.a * y + h.f]; };
+ *  við hlið, „6H 2S-1S Rafmagnsþéttingar“) — síðasti hluti með fra_x ≤ x ræður, annars grunnvörpunin. Full affín vörpun eins og
+ *  canvas.transform(a, b, c, d, e, f): X = a·x + c·y + e, Y = b·x + d·y + f (b, c = 0 og d = a ef þau vantar) — skannað blað getur verið snúið. */
+const varpa = (v: Vorpun, x: number, y: number): [number, number] => { let h: { a: number; e: number; f: number; b?: number; c?: number; d?: number } = v; if (v.hlutar) for (const q of v.hlutar) if (x >= q.fra_x) h = q; return [h.a * x + (h.c || 0) * y + h.e, (h.b || 0) * x + (h.d ?? h.a) * y + h.f]; };
 /** Skarpar flísar (kvardi × upplausn grunnmyndar), hlaðið aðeins fyrir það sem sést þegar stækkað er inn. */
 type Flisar = { kvardi: number; bx: number; by: number; dalkar: number; radir: number; slod: string; ending: string; til: string[] };
 const FLISA_MORK = 1.15;   // skjápixlar per grunnmyndarpixil: þar yfir eru flísar notaðar
@@ -39,7 +40,10 @@ type Faersla = { id: number; skraning_id: number; teikning_id: number; x_px: num
 const FA_SEL = "id,skraning_id,teikning_id,x_px,y_px,uppruni";
 const PX_M = 33.3;   // pixlar á metra á yfirlitsblaðinu (60 px ≈ 1,8 m)
 /** x0/y0 = vörpuð staða úr Ajour-hnitum; x/y = staðan sem er sýnd (færð ef færsla er til). */
-type Punktur = { s: Skr; x: number; y: number; t: Takn; x0: number; y0: number; faersla?: Faersla };
+/** d = deildin sem punkturinn telst á: á yfirlitsblaði ræðst hún af STÖÐU punktsins (sama regla og sýnin skr_haedarhnit), svo færður
+ *  punktur fylgir nýja staðnum; á stakri Ajour-teikningu er það merking skráningarinnar. */
+type Punktur = { s: Skr; x: number; y: number; t: Takn; x0: number; y0: number; faersla?: Faersla; d: string | null };
+const deildAf = (fx: number) => (fx < 0.179 ? "S1" : fx < 0.5 ? "S2" : fx < 0.812 ? "S4" : "S5");
 type Faerir = { p?: Punktur; a?: Aaetlad; x: number; y: number; dx: number; dy: number; hreyft: boolean };
 type Takn = { logun: "x" | "o" | "t" | "s" | "d"; litur: string; r: number; heiti: string; hopur: string };
 
@@ -168,23 +172,25 @@ export default function KortClient() {
     if (teikning.tegund === "yfirlit") { for (const t of teikn) if (t.yfirlit_id === teikning.id && t.vorpun) born.set(t.id, t.vorpun); } else born.set(teikning.id, null);
     const fm = new Map<number, Faersla>();   // færðir punktar eiga aðeins við yfirlitsblaðið sem þeir voru færðir á
     if (teikning.tegund === "yfirlit") for (const f of faerslur) if (f.teikning_id === teikning.id) fm.set(f.skraning_id, f);
+    const aYfirliti = teikning.tegund === "yfirlit";
     const out: Punktur[] = [];
     for (const s of skr) {
       if (s.teikning_id == null || s.x_px == null || s.y_px == null || !born.has(s.teikning_id)) continue;
       const v = born.get(s.teikning_id);
       const [x0, y0] = v ? varpa(v, +s.x_px, +s.y_px) : [+s.x_px, +s.y_px], f = fm.get(s.id);
-      out.push({ s, x: f ? +f.x_px : x0, y: f ? +f.y_px : y0, x0, y0, faersla: f, t: (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
+      const x = f ? +f.x_px : x0, y = f ? +f.y_px : y0;
+      out.push({ s, x, y, x0, y0, faersla: f, d: aYfirliti && teikning.breidd_px ? deildAf(x / teikning.breidd_px) : s.deild, t: (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
     }
     return out;
   }, [teikning, teikn, skr, taknAf, ANNAD, faerslur]);
   const faerdir = useMemo(() => faerslur.filter((f) => f.teikning_id === syn).length, [faerslur, syn]);
-  const deildir = useMemo(() => [...new Set(punktar.map((p) => p.s.deild).filter((d): d is string => !!d))].sort(), [punktar]);
+  const deildir = useMemo(() => [...new Set(punktar.map((p) => p.d).filter((d): d is string => !!d))].sort(), [punktar]);
   /** Skráningar sem eru paraðar við eitthvert áætlað gat á þessu blaði. */
   const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
   /** Sía án táknasíunnar — skýringarnar sýna þá réttan fjölda per tákn. */
   const siaAn = useCallback((p: Punktur) => {
     const s = p.s;
-    if (s.deild && afDeild[s.deild]) return false;
+    if (p.d && afDeild[p.d]) return false;
     if (madur && String(s.starfsmadur_id) !== madur) return false;
     if (fra && (!s.framkvaemt_til || s.framkvaemt_til.slice(0, 7) < fra)) return false;
     if (til && (!s.framkvaemt_til || s.framkvaemt_til.slice(0, 7) > til)) return false;
@@ -220,7 +226,7 @@ export default function KortClient() {
   }, [punktar, siaAn, grunn, stada, aaetludBlads, aaStodusia, aaTakn]);
   const samantekt = useMemo(() => {
     const rod = new Map<string, { kl: number[]; op: number[] }>();
-    for (const p of syndir) { const d = p.s.deild || "—"; let r = rod.get(d); if (!r) { r = { kl: HOPAR.map(() => 0), op: HOPAR.map(() => 0) }; rod.set(d, r); } const i = HOPAR.indexOf(p.t.hopur); (p.s.stada === "done" ? r.kl : r.op)[i]++; }
+    for (const p of syndir) { const d = p.d || "—"; let r = rod.get(d); if (!r) { r = { kl: HOPAR.map(() => 0), op: HOPAR.map(() => 0) }; rod.set(d, r); } const i = HOPAR.indexOf(p.t.hopur); (p.s.stada === "done" ? r.kl : r.op)[i]++; }
     return [...rod.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [syndir]);
   const logSynar = useMemo(() => log.filter((l) => l.teikning_id === syn), [log, syn]);
@@ -397,7 +403,7 @@ export default function KortClient() {
     if (r.error) { setVilla(r.error.message); return; }
     const ny = r.data as Faersla;
     setFaerslur((l) => [...l.filter((q) => q.id !== ny.id), ny]);
-    setValinn((v) => (v?.p?.s.id === p.s.id ? { ...v, p: { ...v.p, x, y, faersla: ny } } : v));
+    setValinn((v) => (v?.p?.s.id === p.s.id ? { ...v, p: { ...v.p, x, y, faersla: ny, d: teikning.breidd_px ? deildAf(x / teikning.breidd_px) : v.p.d } } : v));
   };
   /** Setur punkt aftur á skráða stöðu (færslan er merkt eytt, aldrei hörð eyðing). */
   const afturkallaFaerslu = async (p: Punktur) => {
@@ -532,7 +538,7 @@ export default function KortClient() {
             <h3>#{valinn.p.s.ajour_serial ?? valinn.p.s.radnr} <span className={valinn.p.s.stada === "done" ? "g" : "r"}>{valinn.p.s.stada === "done" ? "Klárað" : "Opið"}</span></h3>
             <dl>
               <dt>Flokkur</dt><dd>{fl(valinn.p.s.flokkur_id)}</dd>
-              <dt>Deild</dt><dd>{valinn.p.s.deild || "—"}</dd>
+              <dt>Deild</dt><dd>{valinn.p.d || "—"}</dd>
               <dt>Starfsmaður</dt><dd>{nafn(valinn.p.s.starfsmadur_id)}</dd>
               <dt>Framkvæmt</dt><dd>{dmy(valinn.p.s.framkvaemt_til) || "—"}</dd>
               {valinn.nanar && <><dt>Teikning</dt><dd>{valinn.nanar.teikning || "—"}</dd><dt>Myndir í Ajour</dt><dd>{valinn.nanar.myndir}</dd></>}

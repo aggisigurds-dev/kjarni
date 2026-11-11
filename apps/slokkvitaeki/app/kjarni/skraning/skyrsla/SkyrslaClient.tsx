@@ -15,7 +15,7 @@ import { sb } from "../lib/sb";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { flokkur_id: number | null; teikning_id: number | null; stada: string; haed: string | null; deild: string | null };
+type Skr = { id: number; flokkur_id: number | null; teikning_id: number | null; stada: string; haed: string | null; deild: string | null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
 type Gogn = { an_staerda?: boolean; aukaverk_med?: boolean; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
@@ -89,12 +89,22 @@ export default function SkyrslaClient() {
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = [];
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("flokkur_id,teikning_id,stada,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,flokkur_id,teikning_id,stada,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           allt.push(...(r.data as unknown as Skr[]));
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
           if (!r.data || r.data.length < 1000) break;
         }
+        // hæðarhnit (sýnin skr_haedarhnit): hæð og deild úr STÖÐU punktsins á yfirlitsblaðinu — ræður þar sem hún er til, svo færðir punktar fylgi nýja staðnum
+        const hn = new Map<number, { haed: string | null; deild: string | null }>();
+        for (let i = 0; ; i += 1000) {
+          const r = await s.from("skr_haedarhnit").select("skraning_id,haed,deild").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
+          if (r.error) throw new Error(r.error.message);
+          for (const q of (r.data || []) as { skraning_id: number; haed: string | null; deild: string | null }[]) hn.set(q.skraning_id, q);
+          if (lifir) setStadaTexti(`Sæki staðsetningar… ${num(hn.size)}`);
+          if (!r.data || r.data.length < 1000) break;
+        }
+        for (const q of allt) { const h = hn.get(q.id); if (h) { q.haed = h.haed || q.haed; q.deild = h.deild || q.deild; } }
         if (!lifir) return;
         setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt);
         setTeiknHaed(new Map(((tk.data || []) as { id: number; heiti: string }[]).flatMap((t) => { const m = /^\s*([456])\s*H/i.exec(t.heiti); return m ? [[t.id, `${m[1]}H`] as [number, string]] : []; })));

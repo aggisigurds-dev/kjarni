@@ -396,12 +396,13 @@ grant select, insert, update on public.skr_faerslur to anon, authenticated;
 
 -- ---------------------------------------------------------------- gatakort: hæðarhnit (11.11.2026, migration skr_haedarhnit)
 -- skr_haedarhnit  staða hverrar skráningar á yfirlitsblaði hæðarinnar, óháð því á hvaða Ajour-teikningu punkturinn var settur:
---                 vörpun teikningar (vorpun, með hlutum fyrir samsett blöð) og færður punktur (skr_faerslur) ráða.
+--                 vörpun teikningar (vorpun: full affín X = a·x + c·y + e, Y = b·x + d·y + f, með hlutum fyrir samsett blöð) og
+--                 færður punktur (skr_faerslur) ráða.
 --                 deild og hluti reiknast úr stöðunni sjálfri (x-/y-hlutfall af blaðinu), svo færður punktur fylgir nýja staðnum.
 create or replace view public.skr_haedarhnit with (security_invoker = true) as
 select s.id as skraning_id, s.verk_id, s.teikning_id, y.id as yfirlit_id, y.haed,
-       round(coalesce(f.x_px, (v.h->>'a')::numeric * s.x_px + (v.h->>'e')::numeric), 1) as x_px,
-       round(coalesce(f.y_px, (v.h->>'a')::numeric * s.y_px + (v.h->>'f')::numeric), 1) as y_px,
+       round(coalesce(f.x_px, (v.h->>'a')::numeric * s.x_px + coalesce((v.h->>'c')::numeric, 0) * s.y_px + (v.h->>'e')::numeric), 1) as x_px,
+       round(coalesce(f.y_px, coalesce((v.h->>'b')::numeric, 0) * s.x_px + coalesce((v.h->>'d')::numeric, (v.h->>'a')::numeric) * s.y_px + (v.h->>'f')::numeric), 1) as y_px,
        (f.id is not null) as faerdur,
        case when p.fx < 0.179 then 'S1' when p.fx < 0.5 then 'S2' when p.fx < 0.812 then 'S4' else 'S5' end as deild,
        case when p.fy < 0.288 then 'N' when p.fy < 0.7116 then 'C' else 'S' end as hluti
@@ -414,8 +415,8 @@ cross join lateral (
                    where s.x_px >= (q->>'fra_x')::numeric order by (q->>'fra_x')::numeric desc limit 1), t.vorpun) as h
 ) v
 cross join lateral (
-  select coalesce(f.x_px, (v.h->>'a')::numeric * s.x_px + (v.h->>'e')::numeric) / nullif(y.breidd_px, 0) as fx,
-         coalesce(f.y_px, (v.h->>'a')::numeric * s.y_px + (v.h->>'f')::numeric) / nullif(y.haed_px, 0) as fy
+  select coalesce(f.x_px, (v.h->>'a')::numeric * s.x_px + coalesce((v.h->>'c')::numeric, 0) * s.y_px + (v.h->>'e')::numeric) / nullif(y.breidd_px, 0) as fx,
+         coalesce(f.y_px, coalesce((v.h->>'b')::numeric, 0) * s.x_px + coalesce((v.h->>'d')::numeric, (v.h->>'a')::numeric) * s.y_px + (v.h->>'f')::numeric) / nullif(y.haed_px, 0) as fy
 ) p
 where not s.eytt and s.x_px is not null and s.y_px is not null;
 grant select on public.skr_haedarhnit to anon, authenticated;
