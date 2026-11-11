@@ -109,6 +109,18 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Stöðusía (11.11.2026):** Allt / Tilbúin (kláraðar skráningar) / Í vinnslu (ókláraðar skráningar + merki að hluta) / Eftir
   (áætluð göt án skráningar og handvirkir punktar, teiknaðir RAUÐIR). Stærðarsían (táknin) gildir líka um áætluð göt.
 
+## Færðir punktar á gatakortinu (11.11.2026) — tafla `skr_faerslur`
+- **Hvað:** hnappurinn „Færa punkta" (efst til hægri, aðeins á yfirlitsblöðum) kveikir á færsluham: bendill niður á sýndan punkt
+  grípur hann (innan 14 skjápixla), dráttur færir, slepping vistar. Síur og lög gilda eins og venjulega, svo Agnar síar fyrst á
+  flokk (t.d. Loft Ø400-630) og kveikir á réttu lagi. Dráttur á auðu svæði færir blaðið áfram.
+- **Skráning:** nýja staðan fer í `skr_faerslur` (skraning_id, teikning_id = yfirlitsblaðið, x_px/y_px, fra_x/fra_y = vörpuð staða
+  fyrir færslu, uppruni handvirkt | sjalfvirkt). `skr_skraningar` er ALDREI breytt — Ajour-hnitin standa og innflutningur
+  yfirskrifar ekki færslur. Ein virk röð per skráningu og blað (einkvæmur vísir `where not eytt`); „Upprunaleg staða" í spjaldi
+  punktsins merkir röðina `eytt`. Færður punktur sýnir bláa brotalínu frá skráðri stöðu meðan færsluhamur er á.
+- **Áætlað gat:** dregið í sama ham; hnitin uppfærast beint í `skr_aaetlud` (þau eru á yfirlitsblaðinu). `parad` verður þá úrelt.
+- **Pörun:** `tools/skraning-gatakort-para.cjs` notar færðu stöðuna. Keyra aftur eftir færslur.
+- **Ekki til enn:** sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (sama aðferð og `-miro-festa.py` fyrir merki).
+
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
 - **Hvað:** skýrsla til Landspítalans: staða per hæð og deild (stök verk, markmið, %) og samanburður við UPPRUNALEGT útboð
   (liðir 1.1–3.1, magn úr mynd Agnars 11.11 — hann segir magnið hafa breyst). Allt reiknað úr `skr_skraningar` við opnun;

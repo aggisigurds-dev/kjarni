@@ -362,3 +362,34 @@ grant select, insert, update on public.skr_skyrslur to anon, authenticated;
 -- aðeins fyrir sýnilegt svæði þegar stækkað er inn (tools/skraning-gatakort-flisar.py og -flisar-upp.cjs).
 alter table public.skr_teikningar add column if not exists flisar jsonb;
 alter table public.skr_log add column if not exists flisar jsonb;
+
+-- ---------------------------------------------------------------- gatakort: færðir punktar (11.11.2026, migration skr_faerslur)
+-- skr_faerslur  leiðrétt staðsetning skráningar Á YFIRLITSBLAÐI gatakortsins (punktar voru oft settir ónákvæmt í síma).
+--               Skráningin sjálf (x_px/y_px á Ajour-teikningu) er óbreytt, svo innflutningur úr Ajour yfirskrifar þetta ekki.
+--               Ein virk röð per skráningu og yfirlitsblað; afturköllun = eytt. uppruni: handvirkt | sjalfvirkt.
+create table if not exists public.skr_faerslur (
+  id            bigint generated always as identity primary key,
+  verk_id       bigint not null references public.skr_verk(id),
+  skraning_id   bigint not null references public.skr_skraningar(id),
+  teikning_id   bigint not null references public.skr_teikningar(id),
+  x_px          numeric not null,
+  y_px          numeric not null,
+  fra_x         numeric,
+  fra_y         numeric,
+  uppruni       text not null default 'handvirkt',
+  eytt          boolean not null default false,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create unique index if not exists skr_faerslur_ein_virk on public.skr_faerslur (skraning_id, teikning_id) where not eytt;
+create index if not exists skr_faerslur_verk_idx on public.skr_faerslur (verk_id, teikning_id, eytt);
+alter table public.skr_faerslur enable row level security;
+drop policy if exists skr_faerslur_select on public.skr_faerslur;
+create policy skr_faerslur_select on public.skr_faerslur for select using (true);
+drop policy if exists skr_faerslur_insert on public.skr_faerslur;
+create policy skr_faerslur_insert on public.skr_faerslur for insert with check (true);
+drop policy if exists skr_faerslur_update on public.skr_faerslur;
+create policy skr_faerslur_update on public.skr_faerslur for update using (true) with check (true);
+drop trigger if exists skr_faerslur_touch on public.skr_faerslur;
+create trigger skr_faerslur_touch before update on public.skr_faerslur for each row execute function public.skr_touch();
+grant select, insert, update on public.skr_faerslur to anon, authenticated;

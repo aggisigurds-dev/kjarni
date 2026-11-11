@@ -31,9 +31,11 @@ const FAG_HOPUR = { loftraesting: 'loft', rafmagn: 'rafmagn', sprinkler: 'ror', 
   const born = new Map(teikn.filter((t) => t.yfirlit_id === yf.id && t.vorpun).map((t) => [t.id, t.vorpun]));
   const flokkar = new Map((await rest('GET', `skr_flokkar?or=(verk_id.eq.${verk.id},verk_id.is.null)&select=id,heiti`)).map((f) => [f.id, f.heiti]));
   const aa = await allt(`skr_aaetlud?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&select=id,x_px,y_px,fag,fjoldi,flokkur_id&order=id`);
+  // færðir punktar (skr_faerslur): leiðrétt staða á yfirlitsblaðinu ræður í pöruninni
+  const faerslur = new Map((await allt(`skr_faerslur?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&select=skraning_id,x_px,y_px&order=id`)).map((f) => [f.skraning_id, f]));
   const skr = (await allt(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.false&teikning_id=in.(${[...born.keys()].join(',')})&select=id,radnr,teikning_id,x_px,y_px,flokkur_id,framkvaemt_til,deild:ajour_gogn->>deild&order=id`))
     .filter((s) => s.x_px != null && s.y_px != null)
-    .map((s) => { const v = born.get(s.teikning_id); return { ...s, X: v.a * s.x_px + v.e, Y: (v.d ?? v.a) * s.y_px + v.f, hopur: hopur(flokkar.get(s.flokkur_id) || '') }; })
+    .map((s) => { const v = born.get(s.teikning_id), f = faerslur.get(s.id); return { ...s, X: f ? +f.x_px : v.a * s.x_px + v.e, Y: f ? +f.y_px : (v.d ?? v.a) * s.y_px + v.f, hopur: hopur(flokkar.get(s.flokkur_id) || '') }; })
     .filter((s) => s.hopur);
   const merki = aa.map((a) => ({ ...a, x: +a.x_px, y: +a.y_px, hopur: (a.flokkur_id && hopur(flokkar.get(a.flokkur_id) || '')) || FAG_HOPUR[a.fag] || null, par: [] }));
   // rist til að finna nágranna hratt

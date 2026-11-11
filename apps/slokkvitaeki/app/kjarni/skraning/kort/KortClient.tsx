@@ -5,7 +5,8 @@
  * staða, starfsmaður, tímabil, lagfæringar, tvítök). Les skr_* beint; greiningin (deild, lagf, tvítak) er reiknuð í
  * tools/skraning-gatakort-innflutningur.cjs og geymd í skr_skraningar.ajour_gogn.
  *   /kjarni/skraning/kort[?verk=ID]
- * Skrif: aðeins áætluð göt (skr_aaetlud) og lög (skr_log) — við smell, aldrei í lykkju. Skráningum er ekki breytt hér.
+ * Skrif: áætluð göt (skr_aaetlud), lög (skr_log) og færðir punktar (skr_faerslur: leiðrétt staða skráningar á yfirlitsblaðinu) —
+ * við smell eða sleppingu, aldrei í lykkju. Skráningunum sjálfum (skr_skraningar) er ekki breytt hér.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,7 +31,13 @@ const PARAD: Record<string, [string, string]> = { fullt: ["Fullt", "#86efac"], h
 // Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
 const FAG_FLOKKAR: Record<string, RegExp> = { loftraesting: /^(Loft|Raufar)/i, sprinkler: /^Stál/i, vatn: /^(Stál|Plast)/i, hiti: /^(Stál|Plast)/i, fravatn: /^(Stál|Plast)/i, gas: /^(Stál|Plast)/i, rafmagn: /^Raf/i, golf: /^Gólf/i };
 type Nanar = { lysing: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string };
-type Punktur = { s: Skr; x: number; y: number; t: Takn };
+/** Færður punktur: leiðrétt staða skráningar á yfirlitsblaði (skr_faerslur). Skráningin sjálf heldur Ajour-hnitunum. */
+type Faersla = { id: number; skraning_id: number; teikning_id: number; x_px: number; y_px: number; uppruni: string };
+const FA_SEL = "id,skraning_id,teikning_id,x_px,y_px,uppruni";
+const PX_M = 33.3;   // pixlar á metra á yfirlitsblaðinu (60 px ≈ 1,8 m)
+/** x0/y0 = vörpuð staða úr Ajour-hnitum; x/y = staðan sem er sýnd (færð ef færsla er til). */
+type Punktur = { s: Skr; x: number; y: number; t: Takn; x0: number; y0: number; faersla?: Faersla };
+type Faerir = { p?: Punktur; a?: Aaetlad; x: number; y: number; dx: number; dy: number; hreyft: boolean };
 type Takn = { logun: "x" | "o" | "t" | "s" | "d"; litur: string; r: number; heiti: string; hopur: string };
 
 const FOG: [string, string, string][] = [["loftraesting", "Loftræsting", "#2563eb"], ["sprinkler", "Sprinkler", "#dc2626"], ["vatn", "Vatnslagnir", "#0891b2"], ["fravatn", "Frárennsli", "#7c2d12"], ["rafmagn", "Rafmagn", "#067429"], ["hiti", "Hiti", "#f97316"], ["gas", "Gas", "#9333ea"], ["golf", "Milliloft", "#0f766e"], ["annad", "Annað", "#6b7280"]];
@@ -79,6 +86,8 @@ export default function KortClient() {
   const [menn, setMenn] = useState<Starfsm[]>([]);
   const [log, setLog] = useState<Lag[]>([]);
   const [aaetlud, setAaetlud] = useState<Aaetlad[]>([]);
+  const [faerslur, setFaerslur] = useState<Faersla[]>([]);
+  const [faera, setFaera] = useState(false); // færsluhamur: draga punkta á réttan stað
   const [villa, setVilla] = useState<string | null>(null);
   const [hladid, setHladid] = useState("Sæki verk…");
   const [syn, setSyn] = useState<number | null>(null); // teikning.id sem er sýnd (yfirlit eða stök)
@@ -99,6 +108,8 @@ export default function KortClient() {
   const [myndTeljari, setMyndTeljari] = useState(0); // hækkar þegar mynd hleðst → endurteikna
 
   const cnvRef = useRef<HTMLCanvasElement | null>(null);
+  /** Punktur (skráning eða áætlað gat) sem er verið að draga í færsluham, í hnitum blaðsins; teiknifallið les þetta beint. */
+  const faerir = useRef<Faerir | null>(null);
   const kassiRef = useRef<HTMLDivElement | null>(null);
   const sjon = useRef({ k: 1, tx: 0, ty: 0, k0: 1 });
   const myndir = useRef(new Map<string, HTMLImageElement>());
@@ -123,6 +134,14 @@ export default function KortClient() {
         const tt = t.data as Teikning[];
         setTeikn(tt); setFlokkar(f.data as Flokkur[]); setMenn(m.data as Starfsm[]); setLog(l.data as Lag[]); setAaetlud(a.data as Aaetlad[]);
         setSyn((tt.find((x) => x.tegund === "yfirlit") || tt[0])?.id ?? null);
+        const fa: Faersla[] = [];
+        for (let i = 0; ; i += 1000) {
+          const r = await s.from("skr_faerslur").select(FA_SEL).eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          if (r.error) throw new Error(r.error.message);
+          fa.push(...(r.data as Faersla[]));
+          if (!r.data || r.data.length < 1000) break;
+        }
+        setFaerslur(fa);
         const allar: Skr[] = [];
         for (let i = 0; ; i += 1000) {
           const r = await s.from("skr_skraningar").select("id,radnr,ajour_serial,teikning_id,x_px,y_px,flokkur_id,starfsmadur_id,stada,framkvaemt_til,deild:ajour_gogn->>deild,lagf:ajour_gogn->>lagf,tvitak_af:ajour_gogn->tvitak_af").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
@@ -144,14 +163,18 @@ export default function KortClient() {
     if (!teikning) return [];
     const born = new Map<number, Vorpun | null>();
     if (teikning.tegund === "yfirlit") { for (const t of teikn) if (t.yfirlit_id === teikning.id && t.vorpun) born.set(t.id, t.vorpun); } else born.set(teikning.id, null);
+    const fm = new Map<number, Faersla>();   // færðir punktar eiga aðeins við yfirlitsblaðið sem þeir voru færðir á
+    if (teikning.tegund === "yfirlit") for (const f of faerslur) if (f.teikning_id === teikning.id) fm.set(f.skraning_id, f);
     const out: Punktur[] = [];
     for (const s of skr) {
       if (s.teikning_id == null || s.x_px == null || s.y_px == null || !born.has(s.teikning_id)) continue;
       const v = born.get(s.teikning_id);
-      out.push({ s, x: v ? v.a * +s.x_px + v.e : +s.x_px, y: v ? v.a * +s.y_px + v.f : +s.y_px, t: (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
+      const x0 = v ? v.a * +s.x_px + v.e : +s.x_px, y0 = v ? v.a * +s.y_px + v.f : +s.y_px, f = fm.get(s.id);
+      out.push({ s, x: f ? +f.x_px : x0, y: f ? +f.y_px : y0, x0, y0, faersla: f, t: (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
     }
     return out;
-  }, [teikning, teikn, skr, taknAf, ANNAD]);
+  }, [teikning, teikn, skr, taknAf, ANNAD, faerslur]);
+  const faerdir = useMemo(() => faerslur.filter((f) => f.teikning_id === syn).length, [faerslur, syn]);
   const deildir = useMemo(() => [...new Set(punktar.map((p) => p.s.deild).filter((d): d is string => !!d))].sort(), [punktar]);
   /** Skráningar sem eru paraðar við eitthvert áætlað gat á þessu blaði. */
   const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
@@ -254,24 +277,27 @@ export default function KortClient() {
       cx.save(); cx.globalAlpha = Number(l.gegnsaei); cx.transform(v.a, v.b || 0, v.c || 0, v.d ?? v.a, v.e, v.f); cx.drawImage(im, 0, 0); cx.restore();
     }
     const zs = Math.max(0.75, Math.min(3.2, Math.sqrt(k / k0) * 0.9)) / k; // táknstærð í skjápixlum, vex hægt með stækkun
+    const dr = faerir.current;
     if (synaSkr) for (const umf of [1, 0]) for (const p of syndir) {
       const kl = p.s.stada === "done"; if ((kl ? 1 : 0) !== umf) continue;
-      const r = p.t.r * zs;
-      slod(cx, p.t.logun, p.x, p.y, r);
+      const r = p.t.r * zs, idr = dr?.p?.s.id === p.s.id, px = idr ? dr!.x : p.x, py = idr ? dr!.y : p.y;
+      if (faera && (p.faersla || idr)) { cx.beginPath(); cx.moveTo(p.x0, p.y0); cx.lineTo(px, py); cx.lineWidth = 1.2 / k; cx.strokeStyle = "#1d4ed8"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); cx.beginPath(); cx.arc(p.x0, p.y0, 1.6 * zs, 0, 6.2832); cx.fillStyle = "#1d4ed8"; cx.fill(); }
+      slod(cx, p.t.logun, px, py, r);
       if (p.t.logun === "x") { cx.lineCap = "round"; cx.lineWidth = Math.max(1 / k, r * 0.5); cx.strokeStyle = kl ? p.t.litur : "#dc2626"; cx.stroke(); }
       else if (kl) { cx.fillStyle = p.t.litur + "d8"; cx.fill(); cx.lineWidth = 0.6 / k; cx.strokeStyle = "rgba(22,21,19,.45)"; cx.stroke(); }
       else { cx.fillStyle = "#ffffffe6"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
-      if (!kl) { cx.beginPath(); cx.arc(p.x, p.y, r + 3.5 * zs, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
-      if (p.s.lagf) { cx.beginPath(); cx.arc(p.x, p.y, r + 2.2 * zs, 0, 6.2832); cx.lineWidth = 1.3 / k; cx.strokeStyle = p.s.lagf === "B" ? "#b45309" : p.s.lagf === "A" ? "#111827" : "#6b7280"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); }
+      if (!kl) { cx.beginPath(); cx.arc(px, py, r + 3.5 * zs, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
+      if (p.s.lagf) { cx.beginPath(); cx.arc(px, py, r + 2.2 * zs, 0, 6.2832); cx.lineWidth = 1.3 / k; cx.strokeStyle = p.s.lagf === "B" ? "#b45309" : p.s.lagf === "A" ? "#111827" : "#6b7280"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); }
     }
     if (synaAaetlud) for (const a of aaetludSynar) {
-      if (aaEftir(a)) { slod(cx, "o", +a.x_px, +a.y_px, 5.6 * zs); cx.fillStyle = "#dc2626"; cx.fill(); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#ffffff"; cx.stroke(); continue; }
-      const r = 6.5 * zs; slod(cx, "d", +a.x_px, +a.y_px, r);
+      const adr = dr?.a?.id === a.id, ax = adr ? dr!.x : +a.x_px, ay = adr ? dr!.y : +a.y_px;
+      if (aaEftir(a)) { slod(cx, "o", ax, ay, 5.6 * zs); cx.fillStyle = "#dc2626"; cx.fill(); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#ffffff"; cx.stroke(); continue; }
+      const r = 6.5 * zs; slod(cx, "d", ax, ay, r);
       cx.fillStyle = (PARAD[a.parad!.stada]?.[1] ?? "#ffffff") + "dd"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
     }
     const v = valinn?.p ? { x: valinn.p.x, y: valinn.p.y } : valinn?.a ? { x: +valinn.a.x_px, y: +valinn.a.y_px } : null;
     if (v) { cx.beginPath(); cx.arc(v.x, v.y, 11 * zs, 0, 6.2832); cx.lineWidth = 2.5 / k; cx.strokeStyle = "#111827"; cx.stroke(); }
-  }, [teikning, W, H, mynd, flis, logSynar, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn]);
+  }, [teikning, W, H, mynd, flis, logSynar, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -304,17 +330,34 @@ export default function KortClient() {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); const p = stadur(e); bendlar.current.set(e.pointerId, p);
     const b = [...bendlar.current.values()];
     drag.current = { x: p.x, y: p.y, hreyft: 0, klipa: b.length === 2 ? Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y) : 0 };
+    // færsluhamur: bendill niður á (eða við) sýndan punkt grípur hann; annars færist blaðið eins og venjulega
+    if (b.length > 1) faerir.current = null;
+    else if (faera && !baetaFag && teikning?.tegund === "yfirlit") {
+      const s = sjon.current, wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k; let bd = 14 / s.k, bp: Punktur | undefined, ba: Aaetlad | undefined;
+      if (synaSkr) for (const q of syndir) { const dd = Math.hypot(q.x - wx, q.y - wy); if (dd < bd) { bd = dd; bp = q; } }
+      if (synaAaetlud) for (const a of aaetludSynar) { const dd = Math.hypot(+a.x_px - wx, +a.y_px - wy); if (dd < bd) { bd = dd; ba = a; bp = undefined; } }
+      const x0 = bp ? bp.x : ba ? +ba.x_px : 0, y0 = bp ? bp.y : ba ? +ba.y_px : 0;
+      faerir.current = bp || ba ? { p: bp, a: ba, x: x0, y: y0, dx: x0 - wx, dy: y0 - wy, hreyft: false } : null;
+    }
   };
   const hreyfa = (e: React.PointerEvent) => {
     if (!bendlar.current.has(e.pointerId) || !drag.current) return;
     const p = stadur(e), fyrri = bendlar.current.get(e.pointerId)!; bendlar.current.set(e.pointerId, p);
     const b = [...bendlar.current.values()];
-    if (b.length === 2) { const d = Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y); if (drag.current.klipa) staekka((b[0].x + b[1].x) / 2, (b[0].y + b[1].y) / 2, d / drag.current.klipa); drag.current.klipa = d; drag.current.hreyft = 99; return; }
+    if (faerir.current && b.length === 1) {
+      const s = sjon.current, f = faerir.current; f.x = (p.x - s.tx) / s.k + f.dx; f.y = (p.y - s.ty) / s.k + f.dy;
+      drag.current.hreyft += Math.abs(p.x - fyrri.x) + Math.abs(p.y - fyrri.y); if (drag.current.hreyft > 4) f.hreyft = true;
+      bidjaUmTeikningu(); return;
+    }
+    if (b.length === 2) { faerir.current = null; const d = Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y); if (drag.current.klipa) staekka((b[0].x + b[1].x) / 2, (b[0].y + b[1].y) / 2, d / drag.current.klipa); drag.current.klipa = d; drag.current.hreyft = 99; return; }
     sjon.current.tx += p.x - fyrri.x; sjon.current.ty += p.y - fyrri.y; drag.current.hreyft += Math.abs(p.x - fyrri.x) + Math.abs(p.y - fyrri.y); bidjaUmTeikningu();
   };
   const upp = async (e: React.PointerEvent) => {
     const var_ = bendlar.current.has(e.pointerId); bendlar.current.delete(e.pointerId);
     const d = drag.current; if (!bendlar.current.size) drag.current = null;
+    const f = faerir.current;
+    if (f && f.hreyft && var_) { await vistaFaerslu(f); if (faerir.current === f) faerir.current = null; bidjaUmTeikningu(); return; }
+    faerir.current = null;
     if (!var_ || !d || d.hreyft > 6 || !teikning || !verk) return;
     const p = stadur(e), s = sjon.current, wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k;
     if (baetaFag) {
@@ -331,6 +374,34 @@ export default function KortClient() {
     setValinn({ p: best, nanar: null });
     const r = await sb().from("skr_skraningar").select("lysing,created_at,ajour_gogn").eq("id", best.s.id).single();
     if (!r.error && r.data) { const g = (r.data.ajour_gogn || {}) as { myndir?: string[]; teikning?: string; lagf_dags?: string; a_stad?: number }; setValinn((v) => (v && v.p && v.p.s.id === best!.s.id ? { ...v, nanar: { lysing: r.data.lysing, created_at: r.data.created_at, myndir: (g.myndir || []).length, teikning: g.teikning || null, lagf_dags: g.lagf_dags || null, a_stad: g.a_stad ?? null } } : v)); }
+  };
+
+  // ---------------------------------------------------------------- færðir punktar (skrif aðeins þegar punkti er sleppt)
+  /** Vistar nýja stöðu: skráning → skr_faerslur (skráningin sjálf óbreytt); áætlað gat → hnitin í skr_aaetlud. */
+  const vistaFaerslu = async (f: Faerir) => {
+    if (!teikning || !verk) return;
+    const x = Math.round(Math.max(0, Math.min(W, f.x)) * 10) / 10, y = Math.round(Math.max(0, Math.min(H, f.y)) * 10) / 10;
+    if (f.a) {
+      const a = f.a;
+      setAaetlud((l) => l.map((q) => (q.id === a.id ? { ...q, x_px: x, y_px: y } : q))); setValinn((v) => (v?.a?.id === a.id ? { ...v, a: { ...v.a, x_px: x, y_px: y } } : v));
+      const r = await sb().from("skr_aaetlud").update({ x_px: x, y_px: y }).eq("id", a.id); if (r.error) setVilla(r.error.message);
+      return;
+    }
+    const p = f.p; if (!p) return;
+    const r = p.faersla
+      ? await sb().from("skr_faerslur").update({ x_px: x, y_px: y, uppruni: "handvirkt" }).eq("id", p.faersla.id).select(FA_SEL).single()
+      : await sb().from("skr_faerslur").insert({ verk_id: verk.id, skraning_id: p.s.id, teikning_id: teikning.id, x_px: x, y_px: y, fra_x: Math.round(p.x0 * 10) / 10, fra_y: Math.round(p.y0 * 10) / 10, uppruni: "handvirkt" }).select(FA_SEL).single();
+    if (r.error) { setVilla(r.error.message); return; }
+    const ny = r.data as Faersla;
+    setFaerslur((l) => [...l.filter((q) => q.id !== ny.id), ny]);
+    setValinn((v) => (v?.p?.s.id === p.s.id ? { ...v, p: { ...v.p, x, y, faersla: ny } } : v));
+  };
+  /** Setur punkt aftur á skráða stöðu (færslan er merkt eytt, aldrei hörð eyðing). */
+  const afturkallaFaerslu = async (p: Punktur) => {
+    const f = p.faersla; if (!f) return;
+    const r = await sb().from("skr_faerslur").update({ eytt: true }).eq("id", f.id); if (r.error) { setVilla(r.error.message); return; }
+    setFaerslur((l) => l.filter((q) => q.id !== f.id));
+    setValinn((v) => (v?.p?.s.id === p.s.id ? { ...v, p: { ...v.p, x: p.x0, y: p.y0, faersla: undefined } } : v));
   };
 
   // ---------------------------------------------------------------- lög og áætluð göt (skrif aðeins við smell)
@@ -442,14 +513,16 @@ export default function KortClient() {
       </aside>
 
       <div className="gk-kort">
-        <div className={`gk-strigi${baetaFag ? " setja" : ""}`} ref={kassiRef} onPointerDown={nidur} onPointerMove={hreyfa} onPointerUp={upp} onPointerCancel={upp}>
+        <div className={`gk-strigi${baetaFag ? " setja" : ""}${faera && !baetaFag ? " faera" : ""}`} ref={kassiRef} onPointerDown={nidur} onPointerMove={hreyfa} onPointerUp={upp} onPointerCancel={upp}>
           <canvas ref={cnvRef} />
         </div>
         <div className="gk-stjorn">
           <button type="button" onClick={() => { const k = kassiRef.current!; staekka(k.clientWidth / 2, k.clientHeight / 2, 1.5); }} aria-label="Stækka">+</button>
           <button type="button" onClick={() => { const k = kassiRef.current!; staekka(k.clientWidth / 2, k.clientHeight / 2, 1 / 1.5); }} aria-label="Minnka">−</button>
           <button type="button" onClick={passa}>Allt blaðið</button>
+          <button type="button" className={faera ? "on" : ""} aria-pressed={faera} disabled={teikning?.tegund !== "yfirlit"} title="Draga punkta á réttan stað á yfirlitsblaðinu" onClick={() => { setFaera((x) => !x); setBaetaFag(""); }}>Færa punkta{faerdir ? ` · ${num(faerdir)}` : ""}</button>
         </div>
+        {faera && !baetaFag && <p className="gk-faera">Dragðu punkt á réttan stað; staðan vistast þegar þú sleppir. Bláa línan sýnir hvaðan hann kom. Skráningin í Ajour breytist ekki.</p>}
         {valinn?.p && (
           <div className="gk-spjald">
             <button type="button" className="gk-x" onClick={() => setValinn(null)} aria-label="Loka">×</button>
@@ -463,6 +536,7 @@ export default function KortClient() {
             </dl>
             {valinn.p.s.lagf && <p className="gk-merki">{LAGF[valinn.p.s.lagf]}{valinn.nanar?.lagf_dags ? ` · ${dmy(valinn.nanar.lagf_dags)}` : ""}{valinn.nanar?.a_stad ? ` · á stað #${valinn.nanar.a_stad}` : ""}</p>}
             {valinn.p.s.tvitak_af && <p className="gk-merki">Á nákvæmlega sömu hnitum og #{valinn.p.s.tvitak_af}</p>}
+            {valinn.p.faersla && <p className="gk-merki gk-faerdur">Færður á kortinu ({valinn.p.faersla.uppruni === "sjalfvirkt" ? "sjálfvirkt" : "handvirkt"}), {(Math.hypot(valinn.p.x - valinn.p.x0, valinn.p.y - valinn.p.y0) / PX_M).toFixed(1).replace(".", ",")} m frá skráðri stöðu <button type="button" onClick={() => afturkallaFaerslu(valinn.p!)}>Upprunaleg staða</button></p>}
             {valinn.nanar === null ? <p className="gk-smatt">Sæki lýsingu…</p> : valinn.nanar?.lysing ? <p className="gk-lysing">{valinn.nanar.lysing}</p> : null}
           </div>
         )}
