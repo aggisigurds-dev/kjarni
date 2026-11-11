@@ -4,7 +4,7 @@
  *  (mánaðardagatal og verkefnalisti) og blaðið þar sem viðburður er skráður. */
 
 import { useState } from "react";
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, ChevronRight as Go, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, ChevronRight as Go, GraduationCap, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { formatTime } from "./arrange";
 import { MONTHS, WEEKDAYS_SHORT, eventsOn, fromYmd, greeting, longDate, monthGrid, shortDate, timeRange, upcoming } from "./calendar";
 import { sortedTodos, type CoachEvent, type EventKind, type LibraryDoc, type Skater, type Todo } from "./library";
@@ -99,9 +99,10 @@ type HomeProps = Shared & {
   onOpenSkater: (k: Skater) => void;
   onNewSkater: () => void;
   onGo: (tab: "skipulag" | "idkendur" | "rutinur") => void;
+  onLearn: () => void;
 };
 
-export function HomeTab({ doc, photos, today, projects, onOpenEvent, onAddEvent, onTodoAdd, onTodoToggle, onTodoDelete, onNewRoutine, onOpenProject, onOpenSkater, onNewSkater, onGo }: HomeProps) {
+export function HomeTab({ doc, photos, today, projects, onOpenEvent, onAddEvent, onTodoAdd, onTodoToggle, onTodoDelete, onNewRoutine, onOpenProject, onOpenSkater, onNewSkater, onGo, onLearn }: HomeProps) {
   const todays = eventsOn(doc.events, today);
   const next = upcoming(doc.events, today, 3);
   const open = sortedTodos(doc.todos).filter((t) => !t.done);
@@ -229,6 +230,20 @@ export function HomeTab({ doc, photos, today, projects, onOpenEvent, onAddEvent,
           </button>
         );
       })}
+
+      <div className="tk-section">
+        <h2>Kennsluefni</h2>
+      </div>
+      <button type="button" className="tk-card alone" onClick={onLearn}>
+        <span className="tk-card-icon" aria-hidden="true">
+          <GraduationCap size={24} />
+        </span>
+        <span className="tk-card-text">
+          <strong>Stökk, snúningar og skref</strong>
+          <small>Heiti á ensku og íslensku, skammstafanir og skýringar</small>
+        </span>
+        <Go size={18} className="tk-card-go" />
+      </button>
     </>
   );
 }

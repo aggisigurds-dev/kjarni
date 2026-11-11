@@ -7,7 +7,7 @@
  *  tækisins opnar. */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarDays, Cloud, CloudOff, Download, Ellipsis, Film, Flag, House, Library, Link2, ListMusic, LoaderCircle, Music, Plus, RefreshCw, Scissors, Share, Trash2, Users, X } from "lucide-react";
+import { CalendarDays, Cloud, CloudOff, Download, Ellipsis, Film, Flag, GraduationCap, House, Library, Link2, ListMusic, LoaderCircle, Music, Plus, RefreshCw, Scissors, Share, Trash2, Users, X } from "lucide-react";
 import { emptyArrangement, formatTime, normalizeArrangement, type Arrangement, type Marker, type Part } from "./arrange";
 import { ymd } from "./calendar";
 import { confidentCover, searchCovers } from "./covers";
@@ -58,6 +58,7 @@ import {
   type ProjectRecord,
 } from "./store";
 import { CloudSync, KEY_PARAM, applyManifestKey, fetchMediaBlob, fetchPhoto, fetchSongBlob, resolveLockerKey, syncAll, type SyncState } from "./sync";
+import { ReferenceSheet } from "./Reference";
 import { LibraryTab, SkaterSheet, SkatersTab, blankSkater, fitsFor, squarePhoto } from "./Tabs";
 import { buildTrackView, newId, songSummary, trackNameFromFile, type TrackView } from "./tracks";
 import TonklippaEditor, { AUDIO_ACCEPT, VIDEO_ACCEPT } from "./TonklippaEditor";
@@ -107,6 +108,7 @@ export default function TonklippaApp() {
   const [playing, setPlaying] = useState("");
   const [newFor, setNewFor] = useState<{ skaterId?: string } | null>(null);
   const [skaterOpen, setSkaterOpen] = useState<{ id: string; isNew: boolean; draft: Skater } | null>(null);
+  const [learning, setLearning] = useState(false);
   const [eventOpen, setEventOpen] = useState<{ event: CoachEvent; isNew: boolean } | null>(null);
 
   const say = useCallback((text: string, ms = 3500) => {
@@ -666,6 +668,7 @@ export default function TonklippaApp() {
             onOpenSkater={(k) => setSkaterOpen({ id: k.id, isNew: false, draft: k })}
             onNewSkater={newSkaterSheet}
             onGo={setTab}
+            onLearn={() => setLearning(true)}
           />
         )}
 
@@ -881,6 +884,8 @@ export default function TonklippaApp() {
         }}
       />
 
+      {learning && <ReferenceSheet onClose={() => setLearning(false)} />}
+
       {openSkater && skaterOpen && (
         <SkaterSheet
           skater={openSkater}
@@ -977,6 +982,20 @@ export default function TonklippaApp() {
               <span>
                 <strong>Opna allt mitt í öðru tæki</strong>
                 <small>Afritar leynitengil — bara fyrir þig</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="tk-sheet-item"
+              onClick={() => {
+                setMenu(false);
+                setLearning(true);
+              }}
+            >
+              <GraduationCap size={20} />
+              <span>
+                <strong>Kennsluefni</strong>
+                <small>Stökk, snúningar og skref — heiti og skýringar</small>
               </span>
             </button>
             <button type="button" className="tk-sheet-item" onClick={() => void shareApp()}>

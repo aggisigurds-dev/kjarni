@@ -38,7 +38,7 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   tónhæðarbreytingar), `analyze.ts` (bylgjuform, slagaleit, hápunktar lags), `match.ts` („besti
   kaflinn“: hvar hápunktar lags falla að hápunktum dansins), `library.ts` (safn/iðkendur/dagatal/
   verkefni/myndir og myndbönd — eitt skjal, sameinað atriði fyrir atriði milli tækja),
-  `calendar.ts`, `elements.ts` (ISU-listinn yfir stökk og snúninga með skammstöfunum, samsetningar, leit, einkunnir, æfingaáherslur), `covers.ts`
+  `calendar.ts`, `elements.ts` (ISU-listinn yfir stökk og snúninga með skammstöfunum, heiti á ensku og íslensku — geymt er alltaf grunnheitið, `labelIn` sýnir valið mál — skýringar, samsetningar, leit, einkunnir, æfingaáherslur), `lang.ts` (EN/ÍS-rofinn, geymdur í tækinu), `Reference.tsx` (Kennsluefni: uppflettilisti með skýringum og heimildum), `covers.ts`
   (umslög fundin eftir heiti lags í opinni leit iTunes, beint úr vafranum; sjálfvirkt aðeins
   þegar heitið passar örugglega, annars valið úr lista — aðeins slóðin er geymd).
   Myndir og myndbönd (`Media.tsx`): gallerí á iðkanda, hápunktar merktir í upptöku af dansinum

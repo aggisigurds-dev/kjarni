@@ -59,7 +59,7 @@ import {
 } from "./library.ts";
 import { bestMatches, songFit } from "./match.ts";
 import { artAt, confidentCover, coverQuery, parseItunes, plain } from "./covers.ts";
-import { ALL_ELEMENTS, ELEMENTS, codeOf, focusList, fromCode, groupOf, joinCombo, jumpParts, needsWork, searchElements, splitSpin, splitTurns, withSpin, withTurns } from "./elements.ts";
+import { ALL_ELEMENTS, ELEMENTS, codeOf, focusList, fromCode, fromWords, groupOf, infoOf, joinCombo, jumpParts, labelIn, nameIn, needsWork, parseElement, searchElements, splitSpin, splitTurns, withSpin, withTurns } from "./elements.ts";
 import { encodeMp3 } from "./mp3.ts";
 import { extract, renderMix, type TrackAudio } from "./render.ts";
 import { timeStretch } from "./stretch.ts";
@@ -695,6 +695,79 @@ test("elements: the ISU list — codes, combinations, flying and change-foot spi
   assert.ok(names("STSQ").includes("Skrefaröð"));
   assert.deepEqual(names("þristur"), ["Three-turn"]);
   assert.deepEqual(names("zzzz"), []);
+});
+
+test("elements: English and Icelandic names, and a short explanation for each", () => {
+  // Það sem er geymt er alltaf grunnheitið; málið ræður aðeins því sem sést.
+  assert.equal(labelIn("2× Axel", "en"), "Double Axel");
+  assert.equal(labelIn("2× Axel", "is"), "Tvöfaldur Axel");
+  assert.equal(labelIn("Axel", "en"), "Axel");
+  assert.equal(labelIn("3× Lutz + 2× Toe loop", "en"), "Triple Lutz + Double Toe loop");
+  assert.equal(labelIn("4× Salchow", "en"), "Quad Salchow");
+  assert.equal(labelIn("4× Salchow", "is"), "Fjórfaldur Salchow");
+  assert.equal(labelIn("2× Loop", "en"), "Double Loop");
+  assert.equal(labelIn("Sitjandi snúningur", "en"), "Sit spin");
+  assert.equal(labelIn("Sitjandi snúningur með flugi", "en"), "Flying sit spin");
+  assert.equal(labelIn("Vogarsnúningur með fótaskiptum", "en"), "Change foot camel spin");
+  assert.equal(labelIn("Samsettur snúningur með flugi og fótaskiptum", "en"), "Flying change foot combination spin");
+  assert.equal(labelIn("Samsettur snúningur með flugi og fótaskiptum", "is"), "Samsettur snúningur með flugi og fótaskiptum");
+  assert.equal(labelIn("Layback", "en"), "Layback spin");
+  assert.equal(labelIn("Skrefaröð", "en"), "Step sequence");
+  assert.equal(labelIn("Skrefaröð", "is"), "Skrefaröð");
+  assert.equal(labelIn("Valshopp", "en"), "Waltz jump");
+  assert.equal(labelIn("Spírall", "en"), "Spiral");
+  assert.equal(labelIn("Ina Bauer", "en"), "Ina Bauer");
+  assert.equal(labelIn("Mitt eigið trix", "en"), "Mitt eigið trix");
+  assert.equal(labelIn("", "en"), "");
+  // Skammstöfunin er sú sama á báðum málum.
+  assert.equal(codeOf("2× Axel"), "2A");
+
+  // Orð → grunnheiti, á báðum málum.
+  assert.equal(fromWords("double axel"), "2× Axel");
+  assert.equal(fromWords("Double Loop"), "2× Loop");
+  assert.equal(fromWords("tvöfaldur lutz"), "2× Lutz");
+  assert.equal(fromWords("þrefaldur toe loop"), "3× Toe loop");
+  assert.equal(fromWords("triple lutz + double toe loop"), "3× Lutz + 2× Toe loop");
+  assert.equal(fromWords("double axel + euler + double salchow"), "2× Axel + Euler + 2× Salchow");
+  assert.equal(fromWords("single axel"), "Axel");
+  assert.equal(fromWords("quad toe loop"), "4× Toe loop");
+  assert.equal(fromWords("flying sit spin"), "Sitjandi snúningur með flugi");
+  assert.equal(fromWords("flying camel"), "Vogarsnúningur með flugi");
+  assert.equal(fromWords("change foot combination spin"), "Samsettur snúningur með fótaskiptum");
+  assert.equal(fromWords("flying change foot sit spin"), "Sitjandi snúningur með flugi og fótaskiptum");
+  assert.equal(fromWords("axel"), null);
+  assert.equal(fromWords("double spiral"), null);
+  assert.equal(fromWords("sit spin"), null);
+  assert.equal(fromWords("eitthvað annað"), null);
+  assert.equal(parseElement("2a+2t"), "2× Axel + 2× Toe loop");
+  assert.equal(parseElement("double flip"), "2× Flip");
+  assert.equal(parseElement("spíral"), null);
+  // Fram og til baka: enska heitið á hverju stökki og snúningi skilar sér í sama grunnheiti.
+  for (const label of ["2× Lutz", "3× Flip + 2× Toe loop", "Sitjandi snúningur með flugi", "Layback með fótaskiptum", "Uppréttur snúningur með flugi og fótaskiptum"]) {
+    assert.equal(parseElement(labelIn(label, "en")), label, label);
+  }
+
+  // Leitin finnur ensku heitin líka.
+  const names = (q: string) => searchElements(q).flatMap((g) => g.items.map((i) => i.name));
+  assert.ok(names("sit spin").includes("Sitjandi snúningur"));
+  assert.ok(names("step seq").includes("Skrefaröð"));
+  assert.ok(names("lunge").includes("Útfall"));
+  assert.ok(names("crossovers").includes("Krossskref"));
+
+  // Hvert atriði (nema augnablikin „í dansinum“) hefur skýringu, og ensku heitin eru einkvæm.
+  for (const g of ELEMENTS) {
+    for (const i of g.items) {
+      if (g.id !== "dans") assert.ok(i.info && i.info.length > 20, `${i.name} vantar skýringu`);
+      assert.ok(nameIn(i, "en").length > 0 && nameIn(i, "is") === i.name);
+    }
+    if (g.id !== "dans") assert.ok(g.about && g.about.length > 40, `${g.label} vantar inngang`);
+  }
+  const en = ELEMENTS.flatMap((g) => g.items.map((i) => nameIn(i, "en").toLowerCase()));
+  assert.equal(new Set(en).size, en.length);
+  assert.ok(infoOf("2× Lutz + 2× Toe loop")?.startsWith("Tástökk"));
+  assert.ok(infoOf("Sitjandi snúningur með flugi")?.includes("sitjandi"));
+  assert.ok(infoOf("Axel")?.includes("áfram"));
+  assert.equal(infoOf("Mitt eigið trix"), null);
 });
 
 test("elements: names, jump rotations, and what to practise first", () => {

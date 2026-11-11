@@ -2165,13 +2165,158 @@
   background: rgba(255, 207, 92, 0.12);
 }
 
-.tk-element-now > span {
+.tk-element-now > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.tk-element-now > div > span {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  min-width: 0;
   font-size: 16px;
+}
+
+.tk-element-now p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tk-soft);
+}
+
+/* Rofi milli enskra og íslenskra heita. */
+.tk-lang {
+  flex: none;
+  margin-left: auto;
+}
+
+.tk-lang button {
+  min-height: 32px;
+  padding: 0 11px;
+}
+
+.tk-lang button.on {
+  background: var(--tk-grad);
+}
+
+/* Kennsluefni: uppflettilisti. */
+.tk-element-search.wide {
+  margin: 0 0 10px;
+}
+
+.tk-ref-group {
+  margin-top: 6px;
+}
+
+.tk-ref-about {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tk-soft);
+}
+
+.tk-ref-turns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tk-ref-turns span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tk-ref-turns b {
+  color: #ffcf5c;
+}
+
+.tk-ref-turns small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tk-faint);
+}
+
+.tk-ref {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-ref li {
+  padding: 10px 0;
+  border-top: 1px solid var(--tk-line);
+}
+
+.tk-ref-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tk-ref-head strong {
+  font-size: 16px;
+}
+
+.tk-ref-head small {
+  font-size: 13px;
+  color: var(--tk-faint);
+}
+
+.tk-ref li p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tk-soft);
+}
+
+.tk-ref.links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tk-ref.links span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.tk-ref.links small {
+  font-size: 13px;
+  color: var(--tk-faint);
+}
+
+.tk-ref.links svg {
+  flex: none;
+  color: var(--tk-faint);
+}
+
+/* Inngangur að kennsluefninu á forsíðunni. */
+.tk-card-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--tk-grad);
+  color: #fff;
 }
 
 .tk-element-now .tk-link {

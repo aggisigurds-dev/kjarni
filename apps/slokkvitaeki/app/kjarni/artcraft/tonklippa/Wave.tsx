@@ -16,7 +16,8 @@ import {
 import { Flag } from "lucide-react";
 import { MIN_SEAM, formatTime, layout, type Arrangement } from "./arrange";
 import { columnPeaks, type Highlight, type Peaks } from "./analyze";
-import { codeOf } from "./elements";
+import { codeOf, labelIn } from "./elements";
+import { useElementLang } from "./lang";
 import type { TrackView } from "./tracks";
 
 /** Litur hvers lags (bakgrunnur búts, bylgja) — á dökkum grunni. */
@@ -117,6 +118,7 @@ export function TimelineView({ arr, tracks, trackIndex, sel, span, playheadRef, 
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { w, h } = useSize(boxRef);
+  const lang = useElementLang();
   const drag = useRef<{ id: number } | null>(null);
   const markerDrag = useRef<{ id: string; pointer: number; x: number; moved: boolean } | null>(null);
 
@@ -241,8 +243,8 @@ export function TimelineView({ arr, tracks, trackIndex, sel, span, playheadRef, 
             type="button"
             className="tk-flag"
             style={{ left: `${Math.min(100, (m.t / span) * 100)}%`, maxWidth: Math.max(22, Math.min(120, room)) }}
-            title={`${formatTime(m.t, true)}${m.label ? ` · ${m.label}` : ""}`}
-            aria-label={`Hápunktur á ${formatTime(m.t, true)}${m.label ? `: ${m.label}` : ""}`}
+            title={`${formatTime(m.t, true)}${m.label ? ` · ${labelIn(m.label, lang)}` : ""}`}
+            aria-label={`Hápunktur á ${formatTime(m.t, true)}${m.label ? `: ${labelIn(m.label, lang)}` : ""}`}
             onPointerDown={(e) => {
               e.stopPropagation();
               (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
@@ -267,7 +269,7 @@ export function TimelineView({ arr, tracks, trackIndex, sel, span, playheadRef, 
           >
             <Flag size={12} fill="currentColor" aria-hidden="true" />
             {/* Á fánanum er pláss fyrir lítið: skammstöfunin (2Lz+2T) ef heitið á sér eina. */}
-            {m.label && room >= 44 && <span className="tk-flag-text">{codeOf(m.label) ?? m.label}</span>}
+            {m.label && room >= 44 && <span className="tk-flag-text">{codeOf(m.label) ?? labelIn(m.label, lang)}</span>}
           </button>
         );
       })}

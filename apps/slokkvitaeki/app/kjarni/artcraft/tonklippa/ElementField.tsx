@@ -9,21 +9,41 @@ import {
   GRADES,
   GRADE_LABEL,
   TURNS,
+  TURN_WORDS,
   codeOf,
-  fromCode,
+  infoOf,
   joinCombo,
   jumpParts,
+  labelIn,
+  nameIn,
+  parseElement,
   plainText,
   searchElements,
   splitSpin,
   withSpin,
   withTurns,
   type ElementGroupId,
+  type Lang,
   type Turns,
 } from "./elements";
+import { setElementLang, useElementLang } from "./lang";
+
+/** Rofi milli enskra og íslenskra heita. */
+export function LangToggle({ lang }: { lang: Lang }) {
+  return (
+    <div className="tk-seg tk-lang" role="radiogroup" aria-label="Mál á heitum">
+      {(["en", "is"] as const).map((l) => (
+        <button key={l} type="button" role="radio" aria-checked={lang === l} className={lang === l ? "on" : ""} onClick={() => setElementLang(l)}>
+          {l === "en" ? "EN" : "ÍS"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Hnappur sem sýnir heitið og opnar lista til að velja úr (eða skrifa eigið). */
 export function ElementField({ value, onChange }: { value: string; onChange: (label: string) => void }) {
+  const lang = useElementLang();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   /** Næsta stökk sem er valið bætist aftan við (samsetning) í stað þess að koma í stað þess síðasta. */
@@ -31,11 +51,13 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
   const jumps = jumpParts(value);
   const spin = splitSpin(value);
   const code = codeOf(value);
+  const info = infoOf(value);
   const typed = query.trim();
   const groups = searchElements(query);
-  const coded = typed ? fromCode(typed) : null;
+  const parsed = typed ? parseElement(typed) : null;
   const plainTyped = plainText(typed);
-  const listed = groups.some((g) => g.items.some((i) => plainText(i.name) === plainTyped));
+  const same = (name: string) => plainText(name) === plainTyped;
+  const hit = typed ? groups.flatMap((g) => g.items.map((i) => ({ group: g.id, item: i }))).find((x) => same(x.item.name) || (x.item.en ? same(x.item.en) : false)) : undefined;
 
   const close = () => {
     setOpen(false);
@@ -66,8 +88,8 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
 
   return (
     <>
-      <button type="button" className={`tk-word tk-element${value ? "" : " empty"}`} onClick={() => setOpen(true)} aria-label={value ? `Tegund: ${value}. Ýttu til að breyta` : "Velja tegund"}>
-        <span className="tk-ellipsis">{value || "Hvað gerist? Veldu…"}</span>
+      <button type="button" className={`tk-word tk-element${value ? "" : " empty"}`} onClick={() => setOpen(true)} aria-label={value ? `Tegund: ${labelIn(value, lang)}. Ýttu til að breyta` : "Velja tegund"}>
+        <span className="tk-ellipsis">{value ? labelIn(value, lang) : "Hvað gerist? Veldu…"}</span>
         {code && <span className="tk-code">{code}</span>}
         <ChevronDown size={16} />
       </button>
@@ -76,6 +98,7 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
           <div className="tk-sheet tall" role="dialog" aria-modal="true" aria-label="Velja tegund" onClick={(e) => e.stopPropagation()}>
             <div className="tk-sheet-head">
               <strong>Hvað gerist hér?</strong>
+              <LangToggle lang={lang} />
               <button type="button" className="tk-iconbtn small" onClick={close} aria-label="Loka">
                 <X size={18} />
               </button>
@@ -86,11 +109,10 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!typed) return;
-                // Enter: heiti af listanum ef það var slegið inn, annars skammstöfun, annars eigið heiti.
-                const hit = groups.flatMap((g) => g.items.map((i) => ({ group: g.id, name: i.name }))).find((x) => plainText(x.name) === plainTyped);
-                if (hit) pick(hit.group, hit.name);
-                else if (coded) {
-                  onChange(coded);
+                // Enter: heiti af listanum ef það var slegið inn, annars skammstöfun eða orð („double axel“), annars eigið heiti.
+                if (hit) pick(hit.group, hit.item.name);
+                else if (parsed) {
+                  onChange(parsed);
                   setQuery("");
                 } else {
                   onChange(typed.slice(0, 60));
@@ -109,10 +131,19 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
             <div className="tk-sheet-scroll">
               {value && !typed && (
                 <div className="tk-element-now">
-                  <span>
-                    <strong>{value}</strong>
-                    {code && <span className="tk-code">{code}</span>}
-                  </span>
+                  <div>
+                    <span>
+                      <strong>{labelIn(value, lang)}</strong>
+                      {code && <span className="tk-code">{code}</span>}
+                    </span>
+                    {info && (
+                      <p>
+                        {/* Í samsetningu á skýringin við síðasta stökkið — það sem hnapparnir breyta. */}
+                        {jumps && jumps.length > 1 && lastJump ? `${lastJump.name}: ` : ""}
+                        {info}
+                      </p>
+                    )}
+                  </div>
                   <button type="button" className="tk-link" onClick={() => onChange("")}>
                     Hreinsa
                   </button>
@@ -120,20 +151,20 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
               )}
               {typed && (
                 <div className="tk-row">
-                  {coded && (
+                  {parsed && !hit && (
                     <button
                       type="button"
                       className="tk-chip on"
                       onClick={() => {
-                        onChange(coded);
+                        onChange(parsed);
                         setQuery("");
                       }}
                     >
-                      {coded}
-                      <span className="tk-code">{codeOf(coded)}</span>
+                      {labelIn(parsed, lang)}
+                      <span className="tk-code">{codeOf(parsed)}</span>
                     </button>
                   )}
-                  {!coded && !listed && (
+                  {!parsed && !hit && (
                     <button
                       type="button"
                       className="tk-chip"
@@ -156,11 +187,13 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
                   <div className="tk-row">
                     {g.items.map((item) => {
                       const on = g.id === "stokk" ? lastJump?.name === item.name : g.id === "snuningar" ? spin?.base === item.name : value.trim().toLowerCase() === item.name.toLowerCase();
-                      // Annað heiti sést þegar leitin fann það (ekki heitið sjálft).
-                      const why = typed && item.also && !plainText(item.name).includes(plainTyped) ? item.also.split(",")[0] : "";
+                      const shown = nameIn(item, lang);
+                      // Þegar leitin fann atriðið eftir öðru heiti en því sem sést: sýna það heiti líka.
+                      const other = [nameIn(item, lang === "en" ? "is" : "en"), ...(item.also ?? "").split(",")].map((x) => x.trim()).find((x) => x && plainText(x).includes(plainTyped));
+                      const why = typed && !plainText(shown).includes(plainTyped) ? (other ?? "") : "";
                       return (
                         <button key={item.name} type="button" className={`tk-chip${on ? " on" : ""}`} onClick={() => pick(g.id, item.name)}>
-                          {item.name}
+                          {shown}
                           {item.code && <span className="tk-code">{item.code}</span>}
                           {why && <small>{why}</small>}
                         </button>
@@ -170,10 +203,10 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
                   {g.id === "stokk" && jumps && lastJump && (
                     <>
                       <div className="tk-row">
-                        <span className="tk-muted">Snúningar í stökkinu:</span>
+                        <span className="tk-muted">Snúningar:</span>
                         {TURNS.map((tn) => (
                           <button key={tn || "1"} type="button" className={`tk-chip${lastJump.turns === tn ? " on" : ""}`} onClick={() => setJumps([...jumps.slice(0, -1), { turns: tn, name: lastJump.name }])}>
-                            {tn || "1×"}
+                            {TURN_WORDS[lang][tn]}
                           </button>
                         ))}
                       </div>
@@ -200,16 +233,16 @@ export function ElementField({ value, onChange }: { value: string; onChange: (la
                   {g.id === "snuningar" && spin && (
                     <div className="tk-row">
                       <button type="button" className={`tk-chip${spin.fly ? " on" : ""}`} role="switch" aria-checked={spin.fly} onClick={() => onChange(withSpin(spin.base, !spin.fly, spin.change))}>
-                        Með flugi
+                        {lang === "en" ? "Flying" : "Með flugi"}
                       </button>
                       <button type="button" className={`tk-chip${spin.change ? " on" : ""}`} role="switch" aria-checked={spin.change} onClick={() => onChange(withSpin(spin.base, spin.fly, !spin.change))}>
-                        Með fótaskiptum
+                        {lang === "en" ? "Change foot" : "Með fótaskiptum"}
                       </button>
                     </div>
                   )}
                 </div>
               ))}
-              {typed && !groups.length && !coded && <p className="tk-muted">Ekkert á listanum passar — ýttu á „Nota“ til að nota þitt eigið heiti.</p>}
+              {typed && !groups.length && !parsed && <p className="tk-muted">Ekkert á listanum passar — ýttu á „Nota“ til að nota þitt eigið heiti.</p>}
               <button type="button" className="tk-cta" onClick={close}>
                 Lokið
               </button>

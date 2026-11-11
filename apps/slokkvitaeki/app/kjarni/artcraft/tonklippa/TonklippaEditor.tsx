@@ -49,6 +49,8 @@ import {
 } from "./arrange";
 import { STEADY_ENOUGH, liveliestWindow } from "./analyze";
 import { ElementField } from "./ElementField";
+import { labelIn } from "./elements";
+import { useElementLang } from "./lang";
 import { MAX_CLOUD_BYTES, MAX_CLOUD_LABEL, type Clip, type Media, type Song } from "./library";
 import { bestMatches } from "./match";
 import { SongPicker } from "./Parts";
@@ -145,6 +147,7 @@ export default function TonklippaEditor({
   });
   const arr = hist.now;
   const [sel, setSel] = useState(0);
+  const lang = useElementLang();
   const [panel, setPanel] = useState<Panel>(initialArr.parts.length ? "butur" : "log");
   const [playing, setPlaying] = useState<null | "mix" | "source">(null);
   const [working, setWorking] = useState(false);
@@ -775,7 +778,7 @@ export default function TonklippaEditor({
   }
 
   async function copyMarkers() {
-    const text = arr.markers.map((m) => `${formatTime(m.t, true)}  ${m.label || "Hápunktur"}`).join("\n");
+    const text = arr.markers.map((m) => `${formatTime(m.t, true)}  ${m.label ? labelIn(m.label, lang) : "Hápunktur"}`).join("\n");
     try {
       await navigator.clipboard.writeText(text);
       say("Listinn afritaður");
