@@ -1,10 +1,15 @@
 "use client";
 
+import { memo } from "react";
 import { Shape } from "react-konva";
 import type { Camera } from "../../lib/board/types";
 import { effectiveGridGap } from "../../lib/board/geometry";
 
-export function GridLayer({
+/** Minnisað (11.11.2026): sceneFunc var nýtt fall við hverja teikningu BoardCanvas, svo rúðunetið var teiknað upp á nýtt við
+ * hverja hreyfingu á vegg (mælt: 59 teikningar á 60 hreyfingum). Það breytist aðeins með myndavélinni og stærð sviðsins. */
+export const GridLayer = memo(GridLayerImpl);
+
+function GridLayerImpl({
   camera,
   width,
   height,
@@ -15,6 +20,7 @@ export function GridLayer({
 }) {
   return (
     <Shape
+      perfectDrawEnabled={false}
       // Grindin er viðmót, ekki innihald — útflutningur (PNG/PDF/A4-flísar)
       // felur allt sem heitir ui-only, en grindin vantaði nafnið og prentaðist
       // því með á hvert einasta kort.
