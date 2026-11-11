@@ -18,8 +18,11 @@ type Skr = { id: number; radnr: number; ajour_serial: number | null; teikning_id
 type Flokkur = { id: number; heiti: string };
 type Starfsm = { id: number; numer: number | null; nafn: string | null };
 type Lag = { id: number; teikning_id: number; heiti: string; fag: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; vorpun: Vorpun | null; gegnsaei: number; synilegt: boolean };
-type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fag: string; fjoldi: number; athugasemd: string | null; flokkur_id: number | null };
-const AA_SEL = "id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd,flokkur_id";
+type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fag: string; fjoldi: number; athugasemd: string | null; flokkur_id: number | null; parad: Parad | null };
+/** Pörun áætlaðs gats við skráningar — reiknuð af tools/skraning-gatakort-para.cjs. */
+type Parad = { ids: number[]; radnr: number[]; n: number; stada: "fullt" | "hluti" | "vantar"; reiknad?: string };
+const AA_SEL = "id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd,flokkur_id,parad";
+const PARAD: Record<string, [string, string]> = { fullt: ["Fullt", "#86efac"], hluti: ["Vantar hluta", "#fde047"], vantar: ["Engin skráning", "#fca5a5"] };
 // Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
 const FAG_FLOKKAR: Record<string, RegExp> = { loftraesting: /^(Loft|Raufar)/i, sprinkler: /^Stál/i, vatn: /^(Stál|Plast)/i, hiti: /^(Stál|Plast)/i, fravatn: /^(Stál|Plast)/i, gas: /^(Stál|Plast)/i, rafmagn: /^Raf/i, golf: /^Gólf/i };
 type Nanar = { lysing: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string };
@@ -83,6 +86,8 @@ export default function KortClient() {
   const [fra, setFra] = useState(""); const [til, setTil] = useState("");
   const [lagf, setLagf] = useState<"allt" | "lagf" | "A" | "B" | "?">("allt");
   const [tvitok, setTvitok] = useState(false);
+  const [oparad, setOparad] = useState(false); // aðeins skráningar sem parast ekki við áætlað gat
+  const [aaStada, setAaStada] = useState("allt"); // sía áætlaðra gata eftir pörunarstöðu
   const [synaSkr, setSynaSkr] = useState(true); const [synaAaetlud, setSynaAaetlud] = useState(true);
   const [baetaFag, setBaetaFag] = useState(""); // fag áætlaðs gats sem er verið að setja (tómt = ekki í setja-ham)
   const [baetaFlokkur, setBaetaFlokkur] = useState<number | "">(""); const [baetaFjoldi, setBaetaFjoldi] = useState(2); // stærð (flokkur) og stök verk nýs gats
@@ -144,6 +149,8 @@ export default function KortClient() {
     return out;
   }, [teikning, teikn, skr, taknAf, ANNAD]);
   const deildir = useMemo(() => [...new Set(punktar.map((p) => p.s.deild).filter((d): d is string => !!d))].sort(), [punktar]);
+  /** Skráningar sem eru paraðar við eitthvert áætlað gat á þessu blaði. */
+  const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
   /** Sía án táknasíunnar — skýringarnar sýna þá réttan fjölda per tákn. */
   const grunnsia = useCallback((p: Punktur) => {
     const s = p.s;
@@ -156,8 +163,9 @@ export default function KortClient() {
     if (lagf === "lagf" && !s.lagf) return false;
     if (lagf !== "allt" && lagf !== "lagf" && s.lagf !== lagf) return false;
     if (tvitok && !s.tvitak_af) return false;
+    if (oparad && paradIds.has(s.id)) return false;
     return true;
-  }, [stada, afDeild, madur, fra, til, lagf, tvitok]);
+  }, [stada, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds]);
   const grunn = useMemo(() => punktar.filter(grunnsia), [punktar, grunnsia]);
   const syndir = useMemo(() => grunn.filter((p) => !afTakn[p.t.heiti]), [grunn, afTakn]);
   const taknTal = useMemo(() => { const m = new Map<string, { t: Takn; n: number }>(); for (const p of grunn) { const x = m.get(p.t.heiti); if (x) x.n++; else m.set(p.t.heiti, { t: p.t, n: 1 }); } return [...m.values()].sort((a, b) => ROD.indexOf(a.t.heiti) - ROD.indexOf(b.t.heiti)); }, [grunn]);
@@ -167,7 +175,8 @@ export default function KortClient() {
     return [...rod.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [syndir]);
   const logSynar = useMemo(() => log.filter((l) => l.teikning_id === syn), [log, syn]);
-  const aaetludSynar = useMemo(() => aaetlud.filter((a) => a.teikning_id === syn), [aaetlud, syn]);
+  const aaetludBlads = useMemo(() => aaetlud.filter((a) => a.teikning_id === syn), [aaetlud, syn]);
+  const aaetludSynar = useMemo(() => (aaStada === "allt" ? aaetludBlads : aaetludBlads.filter((a) => (a.parad?.stada ?? "oreiknad") === aaStada)), [aaetludBlads, aaStada]);
   const manudir = useMemo(() => [...new Set(skr.map((s) => (s.framkvaemt_til || "").slice(0, 7)).filter(Boolean))].sort(), [skr]);
   const utanKorts = useMemo(() => skr.filter((s) => s.teikning_id == null).length, [skr]);
 
@@ -207,7 +216,7 @@ export default function KortClient() {
     }
     if (synaAaetlud) for (const a of aaetludSynar) {
       const r = 6.5 * zs; slod(cx, "d", +a.x_px, +a.y_px, r);
-      cx.fillStyle = "#ffffffcc"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle = (a.parad ? PARAD[a.parad.stada]?.[1] ?? "#ffffff" : "#ffffff") + "dd"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
     }
     const v = valinn?.p ? { x: valinn.p.x, y: valinn.p.y } : valinn?.a ? { x: +valinn.a.x_px, y: +valinn.a.y_px } : null;
     if (v) { cx.beginPath(); cx.arc(v.x, v.y, 11 * zs, 0, 6.2832); cx.lineWidth = 2.5 / k; cx.strokeStyle = "#111827"; cx.stroke(); }
@@ -344,6 +353,9 @@ export default function KortClient() {
         <section>
           <h2>Áætluð göt</h2>
           <div className="gk-rod"><select value={baetaFag} onChange={(e) => { setBaetaFag(e.target.value); setBaetaFlokkur(""); }} aria-label="Fag áætlaðs gats"><option value="">Setja áætlað gat: slökkt</option>{FOG.filter((f) => f[0] !== "annad").map((f) => <option key={f[0]} value={f[0]}>Setja: {f[1]}</option>)}<option value="annad">Setja: Annað</option></select></div>
+          {aaetludBlads.some((a) => a.parad) && (
+            <div className="gk-takn">{(["allt", "fullt", "hluti", "vantar"] as const).map((st) => <button key={st} type="button" className={aaStada === st ? "" : "af-val"} aria-pressed={aaStada === st} onClick={() => setAaStada(st)}>{st !== "allt" && <i style={{ background: PARAD[st][1] }} />}{st === "allt" ? "Öll" : PARAD[st][0]} <small>{num(st === "allt" ? aaetludBlads.length : aaetludBlads.filter((a) => a.parad?.stada === st).length)}</small></button>)}</div>
+          )}
           {baetaFag && (
             <div className="gk-rod gk-tvo">
               <label>Stærð / flokkur<select value={baetaFlokkur} onChange={(e) => setBaetaFlokkur(e.target.value === "" ? "" : Number(e.target.value))}><option value="">— óvalið —</option>{flokkarFags(baetaFag).map((f) => <option key={f.id} value={f.id}>{f.heiti}</option>)}</select></label>
@@ -362,6 +374,7 @@ export default function KortClient() {
           <div className="gk-rod gk-tvo"><label>Frá<select value={fra} onChange={(e) => setFra(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label><label>Til<select value={til} onChange={(e) => setTil(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label></div>
           <label className="gk-rod">Lagfæringar<select value={lagf} onChange={(e) => setLagf(e.target.value as typeof lagf)}><option value="allt">Sýna allt</option><option value="lagf">Aðeins lagfæringar</option><option value="A">Skráðar sem nýtt verk</option><option value="B">Aðeins athugasemd</option><option value="?">Óflokkaðar</option></select></label>
           <label className="gk-lag"><input type="checkbox" checked={tvitok} onChange={(e) => setTvitok(e.target.checked)} /><span>Aðeins skráningar á sömu hnitum og önnur</span></label>
+          {paradIds.size > 0 && <label className="gk-lag"><input type="checkbox" checked={oparad} onChange={(e) => setOparad(e.target.checked)} /><span>Aðeins skráningar sem parast ekki við áætlað gat</span></label>}
         </section>
 
         <section>
@@ -410,6 +423,7 @@ export default function KortClient() {
               <label>Stærð / flokkur<select value={valinn.a.flokkur_id ?? ""} onChange={(e) => breytaAaetludu(valinn.a!, { flokkur_id: e.target.value === "" ? null : Number(e.target.value) })}><option value="">— óvalið —</option>{(valinn.a.flokkur_id && !flokkarFags(valinn.a.fag).some((f) => f.id === valinn.a!.flokkur_id) ? [...flokkarFags(valinn.a.fag), ...flokkar.filter((f) => f.id === valinn.a!.flokkur_id)] : flokkarFags(valinn.a.fag)).map((f) => <option key={f.id} value={f.id}>{f.heiti}</option>)}</select></label>
               <label style={{ flex: "0 0 30%" }}>Stök verk<input type="number" min={1} step={1} value={valinn.a.fjoldi} onChange={(e) => breytaAaetludu(valinn.a!, { fjoldi: Math.max(1, Number(e.target.value) || 1) })} /></label>
             </div>
+            {valinn.a.parad && <p className="gk-merki" style={{ background: PARAD[valinn.a.parad.stada]?.[1] + "66", color: "#1f2937" }}>{PARAD[valinn.a.parad.stada]?.[0]}: {valinn.a.parad.n} af {valinn.a.fjoldi} stökum verkum skráð{valinn.a.parad.radnr.length ? ` — ${valinn.a.parad.radnr.map((r) => "#" + r).join(", ")}` : ""}</p>}
             <label className="gk-rod">Athugasemd<textarea rows={3} value={valinn.a.athugasemd ?? ""} onChange={(e) => breytaAaetludu(valinn.a!, { athugasemd: e.target.value }, false)} onBlur={(e) => breytaAaetludu(valinn.a!, { athugasemd: e.target.value || null })} /></label>
             <button type="button" onClick={() => fjarlaegjaAaetlad(valinn.a!)}>Fjarlægja</button>
           </div>

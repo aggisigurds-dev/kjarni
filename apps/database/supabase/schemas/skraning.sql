@@ -326,3 +326,9 @@ begin
     execute format('grant select, insert, update on public.%I to anon, authenticated', t);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------- gatakort: pörun áætlaðra gata (11.11.2026, migration skr_aaetlud_parad)
+-- skr_aaetlud.parad  niðurstaða tools/skraning-gatakort-para.cjs: hvaða skráningar liggja við áætlaða gatið.
+--   {ids:[skr_skraningar.id], radnr:[…], n, stada: 'fullt' | 'hluti' | 'vantar', radius_px, reiknad}
+--   Endurreiknað í heild við hverja keyrslu; skráningum sjálfum er ekki breytt.
+alter table public.skr_aaetlud add column if not exists parad jsonb;

@@ -70,3 +70,7 @@
 /* spjald áætlaðs gats: stærð, stök verk og athugasemd breytanleg */
 .gk-spjald .gk-rod { margin-bottom: 8px; }
 .gk textarea { width: 100%; min-width: 0; font: inherit; font-size: 12.5px; padding: 5px 6px; border: 1px solid #b9bec4; border-radius: 4px; background: #fff; color: var(--aj-ink); resize: vertical; }
+/* stöðusía áætlaðra gata (pörun við skráningar) */
+.gk-takn button i { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, .25); flex: none; }
+.gk-takn button.af-val { opacity: .55; }
+.gk-takn button[aria-pressed="true"] { border-color: var(--aj-black); font-weight: 600; }

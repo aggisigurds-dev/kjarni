@@ -94,6 +94,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   skurðpunktum lags og brunaveggja; báðar flísar loftræsirammans gáfu sömu hliðrun innan 3 px; s = 0,296 loft, 0,336 vatn).
   Stórir rammar: `canvas_read_as_svg` vistar svarið í `tool-results/*.txt` (undiragent kallar, aðallota les skrána); `image_get_data`
   skilar aðeins 46×120 px smámynd — ónothæft til afstillingar. Miro-talningin er margra mánaða gömul (fyrir baðherbergin).
+- **Pörun áætlaðra gata við skráningar (11.11.2026):** `tools/skraning-gatakort-para.cjs --haed 6H [--write]` skrifar `skr_aaetlud.parad`
+  ({ids, radnr, n, stada: fullt|hluti|vantar}); græðgisleg pörun eftir fjarlægð innan 60 px (≈ 1,8 m), fyrst sami flokkur, svo sami
+  hópur (loft | rör | rafmagn), hver skráning aðeins við eitt gat. Útkoma 6H: 612 full, 62 að hluta, 70 án skráningar. Kortið litar
+  merkin eftir stöðu og síar („Öll / Fullt / Vantar hluta / Engin skráning", „Aðeins skráningar sem parast ekki við áætlað gat").
+  **Endurkeyra eftir hverja Ajour-sókn og eftir handbreytingar á merkjum** — `parad` uppfærist ekki sjálft. Ópöruð skráning er
+  EKKI sönnun um tvítekningu: S1 hefur enga sprinkler-/regnvatns-/rafmagnsramma og Miro-talningin er eldri en baðherbergin.
 
 ## Tengsl
 - **bokari** (bh) — NLSH/gata-uppgjör les `skr_hub_skraningar`; samanburður fyrir/eftir.
