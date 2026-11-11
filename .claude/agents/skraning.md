@@ -120,7 +120,7 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Rafmagn telst með í heild (11.11.2026, Agnar):** markmið `RAF_MARK` = 104 stök verk á hverja deild á 5H og 6H (aldrei minna en
   klárað + opið, svo 6H S2 = 256). Heildin fór við það úr 91 % í 86 % (6H 100 → 95 %, því S4/S5 hafa enga rafmagnsskráningu og
   188 kláraðar á `6H 2S-1S Rafmagnsþéttingar` eru „Án deildar" og teljast ekki á álmu). Raufar við kantaða stokka eru enn án markmiðs.
-  Hub-síðan (`nlsh-sections.js`) hefur EKKI þessa reglu enn.
+  Hub-síðan (`brunaholf/js/nlsh-sections.js`, `RAF_TGT` + `hlutaStada`) fékk sömu reglu og hlutatöflu 11.11.2026 (brunaholf a0129d3).
 - **Aukaverk sér (11.11.2026):** skráningar á teikningu sem heitir „…Viðbótarverkefni" (`AUKA_RE`, teikning 12: 81 kláruð, 4 opin)
   eru í sér kafla, utan stöðutaflna og — sjálfgefið — utan útboðssamanburðar. Hakið „Telja aukaverk með í útboðssamanburði"
   (`gogn.aukaverk_med`) setur þau aftur inn í flokkatalninguna.
