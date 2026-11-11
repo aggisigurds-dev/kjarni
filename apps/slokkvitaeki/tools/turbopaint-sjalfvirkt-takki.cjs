@@ -1,16 +1,25 @@
-/* Prófar takkann „Sjálfvirkt" við hlið Greining á Nesdekk Breiðhöfði 13, 2. hæð.
- * ÖLL skrif í Supabase eru gripin — ekkert fer út á lifandi úttekt.
+/* Prófar takkann „Sjálfvirkt" við hlið Greining. ÖLL skrif í Supabase eru gripin — ekkert fer út á lifandi úttekt.
  *
- *   node tools/turbopaint-sjalfvirkt-takki.cjs [http://localhost:4127] [úttaksmappa]
+ *   node tools/turbopaint-sjalfvirkt-takki.cjs --cid 219 --haed hc219x4b8e2 --nafn "Breiðhöfði 2. hæð" \
+ *        --base http://127.0.0.1:4127 --ut /tmp/ut --hreinsa --sleppa ocr
  */
 const path = require("path");
 const fs = require("fs");
-const { raesa, teljari, mappa } = require("./turbopaint-hjalp.cjs");
+const { raesa, teljari } = require("./turbopaint-hjalp.cjs");
 
-const BASE = process.argv[2] || "http://localhost:4127";
-const OUT = mappa(process.argv, "turbopaint-sjalfvirkt-takki-myndir");
-const CID = 219;
-const HAED = "hc219x4b8e2";
+const arg = (n, d) => {
+  const i = process.argv.indexOf("--" + n);
+  return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith("--") ? process.argv[i + 1] : d;
+};
+const flagg = (n) => process.argv.includes("--" + n);
+const BASE = arg("base", "http://127.0.0.1:4127");
+const CID = Number(arg("cid", "219"));
+const HAED = arg("haed", "hc219x4b8e2");
+const NAFN = arg("nafn", "Breiðhöfði 2. hæð");
+const OUT = arg("ut", path.join(process.cwd(), "turbopaint-sjalfvirkt-takki-myndir"));
+const HREINSA = flagg("hreinsa");
+const SLEPPA = arg("sleppa", "ocr");
+fs.mkdirSync(OUT, { recursive: true });
 const { ok, bad, check } = teljari();
 
 (async () => {
@@ -32,6 +41,7 @@ const { ok, bad, check } = teljari();
         for (const r of rows) {
           for (const h of (r && r.haedir) || []) {
             if (h.id !== HAED) continue;
+            if (!HREINSA) continue;
             delete h.veggjaLinur;
             delete h.leidrett;
             h.pdfVeggir = [];
@@ -55,14 +65,15 @@ const { ok, bad, check } = teljari();
     },
   });
 
-  // Sleppa OCR svo veggir + hurðir sjáist á mínútum; EI/tæki bíða.
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem("tp_sjalfvirkt_sleppa", "ocr");
-    } catch {
-      /* */
-    }
-  });
+  if (SLEPPA) {
+    await page.addInitScript((l) => {
+      try {
+        localStorage.setItem("tp_sjalfvirkt_sleppa", l);
+      } catch {
+        /* */
+      }
+    }, SLEPPA);
+  }
   const log = [];
   page.on("console", (m) => {
     const t = m.text();
@@ -71,7 +82,7 @@ const { ok, bad, check } = teljari();
 
   const t0 = Date.now();
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`${BASE}/kjarni/turbopaint?uttekt=${CID}&haed=${HAED}&b=6006&h=2931&ham=teikning`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${BASE}/kjarni/turbopaint?uttekt=${CID}&haed=${HAED}&ham=teikning`, { waitUntil: "domcontentloaded" });
   await page.locator(".tp-toolbar").waitFor({ timeout: 180000 });
   await page.waitForFunction(
     (cid) => {
@@ -133,14 +144,14 @@ const { ok, bad, check } = teljari();
   console.log("  veggir á borði:", st.n, st.teg);
   console.log("  vistun:", st.vistun, st.vistunTexti, "·", sek, "s");
   await page.screenshot({ path: path.join(OUT, "03_lokid.png") });
-  fs.writeFileSync(path.join(OUT, "skref.json"), JSON.stringify({ cid: CID, haed: HAED, sek: Number(sek), ...st, log }, null, 1));
+  fs.writeFileSync(path.join(OUT, "skref.json"), JSON.stringify({ cid: CID, haed: HAED, nafn: NAFN, sek: Number(sek), ...st, log }, null, 1));
 
   check("öll skref kláruðust", st.skref.every((k) => ["lokid", "sleppt", "villa", "stodvad"].includes(k.stada)), JSON.stringify(st.skref.map((k) => k.id + ":" + k.stada)));
   check("einhverjir veggir komu á borðið", st.n > 0, String(st.n));
   const ut = skrifBeidnir.filter((s) => !verndud.some((v) => s === v.method + " " + v.url) && !/teikning_bord/.test(s));
   check("ekkert skrif fór út (vörður grípur vistun)", ut.length === 0, JSON.stringify(ut));
   check("engar villur á síðunni", errs.length === 0, errs.join(" | "));
-  console.log(`\n${ok.length}/${ok.length + bad.length} · Breiðhöfði 2. hæð · ${sek} s`);
+  console.log(`\n${ok.length}/${ok.length + bad.length} · ${NAFN} · ${sek} s`);
   if (bad.length) console.log("BRÁST:\n" + bad.join("\n"));
   await b.close();
   process.exit(bad.length ? 1 : 0);
