@@ -18,6 +18,8 @@ kóðaskrá fyrir kjarna-lotur.
 | #307 | Lokaskref skarprar TIF-skönnunar í þræði (OffscreenCanvas: sía + JPEG) | `lib/board/skonnun-verk.ts`, `skonnun.ts` | 904 + 548 ms → 386 ms; blaðið pixlarétt eins |
 | #308 | `?uttekt=` opnast beint: biðstaða í minni í stað `loadBoard`, `takaVidBordi` í stað `switchBoard`, `haettaBidOgHlada` við villu | `components/kjarni/WhiteboardApp.tsx`, `lib/board/persistence.ts` | opnun 19,9 → 14,5 s, löng verk 4,9 → 0,8 s |
 | #309 | „Útveggir úr útlínu“ (`utveggirSemVantar`) | `components/kjarni/HusUtlina.tsx`, `lib/board/veggja-hreinsun.ts` | `veggja-hreinsun.test.ts` 30/30; framleiðsla 68 → 72 → undo 68 |
+| #313 | „Vista í úttekt“ sést líka í úttektar-skoðun (hæð opnuð án borðs) | `components/kjarni/WhiteboardApp.tsx` | framleiðsla: takkinn til, smellur skrifar borð + hæð |
+| #314–#317 | Hökt við veggjabreytingar: blaðið án skugga, í eigin Konva-lagi, `ObjectNode` í `React.memo` með stöðugum meðhöndlurum, `perfectDrawEnabled={false}` á öll form, `GridLayer` minnisað | `components/kjarni/ObjectNode.tsx`, `BoardCanvas.tsx`, `SymbolNode.tsx`, `GridLayer.tsx` | framleiðsla: löng verk við drátt á veggenda 150 → 0; teikningar blaðs/rúðunets 59 → 0 |
 
 **Prófun án skrifa á framleiðslu:** Playwright, `ctx.route('**/*')` → allt nema GET/HEAD/OPTIONS á `supabase.co` er
 `fulfill`-að og skráð. `window.__tpStore`, `__tpSkodun`, `__tpSjalfvirkt` eru til fyrir próf (`WhiteboardApp.tsx` ~270).
