@@ -1402,7 +1402,7 @@ export function BoardCanvas({
           draft.kind !== "rect" &&
           draft.kind !== "ellipse" &&
           draft.kind !== "sticky" ? (
-            <Line
+            <Line perfectDrawEnabled={false}
               points={draft.points}
               stroke={style.stroke}
               strokeWidth={style.strokeWidth}
@@ -1415,7 +1415,7 @@ export function BoardCanvas({
             />
           ) : null}
           {draft && (draft.kind === "rect" || draft.kind === "ellipse" || draft.kind === "sticky") ? (
-            <Rect
+            <Rect perfectDrawEnabled={false}
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
               stroke={tool === "room" ? roomStyle.color : tool === "checkbox" ? CHECKBOX_STROKE : style.stroke}
               strokeWidth={tool === "room" || tool === "checkbox" ? 2 : style.strokeWidth}
@@ -1437,7 +1437,7 @@ export function BoardCanvas({
             />
           ) : null}
           {draft && draft.kind === "crop" ? (
-            <Rect
+            <Rect perfectDrawEnabled={false}
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
               stroke="#FE653F"
               strokeWidth={2 / camera.scale}
@@ -1449,7 +1449,7 @@ export function BoardCanvas({
           ) : null}
           {tool === "fjolcrop"
             ? fjolKassar.map((k, i) => (
-                <Rect
+                <Rect perfectDrawEnabled={false}
                   key={`fjol-${i}`}
                   id={`fjolkassi-${i}`}
                   x={k.x}
@@ -1489,14 +1489,14 @@ export function BoardCanvas({
                 const s = 1 / camera.scale;
                 return (
                   <Group key={`fjolnr-${i}`} x={k.x + 6 * s} y={k.y + 6 * s} listening={false} name="ui-only">
-                    <Rect width={30 * s} height={30 * s} cornerRadius={15 * s} fill="#FE653F" />
-                    <KonvaText width={30 * s} height={30 * s} align="center" verticalAlign="middle" text={String(i + 1)} fontSize={17 * s} fontStyle="bold" fill="#ffffff" />
+                    <Rect perfectDrawEnabled={false} width={30 * s} height={30 * s} cornerRadius={15 * s} fill="#FE653F" />
+                    <KonvaText perfectDrawEnabled={false} width={30 * s} height={30 * s} align="center" verticalAlign="middle" text={String(i + 1)} fontSize={17 * s} fontStyle="bold" fill="#ffffff" />
                   </Group>
                 );
               })
             : null}
           {draft && draft.kind === "fjolcrop" ? (
-            <Rect
+            <Rect perfectDrawEnabled={false}
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
               stroke="#FE653F"
               strokeWidth={2 / camera.scale}
@@ -1519,7 +1519,7 @@ export function BoardCanvas({
           />
           {ljosLina && tool === "eydalinu"
             ? ljosLina.map((s, i) => (
-                <Line
+                <Line perfectDrawEnabled={false}
                   key={`ljos-${i}`}
                   points={s}
                   stroke="#e11d2e"
@@ -1532,7 +1532,7 @@ export function BoardCanvas({
               ))
             : null}
           {draft && draft.kind === "hvitpensill" ? (
-            <Line
+            <Line perfectDrawEnabled={false}
               points={draft.points}
               stroke="#ffffff"
               strokeWidth={draft.breidd}
@@ -1544,7 +1544,7 @@ export function BoardCanvas({
             />
           ) : null}
           {draft && draft.kind === "hvitta" ? (
-            <Rect
+            <Rect perfectDrawEnabled={false}
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
               stroke="#FE653F"
               strokeWidth={2 / camera.scale}
@@ -1555,7 +1555,7 @@ export function BoardCanvas({
             />
           ) : null}
           {draft && draft.kind === "marquee" ? (
-            <Rect
+            <Rect perfectDrawEnabled={false}
               {...rectFromPoints(draft.ax, draft.ay, draft.bx, draft.by)}
               stroke="#2563eb"
               strokeWidth={1 / camera.scale}

@@ -135,7 +135,7 @@ export function SkarptPdfLag({ obj, raster }: { obj: ImageObject; raster: HTMLIm
 
   if (!erPdf) return null;
   return (
-    <KonvaImage
+    <KonvaImage perfectDrawEnabled={false}
       ref={nodeRef}
       image={lag?.canvas}
       x={lag?.sv.x ?? 0}

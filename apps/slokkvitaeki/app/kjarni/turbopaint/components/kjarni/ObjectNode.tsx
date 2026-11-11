@@ -55,7 +55,7 @@ function FloorplanImage({ obj }: { obj: Extract<BoardObject, { type: "image" }> 
           veggirnir, svo hver breyting á vegg endurteiknar það — og mjúkur skuggi (shadowBlur 18) á allt að 6000 px mynd var
           langdýrasti hluti hverrar teikningar: CPU-prófíll af drætti á veggenda sýndi 6,1 s í `restore` + 2,5 s í `drawImage`
           af 12 s (80 hreyfingar), 150 löng verk, versta 300 ms. Þunn rammalína afmarkar blaðið í staðinn. */}
-      <KonvaImage
+      <KonvaImage perfectDrawEnabled={false}
         image={image}
         width={obj.width}
         height={obj.height}
@@ -63,7 +63,6 @@ function FloorplanImage({ obj }: { obj: Extract<BoardObject, { type: "image" }> 
         strokeWidth={1}
         strokeScaleEnabled={false}
         shadowEnabled={false}
-        perfectDrawEnabled={false}
       />
       {/* Vigur-PDF: sýnilegi hlutinn teiknaður skarpt þegar þysjað er nær en myndin dugar (aðeins á skjánum). */}
       <SkarptPdfLag obj={obj} raster={image} />
@@ -97,7 +96,7 @@ function SkurdarSkuggi({ obj }: { obj: Extract<BoardObject, { type: "image" }> }
   return (
     <>
       {reitir.map((r, i) => (
-        <Rect key={i} {...r} fill={fill} listening={false} name="ui-only" />
+        <Rect perfectDrawEnabled={false} key={i} {...r} fill={fill} listening={false} name="ui-only" />
       ))}
     </>
   );
@@ -118,8 +117,8 @@ function HaedarMerki({ obj }: { obj: Extract<BoardObject, { type: "image" }> }) 
   const tengd = !!obj.uttekt;
   return (
     <Group x={8 * k} y={8 * k} listening={false} name="ui-only">
-      <Rect width={breidd} height={fs + 2 * pad} fill={tengd ? "#FE653F" : "#44403c"} opacity={0.95} cornerRadius={5 * k} />
-      <KonvaText x={pad} y={pad} text={texti} fontSize={fs} fontStyle="bold" fill="#ffffff" />
+      <Rect perfectDrawEnabled={false} width={breidd} height={fs + 2 * pad} fill={tengd ? "#FE653F" : "#44403c"} opacity={0.95} cornerRadius={5 * k} />
+      <KonvaText perfectDrawEnabled={false} x={pad} y={pad} text={texti} fontSize={fs} fontStyle="bold" fill="#ffffff" />
     </Group>
   );
 }
@@ -249,7 +248,7 @@ function ObjectNodeImpl({
     };
     return (
       <Group {...common} width={obj.width} height={obj.height}>
-        <Rect
+        <Rect perfectDrawEnabled={false}
           width={obj.width}
           height={obj.height}
           fill={paint.fill}
@@ -259,7 +258,7 @@ function ObjectNodeImpl({
         />
         {/* Hakreiturinn í horninu — smellur hér hakar við án þess að velja/draga. */}
         <Group x={badge.x} y={badge.y} name="checkbox-badge" onClick={toggle} onTap={toggle}>
-          <Rect
+          <Rect perfectDrawEnabled={false}
             width={badge.size}
             height={badge.size}
             cornerRadius={Math.round(badge.size / 5)}
@@ -267,7 +266,7 @@ function ObjectNodeImpl({
             stroke={paint.badgeStroke}
             strokeWidth={1.5}
           />
-          <Line
+          <Line perfectDrawEnabled={false}
             points={tickPoints(badge.size)}
             stroke={paint.tick}
             strokeWidth={Math.max(2, badge.size / 8)}
@@ -316,7 +315,7 @@ function ObjectNodeImpl({
     ].filter(Boolean);
     return (
       <Group {...common}>
-        <Rect
+        <Rect perfectDrawEnabled={false}
           width={obj.width}
           height={obj.height}
           fill={obj.fill === "transparent" ? undefined : obj.fill}
@@ -326,7 +325,7 @@ function ObjectNodeImpl({
         />
         {counter != null && isPrimary ? (
           <>
-            <Rect
+            <Rect perfectDrawEnabled={false}
               x={8}
               y={8}
               width={24}
@@ -335,7 +334,7 @@ function ObjectNodeImpl({
               fill={obj.stroke || "#FE653F"}
               listening={false}
             />
-            <KonvaText
+            <KonvaText perfectDrawEnabled={false}
               x={8}
               y={12}
               width={24}
@@ -350,7 +349,7 @@ function ObjectNodeImpl({
           </>
         ) : null}
         {labelLines.length ? (
-          <KonvaText
+          <KonvaText perfectDrawEnabled={false}
             width={Math.max(80, obj.width)}
             x={obj.width < 80 ? (obj.width - 80) / 2 : 0}
             y={Math.max(counter != null ? 36 : 4, obj.height / 2 - labelLines.length * 9)}
@@ -373,7 +372,7 @@ function ObjectNodeImpl({
   if (obj.type === "ellipse") {
     return (
       <Group {...common} width={obj.width} height={obj.height}>
-        <Ellipse
+        <Ellipse perfectDrawEnabled={false}
           x={obj.width / 2}
           y={obj.height / 2}
           radiusX={Math.max(4, obj.width / 2)}
@@ -400,7 +399,7 @@ function ObjectNodeImpl({
     const erStigi = obj.type === "polyline" && obj.veggTegund === "stigi";
     return (
       <Group {...common} shadowEnabled={erStigi ? false : common.shadowEnabled} opacity={erStigi ? Math.min(common.opacity, 0.55) : vegglitur ? 1 : common.opacity}>
-        <Line
+        <Line perfectDrawEnabled={false}
           points={obj.points}
           stroke={vegglitur ?? obj.stroke}
           strokeWidth={obj.strokeWidth}
@@ -410,7 +409,7 @@ function ObjectNodeImpl({
           hitStrokeWidth={erStigi ? obj.strokeWidth : Math.max(16, obj.strokeWidth * 3)}
         />
         {obj.type === "measure" ? (
-          <KonvaText
+          <KonvaText perfectDrawEnabled={false}
             x={(obj.points[0] + obj.points[obj.points.length - 2]) / 2}
             y={(obj.points[1] + obj.points[obj.points.length - 1]) / 2 - 18}
             text={formatLength(length, pixelsPerMeter, obj.meters ?? null)}
@@ -430,7 +429,7 @@ function ObjectNodeImpl({
   if (obj.type === "arrow") {
     return (
       <Group {...common}>
-        <Arrow
+        <Arrow perfectDrawEnabled={false}
           points={obj.points}
           stroke={obj.stroke}
           fill={obj.stroke}
@@ -448,7 +447,7 @@ function ObjectNodeImpl({
 
   if (obj.type === "text") {
     return (
-      <KonvaText
+      <KonvaText perfectDrawEnabled={false}
         {...common}
         text={obj.text}
         fontSize={obj.fontSize}
@@ -465,7 +464,7 @@ function ObjectNodeImpl({
   if (obj.type === "sticky") {
     return (
       <Group {...common}>
-        <Rect
+        <Rect perfectDrawEnabled={false}
           width={obj.width}
           height={obj.height}
           fill={obj.fill}
@@ -474,7 +473,7 @@ function ObjectNodeImpl({
           shadowBlur={10}
           shadowOffsetY={3}
         />
-        <KonvaText
+        <KonvaText perfectDrawEnabled={false}
           x={12}
           y={12}
           width={obj.width - 24}
