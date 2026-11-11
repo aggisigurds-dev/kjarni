@@ -1271,30 +1271,26 @@ export function BoardCanvas({
   // og veggir og tákn, svo hver breyting á vegg endurteiknaði allt að 6000 px mynd (mælt á framleiðslu: 150 löng verk á 150
   // hreyfingum við drátt á veggenda, líka eftir að skugginn fór). Myndir eru alltaf fremst í `objects` (store.addObjects
   // raðar þeim þannig), svo teikniröðin er óbreytt: myndalagið undir, allt annað ofan á.
-  const teiknaHlut = (obj: BoardObject) => (
-            <ObjectNode
-              key={obj.id}
-              obj={obj}
-              isSelected={selectedIds.includes(obj.id)}
-              pixelsPerMeter={pixelsPerMeter}
-              draggable={selectLike && !spacePan && !isDrawnLocked(obj, layers)}
-              listening={
-                (selectLike || tool === "eraser") &&
-                !spacePan &&
-                isDrawnVisible(obj, layers) &&
-                (obj.type === "image" || !isDrawnLocked(obj, layers))
-              }
-              onDragStart={(id) => {
+  // Meðhöndlarar hlutanna: NÝJUSTU lokanirnar í tilvísun, stöðug föll út á við — annars brýtur hver teikning minni ObjectNode.
+  const nyirHondlarar: {
+    onDragStart: (id: string) => void;
+    onDragMove: (id: string, x: number, y: number) => void;
+    onDragEnd: (id: string, x: number, y: number) => void;
+    onTransformEnd: (id: string, node: { x: number; y: number; rotation: number; scaleX: number; scaleY: number; width?: number; height?: number }) => void;
+    onClick: (id: string, shift: boolean) => void;
+    onDblClick: (id: string) => void;
+  } = {
+    onDragStart: (id) => {
                 if (panRef.current || pinchRef.current) {
                   stageRef.current?.findOne(`#${id}`)?.stopDrag();
                   return;
                 }
                 beginDocumentDrag(id);
-              }}
-              onDragMove={(id, x, y) => moveDocumentFollowers(id, x, y)}
-              onDragEnd={(id, x, y) => endDocumentDrag(id, x, y)}
-              onTransformEnd={applyTransform}
-              onClick={(id, shift) => {
+              },
+    onDragMove: (id, x, y) => moveDocumentFollowers(id, x, y),
+    onDragEnd: (id, x, y) => endDocumentDrag(id, x, y),
+    onTransformEnd: applyTransform,
+    onClick: (id, shift) => {
                 if (!selectLike) return;
                 const current = useBoardStore.getState().selectedIds;
                 const unit = new Set(expandGroups([id]));
@@ -1309,11 +1305,45 @@ export function BoardCanvas({
                 } else {
                   useBoardStore.getState().setSelected([...unit]);
                 }
-              }}
-              onDblClick={(id) => {
+              },
+    onDblClick: (id) => {
                 const obj = useBoardStore.getState().objects.find((o) => o.id === id);
                 if (obj?.type === "text" || obj?.type === "sticky") onEditText(id);
-              }}
+              },
+  };
+  const hondlarar = useRef(nyirHondlarar);
+  hondlarar.current = nyirHondlarar;
+  const fastirHondlarar = useMemo(
+    () => ({
+      onDragStart: (id: string) => hondlarar.current.onDragStart(id),
+      onDragMove: (id: string, x: number, y: number) => hondlarar.current.onDragMove(id, x, y),
+      onDragEnd: (id: string, x: number, y: number) => hondlarar.current.onDragEnd(id, x, y),
+      onTransformEnd: (id: string, node: { x: number; y: number; rotation: number; scaleX: number; scaleY: number; width?: number; height?: number }) =>
+        hondlarar.current.onTransformEnd(id, node),
+      onClick: (id: string, shift: boolean) => hondlarar.current.onClick(id, shift),
+      onDblClick: (id: string) => hondlarar.current.onDblClick(id),
+    }),
+    []
+  );
+  const teiknaHlut = (obj: BoardObject) => (
+            <ObjectNode
+              key={obj.id}
+              obj={obj}
+              isSelected={selectedIds.includes(obj.id)}
+              pixelsPerMeter={pixelsPerMeter}
+              draggable={selectLike && !spacePan && !isDrawnLocked(obj, layers)}
+              listening={
+                (selectLike || tool === "eraser") &&
+                !spacePan &&
+                isDrawnVisible(obj, layers) &&
+                (obj.type === "image" || !isDrawnLocked(obj, layers))
+              }
+              onDragStart={fastirHondlarar.onDragStart}
+              onDragMove={fastirHondlarar.onDragMove}
+              onDragEnd={fastirHondlarar.onDragEnd}
+              onTransformEnd={fastirHondlarar.onTransformEnd}
+              onClick={fastirHondlarar.onClick}
+              onDblClick={fastirHondlarar.onDblClick}
             />
   );
 

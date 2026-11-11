@@ -1,7 +1,7 @@
 "use client";
 
 import type Konva from "konva";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   Arrow,
   Ellipse,
@@ -124,7 +124,13 @@ function HaedarMerki({ obj }: { obj: Extract<BoardObject, { type: "image" }> }) 
   );
 }
 
-export function ObjectNode({
+/** Minnisaður (11.11.2026): BoardCanvas endurteiknast við hverja breytingu á borðinu; án minnis fékk HVER hlutur nýja
+ * meðhöndlara og react-konva merkti lag hans óhreint — líka blaðið (allt að 6000 px), sem var þá teiknað aftur við hverja
+ * hreyfingu á vegg. Forsendan: `obj` heldur sömu tilvísun meðan hluturinn er óbreyttur (store.updateObjects) og
+ * meðhöndlararnir eru stöðugir (BoardCanvas: fastirHondlarar). */
+export const ObjectNode = memo(ObjectNodeImpl);
+
+function ObjectNodeImpl({
   obj,
   isSelected = false,
   pixelsPerMeter,
