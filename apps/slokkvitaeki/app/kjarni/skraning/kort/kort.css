@@ -30,7 +30,8 @@
 .gk-upp { flex-direction: row; gap: 6px; align-items: stretch; }
 .gk-upp select { flex: 0 0 42%; }
 .gk-skra { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed #8a9199; border-radius: 4px; padding: 5px 6px; cursor: pointer; color: var(--aj-ink); font-size: 12px; text-align: center; }
-.gk-skra input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gk-skra { position: relative; }   /* falda skráarinntakið má ekki staðsetjast miðað við síðuna: það lengdi skjalið niður fyrir gluggann */
+.gk-skra input { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; }
 .gk-skra:focus-within { outline: 2px solid var(--aj-teal); }
 .gk-takn { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .gk-takn button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--aj-line); background: #fff; color: var(--aj-ink); border-radius: 20px; padding: 3px 9px 3px 7px; line-height: 1.3; }
