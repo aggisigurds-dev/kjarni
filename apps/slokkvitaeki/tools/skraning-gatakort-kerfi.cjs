@@ -7,7 +7,9 @@
 //   node tools/skraning-gatakort-kerfi.cjs --log <lagamappa>                      → DRY: reiknar og telur, skrifar ekkert
 //   node tools/skraning-gatakort-kerfi.cjs --log <lagamappa> --write              → skrifar skr_kerfi (upsert á skraning_id)
 //   … --radius 40 (px) · --prufa <yfirlitsmappa> 6H x y w h   prufumynd í tímabundna möppu
-// Úðakerfi kemur aðeins til greina í flokkunum Stál Ø40-50 og Stál Ø75-110 (Agnar 12.11.2026: „er almennt í stál 50 mm til stál 75 mm“).
+// Úðakerfi kemur aðeins til greina í flokkunum Stál Ø40-50, Ø75-110 og Ø110-160 (Agnar 12.11.2026: „er almennt í stál 50 mm til stál 75 mm“,
+// „kannski líka í 110 mm“ — staðfest á ljósmyndum skráninga nr. 4808 og 5413: rauðmáluð úðarör í Ø110-160). Ekki í Ø15-35.
+// Úðalagnirnar á NLSH eru RAUÐMÁLAÐAR — liturinn á ljósmynd skráningarinnar er betri vísbending en nálægð á teikningu (ekki nýtt enn).
 // Þetta er ÁÆTLUN af teikningu: punktur er merktur „vafi“ ef tvö kerfi eru jafn nærri (innan 6 px) eða næsta lögn er lengra en 15 px.
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), { spawnSync } = require('node:child_process');
 const ARGS = process.argv.slice(2), flag = (f) => ARGS.includes(f), opt = (f) => { const i = ARGS.indexOf(f); return i >= 0 ? ARGS[i + 1] : null; };
@@ -27,7 +29,7 @@ async function allt(slod) { const ut = []; for (let i = 0; ; i += 1000) { const 
   const hnit = (await allt(`skr_haedarhnit?select=skraning_id,haed,x_px,y_px&verk_id=eq.${VERK}&order=skraning_id`)).filter((h) => /^Stál/i.test(skr.get(h.skraning_id) || '') && (h.haed === '5H' || h.haed === '6H'));
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kerfi-')); const radir = [];
   for (const haed of ['6H', '5H']) {
-    const pp = hnit.filter((h) => h.haed === haed).map((h) => ({ id: h.skraning_id, x: Number(h.x_px), y: Number(h.y_px), udi: /Øs*(40-50|75-110)/.test(skr.get(h.skraning_id) || '') }));   // úðakerfið er í stáli 50–75 mm (Agnar 12.11.2026)
+    const pp = hnit.filter((h) => h.haed === haed).map((h) => ({ id: h.skraning_id, x: Number(h.x_px), y: Number(h.y_px), udi: /Øs*(40-50|75-110|110-160)/.test(skr.get(h.skraning_id) || '') }));   // úðakerfið er í stáli 50 mm og sverara (Agnar 12.11.2026 + myndir nr. 4808 og 5413), ekki í Ø15-35
     const fInn = path.join(tmp, `inn-${haed}.json`), fUt = path.join(tmp, `ut-${haed}.json`); fs.writeFileSync(fInn, JSON.stringify(pp));
     const auka = PRUFA && PRUFA[1] === haed ? [path.join(PRUFA[0], `yfirlit-${haed.toLowerCase()}.jpg`), path.join(tmp, `prufa-${haed}.png`), ...PRUFA.slice(2)] : [];
     const r = spawnSync('python', [path.join(__dirname, 'skraning-gatakort-kerfi.py'), LOG, haed.toLowerCase(), fInn, fUt, String(RAD), ...auka], { encoding: 'utf8', maxBuffer: 64e6 });
