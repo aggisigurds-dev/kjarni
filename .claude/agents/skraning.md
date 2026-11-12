@@ -212,6 +212,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Stærðarlínur stöðutöflunnar (12.11.2026, Agnar: „fylla inn í allar stærðir“):** hver stærð hefur markmið, % og stiku. Markmið stærðar =
   það sem er skráð (klárað + opið) + hlutur í afgangi flokksmarkmiðsins (, stærsta afgangs-aðferð), skipt eftir því sem vantar upp á
   sömu stærð á sömu deild á 6. hæð. Summa stærða = markmið flokksins (prófað: 84 línur, engin frávik). Viðmið, ekki talning.
+- **Orðið er „Áætlað“, ekki „markmið“ (Agnar 12.11.2026):** í öllum birtum texta skýrslunnar (dálkar, lykiltölur, skýringar). Kóðaheiti
+  (, , ) eru óbreytt. Prófið  leitar að orðinu í birtum texta.
+- **Opnar skráningar án staðsetningar (12.11.2026, Agnar: „600 gulir punktar í Ajour sem eru opnir“):** opnar eru 680 = 236 með punkt á
+  teikningu + 444 ÁN punkts ( tómt og  null í Ajour-útflutningnum; stofnaðar 02.–11.2026, flestar
+  í apríl–maí, lýsing oftast tóm, 193 með mynd). Þær komast ekki á kort né hæð. Kaflinn  („Skráningar án staðsetningar“) telur
+  þær upp eftir flokki og  segir frá þeim undir lykiltölum kortsins. Hvað þær eru (óunnin göt, drög, leiðarpunktar) er ÓMÆLT.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

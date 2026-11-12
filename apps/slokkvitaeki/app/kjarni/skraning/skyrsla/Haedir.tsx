@@ -23,6 +23,8 @@ type Props = {
   hopar: [string, string][];
   /** Nöfn starfsmanna (skr_starfsmenn) — sýnd á skráningarspjaldinu. */
   starfsmenn: Map<number, string>;
+  /** Opnar skráningar í Ajour sem hafa engan punkt á teikningu — sjást ekki á kortunum, svo sagt er frá þeim undir lykiltölunum. */
+  opidAnStadar: number;
   /** Markmið hóps á deild (með leiðréttingum úr töflunni) og á hluta deildar; null = ekkert markmið. */
   markDeild: (haed: string, deild: string, hop: string) => number | null;
   markHluta: (haed: string, deild: string, hluti: number, hop: string) => number | null;
@@ -261,7 +263,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
   );
 }
 
-export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, markDeild, markHluta }: Props) {
+export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, opidAnStadar, markDeild, markHluta }: Props) {
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
@@ -397,10 +399,11 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
         <div><span>Klárað</span><b>{num(alls.done)}</b></div>
         <div><span>Opið</span><b>{num(alls.open)}</b></div>
         <div><span>Eftir, áætlað og óskráð</span><b>{num(eftirAlls)}</b></div>
-        <div><span>Markmið</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
+        <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
-      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu eða „Frá“-mánuði: markmiðin eru skilgreind á flokkahóp, ekki á stærð eða tímabil.</p>}
+      {opidAnStadar > 0 && <p className="sk-hk-an">Auk þess eru <b>{num(opidAnStadar)}</b> opnar skráningar í Ajour án punkts á teikningu. Þær sjást ekki á kortunum; sjá kaflann „Skráningar án staðsetningar“.</p>}
+      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð eða tímabil.</p>}
 
       <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
 
@@ -411,8 +414,8 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
         const haus = `${haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}${ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}${ha.open ? ` · ${num(ha.open)} opið` : ""}${eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}`;
         return <Haedarkort key={haed} haed={haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus={haus} valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} />;
       })}
-      <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />ekkert markmið</p>
-      <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Markmið hluta fylgir sömu reglu og deildin; föst markmið á deild (milliloft, rafmagn) skiptast jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá markmiði deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
+      <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />engin áætlun</p>
+      <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Áætlun hluta fylgir sömu reglu og deildin; föst áætlun á deild (milliloft, rafmagn) skiptist jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá áætlun deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
     </div>
   );
 }
