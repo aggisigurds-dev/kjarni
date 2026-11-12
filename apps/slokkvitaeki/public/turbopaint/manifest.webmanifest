@@ -1,0 +1,17 @@
+{
+  "name": "TurboPaint — Kjarni",
+  "short_name": "TurboPaint",
+  "description": "Teikningar og úttektir á vettvangi — opnast og vinnst líka án nets.",
+  "start_url": "/kjarni/turbopaint",
+  "scope": "/kjarni/turbopaint",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1117",
+  "theme_color": "#FE653F",
+  "lang": "is",
+  "icons": [
+    { "src": "/turbopaint/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/turbopaint/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/turbopaint/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

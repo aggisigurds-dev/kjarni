@@ -4,10 +4,12 @@ import { toast } from "sonner";
 import {
   Box,
   BrickWall,
+  Check,
   Cloud,
   Download,
   DoorOpen,
   Flame,
+  Loader2,
   ScanText,
   Link2,
   Grid3x3,
@@ -34,7 +36,9 @@ import {
   clearBoard,
   createBoard,
   deleteCurrentBoard,
+  erBordOfflineTilbuid,
   getCurrentBoardId,
+  g_oraBordOfflineTilbuid,
   listBoards,
   listBoardsLocal,
   resetBoard,
@@ -70,6 +74,9 @@ const DEFAULT_BOARD_NAMES = new Set([
   "TurboPaint",
   "Ónefnt borð",
 ]);
+
+/** Staða „Sækja fyrir offline" per borð í borðalistanum. */
+type OfflineStada = "nei" | "saekja" | "ja" | "villa";
 
 export function TopBar({
   onImport,
@@ -117,6 +124,39 @@ export function TopBar({
   const skodun = useSkodun((s) => s.virk);
   const skodunUttekt = useSkodun((s) => s.uttekt);
   const [boards, setBoards] = useState<BoardListEntry[]>([]);
+  // „Sækja fyrir offline": staða hvers borðs í „Borðin mín".
+  const [offline, setOffline] = useState<Record<string, OfflineStada>>({});
+
+  /** Merkir borð sem þegar eru tilbúin án nets með grænu ✓ (hreint staðbundið, ekkert net). */
+  const metaOffline = (list: BoardListEntry[]) => {
+    for (const b of list) {
+      void erBordOfflineTilbuid(b.id).then((tilbuid) => {
+        setOffline((o) => (o[b.id] === "saekja" ? o : { ...o, [b.id]: tilbuid ? "ja" : o[b.id] ?? "nei" }));
+      });
+    }
+  };
+
+  /** Sækir borð + allar myndir þess (líka frumritið) í símann. */
+  const saekjaOffline = async (id: string) => {
+    setOffline((o) => ({ ...o, [id]: "saekja" }));
+    try {
+      const r = await g_oraBordOfflineTilbuid(id);
+      if (r.ok) {
+        setOffline((o) => ({ ...o, [id]: "ja" }));
+        toast.success("Borðið er tilbúið án nets");
+      } else {
+        setOffline((o) => ({ ...o, [id]: "villa" }));
+        toast.error(
+          r.vantar < 0
+            ? "Náði ekki í borðið — ertu án nets?"
+            : `Náði ekki í allar myndir (${r.vantar} eftir) — reyndu aftur með neti`
+        );
+      }
+    } catch {
+      setOffline((o) => ({ ...o, [id]: "villa" }));
+      toast.error("Eitthvað fór úrskeiðis við niðurhal");
+    }
+  };
 
   // Eftir „Nýtt borð" á fókusinn að lenda Í nafnareitnum með textann valinn,
   // svo notandinn geti skírt borðið strax. base-ui skilar fókus á
@@ -168,8 +208,12 @@ export function TopBar({
           // (var: „Sæki borð…" upp í 10–20 sek á hægu neti).
           void listBoardsLocal().then((local) => {
             setBoards((prev) => (prev.length && !local.length ? prev : local));
+            metaOffline(local);
           });
-          void listBoards().then(setBoards);
+          void listBoards().then((all) => {
+            setBoards(all);
+            metaOffline(all);
+          });
         }}
       >
         <DropdownMenuTrigger
@@ -193,18 +237,60 @@ export function TopBar({
           className="max-h-[60vh] min-w-64 overflow-y-auto border border-stone-200 bg-white text-stone-900 shadow-xl [&_[data-slot=dropdown-menu-item]]:text-stone-900 [&_[data-slot=dropdown-menu-item]:hover]:bg-stone-100"
         >
           {boards.length ? (
-            boards.map((b) => (
-              <DropdownMenuItem key={b.id} onClick={() => maHendaSkodun() && void switchBoard(b.id)}>
-                <span className="min-w-0 flex-1 truncate">
-                  {b.id === getCurrentBoardId() ? "● " : ""}
-                  {b.name || "Ónefnt borð"}
-                </span>
-                <span className="pl-3 text-[10px] text-muted-foreground">
-                  {b.updatedAt ? b.updatedAt.slice(0, 10).split("-").reverse().join(".") : ""}
-                  {b.remote ? " ☁" : ""}
-                </span>
-              </DropdownMenuItem>
-            ))
+            boards.map((b) => {
+              const st = offline[b.id];
+              return (
+                // Hnappurinn „Sækja fyrir offline" er SYSTKINI Item-sins (absolute), ekki barn — svo smellur á hann loki
+                // ekki valmyndinni (base-ui lokar við val á Item) og notandinn sjái snúninginn → ✓.
+                <div key={b.id} className="relative">
+                  <DropdownMenuItem className="pr-9" onClick={() => maHendaSkodun() && void switchBoard(b.id)}>
+                    <span className="min-w-0 flex-1 truncate">
+                      {b.id === getCurrentBoardId() ? "● " : ""}
+                      {b.name || "Ónefnt borð"}
+                    </span>
+                    <span className="pl-3 text-[10px] text-muted-foreground">
+                      {b.updatedAt ? b.updatedAt.slice(0, 10).split("-").reverse().join(".") : ""}
+                      {b.remote ? " ☁" : ""}
+                    </span>
+                  </DropdownMenuItem>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    disabled={st === "saekja"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (st !== "saekja") void saekjaOffline(b.id);
+                    }}
+                    title={
+                      st === "ja"
+                        ? "Tilbúið án nets — geymt í símann (smelltu til að uppfæra)"
+                        : st === "saekja"
+                          ? "Sæki niður…"
+                          : st === "villa"
+                            ? "Náðist ekki alveg — reyndu aftur með neti"
+                            : "Sækja fyrir offline — geymir borðið og myndirnar í símann"
+                    }
+                    aria-label="Sækja fyrir offline"
+                    className={
+                      "absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-md hover:bg-stone-200 " +
+                      (st === "ja"
+                        ? "text-emerald-600"
+                        : st === "villa"
+                          ? "text-amber-600"
+                          : "text-stone-400 hover:text-stone-700")
+                    }
+                  >
+                    {st === "saekja" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : st === "ja" ? (
+                      <Check className="size-4" />
+                    ) : (
+                      <Download className="size-4" />
+                    )}
+                  </button>
+                </div>
+              );
+            })
           ) : (
             <DropdownMenuItem disabled>Sæki borð…</DropdownMenuItem>
           )}

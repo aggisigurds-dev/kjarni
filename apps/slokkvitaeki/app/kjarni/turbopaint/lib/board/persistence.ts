@@ -1,5 +1,5 @@
 import { del, get, set } from "idb-keyval";
-import { festaIGeymslu, getAssetBlob, hydrateAssets, putAsset } from "./assets";
+import { erAllarMyndirGeymdar, festaIGeymslu, getAssetBlob, hydrateAssets, putAsset, vistaAssetStadbundid } from "./assets";
 import { createDemoBoard } from "./demo-board";
 import { newId } from "./ids";
 import { erSkodun, useSkodun, type ThjalfunMerki } from "./skodun";
@@ -170,6 +170,76 @@ async function loadUploadedSet() {
     uploadedAssets = new Set((await get<string[]>(UPLOADED_KEY)) ?? []);
   }
   return uploadedAssets;
+}
+
+// ── „Sækja fyrir offline" ────────────────────────────────────────────────────────────────────────────────────────
+// Hnappur í borðalistanum (TopBar) tryggir að tiltekið borð sé TIL FULLS í símanum: doc-ið í IndexedDB OG allar myndir
+// þess — bæði teikningamyndin sem borðið sýnir OG þunga frumritið (TIF/PDF) sem greining notar, sem er annars aldrei sótt
+// við opnun. Þannig opnast borðið og vinnst án nets, og AI-greining virkar líka ef Agnar nær í hana áður en hann fer.
+
+/** Öll eigna-id borðsins (teikningamyndir + frumrit), án tvítaka. */
+export function bordAssetIds(doc: BoardDocument): string[] {
+  return [...new Set([...(doc.assetIds ?? []), ...(doc.frumAssetIds ?? [])])];
+}
+
+/** Tryggir að blob fyrir ÖLL uppgefin id séu staðbundin (IndexedDB) — sækir úr skýinu það sem vantar. Skrifar óháð
+ *  skoðunarham (vistaAssetStadbundid). Skilar þeim id sem náðust ekki (t.d. án nets). */
+async function ensureIdsLocal(ids: string[]): Promise<string[]> {
+  await hydrateAssets(ids);
+  const vantar: string[] = [];
+  for (const id of ids) {
+    if (getAssetBlob(id)) continue;
+    try {
+      const res = await fetch(assetPublicUrl(id));
+      if (!res.ok) {
+        vantar.push(id);
+        continue;
+      }
+      await vistaAssetStadbundid(id, await res.blob());
+    } catch {
+      vantar.push(id);
+    }
+  }
+  return vantar;
+}
+
+/** Nær í doc borðsins: staðbundið fyrst, annars úr skýinu (og skrifar það þá í IndexedDB svo borðið opnist án nets). */
+async function naBordDoc(id: string): Promise<BoardDocument | null> {
+  const local = await get<BoardDocument>(boardKey(id));
+  if (local) return local;
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const query = sb.from("turbopaint_boards").select("doc, deleted").eq("id", id);
+    const sig = timeoutSignal(10000);
+    const { data } = await (sig ? query.abortSignal(sig) : query).maybeSingle();
+    if (!data || data.deleted) return null;
+    const doc = data.doc as BoardDocument;
+    await set(boardKey(id), doc);
+    return doc;
+  } catch {
+    return null;
+  }
+}
+
+/** Gerir borð aðgengilegt án nets: sækir doc + allar myndir (líka frumritið) í IndexedDB og man borðið í staðbundna
+ *  listanum. `ok` er satt þegar ALLT náðist; `vantar` er fjöldi mynda sem náðust ekki (-1 ef borðið sjálft náðist ekki). */
+export async function g_oraBordOfflineTilbuid(id: string): Promise<{ ok: boolean; vantar: number }> {
+  const doc = await naBordDoc(id);
+  if (!doc) return { ok: false, vantar: -1 };
+  await rememberBoard(
+    { id, name: doc.name || "TurboPaint", updatedAt: doc.updatedAt ?? new Date().toISOString() },
+    false
+  );
+  const vantar = await ensureIdsLocal(bordAssetIds(doc));
+  return { ok: vantar.length === 0, vantar: vantar.length };
+}
+
+/** Er borðið tilbúið án nets? Hreint staðbundið (ekkert net): doc í IndexedDB og hvert mynd-id til staðar. */
+export async function erBordOfflineTilbuid(id: string): Promise<boolean> {
+  const doc = await get<BoardDocument>(boardKey(id));
+  if (!doc) return false;
+  return erAllarMyndirGeymdar(bordAssetIds(doc));
 }
 
 /** Er eignin þegar í fötunni? HEAD á opinberu slóðina (engin bæti sótt). Föst auðkenni (eignalykill.ts) — sama teikning
