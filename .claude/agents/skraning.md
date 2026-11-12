@@ -256,12 +256,27 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **VIÐBÓTARVERK Á 4. HÆÐ: stútar af 5. hæð niður í inntaksrými 4. hæðar (12.11.2026, Agnar: „Jú inn“):** 35 staðir úr skjalinu
   „Lagnir 4. hæð – Stútar af 5. hæð niður í inntaksrými 4. hæðar“ (12 svæðisblöð S1/S2/S4/S5 × N/C2/S; S5-C2 enginn stútur). Bútarnir voru
   staðsettir á yfirlitsblað 5H með sniðmátsleit (kvarði 0,96–1,27, sannreynt með yfirlagi) og punktarnir eru í
-  `tools/skraning-gatakort-vidbot-stutar.json`. `tools/skraning-gatakort-vidbot-stutar.cjs [--write] [--radius 20]` setur þá í skr_aaetlud
-  (teikning 6 = 4H, fag 'golf', uppruni `vidbot:stutar-4h:<nr>`) og parar einn á móti einum við skráningu á 4H innan 0,6 m. Staðan 12.11:
-  13 paraðir (9 kláraðar, 4 opnar skráningar; þeir teljast EKKI aftur), 22 „eftir“. Skýrslan (`vidbot4` í SkyrslaClient.tsx) bætir aðeins
-  ÓPÖRUÐUM við Áætlað á gólfi 5. hæðar (489 → 511; S1 +9, S2 +8, S4 +1, S5 +4) og setur þá á réttan hluta deildar. Eftir nýjan Ajour-innflutning:
-  keyra tólið aftur með --write svo pörunin uppfærist. Athugasemdir í skjalinu („Brunaþétting: Komið“ ×13, „Eftir“ ×11) eru EKKI tengdar
-  einstökum punktum (örvarnar eru skornar af í PDF). Heildarteikningar með/án punkta voru afhentar Agnari sem JPG (1× og 4×), ekki vistaðar í repo.
+  `tools/skraning-gatakort-vidbot-stutar.json` (með úttekt hvers stúts: th, st, ath). `tools/skraning-gatakort-vidbot-stutar.cjs [--write]` setur þá í
+  skr_aaetlud (teikning 6 = 4H, fag 'golf', uppruni `vidbot:stutar-4h:<nr>`) og parar einn á móti einum við skráningu á 4H. Heildarteikningar
+  með/án punkta voru afhentar Agnari sem JPG (1× og 4×), ekki vistaðar í repo.
+  - **Betri pörun (12.11.2026, Agnar: „mátt reyna matcha meira, þá getur maður séð hvar maður hefur gleymt að gera, og merkja það sérstaklega“):**
+    þrjár heimildir í fimm umferðum (lýst í haus tólsins): fjarlægð, nóvemberlotan (skráningar stofnaðar frá 01.11.2026; pinnar þeirra liggja
+    0,1–1,2 m frá stútnum, svo 0,6 m radíusinn missti af þeim) og ÚTTEKTIN í skjalinu sjálfu. Merkingarnar („Brunaþétting: Komið“ ×13,
+    „Eftir“ ×11, „Stútur ekki til staðar / innan í vegg“) eru frá 11.11.2026 og voru gerðar á A3-síðu sem var svo minnkuð í Letter: hnit þeirra
+    (CL-lykillinn = örvaroddur) þarf að margfalda með 0,66554624 (cm-fylkið fremst í síðuefninu). Þá lenda allir oddar á þrívíddarmyndinni
+    (þriðja mynd hverrar síðu) og hver merking var lesin á sinn stút af þeirri mynd (sjónrænt mat; #7 og #34 eru óvissust).
+    Staða stútanna sjálfra er sannreynd tölulega: miðgildi 0,39 m frá næstu gólfskráningu á 5H (sami stofn hæð ofar); #30 á engan stofn nærri.
+  - **Niðurstaða 12.11 (parad.flokkun):** 19 paraðir — stadfest 9 (úttekt Komið + kláruð skráning), eftir_skrad 7 (úttekt Eftir + opin skráning,
+    þar af sex stofnaðar 09.11 án mynda), osamraemi 3 (#24 ↔ 9698 kláruð 23.09 en úttekt segir Eftir; #31 ↔ 12151 kláruð / #32 ↔ 12152 opin, víxlað
+    miðað við úttekt). 16 án skráningar — eftir_oskrad 3 (#3, #6, #10), thett_oskrad 3 (#8, #9, #34: þétt í úttekt, engin skráning fannst),
+    stutur_vantar 7 (#14, #15, #17, #19, #20, #27, #30), ometid 3 (#7 ákvörðun um legu pípu, #33, #35). Í S1-S liggja fjórar nóvemberskráningar
+    (12162, 12163, 12165 kláraðar, 12164 opin) 2,4–12 m frá stútunum: myndirnar sýna rauða stúta en pörun við #6–#10 er ÓSTAÐFEST.
+    Eldri kláraðar skráningar á sömu stofnum (10430, 10863, 10431, 5325, 5329) eru í öðrum rýmum (hvítmáluð loft) og parast ekki.
+  - **Skýrslan:** aðeins ÓPARAÐIR stútar bætast við Áætlað á gólfi 5. hæðar (`vidbot4`: 489 → 505; S1 +6, S2 +5, S4 +1, S5 +4). Þeir eru
+    sérmerktir á 4H-kortinu (`HkEftir.st`, `STUT` í Haedir.tsx): rauður tígull með dökkum ramma = eftir að þétta, gulur = þétt í úttekt en
+    skráningu vantar, hvítur með rauðum ramma = stútur ekki kominn eða ómetinn. Smellur á tígul opnar spjald (númer, úttekt, næsta skráning);
+    samantektarlína undir kortinu (`HkStutar`). Gatakortið sýnir sömu upplýsingar í athugasemd gatsins. Osamraemi er EKKI sýnt í skýrslunni
+    (hún fer til eftirlits); það stendur í athugasemd á gatakortinu. Eftir nýjan Ajour-innflutning: keyra tólið aftur með --write.
 - **Úrtakspróf á kerfisflokkuninni (12.11.2026, Agnar bað um það):** 150 stálröraskráningar í lagskiptu slembiúrtaki (fræ 20261112; 50 vissar úða,
   40 óvissar úða, 60 vatn), tvær fyrstu myndir hverrar metnar blint. Rétt: vissar úða 44/50 (88 %), óvissar úða 23/40 (58 %), vatn 57/60 (95 %).
   Vegið: um 81 % í „Úðakerfi“ eru úðalagnir, um 5 % í „Vatn og hiti“ (~210) eru rauð rör, næmi um 85 %; áætlaður raunfjöldi ~1.410 á móti 1.488 flokkuðum.

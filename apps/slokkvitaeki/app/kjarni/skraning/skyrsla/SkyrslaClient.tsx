@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sb } from "../lib/sb";
-import Haedir, { haedHeiti, haedUndir, type HkPunktur, type HkEftir, type HkYfirlit } from "./Haedir";
+import Haedir, { haedHeiti, haedUndir, type HkPunktur, type HkEftir, type HkStutar, type HkYfirlit } from "./Haedir";
 import { Efni, Verkferli, type EfniGogn } from "./Efni";
 
 type Verk = { id: number; heiti: string };
@@ -20,7 +20,8 @@ type Flokkur = { id: number; heiti: string };
 type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null };
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
 type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
-type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string } | null };
+/** parad á stútum viðbótarverksins (tools/skraning-gatakort-vidbot-stutar.cjs) ber auk stöðunnar: númer stúts, flokkun, úttekt skjalsins og skráninguna sem parast. */
+type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string; stutur?: number; flokkun?: string; uttekt?: { texti?: string | null } | null; skr?: { nr: number; stada: string } | null; naest?: { nr: number; d_m: number; stada: string } | null } | null };
 const HLUTAR = ["N", "C", "S"];
 const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), Math.floor(m / 3)][i];   // fast deildarmarkmið skipt á hlutana þrjá
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
@@ -273,8 +274,22 @@ export default function SkyrslaClient() {
     const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y) return [];
     const fl = (a.flokkur_id != null && heitiAf.get(a.flokkur_id)) || "", hf = HOPAR.find((x) => x[2].test(fl));
     const hop = hf ? hf[0] : a.fag in FAG_HOP ? FAG_HOP[a.fag] : "Stál", fx = Number(a.x_px) / y.w, fy = Number(a.y_px) / y.h;
-    return [{ haed: y.haed, deild: fx < 0.179 ? "S1" : fx < 0.5 ? "S2" : fx < 0.812 ? "S4" : "S5", hluti: fy < 0.288 ? "N" : fy < 0.7116 ? "C" : "S", x: Number(a.x_px), y: Number(a.y_px), hop, n: a.fjoldi || 1 }];
+    const st = a.parad && a.parad.stutur != null ? { nr: a.parad.stutur, fl: a.parad.flokkun || "ometid", uttekt: a.parad.uttekt?.texti || null, naest: a.parad.naest || null } : undefined;   // stútur úr viðbótarverkinu: merktur sérstaklega á kortinu
+    return [{ haed: y.haed, deild: fx < 0.179 ? "S1" : fx < 0.5 ? "S2" : fx < 0.812 ? "S4" : "S5", hluti: fy < 0.288 ? "N" : fy < 0.7116 ? "C" : "S", x: Number(a.x_px), y: Number(a.y_px), hop, n: a.fjoldi || 1, st }];
   }), [aaetlud, yfirlit, heitiAf]);
+  /** Samantekt stúta viðbótarverksins per hæð: hve margir eiga skráningu (kláraða / opna) og hvernig hinir skiptast eftir úttekt skjalsins. */
+  const hkStutar = useMemo(() => {
+    const m: Record<string, HkStutar> = {};
+    for (const a of aaetlud) {
+      if (!a.parad || a.parad.stutur == null) continue;
+      const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y) continue;
+      const t = m[y.haed] || (m[y.haed] = { alls: 0, klarad: 0, opid: 0, eftir: 0, thett: 0, annad: 0 });
+      t.alls++;
+      if (a.parad.stada !== "vantar") { if (a.parad.skr?.stada === "done") t.klarad++; else t.opid++; }
+      else if (a.parad.flokkun === "eftir_oskrad") t.eftir++; else if (a.parad.flokkun === "thett_oskrad") t.thett++; else t.annad++;
+    }
+    return m;
+  }, [aaetlud, yfirlit]);
 
   const radir = useMemo(() => HAEDIR.map((haed) => ({
     haed,
@@ -423,7 +438,7 @@ export default function SkyrslaClient() {
       {synaKafla("kort") && yfirlit.length > 0 && (
         <section id="k-haedir">
           <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
-          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone} markDeild={markDeild} markHluta={markmidHluta} />
+          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} stutar={hkStutar} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone} markDeild={markDeild} markHluta={markmidHluta} />
         </section>
       )}
 

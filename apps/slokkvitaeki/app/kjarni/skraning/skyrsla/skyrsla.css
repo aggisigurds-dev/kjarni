@@ -442,3 +442,10 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-hk-mynd.medlag .sk-hk-lag > img:not(.sk-hk-lagmynd) { opacity: .42; }
 .sk-hk-mynd .sk-hk-lagmynd { opacity: 1; pointer-events: none; filter: saturate(1.5) contrast(1.15) drop-shadow(0 0 calc(1.2px / var(--z, 1)) rgba(2, 25, 60, .55)); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .sk-hk-mynd.medlag .sk-hk-hluti { background: transparent !important; }
+
+/* Stútar viðbótarverksins á 4. hæð: sérmerktir tíglar (eftir að þétta / þéttir en óskráðir / stútur ekki kominn) og samantekt undir kortinu */
+.sk-hk-skyring i.es, .sk-hk-skyring i.et, .sk-hk-skyring i.ev { border-radius: 0; transform: rotate(45deg); width: 11px; height: 11px; border: 2px solid #0b1f47; margin-right: 3px; }
+.sk-hk-skyring i.es { background: #dc2626; } .sk-hk-skyring i.et { background: #f59e0b; } .sk-hk-skyring i.ev { background: #fff; border-color: #dc2626; }
+.sk-hk-stutar { margin: 6px 0 2px; line-height: 1.7; } .sk-hk-stutar b { color: var(--bh-navy, #101e43); font-weight: 600; }
+.sk-hk-haed.stor .sk-hk-stutar { margin: 6px 12px 0; }
+.sk-hk-kort-h em.bid { background: #fef3c7; color: #92400e; } .sk-hk-kort-h em.gr { background: #e2e8f0; color: #334155; }
