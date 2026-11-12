@@ -264,7 +264,7 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-hk-mynd { touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: pointer; }
 .sk-hk-mynd.ad { touch-action: none; cursor: grab; }
 .sk-hk-mynd.ad:active { cursor: grabbing; }
-.sk-hk-lag { position: absolute; inset: 0; transform-origin: 0 0; }   /* ekkert will-change: þá teiknar vafrinn teikninguna upp á nýtt í fullri upplausn við aðdrátt */
+.sk-hk-lag { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; }   /* ekkert will-change: þá teiknar vafrinn teikninguna upp á nýtt í fullri upplausn við aðdrátt */
 .sk-hk-mynd.ad .sk-hk-hluti { background: transparent !important; }   /* við aðdrátt víkur stöðuliturinn fyrir teikningunni; ramminn stendur eftir */
 .sk-hk-mynd.ad img { opacity: 1; }
 .sk-hk-lag img { pointer-events: none; }
@@ -385,3 +385,40 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
   .sk-efni-rist { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8pt; }
   .sk-efni-skjol a { border: 0; padding: 0 8pt 0 0; text-decoration: underline; }
 }
+
+/* --- stór sýn (stækkunargler): hæðin yfir allan skjáinn, síur alltaf sýnilegar vinstra megin --- */
+.sk-hk-opna { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--bh-lina2); border-radius: 999px; background: #fff; color: var(--bh-navy3); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.sk-hk-opna:hover, .sk-hk-opna:focus-visible { border-color: var(--bh-navy3); background: var(--bh-flotur); }
+.sk-hk-opna svg { width: 14px; height: 14px; }
+.sk-hk-flogg button svg { position: absolute; right: 6px; bottom: 5px; width: 13px; height: 13px; opacity: .75; }
+.sk-skodari { position: fixed; inset: 0; z-index: 60; display: grid; grid-template-columns: 300px minmax(0, 1fr); background: #e9f0fa; }
+.sk-sko-hlid { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; padding: 16px; background: #fff; border-right: 1px solid var(--bh-lina); }
+.sk-sko-hlid h3 { margin: 0; font-size: 16px; }
+.sk-v2 .sk-sko-hlid .sk-sia { margin: 0; padding: 0; border: 0; background: none; gap: 12px; }
+.sk-sko-hlid .sk-sia-rod > span { flex-basis: 100%; }
+.sk-sko-hlid .sk-sia-rod > i { display: none; }
+.sk-sko-hlid .sk-sia button.sk-sia-hreinsa { margin-left: 0; }
+.sk-sko-tolur { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sk-sko-tolur div { padding: 8px 12px; border-radius: 12px; background: var(--bh-flotur); }
+.sk-sko-tolur span { display: block; font-size: 11.5px; color: #5a6882; }
+.sk-sko-tolur b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.sk-sko-tolur div.p { background: var(--bh-navy3); }
+.sk-sko-tolur div.p span, .sk-sko-tolur div.p b { color: #fff; }
+.sk-sko-adal { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; padding: 12px 16px 12px; }
+.sk-sko-stika { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.sk-sko-flipar { display: flex; gap: 6px; }
+.sk-sko-flipar button { height: 36px; padding: 0 16px; border: 1px solid var(--bh-lina2); border-radius: 999px; background: #fff; color: #2e4064; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.sk-sko-flipar button.on { border-color: var(--bh-navy3); background: var(--bh-navy3); color: #fff; }
+.sk-sko-stika > span { flex: 1 1 200px; font-size: 13px; font-weight: 600; color: #2e4064; font-variant-numeric: tabular-nums; }
+.sk-sko-loka { height: 36px; padding: 0 18px; border: 0; border-radius: 10px; background: linear-gradient(#ff8a1f, #ec5300); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.sk-hk-haed.stor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0; }
+.sk-hk-haed.stor .sk-hk-rammi { flex: 1 1 auto; min-height: 0; }
+.sk-hk-haed.stor .sk-hk-mynd { height: 100%; cursor: grab; touch-action: none; }
+.sk-hk-haed.stor .sk-hk-hint { margin: 4px 0 0; }
+@media (max-width: 860px) {
+  .sk-skodari { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 40%) minmax(0, 1fr); }
+  .sk-sko-hlid { border-right: 0; border-bottom: 1px solid var(--bh-lina); padding: 10px 12px; gap: 8px; }
+  .sk-sko-adal { padding: 8px 10px; }
+  .sk-hk-opna { margin-left: 0; }
+}
+@media print { .sk-skodari { display: none !important; } }

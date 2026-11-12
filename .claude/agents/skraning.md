@@ -218,6 +218,11 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   teikningu + 444 ÁN punkts ( tómt og  null í Ajour-útflutningnum; stofnaðar 02.–11.2026, flestar
   í apríl–maí, lýsing oftast tóm, 193 með mynd). Þær komast ekki á kort né hæð. Kaflinn  („Skráningar án staðsetningar“) telur
   þær upp eftir flokki og  segir frá þeim undir lykiltölum kortsins. Hvað þær eru (óunnin göt, drög, leiðarpunktar) er ÓMÆLT.
+- **Stór sýn (12.11.2026, Agnar: „stækkunargler … opna þá hæð til að geta zoomað, og sjáanlega filterstiku til hliðar“):** hnappurinn
+  „Stór sýn“ við hverja hæð og stækkunarglerið á hverju deildarflaggi opna `.sk-skodari` (fixed, yfir allan skjáinn): síurnar (`siuradir`,
+  sama JSX og í skýrslunni, sama staða) vinstra megin með lykiltölum hæðarinnar; flipar hæða, „Loka“/Esc. Þar er skrun = aðdráttur.
+  `Haedarkort` fær `stor`: glugginn er hærri en teikningin, `r` = hæð glugga / hæð teikningar; `klemma(z, fx, fy, r)` miðjar lóðrétt þegar
+  z ≤ r og öll y-hnit eru í einingum TEIKNINGARHÆÐAR (ekki gluggans). Deildarflagg í skýrslunni opnar stóru sýnina á deildinni.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með
