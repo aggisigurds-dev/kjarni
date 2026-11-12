@@ -182,6 +182,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Til hvers skýrslan er:** svar við beiðni COWI (Arnar Ingi Þórsson, eftirlit) um gögn vegna yfirferðar brunaþéttinga á 5. og 6. hæð,
   framsend af Hilmi Erni Stefánssyni hjá ÞG Verk 10.11.2026 (email_digest 75261): staða verks og yfirlit yfir svæði + samantekt
   í stað lesaðgangs að Ajour. Vörur, vottanir og námskeiðsgögn eru EKKI í kerfinu — Agnar leggur þau til.
+- **Forsendur og fyrirvarar (12.11.2026, Agnar: skýrslan getur ráðið úrslitum um samninga upp á hundruð milljóna):** kaflinn
+  `forsendur` (`.sk-forsendur`, efst, má fela í Kaflar) segir hvað er MÆLT (skráningar í Ajour) og hvað er ÁÆTLAÐ (markmiðin), færslu
+  punkta (talið úr `skr_haedarhnit.faerdur`; mælt 12.11: miðgildi 0,31 m, mest 0,96 m) og stemmir af við Ajour: allar kláraðar =
+  taldar á móti markmiði + raufar + aukaverk + án teikningar + „Annað“ (12.11: 10.526 = 10.291 + 115 + 81 + 22 + 17).
+  466 skráningar eru ÁN TEIKNINGAR (444 opnar; 131 þeirra „Guide point“/„Annað“, 313 í verkflokkum) — hvað þær eru er ÓMÆLT.
+  Aldrei kynna prósenturnar sem talningu á öllum götum: markmið 6. hæðar er það sem er skráð.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

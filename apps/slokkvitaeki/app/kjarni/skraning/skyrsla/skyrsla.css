@@ -180,6 +180,10 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-v2 h2 { margin: 30px 0 10px; font-size: 20px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .sk-v2 h2 small { font-size: 12.5px; font-weight: 400; color: #5a6882; }
 .sk-falinn { display: none !important; }
+.sk-forsendur { margin-top: 20px; padding: 14px 18px 12px; border: 1px solid #f8b98c; border-radius: 12px; background: #ffeee0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.sk-v2 .sk-forsendur h2 { margin: 0 0 6px; font-size: 15px; }
+.sk-forsendur ul { margin: 0; padding-left: 18px; }
+.sk-forsendur li { margin: 4px 0; font-size: 12.5px; line-height: 1.5; color: #2e4064; }
 .sk-v2 .sk-efni > section { overflow-x: auto; }   /* breiðar töflur skruna innan kaflans, ekki út fyrir blaðið */
 .sk-v2 .sk-tafla th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #2e4064; padding: 9px 10px; }
 .sk-v2 .sk-tafla td { padding: 6px 10px; }

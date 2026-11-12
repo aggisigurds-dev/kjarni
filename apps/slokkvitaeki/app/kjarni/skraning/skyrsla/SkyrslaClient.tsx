@@ -18,7 +18,7 @@ type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
 type Skr = { id: number; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null };
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
-type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number };
+type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
 type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string } | null };
 const HLUTAR = ["N", "C", "S"];
 const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), Math.floor(m / 3)][i];   // fast deildarmarkmið skipt á hlutana þrjá
@@ -28,7 +28,7 @@ type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
 type Gogn = { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
-const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["utbod", "Samanburður við útboð"]];
+const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["utbod", "Samanburður við útboð"]];
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5", "—"];   // „—" = skráningar á hæðinni sem skiptast ekki á deild (rafmagn á sérteikningum)
 const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i], ["Raufar", "Raufar við kantaða stokka", /^Raufar/i], ["Rafmagn", "Rafmagn", /^Raf/i]];
@@ -111,7 +111,7 @@ export default function SkyrslaClient() {
         // hæðarhnit (sýnin skr_haedarhnit): hæð og deild úr STÖÐU punktsins á yfirlitsblaðinu — ræður þar sem hún er til, svo færðir punktar fylgi nýja staðnum
         const hn = new Map<number, Hnit>();
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_haedarhnit").select("skraning_id,haed,deild,hluti,x_px,y_px").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
+          const r = await s.from("skr_haedarhnit").select("skraning_id,haed,deild,hluti,x_px,y_px,faerdur").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           for (const q of (r.data || []) as Hnit[]) hn.set(q.skraning_id, q);
           if (lifir) setStadaTexti(`Sæki staðsetningar… ${num(hn.size)}`);
@@ -274,6 +274,10 @@ export default function SkyrslaClient() {
   };
   const nBr = Object.keys(gogn.stada || {}).length + Object.keys(gogn.utbod || {}).length;
   const synaKafla = (k: string) => gogn.kaflar?.[k] !== false;
+  /** Fyrir kaflann „Forsendur og fyrirvarar“: hve margir punktar eru færðir á teikningunni og dagsetning nýjustu kláruðu skráningar. */
+  const faerdirN = [...hnit.values()].filter((h) => h.faerdur).length;
+  const klaradAlls = skr.reduce((n, s) => n + (s.stada === "done" ? 1 : 0), 0);
+  const nyjast = skr.reduce((m, s) => (s.framkvaemt_til && s.framkvaemt_til.slice(0, 10) > m ? s.framkvaemt_til.slice(0, 10) : m), "");
   const skiptaKafla = (k: string) => breyta({ kaflar: { ...(gogn.kaflar || {}), [k]: !synaKafla(k) } });
   const dags = gogn.dags ?? new Date().toISOString().slice(0, 10);
   const dagsTexti = `${Number(dags.slice(8, 10))}. ${MAN[Number(dags.slice(5, 7)) - 1] || ""} ${dags.slice(0, 4)}`;
@@ -333,7 +337,7 @@ export default function SkyrslaClient() {
           <input className="sk-titill" value={gogn.heiti ?? "Brunaþéttingar — staða verks"} onChange={(e) => breyta({ heiti: e.target.value })} aria-label="Heiti skýrslu" />
           <p>{verk?.heiti} · Brunahólf ehf</p>
         </div>
-        <div className="sk-hetja-h"><b>{pros(alls.klar, alls.mark)}<i> %</i></b><span>{num(alls.klar)} af {num(alls.mark)} stökum verkum</span></div>
+        <div className="sk-hetja-h"><b>{pros(alls.klar, alls.mark)}<i> %</i></b><span>{num(alls.klar)} af áætluðum {num(alls.mark)} stökum verkum</span></div>
       </header>
       <div className="sk-efni">
       {synaKafla("texti") && <div className="sk-inngangur">
@@ -349,6 +353,17 @@ export default function SkyrslaClient() {
         </div>)}
       </div>}
 
+      {synaKafla("forsendur") && <div className="sk-forsendur">
+        <h2>Forsendur og fyrirvarar</h2>
+        <ul>
+          <li><b>Gögnin:</b> skráningar Brunahólfs í Ajour. Hver þétting er skráð með staðsetningu á teikningu, flokki, starfsmanni, dagsetningu og að jafnaði myndum.{nyjast ? ` Nýjasta kláraða skráning í þessari skýrslu er frá ${dmy(nyjast)}.` : ""}</li>
+          <li><b>Einingar:</b> tölur eru stök verk, þ.e. þétting öðrum megin við vegg. Tvö stök verk eru ein lokun; í gólfi er eitt verk ein þétting.</li>
+          <li><b>Markmiðin eru áætlun, ekki talning á öllum götum.</b> Á 6. hæð er markmiðið það sem er skráð (klárað og opið), svo hlutfallið þar sýnir hve stórum hluta skráðra þéttinga er lokið. Á 5. hæð er miðað við sama flokk á sömu deild á 6. hæð. Milliloft: {GOLF_MARK} á deild. Rafmagn: {RAF_MARK} á deild. Prósenturnar eru því mat á framvindu og staðfesta ekki einar sér að öllum götum hafi verið lokað.</li>
+          <li><b>Staðsetning punkta:</b> punktarnir eru settir á teikningu á verkstað.{faerdirN ? ` ${num(faerdirN)} punktar hafa verið færðir að næsta skurðpunkti lagnar og brunaveggjar á teikningunni (sjálfvirkt, að miðgildi 0,3 m og mest 1,0 m); skráð staða í Ajour er óbreytt.` : ""}</li>
+          <li><b>Afstemming við Ajour:</b> í gögnunum eru {num(skr.length)} skráningar, þar af {num(klaradAlls)} kláraðar. {num(alls.klar)} þeirra eru taldar á móti markmiði. Hinar {num(klaradAlls - alls.klar)} eru raufar (ekkert markmið), aukaverk ({num(aukaAlls.done)} kláruð, sýnd sér), skráningar án teikningar ({num(taln.utanDone)} kláraðar) og flokkurinn „Annað“.</li>
+          <li><b>Án teikningar:</b> {num(taln.utan)} skráningar eru ekki á teikningu í Ajour og verða því ekki staðsettar á hæð; {num(taln.utan - taln.utanDone)} þeirra eru opnar. Þær eru hvorki í tölum hæðanna né á kortunum.</li>
+        </ul>
+      </div>}
       {synaKafla("kort") && yfirlit.length > 0 && (
         <section>
           <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
