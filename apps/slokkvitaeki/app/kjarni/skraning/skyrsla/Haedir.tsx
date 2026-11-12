@@ -23,8 +23,8 @@ type Props = {
   hopar: [string, string][];
   /** Nöfn starfsmanna (skr_starfsmenn) — sýnd á skráningarspjaldinu. */
   starfsmenn: Map<number, string>;
-  /** Opnar skráningar í Ajour sem hafa engan punkt á teikningu — sjást ekki á kortunum, svo sagt er frá þeim undir lykiltölunum. */
-  opidAnStadar: number;
+  /** Opnar skráningar í Ajour án teikningar. Ekki birt: þetta eru færslur sem Brunahólf eyðir (Agnar 12.11.2026), ekki óunnið verk. */
+  opidAnStadar?: number;
   /** Markmið hóps á deild (með leiðréttingum úr töflunni) og á hluta deildar; null = ekkert markmið. */
   markDeild: (haed: string, deild: string, hop: string) => number | null;
   markHluta: (haed: string, deild: string, hluti: number, hop: string) => number | null;
@@ -280,7 +280,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
   );
 }
 
-export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, opidAnStadar, markDeild, markHluta }: Props) {
+export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, markDeild, markHluta }: Props) {
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
@@ -432,7 +432,6 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, opi
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
-      {opidAnStadar > 0 && <p className="sk-hk-an">Auk þess eru <b>{num(opidAnStadar)}</b> opnar skráningar í Ajour án punkts á teikningu. Þær sjást ekki á kortunum; sjá kaflann „Skráningar án staðsetningar“.</p>}
       {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð eða tímabil.</p>}
 
       <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />

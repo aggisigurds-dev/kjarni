@@ -223,6 +223,14 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   sama JSX og í skýrslunni, sama staða) vinstra megin með lykiltölum hæðarinnar; flipar hæða, „Loka“/Esc. Þar er skrun = aðdráttur.
   `Haedarkort` fær `stor`: glugginn er hærri en teikningin, `r` = hæð glugga / hæð teikningar; `klemma(z, fx, fy, r)` miðjar lóðrétt þegar
   z ≤ r og öll y-hnit eru í einingum TEIKNINGARHÆÐAR (ekki gluggans). Deildarflagg í skýrslunni opnar stóru sýnina á deildinni.
+- **Skráningar án teikningar eru færslur sem verður EYTT (Agnar 12.11.2026, skjámynd úr Ajour „Registrations without drawing (list view) 456“:
+  „Utan teikninga er það sem við eyðum síðan“):** þær eru hvorki unnið né óunnið verk. Aldrei kynna þær sem opin göt. Kaflinn `anstadar` er
+  sjálfgefið FALINN (`SJALFG_FALDIR`), viðvörunin undir lykiltölum kortsins var tekin út, og „Forsendur“ segir hvað þetta er.
+  (Fyrri lína hér að ofan um „opnar án staðsetningar“ lýsir gögnunum; túlkunin er þessi.)
+- **Milliloft á gólfi 5. hæðar (4H) fylgja 5. hæð (Agnar 12.11.2026 bar sjálfur saman 4H-blöðin við „5H. Ceiling“: „alveg líklegt að vanti
+  að gera fyrir 4. hæðina fleiri milliloftaþéttingar“):** `golfMark(haed, deild)` — 4H áætlun = max(110, skráð milliloft á sömu deild á 5H).
+  Mælt 12.11: 5H S1 119, S2 150, S4 106, S5 99 → 4H áætlun 119 + 150 + 110 + 110 = 489 (var 440); klárað 357 → 73 % (var 81 %);
+  heildin 10.291 af 11.938 = 86 % (var 87 %). Hub-síðan (brunaholf) notar enn 110 á deild og sýnir aðra tölu.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með
