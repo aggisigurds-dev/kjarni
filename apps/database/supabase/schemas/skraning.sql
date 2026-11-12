@@ -420,3 +420,24 @@ cross join lateral (
 ) p
 where not s.eytt and s.x_px is not null and s.y_px is not null;
 grant select on public.skr_haedarhnit to anon, authenticated;
+
+-- ---------------------------------------------------------------- gatakort: lagnakerfi stálröraþéttinga (12.11.2026, migration skr_kerfi)
+-- skr_kerfi  kerfið sem stálröraþétting tilheyrir, LESIÐ AF LAGNATEIKNINGUM eftir nálægð (tools/skraning-gatakort-kerfi.cjs):
+--            'udi' úðakerfi · 'vatn' vatn og hiti · 'lyfjaloft' · 'oflokkad'. Ajour flokkar stálrör aðeins eftir stærð.
+--            Þetta er ÁÆTLUN: vafi = true ef tvö kerfi liggja jafn nærri eða næsta lögn er fjarri. Skráningum er ekki breytt.
+--            Biðlarar lesa aðeins (engin insert/update-policy); tólið skrifar með þjónustulykli.
+create table if not exists public.skr_kerfi (
+  skraning_id   bigint primary key references public.skr_skraningar(id) on delete cascade,
+  verk_id       bigint not null references public.skr_verk(id),
+  kerfi         text not null check (kerfi in ('udi','vatn','lyfjaloft','oflokkad')),
+  fjarlaegd_px  numeric,                        -- fjarlægð að næstu lögn kerfisins á yfirlitsblaðinu (1 px ≈ 29 mm)
+  naest         text,                           -- næstnæsta kerfi og fjarlægð, til rýni
+  vafi          boolean not null default false,
+  uppruni       text not null default 'teikning',
+  updated_at    timestamptz not null default now()
+);
+create index if not exists skr_kerfi_verk_idx on public.skr_kerfi (verk_id, kerfi);
+alter table public.skr_kerfi enable row level security;
+drop policy if exists skr_kerfi_select on public.skr_kerfi;
+create policy skr_kerfi_select on public.skr_kerfi for select using (true);
+grant select on public.skr_kerfi to anon, authenticated;

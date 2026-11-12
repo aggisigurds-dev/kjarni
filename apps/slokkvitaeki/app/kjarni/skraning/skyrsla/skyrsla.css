@@ -422,3 +422,18 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
   .sk-hk-opna { margin-left: 0; }
 }
 @media print { .sk-skodari { display: none !important; } }
+
+/* --- ljósmyndir skráningar: smámyndir á spjaldinu og stór mynd --- */
+.sk-hk-myndir { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.sk-hk-myndir button { width: 60px; height: 80px; padding: 0; border: 1px solid var(--bh-lina2); border-radius: 8px; overflow: hidden; background: var(--bh-flotur); cursor: zoom-in; }
+.sk-hk-myndir button:hover, .sk-hk-myndir button:focus-visible { border-color: var(--bh-or); box-shadow: 0 0 0 2px rgba(255, 103, 2, .3); outline: 0; }
+.sk-hk-myndir img { position: static; display: block; width: 100%; height: 100%; object-fit: cover; opacity: 1; }
+.sk-ljos { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: rgba(1, 15, 36, .9); cursor: zoom-out; }
+.sk-ljos img { max-width: 100%; max-height: calc(100% - 64px); border-radius: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); cursor: default; }
+.sk-ljos-stika { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 13.5px; font-weight: 600; cursor: default; }
+.sk-ljos-stika button { min-width: 40px; height: 40px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 10px; background: rgba(255, 255, 255, .08); color: #fff; font: inherit; font-size: 20px; cursor: pointer; }
+.sk-ljos-stika button.l { font-size: 13.5px; font-weight: 600; background: linear-gradient(#ff8a1f, #ec5300); border: 0; }
+@media print { .sk-ljos { display: none !important; } .sk-hk-myndir button { width: 90px; height: 120px; } }
+
+.sk-sia-rod em.sk-sia-ath { font-size: 11.5px; font-weight: 500; color: #5a6882; border-bottom: 1px dotted #9aa7bd; cursor: help; }
+.sk-hk-kort dd small { font-weight: 400; color: #5a6882; }

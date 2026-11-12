@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { publicUrl, sb } from "../lib/sb";
 
-export type HkPunktur = { id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
+export type HkPunktur = { kerfi: string | null; kvafi: boolean; id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
 /** Áætlað gat án skráningar („eftir“): n = stök verk sem vantar. */
 export type HkEftir = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; n: number };
 export type HkYfirlit = { id: number; haed: string; mynd: string | null; w: number; h: number };
@@ -35,6 +35,8 @@ const HLUTAR: [string, string][] = [["N", "Norður"], ["C", "Center"], ["S", "Su
 // Álmurnar á yfirlitsblaðinu (útveggir, lesið af blaðinu): vinstri brún og breidd í % af breidd; hlutaskil í % af hæð (sömu skil og skr_haedarhnit).
 const GEO: Record<string, [number, number]> = { S1: [0.85, 12.92], S2: [23.23, 13.94], S4: [63.35, 13.04], S5: [85.72, 12.99] };
 const BIL: [number, number][] = [[2.3, 26.5], [28.8, 42.36], [71.16, 27.09]];
+/** Lagnakerfi stálröra (skr_kerfi): lesið af lagnateikningum eftir nálægð — áætlun, ekki skráð í Ajour. */
+const KERFI: [string, string][] = [["udi", "Úðakerfi"], ["vatn", "Vatn og hiti"], ["lyfjaloft", "Lyfjaloft"]];
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 /** Litir hæðanna í framvinduritinu — sannprófaðir með validate_palette.js (litblinduaðskilnaður ΔE 12,8; ljós flötur). Fylgja hæðinni, ekki röðinni. */
 const LITUR_H: Record<string, string> = { "6H": "#1d4f91", "5H": "#f07f1b", "4H": "#2a9d8f" };
@@ -52,7 +54,7 @@ const leggja = (a: Reitur, b: Reitur): Reitur => ({ done: a.done + b.done, open:
 /** Stöðulitur: bakgrunnur (gegnsær), rammi, texti. */
 const litur = (p: number | null): [string, string, string] => (p == null ? ["rgba(226,232,240,.30)", "#94a3b8", "#334155"] : p >= 95 ? ["rgba(22,101,52,.17)", "#166534", "#166534"] : p >= 75 ? ["rgba(134,239,172,.24)", "#16a34a", "#166534"] : ["rgba(253,186,116,.30)", "#e8590c", "#9a3412"]);
 /** Nánari upplýsingar um valda skráningu, sóttar þegar smellt er á punkt. */
-type Nanar = { lysing: string | null; athugasemd: string | null; sm: number | null; myndir: number; lagf: string | null; skrad: string | null };
+type Nanar = { lysing: string | null; athugasemd: string | null; sm: number | null; myndir: number; lagf: string | null; skrad: string | null; slodir: string[] };   // slodir = myndir skráningarinnar í geymslu (skr_myndir)
 type Syn = { z: number; fx: number; fy: number };   // aðdráttur og hliðrun sem hlutfall af kortinu (óháð breidd, svo prentun heldur sýninni)
 /** r = hæð kortglugga / hæð teikningar (1 í skýrslunni, > 1 í stóru sýninni): teikning sem er lægri en glugginn er miðjuð lóðrétt. */
 const klemma = (z: number, fx: number, fy: number, r = 1): Syn => ({ z, fx: Math.min(0, Math.max(1 - z, fx)), fy: z <= r ? (r - z) / 2 : Math.min(0, Math.max(r - z, fy)) });
@@ -163,12 +165,12 @@ function Framvinda({ punktar, haedir, fra, til, onVelja }: { punktar: HkPunktur[
 }
 
 /** Ein hæð: deildaflögg, kort með aðdrætti og færslu, smellanlegir punktar, skráningarspjald og tafla. */
-function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH, texti, haus, valinn, nanar, starfsmenn, onVelja, fokus, stor, byrjunDeild, onOpna }: {
+function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH, texti, haus, valinn, nanar, starfsmenn, onVelja, fokus, stor, byrjunDeild, onOpna, onMynd }: {
   haed: string; y: HkYfirlit; punktar: HkPunktur[]; eftir: HkEftir[]; stada: Stada; deildir: string[];
   reiturD: (haed: string, deild: string) => Reitur; reiturH: (haed: string, deild: string, i: number) => Reitur; texti: (r: Reitur) => string; haus: string;
   valinn: HkPunktur | null; nanar: Nanar | null; starfsmenn: Map<number, string>; onVelja: (p: HkPunktur | null) => void; fokus: { id: number; t: number } | null;
   /** stor = stóra sýnin (yfir allan skjáinn): engin tafla, glugginn fyllir plássið. byrjunDeild = deild sem sýnin opnast á. onOpna = opna stóru sýnina. */
-  stor?: boolean; byrjunDeild?: string | null; onOpna?: (deild: string | null) => void;
+  stor?: boolean; byrjunDeild?: string | null; onOpna?: (deild: string | null) => void; onMynd: (slodir: string[], i: number) => void;
 }) {
   const box = useRef<HTMLDivElement | null>(null);
   const [v, setV] = useState<Syn>({ z: 1, fx: 0, fy: 0 });
@@ -251,14 +253,19 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
             <div className="sk-hk-kort-h"><b>Skráning{minn.nr != null ? ` nr. ${minn.nr}` : ""}</b><em className={minn.done ? "ok" : "op"}>{minn.done ? "Klárað" : "Opið"}</em></div>
             <dl>
               <dt>Flokkur</dt><dd>{minn.fl || "—"}</dd>
+              {minn.kerfi && minn.kerfi !== "oflokkad" && <><dt>Kerfi</dt><dd>{KERFI.find((k) => k[0] === minn.kerfi)?.[1]} <small>({minn.kvafi ? "óvíst, " : ""}áætlað af teikningu)</small></dd></>}
               <dt>Staður</dt><dd>{haedHeiti(haed)} · deild {minn.deild} · {minn.hluti === "N" ? "Norðurhlið" : minn.hluti === "S" ? "Suðurhlið" : "Center"}</dd>
               <dt>{minn.done ? "Klárað" : "Skráð"}</dt><dd>{minn.done ? dmy(minn.dags) : dmy(nanar?.skrad)}</dd>
               <dt>Starfsmaður</dt><dd>{nanar ? (nanar.sm != null && starfsmenn.get(nanar.sm)) || "—" : "…"}</dd>
-              <dt>Myndir í Ajour</dt><dd>{nanar ? nanar.myndir : "…"}</dd>
+              <dt>Myndir</dt><dd>{nanar ? (nanar.slodir.length ? nanar.slodir.length : nanar.myndir ? `${nanar.myndir} í Ajour (ekki sóttar enn)` : "engar") : "…"}</dd>
               {nanar?.lagf && <><dt>Lagfært</dt><dd>{dmy(nanar.lagf)}</dd></>}
               {nanar?.lysing && <><dt>Lýsing</dt><dd>{nanar.lysing.slice(0, 240)}</dd></>}
               {nanar?.athugasemd && <><dt>Athugasemd</dt><dd>{nanar.athugasemd.slice(0, 240)}</dd></>}
             </dl>
+            {nanar && nanar.slodir.length > 0 && <div className="sk-hk-myndir">{nanar.slodir.slice(0, 6).map((s, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <button key={s} type="button" onClick={() => onMynd(nanar.slodir, i)} aria-label={`Opna mynd ${i + 1} af ${nanar.slodir.length}`}><img src={publicUrl(s)} alt="" loading="lazy" /></button>
+            ))}</div>}
           </div>
         )}
       </div>
@@ -284,6 +291,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
+  const [kerfiVal, setKerfiVal] = useState<Set<string>>(new Set());   // lagnakerfi stálröra; tómt = öll
   const [afDeild, setAfDeild] = useState<Record<string, boolean>>({});
   const [afHaed, setAfHaed] = useState<Record<string, boolean>>({});
   const [fra, setFra] = useState(""); const [til, setTil] = useState("");
@@ -291,11 +299,20 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
   const [nanar, setNanar] = useState<Nanar | null>(null);
   const [leit, setLeit] = useState(""); const [leitSvar, setLeitSvar] = useState("");
   const [fokus, setFokus] = useState<{ id: number; t: number } | null>(null);
+  const [ljos, setLjos] = useState<{ slodir: string[]; i: number } | null>(null);   // stór mynd (ljósakassi)
+  const ljosRef = useRef(false); ljosRef.current = !!ljos;
+  useEffect(() => {
+    if (!ljos) return;
+    const lykill = (e: KeyboardEvent) => { if (e.key === "Escape") setLjos(null); else if (e.key === "ArrowRight") setLjos((l) => (l ? { ...l, i: (l.i + 1) % l.slodir.length } : l)); else if (e.key === "ArrowLeft") setLjos((l) => (l ? { ...l, i: (l.i + l.slodir.length - 1) % l.slodir.length } : l)); };
+    window.addEventListener("keydown", lykill);
+    return () => window.removeEventListener("keydown", lykill);
+  }, [ljos]);
+  const onMynd = useCallback((slodir: string[], i: number) => setLjos({ slodir, i }), []);
   const [skodari, setSkodari] = useState<{ haed: string; deild: string | null; t: number } | null>(null);   // stóra sýnin: hæð og deild sem hún opnast á
   useEffect(() => {   // stóra sýnin: síðan undir skrunar ekki, Esc lokar
     if (!skodari) return;
     const fyrra = document.body.style.overflow; document.body.style.overflow = "hidden";
-    const lykill = (e: KeyboardEvent) => { if (e.key === "Escape") setSkodari(null); };
+    const lykill = (e: KeyboardEvent) => { if (e.key === "Escape" && !ljosRef.current) setSkodari(null); };
     window.addEventListener("keydown", lykill);
     return () => { document.body.style.overflow = fyrra; window.removeEventListener("keydown", lykill); };
   }, [skodari]);
@@ -310,26 +327,28 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
     return [...m].sort((a, b) => (parseInt(a[0].replace(/^\D+/, ""), 10) || 0) - (parseInt(b[0].replace(/^\D+/, ""), 10) || 0));
   }, [einnHopur, punktar]);
   const manudir = useMemo(() => [...new Set(punktar.map((p) => p.man).filter((m): m is string => !!m))].sort(), [punktar]);
-  const medMarkmid = flVal.size === 0 && !fra;   // markmið eru skilgreind á flokkahóp: stærðarsía og „Frá“-mánuður sýna aðeins fjölda; „Til“ = staðan í lok mánaðar á móti markmiði
+  const medMarkmid = flVal.size === 0 && !fra && kerfiVal.size === 0;   // markmið eru skilgreind á flokkahóp: stærðarsía og „Frá“-mánuður sýna aðeins fjölda; „Til“ = staðan í lok mánaðar á móti markmiði
 
   /** Síað á allt nema tímabil — framvinduritið sýnir alla mánuði þess sem er valið. */
   const anTima = useMemo(() => punktar.filter((p) => {
     if (hopVal.size ? !p.hop || !hopVal.has(p.hop) : false) return false;
     if (flVal.size && !flVal.has(p.fl)) return false;
+    if (kerfiVal.size && (!p.kerfi || !kerfiVal.has(p.kerfi))) return false;
     if (afDeild[p.deild] || afHaed[p.haed]) return false;
     return true;
-  }), [punktar, hopVal, flVal, afDeild, afHaed]);
+  }), [punktar, hopVal, flVal, kerfiVal, afDeild, afHaed]);
+  const kerfiTal = useMemo(() => { const m = new Map<string, number>(); let vafi = 0, alls = 0; for (const p of punktar) if (p.kerfi) { m.set(p.kerfi, (m.get(p.kerfi) || 0) + 1); alls++; if (p.kvafi) vafi++; } return { m, vafi, alls }; }, [punktar]);
   const siadir = useMemo(() => (fra || til ? anTima.filter((p) => !(fra && (!p.man || p.man < fra)) && !(til && (!p.man || p.man > til))) : anTima), [anTima, fra, til]);
-  const eftirSiad = useMemo(() => (flVal.size || fra || til ? [] : eftir.filter((e) => !(hopVal.size ? !e.hop || !hopVal.has(e.hop) : false) && !afDeild[e.deild] && !afHaed[e.haed])), [eftir, hopVal, flVal, afDeild, afHaed, fra, til]);
+  const eftirSiad = useMemo(() => (flVal.size || fra || til || kerfiVal.size ? [] : eftir.filter((e) => !(hopVal.size ? !e.hop || !hopVal.has(e.hop) : false) && !afDeild[e.deild] && !afHaed[e.haed])), [eftir, hopVal, flVal, kerfiVal, afDeild, afHaed, fra, til]);
 
   // nánari upplýsingar um valda skráningu (ein röð, aðeins lestur)
   useEffect(() => {
     setNanar(null); if (!valinn) return;
     let lifir = true;
-    sb().from("skr_skraningar").select("lysing,athugasemd,starfsmadur_id,created_at,ajour_gogn").eq("id", valinn.id).single().then((r) => {
+    Promise.all([sb().from("skr_skraningar").select("lysing,athugasemd,starfsmadur_id,created_at,ajour_gogn").eq("id", valinn.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", valinn.id).order("rod")]).then(([r, m]) => {
       if (!lifir || r.error || !r.data) return;
       const d = r.data as { lysing: string | null; athugasemd: string | null; starfsmadur_id: number | null; created_at: string | null; ajour_gogn: { myndir?: string[]; lagf_dags?: string } | null };
-      setNanar({ lysing: d.lysing, athugasemd: d.athugasemd, sm: d.starfsmadur_id, myndir: (d.ajour_gogn?.myndir || []).length, lagf: d.ajour_gogn?.lagf_dags || null, skrad: d.created_at });
+      setNanar({ lysing: d.lysing, athugasemd: d.athugasemd, sm: d.starfsmadur_id, myndir: (d.ajour_gogn?.myndir || []).length, lagf: d.ajour_gogn?.lagf_dags || null, skrad: d.created_at, slodir: ((m.data || []) as { path: string }[]).map((x) => x.path) });
     });
     return () => { lifir = false; };
   }, [valinn]);
@@ -366,12 +385,13 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
   const haedAlls = (haed: string) => syndarDeildir.reduce((a, d) => leggja(a, reiturD(haed, d)), TOMUR);
   const alls = syndarHaedir.reduce((a, h) => leggja(a, haedAlls(h)), TOMUR);
   const eftirAlls = eftirSiad.reduce((a, e) => a + e.n, 0);
-  const virkar = hopVal.size + flVal.size + (stada !== "allt" ? 1 : 0) + Object.values(afDeild).filter(Boolean).length + Object.values(afHaed).filter(Boolean).length + (fra ? 1 : 0) + (til ? 1 : 0);
-  const hreinsa = () => { setHopVal(new Set()); setFlVal(new Set()); setStada("allt"); setAfDeild({}); setAfHaed({}); setFra(""); setTil(""); };
+  const virkar = hopVal.size + flVal.size + kerfiVal.size + (stada !== "allt" ? 1 : 0) + Object.values(afDeild).filter(Boolean).length + Object.values(afHaed).filter(Boolean).length + (fra ? 1 : 0) + (til ? 1 : 0);
+  const hreinsa = () => { setKerfiVal(new Set()); setHopVal(new Set()); setFlVal(new Set()); setStada("allt"); setAfDeild({}); setAfHaed({}); setFra(""); setTil(""); };
   const manTexti = (m: string) => `${m.slice(5)}.${m.slice(0, 4)}`;
   const siulysing = [
     hopVal.size ? hopar.filter((h) => hopVal.has(h[0])).map((h) => h[1]).join(", ") : "Allir flokkar",
     flVal.size ? [...flVal].join(", ") : "",
+    kerfiVal.size ? `stálrör: ${KERFI.filter((k) => kerfiVal.has(k[0])).map((k) => k[1].toLowerCase()).join(", ")} (áætlað af lagnateikningu)` : "",
     stada === "done" ? "aðeins klárað" : stada === "opid" ? "aðeins opið" : stada === "eftir" ? "aðeins áætluð göt án skráningar" : "",
     Object.values(afDeild).some(Boolean) ? `deildir ${syndarDeildir.join(", ")}` : "",
     fra ? `tímabil ${manTexti(fra)} – ${til ? manTexti(til) : "…"}` : til ? `staðan í lok ${manTexti(til)}` : "",
@@ -397,6 +417,13 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
           <div className="sk-sia-rod"><span>Stærð</span>
             <button type="button" className={flVal.size ? "" : "on"} onClick={() => setFlVal(new Set())}>Allar</button>
             {staerdir.map(([fl, n]) => <button key={fl} type="button" className={flVal.has(fl) ? "on" : ""} aria-pressed={flVal.has(fl)} onClick={() => setFlVal((s) => skipta(s, fl))}>{fl.replace(/^(Loft|Stál|Plast|Gólf)\s*/i, "").replace(/\s*L[Vv]\b.*$/, "").trim() || fl} <small>{num(n)}</small></button>)}
+          </div>
+        )}
+        {kerfiTal.alls > 0 && (
+          <div className="sk-sia-rod"><span>Stálrör eftir kerfi</span>
+            <button type="button" className={kerfiVal.size ? "" : "on"} onClick={() => setKerfiVal(new Set())}>Öll</button>
+            {KERFI.map(([k, nafn]) => <button key={k} type="button" className={kerfiVal.has(k) ? "on" : ""} aria-pressed={kerfiVal.has(k)} onClick={() => setKerfiVal((s) => skipta(s, k))}>{nafn} <small>{num(kerfiTal.m.get(k) || 0)}</small></button>)}
+            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Kerfið er lesið af lagnateikningum eftir því hvaða lögn liggur næst punktinum. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>áætlað af lagnateikningu</em>
           </div>
         )}
         <div className="sk-sia-rod"><span>Staða</span>
@@ -432,7 +459,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
-      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð eða tímabil.</p>}
+      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Kerfi stálröra er lesið af lagnateikningum eftir nálægð og er áætlun: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar.` : ""}</p>}
 
       <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
 
@@ -440,7 +467,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
         const y = yfirlit.find((q) => q.haed === haed)!; const ha = haedAlls(haed);
         const pH = siadir.filter((p) => p.haed === haed), eH = eftirSiad.filter((e) => e.haed === haed);
         if (ha.done + ha.open === 0 && ha.m == null && eH.length === 0) return null;   // sían skilur ekkert eftir á þessari hæð
-        return <Haedarkort key={haed} onOpna={(d) => setSkodari({ haed, deild: d, t: Date.now() })} haed={haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus={hausAf(haed)} valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} />;
+        return <Haedarkort key={haed} onOpna={(d) => setSkodari({ haed, deild: d, t: Date.now() })} haed={haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus={hausAf(haed)} valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} onMynd={onMynd} />;
       })}
       {skodari && (() => {
         const y = yfirlit.find((q) => q.haed === skodari.haed); if (!y) return null;
@@ -464,11 +491,23 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
                 <span>{hausAf(skodari.haed)}</span>
                 <button type="button" className="sk-sko-loka" onClick={() => setSkodari(null)}>Loka</button>
               </div>
-              <Haedarkort key={`stor-${skodari.haed}-${skodari.t}`} stor byrjunDeild={skodari.deild} haed={skodari.haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus="" valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} />
+              <Haedarkort key={`stor-${skodari.haed}-${skodari.t}`} stor byrjunDeild={skodari.deild} haed={skodari.haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus="" valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} onMynd={onMynd} />
             </div>
           </div>
         );
       })()}
+      {ljos && (
+        <div className="sk-ljos" role="dialog" aria-modal="true" aria-label="Ljósmynd skráningar" onClick={() => setLjos(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={publicUrl(ljos.slodir[ljos.i])} alt={`Ljósmynd ${ljos.i + 1} af ${ljos.slodir.length}`} onClick={(e) => e.stopPropagation()} />
+          <div className="sk-ljos-stika" onClick={(e) => e.stopPropagation()}>
+            {ljos.slodir.length > 1 && <button type="button" aria-label="Fyrri mynd" onClick={() => setLjos({ ...ljos, i: (ljos.i + ljos.slodir.length - 1) % ljos.slodir.length })}>‹</button>}
+            <span>{valinn?.nr != null ? `Skráning nr. ${valinn.nr} · ` : ""}mynd {ljos.i + 1} af {ljos.slodir.length}</span>
+            {ljos.slodir.length > 1 && <button type="button" aria-label="Næsta mynd" onClick={() => setLjos({ ...ljos, i: (ljos.i + 1) % ljos.slodir.length })}>›</button>}
+            <button type="button" className="l" onClick={() => setLjos(null)}>Loka</button>
+          </div>
+        </div>
+      )}
       <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />engin áætlun</p>
       <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Áætlun hluta fylgir sömu reglu og deildin; föst áætlun á deild (milliloft, rafmagn) skiptist jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá áætlun deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
     </div>

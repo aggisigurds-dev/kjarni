@@ -231,6 +231,18 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   að gera fyrir 4. hæðina fleiri milliloftaþéttingar“):** `golfMark(haed, deild)` — 4H áætlun = max(110, skráð milliloft á sömu deild á 5H).
   Mælt 12.11: 5H S1 119, S2 150, S4 106, S5 99 → 4H áætlun 119 + 150 + 110 + 110 = 489 (var 440); klárað 357 → 73 % (var 81 %);
   heildin 10.291 af 11.938 = 86 % (var 87 %). Hub-síðan (brunaholf) notar enn 110 á deild og sýnir aðra tölu.
+- **Ljósmyndir skráninga (12.11.2026, Agnar: „mátt sækja myndirnar líka“):** `tools/skraning-myndir-ajour.cjs [--write] [--limit N]` sækir
+  prentstærð hverrar myndar úr Ajour (GET, ~100 kB, 1122×1496; 27.463 myndir ≈ 2,8 GB) í OPNU fötuna `skraning`
+  (`verk/4/myndir/<fileId>.jpg`) og skráir í `skr_myndir` (stig 'annad': Ajour segir ekki fyrir/eftir). Endurkeyranlegt; stöðvast ef
+  Ajour-lotan rennur út. Spjaldið í skýrslunni sýnir smámyndir (`.sk-hk-myndir`) og stóra mynd (`.sk-ljos`, örvar og Esc).
+  Nýjar skráningar í Ajour fá ekki myndir sjálfkrafa — keyra tólið aftur eftir nýjan innflutning.
+- **Stálrör eftir kerfi / úðakerfi (12.11.2026, Agnar: „brjóta aðeins upp og bjóða filter fyrir sprinklerkerfi“):** Ajour flokkar stálrör aðeins
+  eftir stærð. `tools/skraning-gatakort-kerfi.cjs --log <lagamappa> [--write] [--prufa <yfirlitsmappa> 6H x y w h]` (+ `.py`) ber hverja
+  stálröraskráningu á 5H/6H við lagnalögin (vatnsudi M395/M396 = 'udi'; vatn-litur + vatnslagnir = 'vatn'; lyfjaloft) og skrifar næsta
+  kerfi í töfluna `skr_kerfi` (ný, aðeins lestur fyrir biðlara). ÁÆTLUN: `vafi` ef tvö kerfi eru innan 6 px eða lögn fjær en 15 px.
+  Mælt 12.11: 5.664 stálrör → úði 743, vatn og hiti 4.511, lyfjaloft 410; 2.051 óviss. Vatnslagið er teiknað þykkt og dregur að sér punkta,
+  svo úðakerfið er líklega VANTALIÐ. Sían „Stálrör eftir kerfi“ sýnir aðeins fjölda (engin áætlun per kerfi) og er merkt „áætlað af
+  lagnateikningu“. Aldrei kynna kerfistölur sem skráðar staðreyndir.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með
