@@ -246,6 +246,18 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   Stærðarregla (Agnar 12.11.2026: úðakerfið „er almennt í stál 50 mm til stál 75 mm“): aðeins Stál Ø40-50, Ø75-110 og Ø110-160 geta orðið 'udi' (Ø110-160 bætt við sama dag eftir myndskoðun: nr. 4808 og 5413 eru rauð úðarör). ÚÐALAGNIRNAR ERU RAUÐMÁLAÐAR — rauður litur á ljósmynd skráningar er betri vísbending en nálægð á teikningu (af 3 sýnum sem lágu „aðeins á úðalögn“ var eitt blátt einangrað rör); flokkun eftir myndlit er ógerð.
   Eftir regluna: úði 477 (6H 286, 5H 191), vatn og hiti 4.726, lyfjaloft 456. Þegar kerfi er valið í síunni birtist lagnateikning þess
   (skr_log, fag sprinkler/vatn/gas; CSS-klasinn sk-hk-lagmynd) ofan á hæðinni og grunnteikningin dofnar (klasinn medlag á kortglugganum). Sama á við um flokkana Loftræsting (fag loftraesting) og Rafmagn (fag rafmagn): HOP_FAG í Haedir.tsx (Agnar 12.11.2026: „líka svona loftræsti sýn“). Við aðdrátt (z ≥ 2) fá kláraðir punktar hvíta brún.
+- **ÚÐAKERFI ER GREINT AF LJÓSMYND, ekki teikningu (12.11.2026, Agnar: „Jú hljómar vel“) — þetta GILDIR og víkur eldri línum um stærðarreglu:**
+  úðalagnir á NLSH eru rauðmálaðar. `tools/skraning-gatakort-myndlitur.cjs [--write] [--syni <mappa>]` (+ .py) les myndir stálröraskráninga úr
+  okkar geymslu og skrifar `skr_kerfi.rautt` = hlutfall rauðra díla í MIÐJU myndar (70 % × 70 %; litblær ±12°, mettun > 0,55), hæsta gildi af
+  tveimur fyrstu myndum. `skraning-gatakort-kerfi.cjs`: rautt ≥ 1 % → kerfi 'udi', uppruni 'mynd' (vafi ef < 2,5 %); annars ræður næsta lögn á
+  teikningu milli vatns og lyfjalofts (uppruni 'teikning'). ENGIN stærðarregla: grönn rauð úðarör sjást líka í Ø15-35 (nr. 9094, 2508, 3689).
+  Rýnt á sýnisblöðum: 2,5–6 % → 15 af 15 úðarör; 0,8–2,5 % → um 10 af 15 (hitt: rautt rör í bakgrunni, rauður loki, rauð merking á mynd);
+  þekkt villa: rauðbrún plata í bakgrunni (nr. 3326). Mælt 12.11: úði 1.488 (1.135 öruggar, 353 óvissar; 6H 550, 5H 938).
+- **Sjálfvirk færsla eftir kerfi (12.11.2026, Agnar: „hliðra punktunum til svo þeir séu á réttum stöðum“):** `skraning-gatakort-skr-festa` skiptir
+  stálrörum eftir skr_kerfi: hópurinn 'udi' festist aðeins á skurðpunkta ÚÐALAGNA (vatnsudi) og veggja; 'stal' (önnur stálrör) á vatns- og
+  lyfjaloftslagnir, ekki úðalagnir; plaströr ('ror') óbreytt. Þurrkeyrsla 12.11: úði 6H 354 af 550 festir, 5H 582 af 938; hinir standa á skráðum stað.
+  Eftir færslu: keyra `skraning-gatakort-para.cjs --haed 6H|5H --write` og `skraning-gatakort-kerfi.cjs --write` aftur (staða punkta breyttist).
+  Tólið PATCH-ar hverja færslu staka (nokkur þúsund köll, yfir 10 mín) — keyra í bakgrunni.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

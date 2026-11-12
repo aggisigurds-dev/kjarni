@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { publicUrl, sb } from "../lib/sb";
 
-export type HkPunktur = { kerfi: string | null; kvafi: boolean; id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
+export type HkPunktur = { kerfi: string | null; kvafi: boolean; kmynd: boolean; id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
 /** Áætlað gat án skráningar („eftir“): n = stök verk sem vantar. */
 export type HkEftir = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; n: number };
 export type HkYfirlit = { id: number; haed: string; mynd: string | null; w: number; h: number };
@@ -263,7 +263,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
             <div className="sk-hk-kort-h"><b>Skráning{minn.nr != null ? ` nr. ${minn.nr}` : ""}</b><em className={minn.done ? "ok" : "op"}>{minn.done ? "Klárað" : "Opið"}</em></div>
             <dl>
               <dt>Flokkur</dt><dd>{minn.fl || "—"}</dd>
-              {minn.kerfi && minn.kerfi !== "oflokkad" && <><dt>Kerfi</dt><dd>{KERFI.find((k) => k[0] === minn.kerfi)?.[1]} <small>({minn.kvafi ? "óvíst, " : ""}áætlað af teikningu)</small></dd></>}
+              {minn.kerfi && minn.kerfi !== "oflokkad" && <><dt>Kerfi</dt><dd>{KERFI.find((k) => k[0] === minn.kerfi)?.[1]} <small>({minn.kvafi ? "óvíst, " : ""}{minn.kmynd ? "greint af rauðum lit á ljósmynd" : "áætlað af teikningu"})</small></dd></>}
               <dt>Staður</dt><dd>{haedHeiti(haed)} · deild {minn.deild} · {minn.hluti === "N" ? "Norðurhlið" : minn.hluti === "S" ? "Suðurhlið" : "Center"}</dd>
               <dt>{minn.done ? "Klárað" : "Skráð"}</dt><dd>{minn.done ? dmy(minn.dags) : dmy(nanar?.skrad)}</dd>
               <dt>Starfsmaður</dt><dd>{nanar ? (nanar.sm != null && starfsmenn.get(nanar.sm)) || "—" : "…"}</dd>
@@ -401,7 +401,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
   const siulysing = [
     hopVal.size ? hopar.filter((h) => hopVal.has(h[0])).map((h) => h[1]).join(", ") : "Allir flokkar",
     flVal.size ? [...flVal].join(", ") : "",
-    kerfiVal.size ? `stálrör: ${KERFI.filter((k) => kerfiVal.has(k[0])).map((k) => k[1].toLowerCase()).join(", ")} (áætlað af lagnateikningu)` : "",
+    kerfiVal.size ? `stálrör: ${KERFI.filter((k) => kerfiVal.has(k[0])).map((k) => k[1].toLowerCase()).join(", ")} (úðakerfi greint af ljósmynd, annað áætlað af teikningu)` : "",
     stada === "done" ? "aðeins klárað" : stada === "opid" ? "aðeins opið" : stada === "eftir" ? "aðeins áætluð göt án skráningar" : "",
     Object.values(afDeild).some(Boolean) ? `deildir ${syndarDeildir.join(", ")}` : "",
     fra ? `tímabil ${manTexti(fra)} – ${til ? manTexti(til) : "…"}` : til ? `staðan í lok ${manTexti(til)}` : "",
@@ -409,12 +409,12 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
   const texti = (r: Reitur) => (r.m != null ? `${num(r.kl)} / ${num(r.m)}` : `${num(r.done)} klárað`);
   /** Teikningar valinna kerfa og flokka á hæðinni: lagnateikning kerfis (úði, vatn, lyfjaloft) og teikning flokks (loftræsting, rafmagn). */
   const lagAf = (haed: string) => { if (!log) return []; const fog = new Set<string>(); for (const k of kerfiVal) fog.add(KERFI_FAG[k]); for (const h of hopVal) if (HOP_FAG[h]) fog.add(HOP_FAG[h]); return fog.size ? log.filter((l) => l.haed === haed && fog.has(l.fag)).map((l) => l.mynd) : []; };
-  /** Kerfi valið: flokkurinn fer á Stálrör; fyrir úðakerfi eitt og sér er slökkt á Ø15-35 (úðakerfið er í Ø40-50, Ø75-110 og Ø110-160). */
+  /** Kerfi valið: flokkurinn fer á Stálrör; stærðaröðin sýnir þá hve margar þéttingar kerfisins eru í hverri stærð. */
   const veljaKerfi = (k: string | null) => {
     const n = k ? skipta(kerfiVal, k) : new Set<string>(); setKerfiVal(n);
     if (!n.size) { setFlVal(new Set()); return; }
     setHopVal(new Set(["Stál"]));
-    setFlVal(n.size === 1 && n.has("udi") ? new Set(punktar.filter((p) => p.hop === "Stál" && /Øs*(40-50|75-110|110-160)/.test(p.fl)).map((p) => p.fl)) : new Set());
+    setFlVal(new Set());   // engin stærðarregla: úðarör eru í öllum stálstærðum (grönn rauð rör líka í Ø15-35); teljararnir á stærðunum sýna skiptinguna
   };
   const veljaManud = (m: string) => { if (til === m && !fra) setTil(""); else { setFra(""); setTil(m); } };
   const leita = () => {
@@ -442,7 +442,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
           <div className="sk-sia-rod"><span>Stálrör eftir kerfi</span>
             <button type="button" className={kerfiVal.size ? "" : "on"} onClick={() => veljaKerfi(null)}>Öll</button>
             {KERFI.map(([k, nafn]) => <button key={k} type="button" className={kerfiVal.has(k) ? "on" : ""} aria-pressed={kerfiVal.has(k)} onClick={() => veljaKerfi(k)}>{nafn} <small>{num(kerfiTal.m.get(k) || 0)}</small></button>)}
-            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Kerfið er lesið af lagnateikningum eftir því hvaða lögn liggur næst punktinum; úðakerfi kemur aðeins til greina í stáli Ø40-50, Ø75-110 og Ø110-160. Þegar kerfi er valið birtist lagnateikning þess á hæðinni. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>áætlað af lagnateikningu</em>
+            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Úðalagnirnar eru rauðmálaðar: stálröraþétting telst til úðakerfis ef rautt rör sést á ljósmynd hennar. Önnur stálrör eru merkt vatni og hita eða lyfjalofti eftir því hvaða lögn liggur næst á lagnateikningu. Þegar kerfi er valið birtist lagnateikning þess á hæðinni. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>úðakerfi greint af ljósmynd · annað áætlað af teikningu</em>
           </div>
         )}
         <div className="sk-sia-rod"><span>Staða</span>
@@ -478,7 +478,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
-      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Kerfi stálröra er lesið af lagnateikningum eftir nálægð og er áætlun: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar.` : ""}</p>}
+      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Úðakerfi er greint af rauðum lit á ljósmynd; vatn og hiti og lyfjaloft eru áætluð af lagnateikningu: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar.` : ""}</p>}
 
       <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
 

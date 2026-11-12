@@ -441,3 +441,6 @@ alter table public.skr_kerfi enable row level security;
 drop policy if exists skr_kerfi_select on public.skr_kerfi;
 create policy skr_kerfi_select on public.skr_kerfi for select using (true);
 grant select on public.skr_kerfi to anon, authenticated;
+-- skr_kerfi.rautt (12.11.2026, migration skr_kerfi_rautt): hlutfall rauðra díla í miðju ljósmyndar skráningarinnar (0–1), hæsta gildi yfir myndir.
+-- Úðalagnir á NLSH eru rauðmálaðar: rautt ≥ 0,01 → kerfi 'udi' með uppruni 'mynd' (tools/skraning-gatakort-myndlitur.cjs + -kerfi.cjs).
+alter table public.skr_kerfi add column if not exists rautt numeric;

@@ -99,7 +99,7 @@ export default function SkyrslaClient() {
   const [villa, setVilla] = useState("");
   const [starfsmenn, setStarfsmenn] = useState<Map<number, string>>(new Map());
   /** Lagnakerfi stálröraþéttinga (skr_kerfi): lesið af lagnateikningum, áætlun. */
-  const [kerfi, setKerfi] = useState<Map<number, { k: string; v: boolean }>>(new Map());
+  const [kerfi, setKerfi] = useState<Map<number, { k: string; v: boolean; m: boolean }>>(new Map());
   /** Lagnateikningar gatakortsins (skr_log) per hæð og fag — sýndar ofan á hæðinni þegar síað er á kerfi. */
   const [log, setLog] = useState<{ haed: string; fag: string; mynd: string }[]>([]);
   /** Kynningarhamur (?kynning=1): engin stjórntæki til breytinga og engin vistun — aðeins síur, kort og prentun. */
@@ -148,11 +148,11 @@ export default function SkyrslaClient() {
           aa.push(...((r.data || []) as Aaetlad[]));
           if (!r.data || r.data.length < 1000) break;
         }
-        const kf = new Map<number, { k: string; v: boolean }>();
+        const kf = new Map<number, { k: string; v: boolean; m: boolean }>();
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_kerfi").select("skraning_id,kerfi,vafi").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
+          const r = await s.from("skr_kerfi").select("skraning_id,kerfi,vafi,uppruni").eq("verk_id", vk.id).order("skraning_id").range(i, i + 999);
           if (r.error) break;   // taflan er viðbót: án hennar virkar skýrslan, aðeins kerfissían vantar
-          for (const q of (r.data || []) as { skraning_id: number; kerfi: string; vafi: boolean }[]) kf.set(q.skraning_id, { k: q.kerfi, v: q.vafi });
+          for (const q of (r.data || []) as { skraning_id: number; kerfi: string; vafi: boolean; uppruni: string }[]) kf.set(q.skraning_id, { k: q.kerfi, v: q.vafi, m: q.uppruni === "mynd" });
           if (!r.data || r.data.length < 1000) break;
         }
         if (!lifir) return;
@@ -250,7 +250,7 @@ export default function SkyrslaClient() {
       if (s.teikning_id != null && aukaTeikn.has(s.teikning_id)) continue;
       const fl = (s.flokkur_id != null && heitiAf.get(s.flokkur_id)) || "", hop = HOPAR.find((x) => x[2].test(fl));
       const kq = kerfi.get(s.id);
-      ut.push({ kerfi: kq ? kq.k : null, kvafi: kq ? kq.v : false, id: s.id, nr: s.ajour_serial, dags: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 10) : null, haed: h.haed, deild: h.deild, hluti: h.hluti, x: Number(h.x_px), y: Number(h.y_px), hop: hop ? hop[0] : null, fl, done: s.stada === "done", man: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 7) : null });
+      ut.push({ kerfi: kq ? kq.k : null, kvafi: kq ? kq.v : false, kmynd: kq ? kq.m : false, id: s.id, nr: s.ajour_serial, dags: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 10) : null, haed: h.haed, deild: h.deild, hluti: h.hluti, x: Number(h.x_px), y: Number(h.y_px), hop: hop ? hop[0] : null, fl, done: s.stada === "done", man: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 7) : null });
     }
     return ut;
   }, [skr, hnit, heitiAf, aukaTeikn, kerfi]);

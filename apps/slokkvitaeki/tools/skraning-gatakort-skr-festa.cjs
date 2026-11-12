@@ -20,7 +20,8 @@ if (!HAED || !URL_ || !KEY || (!AFTUR && (!YF || !LOG))) { console.error('Notkun
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
 async function rest(method, p, body, prefer = 'return=representation') { const r = await fetch(`${URL_}/rest/v1/${p}`, { method, headers: { ...H, Prefer: prefer }, body: body ? JSON.stringify(body) : undefined }); const t = await r.text(); if (!r.ok) throw new Error(`${method} ${p.slice(0, 70)} → ${r.status} ${t.slice(0, 300)}`); return t ? JSON.parse(t) : null; }
 async function allt(p) { let ut = [], fra = 0; for (;;) { const b = await rest('GET', `${p}&limit=1000&offset=${fra}`); ut = ut.concat(b); if (b.length < 1000) break; fra += 1000; } return ut; }
-const hopur = (heiti) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/i.test(heiti) ? 'rafmagn' : /^(Stál|Plast)/i.test(heiti) ? 'ror' : null);
+// Stálrör skiptast eftir kerfi (skr_kerfi): úðakerfi festist aðeins á úðalagnir, önnur stálrör á vatns- og lyfjaloftslagnir (12.11.2026).
+const hopur = (heiti, kerfi) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/i.test(heiti) ? 'rafmagn' : /^Stál/i.test(heiti) ? (kerfi === 'udi' ? 'udi' : kerfi ? 'stal' : 'ror') : /^Plast/i.test(heiti) ? 'ror' : null);
 (async () => {
   const [verk] = await rest('GET', `skr_verk?heiti=eq.${encodeURIComponent('NLSH 5-6. hæð · gatakort')}&select=id`);
   const yf = (await rest('GET', `skr_teikningar?verk_id=eq.${verk.id}&eytt=eq.false&tegund=eq.yfirlit&haed=eq.${HAED}&select=id,heiti`))[0];
@@ -36,11 +37,12 @@ const hopur = (heiti) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/i.test(
   const flokkar = new Map((await rest('GET', `skr_flokkar?or=(verk_id.eq.${verk.id},verk_id.is.null)&select=id,heiti`)).map((f) => [f.id, f.heiti]));
   const flAf = new Map((await allt(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.false&select=id,flokkur_id&order=id`)).map((s) => [s.id, flokkar.get(s.flokkur_id) || '']));
   const hnit = await allt(`skr_haedarhnit?verk_id=eq.${verk.id}&yfirlit_id=eq.${yf.id}&select=skraning_id,x_px,y_px&order=skraning_id`);
+  const kerfi = new Map((await allt(`skr_kerfi?verk_id=eq.${verk.id}&select=skraning_id,kerfi&order=skraning_id`)).map((k) => [k.skraning_id, k.kerfi]));
   // upprunaleg (vörpuð) staða: handvirkt færðir punktar eru látnir í friði; sjálfvirkt færðir reiknast aftur frá fra_x/fra_y
   const inn = []; let handv = 0;
   for (const h of hnit) {
     const f = fAf.get(h.skraning_id); if (f && f.uppruni !== 'sjalfvirkt') { handv++; continue; }
-    const hp = hopur(flAf.get(h.skraning_id) || ''); if (!hp) continue;
+    const hp = hopur(flAf.get(h.skraning_id) || '', kerfi.get(h.skraning_id)); if (!hp) continue;
     inn.push({ id: h.skraning_id, x: f && f.fra_x != null ? +f.fra_x : +h.x_px, y: f && f.fra_y != null ? +f.fra_y : +h.y_px, hopur: hp });
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'skr-festa-')), fInn = path.join(tmp, 'inn.json'), fUt = path.join(tmp, 'ut.json');

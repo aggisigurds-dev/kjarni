@@ -14,7 +14,8 @@ from PIL import Image, ImageFilter, ImageDraw
 Image.MAX_IMAGE_PIXELS = None
 YF, LOG, H, INN, UT, R = sys.argv[1], sys.argv[2], sys.argv[3].lower(), sys.argv[4], sys.argv[5], float(sys.argv[6])
 R2, HLID = 20.0, 5.0
-LAGSKRAR = {'loft': ['loftraesing'], 'ror': ['vatn-litur', 'vatnslagnir', 'vatnsudi', 'lyfjaloft'], 'rafmagn': ['raflagnaleidir']}
+# udi = stálrör úðakerfis (greind af rauðum lit á ljósmynd): aðeins úðalagnir. stal = önnur stálrör: vatn, hiti og lyfjaloft, ekki úðalagnir.
+LAGSKRAR = {'loft': ['loftraesing'], 'ror': ['vatn-litur', 'vatnslagnir', 'vatnsudi', 'lyfjaloft'], 'udi': ['vatnsudi'], 'stal': ['vatn-litur', 'vatnslagnir', 'lyfjaloft'], 'rafmagn': ['raflagnaleidir']}
 grunnur = Image.open(YF).convert('RGB'); W, Hh = grunnur.size
 g = np.asarray(grunnur, dtype=np.int16)
 rautt = (g[..., 0] > 190) & (g[..., 1] < 100) & (g[..., 2] < 100)
@@ -40,7 +41,7 @@ def klasaleit(kross):
         if c >= 4: kl.append((sx / c, sy / c))
     return np.array(kl, dtype=float).reshape(-1, 2)
 punktar = json.load(open(INN, encoding='utf-8')); ut = []; yfirlit = {}
-for hopur in ('loft', 'ror', 'rafmagn'):
+for hopur in LAGSKRAR:
     pp = [p for p in punktar if p['hopur'] == hopur]
     if not pp: continue
     a, skrar = lag(hopur)
