@@ -176,6 +176,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Ekki til enn:** sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (sama aðferð og `-miro-festa.py` fyrir merki).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
+- **4. hæð = gólf 5. hæðar (Agnar 12.11.2026):** þéttingar skráðar á 4H eru í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð, og teljast
+  því HLUTI af verkinu á 5. og 6. hæð (ekki sleppa þeim úr skýrslu til eftirlits). Skýrslan sýnir „Gólf 5. hæðar“ (`haedHeiti`);
+  lyklarnir í gögnunum (4H/5H/6H) eru óbreyttir. Milliloft á 5H er á sama hátt gólf 6. hæðar.
+- **Til hvers skýrslan er:** svar við beiðni COWI (Arnar Ingi Þórsson, eftirlit) um gögn vegna yfirferðar brunaþéttinga á 5. og 6. hæð,
+  framsend af Hilmi Erni Stefánssyni hjá ÞG Verk 10.11.2026 (email_digest 75261): staða verks og yfirlit yfir svæði + samantekt
+  í stað lesaðgangs að Ajour. Vörur, vottanir og námskeiðsgögn eru EKKI í kerfinu — Agnar leggur þau til.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

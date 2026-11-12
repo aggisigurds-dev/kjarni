@@ -30,6 +30,10 @@ const GEO: Record<string, [number, number]> = { S1: [0.85, 12.92], S2: [23.23, 1
 const BIL: [number, number][] = [[2.3, 26.5], [28.8, 42.36], [71.16, 27.09]];
 const num = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const pros = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
+/** Heiti hæðar í skýrslunni. 4. hæð er GÓLF 5. hæðar (Agnar 12.11.2026): þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð —
+ *  hún er því hluti af verkinu á 5. og 6. hæð, ekki sér hæð. Lyklarnir í gögnunum (4H/5H/6H) eru óbreyttir. */
+export const haedHeiti = (h: string) => (h === "4H" ? "Gólf 5. hæðar" : h.replace("H", ". hæð"));
+export const haedUndir = (h: string) => (h === "4H" ? "unnið neðan frá á 4. hæð" : "");
 type Stada = "allt" | "done" | "opid" | "eftir";
 type Reitur = { done: number; open: number; kl: number; m: number | null };
 const TOMUR: Reitur = { done: 0, open: 0, kl: 0, m: null };
@@ -149,7 +153,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
           {([["allt", "Allt"], ["done", "Klárað"], ["opid", "Opið"], ["eftir", "Eftir (áætlað, óskráð)"]] as const).map(([k, nafn]) => <button key={k} type="button" className={stada === k ? "on" : ""} onClick={() => setStada(k)}>{nafn}</button>)}
         </div>
         <div className="sk-sia-rod"><span>Hæð og deild</span>
-          {HAEDIR.filter((h) => yfirlit.some((y) => y.haed === h)).map((h) => <button key={h} type="button" className={afHaed[h] ? "" : "on"} aria-pressed={!afHaed[h]} onClick={() => setAfHaed((x) => ({ ...x, [h]: !x[h] }))}>{h.replace("H", ". hæð")}</button>)}
+          {HAEDIR.filter((h) => yfirlit.some((y) => y.haed === h)).map((h) => <button key={h} type="button" className={afHaed[h] ? "" : "on"} aria-pressed={!afHaed[h]} onClick={() => setAfHaed((x) => ({ ...x, [h]: !x[h] }))}>{haedHeiti(h)}</button>)}
           <i />
           {DEILDIR.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}
         </div>
@@ -177,7 +181,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
         const eDeild = (d: string) => eH.filter((e) => e.deild === d).reduce((a, e) => a + e.n, 0);
         return (
           <div key={haed} className="sk-hk-haed">
-            <h3>{haed.replace("H", ". hæð")} <span>{ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}{ha.open ? ` · ${num(ha.open)} opið` : ""}{eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}</span></h3>
+            <h3>{haedHeiti(haed)} <span>{haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}{ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}{ha.open ? ` · ${num(ha.open)} opið` : ""}{eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}</span></h3>
             <div className="sk-hk-flogg">
               {syndarDeildir.map((d) => { const r = reiturD(haed, d), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return <div key={d} style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, borderColor: c[1], color: c[2], background: c[0] }}><b>{d}{p != null ? ` · ${p} %` : ""}</b><small>{texti(r)}</small></div>; })}
             </div>
@@ -207,7 +211,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
         );
       })}
       <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />ekkert markmið</p>
-      <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Markmið hluta fylgir sömu reglu og deildin; föst markmið á deild (milliloft, rafmagn) skiptast jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá markmiði deildar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
+      <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Markmið hluta fylgir sömu reglu og deildin; föst markmið á deild (milliloft, rafmagn) skiptast jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá markmiði deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
     </div>
   );
 }

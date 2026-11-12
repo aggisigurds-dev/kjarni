@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sb } from "../lib/sb";
-import Haedir, { type HkPunktur, type HkEftir, type HkYfirlit } from "./Haedir";
+import Haedir, { haedHeiti, haedUndir, type HkPunktur, type HkEftir, type HkYfirlit } from "./Haedir";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
@@ -342,10 +342,10 @@ export default function SkyrslaClient() {
       </div>}
       {synaKafla("spjold") && <div className="sk-haedaspjold">
         {haedaspjold.map((h) => <div key={h.haed}>
-          <div><span>{h.haed.replace("H", ". hæð")}</span><em className={h.p >= 95 ? "ok" : h.p >= 75 ? "vinna" : "eftir"}>{h.p >= 95 ? "Lokið" : "Í vinnslu"}</em></div>
+          <div><span>{haedHeiti(h.haed)}</span><em className={h.p >= 95 ? "ok" : h.p >= 75 ? "vinna" : "eftir"}>{h.p >= 95 ? "Lokið" : "Í vinnslu"}</em></div>
           <b>{h.p} %</b>
           <i><u style={{ width: `${Math.min(100, h.p)}%` }} className={h.p >= 95 ? "ok" : ""} /></i>
-          <small>{num(h.klar)} af {num(h.mark)} stökum verkum</small>
+          <small>{num(h.klar)} af {num(h.mark)} stökum verkum{haedUndir(h.haed) ? ` · ${haedUndir(h.haed)}` : ""}</small>
         </div>)}
       </div>}
 
@@ -378,7 +378,7 @@ export default function SkyrslaClient() {
           const hs = summa(r.deildir.flatMap((d) => d.hopar));
           return (
             <div key={r.haed} className="sk-haed">
-              <h3>{r.haed.replace("H", ". hæð")} <span>{num(hs.klar)} af {num(hs.mark)} · {pros(hs.klar, hs.mark)} %</span></h3>
+              <h3>{haedHeiti(r.haed)} <span>{haedUndir(r.haed) ? `${haedUndir(r.haed)} · ` : ""}{num(hs.klar)} af {num(hs.mark)} · {pros(hs.klar, hs.mark)} %</span></h3>
               <table className="sk-tafla">
                 <thead><tr><th>Deild</th><th>Flokkur</th><th>Skráð klárað</th><th>Opið</th><th>Klárað</th><th>Markmið</th><th>%</th><th className="sk-stikud">Staða</th><th>Athugasemd</th></tr></thead>
                 <tbody>
