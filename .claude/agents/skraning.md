@@ -243,6 +243,9 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   Mælt 12.11: 5.664 stálrör → úði 743, vatn og hiti 4.511, lyfjaloft 410; 2.051 óviss. Vatnslagið er teiknað þykkt og dregur að sér punkta,
   svo úðakerfið er líklega VANTALIÐ. Sían „Stálrör eftir kerfi“ sýnir aðeins fjölda (engin áætlun per kerfi) og er merkt „áætlað af
   lagnateikningu“. Aldrei kynna kerfistölur sem skráðar staðreyndir.
+  Stærðarregla (Agnar 12.11.2026: úðakerfið „er almennt í stál 50 mm til stál 75 mm“): aðeins Stál Ø40-50 og Ø75-110 geta orðið 'udi'.
+  Eftir regluna: úði 477 (6H 286, 5H 191), vatn og hiti 4.726, lyfjaloft 456. Þegar kerfi er valið í síunni birtist lagnateikning þess
+  (skr_log, fag sprinkler/vatn/gas; ) ofan á hæðinni og grunnteikningin dofnar ().
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

@@ -38,7 +38,7 @@ def fjarl(a, x, y):
 
 punktar = json.load(open(INN, encoding='utf-8')); ut = []
 for p in punktar:
-    ds = sorted([(d, k) for k in LAG for d in [fjarl(grimur[k], p['x'], p['y'])] if d is not None])
+    ds = sorted([(d, k) for k in LAG if k != 'udi' or p.get('udi', True) for d in [fjarl(grimur[k], p['x'], p['y'])] if d is not None])   # udi aðeins í stáli 50–75 mm
     if not ds: ut.append({'id': p['id'], 'kerfi': 'oflokkad', 'd': None, 'k2': None, 'd2': None, 'vafi': True}); continue
     d, k = ds[0]; d2, k2 = ds[1] if len(ds) > 1 else (None, None)
     ut.append({'id': p['id'], 'kerfi': k, 'd': round(d, 1), 'k2': k2, 'd2': round(d2, 1) if d2 is not None else None, 'vafi': bool(d > 15 or (d2 is not None and d2 - d < 6))})

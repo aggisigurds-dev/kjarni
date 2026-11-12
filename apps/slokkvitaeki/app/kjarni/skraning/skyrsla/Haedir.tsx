@@ -23,6 +23,8 @@ type Props = {
   hopar: [string, string][];
   /** Nöfn starfsmanna (skr_starfsmenn) — sýnd á skráningarspjaldinu. */
   starfsmenn: Map<number, string>;
+  /** Lagnateikningar (skr_log) per hæð og fag: sýndar ofan á hæðinni þegar síað er á kerfi stálröra. */
+  log?: { haed: string; fag: string; mynd: string }[];
   /** Opnar skráningar í Ajour án teikningar. Ekki birt: þetta eru færslur sem Brunahólf eyðir (Agnar 12.11.2026), ekki óunnið verk. */
   opidAnStadar?: number;
   /** Markmið hóps á deild (með leiðréttingum úr töflunni) og á hluta deildar; null = ekkert markmið. */
@@ -37,6 +39,8 @@ const GEO: Record<string, [number, number]> = { S1: [0.85, 12.92], S2: [23.23, 1
 const BIL: [number, number][] = [[2.3, 26.5], [28.8, 42.36], [71.16, 27.09]];
 /** Lagnakerfi stálröra (skr_kerfi): lesið af lagnateikningum eftir nálægð — áætlun, ekki skráð í Ajour. */
 const KERFI: [string, string][] = [["udi", "Úðakerfi"], ["vatn", "Vatn og hiti"], ["lyfjaloft", "Lyfjaloft"]];
+/** Fag lagnateikningar (skr_log.fag) fyrir hvert kerfi. */
+const KERFI_FAG: Record<string, string> = { udi: "sprinkler", vatn: "vatn", lyfjaloft: "gas" };
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 /** Litir hæðanna í framvinduritinu — sannprófaðir með validate_palette.js (litblinduaðskilnaður ΔE 12,8; ljós flötur). Fylgja hæðinni, ekki röðinni. */
 const LITUR_H: Record<string, string> = { "6H": "#1d4f91", "5H": "#f07f1b", "4H": "#2a9d8f" };
@@ -165,12 +169,12 @@ function Framvinda({ punktar, haedir, fra, til, onVelja }: { punktar: HkPunktur[
 }
 
 /** Ein hæð: deildaflögg, kort með aðdrætti og færslu, smellanlegir punktar, skráningarspjald og tafla. */
-function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH, texti, haus, valinn, nanar, starfsmenn, onVelja, fokus, stor, byrjunDeild, onOpna, onMynd }: {
+function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH, texti, haus, valinn, nanar, starfsmenn, onVelja, fokus, stor, byrjunDeild, onOpna, onMynd, lagmyndir }: {
   haed: string; y: HkYfirlit; punktar: HkPunktur[]; eftir: HkEftir[]; stada: Stada; deildir: string[];
   reiturD: (haed: string, deild: string) => Reitur; reiturH: (haed: string, deild: string, i: number) => Reitur; texti: (r: Reitur) => string; haus: string;
   valinn: HkPunktur | null; nanar: Nanar | null; starfsmenn: Map<number, string>; onVelja: (p: HkPunktur | null) => void; fokus: { id: number; t: number } | null;
   /** stor = stóra sýnin (yfir allan skjáinn): engin tafla, glugginn fyllir plássið. byrjunDeild = deild sem sýnin opnast á. onOpna = opna stóru sýnina. */
-  stor?: boolean; byrjunDeild?: string | null; onOpna?: (deild: string | null) => void; onMynd: (slodir: string[], i: number) => void;
+  stor?: boolean; byrjunDeild?: string | null; onOpna?: (deild: string | null) => void; onMynd: (slodir: string[], i: number) => void; lagmyndir: string[];
 }) {
   const box = useRef<HTMLDivElement | null>(null);
   const [v, setV] = useState<Syn>({ z: 1, fx: 0, fy: 0 });
@@ -225,7 +229,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
         {deildir.map((d) => { const r = reiturD(haed, d), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return <button key={d} type="button" className={fDeild === d ? "on" : ""} title={!stor ? `Opna deild ${d} í stórri sýn` : fDeild === d ? "Sýna alla hæðina" : `Stækka deild ${d}`} onClick={() => aDeild(d)} style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, borderColor: c[1], color: c[2], background: c[0] }}><b>Deild {d}{p != null ? ` · ${p} %` : ""}</b><small>{texti(r)}</small>{!stor && onOpna && <Gler />}</button>; })}
       </div>
       <div className="sk-hk-rammi">
-      <div className={`sk-hk-mynd${v.z > 1 ? " ad" : ""}`} ref={box} style={stor ? undefined : { aspectRatio: `${y.w} / ${y.h}` }}
+      <div className={`sk-hk-mynd${v.z > 1 ? " ad" : ""}${lagmyndir.length ? " medlag" : ""}`} ref={box} style={stor ? undefined : { aspectRatio: `${y.w} / ${y.h}` }}
         onPointerDown={(e) => { if (e.button !== 0) return; drag.current = { x: e.clientX, y: e.clientY, fx: v.fx, fy: v.fy, hreyft: false }; if (v.z > 1) e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => { const d = drag.current; if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; if (!d.hreyft && Math.abs(dx) + Math.abs(dy) < 5) return; d.hreyft = true; if (v.z <= 1) return; const q = e.currentTarget.getBoundingClientRect(); setV((o) => klemma(o.z, d.fx + dx / q.width, d.fy + dy / ((q.width * y.h) / y.w), r)); }}
         onPointerUp={(e) => { const d = drag.current; drag.current = null; if (!d || d.hreyft) return; velja(e); }}
@@ -233,6 +237,10 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
         onDoubleClick={(e) => { const { cx, cy } = hnit(e); zoomVid(2, cx, cy); }}>
         <div className="sk-hk-lag" style={{ aspectRatio: `${y.w} / ${y.h}`, transform: `translate(${v.fx * 100}%, ${v.fy * 100}%) scale(${v.z})`, ["--z" as string]: v.z }}>
           {y.mynd && <img src={publicUrl(y.mynd)} alt={`Yfirlitsteikning ${haedHeiti(haed)}`} draggable={false} />}
+          {lagmyndir.map((s) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={s} className="sk-hk-lagmynd" src={publicUrl(s)} alt="" draggable={false} />
+          ))}
           <Punktalag w={y.w} h={y.h} punktar={punktar} eftir={eftir} stada={stada} z={zT} />
           {deildir.flatMap((d) => HLUTAR.map(([s, nafn], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return (
             <div key={d + s} className="sk-hk-hluti" style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, top: `${BIL[i][0]}%`, height: `${BIL[i][1]}%`, borderColor: c[1], background: c[0] }} title={`${haedHeiti(haed)} ${d} ${nafn}: ${texti(r)}${r.open ? `, ${r.open} opið` : ""}`}>
@@ -287,7 +295,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
   );
 }
 
-export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, markDeild, markHluta }: Props) {
+export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log, markDeild, markHluta }: Props) {
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
@@ -397,6 +405,8 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
     fra ? `tímabil ${manTexti(fra)} – ${til ? manTexti(til) : "…"}` : til ? `staðan í lok ${manTexti(til)}` : "",
   ].filter(Boolean).join(" · ");
   const texti = (r: Reitur) => (r.m != null ? `${num(r.kl)} / ${num(r.m)}` : `${num(r.done)} klárað`);
+  /** Lagnateikningar valinna kerfa á hæðinni (tómt nema síað sé á kerfi). */
+  const lagAf = (haed: string) => (kerfiVal.size && log ? log.filter((l) => l.haed === haed && [...kerfiVal].some((k) => KERFI_FAG[k] === l.fag)).map((l) => l.mynd) : []);
   const veljaManud = (m: string) => { if (til === m && !fra) setTil(""); else { setFra(""); setTil(m); } };
   const leita = () => {
     const n = Number(leit.trim()); if (!leit.trim() || !Number.isFinite(n)) { setLeitSvar(""); return; }
@@ -423,7 +433,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
           <div className="sk-sia-rod"><span>Stálrör eftir kerfi</span>
             <button type="button" className={kerfiVal.size ? "" : "on"} onClick={() => setKerfiVal(new Set())}>Öll</button>
             {KERFI.map(([k, nafn]) => <button key={k} type="button" className={kerfiVal.has(k) ? "on" : ""} aria-pressed={kerfiVal.has(k)} onClick={() => setKerfiVal((s) => skipta(s, k))}>{nafn} <small>{num(kerfiTal.m.get(k) || 0)}</small></button>)}
-            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Kerfið er lesið af lagnateikningum eftir því hvaða lögn liggur næst punktinum. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>áætlað af lagnateikningu</em>
+            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Kerfið er lesið af lagnateikningum eftir því hvaða lögn liggur næst punktinum; úðakerfi kemur aðeins til greina í stáli Ø40-50 og Ø75-110. Þegar kerfi er valið birtist lagnateikning þess á hæðinni. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>áætlað af lagnateikningu</em>
           </div>
         )}
         <div className="sk-sia-rod"><span>Staða</span>
@@ -467,7 +477,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
         const y = yfirlit.find((q) => q.haed === haed)!; const ha = haedAlls(haed);
         const pH = siadir.filter((p) => p.haed === haed), eH = eftirSiad.filter((e) => e.haed === haed);
         if (ha.done + ha.open === 0 && ha.m == null && eH.length === 0) return null;   // sían skilur ekkert eftir á þessari hæð
-        return <Haedarkort key={haed} onOpna={(d) => setSkodari({ haed, deild: d, t: Date.now() })} haed={haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus={hausAf(haed)} valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} onMynd={onMynd} />;
+        return <Haedarkort key={haed} onOpna={(d) => setSkodari({ haed, deild: d, t: Date.now() })} haed={haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus={hausAf(haed)} valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} onMynd={onMynd} lagmyndir={lagAf(haed)} />;
       })}
       {skodari && (() => {
         const y = yfirlit.find((q) => q.haed === skodari.haed); if (!y) return null;
@@ -491,7 +501,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
                 <span>{hausAf(skodari.haed)}</span>
                 <button type="button" className="sk-sko-loka" onClick={() => setSkodari(null)}>Loka</button>
               </div>
-              <Haedarkort key={`stor-${skodari.haed}-${skodari.t}`} stor byrjunDeild={skodari.deild} haed={skodari.haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus="" valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} onMynd={onMynd} />
+              <Haedarkort key={`stor-${skodari.haed}-${skodari.t}`} stor byrjunDeild={skodari.deild} haed={skodari.haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus="" valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} onMynd={onMynd} lagmyndir={lagAf(skodari.haed)} />
             </div>
           </div>
         );

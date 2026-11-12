@@ -100,6 +100,8 @@ export default function SkyrslaClient() {
   const [starfsmenn, setStarfsmenn] = useState<Map<number, string>>(new Map());
   /** Lagnakerfi stálröraþéttinga (skr_kerfi): lesið af lagnateikningum, áætlun. */
   const [kerfi, setKerfi] = useState<Map<number, { k: string; v: boolean }>>(new Map());
+  /** Lagnateikningar gatakortsins (skr_log) per hæð og fag — sýndar ofan á hæðinni þegar síað er á kerfi. */
+  const [log, setLog] = useState<{ haed: string; fag: string; mynd: string }[]>([]);
   /** Kynningarhamur (?kynning=1): engin stjórntæki til breytinga og engin vistun — aðeins síur, kort og prentun. */
   const [les, setLes] = useState(false);
   useEffect(() => { setLes(new URLSearchParams(window.location.search).has("kynning")); }, []);
@@ -112,11 +114,12 @@ export default function SkyrslaClient() {
         const v = vid ? await s.from("skr_verk").select("id,heiti").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
         if (v.error || !v.data) throw new Error(v.error?.message || "Ekkert verk fannst");
         const vk = v.data as Verk;
-        const [f, sk, tk, sm] = await Promise.all([
+        const [f, sk, tk, sm, lg] = await Promise.all([
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_skyrslur").select("id,gogn").eq("verk_id", vk.id).eq("eytt", false).order("id", { ascending: false }).limit(1),
           s.from("skr_teikningar").select("id,heiti,tegund,haed,mynd_path,breidd_px,haed_px").eq("verk_id", vk.id).eq("eytt", false),
           s.from("skr_starfsmenn").select("id,nafn"),
+          s.from("skr_log").select("teikning_id,fag,mynd_path").eq("verk_id", vk.id).eq("eytt", false),
         ]);
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = [];
@@ -154,6 +157,7 @@ export default function SkyrslaClient() {
         }
         if (!lifir) return;
         setHnit(hn); setAaetlud(aa); setKerfi(kf);
+        { const th = new Map(((tk.data || []) as { id: number; haed?: string | null }[]).map((t) => [t.id, t.haed || ""])); setLog(((lg.data || []) as { teikning_id: number; fag: string; mynd_path: string | null }[]).filter((l) => l.mynd_path && th.get(l.teikning_id)).map((l) => ({ haed: th.get(l.teikning_id) as string, fag: l.fag, mynd: l.mynd_path as string }))); }
         setStarfsmenn(new Map(((sm.data || []) as { id: number; nafn: string }[]).map((x) => [x.id, x.nafn] as [number, string])));
         setYfirlit(((tk.data || []) as { id: number; tegund?: string; haed?: string | null; mynd_path?: string | null; breidd_px?: number | null; haed_px?: number | null }[]).filter((t) => t.tegund === "yfirlit" && t.haed && t.breidd_px && t.haed_px).map((t) => ({ id: t.id, haed: t.haed as string, mynd: t.mynd_path ?? null, w: Number(t.breidd_px), h: Number(t.haed_px) })));
         setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt);
@@ -406,7 +410,7 @@ export default function SkyrslaClient() {
       {synaKafla("kort") && yfirlit.length > 0 && (
         <section id="k-haedir">
           <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
-          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} starfsmenn={starfsmenn} opidAnStadar={taln.utan - taln.utanDone} markDeild={markDeild} markHluta={markmidHluta} />
+          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone} markDeild={markDeild} markHluta={markmidHluta} />
         </section>
       )}
 

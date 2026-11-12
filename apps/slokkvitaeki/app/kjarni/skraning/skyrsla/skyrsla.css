@@ -437,3 +437,8 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 
 .sk-sia-rod em.sk-sia-ath { font-size: 11.5px; font-weight: 500; color: #5a6882; border-bottom: 1px dotted #9aa7bd; cursor: help; }
 .sk-hk-kort dd small { font-weight: 400; color: #5a6882; }
+
+/* lagnateikning valins kerfis ofan á hæðinni: grunnteikningin dofnar svo lagnirnar verði áberandi */
+.sk-hk-mynd.medlag .sk-hk-lag > img:not(.sk-hk-lagmynd) { opacity: .42; }
+.sk-hk-mynd .sk-hk-lagmynd { opacity: 1; pointer-events: none; filter: saturate(1.5) contrast(1.15) drop-shadow(0 0 calc(1.2px / var(--z, 1)) rgba(2, 25, 60, .55)); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.sk-hk-mynd.medlag .sk-hk-hluti { background: transparent !important; }
