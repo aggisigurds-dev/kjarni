@@ -78,6 +78,14 @@
 .gk-kross::after { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
 .gk-kross i { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 2px solid #dc2626; background: rgba(255, 255, 255, .7); z-index: 1; }
 .gk.snerti .gk-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--aj-panel); border-top: 1px solid #8a9199; }
+/* Síðan sjálf má ekki stækka (klípa á hnappi eða haus stækkaði allt og neðri stikan hvarf af skjánum): kortið hefur eigin stækkun. */
+.gk.snerti { touch-action: pan-x pan-y; }
+.gk-bar-skyring { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; font-size: 12px; line-height: 1.5; color: var(--aj-ink); }
+.gk-bar-skyring span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.gk-bar-skyring i { display: inline-block; flex: none; width: 11px; height: 11px; border-radius: 50%; }
+.gk-bar-skyring i.op { background: #fff; border: 2px solid #dc2626; }
+.gk-bar-skyring i.ef { background: #dc2626; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #dc2626; }
+.gk-bar-skyring i.lg { width: 16px; height: 6px; border-radius: 2px; background: #5fd6c9; }
 .gk-bar-rod { display: flex; gap: 6px; align-items: stretch; min-width: 0; }
 .gk-bar-hopur { display: flex; flex: 1 1 0; min-width: 0; border: 1px solid #8a9199; border-radius: 8px; overflow: hidden; background: #fff; }
 .gk-bar-hopur:first-child { flex: 3 1 0; } .gk-bar-hopur + .gk-bar-hopur { flex: 4 1 0; }
@@ -110,7 +118,7 @@
 @media (max-width: 860px) {
   /* Hausinn má EKKI vera breiðari en skjárinn: annars stækkar útlitsglugginn í síma (694 px í stað 412) og fastsett skúffan lendir neðan við skjáinn.
    * Valmyndin skrunar þá lárétt. Aðeins á gatakortssíðunni (:has), hinar skráningarsíðurnar eru óbreyttar. */
-  .aj:has(> .gk) { overflow: hidden; }
+  .aj:has(> .gk) { overflow: hidden; touch-action: pan-x pan-y; }
   .aj:has(> .gk) .aj-top { overflow: hidden; }
   .aj:has(> .gk) .aj-logo { flex: none; }
   .aj:has(> .gk) .aj-nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }

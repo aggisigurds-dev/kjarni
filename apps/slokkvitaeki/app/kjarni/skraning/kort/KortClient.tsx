@@ -129,8 +129,14 @@ export default function KortClient() {
   /** Snertiskjár eða mjór gluggi: neðri stika með stórum hnöppum, krosshár þegar punktur er settur, og punktur er VALINN áður en hann er dreginn. */
   const [snerti, setSnerti] = useState(false);
   const snertiRef = useRef(false);
+  /** Snertiskjár: áætluð göt sem EIGA skráningu (grænir og gulir tíglar) eru falin nema beðið sé um þau — aðeins rauðir punktar („eftir“) sjást, annars verður kortið ólæsilegt. */
+  const [synaParud, setSynaParud] = useState(false);
+  const fyrstaSyn = useRef(true);
   useEffect(() => {
-    const a = window.matchMedia("(pointer: coarse)"), b = window.matchMedia("(max-width: 860px)"), f = () => { snertiRef.current = a.matches || b.matches; setSnerti(snertiRef.current); };
+    const a = window.matchMedia("(pointer: coarse)"), b = window.matchMedia("(max-width: 860px)"), f = () => {
+      snertiRef.current = a.matches || b.matches; setSnerti(snertiRef.current);
+      if (fyrstaSyn.current) { fyrstaSyn.current = false; if (snertiRef.current) setSynFag("loftraesting"); }   // sími opnast í einni fagsýn, ekki með öllum lögum og táknum í einu
+    };
     f(); a.addEventListener("change", f); b.addEventListener("change", f);
     return () => { a.removeEventListener("change", f); b.removeEventListener("change", f); };
   }, []);
@@ -239,7 +245,7 @@ export default function KortClient() {
     if (stada === "eftir") return aaEftir(a);
     return true;
   }, [synV, aaStada, stada]);
-  const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti]), [aaetludBlads, aaStodusia, afTakn, aaTakn]);
+  const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti] && (!snerti || synaParud || !a.parad || a.parad.stada === "vantar")), [aaetludBlads, aaStodusia, afTakn, aaTakn, snerti, synaParud]);
   const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV]);
   const taknTal = useMemo(() => {
     const m = new Map<string, { t: Takn; n: number }>();
@@ -553,7 +559,8 @@ export default function KortClient() {
           <h2>Lög</h2>
           <label className="gk-rod">Sýn eftir fagi<select value={synFag} onChange={(e) => setSynFag(e.target.value)}><option value="">Allt, eins og lögin eru stillt</option>{SYNIR.map((x) => <option key={x[0]} value={x[0]}>{x[1]}</option>)}</select></label>
           <label className="gk-lag"><input type="checkbox" checked={synaSkr} onChange={(e) => setSynaSkr(e.target.checked)} /><span>Skráningar úr Ajour</span><small>{num(syndir.length)}</small></label>
-          <label className="gk-lag"><input type="checkbox" checked={synaAaetlud} onChange={(e) => setSynaAaetlud(e.target.checked)} /><span>Áætluð göt</span><small>{num(aaetludSynar.length)}</small></label>
+          <label className="gk-lag"><input type="checkbox" checked={synaAaetlud} onChange={(e) => setSynaAaetlud(e.target.checked)} /><span>{snerti && !synaParud ? "Eftir: rauðir punktar" : "Áætluð göt"}</span><small>{num(aaetludSynar.length)}</small></label>
+          {snerti && <label className="gk-lag"><input type="checkbox" checked={synaParud} onChange={(e) => setSynaParud(e.target.checked)} /><span>Sýna líka áætluð göt sem eiga skráningu</span></label>}
           {logSynar.map((l) => (
             <div key={l.id} className="gk-lag gk-lag-mynd">
               <label><input type="checkbox" checked={lagSest(l)} disabled={!!synV} onChange={(e) => (l.lan ? setLanSyn((x) => ({ ...x, [l.id]: e.target.checked })) : breytaLagi(l, { synilegt: e.target.checked }))} /><i style={{ background: fagLitur(l.fag) }} /><span title={l.heiti}>{fagHeiti(l.fag)} · {l.heiti}</span></label>
@@ -669,6 +676,12 @@ export default function KortClient() {
               <p>Færðu teikninguna þar til krossinn er á staðnum. Rauður punktur telst sem „Eftir“ í stöðuskýrslunni.</p>
             </div>
           )}
+          <p className="gk-bar-skyring">
+            <span>{taknTal[0] ? <TaknSvg t={taknTal[0].t} /> : null}Skráð í Ajour</span>
+            <span><i className="op" />Opin skráning</span>
+            <span><i className="ef" />Eftir, óskráð</span>
+            {synV && logSynar.some((l) => synV[2].includes(l.fag)) && <span><i className="lg" />{synV[1]} á teikningu</span>}
+          </p>
           <div className="gk-bar-rod">
             <div className="gk-bar-hopur" role="group" aria-label="Hæð">{yfirlit.map((t) => <button key={t.id} type="button" className={syn === t.id ? "on" : ""} aria-pressed={syn === t.id} onClick={() => { setSyn(t.id); setValinn(null); }}>{t.haed || t.heiti}</button>)}</div>
             {teikning.tegund === "yfirlit" && <div className="gk-bar-hopur" role="group" aria-label="Fara á deild">{["S1", "S2", "S4", "S5"].map((d) => <button key={d} type="button" onClick={() => faraADeild(d)} aria-label={`Fara á deild ${d}`}>{d}</button>)}</div>}

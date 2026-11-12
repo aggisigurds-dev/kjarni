@@ -194,6 +194,11 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Gildrur:** (1) hausinn `.aj-top` var breiðari en síminn → útlitsglugginn varð 694 px og fastsett skúffa lenti neðan við skjá; á gatakortssíðunni
   skrunar valmyndin nú lárétt (`.aj:has(> .gk)`). (2) Sími: mest 24 skarpar flísar í ramma (`FLISA_THAK_SNERTI`), annars grófa myndin — hver flís er
   ~15 MB afkóðuð. (3) Striginn breytir um stærð þegar setja-spjaldið opnast: `ResizeObserver` teiknar aftur.
+- **Einföldun eftir fyrstu prófun Agnars („gríðarlega ruglingslegt“, 12.11.2026):** (1) síðan var stækkuð tvöfalt í vafranum og neðri stikan því utan
+  skjás → stækkun síðunnar er læst á gatakortinu (`viewport` í `kort/page.tsx`: maximumScale 1, userScalable false; `touch-action: pan-x pan-y`),
+  kortið hefur eigin stækkun. (2) Í síma sjást aðeins rauðir punktar („eftir“) af áætluðum götum; grænir og gulir tíglar (göt sem eiga skráningu) eru
+  faldir nema hakað sé við „Sýna líka áætluð göt sem eiga skráningu“ í skúffunni (`synaParud`). (3) Síminn opnast í sýninni Loftræsting, ekki með öllum
+  lögum. (4) Skýringarlína ofan við hnappana (`.gk-bar-skyring`): Skráð í Ajour · Opin skráning · Eftir, óskráð · lag fagsins.
 - **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`

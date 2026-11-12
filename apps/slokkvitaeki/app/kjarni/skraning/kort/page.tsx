@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import KortClient from "./KortClient";
 import "../skraning.css";
 import "./kort.css";
@@ -7,6 +7,10 @@ export const metadata: Metadata = {
   title: "Skráning — gatakort",
   description: "Gatakort: skráningar á brunayfirlitsteikningu með lögum (fagteikningar, áætluð göt) og síum eftir deild, tegund, stöðu, starfsmanni, tímabili og lagfæringum.",
 };
+
+/* Kortið hefur eigin stækkun (klípa, + og −). Stækkun síðunnar sjálfrar er læst: annars stækkar klípa á hnappi eða haus alla síðuna
+ * og neðri stikan í símanum hverfur af skjánum (Agnar 12.11.2026). viewportFit: cover svo stikan fái öryggisbil neðst á síma. */
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false, viewportFit: "cover" };
 
 export default function KortPage() {
   return (
