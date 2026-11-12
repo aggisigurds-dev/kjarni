@@ -680,6 +680,7 @@ export default function KortClient() {
             <span>{taknTal[0] ? <TaknSvg t={taknTal[0].t} /> : null}Skráð í Ajour</span>
             <span><i className="op" />Opin skráning</span>
             <span><i className="ef" />Eftir, óskráð</span>
+            {syndir.some((p) => p.s.lagf) && <span><i className="lf" />Lagfæring</span>}
             {synV && logSynar.some((l) => synV[2].includes(l.fag)) && <span><i className="lg" />{synV[1]} á teikningu</span>}
           </p>
           <div className="gk-bar-rod">
