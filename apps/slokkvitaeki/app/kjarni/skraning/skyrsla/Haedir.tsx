@@ -4,20 +4,25 @@
  * Hver hæð er sýnd með ÖLLUM skráningum á sínum stað (sýnin skr_haedarhnit: staða á yfirlitsblaðinu, færðir punktar ráða),
  * hver deild skipt í Norðurhlið / Center / Suðurhlið með stöðulit og prósentu, og tafla með sömu tölum undir.
  * Síurnar (flokkur, stærð, staða, deild, hæð, tímabil) gilda um kortið, hlutana og töflurnar í þessum kafla.
- * Prósenta er aðeins sýnd þegar markmið er skilgreint fyrir það sem er síað: engin stærðarsía og ekkert tímabil.
+ * Prósenta er aðeins sýnd þegar markmið er skilgreint fyrir það sem er síað: engin stærðarsía og enginn „Frá“-mánuður.
+ * Gagnvirkt (12.11.2026, Agnar: „geta sýnt nákvæmlega það sem maður vill sjá“): aðdráttur og færsla á hverri hæð, smellur á punkt
+ * sýnir skráninguna (númer, flokkur, dagsetning, starfsmaður, myndafjöldi í Ajour), leit eftir skráningarnúmeri og framvindurit
+ * eftir mánuðum þar sem smellur á mánuð sýnir stöðuna eins og hún var í lok hans.
  * Aðeins lestur — engin skrif.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { publicUrl } from "../lib/sb";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { publicUrl, sb } from "../lib/sb";
 
-export type HkPunktur = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null };
+export type HkPunktur = { id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
 /** Áætlað gat án skráningar („eftir“): n = stök verk sem vantar. */
 export type HkEftir = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; n: number };
 export type HkYfirlit = { id: number; haed: string; mynd: string | null; w: number; h: number };
 type Props = {
   yfirlit: HkYfirlit[]; punktar: HkPunktur[]; eftir: HkEftir[];
   hopar: [string, string][];
+  /** Nöfn starfsmanna (skr_starfsmenn) — sýnd á skráningarspjaldinu. */
+  starfsmenn: Map<number, string>;
   /** Markmið hóps á deild (með leiðréttingum úr töflunni) og á hluta deildar; null = ekkert markmið. */
   markDeild: (haed: string, deild: string, hop: string) => number | null;
   markHluta: (haed: string, deild: string, hluti: number, hop: string) => number | null;
@@ -28,8 +33,12 @@ const HLUTAR: [string, string][] = [["N", "Norður"], ["C", "Center"], ["S", "Su
 // Álmurnar á yfirlitsblaðinu (útveggir, lesið af blaðinu): vinstri brún og breidd í % af breidd; hlutaskil í % af hæð (sömu skil og skr_haedarhnit).
 const GEO: Record<string, [number, number]> = { S1: [0.85, 12.92], S2: [23.23, 13.94], S4: [63.35, 13.04], S5: [85.72, 12.99] };
 const BIL: [number, number][] = [[2.3, 26.5], [28.8, 42.36], [71.16, 27.09]];
+const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
+/** Litir hæðanna í framvinduritinu — sannprófaðir með validate_palette.js (litblinduaðskilnaður ΔE 12,8; ljós flötur). Fylgja hæðinni, ekki röðinni. */
+const LITUR_H: Record<string, string> = { "6H": "#1d4f91", "5H": "#f07f1b", "4H": "#2a9d8f" };
 const num = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const pros = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
+const dmy = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "—");
 /** Heiti hæðar í skýrslunni. 4. hæð er GÓLF 5. hæðar (Agnar 12.11.2026): þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð —
  *  hún er því hluti af verkinu á 5. og 6. hæð, ekki sér hæð. Lyklarnir í gögnunum (4H/5H/6H) eru óbreyttir. */
 export const haedHeiti = (h: string) => (h === "4H" ? "Gólf 5. hæðar" : h.replace("H", ". hæð"));
@@ -40,9 +49,14 @@ const TOMUR: Reitur = { done: 0, open: 0, kl: 0, m: null };
 const leggja = (a: Reitur, b: Reitur): Reitur => ({ done: a.done + b.done, open: a.open + b.open, kl: a.kl + b.kl, m: a.m == null && b.m == null ? null : (a.m || 0) + (b.m || 0) });
 /** Stöðulitur: bakgrunnur (gegnsær), rammi, texti. */
 const litur = (p: number | null): [string, string, string] => (p == null ? ["rgba(226,232,240,.30)", "#94a3b8", "#334155"] : p >= 95 ? ["rgba(22,101,52,.17)", "#166534", "#166534"] : p >= 75 ? ["rgba(134,239,172,.24)", "#16a34a", "#166534"] : ["rgba(253,186,116,.30)", "#e8590c", "#9a3412"]);
+/** Nánari upplýsingar um valda skráningu, sóttar þegar smellt er á punkt. */
+type Nanar = { lysing: string | null; athugasemd: string | null; sm: number | null; myndir: number; lagf: string | null; skrad: string | null };
+type Syn = { z: number; fx: number; fy: number };   // aðdráttur og hliðrun sem hlutfall af kortinu (óháð breidd, svo prentun heldur sýninni)
+const klemma = (z: number, fx: number, fy: number): Syn => ({ z, fx: Math.min(0, Math.max(1 - z, fx)), fy: Math.min(0, Math.max(1 - z, fy)) });
 
-/** Punktar hæðarinnar teiknaðir ofan á yfirlitsmyndina: grænn = klárað, rauður hringur = opið, rauður tígull = áætlað gat án skráningar. */
-function Punktalag({ w, h, punktar, eftir, stada }: { w: number; h: number; punktar: HkPunktur[]; eftir: HkEftir[]; stada: Stada }) {
+/** Punktar hæðarinnar teiknaðir ofan á yfirlitsmyndina: grænn = klárað, rauður hringur = opið, rauður tígull = áætlað gat án skráningar.
+ *  z = aðdráttur: striginn er teiknaður í hærri upplausn og punktarnir stækka hægar en kortið, svo þétt svæði greinast í sundur. */
+function Punktalag({ w, h, punktar, eftir, stada, z }: { w: number; h: number; punktar: HkPunktur[]; eftir: HkEftir[]; stada: Stada; z: number }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const [br, setBr] = useState(0);
   useEffect(() => {
@@ -53,24 +67,211 @@ function Punktalag({ w, h, punktar, eftir, stada }: { w: number; h: number; punk
   useEffect(() => {
     const c = ref.current; if (!c || !br) return;
     const s = Math.min(3, Math.max(2, window.devicePixelRatio || 1));   // minnst tvöföld upplausn svo prentunin verði skörp
-    c.width = Math.round(br * s); c.height = Math.round(((br * h) / w) * s);
+    const q = Math.max(1, Math.min(z, 5200 / (br * s)));                 // hærri upplausn við aðdrátt, með þaki á stærð strigans
+    c.width = Math.round(br * s * q); c.height = Math.round(((br * h) / w) * s * q);
     const cx = c.getContext("2d"); if (!cx) return;
-    const k = c.width / w, r = Math.max(1.3, br / 520) * s;
+    const k = c.width / w, r = Math.max(1.3, br / 520) * Math.pow(z, 0.45) * (c.width / (br * z));
     cx.clearRect(0, 0, c.width, c.height);
     if (stada === "allt" || stada === "done") { cx.fillStyle = "rgba(21,128,61,.88)"; for (const p of punktar) if (p.done) { cx.beginPath(); cx.arc(p.x * k, p.y * k, r, 0, 6.2832); cx.fill(); } }
     if (stada === "allt" || stada === "opid") { cx.lineWidth = Math.max(1, r * 0.55); cx.strokeStyle = "#dc2626"; cx.fillStyle = "#ffffff"; for (const p of punktar) if (!p.done) { cx.beginPath(); cx.arc(p.x * k, p.y * k, r * 1.35, 0, 6.2832); cx.fill(); cx.stroke(); } }
     if (stada === "allt" || stada === "eftir") { cx.fillStyle = "#dc2626"; cx.strokeStyle = "#ffffff"; cx.lineWidth = Math.max(1, r * 0.35); const t = r * 1.9; for (const e of eftir) { const x = e.x * k, y = e.y * k; cx.beginPath(); cx.moveTo(x, y - t); cx.lineTo(x + t, y); cx.lineTo(x, y + t); cx.lineTo(x - t, y); cx.closePath(); cx.fill(); cx.stroke(); } }
-  }, [br, w, h, punktar, eftir, stada]);
+  }, [br, w, h, punktar, eftir, stada, z]);
   return <canvas ref={ref} aria-hidden="true" />;
 }
 
-export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, markHluta }: Props) {
+/** Framvindurit: kláraðar skráningar á mánuði, staflað eftir hæð. Smellur á mánuð = staðan í lok hans (sían „Til“). */
+function Framvinda({ punktar, haedir, fra, til, onVelja }: { punktar: HkPunktur[]; haedir: string[]; fra: string; til: string; onVelja: (m: string) => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [br, setBr] = useState(0);
+  const [yfir, setYfir] = useState<number | null>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const ro = new ResizeObserver(() => setBr(el.clientWidth)); ro.observe(el); setBr(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const gogn = useMemo(() => {
+    const m = new Map<string, Record<string, number>>();
+    for (const p of punktar) if (p.done && p.man) { const r = m.get(p.man) || {}; r[p.haed] = (r[p.haed] || 0) + 1; m.set(p.man, r); }
+    const lyklar = [...m.keys()].sort(); if (!lyklar.length) return [];
+    const ut: { k: string; r: Record<string, number>; alls: number; upps: number }[] = [];
+    let a = Number(lyklar[0].slice(0, 4)), b = Number(lyklar[0].slice(5, 7)), upps = 0; const sid = lyklar[lyklar.length - 1];
+    for (let i = 0; i < 120; i++) {   // samfelld mánaðaröð frá fyrsta til síðasta mánaðar (tómir mánuðir sjást sem eyður)
+      const k = `${a}-${String(b).padStart(2, "0")}`, r = m.get(k) || {}, alls = haedir.reduce((s, h) => s + (r[h] || 0), 0);
+      upps += alls; ut.push({ k, r, alls, upps });
+      if (k >= sid) break;
+      b++; if (b > 12) { b = 1; a++; }
+    }
+    return ut;
+  }, [punktar, haedir]);
+  if (!gogn.length) return null;
+  const anDags = punktar.reduce((a, p) => a + (p.done && !p.man ? 1 : 0), 0);   // kláraðar skráningar án lokadagsetningar komast ekki á tímaás
+  const H = 196, V = 44, HG = 8, T = 20, B = 24, n = gogn.length, plotW = Math.max(60, br - V - HG), skref = plotW / n, bw = Math.max(3, Math.min(34, skref - 4));
+  const hrMax = Math.max(1, ...gogn.map((g) => g.alls)), st = Math.pow(10, Math.floor(Math.log10(hrMax))), max = Math.ceil(hrMax / (st / 2)) * (st / 2);
+  const yAf = (v: number) => T + (H - T - B) * (1 - v / max);
+  const manHeiti = (k: string) => `${MAN[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
+  const nth = Math.max(1, Math.ceil(n / Math.max(1, plotW / 46)));
+  const virkur = (k: string) => (!fra || k >= fra) && (!til || k <= til);
+  const g = yfir != null ? gogn[yfir] : null;
+  return (
+    <div className="sk-fv">
+      <div className="sk-fv-haus">
+        <h3>Framvinda eftir mánuðum <span>kláraðar skráningar · {num(gogn[gogn.length - 1].upps)} alls{anDags ? ` · ${num(anDags)} án dagsetningar eru ekki í ritinu` : ""}</span></h3>
+        <div className="sk-fv-skyring">{haedir.map((h) => <span key={h}><i style={{ background: LITUR_H[h] }} />{haedHeiti(h)}</span>)}</div>
+      </div>
+      <div className="sk-fv-rit" ref={ref} onPointerLeave={() => setYfir(null)}>
+        {br > 0 && (
+          <svg width={br} height={H} role="img" aria-label="Kláraðar skráningar á mánuði, staflað eftir hæð">
+            {[0, max / 2, max].map((v) => <g key={v}><line x1={V} x2={br - HG} y1={yAf(v)} y2={yAf(v)} stroke={v === 0 ? "#9aa7bd" : "#e7ecf3"} strokeWidth="1" /><text x={V - 6} y={yAf(v) + 4} textAnchor="end" fontSize="11" fill="#5a6882">{num(v)}</text></g>)}
+            {gogn.map((d, i) => {
+              const x = V + i * skref + (skref - bw) / 2; let y0 = yAf(0);
+              return (
+                <g key={d.k} opacity={virkur(d.k) ? 1 : 0.28}>
+                  {haedir.map((h) => { const v = d.r[h] || 0; if (!v) return null; const hh = (v / max) * (H - T - B), y = y0 - hh; y0 = y; return <rect key={h} x={x} y={y + (hh > 3 ? 1 : 0)} width={bw} height={Math.max(1, hh - (hh > 3 ? 2 : 0))} rx={Math.min(3, bw / 2)} fill={LITUR_H[h]} />; })}
+                  {skref >= 30 && d.alls > 0 && <text x={x + bw / 2} y={y0 - 4} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="#2e4064">{num(d.alls)}</text>}
+                  {i % nth === 0 && <text x={x + bw / 2} y={H - 7} textAnchor="middle" fontSize="10.5" fill="#5a6882">{d.k.slice(5)}.{d.k.slice(2, 4)}</text>}
+                  {yfir === i && <rect x={V + i * skref} y={T - 6} width={skref} height={H - T - B + 6} fill="#0b2d5f" opacity="0.07" />}
+                  <rect x={V + i * skref} y={0} width={skref} height={H} fill="transparent" style={{ cursor: "pointer" }} tabIndex={0} role="button" aria-label={`${manHeiti(d.k)}: ${d.alls} kláraðar skráningar. Sýna stöðuna í lok mánaðarins.`}
+                    onPointerEnter={() => setYfir(i)} onFocus={() => setYfir(i)} onBlur={() => setYfir(null)} onClick={() => onVelja(d.k)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onVelja(d.k); } }} />
+                </g>
+              );
+            })}
+          </svg>
+        )}
+        {g && yfir != null && (
+          <div className="sk-fv-tip" style={{ left: Math.min(Math.max(8, V + yfir * skref + skref / 2 - 90), Math.max(8, br - 188)) }}>
+            <b>{manHeiti(g.k)}</b>
+            {haedir.map((h) => <div key={h}><i style={{ background: LITUR_H[h] }} /><span>{haedHeiti(h)}</span><em>{num(g.r[h] || 0)}</em></div>)}
+            <div className="s"><span>Alls í mánuðinum</span><em>{num(g.alls)}</em></div>
+            <div><span>Uppsafnað</span><em>{num(g.upps)}</em></div>
+          </div>
+        )}
+      </div>
+      <p className="sk-smatt sk-skjar sk-gagnv">Smelltu á mánuð til að sjá stöðuna á kortunum eins og hún var í lok hans{til && !fra ? <> · nú sýnt: <b>til og með {manHeiti(til)}</b></> : null}.</p>
+      <details className="sk-fv-tafla">
+        <summary>Sýna tölurnar í töflu</summary>
+        <table className="sk-tafla">
+          <thead><tr><th>Mánuður</th>{haedir.map((h) => <th key={h}>{haedHeiti(h)}</th>)}<th>Alls</th><th>Uppsafnað</th></tr></thead>
+          <tbody>{gogn.map((d) => <tr key={d.k}><td className="sk-v">{manHeiti(d.k)}</td>{haedir.map((h) => <td key={h}>{d.r[h] ? num(d.r[h]) : ""}</td>)}<td><b>{num(d.alls)}</b></td><td>{num(d.upps)}</td></tr>)}</tbody>
+        </table>
+      </details>
+    </div>
+  );
+}
+
+/** Ein hæð: deildaflögg, kort með aðdrætti og færslu, smellanlegir punktar, skráningarspjald og tafla. */
+function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH, texti, haus, valinn, nanar, starfsmenn, onVelja, fokus }: {
+  haed: string; y: HkYfirlit; punktar: HkPunktur[]; eftir: HkEftir[]; stada: Stada; deildir: string[];
+  reiturD: (haed: string, deild: string) => Reitur; reiturH: (haed: string, deild: string, i: number) => Reitur; texti: (r: Reitur) => string; haus: string;
+  valinn: HkPunktur | null; nanar: Nanar | null; starfsmenn: Map<number, string>; onVelja: (p: HkPunktur | null) => void; fokus: { id: number; t: number } | null;
+}) {
+  const box = useRef<HTMLDivElement | null>(null);
+  const [v, setV] = useState<Syn>({ z: 1, fx: 0, fy: 0 });
+  const [zT, setZT] = useState(1);            // aðdráttur strigans — fylgir v.z með smá töf svo ekki sé endurteiknað á hverju skrunskrefi
+  const [fDeild, setFDeild] = useState<string | null>(null);
+  const drag = useRef<{ x: number; y: number; fx: number; fy: number; hreyft: boolean } | null>(null);
+  useEffect(() => { const t = setTimeout(() => setZT(v.z), 140); return () => clearTimeout(t); }, [v.z]);
+  /** Aðdráttur um margfeldi f þannig að staðurinn (cx, cy) — hlutfall af kortglugganum — haldist kyrr. */
+  const zoomVid = useCallback((f: number, cx: number, cy: number) => setV((o) => { const z = Math.min(8, Math.max(1, o.z * f)), mx = (cx - o.fx) / o.z, my = (cy - o.fy) / o.z; return klemma(z, cx - mx * z, cy - my * z); }), []);
+  const midja = useCallback((z: number, mx: number, my: number) => setV(klemma(z, 0.5 - mx * z, 0.5 - my * z)), []);
+  useEffect(() => {   // Ctrl + skrun (og klípa á snertifleti) = aðdráttur; venjulegt skrun flettir síðunni áfram
+    const el = box.current; if (!el) return;
+    const wh = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); const r = el.getBoundingClientRect(); zoomVid(e.deltaY < 0 ? 1.25 : 0.8, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); };
+    el.addEventListener("wheel", wh, { passive: false });
+    return () => el.removeEventListener("wheel", wh);
+  }, [zoomVid]);
+  useEffect(() => {   // leit eftir skráningarnúmeri: færa sýnina að punktinum
+    if (!fokus || !valinn || valinn.id !== fokus.id || valinn.haed !== haed) return;
+    midja(5, valinn.x / y.w, valinn.y / y.h); setFDeild(null);
+    box.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokus]);
+  const hnit = (e: { clientX: number; clientY: number }) => { const r = box.current!.getBoundingClientRect(); return { cx: (e.clientX - r.left) / r.width, cy: (e.clientY - r.top) / r.height, br: r.width }; };
+  const velja = (e: { clientX: number; clientY: number }) => {
+    if (stada === "eftir") { onVelja(null); return; }
+    const { cx, cy, br } = hnit(e), X = ((cx - v.fx) / v.z) * y.w, Y = ((cy - v.fy) / v.z) * y.h, R = (14 / br / v.z) * y.w;
+    let best: HkPunktur | null = null, bd = R * R;
+    for (const p of punktar) { if (stada === "done" ? !p.done : stada === "opid" ? p.done : false) continue; const d = (p.x - X) ** 2 + (p.y - Y) ** 2; if (d < bd) { bd = d; best = p; } }
+    onVelja(best);
+  };
+  const aDeild = (d: string) => { if (fDeild === d) { setFDeild(null); setV({ z: 1, fx: 0, fy: 0 }); } else { setFDeild(d); midja(2.6, (GEO[d][0] + GEO[d][1] / 2) / 100, 0.5); } };
+  const stoppa = { onPointerDown: (e: React.PointerEvent) => e.stopPropagation(), onPointerUp: (e: React.PointerEvent) => e.stopPropagation(), onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
+  const minn = valinn && valinn.haed === haed ? valinn : null;
+  const eDeild = (d: string) => eftir.filter((e) => e.deild === d).reduce((a, e) => a + e.n, 0);
+  return (
+    <div className="sk-hk-haed">
+      <h3>{haedHeiti(haed)} <span>{haus}</span></h3>
+      <div className="sk-hk-flogg">
+        {deildir.map((d) => { const r = reiturD(haed, d), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return <button key={d} type="button" className={fDeild === d ? "on" : ""} title={fDeild === d ? "Sýna alla hæðina" : `Stækka ${d}`} onClick={() => aDeild(d)} style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, borderColor: c[1], color: c[2], background: c[0] }}><b>{d}{p != null ? ` · ${p} %` : ""}</b><small>{texti(r)}</small></button>; })}
+      </div>
+      <div className="sk-hk-rammi">
+      <div className={`sk-hk-mynd${v.z > 1 ? " ad" : ""}`} ref={box} style={{ aspectRatio: `${y.w} / ${y.h}` }}
+        onPointerDown={(e) => { if (e.button !== 0) return; drag.current = { x: e.clientX, y: e.clientY, fx: v.fx, fy: v.fy, hreyft: false }; if (v.z > 1) e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerMove={(e) => { const d = drag.current; if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; if (!d.hreyft && Math.abs(dx) + Math.abs(dy) < 5) return; d.hreyft = true; if (v.z <= 1) return; const r = e.currentTarget.getBoundingClientRect(); setV((o) => klemma(o.z, d.fx + dx / r.width, d.fy + dy / r.height)); }}
+        onPointerUp={(e) => { const d = drag.current; drag.current = null; if (!d || d.hreyft) return; velja(e); }}
+        onPointerCancel={() => { drag.current = null; }}
+        onDoubleClick={(e) => { const { cx, cy } = hnit(e); zoomVid(2, cx, cy); }}>
+        <div className="sk-hk-lag" style={{ transform: `translate(${v.fx * 100}%, ${v.fy * 100}%) scale(${v.z})`, ["--z" as string]: v.z }}>
+          {y.mynd && <img src={publicUrl(y.mynd)} alt={`Yfirlitsteikning ${haedHeiti(haed)}`} draggable={false} />}
+          <Punktalag w={y.w} h={y.h} punktar={punktar} eftir={eftir} stada={stada} z={zT} />
+          {deildir.flatMap((d) => HLUTAR.map(([s, nafn], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return (
+            <div key={d + s} className="sk-hk-hluti" style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, top: `${BIL[i][0]}%`, height: `${BIL[i][1]}%`, borderColor: c[1], background: c[0] }} title={`${haedHeiti(haed)} ${d} ${nafn}: ${texti(r)}${r.open ? `, ${r.open} opið` : ""}`}>
+              <span style={{ color: c[2] }}><b>{p != null ? `${p} %` : num(r.done)}</b><small>{nafn}</small></span>
+            </div>
+          ); }))}
+          {minn && <i className="sk-hk-valinn" style={{ left: `${(minn.x / y.w) * 100}%`, top: `${(minn.y / y.h) * 100}%` }} />}
+        </div>
+        <div className="sk-hk-takkar sk-skjar sk-gagnv" {...stoppa}>
+          <button type="button" aria-label="Stækka" title="Stækka" onClick={() => zoomVid(1.6, 0.5, 0.5)}>+</button>
+          <button type="button" aria-label="Minnka" title="Minnka" onClick={() => zoomVid(1 / 1.6, 0.5, 0.5)} disabled={v.z <= 1}>−</button>
+          <button type="button" aria-label="Sýna alla hæðina" title="Sýna alla hæðina" onClick={() => { setV({ z: 1, fx: 0, fy: 0 }); setFDeild(null); }} disabled={v.z <= 1}>⤢</button>
+        </div>
+      </div>
+        {minn && (
+          <div className="sk-hk-kort" {...stoppa}>
+            <button type="button" className="sk-skjar sk-gagnv" aria-label="Loka" onClick={() => onVelja(null)}>×</button>
+            <div className="sk-hk-kort-h"><b>Skráning{minn.nr != null ? ` nr. ${minn.nr}` : ""}</b><em className={minn.done ? "ok" : "op"}>{minn.done ? "Klárað" : "Opið"}</em></div>
+            <dl>
+              <dt>Flokkur</dt><dd>{minn.fl || "—"}</dd>
+              <dt>Staður</dt><dd>{haedHeiti(haed)} · {minn.deild} · {minn.hluti === "N" ? "Norðurhlið" : minn.hluti === "S" ? "Suðurhlið" : "Center"}</dd>
+              <dt>{minn.done ? "Klárað" : "Skráð"}</dt><dd>{minn.done ? dmy(minn.dags) : dmy(nanar?.skrad)}</dd>
+              <dt>Starfsmaður</dt><dd>{nanar ? (nanar.sm != null && starfsmenn.get(nanar.sm)) || "—" : "…"}</dd>
+              <dt>Myndir í Ajour</dt><dd>{nanar ? nanar.myndir : "…"}</dd>
+              {nanar?.lagf && <><dt>Lagfært</dt><dd>{dmy(nanar.lagf)}</dd></>}
+              {nanar?.lysing && <><dt>Lýsing</dt><dd>{nanar.lysing.slice(0, 240)}</dd></>}
+              {nanar?.athugasemd && <><dt>Athugasemd</dt><dd>{nanar.athugasemd.slice(0, 240)}</dd></>}
+            </dl>
+          </div>
+        )}
+      </div>
+      <p className="sk-hk-hint sk-skjar sk-gagnv">Smelltu á punkt til að sjá skráninguna · tvísmelltu eða notaðu + til að stækka · dragðu til að færa · smelltu á deild til að stækka hana</p>
+      <table className="sk-tafla sk-hk-tafla">
+        <thead><tr><th>Deild</th>{HLUTAR.map(([s, nafn]) => <th key={s}>{nafn}</th>)}<th>Deildin</th><th>Opið</th><th>Eftir (áætlað)</th></tr></thead>
+        <tbody>
+          {deildir.map((d) => { const rd = reiturD(haed, d), pd = rd.m != null ? pros(rd.kl, rd.m) : null; return (
+            <tr key={d}>
+              <td className="sk-v"><b>{d}</b></td>
+              {HLUTAR.map(([s], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null; return <td key={s} style={{ background: litur(p)[0] }}>{p != null ? <b>{p} % </b> : null}<small>{texti(r)}{r.open ? ` · +${num(r.open)}` : ""}</small></td>; })}
+              <td style={{ background: litur(pd)[0] }}>{pd != null ? <b>{pd} % </b> : null}<small>{texti(rd)}</small></td>
+              <td>{rd.open ? num(rd.open) : ""}</td><td>{eDeild(d) ? num(eDeild(d)) : ""}</td>
+            </tr>
+          ); })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, markDeild, markHluta }: Props) {
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
   const [afDeild, setAfDeild] = useState<Record<string, boolean>>({});
   const [afHaed, setAfHaed] = useState<Record<string, boolean>>({});
   const [fra, setFra] = useState(""); const [til, setTil] = useState("");
+  const [valinn, setValinn] = useState<HkPunktur | null>(null);
+  const [nanar, setNanar] = useState<Nanar | null>(null);
+  const [leit, setLeit] = useState(""); const [leitSvar, setLeitSvar] = useState("");
+  const [fokus, setFokus] = useState<{ id: number; t: number } | null>(null);
   const skipta = (s: Set<string>, k: string) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; };
 
   const valdir = useMemo(() => (hopVal.size ? hopar.filter((h) => hopVal.has(h[0])).map((h) => h[0]) : hopar.map((h) => h[0])), [hopVal, hopar]);
@@ -82,17 +283,29 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
     return [...m].sort((a, b) => (parseInt(a[0].replace(/^\D+/, ""), 10) || 0) - (parseInt(b[0].replace(/^\D+/, ""), 10) || 0));
   }, [einnHopur, punktar]);
   const manudir = useMemo(() => [...new Set(punktar.map((p) => p.man).filter((m): m is string => !!m))].sort(), [punktar]);
-  const medMarkmid = flVal.size === 0 && !fra && !til;   // markmið eru skilgreind á flokkahóp: stærðar- og tímabilssía sýna aðeins fjölda
+  const medMarkmid = flVal.size === 0 && !fra;   // markmið eru skilgreind á flokkahóp: stærðarsía og „Frá“-mánuður sýna aðeins fjölda; „Til“ = staðan í lok mánaðar á móti markmiði
 
-  const siadir = useMemo(() => punktar.filter((p) => {
+  /** Síað á allt nema tímabil — framvinduritið sýnir alla mánuði þess sem er valið. */
+  const anTima = useMemo(() => punktar.filter((p) => {
     if (hopVal.size ? !p.hop || !hopVal.has(p.hop) : false) return false;
     if (flVal.size && !flVal.has(p.fl)) return false;
     if (afDeild[p.deild] || afHaed[p.haed]) return false;
-    if (fra && (!p.man || p.man < fra)) return false;
-    if (til && (!p.man || p.man > til)) return false;
     return true;
-  }), [punktar, hopVal, flVal, afDeild, afHaed, fra, til]);
+  }), [punktar, hopVal, flVal, afDeild, afHaed]);
+  const siadir = useMemo(() => (fra || til ? anTima.filter((p) => !(fra && (!p.man || p.man < fra)) && !(til && (!p.man || p.man > til))) : anTima), [anTima, fra, til]);
   const eftirSiad = useMemo(() => (flVal.size || fra || til ? [] : eftir.filter((e) => !(hopVal.size ? !e.hop || !hopVal.has(e.hop) : false) && !afDeild[e.deild] && !afHaed[e.haed])), [eftir, hopVal, flVal, afDeild, afHaed, fra, til]);
+
+  // nánari upplýsingar um valda skráningu (ein röð, aðeins lestur)
+  useEffect(() => {
+    setNanar(null); if (!valinn) return;
+    let lifir = true;
+    sb().from("skr_skraningar").select("lysing,athugasemd,starfsmadur_id,created_at,ajour_gogn").eq("id", valinn.id).single().then((r) => {
+      if (!lifir || r.error || !r.data) return;
+      const d = r.data as { lysing: string | null; athugasemd: string | null; starfsmadur_id: number | null; created_at: string | null; ajour_gogn: { myndir?: string[]; lagf_dags?: string } | null };
+      setNanar({ lysing: d.lysing, athugasemd: d.athugasemd, sm: d.starfsmadur_id, myndir: (d.ajour_gogn?.myndir || []).length, lagf: d.ajour_gogn?.lagf_dags || null, skrad: d.created_at });
+    });
+    return () => { lifir = false; };
+  }, [valinn]);
 
   /** Talning síaðra punkta per hæð|deild|hluti|hópur. */
   const tel = useMemo(() => {
@@ -120,25 +333,35 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
     }
     return r;
   };
-  const syndarHaedir = HAEDIR.filter((h) => !afHaed[h] && yfirlit.some((y) => y.haed === h));
+  const allarHaedir = useMemo(() => HAEDIR.filter((h) => yfirlit.some((y) => y.haed === h)), [yfirlit]);
+  const syndarHaedir = allarHaedir.filter((h) => !afHaed[h]);
   const syndarDeildir = DEILDIR.filter((d) => !afDeild[d]);
   const haedAlls = (haed: string) => syndarDeildir.reduce((a, d) => leggja(a, reiturD(haed, d)), TOMUR);
   const alls = syndarHaedir.reduce((a, h) => leggja(a, haedAlls(h)), TOMUR);
   const eftirAlls = eftirSiad.reduce((a, e) => a + e.n, 0);
   const virkar = hopVal.size + flVal.size + (stada !== "allt" ? 1 : 0) + Object.values(afDeild).filter(Boolean).length + Object.values(afHaed).filter(Boolean).length + (fra ? 1 : 0) + (til ? 1 : 0);
   const hreinsa = () => { setHopVal(new Set()); setFlVal(new Set()); setStada("allt"); setAfDeild({}); setAfHaed({}); setFra(""); setTil(""); };
+  const manTexti = (m: string) => `${m.slice(5)}.${m.slice(0, 4)}`;
   const siulysing = [
     hopVal.size ? hopar.filter((h) => hopVal.has(h[0])).map((h) => h[1]).join(", ") : "Allir flokkar",
     flVal.size ? [...flVal].join(", ") : "",
     stada === "done" ? "aðeins klárað" : stada === "opid" ? "aðeins opið" : stada === "eftir" ? "aðeins áætluð göt án skráningar" : "",
     Object.values(afDeild).some(Boolean) ? `deildir ${syndarDeildir.join(", ")}` : "",
-    fra || til ? `tímabil ${fra || "…"} – ${til || "…"}` : "",
+    fra ? `tímabil ${manTexti(fra)} – ${til ? manTexti(til) : "…"}` : til ? `staðan í lok ${manTexti(til)}` : "",
   ].filter(Boolean).join(" · ");
   const texti = (r: Reitur) => (r.m != null ? `${num(r.kl)} / ${num(r.m)}` : `${num(r.done)} klárað`);
+  const veljaManud = (m: string) => { if (til === m && !fra) setTil(""); else { setFra(""); setTil(m); } };
+  const leita = () => {
+    const n = Number(leit.trim()); if (!leit.trim() || !Number.isFinite(n)) { setLeitSvar(""); return; }
+    const p = punktar.find((q) => q.nr === n);
+    if (!p) { setLeitSvar(`Skráning nr. ${n} er ekki á hæðakortunum.`); return; }
+    setLeitSvar(`${haedHeiti(p.haed)} · ${p.deild}`); setAfHaed((x) => ({ ...x, [p.haed]: false })); setAfDeild((x) => ({ ...x, [p.deild]: false }));
+    setValinn(p); setFokus({ id: p.id, t: Date.now() });
+  };
 
   return (
     <div className="sk-hk">
-      <div className="sk-sia sk-skjar">
+      <div className="sk-sia sk-skjar sk-gagnv">
         <div className="sk-sia-rod"><span>Flokkur</span>
           <button type="button" className={hopVal.size ? "" : "on"} onClick={() => { setHopVal(new Set()); setFlVal(new Set()); }}>Allir</button>
           {hopar.map(([k, nafn]) => <button key={k} type="button" className={hopVal.has(k) ? "on" : ""} aria-pressed={hopVal.has(k)} onClick={() => { setHopVal((s) => skipta(s, k)); setFlVal(new Set()); }}>{nafn}</button>)}
@@ -153,13 +376,17 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
           {([["allt", "Allt"], ["done", "Klárað"], ["opid", "Opið"], ["eftir", "Eftir (áætlað, óskráð)"]] as const).map(([k, nafn]) => <button key={k} type="button" className={stada === k ? "on" : ""} onClick={() => setStada(k)}>{nafn}</button>)}
         </div>
         <div className="sk-sia-rod"><span>Hæð og deild</span>
-          {HAEDIR.filter((h) => yfirlit.some((y) => y.haed === h)).map((h) => <button key={h} type="button" className={afHaed[h] ? "" : "on"} aria-pressed={!afHaed[h]} onClick={() => setAfHaed((x) => ({ ...x, [h]: !x[h] }))}>{haedHeiti(h)}</button>)}
+          {allarHaedir.map((h) => <button key={h} type="button" className={afHaed[h] ? "" : "on"} aria-pressed={!afHaed[h]} onClick={() => setAfHaed((x) => ({ ...x, [h]: !x[h] }))}>{haedHeiti(h)}</button>)}
           <i />
           {DEILDIR.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}
         </div>
         <div className="sk-sia-rod"><span>Tímabil</span>
-          <label>Frá <select value={fra} onChange={(e) => setFra(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label>
-          <label>Til <select value={til} onChange={(e) => setTil(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label>
+          <label>Frá <select value={fra} onChange={(e) => setFra(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{manTexti(m)}</option>)}</select></label>
+          <label>Til <select value={til} onChange={(e) => setTil(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{manTexti(m)}</option>)}</select></label>
+          <i />
+          <label>Skráning nr. <input type="text" inputMode="numeric" value={leit} placeholder="t.d. 4312" onChange={(e) => setLeit(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") leita(); }} /></label>
+          <button type="button" onClick={leita}>Finna</button>
+          {leitSvar && <em>{leitSvar}</em>}
           {virkar > 0 && <button type="button" className="sk-sia-hreinsa" onClick={hreinsa}>Hreinsa síur ({virkar})</button>}
         </div>
       </div>
@@ -172,43 +399,16 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, markDeild, mark
         <div><span>Markmið</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
-      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðar- eða tímabilssíu: markmiðin eru skilgreind á flokkahóp, ekki á stærð eða mánuð.</p>}
+      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu eða „Frá“-mánuði: markmiðin eru skilgreind á flokkahóp, ekki á stærð eða tímabil.</p>}
+
+      <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
 
       {syndarHaedir.map((haed) => {
         const y = yfirlit.find((q) => q.haed === haed)!; const ha = haedAlls(haed);
         const pH = siadir.filter((p) => p.haed === haed), eH = eftirSiad.filter((e) => e.haed === haed);
         if (ha.done + ha.open === 0 && ha.m == null && eH.length === 0) return null;   // sían skilur ekkert eftir á þessari hæð
-        const eDeild = (d: string) => eH.filter((e) => e.deild === d).reduce((a, e) => a + e.n, 0);
-        return (
-          <div key={haed} className="sk-hk-haed">
-            <h3>{haedHeiti(haed)} <span>{haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}{ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}{ha.open ? ` · ${num(ha.open)} opið` : ""}{eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}</span></h3>
-            <div className="sk-hk-flogg">
-              {syndarDeildir.map((d) => { const r = reiturD(haed, d), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return <div key={d} style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, borderColor: c[1], color: c[2], background: c[0] }}><b>{d}{p != null ? ` · ${p} %` : ""}</b><small>{texti(r)}</small></div>; })}
-            </div>
-            <div className="sk-hk-mynd" style={{ aspectRatio: `${y.w} / ${y.h}` }}>
-              {y.mynd && <img src={publicUrl(y.mynd)} alt={`Yfirlitsteikning ${haed}`} />}
-              <Punktalag w={y.w} h={y.h} punktar={pH} eftir={eH} stada={stada} />
-              {syndarDeildir.flatMap((d) => HLUTAR.map(([s, nafn], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return (
-                <div key={d + s} className="sk-hk-hluti" style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, top: `${BIL[i][0]}%`, height: `${BIL[i][1]}%`, borderColor: c[1], background: c[0] }} title={`${haed} ${d} ${nafn}: ${texti(r)}${r.open ? `, ${r.open} opið` : ""}`}>
-                  <span style={{ color: c[2] }}><b>{p != null ? `${p} %` : num(r.done)}</b><small>{nafn}</small></span>
-                </div>
-              ); }))}
-            </div>
-            <table className="sk-tafla sk-hk-tafla">
-              <thead><tr><th>Deild</th>{HLUTAR.map(([s, nafn]) => <th key={s}>{nafn}</th>)}<th>Deildin</th><th>Opið</th><th>Eftir (áætlað)</th></tr></thead>
-              <tbody>
-                {syndarDeildir.map((d) => { const rd = reiturD(haed, d), pd = rd.m != null ? pros(rd.kl, rd.m) : null; return (
-                  <tr key={d}>
-                    <td className="sk-v"><b>{d}</b></td>
-                    {HLUTAR.map(([s], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null; return <td key={s} style={{ background: litur(p)[0] }}>{p != null ? <b>{p} % </b> : null}<small>{texti(r)}{r.open ? ` · +${num(r.open)}` : ""}</small></td>; })}
-                    <td style={{ background: litur(pd)[0] }}>{pd != null ? <b>{pd} % </b> : null}<small>{texti(rd)}</small></td>
-                    <td>{rd.open ? num(rd.open) : ""}</td><td>{eDeild(d) ? num(eDeild(d)) : ""}</td>
-                  </tr>
-                ); })}
-              </tbody>
-            </table>
-          </div>
-        );
+        const haus = `${haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}${ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}${ha.open ? ` · ${num(ha.open)} opið` : ""}${eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}`;
+        return <Haedarkort key={haed} haed={haed} y={y} punktar={pH} eftir={eH} stada={stada} deildir={syndarDeildir} reiturD={reiturD} reiturH={reiturH} texti={texti} haus={haus} valinn={valinn} nanar={nanar} starfsmenn={starfsmenn} onVelja={setValinn} fokus={fokus} />;
       })}
       <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />ekkert markmið</p>
       <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Markmið hluta fylgir sömu reglu og deildin; föst markmið á deild (milliloft, rafmagn) skiptast jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá markmiði deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>

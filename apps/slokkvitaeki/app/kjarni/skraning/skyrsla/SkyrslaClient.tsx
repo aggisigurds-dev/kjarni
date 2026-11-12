@@ -13,10 +13,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sb } from "../lib/sb";
 import Haedir, { haedHeiti, haedUndir, type HkPunktur, type HkEftir, type HkYfirlit } from "./Haedir";
+import { Efni, Verkferli, type EfniGogn } from "./Efni";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { id: number; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null };
+type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null };
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
 type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
 type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string } | null };
@@ -25,10 +26,12 @@ const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), M
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
-const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["utbod", "Samanburður við útboð"]];
+const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"]];
+/** Efnisyfirlit: akkeri kaflanna (sýnd aðeins ef kaflinn er sýnilegur). */
+const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"]];
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5", "—"];   // „—" = skráningar á hæðinni sem skiptast ekki á deild (rafmagn á sérteikningum)
 const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i], ["Raufar", "Raufar við kantaða stokka", /^Raufar/i], ["Rafmagn", "Rafmagn", /^Raf/i]];
@@ -85,6 +88,10 @@ export default function SkyrslaClient() {
   const [ovistad, setOvistad] = useState(false);
   const [stadaTexti, setStadaTexti] = useState("Sæki skráningar…");
   const [villa, setVilla] = useState("");
+  const [starfsmenn, setStarfsmenn] = useState<Map<number, string>>(new Map());
+  /** Kynningarhamur (?kynning=1): engin stjórntæki til breytinga og engin vistun — aðeins síur, kort og prentun. */
+  const [les, setLes] = useState(false);
+  useEffect(() => { setLes(new URLSearchParams(window.location.search).has("kynning")); }, []);
 
   useEffect(() => {
     let lifir = true;
@@ -94,15 +101,16 @@ export default function SkyrslaClient() {
         const v = vid ? await s.from("skr_verk").select("id,heiti").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
         if (v.error || !v.data) throw new Error(v.error?.message || "Ekkert verk fannst");
         const vk = v.data as Verk;
-        const [f, sk, tk] = await Promise.all([
+        const [f, sk, tk, sm] = await Promise.all([
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_skyrslur").select("id,gogn").eq("verk_id", vk.id).eq("eytt", false).order("id", { ascending: false }).limit(1),
           s.from("skr_teikningar").select("id,heiti,tegund,haed,mynd_path,breidd_px,haed_px").eq("verk_id", vk.id).eq("eytt", false),
+          s.from("skr_starfsmenn").select("id,nafn"),
         ]);
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = [];
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("id,flokkur_id,teikning_id,stada,framkvaemt_til,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,ajour_serial,flokkur_id,teikning_id,stada,framkvaemt_til,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           allt.push(...(r.data as unknown as Skr[]));
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
@@ -128,6 +136,7 @@ export default function SkyrslaClient() {
         }
         if (!lifir) return;
         setHnit(hn); setAaetlud(aa);
+        setStarfsmenn(new Map(((sm.data || []) as { id: number; nafn: string }[]).map((x) => [x.id, x.nafn] as [number, string])));
         setYfirlit(((tk.data || []) as { id: number; tegund?: string; haed?: string | null; mynd_path?: string | null; breidd_px?: number | null; haed_px?: number | null }[]).filter((t) => t.tegund === "yfirlit" && t.haed && t.breidd_px && t.haed_px).map((t) => ({ id: t.id, haed: t.haed as string, mynd: t.mynd_path ?? null, w: Number(t.breidd_px), h: Number(t.haed_px) })));
         setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt);
         setTeiknHaed(new Map(((tk.data || []) as { id: number; heiti: string }[]).flatMap((t) => { const m = /^\s*([456])\s*H/i.exec(t.heiti); return m ? [[t.id, `${m[1]}H`] as [number, string]] : []; })));
@@ -216,7 +225,7 @@ export default function SkyrslaClient() {
       const h = hnit.get(s.id); if (!h || !h.haed || !h.deild || !h.hluti) continue;
       if (s.teikning_id != null && aukaTeikn.has(s.teikning_id)) continue;
       const fl = (s.flokkur_id != null && heitiAf.get(s.flokkur_id)) || "", hop = HOPAR.find((x) => x[2].test(fl));
-      ut.push({ haed: h.haed, deild: h.deild, hluti: h.hluti, x: Number(h.x_px), y: Number(h.y_px), hop: hop ? hop[0] : null, fl, done: s.stada === "done", man: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 7) : null });
+      ut.push({ id: s.id, nr: s.ajour_serial, dags: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 10) : null, haed: h.haed, deild: h.deild, hluti: h.hluti, x: Number(h.x_px), y: Number(h.y_px), hop: hop ? hop[0] : null, fl, done: s.stada === "done", man: s.framkvaemt_til ? s.framkvaemt_til.slice(0, 7) : null });
     }
     return ut;
   }, [skr, hnit, heitiAf, aukaTeikn]);
@@ -295,12 +304,14 @@ export default function SkyrslaClient() {
   if (stadaTexti) return <p className="sk-hl">{stadaTexti}</p>;
   if (villa && !verk) return <p className="sk-hl">Villa: {villa}</p>;
   return (
-    <div className="sk sk-v2">
+    <div className={`sk sk-v2${les ? " sk-les" : ""}`}>
+      {les && <div className="sk-lesstika"><b>Brunahólf ehf</b><span>{verk?.heiti}</span><button type="button" onClick={() => window.print()}>Prenta / PDF</button></div>}
       <div className="sk-stika">
         <span>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</span>
         <button type="button" onClick={vista} disabled={!ovistad}>Vista</button>
         <label className="sk-val"><input type="checkbox" checked={!gogn.an_staerda} onChange={(e) => breyta({ an_staerda: !e.target.checked })} /> Sýna stærðir</label>
         <button type="button" onClick={() => window.print()}>Prenta / PDF</button>
+        <button type="button" title="Opnar skýrsluna án stjórntækja til breytinga — til að sýna öðrum" onClick={() => window.open(`${window.location.pathname}?kynning=1`, "_blank")}>Kynningarhamur</button>
         <button type="button" onClick={() => { if (nBr && window.confirm("Hreinsa allar leiðréttingar á tölum? Textar haldast. Breytingin vistast ekki fyrr en þú velur Vista.")) breyta({ stada: {}, utbod: {} }); }} disabled={!nBr}>Hreinsa leiðréttingar</button>
         {villa && <em>Villa: {villa}</em>}
       </div>
@@ -334,19 +345,20 @@ export default function SkyrslaClient() {
       <header className="sk-hetja">
         <div className="sk-hetja-v">
           <div className="sk-kicker">Stöðuskýrsla · {dagsTexti}</div>
-          <input className="sk-titill" value={gogn.heiti ?? "Brunaþéttingar — staða verks"} onChange={(e) => breyta({ heiti: e.target.value })} aria-label="Heiti skýrslu" />
+          <input className="sk-titill" readOnly={les} value={gogn.heiti ?? "Brunaþéttingar — staða verks"} onChange={(e) => breyta({ heiti: e.target.value })} aria-label="Heiti skýrslu" />
           <p>{verk?.heiti} · Brunahólf ehf</p>
         </div>
         <div className="sk-hetja-h"><b>{pros(alls.klar, alls.mark)}<i> %</i></b><span>{num(alls.klar)} af áætluðum {num(alls.mark)} stökum verkum</span></div>
       </header>
+      <nav className="sk-yfirlit sk-skjar sk-gagnv" aria-label="Efnisyfirlit">{AKKERI.filter((a) => synaKafla(a[2])).map(([id, nafn]) => <a key={id} href={`#${id}`}>{nafn}</a>)}</nav>
       <div className="sk-efni">
       {synaKafla("texti") && <div className="sk-inngangur">
         <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? ""} onChange={(e) => breyta({ inngangur: e.target.value })} />
         <p className="sk-prent sk-malsgr">{gogn.inngangur}</p>
       </div>}
-      {synaKafla("spjold") && <div className="sk-haedaspjold">
+      {synaKafla("spjold") && <div className="sk-haedaspjold" id="k-yfirlit">
         {haedaspjold.map((h) => <div key={h.haed}>
-          <div><span>{haedHeiti(h.haed)}</span><em className={h.p >= 95 ? "ok" : h.p >= 75 ? "vinna" : "eftir"}>{h.p >= 95 ? "Lokið" : "Í vinnslu"}</em></div>
+          <div><span>{haedHeiti(h.haed)}</span><em className={h.p >= 95 ? "ok" : h.p >= 75 ? "vinna" : "eftir"}>{h.klar >= h.mark ? "Lokið" : h.p >= 95 ? "Á lokastigi" : "Í vinnslu"}</em></div>
           <b>{h.p} %</b>
           <i><u style={{ width: `${Math.min(100, h.p)}%` }} className={h.p >= 95 ? "ok" : ""} /></i>
           <small>{num(h.klar)} af {num(h.mark)} stökum verkum{haedUndir(h.haed) ? ` · ${haedUndir(h.haed)}` : ""}</small>
@@ -365,14 +377,14 @@ export default function SkyrslaClient() {
         </ul>
       </div>}
       {synaKafla("kort") && yfirlit.length > 0 && (
-        <section>
+        <section id="k-haedir">
           <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
-          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} markDeild={markDeild} markHluta={markmidHluta} />
+          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} hopar={hkHopar} starfsmenn={starfsmenn} markDeild={markDeild} markHluta={markmidHluta} />
         </section>
       )}
 
       {synaKafla("flokkar") && (
-        <section>
+        <section id="k-flokkar">
           <h2>Heild eftir flokkum <small>Allar hæðir og deildir · markmið eru summa deildanna</small></h2>
           <table className="sk-tafla sk-flokkar">
             <thead><tr><th>Flokkur</th><th>Klárað</th><th>Opið</th><th>Markmið</th><th>%</th><th className="sk-stikud">Staða</th></tr></thead>
@@ -386,7 +398,7 @@ export default function SkyrslaClient() {
         </section>
       )}
 
-      <section className={synaKafla("tafla") ? "" : "sk-falinn"}>
+      <section id="k-tolur" className={synaKafla("tafla") ? "" : "sk-falinn"}>
         <h2>Staða eftir hæð og deild</h2>
         <p className="sk-smatt">Tölur eru stök verk eins og þau eru skráð. Heild: <b>{num(alls.klar)}</b> af <b>{num(alls.mark)}</b> = <b>{pros(alls.klar, alls.mark)} %</b>.<span className="sk-skjar"> Reitirnir Klárað og Markmið eru breytanlegir; tómur reitur notar reiknaða gildið.</span></p>
         {radir.map((r) => {
@@ -443,7 +455,7 @@ export default function SkyrslaClient() {
         </section>
       )}
 
-      <section className={synaKafla("utbod") ? "" : "sk-falinn"}>
+      <section id="k-utbod" className={synaKafla("utbod") ? "" : "sk-falinn"}>
         <h2>Samanburður við upprunalegt útboð <small>Lokið í einingum tilboðs · strikið er útboðsmagnið</small></h2>
         <div className="sk-ustikur">
           {utbodStikur.map((u) => <div key={u.nr}>
@@ -473,6 +485,20 @@ export default function SkyrslaClient() {
         </table>
         <p className="sk-smatt">Liðir 1.1 og 1.3: Ajour hefur aðeins einn gólfflokk (Ø160-200), svo öll gólfgöt teljast á 1.2. Liður 2.11 er í metrum og reiknast ekki úr fjölda skráninga — metrarnir eru slegnir inn í „Lokið". Utan útboðsliða: {num(utanUtbods.n)} kláraðar skráningar{utanUtbods.nofn.length ? ` (${utanUtbods.nofn.join(", ")})` : ""}.</p>
       </section>
+
+      {synaKafla("efni") && (
+        <section id="k-efni">
+          <h2>Efni og kerfi <small>Brunaþéttiefnin sem notuð eru í verkinu</small></h2>
+          <Efni />
+        </section>
+      )}
+
+      {synaKafla("verkferli") && (
+        <section id="k-verkferli">
+          <h2>Verkferli <small>Frá skoðun gats að skráðri og staðfestri þéttingu</small></h2>
+          <Verkferli gogn={gogn} onChange={breyta} les={les} />
+        </section>
+      )}
 
       <section className={synaKafla("texti") ? "" : "sk-falinn"}>
         <textarea className="sk-texti" rows={3} placeholder="Lokaorð / næstu skref (valfrjálst) …" value={gogn.lok ?? ""} onChange={(e) => breyta({ lok: e.target.value })} />

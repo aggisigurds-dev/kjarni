@@ -188,6 +188,22 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   taldar á móti markmiði + raufar + aukaverk + án teikningar + „Annað“ (12.11: 10.526 = 10.291 + 115 + 81 + 22 + 17).
   466 skráningar eru ÁN TEIKNINGAR (444 opnar; 131 þeirra „Guide point“/„Annað“, 313 í verkflokkum) — hvað þær eru er ÓMÆLT.
   Aldrei kynna prósenturnar sem talningu á öllum götum: markmið 6. hæðar er það sem er skráð.
+- **Gagnvirkt og til sýnis (12.11.2026, Agnar: skýrslan verður skoðuð af stærstu verktökum landsins — „geta sýnt nákvæmlega það sem
+  maður vill sjá“, „eins flott og professional og hægt er“):**
+  - `Haedir.tsx` → `Haedarkort`: aðdráttur (+/−/⤢, tvísmellur, Ctrl+skrun) og færsla (draga); sýnin er `{z, fx, fy}` sem HLUTFALL af
+    kortinu (`translate(%) scale()`), svo prentun heldur því sem er á skjánum. Enginn `will-change` á `.sk-hk-lag` (annars óskýr teikning).
+    Smellur á punkt (næsti innan 14 px) → spjald `.sk-hk-kort`: nr. (ajour_serial), flokkur, staður, dagsetning, starfsmaður, fjöldi mynda í
+    Ajour — nánar sótt með einni `select` á `skr_skraningar`. Deildarflagg = hnappur sem stækkar deildina. Leit „Skráning nr.“ fer að punktinum.
+  - `Framvinda` (í sama skjali): kláraðar skráningar á mánuði, staflað eftir hæð; smellur á mánuð setur „Til“ = staðan í lok mánaðar
+    (prósenta á móti markmiði helst þá; „Frá“ og stærðarsía fella hana). Litir hæða `LITUR_H` eru sannprófaðir (dataviz validate_palette).
+  - `Efni.tsx`: **Efni og kerfi** = Protecta-vörurnar af reikningum Redder vegna verksins (FR Acrylic PRO005/PRO022, FR Graphite PRO010,
+    FR Board A006, FR Collar PRO0039-30, FR Pipe Wrap PRO276; FSi FS310CW25/FS310HPE nefnd í smáu letri). Myndir og tækniblöð eru TENGLAR á
+    redder.is (ekki afrit í okkar geymslu). Magn og verð eru ekki sýnd. ETA-vottorð eru EKKI í kerfinu — ekki fullyrða um vottun.
+    **Verkferli** = sex skref, DRÖG þar til Agnar hakar við „Yfirfarið“ (`gogn.verkferli_ok`); texti skrefa yfirskrifanlegur (`gogn.verkferli`).
+  - **Kynningarhamur** `?kynning=1` (`.sk-les`): engin ritstjórn, engin vistun, ekkert app-nav — aðeins síur, kort og prentun. `.sk-gagnv`
+    merkir stjórntæki sem sjást þar. ATH: þetta er ekki aðgangsstýring — slóðin án `?kynning=1` er jafn opin (RLS leyfir skrif).
+  - Efnisyfirlit `.sk-yfirlit` (sticky; `.sk-blad` er `overflow: clip`). Merki hæðaspjalda: „Lokið“ aðeins við 100 %, „Á lokastigi“ ≥ 95 %.
+  - Myndir þéttinganna sjálfra eru enn AÐEINS í Ajour (`ajour_gogn.myndir` = skráarauðkenni; `skr_myndir` er tóm fyrir verk 4).
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með
