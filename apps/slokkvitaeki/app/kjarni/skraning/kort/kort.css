@@ -86,7 +86,7 @@
 .gk-bar-skyring i { display: inline-block; flex: none; width: 11px; height: 11px; border-radius: 50%; }
 .gk-bar-skyring i.op { background: #fff; border: 2px solid #dc2626; }
 .gk-bar-skyring i.ef { background: #dc2626; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #dc2626; }
-.gk-bar-skyring i.lf { background: transparent; border: 1.5px dashed #111827; }
+.gk-merki.gk-hja { background: #eef2f7; color: #1f2937; }
 .gk-bar-skyring i.lg { width: 16px; height: 6px; border-radius: 2px; background: #5fd6c9; }
 .gk-bar-rod { display: flex; gap: 6px; align-items: stretch; min-width: 0; }
 .gk-bar-hopur { display: flex; flex: 1 1 0; min-width: 0; border: 1px solid #8a9199; border-radius: 8px; overflow: hidden; background: #fff; }

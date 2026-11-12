@@ -199,6 +199,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   kortið hefur eigin stækkun. (2) Í síma sjást aðeins rauðir punktar („eftir“) af áætluðum götum; grænir og gulir tíglar (göt sem eiga skráningu) eru
   faldir nema hakað sé við „Sýna líka áætluð göt sem eiga skráningu“ í skúffunni (`synaParud`). (3) Síminn opnast í sýninni Loftræsting, ekki með öllum
   lögum. (4) Skýringarlína ofan við hnappana (`.gk-bar-skyring`): Skráð í Ajour · Opin skráning · Eftir, óskráð · lag fagsins.
+- **Merkin í símasýn (Agnar 12.11.2026: „þessi x verða voða messy“, sendi þrjár myndir af Miro-borðinu sínu):** skráningar eru teiknaðar eins og á
+  Miro-borði hans, ekki sem fylltir krossar. Loftræsting = PLÚSÚTLÍNA í lit stærðarflokks með stærðinni inni í (efri mörk flokksins, „Loft 125-160“ → 160:
+  Ajour geymir flokkinn, ekki þvermálið) og dökk hök. Rör (stál, plast) = BLÓMHRINGUR með FJÖLDA stakra verka inni í og græn hök. Eitt hak = eitt klárað
+  stakt verk (mest tvö sýnd; „×n“ við plús ef þrjú eða fleiri). Skráningar sama hóps innan 2,4 × merkisbreiddar eru EITT merki (`merkisR`, hópun í `teikna`);
+  valinn eða dreginn punktur er alltaf stakur, og spjaldið telur upp „Í sama merki“. Opin skráning = rauð útlína + rauður hringur. Lagfæringarhringir eru
+  ekki teiknaðir í síma. Borðtölvusýnin notar áfram gömlu táknin (kross/hringur/þríhyrningur) — ekki breytt án þess að Agnar biðji um það.
 - **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
