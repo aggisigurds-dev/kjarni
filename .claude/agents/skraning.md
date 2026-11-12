@@ -175,6 +175,27 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Pörun:** `tools/skraning-gatakort-para.cjs` notar færðu stöðuna. Keyra aftur eftir færslur.
 - **Ekki til enn:** sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (sama aðferð og `-miro-festa.py` fyrir merki).
 
+## Símaviðmót gatakortsins (12.11.2026, Agnar: „í nokkuð góðu zoomi og góðu símaviðmóti“)
+- **Hvenær:** `.gk.snerti` er sett þegar bendillinn er grófur (`pointer: coarse`) eða glugginn ≤ 860 px. Borðtölvusýnin er óbreytt (neðri stikan er `display: none`).
+- **Uppsetning (≤ 860 px):** kortið fyllir skjáinn (`100dvh − 50px`), neðri stika `.gk-bar` (44 px hnappar): hæð 6H/5H/4H · stökk á deild S1/S2/S4/S5
+  (`faraADeild`: 1.–99. hundraðshluti punkta deildarinnar) · „Sýn“ · Færa · ＋ Punktur · Lög og síur. Hliðarstikan er skúffa að neðan (`.gk.skuffa`).
+  Blaðið opnast á hæðina (fyllir hæð, byrjar vestast); jafnstór blöð halda sýninni þegar skipt er um hæð.
+- **Sýn eftir fagi (`SYNIR`, líka í hliðarstiku á borðtölvu):** Loftræsting / Úðakerfi / Vatn og lagnir / Rafmagn / Gólf. Ræður hvaða lög sjást og síar
+  skráningar (táknhópur) og áætluð göt (fag). AÐEINS á skjánum: skrifar ekki `skr_log.synilegt` (gátreitir laga eru óvirkir á meðan).
+- **4H fær lög 5H að láni:** yfirlitsblað án eigin laga með sömu `mynd_path` og annað yfirlit sýnir lög þess (`Lag.lan`), falin þar til kveikt er;
+  kveikt/slökkt og gegnsæi gilda aðeins á skjánum.
+- **Færa með fingri:** pikka FYRST á punkt (velur hann), draga hann svo (grip innan 44 px frá valda punktinum). Dráttur annars staðar færir blaðið —
+  á þéttu korti gripi fingur annars punkt af slysni og skrifaði færslu. Stækkunargler (2,2×) birtist í horni fjær fingrinum meðan dregið er.
+  Mús er óbreytt (grípur næsta punkt innan 14 px).
+- **Rauður punktur með fingri:** „＋ Punktur“ sýnir krosshár á miðju korti og hnappinn „Setja rauðan punkt í krossinn“ (`setjaIKross`); pikk á kortið
+  setur EKKI punkt á snertiskjá. Fag sjálfgefið úr sýninni (annars loftræsting), stök verk 2 (gólf 1). `uppruni = handvirkt`.
+- **ATH skýrslan:** handsettur rauður punktur (óparað áætlað gat) telst strax sem „Eftir (áætlað og óskráð)“ í stöðuskýrslunni (`hkEftir`) og sést á
+  hæðarkorti hennar; á 4H með fag `golf` hækkar hann líka áætlunina (`vidbot4`). Stendur í setja-spjaldinu í símanum.
+- **Gildrur:** (1) hausinn `.aj-top` var breiðari en síminn → útlitsglugginn varð 694 px og fastsett skúffa lenti neðan við skjá; á gatakortssíðunni
+  skrunar valmyndin nú lárétt (`.aj:has(> .gk)`). (2) Sími: mest 24 skarpar flísar í ramma (`FLISA_THAK_SNERTI`), annars grófa myndin — hver flís er
+  ~15 MB afkóðuð. (3) Striginn breytir um stærð þegar setja-spjaldið opnast: `ResizeObserver` teiknar aftur.
+- **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
+
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
 - **4. hæð = gólf 5. hæðar (Agnar 12.11.2026):** þéttingar skráðar á 4H eru í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð, og teljast
   því HLUTI af verkinu á 5. og 6. hæð (ekki sleppa þeim úr skýrslu til eftirlits). Skýrslan sýnir „Gólf 5. hæðar“ (`haedHeiti`);
