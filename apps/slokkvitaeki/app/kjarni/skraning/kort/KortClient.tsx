@@ -155,6 +155,7 @@ export default function KortClient() {
   const [synFag, setSynFag] = useState(""); // flýtisýn eftir fagi (SYNIR); tómt = lög og síur eins og þau eru stillt
   const [lanSyn, setLanSyn] = useState<Record<number, boolean>>({}); // lánuð lög sem kveikt er á (aðeins á þessum skjá)
   const [skuffa, setSkuffa] = useState(false); // mjór skjár: hliðarstikan er skúffa að neðan
+  const [virkDeild, setVirkDeild] = useState(""); // símasýn: deildin sem er sýnd ein (tómt = allar)
   /** Snertiskjár eða mjór gluggi: neðri stika með stórum hnöppum, krosshár þegar punktur er settur, og punktur er VALINN áður en hann er dreginn. */
   const [snerti, setSnerti] = useState(false);
   const snertiRef = useRef(false);
@@ -245,8 +246,11 @@ export default function KortClient() {
   const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
   /** Sía án táknasíunnar — skýringarnar sýna þá réttan fjölda per tákn. */
   const synV = useMemo(() => SYNIR.find((x) => x[0] === synFag) || null, [synFag]);
+  /** Símasýn: ein deild í einu (Agnar 12.11.2026: „í breytingarham er alveg nóg að sjá bara eina deild í einu“). Aðeins á yfirlitsblaði. */
+  const einDeild = virkDeild && teikning?.tegund === "yfirlit" ? virkDeild : "";
   const siaAn = useCallback((p: Punktur) => {
     const s = p.s;
+    if (einDeild && p.d !== einDeild) return false;
     if (synV && !synV[3].includes(p.t.hopur)) return false;
     if (p.d && afDeild[p.d]) return false;
     if (madur && String(s.starfsmadur_id) !== madur) return false;
@@ -257,7 +261,7 @@ export default function KortClient() {
     if (tvitok && !s.tvitak_af) return false;
     if (oparad && paradIds.has(s.id)) return false;
     return true;
-  }, [synV, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds]);
+  }, [einDeild, synV, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds]);
   /** Staða: Tilbúin = kláraðar skráningar · Í vinnslu = ókláraðar skráningar · Eftir = engar skráningar sýndar (aðeins rauðir punktar áætlaðra gata). */
   const grunnsia = useCallback((p: Punktur) => siaAn(p) && (stada === "allt" || (stada === "done" ? p.s.stada === "done" : stada === "opid" ? p.s.stada !== "done" : false)), [siaAn, stada]);
   const grunn = useMemo(() => punktar.filter(grunnsia), [punktar, grunnsia]);
@@ -266,16 +270,18 @@ export default function KortClient() {
   /** Tákn (stærðarflokkur) áætlaðs gats — sama flokkun og skráningar, svo stærðarsían gildir um hvort tveggja. */
   const aaTakn = useCallback((a: Aaetlad) => (a.flokkur_id != null && taknAf.get(a.flokkur_id)) || takn(a.fag === "rafmagn" ? "Raf" : a.fag === "golf" ? "Gólf" : "Annað"), [taknAf]);
   const aaEftir = (a: Aaetlad) => !a.parad || a.parad.stada === "vantar";   // engin skráning parast: handvirkur punktur eða merki án skráningar
+  const aaIDeild = useCallback((a: Aaetlad) => !einDeild || deildAf(+a.x_px / (teikning?.breidd_px || 1)) === einDeild, [einDeild, teikning]);
   const aaStodusia = useCallback((a: Aaetlad) => {
+    if (!aaIDeild(a)) return false;
     if (synV && !synV[2].includes(a.fag)) return false;
     if (aaStada !== "allt" && (a.parad?.stada ?? "oreiknad") !== aaStada) return false;
     if (stada === "done") return false;
     if (stada === "opid") return a.parad?.stada === "hluti";
     if (stada === "eftir") return aaEftir(a);
     return true;
-  }, [synV, aaStada, stada]);
+  }, [aaIDeild, synV, aaStada, stada]);
   const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti] && (!snerti || synaParud || !a.parad || a.parad.stada === "vantar")), [aaetludBlads, aaStodusia, afTakn, aaTakn, snerti, synaParud]);
-  const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV]);
+  const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && aaIDeild(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV, aaIDeild]);
   const taknTal = useMemo(() => {
     const m = new Map<string, { t: Takn; n: number }>();
     for (const q of punktar) if (siaAn(q) && !m.has(q.t.heiti)) m.set(q.t.heiti, { t: q.t, n: 0 });
@@ -354,6 +360,11 @@ export default function KortClient() {
       const v = l.vorpun || { a: W / (l.breidd_px || im.naturalWidth), e: 0, f: 0 };
       cx.save(); cx.globalAlpha = Number(l.gegnsaei); cx.transform(v.a, v.b || 0, v.c || 0, v.d ?? v.a, v.e, v.f); cx.drawImage(im, 0, 0); cx.restore();
     }
+    // ein deild í einu: hinar deildirnar eru dofnaðar, svo ljóst sé hvar unnið er (deildaskil á x: 0,179 · 0,5 · 0,812 af blaðbreidd)
+    if (einDeild) {
+      const skil = [0, 0.179, 0.5, 0.812, 1], i = ["S1", "S2", "S4", "S5"].indexOf(einDeild);
+      if (i >= 0) { cx.fillStyle = "rgba(255,255,255,.72)"; cx.fillRect(sx0 - 10, sy0 - 10, skil[i] * W - sx0 + 10, sy1 - sy0 + 20); cx.fillRect(skil[i + 1] * W, sy0 - 10, sx1 - skil[i + 1] * W + 10, sy1 - sy0 + 20); }
+    }
     const zs = Math.max(0.75, Math.min(3.2, Math.sqrt(k / k0) * 0.9)) / k; // táknstærð í skjápixlum, vex hægt með stækkun
     const dr = faerir.current;
     if (synaSkr && snerti) {
@@ -429,7 +440,7 @@ export default function KortClient() {
       cx.beginPath(); cx.arc(lx, ly, R, 0, 6.2832); cx.lineWidth = 3 * dpr; cx.strokeStyle = "#1d4ed8"; cx.stroke();
       cx.beginPath(); cx.moveTo(lx - R, ly); cx.lineTo(lx - 9 * dpr, ly); cx.moveTo(lx + 9 * dpr, ly); cx.lineTo(lx + R, ly); cx.moveTo(lx, ly - R); cx.lineTo(lx, ly - 9 * dpr); cx.moveTo(lx, ly + 9 * dpr); cx.lineTo(lx, ly + R); cx.lineWidth = 1 * dpr; cx.strokeStyle = "rgba(29,78,216,.55)"; cx.stroke();
     }
-  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti]);
+  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -761,11 +772,15 @@ export default function KortClient() {
           </p>
           <div className="gk-bar-rod">
             <div className="gk-bar-hopur" role="group" aria-label="Hæð">{yfirlit.map((t) => <button key={t.id} type="button" className={syn === t.id ? "on" : ""} aria-pressed={syn === t.id} onClick={() => { setSyn(t.id); setValinn(null); }}>{t.haed || t.heiti}</button>)}</div>
-            {teikning.tegund === "yfirlit" && <div className="gk-bar-hopur" role="group" aria-label="Fara á deild">{["S1", "S2", "S4", "S5"].map((d) => <button key={d} type="button" onClick={() => faraADeild(d)} aria-label={`Fara á deild ${d}`}>{d}</button>)}</div>}
+            {teikning.tegund === "yfirlit" && <div className="gk-bar-hopur" role="group" aria-label="Fara á deild">{["S1", "S2", "S4", "S5"].map((d) => <button key={d} type="button" className={virkDeild === d ? "on" : ""} aria-pressed={virkDeild === d} onClick={() => { if (virkDeild === d) { setVirkDeild(""); return; } setVirkDeild(d); setValinn(null); faraADeild(d); }} aria-label={`Fara á deild ${d}`}>{d}</button>)}</div>}
           </div>
           <div className="gk-bar-rod">
             <select className={synFag ? "on" : ""} value={synFag} onChange={(e) => setSynFag(e.target.value)} aria-label="Sýn eftir fagi"><option value="">Sýn: allt</option>{SYNIR.map((x) => <option key={x[0]} value={x[0]}>{x[1]}</option>)}</select>
-            <button type="button" className={faera && !baetaFag ? "on" : ""} aria-pressed={faera && !baetaFag} disabled={teikning.tegund !== "yfirlit"} onClick={() => { setFaera((x) => !x || !!baetaFag); setBaetaFag(""); }}>Færa</button>
+            <button type="button" className={faera && !baetaFag ? "on" : ""} aria-pressed={faera && !baetaFag} disabled={teikning.tegund !== "yfirlit"} onClick={() => {
+              // færsluhamur sýnir eina deild: sé engin valin er það deildin á miðjum skjánum
+              if (!(faera && !baetaFag) && !virkDeild && kassiRef.current && teikning.breidd_px) { const s = sjon.current; setVirkDeild(deildAf(Math.max(0, Math.min(0.999, (kassiRef.current.clientWidth / 2 - s.tx) / s.k / teikning.breidd_px)))); }
+              setFaera((x) => !x || !!baetaFag); setBaetaFag("");
+            }}>Færa</button>
             <button type="button" className={baetaFag ? "on raud" : ""} aria-pressed={!!baetaFag} onClick={() => { if (baetaFag) { setBaetaFag(""); return; } const f = synV ? synV[2][0] : "loftraesting"; setBaetaFag(f); setBaetaFlokkur(""); setBaetaFjoldi(f === "golf" ? 1 : 2); setFaera(false); setValinn(null); }}>＋ Punktur</button>
             <button type="button" className={skuffa ? "on" : ""} aria-expanded={skuffa} onClick={() => setSkuffa((x) => !x)}>Lög og síur</button>
           </div>

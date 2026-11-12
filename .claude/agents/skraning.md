@@ -205,6 +205,9 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   stakt verk (mest tvö sýnd; „×n“ við plús ef þrjú eða fleiri). Skráningar sama hóps innan 2,4 × merkisbreiddar eru EITT merki (`merkisR`, hópun í `teikna`);
   valinn eða dreginn punktur er alltaf stakur, og spjaldið telur upp „Í sama merki“. Opin skráning = rauð útlína + rauður hringur. Lagfæringarhringir eru
   ekki teiknaðir í síma. Borðtölvusýnin notar áfram gömlu táknin (kross/hringur/þríhyrningur) — ekki breytt án þess að Agnar biðji um það.
+- **Ein deild í einu (Agnar 12.11.2026: „í breytingarham er alveg nóg að sjá bara eina deild í einu“):** deildarhnappur í neðri stikunni velur deild
+  (`virkDeild`): stækkar inn á hana, sýnir aðeins skráningar og rauða punkta hennar og dofnar hinar deildirnar. Sami hnappur aftur = allar deildir.
+  „Færa“ án valinnar deildar velur deildina á miðjum skjánum. Valið helst milli hæða. Aðeins á yfirlitsblöðum.
 - **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
