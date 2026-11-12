@@ -41,7 +41,7 @@ async function allt(slod) { const ut = []; for (let i = 0; ; i += 1000) { const 
     const ut = JSON.parse(fs.readFileSync(fUt, 'utf8')); const tel = {};
     for (const q of ut.punktar) {
       const rt = rautt.get(q.id), afMynd = rt != null && rt >= RAUTT_UDI;   // rauðmálað rör á ljósmynd = úðakerfi
-      const rod = afMynd ? { skraning_id: q.id, verk_id: VERK, kerfi: 'udi', fjarlaegd_px: q.d, naest: `${q.kerfi} ${q.d ?? ''}`.trim(), vafi: rt < RAUTT_VISS, uppruni: 'mynd' } : { skraning_id: q.id, verk_id: VERK, kerfi: q.kerfi, fjarlaegd_px: q.d, naest: q.k2 ? `${q.k2} ${q.d2}` : null, vafi: q.vafi, uppruni: 'teikning' };
+      const rod = afMynd ? { skraning_id: q.id, verk_id: VERK, kerfi: 'udi', fjarlaegd_px: q.d, naest: `${q.kerfi} ${q.d ?? ''}`.trim(), vafi: rt < RAUTT_VISS, uppruni: 'mynd' } : { skraning_id: q.id, verk_id: VERK, kerfi: q.kerfi, fjarlaegd_px: q.d, naest: q.k2 ? `${q.k2} ${q.d2}` : null, vafi: false, uppruni: 'teikning' };   // ekki rautt rör á mynd → vatn og hiti; óvissa á aðeins við úðakerfið
       const k = rod.kerfi + (afMynd ? ' [mynd]' : '') + (rod.vafi ? ' (vafi)' : ''); tel[k] = (tel[k] || 0) + 1; radir.push(rod);
     }
     console.log(haed, pp.length, 'stálrör ·', Object.entries(tel).sort().map(([k, n]) => `${k} ${n}`).join(' · '), '· lög:', Object.entries(ut.skrar).map(([k, s]) => `${k}=${s.length}`).join(' '), auka.length ? '· prufa: ' + auka[1] : '');

@@ -12,7 +12,8 @@ from PIL import Image, ImageDraw
 Image.MAX_IMAGE_PIXELS = None
 LOG, H, INN, UT, R = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5])
 PRUFA = sys.argv[6:]
-LAG = {'udi': ['vatnsudi'], 'vatn': ['vatn-litur', 'vatnslagnir'], 'lyfjaloft': ['lyfjaloft']}
+# Lyfjaloft er ekki sér kerfi (Agnar 12.11.2026: „settu bara í sem vatn og hiti“): lyfjaloftsteikningin telst með vatni og hita.
+LAG = {'udi': ['vatnsudi'], 'vatn': ['vatn-litur', 'vatnslagnir', 'lyfjaloft']}
 LITUR = {'udi': (29, 78, 216), 'vatn': (5, 150, 105), 'lyfjaloft': (168, 85, 247), 'oflokkad': (107, 114, 128)}
 
 grimur = {}; skrar = {}

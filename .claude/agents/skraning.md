@@ -253,6 +253,8 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   teikningu milli vatns og lyfjalofts (uppruni 'teikning'). ENGIN stærðarregla: grönn rauð úðarör sjást líka í Ø15-35 (nr. 9094, 2508, 3689).
   Rýnt á sýnisblöðum: 2,5–6 % → 15 af 15 úðarör; 0,8–2,5 % → um 10 af 15 (hitt: rautt rör í bakgrunni, rauður loki, rauð merking á mynd);
   þekkt villa: rauðbrún plata í bakgrunni (nr. 3326). Mælt 12.11: úði 1.488 (1.135 öruggar, 353 óvissar; 6H 550, 5H 938).
+- **Lyfjaloft er EKKI sér flokkur (Agnar 12.11.2026: „settu bara í sem vatn og hiti“):** stálrör eru aðeins 'udi' (rautt rör á ljósmynd) eða 'vatn'.
+  Lyfjaloftsteikningin (M795/M796) er áfram í lagahópnum sem stálrör festast á, en gefur ekki sér kerfi. Tölur 12.11: úði 1.488, vatn og hiti 4.176.
 - **Sjálfvirk færsla eftir kerfi (12.11.2026, Agnar: „hliðra punktunum til svo þeir séu á réttum stöðum“):** `skraning-gatakort-skr-festa` skiptir
   stálrörum eftir skr_kerfi: hópurinn 'udi' festist aðeins á skurðpunkta ÚÐALAGNA (vatnsudi) og veggja; 'stal' (önnur stálrör) á vatns- og
   lyfjaloftslagnir, ekki úðalagnir; plaströr ('ror') óbreytt. Þurrkeyrsla 12.11: úði 6H 354 af 550 festir, 5H 582 af 938; hinir standa á skráðum stað.
