@@ -36,5 +36,7 @@ export function shouldLockDesktop(screenW: number, screenH: number, innerW: numb
 export function isStationDesktopPath(pathname: string): boolean {
   if (/\/kjarni\/turbopaint(\/|$)/.test(pathname)) return false;
   if (/\/kjarni\/artcraft(\/|$)/.test(pathname)) return false;
+  // Skráning (/kjarni/skraning/…) er með eigið símaútlit og er EKKI í StationChrome/DesktopView: tölvulás þar læsti skruni síðunnar á símum (12.11.2026).
+  if (/\/kjarni\/skraning(\/|$)/.test(pathname)) return false;
   return /\/(kjarni|stjorn|kerfi|skjalarinn|draft)(\/|$)/.test(pathname);
 }
