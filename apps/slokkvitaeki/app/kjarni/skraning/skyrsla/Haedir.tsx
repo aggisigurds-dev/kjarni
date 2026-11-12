@@ -201,7 +201,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
     <div className="sk-hk-haed">
       <h3>{haedHeiti(haed)} <span>{haus}</span></h3>
       <div className="sk-hk-flogg">
-        {deildir.map((d) => { const r = reiturD(haed, d), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return <button key={d} type="button" className={fDeild === d ? "on" : ""} title={fDeild === d ? "Sýna alla hæðina" : `Stækka ${d}`} onClick={() => aDeild(d)} style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, borderColor: c[1], color: c[2], background: c[0] }}><b>{d}{p != null ? ` · ${p} %` : ""}</b><small>{texti(r)}</small></button>; })}
+        {deildir.map((d) => { const r = reiturD(haed, d), p = r.m != null ? pros(r.kl, r.m) : null, c = litur(p); return <button key={d} type="button" className={fDeild === d ? "on" : ""} title={fDeild === d ? "Sýna alla hæðina" : `Stækka ${d}`} onClick={() => aDeild(d)} style={{ left: `${GEO[d][0]}%`, width: `${GEO[d][1]}%`, borderColor: c[1], color: c[2], background: c[0] }}><b>Deild {d}{p != null ? ` · ${p} %` : ""}</b><small>{texti(r)}</small></button>; })}
       </div>
       <div className="sk-hk-rammi">
       <div className={`sk-hk-mynd${v.z > 1 ? " ad" : ""}`} ref={box} style={{ aspectRatio: `${y.w} / ${y.h}` }}
@@ -232,7 +232,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
             <div className="sk-hk-kort-h"><b>Skráning{minn.nr != null ? ` nr. ${minn.nr}` : ""}</b><em className={minn.done ? "ok" : "op"}>{minn.done ? "Klárað" : "Opið"}</em></div>
             <dl>
               <dt>Flokkur</dt><dd>{minn.fl || "—"}</dd>
-              <dt>Staður</dt><dd>{haedHeiti(haed)} · {minn.deild} · {minn.hluti === "N" ? "Norðurhlið" : minn.hluti === "S" ? "Suðurhlið" : "Center"}</dd>
+              <dt>Staður</dt><dd>{haedHeiti(haed)} · deild {minn.deild} · {minn.hluti === "N" ? "Norðurhlið" : minn.hluti === "S" ? "Suðurhlið" : "Center"}</dd>
               <dt>{minn.done ? "Klárað" : "Skráð"}</dt><dd>{minn.done ? dmy(minn.dags) : dmy(nanar?.skrad)}</dd>
               <dt>Starfsmaður</dt><dd>{nanar ? (nanar.sm != null && starfsmenn.get(nanar.sm)) || "—" : "…"}</dd>
               <dt>Myndir í Ajour</dt><dd>{nanar ? nanar.myndir : "…"}</dd>
@@ -249,7 +249,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, reiturD, reiturH,
         <tbody>
           {deildir.map((d) => { const rd = reiturD(haed, d), pd = rd.m != null ? pros(rd.kl, rd.m) : null; return (
             <tr key={d}>
-              <td className="sk-v"><b>{d}</b></td>
+              <td className="sk-v"><b>Deild {d}</b> <small>{haedHeiti(haed)}</small></td>
               {HLUTAR.map(([s], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null; return <td key={s} style={{ background: litur(p)[0] }}>{p != null ? <b>{p} % </b> : null}<small>{texti(r)}{r.open ? ` · +${num(r.open)}` : ""}</small></td>; })}
               <td style={{ background: litur(pd)[0] }}>{pd != null ? <b>{pd} % </b> : null}<small>{texti(rd)}</small></td>
               <td>{rd.open ? num(rd.open) : ""}</td><td>{eDeild(d) ? num(eDeild(d)) : ""}</td>
@@ -355,7 +355,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
     const n = Number(leit.trim()); if (!leit.trim() || !Number.isFinite(n)) { setLeitSvar(""); return; }
     const p = punktar.find((q) => q.nr === n);
     if (!p) { setLeitSvar(`Skráning nr. ${n} er ekki á hæðakortunum.`); return; }
-    setLeitSvar(`${haedHeiti(p.haed)} · ${p.deild}`); setAfHaed((x) => ({ ...x, [p.haed]: false })); setAfDeild((x) => ({ ...x, [p.deild]: false }));
+    setLeitSvar(`${haedHeiti(p.haed)} · deild ${p.deild}`); setAfHaed((x) => ({ ...x, [p.haed]: false })); setAfDeild((x) => ({ ...x, [p.deild]: false }));
     setValinn(p); setFokus({ id: p.id, t: Date.now() });
   };
 
@@ -375,10 +375,11 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, mar
         <div className="sk-sia-rod"><span>Staða</span>
           {([["allt", "Allt"], ["done", "Klárað"], ["opid", "Opið"], ["eftir", "Eftir (áætlað, óskráð)"]] as const).map(([k, nafn]) => <button key={k} type="button" className={stada === k ? "on" : ""} onClick={() => setStada(k)}>{nafn}</button>)}
         </div>
-        <div className="sk-sia-rod"><span>Hæð og deild</span>
+        <div className="sk-sia-rod"><span>Hæð</span>
           {allarHaedir.map((h) => <button key={h} type="button" className={afHaed[h] ? "" : "on"} aria-pressed={!afHaed[h]} onClick={() => setAfHaed((x) => ({ ...x, [h]: !x[h] }))}>{haedHeiti(h)}</button>)}
-          <i />
-          {DEILDIR.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}
+        </div>
+        <div className="sk-sia-rod"><span>Deild</span>
+          {DEILDIR.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>Deild {d}</button>)}
         </div>
         <div className="sk-sia-rod"><span>Tímabil</span>
           <label>Frá <select value={fra} onChange={(e) => setFra(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{manTexti(m)}</option>)}</select></label>

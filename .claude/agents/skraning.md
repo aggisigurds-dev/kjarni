@@ -206,6 +206,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     merkir stjórntæki sem sjást þar. ATH: þetta er ekki aðgangsstýring — slóðin án `?kynning=1` er jafn opin (RLS leyfir skrif).
   - Efnisyfirlit `.sk-yfirlit` (sticky; `.sk-blad` er `overflow: clip`). Merki hæðaspjalda: „Lokið“ aðeins við 100 %, „Á lokastigi“ ≥ 95 %.
   - Myndir þéttinganna sjálfra eru enn AÐEINS í Ajour (`ajour_gogn.myndir` = skráarauðkenni; `skr_myndir` er tóm fyrir verk 4).
+- **„S4“ er DEILD (stúka 4), ekki 4. hæð (12.11.2026):** Agnar las sjálfur 6. hæð S4 í töflunni sem 4. hæð. Hæðin stendur því við hverja deild
+  („Deild S4“ + hæð í deildarreit og samtölulínu, á flöggum og í töflum kortsins; síurnar „Hæð“ og „Deild“ aðskildar). Aldrei sýna „S4“ án hæðar
+  í neinu sem fer út. Á 4H (gólf 5. hæðar) eru EINGÖNGU milliloftaþéttingar (Gólf), mælt 12.11: 367 skráningar.
+- **Stærðarlínur stöðutöflunnar (12.11.2026, Agnar: „fylla inn í allar stærðir“):** hver stærð hefur markmið, % og stiku. Markmið stærðar =
+  það sem er skráð (klárað + opið) + hlutur í afgangi flokksmarkmiðsins (, stærsta afgangs-aðferð), skipt eftir því sem vantar upp á
+  sömu stærð á sömu deild á 6. hæð. Summa stærða = markmið flokksins (prófað: 84 línur, engin frávik). Viðmið, ekki talning.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

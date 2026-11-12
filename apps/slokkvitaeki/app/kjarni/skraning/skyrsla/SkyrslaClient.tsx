@@ -62,6 +62,13 @@ const UTBOD: { nr: string; heiti: string; ein: string; magn: number; per: number
 ];
 const num = (n: number, aukast = 0) => { const [h, b] = Math.abs(n).toFixed(aukast).split("."); return (n < 0 ? "−" : "") + h.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (b && +b ? "," + b : ""); };
 const pros = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
+/** Skiptir heiltölu á liði í hlutfalli við vog (stærsta afgangs-aðferð), svo summan verði nákvæmlega „alls“. */
+const deila = (alls: number, vog: number[]): number[] => {
+  const sv = vog.reduce((a, b) => a + b, 0); if (sv <= 0) return vog.map(() => 0);
+  const hra = vog.map((v) => (alls * v) / sv), ut = hra.map(Math.floor); let eftir = Math.round(alls) - ut.reduce((a, b) => a + b, 0);
+  for (const i of hra.map((h, j) => [h - Math.floor(h), j] as [number, number]).sort((a, b) => b[0] - a[0]).map((x) => x[1])) { if (eftir <= 0) break; ut[i]++; eftir--; }
+  return ut;
+};
 const dmy = (d: string) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "");
 
 /** Talnareitur sem má yfirskrifa: tómt = reiknað gildi (sýnt sem placeholder); breytt gildi er merkt. */
@@ -246,8 +253,13 @@ export default function SkyrslaClient() {
         const x = taln.hd.get(`${haed}|${deild}|${k}`) || { done: 0, open: 0 }, lykill = `${haed}|${deild}|${k}`, br = gogn.stada?.[lykill] || {};
         const markR = markmidReiknad(haed, deild, k), mark = br.markmid ?? markR, klar = br.klarad ?? x.done;
         const prosenta = mark == null ? null : pros(Math.min(klar, Math.max(mark, klar)), Math.max(mark, klar));
-        // stærðarflokkar hópsins á þessari deild, með sama flokki á 6. hæð sem viðmið (aðeins til upplýsingar)
-        const staerdir = flokkar.filter((f) => HOPAR.find((y) => y[0] === k)![2].test(f.heiti)).map((f) => { const a = taln.st.get(`${haed}|${deild}|${f.heiti}`) || { done: 0, open: 0 }, r6 = taln.st.get(`6H|${deild}|${f.heiti}`) || { done: 0, open: 0 }; return { heiti: f.heiti.replace(/^(Loft|Stál|Plast|Gólf)\s*/i, "").replace(/\s*L[Vv]\b.*$/, "").trim() || f.heiti, done: a.done, open: a.open, vidmid: haed === "5H" && markR != null ? r6.done + r6.open : 0 }; }).filter((z) => z.done + z.open + z.vidmid > 0).sort((a, b) => (parseInt(a.heiti.replace(/^\D+/, ""), 10) || 0) - (parseInt(b.heiti.replace(/^\D+/, ""), 10) || 0));
+        // stærðarflokkar hópsins á þessari deild. Markmið stærðar = markmið hópsins skipt á stærðirnar eftir vog: það sem er skráð (klárað + opið),
+        // og á 5. hæð sama stærð á sömu deild á 6. hæð ef hún er stærri. Fyrst fær hver stærð það sem er skráð; afgangi hópmarkmiðsins er skipt á
+        // stærðirnar sem vantar upp á viðmiðið. Summa stærða = markmið hópsins.
+        const st0 = flokkar.filter((f) => HOPAR.find((y) => y[0] === k)![2].test(f.heiti)).map((f) => { const a = taln.st.get(`${haed}|${deild}|${f.heiti}`) || { done: 0, open: 0 }, r6 = taln.st.get(`6H|${deild}|${f.heiti}`) || { done: 0, open: 0 }; return { heiti: f.heiti.replace(/^(Loft|Stál|Plast|Gólf)\s*/i, "").replace(/\s*L[Vv]\b.*$/, "").trim() || f.heiti, done: a.done, open: a.open, vog: Math.max(a.done + a.open, haed === "5H" ? r6.done + r6.open : 0) }; }).filter((z) => z.vog > 0).sort((a, b) => (parseInt(a.heiti.replace(/^\D+/, ""), 10) || 0) - (parseInt(b.heiti.replace(/^\D+/, ""), 10) || 0));
+        const skrad = st0.reduce((a, z) => a + z.done + z.open, 0), vantar = st0.map((z) => Math.max(0, z.vog - z.done - z.open));
+        const afgangur = mark != null && mark > 0 ? deila(Math.max(0, Math.max(mark, klar) - skrad), vantar.some((v) => v > 0) ? vantar : st0.map((z) => z.vog)) : null;
+        const staerdir = st0.map((z, i) => ({ heiti: z.heiti, done: z.done, open: z.open, vidmid: afgangur ? z.done + z.open + afgangur[i] : 0 })).filter((z) => z.done + z.open + z.vidmid > 0);   // stærð sem ekkert er skráð á og fær ekkert af markmiðinu er ekki sýnd
         return { k, nafn, lykill, done: x.done, open: x.open, markR, mark, klar, prosenta, br, staerdir: staerdir.length > 1 ? staerdir : [] };
       }).filter((h) => (h.mark ?? 0) > 0 || h.done + h.open > 0),
     })),
@@ -415,7 +427,7 @@ export default function SkyrslaClient() {
                     return d.hopar.length ? [
                       ...d.hopar.flatMap((h, i) => [
                         <tr key={h.lykill}>
-                          {i === 0 && <td rowSpan={nRod} className="sk-deild">{d.deild === "—" ? "Án deildar" : d.deild}</td>}
+                          {i === 0 && <td rowSpan={nRod} className="sk-deild">{d.deild === "—" ? "Án deildar" : <>Deild {d.deild}</>}<small>{haedHeiti(r.haed)}</small></td>}
                           <td className="sk-v">{h.nafn}</td><td>{num(h.done)}</td><td>{h.open ? num(h.open) : ""}</td>
                           <td><Tala gildi={h.br.klarad} reiknad={h.done} onChange={(v) => breytaStodu(h.lykill, { klarad: v })} /></td>
                           <td><Tala gildi={h.br.markmid} reiknad={h.markR} onChange={(v) => breytaStodu(h.lykill, { markmid: v })} /></td>
@@ -430,7 +442,7 @@ export default function SkyrslaClient() {
                           </tr>
                         )) : []),
                       ]),
-                      <tr key={d.deild + "-s"} className="sk-sum"><td className="sk-v">Deild alls</td><td></td><td></td><td>{ds.mark ? num(ds.klar) : "—"}</td><td>{ds.mark ? num(ds.mark) : "—"}</td><td>{ds.mark ? `${pros(ds.klar, ds.mark)} %` : "—"}</td><td className="sk-stikud">{ds.mark ? <i style={{ width: `${pros(ds.klar, ds.mark)}%` }} /> : null}</td><td></td></tr>,
+                      <tr key={d.deild + "-s"} className="sk-sum"><td className="sk-v">{d.deild === "—" ? "Án deildar alls" : `Deild ${d.deild} alls`} · {haedHeiti(r.haed)}</td><td></td><td></td><td>{ds.mark ? num(ds.klar) : "—"}</td><td>{ds.mark ? num(ds.mark) : "—"}</td><td>{ds.mark ? `${pros(ds.klar, ds.mark)} %` : "—"}</td><td className="sk-stikud">{ds.mark ? <i style={{ width: `${pros(ds.klar, ds.mark)}%` }} /> : null}</td><td></td></tr>,
                     ] : null;
                   })}
                 </tbody>
@@ -438,7 +450,7 @@ export default function SkyrslaClient() {
             </div>
           );
         })}
-        <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Rafmagn: {RAF_MARK} stök verk á deild á 5. og 6. hæð, og telst með í samtölum. Raufar við kantaða stokka hafa ekkert reiknað markmið: þar birtist prósenta aðeins ef markmið er slegið inn, og sú lína telst þá fyrst með í samtölum. „Án deildar" eru skráningar á teikningum sem skiptast ekki á deildir. Stærðarlínurnar (inndregnar) sýna skráningar per stærð; á 5. hæð er sama stærð á sömu deild á 6. hæð sýnd sem viðmið — stærðaflokkun er ekki alltaf eins milli hæða, svo prósentan á við hópinn í heild. Utan hæða og hópa (skráningar án hæðar, Annað og Guide point{gogn.aukaverk_med ? ", aukaverk" : ""}): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.{aukaRadir.length ? " Aukaverk eru í sér kafla hér að neðan." : ""}</p>
+        <p className="sk-smatt">Sjálfgefin markmið: 6. hæð = það sem er klárað; 5. hæð = sami flokkahópur á sömu deild á 6. hæð (loftræsting kvörðuð við talningu á 5. hæð), en aldrei minna en klárað + opið; milliloft {GOLF_MARK} á deild á 4. og 5. hæð. Rafmagn: {RAF_MARK} stök verk á deild á 5. og 6. hæð, og telst með í samtölum. Raufar við kantaða stokka hafa ekkert reiknað markmið: þar birtist prósenta aðeins ef markmið er slegið inn, og sú lína telst þá fyrst með í samtölum. „Án deildar" eru skráningar á teikningum sem skiptast ekki á deildir. Stærðarlínurnar (inndregnar) sýna skráningar per stærð. Markmið stærðar er markmið flokksins skipt á stærðirnar: hver stærð fær fyrst það sem er skráð (klárað + opið), og því sem þá vantar upp á markmið flokksins er á 5. hæð skipt eftir sömu stærð á sömu deild á 6. hæð. Summa stærða er því markmið flokksins. Stærðaflokkun er ekki alltaf eins milli hæða, svo markmið stærðar er viðmið; prósentan sem gildir er flokksins. Utan hæða og hópa (skráningar án hæðar, Annað og Guide point{gogn.aukaverk_med ? ", aukaverk" : ""}): {num(taln.utan)} skráningar, þar af {num(taln.utanDone)} kláraðar — þær eru ekki í töflunum hér að ofan.{aukaRadir.length ? " Aukaverk eru í sér kafla hér að neðan." : ""}</p>
       </section>
 
       {aukaRadir.length > 0 && synaKafla("aukaverk") && (

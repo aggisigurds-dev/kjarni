@@ -180,6 +180,9 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-v2 h2 { margin: 30px 0 10px; font-size: 20px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .sk-v2 h2 small { font-size: 12.5px; font-weight: 400; color: #5a6882; }
 .sk-falinn { display: none !important; }
+.sk-deild { white-space: nowrap; }
+.sk-deild small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 600; color: #5a6882; }
+.sk-hk-tafla th:first-child, .sk-hk-tafla td:first-child { width: 130px; white-space: nowrap; }
 .sk-forsendur { margin-top: 20px; padding: 14px 18px 12px; border: 1px solid #f8b98c; border-radius: 12px; background: #ffeee0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .sk-v2 .sk-forsendur h2 { margin: 0 0 6px; font-size: 15px; }
 .sk-forsendur ul { margin: 0; padding-left: 18px; }
