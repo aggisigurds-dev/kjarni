@@ -245,7 +245,7 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   lagnateikningu“. Aldrei kynna kerfistölur sem skráðar staðreyndir.
   Stærðarregla (Agnar 12.11.2026: úðakerfið „er almennt í stál 50 mm til stál 75 mm“): aðeins Stál Ø40-50, Ø75-110 og Ø110-160 geta orðið 'udi' (Ø110-160 bætt við sama dag eftir myndskoðun: nr. 4808 og 5413 eru rauð úðarör). ÚÐALAGNIRNAR ERU RAUÐMÁLAÐAR — rauður litur á ljósmynd skráningar er betri vísbending en nálægð á teikningu (af 3 sýnum sem lágu „aðeins á úðalögn“ var eitt blátt einangrað rör); flokkun eftir myndlit er ógerð.
   Eftir regluna: úði 477 (6H 286, 5H 191), vatn og hiti 4.726, lyfjaloft 456. Þegar kerfi er valið í síunni birtist lagnateikning þess
-  (skr_log, fag sprinkler/vatn/gas; CSS-klasinn sk-hk-lagmynd) ofan á hæðinni og grunnteikningin dofnar (klasinn medlag á kortglugganum).
+  (skr_log, fag sprinkler/vatn/gas; CSS-klasinn sk-hk-lagmynd) ofan á hæðinni og grunnteikningin dofnar (klasinn medlag á kortglugganum). Sama á við um flokkana Loftræsting (fag loftraesting) og Rafmagn (fag rafmagn): HOP_FAG í Haedir.tsx (Agnar 12.11.2026: „líka svona loftræsti sýn“). Við aðdrátt (z ≥ 2) fá kláraðir punktar hvíta brún.
 - **Snið hönnunarinnar (11.11.2026, Agnar: „svipað og artifact buildið“):** síðan fylgir Claude Design-skjalinu „Stöðuskýrsla NLSH“
   (Brunahólf V2): `.sk-v2` yfirskrifar `--aj-*` litabreyturnar innan skýrslunnar, Poppins um `next/font` í `page.tsx`
   (`--font-poppins`). Uppsetning: hliðarstika (`.sk-hlid`: kaflarofar, dagsetning, skýringar, vistun) + blað (`.sk-blad`) með

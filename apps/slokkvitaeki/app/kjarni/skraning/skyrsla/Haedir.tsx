@@ -41,6 +41,8 @@ const BIL: [number, number][] = [[2.3, 26.5], [28.8, 42.36], [71.16, 27.09]];
 const KERFI: [string, string][] = [["udi", "Úðakerfi"], ["vatn", "Vatn og hiti"], ["lyfjaloft", "Lyfjaloft"]];
 /** Fag lagnateikningar (skr_log.fag) fyrir hvert kerfi. */
 const KERFI_FAG: Record<string, string> = { udi: "sprinkler", vatn: "vatn", lyfjaloft: "gas" };
+/** Fag teikningar fyrir flokkahóp: valinn hópur sýnir teikningu síns fags ofan á hæðinni. */
+const HOP_FAG: Record<string, string> = { Loft: "loftraesting", Rafmagn: "rafmagn" };
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 /** Litir hæðanna í framvinduritinu — sannprófaðir með validate_palette.js (litblinduaðskilnaður ΔE 12,8; ljós flötur). Fylgja hæðinni, ekki röðinni. */
 const LITUR_H: Record<string, string> = { "6H": "#1d4f91", "5H": "#f07f1b", "4H": "#2a9d8f" };
@@ -82,7 +84,7 @@ function Punktalag({ w, h, punktar, eftir, stada, z }: { w: number; h: number; p
     const cx = c.getContext("2d"); if (!cx) return;
     const k = c.width / w, r = Math.max(1.3, br / 520) * Math.pow(z, 0.45) * (c.width / (br * z));
     cx.clearRect(0, 0, c.width, c.height);
-    if (stada === "allt" || stada === "done") { cx.fillStyle = "rgba(21,128,61,.88)"; for (const p of punktar) if (p.done) { cx.beginPath(); cx.arc(p.x * k, p.y * k, r, 0, 6.2832); cx.fill(); } }
+    if (stada === "allt" || stada === "done") { const brun = z >= 2; cx.fillStyle = brun ? "rgb(21,128,61)" : "rgba(21,128,61,.88)"; cx.strokeStyle = "#ffffff"; cx.lineWidth = Math.max(1, r * 0.28); for (const p of punktar) if (p.done) { cx.beginPath(); cx.arc(p.x * k, p.y * k, r, 0, 6.2832); cx.fill(); if (brun) cx.stroke(); } }   // hvít brún við aðdrátt: punktar greinast frá lögnum og stokkum
     if (stada === "allt" || stada === "opid") { cx.lineWidth = Math.max(1, r * 0.55); cx.strokeStyle = "#dc2626"; cx.fillStyle = "#ffffff"; for (const p of punktar) if (!p.done) { cx.beginPath(); cx.arc(p.x * k, p.y * k, r * 1.35, 0, 6.2832); cx.fill(); cx.stroke(); } }
     if (stada === "allt" || stada === "eftir") { cx.fillStyle = "#dc2626"; cx.strokeStyle = "#ffffff"; cx.lineWidth = Math.max(1, r * 0.35); const t = r * 1.9; for (const e of eftir) { const x = e.x * k, y = e.y * k; cx.beginPath(); cx.moveTo(x, y - t); cx.lineTo(x + t, y); cx.lineTo(x, y + t); cx.lineTo(x - t, y); cx.closePath(); cx.fill(); cx.stroke(); } }
   }, [br, w, h, punktar, eftir, stada, z]);
@@ -405,8 +407,8 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
     fra ? `tímabil ${manTexti(fra)} – ${til ? manTexti(til) : "…"}` : til ? `staðan í lok ${manTexti(til)}` : "",
   ].filter(Boolean).join(" · ");
   const texti = (r: Reitur) => (r.m != null ? `${num(r.kl)} / ${num(r.m)}` : `${num(r.done)} klárað`);
-  /** Lagnateikningar valinna kerfa á hæðinni (tómt nema síað sé á kerfi). */
-  const lagAf = (haed: string) => (kerfiVal.size && log ? log.filter((l) => l.haed === haed && [...kerfiVal].some((k) => KERFI_FAG[k] === l.fag)).map((l) => l.mynd) : []);
+  /** Teikningar valinna kerfa og flokka á hæðinni: lagnateikning kerfis (úði, vatn, lyfjaloft) og teikning flokks (loftræsting, rafmagn). */
+  const lagAf = (haed: string) => { if (!log) return []; const fog = new Set<string>(); for (const k of kerfiVal) fog.add(KERFI_FAG[k]); for (const h of hopVal) if (HOP_FAG[h]) fog.add(HOP_FAG[h]); return fog.size ? log.filter((l) => l.haed === haed && fog.has(l.fag)).map((l) => l.mynd) : []; };
   /** Kerfi valið: flokkurinn fer á Stálrör; fyrir úðakerfi eitt og sér er slökkt á Ø15-35 (úðakerfið er í Ø40-50, Ø75-110 og Ø110-160). */
   const veljaKerfi = (k: string | null) => {
     const n = k ? skipta(kerfiVal, k) : new Set<string>(); setKerfiVal(n);
