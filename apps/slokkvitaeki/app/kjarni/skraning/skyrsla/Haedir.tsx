@@ -331,9 +331,9 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
   /** Stærðir (flokkar) valda hópsins, í stærðarröð. */
   const staerdir = useMemo(() => {
     if (!einnHopur) return [];
-    const m = new Map<string, number>(); for (const p of punktar) if (p.hop === einnHopur) m.set(p.fl, (m.get(p.fl) || 0) + 1);
+    const m = new Map<string, number>(); for (const p of punktar) if (p.hop === einnHopur) m.set(p.fl, (m.get(p.fl) || 0) + (kerfiVal.size && (!p.kerfi || !kerfiVal.has(p.kerfi)) ? 0 : 1));   // allar stærðir hópsins sjást; teljarinn fylgir völdu kerfi
     return [...m].sort((a, b) => (parseInt(a[0].replace(/^\D+/, ""), 10) || 0) - (parseInt(b[0].replace(/^\D+/, ""), 10) || 0));
-  }, [einnHopur, punktar]);
+  }, [einnHopur, punktar, kerfiVal]);
   const manudir = useMemo(() => [...new Set(punktar.map((p) => p.man).filter((m): m is string => !!m))].sort(), [punktar]);
   const medMarkmid = flVal.size === 0 && !fra && kerfiVal.size === 0;   // markmið eru skilgreind á flokkahóp: stærðarsía og „Frá“-mánuður sýna aðeins fjölda; „Til“ = staðan í lok mánaðar á móti markmiði
 
@@ -407,6 +407,13 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
   const texti = (r: Reitur) => (r.m != null ? `${num(r.kl)} / ${num(r.m)}` : `${num(r.done)} klárað`);
   /** Lagnateikningar valinna kerfa á hæðinni (tómt nema síað sé á kerfi). */
   const lagAf = (haed: string) => (kerfiVal.size && log ? log.filter((l) => l.haed === haed && [...kerfiVal].some((k) => KERFI_FAG[k] === l.fag)).map((l) => l.mynd) : []);
+  /** Kerfi valið: flokkurinn fer á Stálrör; fyrir úðakerfi eitt og sér eru aðeins stærðirnar 50–75 mm kveiktar (Ø40-50 og Ø75-110). */
+  const veljaKerfi = (k: string | null) => {
+    const n = k ? skipta(kerfiVal, k) : new Set<string>(); setKerfiVal(n);
+    if (!n.size) { setFlVal(new Set()); return; }
+    setHopVal(new Set(["Stál"]));
+    setFlVal(n.size === 1 && n.has("udi") ? new Set(punktar.filter((p) => p.hop === "Stál" && /Øs*(40-50|75-110)/.test(p.fl)).map((p) => p.fl)) : new Set());
+  };
   const veljaManud = (m: string) => { if (til === m && !fra) setTil(""); else { setFra(""); setTil(m); } };
   const leita = () => {
     const n = Number(leit.trim()); if (!leit.trim() || !Number.isFinite(n)) { setLeitSvar(""); return; }
@@ -431,8 +438,8 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
         )}
         {kerfiTal.alls > 0 && (
           <div className="sk-sia-rod"><span>Stálrör eftir kerfi</span>
-            <button type="button" className={kerfiVal.size ? "" : "on"} onClick={() => setKerfiVal(new Set())}>Öll</button>
-            {KERFI.map(([k, nafn]) => <button key={k} type="button" className={kerfiVal.has(k) ? "on" : ""} aria-pressed={kerfiVal.has(k)} onClick={() => setKerfiVal((s) => skipta(s, k))}>{nafn} <small>{num(kerfiTal.m.get(k) || 0)}</small></button>)}
+            <button type="button" className={kerfiVal.size ? "" : "on"} onClick={() => veljaKerfi(null)}>Öll</button>
+            {KERFI.map(([k, nafn]) => <button key={k} type="button" className={kerfiVal.has(k) ? "on" : ""} aria-pressed={kerfiVal.has(k)} onClick={() => veljaKerfi(k)}>{nafn} <small>{num(kerfiTal.m.get(k) || 0)}</small></button>)}
             <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Kerfið er lesið af lagnateikningum eftir því hvaða lögn liggur næst punktinum; úðakerfi kemur aðeins til greina í stáli Ø40-50 og Ø75-110. Þegar kerfi er valið birtist lagnateikning þess á hæðinni. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>áætlað af lagnateikningu</em>
           </div>
         )}
