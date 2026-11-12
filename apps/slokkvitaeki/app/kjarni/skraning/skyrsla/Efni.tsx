@@ -8,6 +8,10 @@
  *   POL PRO276 eldvarnarband. Vöruheiti, lýsingar, myndir og tækniblöð eru af vörusíðum redder.is (lesið sama dag) — lýsingarnar
  *   eru endursagðar, ekki afritaðar. Magn og innkaupsverð eru EKKI sýnd (viðskiptaupplýsingar).
  *   Myndirnar eru sóttar beint af redder.is (ekki afritaðar í okkar geymslu); mynd sem næst ekki er falin.
+ *   Reikningar merktir „Landsspítalinn“ frá 14.11.2023 til 05.02.2024 („BUGL“, „LSH 0104-14“) eru ANNAÐ verk og teljast ekki með:
+ *   FSi háþenslukíttið (FS310HPE) er aðeins þar. NLSH-reikningarnir byrja 03.10.2025. FSi á NLSH: aðeins FS310CW25 ×75 (09.07.2026)
+ *   og eldvarnarband PW á rúllu ×2 (30.06. og 09.07.2026). Forsniðnu böndin eftir rörastærð (POL PRO076 82 mm, PRO069 110 mm) eru
+ *   aðeins á ótengdum reikningum — ekki hægt að eigna þau verkinu, svo þau eru ekki talin upp.
  *   Vottorð (ETA, DoP) eru ekki í kerfinu — aðeins tenglar á tækniblöð Redder. Aldrei fullyrða um vottun umfram það.
  * VERKFERLI: skrefin eru DRÖG þar til Agnar hakar við „Yfirfarið“ (gogn.verkferli_ok) — merkið „Drög“ prentast með á meðan.
  *   Texta hvers skrefs má yfirskrifa (gogn.verkferli[lykill]); tómt = sjálfgefinn texti.
@@ -66,7 +70,7 @@ export function Efni() {
           </article>
         ))}
       </div>
-      <p className="sk-smatt">Efnin eru úr Protecta-línunni og keypt hjá Redder ehf. Á reikningum vegna verksins eru auk þess, í minna magni, eldvarnarakríl og háþenslukítti frá FSi (FSI FS310CW25 og FSI FS310HPE). Brunamótstaða hverrar þéttingar ræðst af prófaðri útfærslu samkvæmt gögnum framleiðanda (gerð veggjar eða gólfs, stærð ops og tegund lagnar). Tenglarnir vísa á tækniblöð og leiðbeiningar á vef Redder. Myndir: Redder ehf.</p>
+      <p className="sk-smatt">Efnin eru úr Protecta-línunni og keypt hjá Redder ehf. Á tveimur reikningum vegna verksins sumarið 2026 eru auk þess hvítt eldvarnarakríl og eldvarnarband á rúllu frá FSi (FSI FS310CW25 og FSI PWPEL). Brunamótstaða hverrar þéttingar ræðst af prófaðri útfærslu samkvæmt gögnum framleiðanda (gerð veggjar eða gólfs, stærð ops og tegund lagnar). Tenglarnir vísa á tækniblöð og leiðbeiningar á vef Redder. Myndir: Redder ehf.</p>
     </div>
   );
 }

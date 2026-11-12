@@ -197,7 +197,9 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   - `Framvinda` (í sama skjali): kláraðar skráningar á mánuði, staflað eftir hæð; smellur á mánuð setur „Til“ = staðan í lok mánaðar
     (prósenta á móti markmiði helst þá; „Frá“ og stærðarsía fella hana). Litir hæða `LITUR_H` eru sannprófaðir (dataviz validate_palette).
   - `Efni.tsx`: **Efni og kerfi** = Protecta-vörurnar af reikningum Redder vegna verksins (FR Acrylic PRO005/PRO022, FR Graphite PRO010,
-    FR Board A006, FR Collar PRO0039-30, FR Pipe Wrap PRO276; FSi FS310CW25/FS310HPE nefnd í smáu letri). Myndir og tækniblöð eru TENGLAR á
+    FR Board A006, FR Collar PRO0039-30, FR Pipe Wrap PRO276; FSi FS310CW25 og PW-band á rúllu nefnd í smáu letri). Redder-verkstaðurinn
+    „Landsspítalinn“ geymir LÍKA annað verk: reikningar 14.11.2023–05.02.2024 („BUGL“, „LSH 0104-14“) eru ekki NLSH (FSi háþenslukítti
+    FS310HPE er aðeins þar); NLSH-reikningar byrja 03.10.2025. Efni haustið 2025 er að mestu á ÓTENGDUM reikningum (worksite_match null). Myndir og tækniblöð eru TENGLAR á
     redder.is (ekki afrit í okkar geymslu). Magn og verð eru ekki sýnd. ETA-vottorð eru EKKI í kerfinu — ekki fullyrða um vottun.
     **Verkferli** = sex skref, DRÖG þar til Agnar hakar við „Yfirfarið“ (`gogn.verkferli_ok`); texti skrefa yfirskrifanlegur (`gogn.verkferli`).
   - **Kynningarhamur** `?kynning=1` (`.sk-les`): engin ritstjórn, engin vistun, ekkert app-nav — aðeins síur, kort og prentun. `.sk-gagnv`
