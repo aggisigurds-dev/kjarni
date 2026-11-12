@@ -253,6 +253,15 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   teikningu milli vatns og lyfjalofts (uppruni 'teikning'). ENGIN stærðarregla: grönn rauð úðarör sjást líka í Ø15-35 (nr. 9094, 2508, 3689).
   Rýnt á sýnisblöðum: 2,5–6 % → 15 af 15 úðarör; 0,8–2,5 % → um 10 af 15 (hitt: rautt rör í bakgrunni, rauður loki, rauð merking á mynd);
   þekkt villa: rauðbrún plata í bakgrunni (nr. 3326). Mælt 12.11: úði 1.488 (1.135 öruggar, 353 óvissar; 6H 550, 5H 938).
+- **VIÐBÓTARVERK Á 4. HÆÐ: stútar af 5. hæð niður í inntaksrými 4. hæðar (12.11.2026, Agnar: „Jú inn“):** 35 staðir úr skjalinu
+  „Lagnir 4. hæð – Stútar af 5. hæð niður í inntaksrými 4. hæðar“ (12 svæðisblöð S1/S2/S4/S5 × N/C2/S; S5-C2 enginn stútur). Bútarnir voru
+  staðsettir á yfirlitsblað 5H með sniðmátsleit (kvarði 0,96–1,27, sannreynt með yfirlagi) og punktarnir eru í
+  `tools/skraning-gatakort-vidbot-stutar.json`. `tools/skraning-gatakort-vidbot-stutar.cjs [--write] [--radius 20]` setur þá í skr_aaetlud
+  (teikning 6 = 4H, fag 'golf', uppruni `vidbot:stutar-4h:<nr>`) og parar einn á móti einum við skráningu á 4H innan 0,6 m. Staðan 12.11:
+  13 paraðir (9 kláraðar, 4 opnar skráningar; þeir teljast EKKI aftur), 22 „eftir“. Skýrslan (`vidbot4` í SkyrslaClient.tsx) bætir aðeins
+  ÓPÖRUÐUM við Áætlað á gólfi 5. hæðar (489 → 511; S1 +9, S2 +8, S4 +1, S5 +4) og setur þá á réttan hluta deildar. Eftir nýjan Ajour-innflutning:
+  keyra tólið aftur með --write svo pörunin uppfærist. Athugasemdir í skjalinu („Brunaþétting: Komið“ ×13, „Eftir“ ×11) eru EKKI tengdar
+  einstökum punktum (örvarnar eru skornar af í PDF). Heildarteikningar með/án punkta voru afhentar Agnari sem JPG (1× og 4×), ekki vistaðar í repo.
 - **Úrtakspróf á kerfisflokkuninni (12.11.2026, Agnar bað um það):** 150 stálröraskráningar í lagskiptu slembiúrtaki (fræ 20261112; 50 vissar úða,
   40 óvissar úða, 60 vatn), tvær fyrstu myndir hverrar metnar blint. Rétt: vissar úða 44/50 (88 %), óvissar úða 23/40 (58 %), vatn 57/60 (95 %).
   Vegið: um 81 % í „Úðakerfi“ eru úðalagnir, um 5 % í „Vatn og hiti“ (~210) eru rauð rör, næmi um 85 %; áætlaður raunfjöldi ~1.410 á móti 1.488 flokkuðum.
