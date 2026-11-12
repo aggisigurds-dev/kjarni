@@ -253,6 +253,11 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   teikningu milli vatns og lyfjalofts (uppruni 'teikning'). ENGIN stærðarregla: grönn rauð úðarör sjást líka í Ø15-35 (nr. 9094, 2508, 3689).
   Rýnt á sýnisblöðum: 2,5–6 % → 15 af 15 úðarör; 0,8–2,5 % → um 10 af 15 (hitt: rautt rör í bakgrunni, rauður loki, rauð merking á mynd);
   þekkt villa: rauðbrún plata í bakgrunni (nr. 3326). Mælt 12.11: úði 1.488 (1.135 öruggar, 353 óvissar; 6H 550, 5H 938).
+- **Úrtakspróf á kerfisflokkuninni (12.11.2026, Agnar bað um það):** 150 stálröraskráningar í lagskiptu slembiúrtaki (fræ 20261112; 50 vissar úða,
+  40 óvissar úða, 60 vatn), tvær fyrstu myndir hverrar metnar blint. Rétt: vissar úða 44/50 (88 %), óvissar úða 23/40 (58 %), vatn 57/60 (95 %).
+  Vegið: um 81 % í „Úðakerfi“ eru úðalagnir, um 5 % í „Vatn og hiti“ (~210) eru rauð rör, næmi um 85 %; áætlaður raunfjöldi ~1.410 á móti 1.488 flokkuðum.
+  Villurnar: rautt rör í BAKGRUNNI en þéttingin er á einangruðu röri (flestar), og dökkrauð rör í skugga sem ná ekki mettunarþröskuldi (nr. 6970, 6432, 3065).
+  Textinn er í `KERFI_URTAK` í Haedir.tsx (sést þegar kerfi er valið). Breytist þröskuldur eða litaregla: endurtaka prófið og uppfæra textann.
 - **Lyfjaloft er EKKI sér flokkur (Agnar 12.11.2026: „settu bara í sem vatn og hiti“):** stálrör eru aðeins 'udi' (rautt rör á ljósmynd) eða 'vatn'.
   Lyfjaloftsteikningin (M795/M796) er áfram í lagahópnum sem stálrör festast á, en gefur ekki sér kerfi. Tölur 12.11: úði 1.488, vatn og hiti 4.176.
 - **Sjálfvirk færsla eftir kerfi (12.11.2026, Agnar: „hliðra punktunum til svo þeir séu á réttum stöðum“):** `skraning-gatakort-skr-festa` skiptir

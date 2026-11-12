@@ -40,6 +40,9 @@ const BIL: [number, number][] = [[2.3, 26.5], [28.8, 42.36], [71.16, 27.09]];
 /** Lagnakerfi stálröra (skr_kerfi): lesið af lagnateikningum eftir nálægð — áætlun, ekki skráð í Ajour. */
 const KERFI: [string, string][] = [["udi", "Úðakerfi"], ["vatn", "Vatn og hiti"]];   // lyfjaloft er ekki sér flokkur (Agnar 12.11.2026): telst með vatni og hita
 /** Fag lagnateikningar (skr_log.fag) fyrir hvert kerfi. */
+// Úrtakspróf á kerfisflokkuninni (12.11.2026): 150 stálröraskráningar í lagskiptu slembiúrtaki (50 vissar úða, 40 óvissar úða, 60 vatn),
+// ljósmyndir metnar án þess að flokkunin sæist. Rétt: 44/50, 23/40 og 57/60. Vegið: um 81 % í „Úðakerfi“ eru úðalagnir, um 5 % í „Vatn og hiti“ eru rauð rör.
+const KERFI_URTAK = "Úrtakspróf 12.11.2026 (150 skráningar, ljósmyndir metnar án þess að flokkunin sæist): um 8 af hverjum 10 í „Úðakerfi“ eru úðalagnir (88 % þar sem greiningin er viss, 58 % þar sem hún er óviss) og um 5 % í „Vatn og hiti“ eru í raun rauð rör. Fjöldi úðaþéttinga í heild er því nærri lagi, en einstakar skráningar geta verið rangt flokkaðar.";
 const KERFI_FAG: Record<string, string> = { udi: "sprinkler", vatn: "vatn", lyfjaloft: "gas" };
 /** Fag teikningar fyrir flokkahóp: valinn hópur sýnir teikningu síns fags ofan á hæðinni. */
 const HOP_FAG: Record<string, string> = { Loft: "loftraesting", Rafmagn: "rafmagn" };
@@ -442,7 +445,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
           <div className="sk-sia-rod"><span>Stálrör eftir kerfi</span>
             <button type="button" className={kerfiVal.size ? "" : "on"} onClick={() => veljaKerfi(null)}>Öll</button>
             {KERFI.map(([k, nafn]) => <button key={k} type="button" className={kerfiVal.has(k) ? "on" : ""} aria-pressed={kerfiVal.has(k)} onClick={() => veljaKerfi(k)}>{nafn} <small>{num(kerfiTal.m.get(k) || 0)}</small></button>)}
-            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Úðalagnirnar eru rauðmálaðar: stálröraþétting telst til úðakerfis ef rautt rör sést á ljósmynd hennar. Önnur stálrör teljast vatn og hiti. Þegar kerfi er valið birtist lagnateikning þess á hæðinni. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (tvö kerfi jafn nærri eða lögn fjarri).`}>úðakerfi greint af ljósmynd</em>
+            <em className="sk-sia-ath" title={`Ajour flokkar stálrör aðeins eftir stærð. Úðalagnirnar eru rauðmálaðar: stálröraþétting telst til úðakerfis ef rautt rör sést á ljósmynd hennar. Önnur stálrör teljast vatn og hiti. Þegar kerfi er valið birtist lagnateikning þess á hæðinni. ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} eru óviss (lítið rautt á myndinni). ${KERFI_URTAK}`}>úðakerfi greint af ljósmynd</em>
           </div>
         )}
         <div className="sk-sia-rod"><span>Staða</span>
@@ -478,7 +481,7 @@ export default function Haedir({ yfirlit, punktar, eftir, hopar, starfsmenn, log
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
-      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Úðakerfi er greint af rauðum lit á ljósmynd; önnur stálrör teljast vatn og hiti: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar.` : ""}</p>}
+      {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Úðakerfi er greint af rauðum lit á ljósmynd; önnur stálrör teljast vatn og hiti: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar. ${KERFI_URTAK}` : ""}</p>}
 
       <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
 
