@@ -160,18 +160,27 @@ export default function KortClient() {
   const [virkDeild, setVirkDeild] = useState(""); // símasýn: deildin sem er sýnd ein (tómt = allar)
   /** Snertiskjár eða mjór gluggi: neðri stika með stórum hnöppum, krosshár þegar punktur er settur, og punktur er VALINN áður en hann er dreginn. */
   const [snerti, setSnerti] = useState(false);
+  /** Mjótt útlit (kortið fyllir skjáinn, hliðarstikan er skúffa): gluggi ≤ 860 px, eða sími sem teiknar síðuna í „tölvuútgáfu“ (sjá áhrifin hér að neðan). */
+  const [mjor, setMjor] = useState(false);
   const snertiRef = useRef(false);
   /** Snertiskjár: áætluð göt sem EIGA skráningu (grænir og gulir tíglar) eru falin nema beðið sé um þau — aðeins rauðir punktar („eftir“) sjást, annars verður kortið ólæsilegt. */
   const [synaParud, setSynaParud] = useState(false);
   const [synaTillogur, setSynaTillogur] = useState(true); // tillögur tóla (stokkur í brunavegg án skráningar)
   const fyrstaSyn = useRef(true);
   useEffect(() => {
-    const a = window.matchMedia("(pointer: coarse)"), b = window.matchMedia("(max-width: 860px)"), f = () => {
-      snertiRef.current = a.matches || b.matches; setSnerti(snertiRef.current);
+    /* Sími í „tölvuútgáfu“ vafrans (Desktop site): vafrinn hunsar viewport-merkið, teiknar síðuna ~980 px breiða og smækkar hana á skjáinn, svo
+     * @media (max-width) sér aldrei síma. Þess vegna ræðst útlitið hér: sé bendillinn grófur, skjárinn lítill (≤ 600 px á styttri kant) og glugginn
+     * samt mun breiðari en skjárinn, er .aj stækkað aftur með zoom (gluggabreidd / skjábreidd) og breiddin reiknuð eftir því. --gk-vh er SÝNILEG hæð
+     * gluggans í einingum síðunnar (100vh er hærra en það sem sést í símavafra og neðri stikan lenti neðan við skjáinn). */
+    const a = window.matchMedia("(pointer: coarse)"), aj = document.querySelector<HTMLElement>(".aj"), f = () => {
+      const grofur = a.matches, sw = window.screen?.width || 0, stutt = Math.min(sw, window.screen?.height || 0);
+      const z = grofur && stutt > 0 && stutt <= 600 && window.innerWidth > sw * 1.3 ? window.innerWidth / sw : 1, m = window.innerWidth / z <= 860;
+      if (aj) { aj.style.setProperty("zoom", String(Math.round(z * 1000) / 1000)); aj.style.setProperty("--gk-vh", `${Math.round((window.innerHeight / z) * 10) / 10}px`); aj.classList.toggle("gk-mjor", m); }
+      snertiRef.current = grofur || m; setSnerti(snertiRef.current); setMjor(m);
       if (fyrstaSyn.current) { fyrstaSyn.current = false; if (snertiRef.current) setSynFag("loftraesting"); }   // sími opnast í einni fagsýn, ekki með öllum lögum og táknum í einu
     };
-    f(); a.addEventListener("change", f); b.addEventListener("change", f);
-    return () => { a.removeEventListener("change", f); b.removeEventListener("change", f); };
+    f(); a.addEventListener("change", f); window.addEventListener("resize", f); window.visualViewport?.addEventListener("resize", f);
+    return () => { a.removeEventListener("change", f); window.removeEventListener("resize", f); window.visualViewport?.removeEventListener("resize", f); if (aj) { aj.style.removeProperty("zoom"); aj.style.removeProperty("--gk-vh"); aj.classList.remove("gk-mjor"); } };
   }, []);
 
   const cnvRef = useRef<HTMLCanvasElement | null>(null);
@@ -339,7 +348,8 @@ export default function KortClient() {
   const W = teikning?.breidd_px || 1000, H = teikning?.haed_px || 700;
   const teikna = useCallback(() => {
     const cnv = cnvRef.current, kassi = kassiRef.current; if (!cnv || !kassi || !teikning) return;
-    const dpr = window.devicePixelRatio || 1, cw = kassi.clientWidth, ch = kassi.clientHeight;
+    // undir zoom (sími í tölvuútgáfu) er hver eining strigans stærri á skjánum: upplausnin fylgir því, annars verður teikningin óskýr
+    const cw = kassi.clientWidth, ch = kassi.clientHeight, dpr = (window.devicePixelRatio || 1) * (cw ? Math.max(1, kassi.getBoundingClientRect().width / cw) : 1);
     if (cnv.width !== Math.round(cw * dpr) || cnv.height !== Math.round(ch * dpr)) { cnv.width = Math.round(cw * dpr); cnv.height = Math.round(ch * dpr); }
     const cx = cnv.getContext("2d"); if (!cx) return;
     const { k, tx, ty, k0 } = sjon.current;
@@ -486,7 +496,8 @@ export default function KortClient() {
   // ---------------------------------------------------------------- bendill: færa, stækka, velja, setja áætlað gat
   const bendlar = useRef(new Map<number, { x: number; y: number }>());
   const drag = useRef<{ x: number; y: number; hreyft: number; klipa: number } | null>(null);
-  const stadur = (e: { clientX: number; clientY: number }) => { const r = kassiRef.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  /** Staða bendils í einingum strigans. Undir zoom eru gluggahnit (clientX, getBoundingClientRect) ekki í sömu einingum og clientWidth: hlutfallið leiðréttir það. */
+  const stadur = (e: { clientX: number; clientY: number }) => { const el = kassiRef.current!, r = el.getBoundingClientRect(), f = r.width ? el.clientWidth / r.width : 1; return { x: (e.clientX - r.left) * f, y: (e.clientY - r.top) * f }; };
   const staekka = useCallback((sx: number, sy: number, f: number) => {
     const s = sjon.current, k = Math.max(s.k0 * 0.6, Math.min(s.k0 * 40, s.k * f));
     s.tx = sx - ((sx - s.tx) / s.k) * k; s.ty = sy - ((sy - s.ty) / s.k) * k; s.k = k; bidjaUmTeikningu();
@@ -641,7 +652,7 @@ export default function KortClient() {
   const LAGF: Record<string, string> = { A: "Lagfæring skráð sem nýtt verk", B: "Lagfæring aðeins sem athugasemd", "?": "Lagfæring, óflokkuð" };
 
   return (
-    <div className={`gk${snerti ? " snerti" : ""}${skuffa ? " skuffa" : ""}`}>
+    <div className={`gk${snerti ? " snerti" : ""}${mjor ? " mjor" : ""}${skuffa ? " skuffa" : ""}`}>
       <aside className="gk-hlid">
         <div className="gk-skuffuhaus"><b>Lög og síur</b><button type="button" onClick={() => setSkuffa(false)}>Loka</button></div>
         <div className="gk-haus"><h1>{verk.heiti}</h1><p>{num(skr.length)} skráningar{hladid ? ` · ${hladid}` : ""}{utanKorts ? ` · ${num(utanKorts)} án teikningar` : ""}</p></div>

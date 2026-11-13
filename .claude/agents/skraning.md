@@ -223,6 +223,14 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Ein deild í einu (Agnar 12.11.2026: „í breytingarham er alveg nóg að sjá bara eina deild í einu“):** deildarhnappur í neðri stikunni velur deild
   (`virkDeild`): stækkar inn á hana, sýnir aðeins skráningar og rauða punkta hennar og dofnar hinar deildirnar. Sami hnappur aftur = allar deildir.
   „Færa“ án valinnar deildar velur deildina á miðjum skjánum. Valið helst milli hæða. Aðeins á yfirlitsblöðum.
+- **Sími í „tölvuútgáfu“ vafrans (Agnar 13.11.2026, raunskjáskot: „allt voða skrítið“):** Chrome í símanum hans teiknaði síðuna ~1.230 px breiða og
+  smækkaða (Desktop site: viewport-merkið er hunsað), svo `@media (max-width: 860px)` náði aldrei símanum, borðtölvuútlitið birtist agnarsmátt og neðri
+  stikan lenti neðan við skjáinn (100vh > sýnileg hæð). Útlitið ræðst því af KLASA, ekki media-fyrirspurn: KortClient setur `.gk.mjor` og `.aj.gk-mjor`
+  þegar `innerWidth / zoom ≤ 860`, og `zoom = innerWidth / screen.width` á `.aj` þegar bendill er grófur, styttri kantur skjás ≤ 600 px og glugginn
+  > 1,3 × skjábreidd. `--gk-vh` = `innerHeight / zoom` (sýnileg hæð) ræður hæð korts og skúffu. Undir zoom eru gluggahnit og `clientWidth` ekki í sömu
+  einingum: `stadur()` og upplausn strigans leiðrétta með `getBoundingClientRect().width / clientWidth`. ALDREI setja símaútlit gatakortsins aftur í
+  `@media (max-width)`. Hermipróf: `gk_simi2.cjs <slóð> <nafn> 980 1763 412 915 1.102` og `gk_hitt.cjs` (pikk og dráttur hitta rétt undir zoom).
+  ÓSANNREYNT á tækinu sjálfu: hvort `screen.width` er 412 í tölvuútgáfu Chrome á S26 (ef ekki, gerist ekkert og Agnar slekkur á „Tölvuútgáfu“).
 - **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`

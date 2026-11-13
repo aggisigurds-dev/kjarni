@@ -117,36 +117,38 @@
 .gk.snerti .gk-svid.faera .gk-spjald .gk-faerdur { margin: 6px 0 0; }
 .gk.snerti .gk-x { width: 40px; height: 40px; right: 2px; top: 0; font-size: 24px; }
 
-@media (max-width: 860px) {
-  /* Hausinn má EKKI vera breiðari en skjárinn: annars stækkar útlitsglugginn í síma (694 px í stað 412) og fastsett skúffan lendir neðan við skjáinn.
-   * Valmyndin skrunar þá lárétt. Aðeins á gatakortssíðunni (:has), hinar skráningarsíðurnar eru óbreyttar. */
-  .aj:has(> .gk) { overflow: hidden; touch-action: pan-x pan-y; }
-  .aj:has(> .gk) .aj-top { overflow: hidden; }
-  .aj:has(> .gk) .aj-logo { flex: none; }
-  .aj:has(> .gk) .aj-nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .aj:has(> .gk) .aj-nav::-webkit-scrollbar { display: none; }
-  .aj:has(> .gk) .aj-nav a { flex: none; white-space: nowrap; }
-  .aj:has(> .gk) .aj-right { display: none; }
-  /* kortið fyllir skjáinn; hliðarstikan verður skúffa að neðan sem opnast með „Lög og síur“ */
-  .gk { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: calc(100vh - 50px); height: calc(100dvh - 50px); min-height: 0; }
-  .gk-kort { grid-row: 1; }
-  .gk-hlid { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 66vh; max-height: 66dvh; overflow-y: auto; overscroll-behavior: contain; border-right: 0; border-top: 1px solid #8a9199; border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px rgba(0, 0, 0, .28); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateY(105%); visibility: hidden; transition: transform .18s ease, visibility 0s linear .18s; font-size: 15px; }
-  .gk.skuffa .gk-hlid { transform: none; visibility: visible; transition: transform .18s ease; }
-  .gk-skuffuhaus { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 2; padding: 8px 8px 8px 14px; background: var(--aj-head); border-bottom: 1px solid var(--aj-line); border-radius: 14px 14px 0 0; font-size: 15px; }
-  .gk .gk-skuffuhaus button { height: 40px; padding: 0 16px; border: 1px solid #8a9199; border-radius: 8px; background: #fff; color: var(--aj-ink); font-weight: 600; font-size: 14px; }
-  .gk-hlid .gk-haus { display: none; }
-  .gk .gk-hlid select, .gk .gk-hlid input[type="number"], .gk .gk-hlid textarea { font-size: 16px; padding: 9px 8px; }
-  .gk-hlid .gk-rod { font-size: 13px; }
-  .gk .gk-hlid .gk-hnappar button { min-height: 44px; font-size: 15px; }
-  .gk .gk-hlid .gk-takn button { padding: 9px 13px 9px 10px; font-size: 14px; }
-  .gk-hlid .gk-lag { min-height: 40px; font-size: 15px; gap: 10px; }
-  .gk-hlid .gk-lag-mynd label { min-height: 36px; gap: 10px; }
-  .gk-hlid input[type="checkbox"] { width: 22px; height: 22px; flex: none; }
-  .gk-hlid .gk-lag-mynd input[type="range"] { height: 30px; }
-  .gk-hlid .gk-smatt { font-size: 13px; }
-  .gk-hlid .gk-skra { min-height: 44px; font-size: 14px; }
-  .gk-hlid .gk-tafla table { font-size: 13px; }
-}
+/* ---- Mjótt útlit (.gk.mjor og .aj.gk-mjor, sett af KortClient): gluggi ≤ 860 px EÐA sími í „tölvuútgáfu“ vafrans. Í tölvuútgáfu hunsar vafrinn
+ * viewport-merkið og teiknar síðuna ~980 px breiða og smækkaða, svo @media (max-width) nær aldrei símanum (Agnar 13.11.2026: „allt voða skrítið“).
+ * KortClient stækkar þá .aj aftur með zoom og setur --gk-vh = sýnileg hæð gluggans (100vh er hærra en það sem sést í símavafra). */
+/* Hausinn má EKKI vera breiðari en skjárinn: annars stækkar útlitsglugginn í síma og fastsett skúffan lendir neðan við skjáinn. Valmyndin skrunar lárétt. */
+.aj.gk-mjor { overflow: hidden; touch-action: pan-x pan-y; }
+.aj.gk-mjor .aj-top { overflow: hidden; }
+.aj.gk-mjor .aj-logo { flex: none; }
+.aj.gk-mjor .aj-nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.aj.gk-mjor .aj-nav::-webkit-scrollbar { display: none; }
+.aj.gk-mjor .aj-nav a { flex: none; white-space: nowrap; }
+.aj.gk-mjor .aj-right { display: none; }
+/* snertiskjár í breiðu útliti (spjaldtölva): hæðin er sýnilegi glugginn, svo neðri stikan lendi ekki neðan við skjá */
+.gk.snerti { height: calc(var(--gk-vh, 100vh) - 50px); }
+/* kortið fyllir skjáinn; hliðarstikan verður skúffa að neðan sem opnast með „Lög og síur“ */
+.gk.mjor { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: calc(var(--gk-vh, 100dvh) - 50px); min-height: 0; }
+.gk.mjor .gk-kort { grid-row: 1; }
+.gk.mjor .gk-hlid { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: calc(var(--gk-vh, 100dvh) * 0.66); overflow-y: auto; overscroll-behavior: contain; border-right: 0; border-top: 1px solid #8a9199; border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px rgba(0, 0, 0, .28); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateY(105%); visibility: hidden; transition: transform .18s ease, visibility 0s linear .18s; font-size: 15px; }
+.gk.mjor.skuffa .gk-hlid { transform: none; visibility: visible; transition: transform .18s ease; }
+.gk.mjor .gk-skuffuhaus { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 2; padding: 8px 8px 8px 14px; background: var(--aj-head); border-bottom: 1px solid var(--aj-line); border-radius: 14px 14px 0 0; font-size: 15px; }
+.gk.mjor .gk-skuffuhaus button { height: 40px; padding: 0 16px; border: 1px solid #8a9199; border-radius: 8px; background: #fff; color: var(--aj-ink); font-weight: 600; font-size: 14px; }
+.gk.mjor .gk-hlid .gk-haus { display: none; }
+.gk.mjor .gk-hlid select, .gk.mjor .gk-hlid input[type="number"], .gk.mjor .gk-hlid textarea { font-size: 16px; padding: 9px 8px; }
+.gk.mjor .gk-hlid .gk-rod { font-size: 13px; }
+.gk.mjor .gk-hlid .gk-hnappar button { min-height: 44px; font-size: 15px; }
+.gk.mjor .gk-hlid .gk-takn button { padding: 9px 13px 9px 10px; font-size: 14px; }
+.gk.mjor .gk-hlid .gk-lag { min-height: 40px; font-size: 15px; gap: 10px; }
+.gk.mjor .gk-hlid .gk-lag-mynd label { min-height: 36px; gap: 10px; }
+.gk.mjor .gk-hlid input[type="checkbox"] { width: 22px; height: 22px; flex: none; }
+.gk.mjor .gk-hlid .gk-lag-mynd input[type="range"] { height: 30px; }
+.gk.mjor .gk-hlid .gk-smatt { font-size: 13px; }
+.gk.mjor .gk-hlid .gk-skra { min-height: 44px; font-size: 14px; }
+.gk.mjor .gk-hlid .gk-tafla table { font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .gk-hlid { transition: none !important; } }
 
 /* spjald áætlaðs gats: stærð, stök verk og athugasemd breytanleg */
