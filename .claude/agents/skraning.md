@@ -262,7 +262,7 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     ein á nemanum → `einn` (rautt ✕: „engin skráning hinum megin … á þessu gegnumtaki“); allar sömu megin → `samaNemi` (rautt ✕); annars „ovist“.
     Skráning á ÖÐRUM nema telst aldrei hinn endinn. Skráningar utan nema (um 37 %) fylgja áfram línureglunni að ofan (gult „?“ ef sömu megin).
   - Af hverju: í „sömu megin“-pörum var bilið milli Ajour-staðanna oftar MEÐFRAM veggnum en þvert (5H 64 %, 6H 58 %; í „hinum“-pörum 28 % / 24 %),
-    þ.e. tveir stokkar hlið við hlið. Með nemum: 5H rautt ✕ 84 (S1 16 · S2 20 · S4 18 · S5 30; þar af ein á gegnumtaki 41+, allar sömu megin 12, engin
+    þ.e. tveir stokkar hlið við hlið. Með nemum: 5H rautt ✕ 84 (S1 16 · S2 20 · S4 18 · S5 30; þar af ein á gegnumtaki 41, allar sömu megin 16, engin
     innan 0,9 m 27) og gult „?“ 44; 6H rautt ✕ 137, gult „?“ 61. Áður (aðeins nálægð + lína): 5H ✕ 55 og ? 73; 6H ✕ 75 og ? 123.
     Kortið og `scratchpad/lm_nemar2.py` (sama regla í Python, gögn úr `lm_gogn2.cjs`) gefa SÖMU tölur per deild. ATH: `skr_faerslur.fra_x` er námundað
     í 0,1 px og það eitt færði 6 skráningar milli flokka; viðmiðunarmæling verður að varpa Ajour-hnitunum sjálf eins og kortið.
