@@ -269,6 +269,19 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   - ÓMÆLT: hve mörg ✕ eru raunveruleg göt. 6H er 96 % búin en fær samt 137 ✕ af 1.090 loftskráningum, svo hluti þeirra er skekkja í pikki eða í því hvaða
     nema sjálfvirka færslan valdi. Ekkert af þessu fer í stöðuskýrsluna; þetta er vinnulisti til að ganga á.
   - Þegar skráning er valin er neminn hennar teiknaður sem strik meðfram veggnum (grænt = báðum megin, rautt = vantar, grátt = óvíst).
+- **Raufar = loftræsting, og seinna hakið = hinn endinn SKRÁÐUR (Agnar 13.11.2026 seint: „teikningin sýnir næstum alls staðar að bara sé búið öðrum megin á
+  t.d. 6H2S þar sem allt á að vera búið. Mátt bæta inn í loftræstingasýnina götin raufar metrar, sem eru kringum ferköntuðu loftræstingarnar“):**
+  - Flokkurinn „Raufar. (Metrer) LV“ (id 41; 110 á 6H, 17 á 5H) féll undir Rafmagn af því að `RAF = /Raf|Raufar/`. Nú `takn()` → hópur **Loft**, heiti
+    „Loft raufar“, dökkblár ferningur. Hann er því í loftræstisýninni, fær nema og parast við aðrar loftskráningar. „Raf raufar …“ (44) og
+    „Raflagnaþéttingar …“ (34) eru áfram rafmagn. Samantektartafla kortsins telur raufarnar nú í Loft-dálki. Stöðuskýrslan notar ekki `takn()`.
+  - Merkin (`merki(…, ve, vs, nh)`): seinna hakið sést ef hinn endinn er skráður og kláraður (`hinnKlar`: endar-færsla til, ekki `einn`, og q klárað),
+    LÍKA þegar hann er teiknaður sem annað merki hinum megin við vegginn (áður sýndi stök skráning eitt hak og leit út sem „búið öðrum megin“). Rautt ✕
+    aðeins ef engin skráning merkisins á hinn endann; í blönduðu merki er hakið sýnt og lítið ✕ við hornið. Gult „?“ sést AÐEINS þegar sían „Sömu megin“ er á.
+  - `samaNemi` (allar skráningar gegnumtaks sömu megin) er EKKI lengur rautt ✕: það telst með „Sömu megin“. `vantarEnda` = engin færsla eða `einn`.
+    Ástæða: hlið veggjar er lesin úr pikki og á búinni deild (6H S2) gaf reglan 24 ✕ og 28 ? sem ekki verða greind frá ónákvæmu pikki.
+  - Mælt eftir breytingu (kort = `lm_nemar2.py` með raufum, per deild á 5H): 5H ✕ 75 (S1 17 · S2 19 · S4 18 · S5 21), sömu megin 60; 6H ✕ um 107 (S1 29 ·
+    S2 33 · S4 19 · S5 26), sömu megin um 122 (Agnar var að færa punkta á 6H S2 á meðan, tölurnar hnikuðust um 1–3). 6H S2: 372 skráningar með raufum.
+  - Próf án blindra pikka: `scratchpad/gk_tolur.cjs <grunnslóð>` (teljarar per hæð og deild), `gk_s2_mynd.cjs <grunnslóð> <nafn> [hæð] [deild] [stækkanir]`.
 - **Ajour-staðir (Agnar 13.11.2026: „þetta er allt rosa skrítið. Myndi vilja geta séð Ajour punktana hvar þeir eru“):** hnappurinn „Ajour-staðir“ í skýringunum
   neðst (og gátreitur í „Lög og síur“) teiknar bláan punkt þar sem pikkað var í Ajour (x0, y0) fyrir HVERJA skráningu og bláa strikalínu í merkið ef hún var
   færð (`ajLina` / `ajPt` í `teikna`); stærðartalan inni í merkinu er falin á meðan svo punkturinn sjáist. Valin skráning sýnir alltaf sinn Ajour-stað, og
