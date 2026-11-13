@@ -296,6 +296,23 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     röngum flokki; ósannreynt, flokkun ekki breytt. Hringlaga loftskráningar á raflagnaleið og ekki við stokk: 33 á 6H, 17 á 5H.
   - Mynd #5364 (6H S1, 315) sýnir stokk upp í gegnum steypta loftplötu, ekki vegg: sum rauð ✕ eru þá gegnumtök í plötu þar sem ein skráning er öll lokunin.
     ÓMÆLT hve mörg; kortið greinir ekki plötu frá vegg.
+- **Hurðalínur, hlið skráningar og smellur (Agnar 14.11.2026: „smá að pæla hvort stærðarplúsarnir gætu fundið skurðinn þar sem loftræstingin fer í gegn. Og
+  maður gæti dregið punktana svo þeir festast í einhvern endann á plúsnum og þá kæmi neon check ✓ á þann hluta … væri hægt að gera bláa línu í hurðagötin“,
+  „það er samt næstum því bara bein lína eftir öllum ganginum“):**
+  - HURÐALÍNUR: `tools/skraning-gatakort-veggir.py` tengir rauða veggbúta í sömu línu (lárétt/lóðrétt, innan 4 px; bil ≤ 4,0 m alltaf, 4,0–6,6 m aðeins með
+    bláu hurðartákni; línan þarf ≥ 2 m af rauðum vegg) → `hurdir` í veggir-JSON (282 á 5H, 285 á 6H) og aftast í `seg`, svo kortið fer með þær sem vegg.
+    `skraning-gatakort-nemar.py` telur þær vegg → 489 nemar á 5H (var 427), 511 á 6H (var 446). Kortið teiknar þær sem bláar línur. Ástæðan: ofan við hurðir
+    er veggurinn samfelldur, stokkarnir fara þar í gegn. ÓLEYST (mynd Agnars 14.11): við INNDREGNAR stofuhurðir (E30-S í skoti milli baðherbergja) á línan að
+    fylgja hurðinni inn í skotið; núna fer hún beint eftir ganginum fram hjá skotinu. Innri hurð (gátt → sjúkrastofa) á EKKI að fá línu; á hluta 6H S2 var
+    þétt þar fyrir mistök og þær skráningar parast áfram á nálægð einni.
+  - HLIÐ: skráning á nema fær `megin` (−1 ofan/vinstra megin, +1 neðan/hægra megin) úr Ajour-staðnum, eða úr sýndri stöðu ef henni var SMELLT (`fest`:
+    handfærð, á miðju nemans og nákvæmlega `SMELL_PX` = 4 px frá vegglínu). Hakið fer þeim megin við merkið; neongrænt (`NEON`) ef `fest`, annars dökkt.
+    Hitt sætið: hak ef hinn endinn er skráður, annars rautt ✕. Smellt hlið ræður líka pöruninni (A/B í `endar`).
+  - SMELLUR: í Færa-ham lendir Loft-punktur sem er dreginn innan 14 px frá nema á miðju hans, 4 px frá vegg þeim megin sem sleppt er (`smella()` í `hreyfa`).
+    Próf með skrifin stöðvuð og lesin: `scratchpad/gk_smell_prof.cjs` (PATCH átti að vista (1943.9, 385) = neminn (1943.9, 381) + 4 px).
+  - Víðari pörunin krefst nú sama HÓPS auk sama flokks (raufar sem eru raflagnir pöruðust annars við loftraufar).
+  - Mælt eftir (kort = `lm_nemar2.py`, eins per deild; viðmiðunin kann ekki `fest` enn, engin smellt skráning til): 6H ✕ 84 (S1 24 · S2 25 · S4 11 · S5 24),
+    sömu megin 89; 5H ✕ 65 (12 · 16 · 18 · 19), sömu megin 39.
 - **Hök uppi og niðri, og raufar sem eru raflagnir (Agnar 14.11.2026: „check ✓ mætti alveg líka koma uppi og niðri þegar við á, í stað hægri vinstri“,
   „þú kannski nærð að sjá hvort þetta séu loftstokkar eða rafmagns vírabúnt“):**
   - `veggurLarettur(v, x, y)`: liggi næsti brunaveggur (innan `VEGG_NAER`) lárétt við merkið fara sætin tvö OFAN og NEÐAN við það, annars vinstra og hægra megin.

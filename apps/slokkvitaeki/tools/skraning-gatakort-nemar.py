@@ -16,6 +16,10 @@ YF, LAG, VEGGIR, UT = sys.argv[1:5]
 seg = np.array(json.load(open(VEGGIR))['seg'], float).reshape(-1, 4)
 g = np.asarray(Image.open(YF).convert('RGB'), dtype=np.int16); Hh, W = g.shape[:2]
 rautt = (g[..., 0] > 190) & (g[..., 1] < 100) & (g[..., 2] < 100)
+# hurðalínur (veggir.json "hurdir"): hurðaop í brunavegg telst veggur hér, svo stokkur yfir hurð fær nema eins og stokkur gegnum vegg
+hm = np.zeros((Hh, W), np.uint8)
+for x1, y1, x2, y2 in np.array(json.load(open(VEGGIR)).get('hurdir', []), int).reshape(-1, 4): cv2.line(hm, (int(x1), int(y1)), (int(x2), int(y2)), 1, 5)
+rautt = rautt | (hm > 0)
 a = np.asarray(Image.open(LAG).convert('RGBA'))[..., 3] > 60
 lag = np.zeros((Hh, W), bool); lag[:min(Hh, a.shape[0]), :min(W, a.shape[1])] = a[:Hh, :W]
 fjarl = lambda m: cv2.distanceTransform((~m).astype(np.uint8), cv2.DIST_L2, 5)
