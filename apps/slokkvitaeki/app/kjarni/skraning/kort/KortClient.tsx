@@ -61,6 +61,15 @@ const veggjaNet = (seg: number[]): Veggir => {
   return { seg, net };
 };
 /** Fjarlægð (px) frá punkti í næsta veggbút; leitar í reit punktsins og grannreitum, svo allt yfir VC telst „langt frá“. */
+/** Liggur næsti brunaveggur við (px, py) lárétt á blaðinu? null ef enginn veggur er innan VEGG_NAER. Ræður því hvort hök merkis eru uppi og niðri eða til hliðanna. */
+const veggurLarettur = (v: Veggir, px: number, py: number): boolean | null => {
+  let b = VEGG_NAER, lar: boolean | null = null; const gx = Math.floor(px / VC), gy = Math.floor(py / VC);
+  for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const i of v.net.get(vLyk(ix, iy)) || []) {
+    const x1 = v.seg[i], y1 = v.seg[i + 1], dx = v.seg[i + 2] - x1, dy = v.seg[i + 3] - y1, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / L)) : 0;
+    const d = Math.hypot(px - x1 - t * dx, py - y1 - t * dy); if (d < b) { b = d; lar = Math.abs(dx) > Math.abs(dy); }
+  }
+  return lar;
+};
 const fjarVegg = (v: Veggir, px: number, py: number): number => {
   let b = 1e9; const gx = Math.floor(px / VC), gy = Math.floor(py / VC);
   for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const i of v.net.get(vLyk(ix, iy)) || []) {
@@ -141,6 +150,13 @@ function takn(c: string): Takn {
   if (RAF.test(c)) return { logun: "d", litur: "#067429", r: 4, heiti: "Rafmagn", hopur: "Rafmagn" };
   return { logun: "s", litur: "#9ca3af", r: 2.6, heiti: "Annað", hopur: "Annað" };
 }
+/** Skráningar í flokknum „Raufar. (Metrer) LV“ sem eru í raun RAFLAGNIR (kapalbúnt á strengjastiga gegnum vegg), staðfest af ljósmyndum skráninganna
+ *  14.11.2026 (Agnar: „kannski voru einhverjar raflagnir settar í rangan flokk … þú kannski nærð að sjá hvort þetta séu loftstokkar eða rafmagns vírabúnt“).
+ *  Aðeins BIRTING á kortinu: þær teljast rafmagn hér; flokkurinn í grunninum og í Ajour er óbreyttur. Fundnar með `scratchpad/lm_raufar.py` (á raflagnaleið
+ *  og ekki við loftstokk: 17 af 17 með myndir voru kaplar) + #11834 úr úrtaki við loftstokk. #8021, 8022, 8024, 8025, 8026 (5H S1) eiga engar myndir og
+ *  eru því EKKI hér. Lykill: ajour_serial. */
+const RAUFAR_RAFMAGN = new Set([11763, 11819, 11820, 11826, 11827, 11951, 11953, 11954, 11955, 11957, 11961, 12094, 12098, 12099, 12100, 8359, 8681, 11834]);
+const RAF_TAKN = takn("Raf");
 const num = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const dmy = (d: string | null) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "");
 
@@ -327,7 +343,7 @@ export default function KortClient() {
       const v = born.get(s.teikning_id);
       const [x0, y0] = v ? varpa(v, +s.x_px, +s.y_px) : [+s.x_px, +s.y_px], f = fm.get(s.id);
       const x = f ? +f.x_px : x0, y = f ? +f.y_px : y0;
-      out.push({ s, x, y, x0, y0, faersla: f, d: aYfirliti && teikning.breidd_px ? deildAf(x / teikning.breidd_px) : s.deild, t: (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
+      out.push({ s, x, y, x0, y0, faersla: f, d: aYfirliti && teikning.breidd_px ? deildAf(x / teikning.breidd_px) : s.deild, t: (s.ajour_serial != null && RAUFAR_RAFMAGN.has(s.ajour_serial) ? RAF_TAKN : null) || (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
     }
     return out;
   }, [teikning, teikn, skr, taknAf, ANNAD, faerslur]);
@@ -578,6 +594,7 @@ export default function KortClient() {
         if (p.s.stada === "done") h.nd++; else h.no++;
         if (vantarEnda(p)) h.ve++; else { if (samaMegin(p)) h.vs++; if (hinnKlar(p)) h.nh++; }
       }
+      const vgT = veggir && veggir.lykill === veggjaLykill ? veggir.v : null;
       const tikk = (x: number, y: number, litur: string) => {
         const t = R; cx.beginPath(); cx.moveTo(x - 0.5 * t, y - 0.1 * t); cx.lineTo(x - 0.12 * t, y + 0.38 * t); cx.lineTo(x + 0.6 * t, y - 0.55 * t);
         cx.lineJoin = "round"; cx.lineCap = "round"; cx.lineWidth = R * 0.44; cx.strokeStyle = "#fff"; cx.stroke(); cx.lineWidth = R * 0.24; cx.strokeStyle = litur; cx.stroke();
@@ -605,13 +622,17 @@ export default function KortClient() {
         const st = loft ? /-(\d+)\s*$/.exec(t.heiti) : null;
         if (Rs >= 11 && !synaAjour) { if (st) texti(st[1], x, y + R * 0.05, R * 0.72, "center"); else if (!loft && n >= 2) texti(String(n), x, y + R * 0.05, R * 0.95, "center"); }
         const hl = loft ? "#1f2937" : "#15803d";
-        if (nd >= 1) tikk(x - R * 1.5, y - R * 0.1, hl);   // hökin utan við merkið, svo talan inni í því sjáist öll
+        /* Sætin tvö fylgja veggnum (Agnar 14.11.2026: „check ✓ mætti alveg líka koma uppi og niðri þegar við á, í stað hægri vinstri“): liggi brunaveggurinn
+         * við merkið lárétt eru hliðar hans ofan og neðan við, svo hökin fara þangað; annars til vinstri og hægri. Hökin eru utan við merkið svo talan sjáist. */
+        const upp = !!vgT && veggurLarettur(vgT, x, y) === true;
+        const ax = upp ? x : x - R * 1.5, ay = upp ? y - R * 1.5 : y - R * 0.1, bx = upp ? x : x + R * 1.5, by = upp ? y + R * 1.6 : y - R * 0.1;
+        if (nd >= 1) tikk(ax, ay, hl);
         /* Seinna sætið (Agnar 13.11.2026: „teikningin sýnir næstum alls staðar að bara sé búið öðrum megin“ á 6H S2 sem er búin): hak ef hinn endinn er
          * skráður og kláraður, líka þegar hann er teiknaður sem annað merki hinum megin við vegginn. Rautt ✕ aðeins ef ENGIN skráning merkisins á hinn
          * endann; í blönduðu merki (yfirlit) er hakið sýnt og lítið ✕ við hornið. Gult „?“ sést aðeins þegar sían „Sömu megin“ er á. */
-        if (nh > 0) { if (samaSia && vs > 0) gultSpurn(x + R * 1.5, y - R * 0.05); else tikk(x + R * 1.5, y - R * 0.1, hl); if (ve > 0) raudurKross(x + R * 2.2, y - R * 0.95, 0.62); }
-        else if (ve > 0) raudurKross(x + R * 1.5, y - R * 0.1); else if (nd >= 2) tikk(x + R * 1.5, y - R * 0.1, hl);
-        if (loft && n >= 3) texti("×" + n, x + R * 0.55, y + R * 0.85, R * 0.7, "left");
+        if (nh > 0) { if (samaSia && vs > 0) gultSpurn(bx, by + R * 0.05); else tikk(bx, by, hl); if (ve > 0) raudurKross(upp ? x + R * 0.95 : x + R * 2.2, upp ? y + R * 2.1 : y - R * 0.95, 0.62); }
+        else if (ve > 0) raudurKross(bx, by); else if (nd >= 2) tikk(bx, by, hl);
+        if (loft && n >= 3) texti("×" + n, upp ? x + R * 1.15 : x + R * 0.55, upp ? y + R * 0.1 : y + R * 0.85, R * 0.7, "left");
       };
       for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh);
       for (const p of stakir) {

@@ -296,6 +296,15 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     röngum flokki; ósannreynt, flokkun ekki breytt. Hringlaga loftskráningar á raflagnaleið og ekki við stokk: 33 á 6H, 17 á 5H.
   - Mynd #5364 (6H S1, 315) sýnir stokk upp í gegnum steypta loftplötu, ekki vegg: sum rauð ✕ eru þá gegnumtök í plötu þar sem ein skráning er öll lokunin.
     ÓMÆLT hve mörg; kortið greinir ekki plötu frá vegg.
+- **Hök uppi og niðri, og raufar sem eru raflagnir (Agnar 14.11.2026: „check ✓ mætti alveg líka koma uppi og niðri þegar við á, í stað hægri vinstri“,
+  „þú kannski nærð að sjá hvort þetta séu loftstokkar eða rafmagns vírabúnt“):**
+  - `veggurLarettur(v, x, y)`: liggi næsti brunaveggur (innan `VEGG_NAER`) lárétt við merkið fara sætin tvö OFAN og NEÐAN við það, annars vinstra og hægra megin.
+  - Ljósmyndir skoðaðar 14.11 (`scratchpad/lm_raufamyndir.cjs` + `lm_raufablod.py` → `raufamyndir_blad_*.jpg`): af 22 raufum á raflagnaleið og ekki við
+    loftstokk eiga 17 myndir og ALLAR 17 sýna kapalbúnt á strengjastiga gegnum vegg. Úrtak 8 raufa VIÐ loftstokk: 7 ferkantaðir stokkar, 1 kapalbúnt (#11834).
+    Þessar 18 eru í `RAUFAR_RAFMAGN` (ajour_serial) í KortClient og teljast rafmagn Á KORTINU; flokkur í grunni og Ajour er ÓBREYTTUR og stöðuskýrslan líka.
+    #8021, 8022, 8024, 8025, 8026 (5H S1, 01.06.2026) eiga engar myndir: óstaðfest, ekki í listanum. Hinar 92 raufarnar við loftstokk eru óskoðaðar
+    (úrtakið gefur 1 af 8). Hringlaga loftskráningar á raflagnaleið (33 á 6H, 17 á 5H) eru líka óskoðaðar.
+  - Mælt eftir (kort = `lm_nemar2.py`, eins per deild): 6H ✕ 92 (S1 27 · S2 24 · S4 15 · S5 26), sömu megin 120; 5H ✕ 67 (15 · 15 · 18 · 19), sömu megin 60.
 - **Ajour-staðir (Agnar 13.11.2026: „þetta er allt rosa skrítið. Myndi vilja geta séð Ajour punktana hvar þeir eru“):** hnappurinn „Ajour-staðir“ í skýringunum
   neðst (og gátreitur í „Lög og síur“) teiknar bláan punkt þar sem pikkað var í Ajour (x0, y0) fyrir HVERJA skráningu og bláa strikalínu í merkið ef hún var
   færð (`ajLina` / `ajPt` í `teikna`); stærðartalan inni í merkinu er falin á meðan svo punkturinn sjáist. Valin skráning sýnir alltaf sinn Ajour-stað, og
