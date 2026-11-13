@@ -252,6 +252,23 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   - Viðmót: hnappurinn „? Sömu megin (n)“ í skýringarlínunni síar á þær (`samaSia`), gátreitur í Síur gerir það sama; þegar slík skráning er valin er
     dregin gul lína milli Ajour-staðanna tveggja svo sjáist hvar pikkin lentu miðað við vegginn. Rauða ✕-ið (engin skráning innan 0,9 m) er óbreytt.
   - Samanburðarmæling utan kortsins: `scratchpad/lm_hlid2.py 5H|6H` (sama regla í Python) gaf sömu tölur og kortið (5H 73 = 73, 6H 124 á móti 123).
+- **NEMAR (Agnar 13.11.2026: „setja reglu að punktur má ekki tengjast sín megin við rauða vegginn. Gera rauða vegginn með einhvers konar nema … hann
+  nemi sirka breiddina af rörunum sem fara í gegn“):** hvert gegnumtak loftræsilagsins gegnum rauðan vegg er nemi með breidd stokksins.
+  - Gögn: `tools/skraning-gatakort-nemar.py <yfirlit.jpg> <lag.png> <veggir.json> <út.json>` → `kort/nemar/loft-5h.json` (427 nemar) og `loft-6h.json`
+    (446), flatt [x, y, tx, ty, hb]; hálf breidd miðgildi 7 px (0,2 m), 90 % undir 17 px. 3×3 útvíkkun svo stokkar hlið við hlið haldast aðskildir
+    (tillögutólið notar 9×9 og fær 377 klasa á 5H). Aðeins til fyrir hópinn Loft (`NEMA_HOPUR`); rör (úði, vatn) fá nema þegar lög þeirra eru keyrð í gegn.
+  - Regla (`endar`): Loft-skráning tengist nema ef sýnd staða er innan hb + 6 px meðfram vegg og 12 px þvert. Hlið = formerki Ajour-staðar (x0, y0) frá
+    vegglínu nemans, ±3 px telst á veggnum. Neminn á skráningar báðum megin → „hinum“. Annars: skráning ÁN nema handan veggjar innan 0,9 m → „hinum“;
+    ein á nemanum → `einn` (rautt ✕: „engin skráning hinum megin … á þessu gegnumtaki“); allar sömu megin → `samaNemi` (rautt ✕); annars „ovist“.
+    Skráning á ÖÐRUM nema telst aldrei hinn endinn. Skráningar utan nema (um 37 %) fylgja áfram línureglunni að ofan (gult „?“ ef sömu megin).
+  - Af hverju: í „sömu megin“-pörum var bilið milli Ajour-staðanna oftar MEÐFRAM veggnum en þvert (5H 64 %, 6H 58 %; í „hinum“-pörum 28 % / 24 %),
+    þ.e. tveir stokkar hlið við hlið. Með nemum: 5H rautt ✕ 84 (S1 16 · S2 20 · S4 18 · S5 30; þar af ein á gegnumtaki 41+, allar sömu megin 12, engin
+    innan 0,9 m 27) og gult „?“ 44; 6H rautt ✕ 137, gult „?“ 61. Áður (aðeins nálægð + lína): 5H ✕ 55 og ? 73; 6H ✕ 75 og ? 123.
+    Kortið og `scratchpad/lm_nemar2.py` (sama regla í Python, gögn úr `lm_gogn2.cjs`) gefa SÖMU tölur per deild. ATH: `skr_faerslur.fra_x` er námundað
+    í 0,1 px og það eitt færði 6 skráningar milli flokka; viðmiðunarmæling verður að varpa Ajour-hnitunum sjálf eins og kortið.
+  - ÓMÆLT: hve mörg ✕ eru raunveruleg göt. 6H er 96 % búin en fær samt 137 ✕ af 1.090 loftskráningum, svo hluti þeirra er skekkja í pikki eða í því hvaða
+    nema sjálfvirka færslan valdi. Ekkert af þessu fer í stöðuskýrsluna; þetta er vinnulisti til að ganga á.
+  - Þegar skráning er valin er neminn hennar teiknaður sem strik meðfram veggnum (grænt = báðum megin, rautt = vantar, grátt = óvíst).
 - **Merkjastærð (Agnar 13.11.2026: „merki mega ekki vera of stór svo ég sjái ekki“):** `merkisR` þak 13 px (var 17), fylling merkja 40 % hvít (var 60 %),
   áætluð göt og tillögur mest um 9 px í símasýn (`zb`) og tillöguhringurinn hálfgegnsær. Teikningin undir merkinu á að sjást; ekki stækka þetta aftur.
 - **Valinn punktur undir spjaldi:** í símasýn þekur spjaldið allt að neðri helming kortsins; lendi valdi punkturinn neðar en 40 % af hæð kortsins er
