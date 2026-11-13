@@ -184,3 +184,7 @@
 .gk .gk-bar-skyring button.sama b { color: #d97706; font-weight: 800; font-size: 14px; line-height: 1; }
 .gk .gk-bar-skyring button.sama.on { background: #d97706; border-color: #d97706; color: #fff; }
 .gk .gk-bar-skyring button.sama.on b { color: #fff; }
+.gk .gk-bar-skyring button.ajour { border-color: #93c5fd; color: #1e40af; }
+.gk .gk-bar-skyring button.ajour i { width: 9px; height: 9px; background: #1d4ed8; }
+.gk .gk-bar-skyring button.ajour.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.gk .gk-bar-skyring button.ajour.on i { background: #fff; }

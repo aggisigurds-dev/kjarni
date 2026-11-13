@@ -269,6 +269,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   - ÓMÆLT: hve mörg ✕ eru raunveruleg göt. 6H er 96 % búin en fær samt 137 ✕ af 1.090 loftskráningum, svo hluti þeirra er skekkja í pikki eða í því hvaða
     nema sjálfvirka færslan valdi. Ekkert af þessu fer í stöðuskýrsluna; þetta er vinnulisti til að ganga á.
   - Þegar skráning er valin er neminn hennar teiknaður sem strik meðfram veggnum (grænt = báðum megin, rautt = vantar, grátt = óvíst).
+- **Ajour-staðir (Agnar 13.11.2026: „þetta er allt rosa skrítið. Myndi vilja geta séð Ajour punktana hvar þeir eru“):** hnappurinn „Ajour-staðir“ í skýringunum
+  neðst (og gátreitur í „Lög og síur“) teiknar bláan punkt þar sem pikkað var í Ajour (x0, y0) fyrir HVERJA skráningu og bláa strikalínu í merkið ef hún var
+  færð (`ajLina` / `ajPt` í `teikna`); stærðartalan inni í merkinu er falin á meðan svo punkturinn sjáist. Valin skráning sýnir alltaf sinn Ajour-stað, og
+  spjaldið segir „Á sama stað og í Ajour (ekki færð á kortinu)“ ef engin færsla er til. Tilefnið: 6H S1 #5364, #5365, #5366 (þrjú 315-verk 18.03.2026 í röð
+  með 1,1 og 1,4 m bili við vegg sem er EKKI rauður á blaðinu; hvert stendur eitt innan 0,9 m og fær því rautt ✕). Próf: `scratchpad/gk_ajour_prof.cjs
+  <grunnslóð> <nafn> [x y] [stækkanir]` (sími) og `gk_ajour_bord.cjs` (borðtölva). ATH: `gk_hlid_prof.cjs` pikkar blint og reynir ~20 PATCH (stöðvuð af prófinu).
 - **Merkjastærð (Agnar 13.11.2026: „merki mega ekki vera of stór svo ég sjái ekki“):** `merkisR` þak 13 px (var 17), fylling merkja 40 % hvít (var 60 %),
   áætluð göt og tillögur mest um 9 px í símasýn (`zb`) og tillöguhringurinn hálfgegnsær. Teikningin undir merkinu á að sjást; ekki stækka þetta aftur.
 - **Valinn punktur undir spjaldi:** í símasýn þekur spjaldið allt að neðri helming kortsins; lendi valdi punkturinn neðar en 40 % af hæð kortsins er
