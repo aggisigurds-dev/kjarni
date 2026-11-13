@@ -144,7 +144,7 @@ export default function SkyrslaClient() {
         // áætluð göt gatakortsins: þau sem engin skráning parast við birtast sem „eftir“ á hæðakortinu
         const aa: Aaetlad[] = [];
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_aaetlud").select("teikning_id,x_px,y_px,fag,flokkur_id,fjoldi,parad").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_aaetlud").select("teikning_id,x_px,y_px,fag,flokkur_id,fjoldi,parad").eq("verk_id", vk.id).eq("eytt", false).not("uppruni", "like", "tillaga:%").order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           aa.push(...((r.data || []) as Aaetlad[]));
           if (!r.data || r.data.length < 1000) break;

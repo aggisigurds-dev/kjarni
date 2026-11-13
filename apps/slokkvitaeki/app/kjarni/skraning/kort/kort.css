@@ -159,3 +159,12 @@
 /* stöðusía: teljarar í hnöppum og rauður punktur fyrir „Eftir" */
 .gk-hnappar button small { font-weight: 400; opacity: .75; font-variant-numeric: tabular-nums; margin-left: 2px; }
 .gk-raudur { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #dc2626; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #dc2626; margin-right: 5px; vertical-align: 0; }
+
+/* tillögur tóla (uppruni 'tillaga:…'): lögn í brunavegg án skráningar — staðfest með „Já, eftir að þétta“, hafnað með „Nei, ekki gat“ */
+.gk-tillaga { margin: 0 0 8px; padding: 8px 10px; border: 1px solid #fdba74; border-radius: 6px; background: #fff7ed; }
+.gk-tillaga p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.4; color: #7c2d12; }
+.gk-tillaga div { display: flex; gap: 8px; }
+.gk .gk-tillaga button { flex: 1 1 0; min-height: 40px; padding: 0 10px; border: 1px solid #8a9199; border-radius: 6px; background: #fff; color: var(--aj-ink); font-weight: 600; }
+.gk .gk-tillaga button.ja { background: #dc2626; border-color: #dc2626; color: #fff; }
+.gk-bar-skyring i.ti { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; background: #fff; border: 1.6px solid #ea580c; color: #c2410c; font-style: normal; font-weight: 700; font-size: 10px; line-height: 1; }
+.gk.snerti .gk-svid.faera .gk-spjald .gk-tillaga { display: none; }

@@ -175,6 +175,21 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - **Pörun:** `tools/skraning-gatakort-para.cjs` notar færðu stöðuna. Keyra aftur eftir færslur.
 - **Ekki til enn:** sjálfvirk færsla skráninga á skurðpunkt lags og brunaveggjar (sama aðferð og `-miro-festa.py` fyrir merki).
 
+## Tillögur: stokkur í brunavegg án skráningar (13.11.2026) — `uppruni = 'tillaga:…'` í skr_aaetlud
+- **Hvað:** `tools/skraning-gatakort-tillogur.cjs --haed 5H --vidmid 6H --yfirlit <mappa> --log <mappa> [--radius 30] [--write]` (+ `.py`, notar cv2).
+  Finnur skurðklasa loftræsistokks og RAUÐS brunaveggjar (lag innan 4 px frá vegg; klasi lengri en 60 px = stokkur meðfram vegg, sleppt) sem eiga
+  enga loftræstiskráningu innan 0,9 m á hæðinni, ÞÓTT sami staður (innan 25 px) á viðmiðunarhæðinni sé skráður. Þurrkeyrsla nema `--write`.
+- **Mælt 13.11 (5H, viðmið 6H):** 377 klasar, 225 með skráningu, 152 án: sami staður á 6H skráður 73, líka óskráður á 6H 41 (ekki raunverulegt gat
+  eða utan radíuss), enginn klasi á 6H 38. 2 áttu þegar áætlað gat → 71 tillaga (S1 5 · S2 4 · S4 15 · S5 47). Á 6H sjálfri eru 74 af 382 klösum án
+  skráningar þótt hæðin sé 96 % kláruð: klasi einn og sér er EKKI sönnun um gat, þess vegna viðmiðunarhæðin.
+- **Til samanburðar (sama dag):** loftræstiskráningar á 5H sitja vel á laginu eftir sjálfvirku færsluna: 89 % innan 6 px (0,18 m) frá stokk, 79 % innan
+  6 px frá skurðpunkti stokks og rauðs veggjar (fyrir færslu 64 % innan 6 px frá stokk). 203 af 797 eru ófærðar; 158 þeirra standa samt á stokk.
+- **Tillaga er EKKI áætlað gat:** stöðuskýrslan sleppir `uppruni like 'tillaga:%'` (SkyrslaClient), svo tölurnar til COWI breytast ekki. Á gatakortinu
+  er tillaga appelsínugulur hringur með „?“ (gátreitur „Tillögur“ í Lög, talin í skýringarlínu símans). Spjaldið: „Já, eftir að þétta“ → uppruni verður
+  `handvirkt` (rauður punktur, telst þá sem Eftir í skýrslunni) · „Nei, ekki gat“ → `eytt` (kemur ekki aftur við endurkeyrslu).
+- **Aðrir lesendur skr_aaetlud:** `-para.cjs` parar tillögu við skráningu sem bætist við nálægt (þá hættir hún að birtast sem tillaga); `-vidbot-stutar`
+  og `-aaetlud` snerta aðeins sinn uppruna.
+
 ## Símaviðmót gatakortsins (12.11.2026, Agnar: „í nokkuð góðu zoomi og góðu símaviðmóti“)
 - **Hvenær:** `.gk.snerti` er sett þegar bendillinn er grófur (`pointer: coarse`) eða glugginn ≤ 860 px. Borðtölvusýnin er óbreytt (neðri stikan er `display: none`).
 - **Uppsetning (≤ 860 px):** kortið fyllir skjáinn (`100dvh − 50px`), neðri stika `.gk-bar` (44 px hnappar): hæð 6H/5H/4H · stökk á deild S1/S2/S4/S5
