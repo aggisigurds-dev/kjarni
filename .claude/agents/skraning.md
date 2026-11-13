@@ -231,6 +231,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   einingum: `stadur()` og upplausn strigans leiðrétta með `getBoundingClientRect().width / clientWidth`. ALDREI setja símaútlit gatakortsins aftur í
   `@media (max-width)`. Hermipróf: `gk_simi2.cjs <slóð> <nafn> 980 1763 412 915 1.102` og `gk_hitt.cjs` (pikk og dráttur hitta rétt undir zoom).
   ÓSANNREYNT á tækinu sjálfu: hvort `screen.width` er 412 í tölvuútgáfu Chrome á S26 (ef ekki, gerist ekkert og Agnar slekkur á „Tölvuútgáfu“).
+- **Hinn endinn (Agnar 13.11.2026: „fullkomnað ef maður gæti checkað við hina endana líka … rautt x ef það er ekki Ajour-punktur nálægt þeim megin“):**
+  lokun í vegg er tvö stök verk. `endar` í KortClient finnur fyrir hverja skráningu næstu skráningu SAMA HÓPS innan `ENDI_PX` = 30 px (0,9 m) frá sýndri
+  stöðu, úr öllum skráningum blaðsins (síur breyta því ekki); aðeins á yfirlitsblaði, gólf undanskilið. Vanti hana: rautt ✕ í stað seinna haksins í merkinu
+  (símasýn), rauð lína „Hinn endinn: engin önnur skráning innan 0,9 m“ í spjaldinu (annars „Hinn endinn: #nr, x m frá“), hnappurinn „Hinn endann vantar (n)“
+  í skýringarlínunni síar á þær (`anEnda`), og gátreitur í Síur gerir það sama á borðtölvu. Mælt 13.11 í loftræstisýn: 6H 75, 5H 55 (S1 5 · S2 15 · S4 14 ·
+  S5 21). TAKMÖRKUN: mælir nálægð, ekki hlið veggjar — tvær skráningar sömu megin teljast par, og tvö gegnumtök nær en 0,9 m fela hvort annað.
 - **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`

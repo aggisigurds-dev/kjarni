@@ -170,3 +170,9 @@
 .gk .gk-tillaga button.ja { background: #dc2626; border-color: #dc2626; color: #fff; }
 .gk-bar-skyring i.ti { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; background: #fff; border: 1.6px solid #ea580c; color: #c2410c; font-style: normal; font-weight: 700; font-size: 10px; line-height: 1; }
 .gk.snerti .gk-svid.faera .gk-spjald .gk-tillaga { display: none; }
+
+/* hinn endinn: rautt ✕ í merki, lína í spjaldi og hnappur í skýringarlínu (pikk síar á þær skráningar) */
+.gk-merki.gk-endi { background: #fee2e2; color: #991b1b; font-weight: 600; }
+.gk .gk-bar-skyring button { display: inline-flex; align-items: center; gap: 5px; margin: -2px 0; padding: 2px 8px 2px 5px; border: 1px solid #fca5a5; border-radius: 12px; background: #fff; color: #991b1b; font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.gk .gk-bar-skyring button.on { background: #dc2626; border-color: #dc2626; color: #fff; }
+.gk .gk-bar-skyring button.on svg path { stroke: #fff; }
