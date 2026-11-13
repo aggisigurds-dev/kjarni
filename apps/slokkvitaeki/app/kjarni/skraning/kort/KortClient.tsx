@@ -190,16 +190,23 @@ export default function KortClient() {
         const v = vid ? await s.from("skr_verk").select("id,heiti").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
         if (v.error || !v.data) throw new Error(v.error?.message || "Verk fannst ekki");
         const vk = v.data as Verk; setVerk(vk);
-        const [t, f, m, l, a] = await Promise.all([
+        const [t, f, m, l] = await Promise.all([
           s.from("skr_teikningar").select("id,heiti,haed,tegund,mynd_path,breidd_px,haed_px,yfirlit_id,vorpun,deildir,flisar").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
           s.from("skr_flokkar").select("id,heiti").or(`verk_id.eq.${vk.id},verk_id.is.null`),
           s.from("skr_starfsmenn").select("id,numer,nafn").order("numer"),
           s.from("skr_log").select("id,teikning_id,heiti,fag,mynd_path,breidd_px,haed_px,vorpun,gegnsaei,synilegt,flisar").eq("verk_id", vk.id).eq("eytt", false).order("rod").order("id"),
-          s.from("skr_aaetlud").select(AA_SEL).eq("verk_id", vk.id).eq("eytt", false),
         ]);
-        const err = t.error || f.error || m.error || l.error || a.error; if (err) throw new Error(err.message);
+        const err = t.error || f.error || m.error || l.error; if (err) throw new Error(err.message);
+        // áætluð göt í 1.000 raða síðum: ein beiðni klippist við 1.000 raðir og göt hurfu þegjandi af kortinu (13.11.2026: 1.098 raðir)
+        const aa: Aaetlad[] = [];
+        for (let i = 0; ; i += 1000) {
+          const r = await s.from("skr_aaetlud").select(AA_SEL).eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          if (r.error) throw new Error(r.error.message);
+          aa.push(...(r.data as Aaetlad[]));
+          if (!r.data || r.data.length < 1000) break;
+        }
         const tt = t.data as Teikning[];
-        setTeikn(tt); setFlokkar(f.data as Flokkur[]); setMenn(m.data as Starfsm[]); setLog(l.data as Lag[]); setAaetlud(a.data as Aaetlad[]);
+        setTeikn(tt); setFlokkar(f.data as Flokkur[]); setMenn(m.data as Starfsm[]); setLog(l.data as Lag[]); setAaetlud(aa);
         setSyn((tt.find((x) => x.tegund === "yfirlit") || tt[0])?.id ?? null);
         const fa: Faersla[] = [];
         for (let i = 0; ; i += 1000) {
