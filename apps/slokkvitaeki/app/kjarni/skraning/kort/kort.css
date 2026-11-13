@@ -176,3 +176,11 @@
 .gk .gk-bar-skyring button { display: inline-flex; align-items: center; gap: 5px; margin: -2px 0; padding: 2px 8px 2px 5px; border: 1px solid #fca5a5; border-radius: 12px; background: #fff; color: #991b1b; font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
 .gk .gk-bar-skyring button.on { background: #dc2626; border-color: #dc2626; color: #fff; }
 .gk .gk-bar-skyring button.on svg path { stroke: #fff; }
+
+/* hinn endinn eftir hlið veggjar: grænt = brunaveggur milli Ajour-staðanna, gult = báðar sömu megin (veikt merki) */
+.gk-merki.gk-hinum { background: #dcfce7; color: #166534; }
+.gk-merki.gk-sama { background: #fef3c7; color: #92400e; font-weight: 600; }
+.gk .gk-bar-skyring button.sama { border-color: #fcd34d; color: #92400e; }
+.gk .gk-bar-skyring button.sama b { color: #d97706; font-weight: 800; font-size: 14px; line-height: 1; }
+.gk .gk-bar-skyring button.sama.on { background: #d97706; border-color: #d97706; color: #fff; }
+.gk .gk-bar-skyring button.sama.on b { color: #fff; }

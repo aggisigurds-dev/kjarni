@@ -237,6 +237,25 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   (símasýn), rauð lína „Hinn endinn: engin önnur skráning innan 0,9 m“ í spjaldinu (annars „Hinn endinn: #nr, x m frá“), hnappurinn „Hinn endann vantar (n)“
   í skýringarlínunni síar á þær (`anEnda`), og gátreitur í Síur gerir það sama á borðtölvu. Mælt 13.11 í loftræstisýn: 6H 75, 5H 55 (S1 5 · S2 15 · S4 14 ·
   S5 21). TAKMÖRKUN: mælir nálægð, ekki hlið veggjar — tvær skráningar sömu megin teljast par, og tvö gegnumtök nær en 0,9 m fela hvort annað.
+- **Hinn endinn eftir HLIÐ VEGGJAR (Agnar 13.11.2026: „gáðu hvort þú finnir leið“):** starfsmenn pikka á Ajour-teikninguna þeim megin við vegginn sem
+  þeir vinna. Mælt 13.11 (PCA á rauðum pixlum, loftræsting): í 87 % tveggja skráninga para á sama gegnumtaki eru Ajour-staðirnar sitt hvorum megin við
+  rauða brunavegginn, bæði á 5H og 6H (tilviljun gæfi 50 %). Kortið notar því UPPRUNALEGU Ajour-stöðuna (`Punktur.x0/y0`, ekki færðu stöðuna):
+  - Veggir: `tools/skraning-gatakort-veggir.py <yfirlit.jpg> <út.json>` dregur miðlínur rauðra veggja út sem línubúta (rauður litur → þynning →
+    Hough í þremur umferðum; þekur 96 % miðlínunnar á 5H og 6H). Skrárnar eru í `kort/veggir/yfirlit-5h.json` og `-6h.json` og hlaðast eftir þörfum
+    (`VEGGIR` í KortClient, lykill „hæð:myndarheiti“; 4H notar 5H-blaðið en fær enga veggi, þar er eitt verk ein þétting). Keyra aftur ef yfirlitsmynd breytist.
+  - Regla (`endar`): fyrir skráningu p og hverja skráningu q sama hóps innan 0,9 m frá sýndri stöðu: sker beina línan milli Ajour-staðanna veggbút
+    (`skerVegg`, bútar lengdir um `VL` = 8 px í hvorn enda)? Já → „hinum“ (græn lína í spjaldi: „hinum megin við brunavegginn“). Nei, rauður veggur
+    innan 20 px frá merkinu og engin Ajour-staðanna nær miðlínu en 3 px → „sama“. Annars „ovist“ (nálægðarreglan ein, eins og áður).
+  - „sama“ er VEIKT merki og því gult „?“ í stað seinna haksins, ekki rautt ✕: á 6H (96 % búin) lenda 123 af 1.090 loftskráningum þar (S2 66), á 5H 73
+    af 780 (S1 14 · S2 29 · S4 19 · S5 11). Í þeim pörum er oftar sami starfsmaður sama dag (6H: 55 % / 43 % á móti 28 % / 12 % í „hinum“-pörum), þ.e.
+    maður sem pikkar tvisvar á sama stað. Hvaða „sama“-tilvik eru raunveruleg göt er ÓMÆLT (ekki borið saman við myndir né skoðað á staðnum).
+  - Viðmót: hnappurinn „? Sömu megin (n)“ í skýringarlínunni síar á þær (`samaSia`), gátreitur í Síur gerir það sama; þegar slík skráning er valin er
+    dregin gul lína milli Ajour-staðanna tveggja svo sjáist hvar pikkin lentu miðað við vegginn. Rauða ✕-ið (engin skráning innan 0,9 m) er óbreytt.
+  - Samanburðarmæling utan kortsins: `scratchpad/lm_hlid2.py 5H|6H` (sama regla í Python) gaf sömu tölur og kortið (5H 73 = 73, 6H 124 á móti 123).
+- **Merkjastærð (Agnar 13.11.2026: „merki mega ekki vera of stór svo ég sjái ekki“):** `merkisR` þak 13 px (var 17), fylling merkja 40 % hvít (var 60 %),
+  áætluð göt og tillögur mest um 9 px í símasýn (`zb`) og tillöguhringurinn hálfgegnsær. Teikningin undir merkinu á að sjást; ekki stækka þetta aftur.
+- **Valinn punktur undir spjaldi:** í símasýn þekur spjaldið allt að neðri helming kortsins; lendi valdi punkturinn neðar en 40 % af hæð kortsins er
+  kortinu hliðrað svo hann sitji í 25 % (`lyfta` í pikk-meðhöndluninni). Ekki í færsluham (spjaldið samanbrotið þar).
 - **Próf:** `scratchpad/gk_simi2.cjs <slóð> <nafn>` (412 × 915, snerting um CDP, skrif stöðvuð og svarað með uppgerð).
 
 ## Stöðuskýrsla (11.11.2026) — `/kjarni/skraning/skyrsla`
