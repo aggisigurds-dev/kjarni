@@ -38,6 +38,8 @@ const SYNIR: [string, string, string[], string[]][] = [
 ];
 /** Hinn endinn: lokun í vegg er tvö stök verk, eitt hvorum megin. Önnur skráning sama hóps innan þessa (30 px = 0,9 m) telst hinn endinn. */
 const ENDI_PX = 30;
+/** Víðari leit fyrir skráningar sem eiga engan hinn enda (50 px = 1,5 m): aðeins SAMI flokkur og aðeins ef brunaveggur liggur milli Ajour-staðanna. */
+const ENDI_VITT_PX = 50;
 /** Rauðir brunaveggir yfirlitsblaðsins sem línubútar (tools/skraning-gatakort-veggir.py → veggir/<mynd>.json, flatt [x1,y1,x2,y2,…] í px blaðsins).
  *  Lykill: hæð og myndarheiti. 4H notar 5H-blaðið en er gólf 5. hæðar (eitt verk = ein þétting), svo þar eru veggir ekki notaðir. */
 const VEGGIR: Record<string, () => Promise<{ default: { seg: number[] } }>> = {
@@ -93,7 +95,7 @@ const NEMAR: Record<string, () => Promise<{ default: { nemar: number[] } }>> = {
 };
 const NEMA_HOPUR = "Loft", N_MED = 6, N_THV = 12;
 /** einn = eina skráningin á sínu gegnumtaki og engin hinum megin · samaNemi = allar skráningar gegnumtaksins sömu megin (báðar rautt ✕). */
-type Endi = { q: Punktur | null; nr: number | null; d: number; hlid: "hinum" | "sama" | "ovist" | "einn" | "samaNemi"; nemi?: number };
+type Endi = { q: Punktur | null; nr: number | null; d: number; hlid: "hinum" | "sama" | "ovist" | "einn" | "samaNemi"; nemi?: number; vitt?: boolean };
 const FLISA_THAK_SNERTI = 24; // snertiskjár: mest þetta margar skarpar flísar í einum ramma (grunnur + lög), annars grófa myndin
 type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fag: string; fjoldi: number; athugasemd: string | null; flokkur_id: number | null; parad: Parad | null; uppruni?: string };
 /** Tillaga: staður sem tól stingur upp á (t.d. stokkur gegnum brunavegg án skráningar). Sést á kortinu en telst EKKI í stöðuskýrslunni fyrr en hún er staðfest. */
@@ -104,7 +106,8 @@ const AA_SEL = "id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd,flokkur_id,parad,
 const PARAD: Record<string, [string, string]> = { fullt: ["Fullt", "#86efac"], hluti: ["Vantar hluta", "#fde047"], vantar: ["Engin skráning", "#fca5a5"] };
 // Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
 const FAG_FLOKKAR: Record<string, RegExp> = { loftraesting: /^(Loft|Raufar)/i, sprinkler: /^Stál/i, vatn: /^(Stál|Plast)/i, hiti: /^(Stál|Plast)/i, fravatn: /^(Stál|Plast)/i, gas: /^(Stál|Plast)/i, rafmagn: /^Raf/i, golf: /^Gólf/i };
-type Nanar = { lysing: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string };
+/** slodir = myndir skráningarinnar í OKKAR geymslu (skr_myndir, fatan „skraning“; sóttar úr Ajour með tools/skraning-myndir-ajour.cjs). */
+type Nanar = { lysing: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string; slodir: string[] };
 /** Færður punktur: leiðrétt staða skráningar á yfirlitsblaði (skr_faerslur). Skráningin sjálf heldur Ajour-hnitunum. */
 type Faersla = { id: number; skraning_id: number; teikning_id: number; x_px: number; y_px: number; uppruni: string };
 const FA_SEL = "id,skraning_id,teikning_id,x_px,y_px,uppruni";
@@ -214,6 +217,8 @@ export default function KortClient() {
   const [samaSia, setSamaSia] = useState(false); // aðeins skráningar þar sem hinn endinn er skráður SÖMU megin við brunavegginn
   /** Ajour-staðir (Agnar 13.11.2026: „myndi vilja geta séð Ajour punktana hvar þeir eru“): blár punktur þar sem pikkað var í Ajour, lína í merkið ef það var fært. */
   const [synaAjour, setSynaAjour] = useState(false);
+  /** Stór mynd (ljósakassi): Agnar 13.11.2026, „yrði hægt að geta séð preview mynd úr punktunum“. */
+  const [ljos, setLjos] = useState<{ slodir: string[]; i: number; nr: number } | null>(null);
   const [veggir, setVeggir] = useState<{ lykill: string; v: Veggir; nemar: number[] | null } | null>(null);
   const [aaStada, setAaStada] = useState("allt"); // sía áætlaðra gata eftir pörunarstöðu
   const [synaSkr, setSynaSkr] = useState(true); const [synaAaetlud, setSynaAaetlud] = useState(true);
@@ -391,6 +396,25 @@ export default function KortClient() {
       if (!bq) continue;
       if (hq) m.set(p.s.id, { q: hq, nr: nr(hq), d: hd, hlid: "hinum" });
       else m.set(p.s.id, { q: bq, nr: nr(bq), d: bd, hlid: !vg || fjarVegg(vg, p.x, p.y) > VEGG_NAER || aLinu || fjarVegg(vg, p.x0, p.y0) < A_LINU ? "ovist" : "sama" });
+    }
+    /* Munaðarlausar skráningar (engin innan 0,9 m, eða ein á sínu gegnumtaki): Agnar 13.11.2026, „mátt alveg halda áfram að reyna láta matcha“. Önnur
+     * munaðarlaus skráning SAMA flokks innan 1,5 m með brunavegg milli Ajour-staðanna er hinn endinn (pikkin lentu lengra í sundur en 0,9 m, eða
+     * sjálfvirka færslan valdi hvort sinn stokkinn). Mælt 13.11 (loft með raufum): leysir 8 af 110 á 6H og 6 af 75 á 5H. Þær sem eiga aðra munaðarlausa
+     * nálægt SÖMU megin eða án veggjar á milli (30 á 6H, 8 á 5H) eru látnar óhreyfðar: þar segir ekkert til um hvort þær eru sama lokun. */
+    if (vg) {
+      const mun = punktar.filter((p) => { if (p.t.hopur === "Gólf") return false; const e = m.get(p.s.id); return !e || e.hlid === "einn"; });
+      const mnet = new Map<number, Punktur[]>();
+      for (const p of mun) { const l = vLyk(Math.floor(p.x / ENDI_VITT_PX), Math.floor(p.y / ENDI_VITT_PX)), a = mnet.get(l); if (a) a.push(p); else mnet.set(l, [p]); }
+      const nytt: [Punktur, Punktur, number][] = [];
+      for (const p of mun) {
+        const gx = Math.floor(p.x / ENDI_VITT_PX), gy = Math.floor(p.y / ENDI_VITT_PX); let bd = ENDI_VITT_PX, bq: Punktur | null = null;
+        for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const q of mnet.get(vLyk(ix, iy)) || []) {
+          if (q === p || q.s.flokkur_id !== p.s.flokkur_id) continue; const d = Math.hypot(q.x - p.x, q.y - p.y);
+          if (d <= bd && skerVegg(vg, p.x0, p.y0, q.x0, q.y0)) { bd = d; bq = q; }
+        }
+        if (bq) nytt.push([p, bq, bd]);
+      }
+      for (const [p, q, d] of nytt) m.set(p.s.id, { q, nr: nr(q), d, hlid: "hinum", nemi: nemiAf.get(p.s.id), vitt: true });
     }
     return m;
   }, [punktar, teikning, veggir, veggjaLykill]);
@@ -739,8 +763,9 @@ export default function KortClient() {
     const b0 = best, dHja = (2.4 * merkisR(s.k, s.k0)) / s.k;
     const hja = snerti ? syndir.filter((q) => q !== b0 && q.t.hopur === b0.t.hopur && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja).map((q) => q.s.ajour_serial ?? q.s.radnr).slice(0, 8) : [];
     setValinn({ p: best, nanar: null, hja }); lyfta(best.y);
-    const r = await sb().from("skr_skraningar").select("lysing,created_at,ajour_gogn").eq("id", best.s.id).single();
-    if (!r.error && r.data) { const g = (r.data.ajour_gogn || {}) as { myndir?: string[]; teikning?: string; lagf_dags?: string; a_stad?: number }; setValinn((v) => (v && v.p && v.p.s.id === best!.s.id ? { ...v, nanar: { lysing: r.data.lysing, created_at: r.data.created_at, myndir: (g.myndir || []).length, teikning: g.teikning || null, lagf_dags: g.lagf_dags || null, a_stad: g.a_stad ?? null } } : v)); }
+    const [r, mr] = await Promise.all([sb().from("skr_skraningar").select("lysing,created_at,ajour_gogn").eq("id", best.s.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", best.s.id).order("rod")]);
+    const slodir = ((mr.data || []) as { path: string }[]).map((x) => x.path);
+    if (!r.error && r.data) { const g = (r.data.ajour_gogn || {}) as { myndir?: string[]; teikning?: string; lagf_dags?: string; a_stad?: number }; setValinn((v) => (v && v.p && v.p.s.id === best!.s.id ? { ...v, nanar: { lysing: r.data.lysing, created_at: r.data.created_at, myndir: (g.myndir || []).length, teikning: g.teikning || null, lagf_dags: g.lagf_dags || null, a_stad: g.a_stad ?? null, slodir } } : v)); }
   };
 
   /** Nýtt áætlað gat (rauður punktur: engin skráning parast við það) á hnitum blaðsins. Skrif aðeins við smell eða hnapp. */
@@ -929,12 +954,18 @@ export default function KortClient() {
           <div className="gk-spjald">
             <button type="button" className="gk-x" onClick={() => setValinn(null)} aria-label="Loka">×</button>
             <h3>#{valinn.p.s.ajour_serial ?? valinn.p.s.radnr} <span className={valinn.p.s.stada === "done" ? "g" : "r"}>{valinn.p.s.stada === "done" ? "Klárað" : "Opið"}</span></h3>
+            {valinn.nanar && valinn.nanar.slodir.length > 0 && (() => { const sl = valinn.nanar!.slodir, nr = valinn.p!.s.ajour_serial ?? valinn.p!.s.radnr; return (
+              <div className="gk-myndir">{sl.slice(0, 6).map((m, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <button key={m} type="button" onClick={() => setLjos({ slodir: sl, i, nr })} aria-label={`Opna mynd ${i + 1} af ${sl.length}`}><img src={publicUrl(m)} alt="" loading="lazy" /></button>
+              ))}{sl.length > 6 && <span>+{sl.length - 6}</span>}</div>
+            ); })()}
             <dl>
               <dt>Flokkur</dt><dd>{fl(valinn.p.s.flokkur_id)}</dd>
               <dt>Deild</dt><dd>{valinn.p.d || "—"}</dd>
               <dt>Starfsmaður</dt><dd>{nafn(valinn.p.s.starfsmadur_id)}</dd>
               <dt>Framkvæmt</dt><dd>{dmy(valinn.p.s.framkvaemt_til) || "—"}</dd>
-              {valinn.nanar && <><dt>Teikning</dt><dd>{valinn.nanar.teikning || "—"}</dd><dt>Myndir í Ajour</dt><dd>{valinn.nanar.myndir}</dd></>}
+              {valinn.nanar && <><dt>Teikning</dt><dd>{valinn.nanar.teikning || "—"}</dd><dt>Myndir</dt><dd>{valinn.nanar.slodir.length || (valinn.nanar.myndir ? `${valinn.nanar.myndir} í Ajour (ekki sóttar enn)` : "engar")}</dd></>}
             </dl>
             {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í sama merki: {valinn.hja.map((r) => "#" + r).join(", ")}</p>}
             {teikning.tegund === "yfirlit" && valinn.p.t.hopur !== "Gólf" && (() => {
@@ -942,7 +973,7 @@ export default function KortClient() {
               if (!e) return <p className="gk-merki gk-endi">Hinn endinn: engin önnur skráning innan {(ENDI_PX / PX_M).toFixed(1).replace(".", ",")} m</p>;
               if (e.hlid === "einn") return <p className="gk-merki gk-endi">Hinn endinn: engin skráning hinum megin við brunavegginn á þessu gegnumtaki</p>;
               if (e.hlid === "samaNemi") return <p className="gk-merki gk-sama">Hinn endinn skráður: #{e.nr} á sama gegnumtaki. Ajour-staðsetning beggja er þó sömu megin við brunavegginn</p>;
-              if (e.hlid === "hinum") return <p className="gk-merki gk-hinum">Hinn endinn: #{e.nr}, hinum megin við brunavegginn{e.nemi !== undefined ? " á sama gegnumtaki" : ""}</p>;
+              if (e.hlid === "hinum") return <p className="gk-merki gk-hinum">Hinn endinn: #{e.nr}, hinum megin við brunavegginn{e.vitt ? `, ${(e.d / PX_M).toFixed(1).replace(".", ",")} m frá` : e.nemi !== undefined ? " á sama gegnumtaki" : ""}</p>;
               if (e.hlid === "sama") return <p className="gk-merki gk-sama">Hinn endinn skráður: #{e.nr}. Ajour-staðsetning beggja er þó sömu megin við brunavegginn</p>;
               return <p className="gk-merki gk-hja">Hinn endinn: #{e.nr}, {(e.d / PX_M).toFixed(1).replace(".", ",")} m frá (hlið veggjar ekki metin)</p>;
             })()}
@@ -1015,6 +1046,18 @@ export default function KortClient() {
           </div>
         </div>
       </div>
+      {ljos && (
+        <div className="gk-ljos" role="dialog" aria-modal="true" aria-label="Ljósmynd skráningar" onClick={() => setLjos(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={publicUrl(ljos.slodir[ljos.i])} alt={`Ljósmynd ${ljos.i + 1} af ${ljos.slodir.length}`} onClick={(e) => e.stopPropagation()} />
+          <div className="gk-ljos-stika" onClick={(e) => e.stopPropagation()}>
+            {ljos.slodir.length > 1 && <button type="button" aria-label="Fyrri mynd" onClick={() => setLjos({ ...ljos, i: (ljos.i + ljos.slodir.length - 1) % ljos.slodir.length })}>‹</button>}
+            <span>#{ljos.nr} · mynd {ljos.i + 1} af {ljos.slodir.length}</span>
+            {ljos.slodir.length > 1 && <button type="button" aria-label="Næsta mynd" onClick={() => setLjos({ ...ljos, i: (ljos.i + 1) % ljos.slodir.length })}>›</button>}
+            <button type="button" className="l" onClick={() => setLjos(null)}>Loka</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

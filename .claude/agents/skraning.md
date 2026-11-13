@@ -282,6 +282,20 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   - Mælt eftir breytingu (kort = `lm_nemar2.py` með raufum, per deild á 5H): 5H ✕ 75 (S1 17 · S2 19 · S4 18 · S5 21), sömu megin 60; 6H ✕ um 107 (S1 29 ·
     S2 33 · S4 19 · S5 26), sömu megin um 122 (Agnar var að færa punkta á 6H S2 á meðan, tölurnar hnikuðust um 1–3). 6H S2: 372 skráningar með raufum.
   - Próf án blindra pikka: `scratchpad/gk_tolur.cjs <grunnslóð>` (teljarar per hæð og deild), `gk_s2_mynd.cjs <grunnslóð> <nafn> [hæð] [deild] [stækkanir]`.
+- **Myndir í spjaldi, víðari pörun og raufar á raflagnaleið (Agnar 13.11.2026 um miðnætti: „mátt alveg halda áfram að reyna láta matcha … mögulega eru
+  einhverjar rafmagnsraufar og göt inn í þessu raufarmetrar … yrði hægt að geta séð preview mynd úr punktunum“, „kannski voru einhverjar raflagnir settar í
+  rangan flokk“):**
+  - Myndir: allar 27.463 Ajour-myndir verks 4 eru í OKKAR geymslu (`skr_myndir`, 10.896 skráningar, 0 vantar; mælt 13.11). Spjald valins punkts sækir
+    `skr_myndir.path` og sýnir allt að 6 smámyndir efst (`.gk-myndir`); pikk opnar ljósakassa (`.gk-ljos`, fletta ‹ ›, Loka). Próf: `scratchpad/gk_mynd_prof.cjs`.
+  - Víðari pörun (`ENDI_VITT_PX = 50`, 1,5 m): munaðarlaus skráning (engin færsla eða `einn`) + önnur munaðarlaus skráning SAMA flokks innan 1,5 m með
+    brunavegg milli Ajour-staðanna → „hinum“ með `vitt: true`. Leysir 8 á 6H og 6 á 5H. Þær sem eiga aðra munaðarlausa nálægt sömu megin eða án veggjar
+    (30 á 6H, 8 á 5H) eru EKKI paraðar. Mælt eftir (kort = `lm_nemar2.py`, eins per deild): 6H ✕ 94 (S1 29 · S2 24 · S4 15 · S5 26), sömu megin 124;
+    5H ✕ 69 (15 · 17 · 18 · 19), sömu megin 60.
+  - Raufar (flokkur 41) móti lögum (`scratchpad/lm_raufar.py`, fjarlægð frá loftræsilagi M215/M216 og raflagnaleiðum R1150/R1160): 6H 110, þar af 90 við
+    loftstokk (≤ 0,3 m) og 15 á raflagnaleið (≤ 0,15 m) en ekki við stokk; 5H 17, þar af 10 við stokk og 7 á raflagnaleið. Þessar 22 GÆTU verið raflagnir í
+    röngum flokki; ósannreynt, flokkun ekki breytt. Hringlaga loftskráningar á raflagnaleið og ekki við stokk: 33 á 6H, 17 á 5H.
+  - Mynd #5364 (6H S1, 315) sýnir stokk upp í gegnum steypta loftplötu, ekki vegg: sum rauð ✕ eru þá gegnumtök í plötu þar sem ein skráning er öll lokunin.
+    ÓMÆLT hve mörg; kortið greinir ekki plötu frá vegg.
 - **Ajour-staðir (Agnar 13.11.2026: „þetta er allt rosa skrítið. Myndi vilja geta séð Ajour punktana hvar þeir eru“):** hnappurinn „Ajour-staðir“ í skýringunum
   neðst (og gátreitur í „Lög og síur“) teiknar bláan punkt þar sem pikkað var í Ajour (x0, y0) fyrir HVERJA skráningu og bláa strikalínu í merkið ef hún var
   færð (`ajLina` / `ajPt` í `teikna`); stærðartalan inni í merkinu er falin á meðan svo punkturinn sjáist. Valin skráning sýnir alltaf sinn Ajour-stað, og

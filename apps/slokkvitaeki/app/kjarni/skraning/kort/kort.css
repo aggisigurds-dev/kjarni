@@ -188,3 +188,16 @@
 .gk .gk-bar-skyring button.ajour i { width: 9px; height: 9px; background: #1d4ed8; }
 .gk .gk-bar-skyring button.ajour.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
 .gk .gk-bar-skyring button.ajour.on i { background: #fff; }
+
+/* Myndir skráningar í spjaldi valins punkts og ljósakassi (13.11.2026) */
+.gk-myndir { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; overflow-x: auto; }
+.gk .gk-myndir button { flex: none; width: 62px; height: 82px; padding: 0; border: 1px solid #8a9199; border-radius: 6px; overflow: hidden; background: #f3f4f6; cursor: zoom-in; }
+.gk-myndir img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gk-myndir span { flex: none; font-size: 12px; font-weight: 600; color: var(--aj-dim); }
+.gk.snerti .gk-myndir button { width: 76px; height: 100px; }
+.gk.snerti .gk-svid.faera .gk-spjald .gk-myndir { display: none; }
+.gk-ljos { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 12px; background: rgba(1, 15, 36, .92); }
+.gk-ljos img { max-width: 100%; max-height: calc(100% - 64px); border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+.gk-ljos-stika { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 14px; font-weight: 600; }
+.gk .gk-ljos-stika button { min-width: 44px; height: 44px; padding: 0 14px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 10px; background: rgba(255, 255, 255, .1); color: #fff; font: inherit; font-size: 22px; }
+.gk .gk-ljos-stika button.l { font-size: 14px; font-weight: 600; background: #1d4ed8; border-color: #1d4ed8; }
