@@ -48,8 +48,8 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 ## Gatakort og stöðuskýrsla — EKKI þitt lengur (14.11.2026)
 - `/kjarni/skraning/kort` og `/kjarni/skraning/skyrsla`, tólin `apps/slokkvitaeki/tools/skraning-gatakort-*`, töflurnar `skr_log`,
   `skr_aaetlud`, `skr_faerslur`, `skr_kerfi`, `skr_skyrslur` og sýnin `skr_haedarhnit` eru á sviði agentsins **`gatakort`** (Jackie Chan 🥋,
-  `.claude/agents/gatakort.md`). Verkferlið: `.claude/skills/gatakort-nytt-husnaedi/SKILL.md`. Öll NLSH-sagan (tól, tölur, gildrur, úrskurðir
-  Agnars 11.–14.11.2026) var flutt óbreytt í `.claude/skills/gatakort-nytt-husnaedi/NLSH-DAGBOK.md`.
+  heimaskrá `brunaholf/.claude/agents/gatakort.md`, afrit hér). Verkferlið: `brunaholf/.claude/skills/gatakort-nytt-husnaedi/SKILL.md`. Öll NLSH-sagan (tól, tölur, gildrur, úrskurðir
+  Agnars 11.–14.11.2026) var flutt óbreytt í `brunaholf/.claude/skills/gatakort-nytt-husnaedi/NLSH-DAGBOK.md`.
 - **Þú átt áfram:** líkanið (`skr_verk`, `skr_skraningar`, `skr_teikningar`, `skr_flokkar`), `skr_yfirlit`/`skr_hub_skraningar` og allt sem
   uppgjörið les. Gatakortið má aldrei breyta þeim án þín: verk gatakortsins hafa `ajour_nafn = NULL` einmitt til að uppgjörið haldist óbreytt.
 - **Faldar skráningar í verki 4 (14.11.2026, með leyfi Agnars):** 31 milliloft skráð ofan frá á 6H S2 og 466 skráningar án teikningar eru

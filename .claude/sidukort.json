@@ -1121,7 +1121,7 @@
     "apps/slokkvitaeki/app/kjarni/skraning/skyrsla/page.tsx"
    ],
    "yfir": null,
-   "eigandi": "gatakort",
+   "eigandi": "bh:gatakort",
    "undiragentar": [
     "skraning"
    ],
@@ -1143,7 +1143,7 @@
     "apps/slokkvitaeki/app/kjarni/skraning/kort/page.tsx"
    ],
    "yfir": null,
-   "eigandi": "gatakort",
+   "eigandi": "bh:gatakort",
    "undiragentar": [
     "skraning"
    ],
