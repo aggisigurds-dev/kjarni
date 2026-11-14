@@ -901,7 +901,7 @@ export default function KortClient() {
 
   // ---------------------------------------------------------------- bendill: færa, stækka, velja, setja áætlað gat
   const bendlar = useRef(new Map<number, { x: number; y: number }>());
-  const drag = useRef<{ x: number; y: number; hreyft: number; klipa: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; hreyft: number; klipa: number; mx?: number; my?: number } | null>(null);   // mx, my = miðja milli tveggja fingra í síðustu hreyfingu
   /** Staða bendils í einingum strigans. Undir zoom eru gluggahnit (clientX, getBoundingClientRect) ekki í sömu einingum og clientWidth: hlutfallið leiðréttir það. */
   const stadur = (e: { clientX: number; clientY: number }) => { const el = kassiRef.current!, r = el.getBoundingClientRect(), f = r.width ? el.clientWidth / r.width : 1; return { x: (e.clientX - r.left) * f, y: (e.clientY - r.top) * f }; };
   const staekka = useCallback((sx: number, sy: number, f: number) => {
@@ -946,7 +946,12 @@ export default function KortClient() {
       drag.current.hreyft += Math.abs(p.x - fyrri.x) + Math.abs(p.y - fyrri.y); if (drag.current.hreyft > 4) f.hreyft = true;
       bidjaUmTeikningu(); return;
     }
-    if (b.length === 2) { faerir.current = null; const d = Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y); if (drag.current.klipa) staekka((b[0].x + b[1].x) / 2, (b[0].y + b[1].y) / 2, d / drag.current.klipa); drag.current.klipa = d; drag.current.hreyft = 99; return; }
+    if (b.length === 2) {   // klípa: stækkun um miðjuna milli fingranna, og blaðið fylgir miðjunni (tveir fingur færa líka)
+      faerir.current = null; const d = Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y), mx = (b[0].x + b[1].x) / 2, my = (b[0].y + b[1].y) / 2, dc = drag.current;
+      if (dc.mx !== undefined && dc.my !== undefined) { sjon.current.tx += mx - dc.mx; sjon.current.ty += my - dc.my; }
+      if (dc.klipa) staekka(mx, my, d / dc.klipa); else bidjaUmTeikningu();
+      dc.klipa = d; dc.mx = mx; dc.my = my; dc.hreyft = 99; return;
+    }
     sjon.current.tx += p.x - fyrri.x; sjon.current.ty += p.y - fyrri.y; drag.current.hreyft += Math.abs(p.x - fyrri.x) + Math.abs(p.y - fyrri.y); bidjaUmTeikningu();
   };
   const upp = async (e: React.PointerEvent) => {

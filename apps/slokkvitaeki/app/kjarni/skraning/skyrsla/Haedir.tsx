@@ -201,7 +201,10 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
   const drag = useRef<{ x: number; y: number; fx: number; fy: number; hreyft: boolean } | null>(null);
   useEffect(() => { const t = setTimeout(() => setZT(v.z), 140); return () => clearTimeout(t); }, [v.z]);
   /** Aðdráttur um margfeldi f þannig að staðurinn (cx, cy) — hlutfall af kortglugganum — haldist kyrr. */
-  const zoomVid = useCallback((f: number, cx: number, cy: number) => setV((o) => { const z = Math.min(8, Math.max(1, o.z * f)), mx = (cx - o.fx) / o.z, my = (cy - o.fy) / o.z; return klemma(z, cx - mx * z, cy - my * z, r); }), [r]);
+  /* Stækkunarþak: allt að 3 skjápixlar á hvern pixil teikningar, minnst 8× og mest 60×. Á síma (gluggi ~360 px, teikning 5.790 px) er það um 48×; fasta
+   * þakið 8× sem var hér áður sýndi enn áttunda hluta hæðarinnar þvert yfir skjáinn (Agnar 15.11.2026: „næ ég engan veginn að zooma nægilega mikið“). */
+  const zMest = useCallback(() => { const b = box.current?.clientWidth || 0; return b ? Math.max(8, Math.min(60, (3 * y.w) / b)) : 8; }, [y.w]);
+  const zoomVid = useCallback((f: number, cx: number, cy: number) => setV((o) => { const z = Math.min(zMest(), Math.max(1, o.z * f)), mx = (cx - o.fx) / o.z, my = (cy - o.fy) / o.z; return klemma(z, cx - mx * z, cy - my * z, r); }), [r, zMest]);
   const midja = useCallback((z: number, mx: number, my: number) => setV(klemma(z, 0.5 - mx * z, r / 2 - my * z, r)), [r]);
   useEffect(() => {   // hlutfall gluggans mælt (stóra sýnin); sýnin klemmd upp á nýtt þegar það breytist
     const el = box.current; if (!el || !stor) return;
@@ -221,6 +224,23 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
     el.addEventListener("wheel", wh, { passive: false });
     return () => el.removeEventListener("wheel", wh);
   }, [zoomVid, stor, y.w, y.h]);
+  /* Tveggja fingra klípa á snertiskjá: stækkar um miðjuna milli fingranna og færir teikninguna með þeim. Unnið með snertiatburðum (ekki bendilatburðum) svo
+   * hægt sé að stöðva skrun síðunnar þegar tveir fingur eru á teikningunni; einn fingur skrunar síðunni áfram þar til stækkað er (touch-action: pan-y).
+   * Meðan klípa stendur, og þar til allir fingur eru farnir af, er eins fingurs drag og val á punkti óvirkt (klipa.current er ekki null). */
+  const klipa = useRef<{ d: number; cx: number; cy: number } | null>(null);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    const maela = (e: TouchEvent) => { const q = el.getBoundingClientRect(), a = e.touches[0], b = e.touches[1]; return { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), cx: ((a.clientX + b.clientX) / 2 - q.left) / q.width, cy: ((a.clientY + b.clientY) / 2 - q.top) / ((q.width * y.h) / y.w) }; };
+    const byrja = (e: TouchEvent) => { if (e.touches.length !== 2) return; if (e.cancelable) e.preventDefault(); klipa.current = maela(e); drag.current = null; };
+    const hreyfa = (e: TouchEvent) => {
+      const k = klipa.current; if (!k || e.touches.length !== 2) return; if (e.cancelable) e.preventDefault();
+      const n = maela(e), f = k.d > 0 ? n.d / k.d : 1; klipa.current = n;
+      setV((o) => { const z = Math.min(zMest(), Math.max(1, o.z * f)), mx = (k.cx - o.fx) / o.z, my = (k.cy - o.fy) / o.z; return klemma(z, n.cx - mx * z, n.cy - my * z, r); });
+    };
+    const enda = (e: TouchEvent) => { if (klipa.current && e.touches.length < 2) klipa.current = e.touches.length ? { d: 0, cx: 0, cy: 0 } : null; };
+    el.addEventListener("touchstart", byrja, { passive: false }); el.addEventListener("touchmove", hreyfa, { passive: false }); el.addEventListener("touchend", enda); el.addEventListener("touchcancel", enda);
+    return () => { el.removeEventListener("touchstart", byrja); el.removeEventListener("touchmove", hreyfa); el.removeEventListener("touchend", enda); el.removeEventListener("touchcancel", enda); };
+  }, [r, zMest, y.w, y.h]);
   useEffect(() => {   // leit eftir skráningarnúmeri: færa sýnina að punktinum
     if (!fokus || !valinn || valinn.id !== fokus.id || valinn.haed !== haed) return;
     midja(5, valinn.x / y.w, valinn.y / y.h); setFDeild(null);
@@ -250,8 +270,8 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
       <div className="sk-hk-rammi">
       <div className={`sk-hk-mynd${v.z > 1 ? " ad" : ""}${lagmyndir.length ? " medlag" : ""}`} ref={box} style={stor ? undefined : { aspectRatio: `${y.w} / ${y.h}` }}
         onPointerDown={(e) => { if (e.button !== 0) return; drag.current = { x: e.clientX, y: e.clientY, fx: v.fx, fy: v.fy, hreyft: false }; if (v.z > 1) e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={(e) => { const d = drag.current; if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; if (!d.hreyft && Math.abs(dx) + Math.abs(dy) < 5) return; d.hreyft = true; if (v.z <= 1) return; const q = e.currentTarget.getBoundingClientRect(); setV((o) => klemma(o.z, d.fx + dx / q.width, d.fy + dy / ((q.width * y.h) / y.w), r)); }}
-        onPointerUp={(e) => { const d = drag.current; drag.current = null; if (!d || d.hreyft) return; velja(e); }}
+        onPointerMove={(e) => { const d = drag.current; if (!d || klipa.current) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; if (!d.hreyft && Math.abs(dx) + Math.abs(dy) < 5) return; d.hreyft = true; if (v.z <= 1) return; const q = e.currentTarget.getBoundingClientRect(); setV((o) => klemma(o.z, d.fx + dx / q.width, d.fy + dy / ((q.width * y.h) / y.w), r)); }}
+        onPointerUp={(e) => { const d = drag.current; drag.current = null; if (!d || d.hreyft || klipa.current) return; velja(e); }}
         onPointerCancel={() => { drag.current = null; }}
         onDoubleClick={(e) => { const { cx, cy } = hnit(e); zoomVid(2, cx, cy); }}>
         <div className="sk-hk-lag" style={{ aspectRatio: `${y.w} / ${y.h}`, transform: `translate(${v.fx * 100}%, ${v.fy * 100}%) scale(${v.z})`, ["--z" as string]: v.z }}>
@@ -310,7 +330,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
         )}
       </div>
       {stutar && stutar.alls > 0 && <p className="sk-hk-skyring sk-hk-stutar"><b>Viðbótarverk, stútar af 5. hæð niður í inntaksrými ({num(stutar.alls)}):</b> {num(stutar.klarad + stutar.opid)} eiga skráningu ({num(stutar.klarad)} kláraðar, {num(stutar.opid)} opnar) · {num(stutar.eftir + stutar.thett + stutar.annad)} án skráningar: <span><i className="es" />{num(stutar.eftir)} eftir að þétta</span> <span><i className="et" />{num(stutar.thett)} þéttir í úttekt 11.11.2026, skráningu vantar</span> <span><i className="ev" />{num(stutar.annad)} þar sem stútur er ekki kominn eða ómetinn.</span> <span className="sk-skjar sk-gagnv">Smelltu á tígul til að sjá stútinn.</span></p>}
-      {stor ? <p className="sk-hk-hint">Skrunaðu til að stækka og minnka · dragðu til að færa · smelltu á punkt til að sjá skráninguna · smelltu á deild til að fara að henni</p> : <p className="sk-hk-hint sk-skjar sk-gagnv">Smelltu á punkt til að sjá skráninguna · tvísmelltu eða notaðu + til að stækka · dragðu til að færa · stækkunarglerið opnar hæðina eða deildina í stórri sýn</p>}
+      {stor ? <p className="sk-hk-hint">Skrunaðu eða klíptu með tveimur fingrum til að stækka og minnka · dragðu til að færa · smelltu á punkt til að sjá skráninguna · smelltu á deild til að fara að henni</p> : <p className="sk-hk-hint sk-skjar sk-gagnv">Smelltu á punkt til að sjá skráninguna · klíptu með tveimur fingrum, tvísmelltu eða notaðu + til að stækka · dragðu til að færa · stækkunarglerið opnar hæðina eða deildina í stórri sýn</p>}
       {!stor && <table className="sk-tafla sk-hk-tafla">
         <thead><tr><th>Deild</th>{HLUTAR.map(([s, nafn]) => <th key={s}>{nafn}</th>)}<th>Deildin</th><th>Opið</th><th>Eftir (áætlað)</th></tr></thead>
         <tbody>
