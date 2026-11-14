@@ -17,6 +17,12 @@ export function OfflineReady() {
         .register("/turbopaint-sw.js", { scope: "/kjarni/turbopaint" })
         .catch(() => undefined);
     }
+    // Biðja um varanlega geymslu svo síminn hreinsi EKKI offline-borðin (IndexedDB +
+    // skyndiminni) undir plássþrýstingi — virkar hvort sem appið er installað eða bara
+    // opið í vafra, svo Agnar þarf ekki að installa til að gögnin haldist.
+    if (navigator.storage && typeof navigator.storage.persist === "function") {
+      navigator.storage.persist().catch(() => undefined);
+    }
   }, []);
 
   useEffect(() => {
