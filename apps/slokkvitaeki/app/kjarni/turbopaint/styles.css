@@ -116,6 +116,15 @@ body:has(.tp-root),
 /* --- Farsíma-fínstilling (Joker, 2026-08-26) ---------------------------------
    Ólagskipt CSS vinnur á Tailwind-utilities (þau búa í @layer utilities). */
 
+/* Viðmótsstærð (Agnar 2026-11-14: „texti og takkar of smá … eða setja +- takka").
+   +/- hnappurinn (UiScale.tsx) stillir --tp-ui á .tp-root; stikurnar sem bera
+   .tp-ui-scale stækka með `zoom`. Teikni-striginn (.kjarni-stage) ber ALDREI
+   þennan klasa — hann er systkini stikanna, ekki foreldri, svo snerti-hnit
+   teikningarinnar haldast rétt þótt stikurnar séu skalaðar. */
+.tp-ui-scale {
+  zoom: var(--tp-ui, 1);
+}
+
 /* Snertiskjár með næga hæð: verkfærahnappar ≥ 40px (HIG 44 / Material 48 dp
    viðmiðið — 40px er málamiðlun súlunnar svo hún þeki ekki teikninguna). */
 @media (pointer: coarse) and (min-height: 701px) {

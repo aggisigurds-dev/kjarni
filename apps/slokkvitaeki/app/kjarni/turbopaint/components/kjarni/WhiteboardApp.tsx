@@ -1,7 +1,7 @@
 "use client";
 
 import "../../lib/board/polyfills";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -131,6 +131,7 @@ import { RightPanel } from "./RightPanel";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
+import { UiScale, lesaUiScale, vistaUiScale } from "./UiScale";
 import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
@@ -216,6 +217,11 @@ async function beitaEiNidurstodum(nidurstodur: EiNidurstada[], fjarlaegja: (o: B
 export function WhiteboardApp() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1200, height: 800 });
+  // Viðmótsstærð (+/- hnappur, UiScale.tsx) — munuð í símanum, lesin eftir hydrun.
+  const [uiScale, setUiScale] = useState(1);
+  useEffect(() => {
+    setUiScale(lesaUiScale());
+  }, []);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<"board" | "viewport" | "selection">("board");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -2001,6 +2007,7 @@ export function WhiteboardApp() {
   return (
     <div
       className="tp-root dark flex h-full min-h-0 flex-1 flex-col bg-[#0f1117] text-stone-100"
+      style={{ "--tp-ui": uiScale } as CSSProperties}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -2095,7 +2102,7 @@ export function WhiteboardApp() {
           </div>
         </div>
       )}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
           ref={shellRef}
           className="relative min-w-0 flex-1 bg-[#ece7de]"
@@ -2148,10 +2155,10 @@ export function WhiteboardApp() {
                 Núna: bundin milli topps og neðri borðanna og miðjuð INNAN þess
                 bils — hún getur því hvorki farið upp fyrir né niður í borðin.
                 Súlan sjálf skrunar ef hún kemst enn ekki fyrir (sjá styles.css). */}
-            <div className="absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
+            <div className="tp-ui-scale absolute top-2 bottom-28 left-2 flex items-center sm:left-3">
               <Toolbar />
             </div>
-            <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+            <div className="tp-ui-scale absolute top-3 right-3 flex flex-col items-end gap-2">
               {vistaSyn && simi ? (
                 <button
                   type="button"
@@ -2204,7 +2211,7 @@ export function WhiteboardApp() {
             ) : null}
             {/* Undir „Vista í úttekt"-borðanum þegar hann er uppi — annars skyggði hann á stikurnar. */}
             <div
-              className={`absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 ${
+              className={`tp-ui-scale absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 ${
                 tengdMynd?.uttekt || (simi && vistaSyn) ? "top-16" : "top-3"
               }`}
             >
@@ -2216,12 +2223,22 @@ export function WhiteboardApp() {
               />
               <VeggjaStika />
             </div>
-            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+            <div className="tp-ui-scale absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               <RitilThettStika auka={simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? { onAdgerd: hamAdgerd } : undefined} />
               {simi && SIMA_VEGGJA_HAMIR.includes(hamur) ? null : <SymbolTray />}
               {/* Veggjahamir (tölva líka — Agnar 05.11.2026: „litakóðinn niðri mætti vera val á veggjum eins og í Teikningu"): neðsta stikan er
                   veggjategund + þykkt í stað litapallettunnar. */}
               {SIMA_VEGGJA_HAMIR.includes(hamur) ? <VeggjaTegundSimaStika /> : <StyleStrip />}
+            </div>
+            {/* Viðmótsstærð (+/-) — neðst í vinstra horni, undir verkfærasúlunni. Sést aðeins á snertiskjá. */}
+            <div className="absolute bottom-4 left-2">
+              <UiScale
+                value={uiScale}
+                onChange={(v) => {
+                  setUiScale(v);
+                  vistaUiScale(v);
+                }}
+              />
             </div>
           </div>
           {dragOver ? (
@@ -2269,7 +2286,7 @@ export function WhiteboardApp() {
             </div>
           ) : null}
         </div>
-        <div className="hidden lg:block">
+        <div className="tp-ui-scale hidden lg:block">
           {spjaldFalid ? (
             // Saman lagt spjald: mjó rönd — teikningin fær skjáinn (Agnar 03.10.2026: „spara pláss á skjánum").
             <button
