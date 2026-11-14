@@ -46,6 +46,8 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
 - Schema-rek: skr-viewin/RPC-in eru ekki í `apps/database/supabase/schemas` (brýtur AGENTS.md).
 
 ## Gatakort og stöðuskýrsla — EKKI þitt lengur (14.11.2026)
+- **Nafnið (Agnar 14.11.2026):** nýja Ajour heitir **Apex Ajour** í bili, meðan hún er greiningartól ofan á Ajour, og síðar **Apex**.
+  Heiti í kóða, slóðum og töflum (`skraning`, `skr_*`) eru óbreytt.
 - `/kjarni/skraning/kort` og `/kjarni/skraning/skyrsla`, tólin `apps/slokkvitaeki/tools/skraning-gatakort-*`, töflurnar `skr_log`,
   `skr_aaetlud`, `skr_faerslur`, `skr_kerfi`, `skr_skyrslur` og sýnin `skr_haedarhnit` eru á sviði agentsins **`gatakort`** (Jackie Chan 🥋,
   heimaskrá `brunaholf/.claude/agents/gatakort.md`, afrit hér). Verkferlið: `brunaholf/.claude/skills/gatakort-nytt-husnaedi/SKILL.md`. Öll NLSH-sagan (tól, tölur, gildrur, úrskurðir
