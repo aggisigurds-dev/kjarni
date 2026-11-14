@@ -255,8 +255,8 @@ export function Gallery({
               </button>
             </div>
             <p className="px-3 pb-1.5 text-[0.62rem] leading-snug text-slate-400">
-              Eye hides a part. Sparkles repairs that one part only. View → Focus (or Alt-click the
-              eye) looks at one part; uncheck Focus to bring the others back.
+              Eye hides a part. Sparkles repairs that one part only. Object → Isolate (or Alt-click
+              the eye) looks at one part; Isolate again to bring the others back.
             </p>
             <ul className="pb-1">
               {project.parts.map((part) => {
