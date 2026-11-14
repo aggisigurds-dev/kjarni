@@ -314,6 +314,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     einangruðum. Blá og ómáluð ber rör nást EKKI á lit, og „einangrað“ verður ekki dæmt af lit (18 % af litlausum eru ber). Fjarlægð frá úðalögn/vatnslögn
     á teikningum greinir ekki á milli (M115/M116 liggur við flest). Í 6–7 skráningum er stuttur einangrunarhólkur í gatinu en rörið bert ofan við
     (#5023, 6110, 7128, 10026, 10155, 11149, 3278): dæmt einangrað, skilgreiningaratriði fyrir Agnar.
+    Keyrt á ALLAR 2.841 (allar eiga myndir, 959 MB sótt í scratchpad/stalallt): rautt ≥ 2,7 % hjá 671 (23,6 %). SANNPRÓFUN á nýju slembiúrtaki 12 slíkra
+    (fræ 777, ég skoðaði sjálfur): 8 rauð úðarör, 3 EINANGRUÐ rör með rautt rör í bakgrunni (#7371, 8290, 10343), 1 óljós (#9178). Litur einn er því
+    EKKI dómur (um 2 af 3 rétt). Þess vegna: `visbendingar.json.raud` (648 númer) er aðeins vísbending í spjaldi („Sjálfvirk litagreining: rautt rör …“),
+    enginn kerfispunktur og engin áhrif á sýnir. Dómar með vissu „há“ (skoðaðar myndir): úði 24, einangrað 36 → kerfispunktur, og sýnin „Úðakerfi“ felur
+    stál dæmt einangrað, „Vatn og lagnir“ felur stál dæmt úði (ódæmd sjást í báðum). Full myndskoðun allra 2.841 kostar um 5–6 milljón tákn hjá
+    undiragentum (66 kostuðu 134 þús.): ekki keyrt án samþykkis Agnars. Próf: `scratchpad/gk_udi_prof.cjs`.
 - **Hurðalínur, hlið skráningar og smellur (Agnar 14.11.2026: „smá að pæla hvort stærðarplúsarnir gætu fundið skurðinn þar sem loftræstingin fer í gegn. Og
   maður gæti dregið punktana svo þeir festast í einhvern endann á plúsnum og þá kæmi neon check ✓ á þann hluta … væri hægt að gera bláa línu í hurðagötin“,
   „það er samt næstum því bara bein lína eftir öllum ganginum“):**

@@ -259,7 +259,10 @@ export default function KortClient() {
   /** Ajour-staðir (Agnar 13.11.2026: „myndi vilja geta séð Ajour punktana hvar þeir eru“): blár punktur þar sem pikkað var í Ajour, lína í merkið ef það var fært. */
   const [synaAjour, setSynaAjour] = useState(false);
   const [visb, setVisb] = useState<Visb>({});
-  useEffect(() => { let lifir = true; import("./visbendingar.json").then((m) => { if (lifir) setVisb(m.default.v as unknown as Visb); }).catch(() => { /* án vísbendinga */ }); return () => { lifir = false; }; }, []);
+  /** Stálrör þar sem sjálfvirk litagreining fann RAUTT á ljósmynd (líklega úðarör, óskoðað). Aðeins vísbending í spjaldi: í prófun 14.11.2026 voru 8 af 12
+   *  slíkum rauð úðarör, 3 einangruð rör með rautt rör í bakgrunni og 1 óljós. Þess vegna enginn kerfispunktur og engin áhrif á sýnir. */
+  const [visbRaud, setVisbRaud] = useState<Set<number>>(new Set());
+  useEffect(() => { let lifir = true; import("./visbendingar.json").then((m) => { if (lifir) { setVisb(m.default.v as unknown as Visb); setVisbRaud(new Set((m.default as { raud?: number[] }).raud || [])); } }).catch(() => { /* án vísbendinga */ }); return () => { lifir = false; }; }, []);
   /** Stór mynd (ljósakassi): Agnar 13.11.2026, „yrði hægt að geta séð preview mynd úr punktunum“. */
   const [ljos, setLjos] = useState<{ slodir: string[]; i: number; nr: number } | null>(null);
   const [veggir, setVeggir] = useState<{ lykill: string; v: Veggir; nemar: number[] | null; hurdir: number[] } | null>(null);
@@ -483,6 +486,9 @@ export default function KortClient() {
     const s = p.s;
     if (einDeild && p.d !== einDeild) return false;
     if (synV && !synV[3].includes(p.t.hopur)) return false;
+    /* Stálrör eru bæði í úðakerfi og í vatns- og hitalögnum (Agnar 14.11.2026: „sprinkler alltaf óeinangruð stálrör … vatns- og hitakerfi alltaf með
+     * einangrun“). Þar sem myndgreining hefur dæmt rörið fer það aðeins í sína sýn; ódæmd stálrör sjást áfram í báðum. */
+    if (synV && p.t.hopur === "Stál" && s.ajour_serial != null) { const vd = visb[s.ajour_serial]?.[0]; if ((synV[0] === "udi" && vd === "einangrad") || (synV[0] === "lagnir" && vd === "udi")) return false; }
     if (p.d && afDeild[p.d]) return false;
     if (madur && String(s.starfsmadur_id) !== madur) return false;
     if (fra && (!s.framkvaemt_til || s.framkvaemt_til.slice(0, 7) < fra)) return false;
@@ -493,7 +499,7 @@ export default function KortClient() {
     if (oparad && paradIds.has(s.id)) return false;
     if ((anEnda || samaSia) && !((anEnda && vantarEnda(p)) || (samaSia && samaMegin(p)))) return false;
     return true;
-  }, [einDeild, synV, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds, anEnda, vantarEnda, samaSia, samaMegin]);
+  }, [einDeild, synV, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds, anEnda, vantarEnda, samaSia, samaMegin, visb]);
   /** Staða: Tilbúin = kláraðar skráningar · Í vinnslu = ókláraðar skráningar · Eftir = engar skráningar sýndar (aðeins rauðir punktar áætlaðra gata). */
   const grunnsia = useCallback((p: Punktur) => siaAn(p) && (stada === "allt" || (stada === "done" ? p.s.stada === "done" : stada === "opid" ? p.s.stada !== "done" : false)), [siaAn, stada]);
   const grunn = useMemo(() => punktar.filter(grunnsia), [punktar, grunnsia]);
@@ -1048,7 +1054,8 @@ export default function KortClient() {
             </dl>
             {(() => { const sn = valinn.p!.s.ajour_serial, v = sn != null ? visb[sn] : undefined; if (!v || !VISB_HEITI[v[0]]) return null;
               const rangt = v[0] === "kaplar" && /^(Loft|Raufar)/i.test(fl(valinn.p!.s.flokkur_id));
-              return <p className={`gk-merki ${rangt ? "gk-sama" : "gk-hja"}`}>Ljósmyndirnar sýna {VISB_HEITI[v[0]]}{rangt ? ", en flokkurinn í Ajour er loftræsting" : ""} (myndgreining, vissa {v[2]})</p>; })()}
+              return <p className={`gk-merki ${rangt ? "gk-sama" : "gk-hja"}`}>Ljósmyndirnar sýna {VISB_HEITI[v[0]]}{rangt ? ", en flokkurinn í Ajour er loftræsting" : ""} {v[2] === "litur" ? "(sjálfvirk litagreining, myndirnar ekki skoðaðar)" : `(myndgreining, vissa ${v[2]})`}</p>; })()}
+            {valinn.p.s.ajour_serial != null && !visb[valinn.p.s.ajour_serial] && visbRaud.has(valinn.p.s.ajour_serial) && <p className="gk-merki gk-hja">Sjálfvirk litagreining: rautt rör á ljósmynd, gæti verið úðakerfi (óskoðað; rétt í um 2 af hverjum 3 í prófun)</p>}
             {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í sama merki: {valinn.hja.map((r) => "#" + r).join(", ")}</p>}
             {teikning.tegund === "yfirlit" && valinn.p.t.hopur !== "Gólf" && (() => {
               if (iPlotu(valinn.p!)) return <p className="gk-merki gk-hinum">Gegnumtak í loftplötu samkvæmt ljósmynd: ein skráning er öll lokunin</p>;
