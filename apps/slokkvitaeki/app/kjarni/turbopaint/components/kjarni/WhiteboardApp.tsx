@@ -50,6 +50,8 @@ import { drawingScaleFromWords, pixelsPerMeterFromScale } from "../../lib/board/
 import type { FirewallHit, OcrWord } from "../../lib/board/firewall-rating";
 import {
   clearBoard,
+  createBoard,
+  getCurrentBoardId,
   haettaBidOgHlada,
   listBoards,
   loadBoard,
@@ -132,6 +134,7 @@ import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
 import { UiScale, lesaUiScale, vistaUiScale } from "./UiScale";
+import { Verkefni } from "./Verkefni";
 import { VeggjaYfirlit } from "./VeggjaYfirlit";
 import Hus3D from "./Hus3D";
 import { finnaLinu } from "../../lib/board/pdf-linur";
@@ -139,7 +142,7 @@ import { getHamur, HAMIR, useHamur, type HamAdgerd, type HamurId } from "../../l
 import { GreiningTolSpjald } from "./GreiningTolSpjald";
 import { HamValSimi, SIMA_VEGGJA_HAMIR, VeggjaStika, VeggjaTegundSimaStika } from "./VeggjaStika";
 import { RitilThettStika, VeggjaRitill } from "./VeggjaRitill";
-import { useErSimi } from "../../lib/board/simi";
+import { erSimi, useErSimi } from "../../lib/board/simi";
 import { SjalfvirktSpjald } from "./SjalfvirktSpjald";
 import { keyraSjalfvirkt, type GaediLysing } from "../../lib/board/sjalfvirkt";
 import { useSjalfvirkt, type SkrefId } from "../../lib/board/sjalfvirkt-stada";
@@ -275,6 +278,9 @@ export function WhiteboardApp() {
     const q = new URLSearchParams(window.location.search);
     return Number(q.get("uttekt") || 0) > 0 && !!(q.get("haed") || q.get("plan"));
   });
+  // Forsíða (Verkefni, Agnar 2026-11-14): opnast sjálfkrafa á síma við venjulega ræsingu — EKKI þegar djúptengill
+  // (?skoda=/?uttekt=) opnar tiltekna teikningu. Verkefni-hnappurinn opnar hana líka hvenær sem er.
+  const [heimaOpin, setHeimaOpin] = useState(() => !skodunBeidni && !uttektBeidni && erSimi());
   const skodunVirk = useSkodun((s) => s.virk);
   // Úttektarhæð opnuð án borðs (skoðun með `uttekt`): viðmótið er eins og á venjulegu úttektarborði — „Vista í úttekt“ sést
   // og skoðunarborðinn („Vista sem borð“) ekki. Borðið verður til við fyrstu breytingu eða vistun.
@@ -303,6 +309,25 @@ export function WhiteboardApp() {
     w.__tpSkodun = useSkodun;
     w.__tpEign = getAssetBlob;
   }, [skodunBeidni]);
+
+  // Forsíða (Verkefni): opna valið verkefni / búa til nýtt. Bíður eftir grunnhleðslu (loadBoard) svo switchBoard eigi
+  // gilt núverandi borð — annars gæti persistBoard búið til draugaborð úr tómu ástandi.
+  const bidaHydrunar = useCallback(async () => {
+    for (let i = 0; i < 200 && !useBoardStore.getState().hydrated; i++) await new Promise((r) => setTimeout(r, 50));
+  }, []);
+  const opnaVerkefni = useCallback(
+    async (id: string) => {
+      await bidaHydrunar();
+      if (id !== getCurrentBoardId()) await switchBoard(id);
+      setHeimaOpin(false);
+    },
+    [bidaHydrunar]
+  );
+  const nyttVerkefni = useCallback(async () => {
+    await bidaHydrunar();
+    await createBoard();
+    setHeimaOpin(false);
+  }, [bidaHydrunar]);
 
   // Lag-smellur á hlut utan skjás: miðja myndavélina á hann (sama zoom).
   const focusObject = useCallback(
@@ -2006,7 +2031,7 @@ export function WhiteboardApp() {
 
   return (
     <div
-      className="tp-root dark flex h-full min-h-0 flex-1 flex-col bg-[#0f1117] text-stone-100"
+      className="tp-root dark relative flex h-full min-h-0 flex-1 flex-col bg-[#0f1117] text-stone-100"
       style={{ "--tp-ui": uiScale } as CSSProperties}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
@@ -2049,6 +2074,7 @@ export function WhiteboardApp() {
         on3d={() => setThrividd(true)}
         onHamAdgerd={hamAdgerd}
         onOpenLayers={() => setPanelOpen(true)}
+        onOpenHome={() => setHeimaOpin(true)}
         greining={hefurMyndGr ? { onAdgerd: hamAdgerd, keyraCombo: keyraGreiningu, uttekt: !!tengdMynd?.uttekt } : null}
         viewSize={size}
       />
@@ -2321,6 +2347,9 @@ export function WhiteboardApp() {
             <RightPanel onFocusObject={focusObject} onHamAdgerd={hamAdgerd} />
           </div>
         </div>
+      ) : null}
+      {heimaOpin ? (
+        <Verkefni onOpen={opnaVerkefni} onNew={nyttVerkefni} onClose={() => setHeimaOpin(false)} maLoka={hydrated} />
       ) : null}
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} initialTarget={exportTarget} />
       <StripDialog
