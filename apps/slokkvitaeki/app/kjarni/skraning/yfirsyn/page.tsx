@@ -4,7 +4,7 @@ import "../skraning.css";
 import "./yfirsyn.css";
 
 export const metadata: Metadata = {
-  title: "Skráning — yfirsýn",
+  title: "Apex Ajour — yfirsýn",
   description: "Yfirsýndarborð: afköst per dag og mánuð, verk, starfsmenn með Tímaveru-tímum, flokkar, aldur opinna punkta.",
 };
 
@@ -13,7 +13,8 @@ export default function YfirsynPage() {
     <div className="aj">
       <header className="aj-top">
         <a className="aj-logo" href="/kjarni" title="Kjarni" aria-label="Kjarni"><span>⌂</span></a>
-        <nav className="aj-nav" aria-label="Skráning">
+        <a className="aj-apex" href="/kjarni/skraning" title="Apex Ajour" aria-label="Apex Ajour"><img className="aj-apex-full" src="/apex/apex-ajour-haus.svg" alt="Apex Ajour" /><img className="aj-apex-takn" src="/apex/apex-takn-ljost.svg" alt="" /></a>
+        <nav className="aj-nav" aria-label="Apex Ajour">
           <a className="on" href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>
           <a href="/kjarni/skraning/kort">Gatakort</a>

@@ -3,9 +3,9 @@ import SkraningClient from "./SkraningClient";
 import "./skraning.css";
 
 export const metadata: Metadata = {
-  title: "Skráning — Kjarni",
+  title: "Apex Ajour — Kjarni",
   description:
-    "Skráning — brunaþéttingar á verkstöðum: yfirlit yfir öll verk, síur og skýrslur. Eigið kerfi í stað Ajour.",
+    "Apex Ajour — brunaþéttingar á verkstöðum: yfirlit yfir öll verk, síur og skýrslur. Eigið kerfi í stað Ajour.",
 };
 
 /* Útlitið fylgir Ajour (Agnar 13.10: „keep the same visual theme as ajour") — ljóst, svartur
@@ -18,7 +18,8 @@ export default function SkraningPage() {
         <a className="aj-logo" href="/kjarni" title="Kjarni — stjórnstöð" aria-label="Kjarni">
           <span>⌂</span>
         </a>
-        <nav className="aj-nav" aria-label="Skráning">
+        <a className="aj-apex" href="/kjarni/skraning" title="Apex Ajour" aria-label="Apex Ajour"><img className="aj-apex-full" src="/apex/apex-ajour-haus.svg" alt="Apex Ajour" /><img className="aj-apex-takn" src="/apex/apex-takn-ljost.svg" alt="" /></a>
+        <nav className="aj-nav" aria-label="Apex Ajour">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>
           <a href="/kjarni/skraning/kort">Gatakort</a>

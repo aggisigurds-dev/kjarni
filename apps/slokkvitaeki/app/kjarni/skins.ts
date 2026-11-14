@@ -19,7 +19,7 @@ export const TOOLS = [
   { id: "turbopaint", label: "TurboPaint", href: "/kjarni/turbopaint" },
   { id: "artcraft", label: "ArtCraft", href: "/kjarni/artcraft" },
   { id: "officecraft", label: "OfficeCraft", href: "/kjarni/officecraft" },
-  { id: "skraning", label: "Ajour-Craft", href: "/kjarni/skraning" },
+  { id: "skraning", label: "Apex Ajour", href: "/kjarni/skraning" },
   { id: "bord", label: "Borð", href: "/bord" },
   { id: "stjorn", label: "Stjórnborð", href: "/stjorn" },
   { id: "kerfi", label: "Kerfi", href: "/kerfi" },

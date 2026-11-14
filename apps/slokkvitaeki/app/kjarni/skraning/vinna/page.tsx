@@ -4,11 +4,11 @@ import "../skraning.css";
 import "./vinna.css";
 
 export const metadata: Metadata = {
-  title: "Skráning — vinna",
+  title: "Apex Ajour — vinna",
   description: "Vinnuútgáfa Skráningar: veldu byggingu og hæð, settu punkt á teikninguna, mynd, stærð og efni; mynd eftir þéttingu og merkja lokið.",
   // „Bæta á heimaskjá" í síma — opnast sem app án vafrastiku
   manifest: "/skraning/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Skráning", statusBarStyle: "black" },
+  appleWebApp: { capable: true, title: "Apex Ajour", statusBarStyle: "black" },
   icons: { icon: "/skraning/icon-192.png", apple: "/skraning/icon-192.png" },
 };
 export const viewport = { themeColor: "#1e1e1e", width: "device-width", initialScale: 1 };
@@ -17,7 +17,8 @@ export default function VinnaPage() {
   return (
     <div className="aj aj-vinna">
       <header className="aj-top">
-        <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Skráning"><span>⌂</span></a>
+        <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Apex Ajour"><span>⌂</span></a>
+        <a className="aj-apex" href="/kjarni/skraning" title="Apex Ajour" aria-label="Apex Ajour"><img className="aj-apex-full" src="/apex/apex-ajour-haus.svg" alt="Apex Ajour" /><img className="aj-apex-takn" src="/apex/apex-takn-ljost.svg" alt="" /></a>
         <nav className="aj-nav" aria-label="Skráning">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>

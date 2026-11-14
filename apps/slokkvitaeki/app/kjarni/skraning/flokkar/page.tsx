@@ -6,7 +6,7 @@ import "../verk/verk.css";
 import "./flokkar.css";
 
 export const metadata: Metadata = {
-  title: "Skráning — flokkar, gátlisti og starfsmenn",
+  title: "Apex Ajour — flokkar, gátlisti og starfsmenn",
   description: "Categories/schema: stærðarflokkar (verðskrárlínur), gátlisti (brunamótstaða, efni) og starfsmannalisti fyrir skráningar.",
 };
 
@@ -14,7 +14,8 @@ export default function FlokkarPage() {
   return (
     <div className="aj aj-vinna">
       <header className="aj-top">
-        <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Skráning"><span>⌂</span></a>
+        <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Apex Ajour"><span>⌂</span></a>
+        <a className="aj-apex" href="/kjarni/skraning" title="Apex Ajour" aria-label="Apex Ajour"><img className="aj-apex-full" src="/apex/apex-ajour-haus.svg" alt="Apex Ajour" /><img className="aj-apex-takn" src="/apex/apex-takn-ljost.svg" alt="" /></a>
         <nav className="aj-nav" aria-label="Skráning">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>

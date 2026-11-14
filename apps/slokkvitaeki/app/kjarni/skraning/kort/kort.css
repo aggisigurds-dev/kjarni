@@ -124,6 +124,7 @@
 .aj.gk-mjor { overflow: hidden; touch-action: pan-x pan-y; }
 .aj.gk-mjor .aj-top { overflow: hidden; }
 .aj.gk-mjor .aj-logo { flex: none; }
+.aj.gk-mjor .aj-apex { padding: 0 8px; } .aj.gk-mjor .aj-apex .aj-apex-full { display: none; } .aj.gk-mjor .aj-apex .aj-apex-takn { display: block; }
 .aj.gk-mjor .aj-nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .aj.gk-mjor .aj-nav::-webkit-scrollbar { display: none; }
 .aj.gk-mjor .aj-nav a { flex: none; white-space: nowrap; }

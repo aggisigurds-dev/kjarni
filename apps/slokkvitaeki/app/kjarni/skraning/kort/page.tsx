@@ -4,7 +4,7 @@ import "../skraning.css";
 import "./kort.css";
 
 export const metadata: Metadata = {
-  title: "Skráning — gatakort",
+  title: "Apex Ajour — gatakort",
   description: "Gatakort: skráningar á brunayfirlitsteikningu með lögum (fagteikningar, áætluð göt) og síum eftir deild, tegund, stöðu, starfsmanni, tímabili og lagfæringum.",
 };
 
@@ -17,7 +17,8 @@ export default function KortPage() {
     <div className="aj">
       <header className="aj-top">
         <a className="aj-logo" href="/kjarni" title="Kjarni" aria-label="Kjarni"><span>⌂</span></a>
-        <nav className="aj-nav" aria-label="Skráning">
+        <a className="aj-apex" href="/kjarni/skraning" title="Apex Ajour" aria-label="Apex Ajour"><img className="aj-apex-full" src="/apex/apex-ajour-haus.svg" alt="Apex Ajour" /><img className="aj-apex-takn" src="/apex/apex-takn-ljost.svg" alt="" /></a>
+        <nav className="aj-nav" aria-label="Apex Ajour">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>
           <a className="on" href="/kjarni/skraning/kort">Gatakort</a>
