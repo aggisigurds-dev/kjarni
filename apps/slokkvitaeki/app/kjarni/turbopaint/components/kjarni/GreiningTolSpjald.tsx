@@ -3,17 +3,18 @@
 // „Greining" — EINN samanbrotinn flipi með öllum greiningartólunum (Agnar 04.11.2026: „hafa einn stóran collapsed flipa
 // með öllum greiningartólunum og geta valið staka eða combo" · „endurskipuleggja layoutið á því öllu").
 //
-// Efst til hægri á borðinu, undir „Vista" og hamvalinu. Tveir hlutar:
-//   Combo   — veldu hópa (Veggir og hurðir · Eldveggir EI · Tæki og merki) og „Keyra valin": sjálfvirka verkferlið
-//             (lib/board/sjalfvirkt.ts) keyrir aðeins þá, í réttri röð, á opnu hæðinni. Framvindan og „Hvernig?" koma í
-//             framvinduspjaldinu.
-//   Stök tól — hvert tól opnast sér með skýringu á því hvað það gerir og hvaða vél vinnur.
+// Efst til hægri á borðinu, undir „Vista" og hamvalinu. Aukalegur takki „Sjálfvirkt" (SjalfvirktTakki) stendur við hliðina
+// og keyrir öll 8 skref í einu. Í flipanum:
+//   Sjálfvirkt · öll 8 skref — sama og takkinn við hliðina.
+//   Combo   — veldu hópa (Veggir og hurðir · Eldveggir EI · Tæki og merki) og „Keyra valin".
+//   Stök tól — hvert tól opnast sér.
 
-import { Box, ChevronDown, DoorOpen, Flame, ScanSearch, ScanText, Wand2, BrickWall, Search } from "lucide-react";
+import { Box, ChevronDown, DoorOpen, Flame, ListOrdered, ScanSearch, ScanText, Wand2, BrickWall, Search } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { HamAdgerd } from "../../lib/board/hamir";
 import type { SkrefId } from "../../lib/board/sjalfvirkt-stada";
+import { SJALFVIRKT_SKREF_LYSING } from "../../lib/board/sjalfvirkt-takki";
 import { finnaHurdirTillogur, finnaVeggiTillogur } from "./VeggjaRitill";
 
 type Hopur = { id: Extract<SkrefId, "veggir" | "ei" | "taeki">; heiti: string; skyring: string };
@@ -32,10 +33,13 @@ type Tol = { id: string; heiti: string; skyring: string; takn: ReactNode; keyra:
 export function GreiningTolSpjald({
   onAdgerd,
   keyraCombo,
+  keyraAllt,
   uttekt,
 }: {
   onAdgerd: (a: HamAdgerd) => void;
   keyraCombo: (valin: SkrefId[]) => void;
+  /** Eitt smellur — öll 8 skref sjálfvirka verkferlisins (takkinum „Sjálfvirkt" við hliðina gerir það sama). */
+  keyraAllt?: () => void;
   /** Hæð úr úttekt er opin — combo þarf hana (vistar til baka). */
   uttekt: boolean;
 }) {
@@ -116,7 +120,29 @@ export function GreiningTolSpjald({
           style={{ position: "fixed", top: stadur.top, right: stadur.right, maxHeight: `calc(100dvh - ${stadur.top}px - 12px)` }}
           className="z-[80] w-[min(88vw,21rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#1a1d2e] p-2.5 text-stone-100 shadow-2xl shadow-black/50"
         >
-          <div className="text-[10.5px] font-semibold tracking-wide text-white/45 uppercase">Combo — keyrt í röð</div>
+          {keyraAllt ? (
+            <>
+              <button
+                type="button"
+                data-greining-sjalfvirkt
+                disabled={!uttekt}
+                title={SJALFVIRKT_SKREF_LYSING}
+                onClick={() => keyra(keyraAllt)}
+                className="flex w-full items-start gap-2 rounded-lg border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-2 text-left active:translate-y-px disabled:opacity-40"
+              >
+                <ListOrdered className="mt-0.5 size-4 shrink-0 text-emerald-300" />
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] font-semibold">Sjálfvirkt · öll 8 skref</span>
+                  <span className="block text-[11px] leading-snug text-white/60">
+                    Gæði, skurður, veggir, hreinsun, hurðir, EI, tæki og vistun — eitt smellur. Takkinum „Sjálfvirkt“ við hlið Greining gerir það sama.
+                  </span>
+                </span>
+              </button>
+              <div className="mt-3 text-[10.5px] font-semibold tracking-wide text-white/45 uppercase">Combo — veldu hópa</div>
+            </>
+          ) : (
+            <div className="text-[10.5px] font-semibold tracking-wide text-white/45 uppercase">Combo — keyrt í röð</div>
+          )}
           <div className="mt-1.5 flex flex-col gap-1">
             {HOPAR.map((h) => (
               <label key={h.id} className="flex cursor-pointer items-start gap-2 rounded-lg bg-white/5 px-2 py-1.5 hover:bg-white/8">

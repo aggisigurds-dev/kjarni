@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { GreiningTolSpjald } from "./GreiningTolSpjald";
+import { SjalfvirktTakki } from "./SjalfvirktTakki";
 import { finnaHurdirTillogur } from "./VeggjaRitill";
 import { useErSimi } from "../../lib/board/simi";
 import type { SkrefId } from "../../lib/board/sjalfvirkt-stada";
@@ -107,7 +108,7 @@ export function TopBar({
   /** Opna lög/eiginleika á síma — panellinn er falinn undir lg. */
   onOpenLayers?: () => void;
   /** Greining-flipinn í stikunni (skjáborð): aðeins þegar teikning er á borðinu. */
-  greining?: { onAdgerd: (a: HamAdgerd) => void; keyraCombo: (valin: SkrefId[]) => void; uttekt: boolean } | null;
+  greining?: { onAdgerd: (a: HamAdgerd) => void; keyraCombo: (valin: SkrefId[]) => void; keyraAllt: () => void; uttekt: boolean } | null;
   viewSize: { width: number; height: number };
 }) {
   const simi = useErSimi();
@@ -429,7 +430,8 @@ export function TopBar({
               </Button>
             ))}
           </div>
-          <GreiningTolSpjald onAdgerd={greining.onAdgerd} keyraCombo={greining.keyraCombo} uttekt={greining.uttekt} />
+          <GreiningTolSpjald onAdgerd={greining.onAdgerd} keyraCombo={greining.keyraCombo} keyraAllt={greining.keyraAllt} uttekt={greining.uttekt} />
+          <SjalfvirktTakki onKeyra={greining.keyraAllt} uttekt={greining.uttekt} />
         </>
       ) : null}
       {/* E-30/E-60, Gegnumtök, Hreinsa, Veggir og 3D búa í hamstikunni (HamStika) og í Greining-flipanum. */}
