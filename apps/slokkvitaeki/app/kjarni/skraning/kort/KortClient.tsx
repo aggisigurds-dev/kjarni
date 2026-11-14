@@ -21,9 +21,12 @@ const varpa = (v: Vorpun, x: number, y: number): [number, number] => { let h: { 
 type Flisar = { kvardi: number; bx: number; by: number; dalkar: number; radir: number; slod: string; ending: string; til: string[] };
 const FLISA_MORK = 1.15;   // skjápixlar per grunnmyndarpixil: þar yfir eru flísar notaðar
 const FLISA_HAMARK = 24;   // mest þetta margar flísar í minni (hver ~15 MB afkóðuð)
-type Verk = { id: number; heiti: string };
+type Verk = { id: number; heiti: string; stillingar?: { breytingar?: boolean } | null };
+/* Handbreytt svið skráningar (dálkurinn skr_skraningar.handvirkt): upprunalega gildið per svið. */
+type Svid = "flokkur_id" | "stada" | "lysing" | "athugasemd";
+type Handvirkt = Partial<Record<Svid, { fra: string | number | null; hvenaer?: string }>>;
 type Teikning = { id: number; heiti: string; haed: string | null; tegund: string; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; yfirlit_id: number | null; vorpun: Vorpun | null; deildir: string[] | null; flisar: Flisar | null };
-type Skr = { id: number; radnr: number; ajour_serial: number | null; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stada: string; framkvaemt_til: string | null; deild: string | null; lagf: string | null; tvitak_af: number | null };
+type Skr = { id: number; radnr: number; ajour_serial: number | null; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stada: string; framkvaemt_til: string | null; deild: string | null; lagf: string | null; tvitak_af: number | null; handvirkt: Handvirkt | null };
 type Flokkur = { id: number; heiti: string };
 type Starfsm = { id: number; numer: number | null; nafn: string | null };
 /** `lan`: lagið tilheyrir öðru yfirlitsblaði með sömu grunnmynd (4H notar 5H-blaðið) og er sýnt hér að láni; hæð þess blaðs. */
@@ -127,7 +130,7 @@ const PARAD: Record<string, [string, string]> = { fullt: ["Fullt", "#86efac"], h
 // Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
 const FAG_FLOKKAR: Record<string, RegExp> = { loftraesting: /^(Loft|Raufar)/i, sprinkler: /^Stál/i, vatn: /^(Stál|Plast)/i, hiti: /^(Stál|Plast)/i, fravatn: /^(Stál|Plast)/i, gas: /^(Stál|Plast)/i, rafmagn: /^Raf/i, golf: /^Gólf/i };
 /** slodir = myndir skráningarinnar í OKKAR geymslu (skr_myndir, fatan „skraning“; sóttar úr Ajour með tools/skraning-myndir-ajour.cjs). */
-type Nanar = { lysing: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string; slodir: string[] };
+type Nanar = { lysing: string | null; athugasemd: string | null; myndir: number; teikning: string | null; lagf_dags: string | null; a_stad: number | null; created_at: string; slodir: string[] };
 /** Færður punktur: leiðrétt staða skráningar á yfirlitsblaði (skr_faerslur). Skráningin sjálf heldur Ajour-hnitunum. */
 type Faersla = { id: number; skraning_id: number; teikning_id: number; x_px: number; y_px: number; uppruni: string };
 const FA_SEL = "id,skraning_id,teikning_id,x_px,y_px,uppruni";
@@ -318,7 +321,7 @@ export default function KortClient() {
     (async () => {
       try {
         const s = sb(), q = new URLSearchParams(window.location.search), vid = Number(q.get("verk"));
-        const v = vid ? await s.from("skr_verk").select("id,heiti").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
+        const v = vid ? await s.from("skr_verk").select("id,heiti,stillingar").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti,stillingar").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
         if (v.error || !v.data) throw new Error(v.error?.message || "Verk fannst ekki");
         const vk = v.data as Verk; setVerk(vk);
         const [t, f, m, l] = await Promise.all([
@@ -349,7 +352,7 @@ export default function KortClient() {
         setFaerslur(fa);
         const allar: Skr[] = [];
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("id,radnr,ajour_serial,teikning_id,x_px,y_px,flokkur_id,starfsmadur_id,stada,framkvaemt_til,deild:ajour_gogn->>deild,lagf:ajour_gogn->>lagf,tvitak_af:ajour_gogn->tvitak_af").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,radnr,ajour_serial,teikning_id,x_px,y_px,flokkur_id,starfsmadur_id,stada,framkvaemt_til,handvirkt,deild:ajour_gogn->>deild,lagf:ajour_gogn->>lagf,tvitak_af:ajour_gogn->tvitak_af").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           allar.push(...(r.data as unknown as Skr[])); setHladid(`Sæki skráningar… ${num(allar.length)}`);
           if (!r.data || r.data.length < 1000) break;
@@ -852,9 +855,9 @@ export default function KortClient() {
     const b0 = best, dHja = (2.4 * merkisR(s.k, s.k0)) / s.k;
     const hja = snerti ? syndir.filter((q) => q !== b0 && q.t.hopur === b0.t.hopur && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja).map((q) => q.s.ajour_serial ?? q.s.radnr).slice(0, 8) : [];
     setValinn({ p: best, nanar: null, hja }); lyfta(best.y);
-    const [r, mr] = await Promise.all([sb().from("skr_skraningar").select("lysing,created_at,ajour_gogn").eq("id", best.s.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", best.s.id).order("rod")]);
+    const [r, mr] = await Promise.all([sb().from("skr_skraningar").select("lysing,athugasemd,created_at,ajour_gogn").eq("id", best.s.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", best.s.id).order("rod")]);
     const slodir = ((mr.data || []) as { path: string }[]).map((x) => x.path);
-    if (!r.error && r.data) { const g = (r.data.ajour_gogn || {}) as { myndir?: string[]; teikning?: string; lagf_dags?: string; a_stad?: number }; setValinn((v) => (v && v.p && v.p.s.id === best!.s.id ? { ...v, nanar: { lysing: r.data.lysing, created_at: r.data.created_at, myndir: (g.myndir || []).length, teikning: g.teikning || null, lagf_dags: g.lagf_dags || null, a_stad: g.a_stad ?? null, slodir } } : v)); }
+    if (!r.error && r.data) { const g = (r.data.ajour_gogn || {}) as { myndir?: string[]; teikning?: string; lagf_dags?: string; a_stad?: number }; setValinn((v) => (v && v.p && v.p.s.id === best!.s.id ? { ...v, nanar: { lysing: r.data.lysing, athugasemd: r.data.athugasemd, created_at: r.data.created_at, myndir: (g.myndir || []).length, teikning: g.teikning || null, lagf_dags: g.lagf_dags || null, a_stad: g.a_stad ?? null, slodir } } : v)); }
   };
 
   /** Nýtt áætlað gat (rauður punktur: engin skráning parast við það) á hnitum blaðsins. Skrif aðeins við smell eða hnapp. */
@@ -909,6 +912,30 @@ export default function KortClient() {
     setValinn((v) => (v?.p?.s.id === p.s.id ? { ...v, p: { ...v.p, x: p.x0, y: p.y0, faersla: undefined } } : v));
   };
 
+  // ---------------------------------------------------------------- handbreytingar á skráningu (aðeins þegar opið er fyrir breytingar í Stillingum)
+  /* Agnar 14.11.2026: „losna við kjánaleg höft … í stillingum að ég geti opnað á sem flesta hluti … breyta, skrifa, stærðir, flokka, texta“.
+   * Stillingin býr á verkinu (skr_verk.stillingar.breytingar), svo hún er eins á öllum tækjum. Gildið fer í dálkinn sjálfan; `handvirkt` geymir
+   * upprunalega gildið per svið (innflutningurinn yfirskrifar þá ekki sviðið og breytinguna má taka til baka) og skr_atburdir fær færslu.
+   * Ajour sjálft breytist aldrei. Pörun áætlaðra gata (skr_aaetlud.parad) fylgir ekki sjálfkrafa: keyra -para.cjs eftir flokkabreytingar. */
+  const opid = !!verk?.stillingar?.breytingar;
+  const setjaOpid = async (b: boolean) => {
+    if (!verk) return; const stillingar = { ...(verk.stillingar || {}), breytingar: b };
+    const r = await sb().from("skr_verk").update({ stillingar }).eq("id", verk.id); if (r.error) { setVilla(r.error.message); return; }
+    setVerk({ ...verk, stillingar });
+  };
+  const breytaSkraningu = async (p: Punktur, svid: Svid, gildi: string | number | null) => {
+    const nu = svid === "flokkur_id" ? p.s.flokkur_id : svid === "stada" ? p.s.stada : svid === "lysing" ? valinn?.nanar?.lysing ?? null : valinn?.nanar?.athugasemd ?? null;
+    if (nu === gildi) return;
+    const h: Handvirkt = { ...(p.s.handvirkt || {}) }, fra = h[svid] ? h[svid]!.fra : nu;
+    if (fra === gildi) delete h[svid]; else h[svid] = { fra, hvenaer: new Date().toISOString() };
+    const handvirkt = Object.keys(h).length ? h : null;
+    const r = await sb().from("skr_skraningar").update({ [svid]: gildi, handvirkt }).eq("id", p.s.id); if (r.error) { setVilla(r.error.message); return; }
+    const a = await sb().from("skr_atburdir").insert({ skraning_id: p.s.id, hvad: svid === "flokkur_id" ? "flokkur" : svid === "stada" ? "stada" : "texti", gogn: { svid, fra: nu, til: gildi, uppruni: "gatakort" } }); if (a.error) setVilla(a.error.message);
+    const ny: Skr = { ...p.s, handvirkt, ...(svid === "flokkur_id" ? { flokkur_id: gildi as number | null } : svid === "stada" ? { stada: String(gildi) } : {}) };
+    setSkr((l) => l.map((q) => (q.id === ny.id ? ny : q)));
+    setValinn((v) => (v?.p?.s.id === ny.id ? { ...v, p: { ...v.p, s: ny }, nanar: v.nanar && (svid === "lysing" || svid === "athugasemd") ? { ...v.nanar, [svid]: gildi as string | null } : v.nanar } : v));
+  };
+
   // ---------------------------------------------------------------- lög og áætluð göt (skrif aðeins við smell)
   const breytaAaetludu = async (a: Aaetlad, breyting: Partial<Pick<Aaetlad, "flokkur_id" | "fjoldi" | "athugasemd" | "fag" | "uppruni">>, vista = true) => {
     const nytt = { ...a, ...breyting };
@@ -941,6 +968,12 @@ export default function KortClient() {
   const kl = syndir.filter((p) => p.s.stada === "done").length;
   const nafn = (id: number | null) => { const m = menn.find((x) => x.id === id); return m ? (m.nafn || `Starfsmaður ${m.numer}`) : "—"; };
   const fl = (id: number | null) => flokkar.find((f) => f.id === id)?.heiti || "—";
+  /* „Breytt hér, var: …“ við handbreytt svið; hnappurinn „Upprunalegt“ sést aðeins þegar opið er fyrir breytingar. */
+  const varGildi = (p: Punktur, svid: Svid) => {
+    const h = p.s.handvirkt?.[svid]; if (!h) return null;
+    const t = svid === "flokkur_id" ? fl(h.fra as number | null) : svid === "stada" ? (h.fra === "done" ? "Klárað" : "Opið") : h.fra ? `„${String(h.fra).slice(0, 60)}“` : "autt";
+    return <small className="gk-var">Breytt hér, var: {t}{opid && <button type="button" onClick={() => breytaSkraningu(p, svid, h.fra)}>Upprunalegt</button>}</small>;
+  };
   const flokkarFags = (fag: string) => { const r = FAG_FLOKKAR[fag]; const m = r ? flokkar.filter((f) => r.test(f.heiti)) : []; return (m.length ? m : flokkar).slice().sort((a, b) => a.heiti.localeCompare(b.heiti, "is")); };
   const LAGF: Record<string, string> = { A: "Lagfæring skráð sem nýtt verk", B: "Lagfæring aðeins sem athugasemd", "?": "Lagfæring, óflokkuð" };
 
@@ -1024,6 +1057,11 @@ export default function KortClient() {
           </table></div>
           <p className="gk-smatt">Klárað, og opið með + fyrir aftan. Fylgir síunum. Tölurnar eru stök verk eins og Ajour telur þau.</p>
         </section>
+        <section className="gk-stillingar">
+          <h2>Stillingar</h2>
+          <label className="gk-opna"><input type="checkbox" checked={opid} onChange={(e) => setjaOpid(e.target.checked)} /> Opna fyrir breytingar á skráningum</label>
+          <p className="gk-smatt">Þegar opið er má breyta flokki og stærð, stöðu, lýsingu og athugasemd á punktinum sem er valinn. Hver breyting er skráð og má taka til baka („Upprunalegt“). Ajour breytist ekki, og innflutningur úr Ajour yfirskrifar ekki það sem er breytt hér. Stillingin gildir á öllum tækjum.{skr.some((q) => q.handvirkt) ? ` Handbreyttar skráningar: ${num(skr.filter((q) => q.handvirkt).length)}.` : ""}</p>
+        </section>
       </aside>
 
       <div className="gk-kort">
@@ -1050,7 +1088,7 @@ export default function KortClient() {
               ))}{sl.length > 6 && <span>+{sl.length - 6}</span>}</div>
             ); })()}
             <dl>
-              <dt>Flokkur</dt><dd>{fl(valinn.p.s.flokkur_id)}</dd>
+              <dt>Flokkur</dt><dd>{opid ? <select className="gk-br" aria-label="Flokkur og stærð" value={valinn.p.s.flokkur_id ?? ""} onChange={(e) => breytaSkraningu(valinn.p!, "flokkur_id", e.target.value === "" ? null : Number(e.target.value))}><option value="">— enginn —</option>{[...flokkar].sort((a, b) => a.heiti.localeCompare(b.heiti, "is", { numeric: true })).map((f) => <option key={f.id} value={f.id}>{f.heiti}</option>)}</select> : fl(valinn.p.s.flokkur_id)}{varGildi(valinn.p, "flokkur_id")}</dd>
               <dt>Deild</dt><dd>{valinn.p.d || "—"}</dd>
               <dt>Starfsmaður</dt><dd>{nafn(valinn.p.s.starfsmadur_id)}</dd>
               <dt>Framkvæmt</dt><dd>{dmy(valinn.p.s.framkvaemt_til) || "—"}</dd>
@@ -1075,7 +1113,14 @@ export default function KortClient() {
             {valinn.p.s.tvitak_af && <p className="gk-merki">Á nákvæmlega sömu hnitum og #{valinn.p.s.tvitak_af}</p>}
             {valinn.p.faersla && <p className="gk-merki gk-faerdur">Færður á kortinu ({valinn.p.faersla.uppruni === "sjalfvirkt" ? "sjálfvirkt" : "handvirkt"}), {(Math.hypot(valinn.p.x - valinn.p.x0, valinn.p.y - valinn.p.y0) / PX_M).toFixed(1).replace(".", ",")} m frá skráðri stöðu <button type="button" onClick={() => afturkallaFaerslu(valinn.p!)}>Upprunaleg staða</button></p>}
             {teikning.tegund === "yfirlit" && !valinn.p.faersla && <p className="gk-merki gk-hja">Á sama stað og í Ajour (ekki færð á kortinu)</p>}
-            {valinn.nanar === null ? <p className="gk-smatt">Sæki lýsingu…</p> : valinn.nanar?.lysing ? <p className="gk-lysing">{valinn.nanar.lysing}</p> : null}
+            {valinn.nanar === null ? <p className="gk-smatt">Sæki lýsingu…</p> : opid ? (
+              <div className="gk-breyta">
+                <label className="gk-rod">Staða<select value={valinn.p.s.stada === "done" ? "done" : "created"} onChange={(e) => breytaSkraningu(valinn.p!, "stada", e.target.value)}><option value="done">Klárað</option><option value="created">Opið</option></select>{varGildi(valinn.p, "stada")}</label>
+                <label className="gk-rod">Lýsing<textarea key={`l${valinn.p.s.id}|${valinn.nanar?.lysing ?? ""}`} rows={2} defaultValue={valinn.nanar?.lysing ?? ""} onBlur={(e) => breytaSkraningu(valinn.p!, "lysing", e.target.value.trim() || null)} />{varGildi(valinn.p, "lysing")}</label>
+                <label className="gk-rod">Athugasemd<textarea key={`a${valinn.p.s.id}|${valinn.nanar?.athugasemd ?? ""}`} rows={2} defaultValue={valinn.nanar?.athugasemd ?? ""} onBlur={(e) => breytaSkraningu(valinn.p!, "athugasemd", e.target.value.trim() || null)} />{varGildi(valinn.p, "athugasemd")}</label>
+                <p className="gk-smatt">Opið fyrir breytingar (Stillingar). Hver breyting vistast strax og er skráð. Ajour breytist ekki.</p>
+              </div>
+            ) : <>{valinn.nanar?.lysing ? <p className="gk-lysing">{valinn.nanar.lysing}</p> : null}{valinn.nanar?.athugasemd ? <p className="gk-lysing">{valinn.nanar.athugasemd}</p> : null}{varGildi(valinn.p, "stada")}{varGildi(valinn.p, "lysing")}{varGildi(valinn.p, "athugasemd")}</>}
           </div>
         )}
         {valinn?.a && (

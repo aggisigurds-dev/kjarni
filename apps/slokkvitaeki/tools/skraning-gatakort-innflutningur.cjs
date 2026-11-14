@@ -163,15 +163,21 @@ const flokkTegund = (h) => (/^(Stál|Plast|Loft|Gólf|Gat)/i.test(h) ? 'gat' : /
   // enn án teikningar í Ajour; fái skráning stað á teikningu birtist hún aftur.
   const faldarAnT = new Set();
   for (let o = 0; ; o += 1000) { const d = await get(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.true&teikning_id=is.null&select=ajour_registration_id&order=id&limit=1000&offset=${o}`); for (const q of d) faldarAnT.add(q.ajour_registration_id); if (d.length < 1000) break; }
+  // Handbreytingar úr Apex Ajour (dálkurinn handvirkt, 14.11.2026): sviðin sem þar eru talin halda gildi sínu í grunninum; innflutningurinn yfirskrifar þau EKKI.
+  const handv = new Map();
+  for (let o = 0; ; o += 1000) { const d = await get(`skr_skraningar?verk_id=eq.${verk.id}&handvirkt=not.is.null&select=ajour_registration_id,handvirkt,flokkur_id,stada,lysing&order=id&limit=1000&offset=${o}`); for (const q of d) handv.set(q.ajour_registration_id, q); if (d.length < 1000) break; }
+  console.log('  handbreyttar skráningar (breyttu sviðin halda sér):', handv.size);
   let n = 0;
   for (let i = 0; i < skr.length; i += 500) {
     const radir = skr.slice(i, i + 500).map((r) => { const c = (r.registrationCoordinates || [])[0], g = G.get(r.id) || {};
-      return { verk_id: verk.id, radnr: radnr.get(r.id), teikning_id: c ? (teiknId.get(c.fileId) || null) : null, x_px: c ? c.x : null, y_px: c ? c.y : null,
+      const rod = { verk_id: verk.id, radnr: radnr.get(r.id), teikning_id: c ? (teiknId.get(c.fileId) || null) : null, x_px: c ? c.x : null, y_px: c ? c.y : null,
         flokkur_id: flokkId(r.categoryGroupName), starfsmadur_id: mannId(starfsmNr(r)), tegund: 'qa', stada: r.status === 4 ? 'done' : r.status === 5 ? 'completed' : r.status === 6 ? 'rejected' : r.status === 7 ? 'not_approved' : 'created',
         lysing: r.description || null, framkvaemt_fra: dmy(r.executionFrom), framkvaemt_til: dmy(r.executionTo),
         lokid_at: r.status === 4 && r.senderStatusUpdated && !r.senderStatusUpdated.startsWith('0001') ? r.senderStatusUpdated : null,
         abyrgd_id: brunaholf, ajour_registration_id: r.id, ajour_serial: Number(r.serialNumber), eytt: OFAN_FRA.has(Number(r.serialNumber)) || (!c && faldarAnT.has(r.id)), created_at: r.created || new Date().toISOString(),
-        ajour_gogn: { ...g, upd: r.updated || null, myndir: (r.photos || []).map((x) => x.fileId), teikning: r.blueprintName || null } }; });
+        ajour_gogn: { ...g, upd: r.updated || null, myndir: (r.photos || []).map((x) => x.fileId), teikning: r.blueprintName || null } };
+      const hv = handv.get(r.id); if (hv) for (const k of ['flokkur_id', 'stada', 'lysing']) if (k in (hv.handvirkt || {})) rod[k] = hv[k];
+      return rod; });
     n += (await upsert('skr_skraningar', radir, 'ajour_registration_id')).length;
     process.stdout.write(`\r  ${n}/${skr.length} skráningar`);
   }

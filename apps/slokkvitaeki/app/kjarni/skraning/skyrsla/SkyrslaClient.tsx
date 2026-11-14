@@ -17,7 +17,7 @@ import { Efni, Verkferli, type EfniGogn } from "./Efni";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null };
+type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null; handvirkt: { flokkur_id?: unknown; stada?: unknown } | null };
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
 type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
 /** parad á stútum viðbótarverksins (tools/skraning-gatakort-vidbot-stutar.cjs) ber auk stöðunnar: númer stúts, flokkun, úttekt skjalsins og skráninguna sem parast. */
@@ -133,7 +133,7 @@ export default function SkyrslaClient() {
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = []; const sleppt = { n: 0, done: 0 };
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("id,ajour_serial,flokkur_id,teikning_id,stada,framkvaemt_til,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,ajour_serial,flokkur_id,teikning_id,stada,framkvaemt_til,handvirkt,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           for (const q of r.data as unknown as Skr[]) { if (q.ajour_serial != null && OFAN_FRA.has(q.ajour_serial)) { sleppt.n++; if (q.stada === "done") sleppt.done++; } else allt.push(q); }
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
@@ -452,6 +452,8 @@ export default function SkyrslaClient() {
           <li><b>„Áætlað“ er áætlaður fjöldi, ekki talning á öllum götum.</b> Á 6. hæð er áætlunin það sem er skráð (klárað og opið), svo hlutfallið þar sýnir hve stórum hluta skráðra þéttinga er lokið. Á 5. hæð er miðað við sama flokk á sömu deild á 6. hæð. Milliloft: {GOLF_MARK} á deild; á gólfi 5. hæðar þó aldrei færri en skráð eru á sömu deild á 5. hæð, og við bætast stútar af 5. hæð niður í inntaksrými 4. hæðar sem eiga enga skráningu enn (viðbótarverk, 12.11.2026). Rafmagn: {RAF_MARK} á deild. Prósenturnar eru því mat á framvindu og staðfesta ekki einar sér að öllum götum hafi verið lokað.</li>
           <li><b>Staðsetning punkta:</b> punktarnir eru settir á teikningu á verkstað.{faerdirN ? ` ${num(faerdirN)} punktar hafa verið færðir að næsta skurðpunkti lagnar og brunaveggjar á teikningunni (sjálfvirkt, að miðgildi 0,3 m og mest 1,0 m); skráð staða í Ajour er óbreytt.` : ""}</li>
           <li><b>Afstemming við Ajour:</b> í gögnunum eru {num(skr.length + ofanFra.n + faldarAnT.n)} skráningar, þar af {num(klaradAlls + ofanFra.done + faldarAnT.done)} kláraðar. {num(alls.klar)} þeirra eru taldar á móti áætlun. Hinar {num(klaradAlls + ofanFra.done + faldarAnT.done - alls.klar)} eru raufar (engin áætlun), aukaverk ({num(aukaAlls.done)} kláruð, sýnd sér), skráningar án teikningar ({num(taln.utanDone + faldarAnT.done)} merktar kláraðar; þeim verður eytt){ofanFra.n ? `, milliloft skráð ofan frá (${num(ofanFra.done)}, sjá næsta lið)` : ""} og flokkurinn „Annað“.</li>
+          {(() => { const fl = skr.filter((q) => q.handvirkt?.flokkur_id).length, st = skr.filter((q) => q.handvirkt?.stada).length; if (!fl && !st) return null;
+            return <li><b>Handbreytt í Apex Ajour:</b> {fl > 0 ? `flokkur eða stærð á ${num(fl)} ${fl % 10 === 1 && fl % 100 !== 11 ? "skráningu" : "skráningum"}` : ""}{fl > 0 && st > 0 ? " og " : ""}{st > 0 ? `staða á ${num(st)}` : ""}. Þær víkja frá Ajour; upprunalega gildið er geymt með hverri breytingu.</li>; })()}
           {ofanFra.n > 0 && <li><b>Milliloft skráð ofan frá:</b> {num(ofanFra.n)} {ofanFra.n % 10 === 1 && ofanFra.n % 100 !== 11 ? "skráning í milliloft á 6. hæð, deild S2, frá september til nóvember 2025 var skráð ofan frá. Í gólfi er aðeins neðri vinnan talin, svo hún er ekki talin með í þessari skýrslu." : "skráningar í milliloft á 6. hæð, deild S2, frá september til nóvember 2025 voru skráðar ofan frá. Í gólfi er aðeins neðri vinnan talin, svo þær eru ekki taldar með í þessari skýrslu."}</li>}
           <li><b>Skráningar án teikningar:</b> í Ajour eru {num(taln.utan + faldarAnT.n)} skráningar sem ekki eru settar á teikningu („Registrations without drawing“). Það eru vinnufærslur sem Brunahólf eyðir úr Ajour. Þær eru hvorki unnið verk né óunnið og teljast ekki með í tölum eða á kortum.</li>
         </ul>

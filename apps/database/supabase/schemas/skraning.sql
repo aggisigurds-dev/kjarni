@@ -444,3 +444,11 @@ grant select on public.skr_kerfi to anon, authenticated;
 -- skr_kerfi.rautt (12.11.2026, migration skr_kerfi_rautt): hlutfall rauðra díla í miðju ljósmyndar skráningarinnar (0–1), hæsta gildi yfir myndir.
 -- Úðalagnir á NLSH eru rauðmálaðar: rautt ≥ 0,01 → kerfi 'udi' með uppruni 'mynd' (tools/skraning-gatakort-myndlitur.cjs + -kerfi.cjs).
 alter table public.skr_kerfi add column if not exists rautt numeric;
+
+-- ---------------------------------------------------------------- Apex Ajour: handbreytingar og stillingar verks (14.11.2026, migration skr_handvirkt_stillingar)
+-- Agnar: „í stillingum … opna á sem flesta hluti … breyta, skrifa, stærðir, flokka, texta“. Gatakortið leyfir þá að breyta flokki, stöðu, lýsingu og
+-- athugasemd skráningar. Gildið fer í dálkinn sjálfan; handvirkt geymir upprunalega gildið per svið: { <svið>: { fra, hvenaer } }. NULL = óbreytt.
+-- tools/skraning-gatakort-innflutningur.cjs yfirskrifar ekki svið sem eru talin í handvirkt. Ajour sjálft breytist aldrei.
+alter table public.skr_skraningar add column if not exists handvirkt jsonb;
+-- skr_verk.stillingar: stillingar verks, á þjóni svo þær séu eins á öllum tækjum. { breytingar: true } = opið fyrir handbreytingar á gatakortinu.
+alter table public.skr_verk add column if not exists stillingar jsonb not null default '{}'::jsonb;

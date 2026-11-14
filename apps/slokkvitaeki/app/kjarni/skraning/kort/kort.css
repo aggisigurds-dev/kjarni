@@ -203,3 +203,14 @@
 .gk .gk-ljos-stika button { min-width: 44px; height: 44px; padding: 0 14px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 10px; background: rgba(255, 255, 255, .1); color: #fff; font: inherit; font-size: 22px; }
 .gk .gk-ljos-stika button.l { font-size: 14px; font-weight: 600; background: #1d4ed8; border-color: #1d4ed8; }
 .gk-bar-skyring .gk-kerfi { gap: 8px; } .gk-bar-skyring .gk-kerfi b { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; } .gk-bar-skyring .gk-kerfi i { width: 8px; height: 8px; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }
+
+/* Apex Ajour: handbreytingar á skráningu (14.11.2026). Sýnilegt aðeins þegar „Opna fyrir breytingar“ er á í Stillingum. */
+.gk-spjald select.gk-br { width: 100%; font: inherit; padding: 4px 6px; border: 1px solid #8a9199; border-radius: 4px; background: #fff; }
+.gk-breyta { border-top: 1px solid var(--aj-line); margin-top: 8px; padding-top: 8px; }
+.gk-breyta select, .gk-breyta textarea { font: inherit; font-size: 13px; color: var(--aj-ink); padding: 5px 6px; border: 1px solid #8a9199; border-radius: 4px; background: #fff; width: 100%; box-sizing: border-box; }
+.gk-breyta textarea { resize: vertical; min-height: 44px; }
+.gk-var { display: block; margin-top: 3px; font-size: 11.5px; color: #92400e; }
+.gk-var button { margin-left: 8px; border: 1px solid #92400e; color: #92400e; background: #fff; border-radius: 4px; padding: 1px 8px; font-size: 11.5px; }
+.gk-opna { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.gk-opna input { width: 18px; height: 18px; }
+.gk.snerti .gk-breyta select, .gk.snerti .gk-breyta textarea, .gk.snerti .gk-spjald select.gk-br { font-size: 16px; min-height: 40px; }
