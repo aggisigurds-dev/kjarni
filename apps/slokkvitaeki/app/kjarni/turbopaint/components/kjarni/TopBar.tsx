@@ -15,6 +15,7 @@ import {
   Grid3x3,
   HelpCircle,
   Layers,
+  LayoutGrid,
   ListTree,
   Magnet,
   Redo2,
@@ -88,6 +89,7 @@ export function TopBar({
   onImportUrl,
   onVeljaTeikningu,
   onOpenLayers,
+  onOpenHome,
   greining,
   viewSize,
 }: {
@@ -106,6 +108,8 @@ export function TopBar({
   onVeljaTeikningu?: (infoUrl: string) => void;
   /** Opna lög/eiginleika á síma — panellinn er falinn undir lg. */
   onOpenLayers?: () => void;
+  /** Opna Verkefni-forsíðuna (listi yfir öll borð). */
+  onOpenHome?: () => void;
   /** Greining-flipinn í stikunni (skjáborð): aðeins þegar teikning er á borðinu. */
   greining?: { onAdgerd: (a: HamAdgerd) => void; keyraCombo: (valin: SkrefId[]) => void; uttekt: boolean } | null;
   viewSize: { width: number; height: number };
@@ -200,6 +204,18 @@ export function TopBar({
         </div>
       </Link>
       <div className="hidden h-6 w-px bg-white/10 sm:block" />
+      {onOpenHome ? (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={onOpenHome}
+          title="Verkefni — forsíða með öllum teikningum"
+          aria-label="Verkefni"
+          className="shrink-0 text-stone-300 hover:bg-white/10 max-sm:size-9"
+        >
+          <LayoutGrid className="size-4" />
+        </Button>
+      ) : null}
       <DropdownMenu
         modal={false}
         onOpenChange={(open) => {
