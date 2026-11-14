@@ -221,14 +221,15 @@ const blomPunktar = (x: number, y: number, R: number) => Array.from({ length: 8 
   return { dx: x + Math.cos(d) * R * 0.74, dy: y + Math.sin(d) * R * 0.74, tx: x + Math.cos(t) * R * 1.3, ty: y + Math.sin(t) * R * 1.3 };
 });
 /* Merki tillögu D (Agnar 14.11.2026: „tveir hringir saman sniðugt fyrir vatn og hita sem er 80% alltaf í pörum … 2 × 8-ur á hlið til að túlka þessi 4 rör …
- * setja fyrir 2 x 2 á brunavegginn, V check sitt hvorum megin“). Átta = tveir hringir sem snertast (eitt rörapar), ÞVERT á brunavegginn.
- * lar = veggurinn liggur lárétt. hvor: 0 = ein átta í miðju · −1 / 1 = önnur af tveimur, hliðrað EFTIR veggnum, svo fjögur rör mynda 2 × 2 á veggnum. */
-function attuMidjur(x: number, y: number, R: number, lar: boolean, hvor: number): [number, number][] {
-  const a = R * 0.5, h = hvor * R * 0.55;
-  return lar ? [[x + h, y - a], [x + h, y + a]] : [[x - a, y + h], [x + a, y + h]];
+ * setja fyrir 2 x 2 á brunavegginn, V check sitt hvorum megin“). Átta = tveir hringir sem snertast (eitt rörapar) og liggur ALLTAF Á HLIÐ (∞), hvernig sem
+ * veggurinn snýr (Agnar 15.11.2026: „2 x 2 áttu að vera 8 á hlið x 2 vatnslagnir“; áður stóð áttan upprétt við láréttan vegg).
+ * hvor: 0 = ein átta í miðju · −1 / 1 = efri / neðri af tveimur, með bili á milli svo þær lesist sem tvær áttur en ekki fjögurra hringja smári. */
+function attuMidjur(x: number, y: number, R: number, hvor: number): [number, number][] {
+  const a = R * 0.5, h = hvor * R * 0.62;
+  return [[x - a, y + h], [x + a, y + h]];
 }
-function attur(cx: CanvasRenderingContext2D, x: number, y: number, R: number, lar: boolean, hvor: number) {
-  cx.beginPath(); for (const [mx, my] of attuMidjur(x, y, R, lar, hvor)) { cx.moveTo(mx + R * 0.5, my); cx.arc(mx, my, R * 0.5, 0, 6.2832); }
+function attur(cx: CanvasRenderingContext2D, x: number, y: number, R: number, hvor: number) {
+  cx.beginPath(); for (const [mx, my] of attuMidjur(x, y, R, hvor)) { cx.moveTo(mx + R * 0.5, my); cx.arc(mx, my, R * 0.5, 0, 6.2832); }
 }
 /** Elding inni í rafmagnstíglinum („rafmagn tígull með rafmagnseldingu“). */
 function elding(cx: CanvasRenderingContext2D, x: number, y: number, R: number) {
@@ -767,17 +768,17 @@ export default function KortClient() {
         const tilbuid = no === 0 && nd >= 1 && ve === 0 && (ne > 0 || nd >= 2 || nh > 0);
         /* Hálfnað er aðeins metið á yfirlitsblaði (þar er hinn endinn leitaður uppi); á stakri Ajour-teikningu er kláruð skráning ófyllt eins og áður. */
         const fyll = tilbuid ? NEON_FYLL : nd === 0 ? RAUTT_FYLL : no > 0 || teikning?.tegund === "yfirlit" ? GULT_FYLL : "rgba(255,255,255,.4)";
-        /* Lögun eftir tillögu D: úðakerfi er oftast stakt rör → hringur með punkti · vatn og hiti koma í pörum → átta þvert á vegginn; fjögur rör eða fleiri →
-         * tvær áttur (2 × 2) á veggnum, hvor í sínum tóni · plaströr → átta með punkti í hvorum hring · stálrör með óþekkt kerfi → blómhringur með fjölda eins og áður ·
+        /* Lögun eftir tillögu D: úðakerfi er oftast stakt rör → hringur með punkti · vatn og hiti koma í pörum → átta á hlið (∞); fjögur rör eða fleiri →
+         * tvær áttur á hlið, hvor ofan á annarri (2 × 2), hvor í sínum tóni · plaströr → átta með punkti í hvorum hring · stálrör með óþekkt kerfi → blómhringur með fjölda eins og áður ·
          * raufar kringum ferkantaðan stokk → liggjandi kassi í fjölskyldu plússins · rafmagn → tígull með eldingu · milliloft → kassi með hakinu INNI í. */
-        const lar = !!vgT && veggurLarettur(vgT, x, y) === true, par = t.logun === "t" || (t.logun === "o" && kk === "vatn"), udi = t.logun === "o" && kk === "udi";
+        const par = t.logun === "t" || (t.logun === "o" && kk === "vatn"), udi = t.logun === "o" && kk === "udi";
         const tvaer = par && Math.max(hs?.nA || 0, hs?.nB || 0, Math.ceil(n / 2)) >= 3, raufar = t.heiti === "Loft raufar", hk = tvaer && t.logun === "o";   // hk = heitt og kalt
-        if (t.logun === "x") plus(cx, x, y, R); else if (par) attur(cx, x, y, R, lar, tvaer ? -1 : 0); else if (udi) { cx.beginPath(); cx.arc(x, y, R * 0.82, 0, 6.2832); } else if (ror) blom(cx, x, y, R * 0.92);
+        if (t.logun === "x") plus(cx, x, y, R); else if (par) attur(cx, x, y, R, tvaer ? -1 : 0); else if (udi) { cx.beginPath(); cx.arc(x, y, R * 0.82, 0, 6.2832); } else if (ror) blom(cx, x, y, R * 0.92);
         else if (raufar) { cx.beginPath(); cx.rect(x - R * 1.15, y - R * 0.72, R * 2.3, R * 1.44); } else slod(cx, t.logun, x, y, R * 0.9);
         cx.fillStyle = fyll; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.4 / k, R * (ror ? 0.2 : 0.26)); cx.strokeStyle = hk ? HEITT : nd ? t.litur : "#dc2626"; if (lg) cx.setLineDash([R * 0.55, R * 0.35]); cx.stroke(); if (lg) cx.setLineDash([]);   // brotin útlína = lagfæring
-        if (tvaer) { attur(cx, x, y, R, lar, 1); cx.fillStyle = fyll; cx.fill(); cx.strokeStyle = hk ? KALT : nd ? ljosari(t.litur) : "#dc2626"; cx.stroke(); }
+        if (tvaer) { attur(cx, x, y, R, 1); cx.fillStyle = fyll; cx.fill(); cx.strokeStyle = hk ? KALT : nd ? ljosari(t.litur) : "#dc2626"; cx.stroke(); }
         if (udi) { cx.beginPath(); cx.arc(x, y, R * 0.24, 0, 6.2832); cx.fillStyle = nd ? t.litur : "#dc2626"; cx.fill(); }
-        if (t.logun === "t") { cx.beginPath(); for (const hv of tvaer ? [-1, 1] : [0]) for (const [mx, my] of attuMidjur(x, y, R, lar, hv)) { cx.moveTo(mx + R * 0.17, my); cx.arc(mx, my, R * 0.17, 0, 6.2832); } cx.fillStyle = nd ? t.litur : "#dc2626"; cx.fill(); }
+        if (t.logun === "t") { cx.beginPath(); for (const hv of tvaer ? [-1, 1] : [0]) for (const [mx, my] of attuMidjur(x, y, R, hv)) { cx.moveTo(mx + R * 0.17, my); cx.arc(mx, my, R * 0.17, 0, 6.2832); } cx.fillStyle = nd ? t.litur : "#dc2626"; cx.fill(); }
         if (no && nd) { cx.beginPath(); cx.arc(x, y, R * 1.7, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }   // rauður hringur aðeins á blönduðu merki (sumt klárað, annað opið); alopið merki er rautt að innan
         if (Rs < 7) return;   // yfirlit: aðeins merkið sjálft
         if (kl) { cx.beginPath(); cx.arc(x - R * 0.98, y + R * 0.98, R * 0.3, 0, 6.2832); cx.fillStyle = kl; cx.fill(); cx.lineWidth = R * 0.1; cx.strokeStyle = "#fff"; cx.stroke(); }   // kerfi samkvæmt myndgreiningu
