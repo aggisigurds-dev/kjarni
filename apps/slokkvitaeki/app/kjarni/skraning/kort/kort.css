@@ -201,3 +201,4 @@
 .gk-ljos-stika { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 14px; font-weight: 600; }
 .gk .gk-ljos-stika button { min-width: 44px; height: 44px; padding: 0 14px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 10px; background: rgba(255, 255, 255, .1); color: #fff; font: inherit; font-size: 22px; }
 .gk .gk-ljos-stika button.l { font-size: 14px; font-weight: 600; background: #1d4ed8; border-color: #1d4ed8; }
+.gk-bar-skyring .gk-kerfi { gap: 8px; } .gk-bar-skyring .gk-kerfi b { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; } .gk-bar-skyring .gk-kerfi i { width: 8px; height: 8px; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }

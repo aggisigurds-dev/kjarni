@@ -168,6 +168,20 @@ function takn(c: string): Takn {
  *  eru því EKKI hér. Lykill: ajour_serial. */
 const RAUFAR_RAFMAGN = new Set([11763, 11819, 11820, 11826, 11827, 11951, 11953, 11954, 11955, 11957, 11961, 12094, 12098, 12099, 12100, 8359, 8681, 11834]);
 const RAF_TAKN = takn("Raf");
+/** Vísbendingar úr LJÓSMYNDUM skráninganna (Agnar 14.11.2026: „mögulega getur myndgreiningin hjálpað að flokka betur eða gefið vísbendingar“).
+ *  kort/visbendingar.json: ajour_serial → [dómur, í loftplötu (1 já · 0 nei · -1 sést ekki), vissa]. Smíðað með scratchpad/lm_visb.cjs úr skoðun ljósmynda
+ *  (litagreining velur, myndirnar svo skoðaðar). Aðeins birting: flokkurinn í grunni og Ajour er óbreyttur og ekkert af þessu fer í stöðuskýrsluna. */
+type Visb = Record<string, [string, number, string]>;
+const VISB_HEITI: Record<string, string> = { kaplar: "kapalbúnt (raflögn)", ferkantadur_stokkur: "ferkantaðan loftstokk", hringlaga_stokkur: "hringlaga loftstokk", ror: "rör", blandad: "kapla og stokk í sama gati", udi: "óeinangrað stálrör (úðakerfi)", einangrad: "einangrað rör (vatn eða hiti)" };
+/** Kerfispunktur (Agnar 14.11.2026: „kannski bæta við pínulitlum lituðum punkti eftir kerfi hvað punkturinn er þegar búið er að greina hann“): litur og heiti
+ *  kerfisins sem ljósmyndirnar sýna. Sömu litir og fögin (FOG): rafmagn grænt, loftræsting blátt, úðakerfi rautt, vatn og hiti blágrænt. */
+const VISB_KERFI: Record<string, [string, string]> = { kaplar: ["#067429", "Rafmagn"], ferkantadur_stokkur: ["#2563eb", "Loftræsting"], hringlaga_stokkur: ["#2563eb", "Loftræsting"], udi: ["#dc2626", "Úðakerfi"], einangrad: ["#0891b2", "Vatn og hiti"] };
+/** Loftskráning sem ljósmyndir sýna (með háa vissu) að er kapalbúnt telst rafmagn á kortinu. */
+function taknMedVisb(s: Skr, t: Takn, visb: Visb): Takn {
+  if (s.ajour_serial == null || t.hopur !== "Loft") return t;
+  if (RAUFAR_RAFMAGN.has(s.ajour_serial)) return RAF_TAKN;
+  const v = visb[s.ajour_serial]; return v && v[0] === "kaplar" && v[2] === "há" ? RAF_TAKN : t;
+}
 const num = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const dmy = (d: string | null) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : "");
 
@@ -244,6 +258,8 @@ export default function KortClient() {
   const [samaSia, setSamaSia] = useState(false); // aðeins skráningar þar sem hinn endinn er skráður SÖMU megin við brunavegginn
   /** Ajour-staðir (Agnar 13.11.2026: „myndi vilja geta séð Ajour punktana hvar þeir eru“): blár punktur þar sem pikkað var í Ajour, lína í merkið ef það var fært. */
   const [synaAjour, setSynaAjour] = useState(false);
+  const [visb, setVisb] = useState<Visb>({});
+  useEffect(() => { let lifir = true; import("./visbendingar.json").then((m) => { if (lifir) setVisb(m.default.v as unknown as Visb); }).catch(() => { /* án vísbendinga */ }); return () => { lifir = false; }; }, []);
   /** Stór mynd (ljósakassi): Agnar 13.11.2026, „yrði hægt að geta séð preview mynd úr punktunum“. */
   const [ljos, setLjos] = useState<{ slodir: string[]; i: number; nr: number } | null>(null);
   const [veggir, setVeggir] = useState<{ lykill: string; v: Veggir; nemar: number[] | null; hurdir: number[] } | null>(null);
@@ -354,10 +370,10 @@ export default function KortClient() {
       const v = born.get(s.teikning_id);
       const [x0, y0] = v ? varpa(v, +s.x_px, +s.y_px) : [+s.x_px, +s.y_px], f = fm.get(s.id);
       const x = f ? +f.x_px : x0, y = f ? +f.y_px : y0;
-      out.push({ s, x, y, x0, y0, faersla: f, d: aYfirliti && teikning.breidd_px ? deildAf(x / teikning.breidd_px) : s.deild, t: (s.ajour_serial != null && RAUFAR_RAFMAGN.has(s.ajour_serial) ? RAF_TAKN : null) || (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD });
+      out.push({ s, x, y, x0, y0, faersla: f, d: aYfirliti && teikning.breidd_px ? deildAf(x / teikning.breidd_px) : s.deild, t: taknMedVisb(s, (s.flokkur_id != null && taknAf.get(s.flokkur_id)) || ANNAD, visb) });
     }
     return out;
-  }, [teikning, teikn, skr, taknAf, ANNAD, faerslur]);
+  }, [teikning, teikn, skr, taknAf, ANNAD, faerslur, visb]);
   const faerdir = useMemo(() => faerslur.filter((f) => f.teikning_id === syn).length, [faerslur, syn]);
   const deildir = useMemo(() => [...new Set(punktar.map((p) => p.d).filter((d): d is string => !!d))].sort(), [punktar]);
   /** Skráningar sem eru paraðar við eitthvert áætlað gat á þessu blaði. */
@@ -454,8 +470,10 @@ export default function KortClient() {
   const samaMegin = useCallback((p: Punktur) => { const h = endar.get(p.s.id)?.hlid; return h === "sama" || h === "samaNemi"; }, [endar]);
   /** Hinn endinn er skráður og kláraður (í sama merki eða öðru): seinna hakið. Hlið veggjar ræður ekki hér — tvö stök verk á sama stað eru ein lokun. */
   const hinnKlar = useCallback((p: Punktur) => { const e = endar.get(p.s.id); return !!e && e.hlid !== "einn" && e.q?.s.stada === "done"; }, [endar]);
+  /** Ljósmyndir sýna (með háa vissu) að gegnumtakið er í LOFTPLÖTU: þar er ein skráning öll lokunin, svo hinn endann vantar ekki. */
+  const iPlotu = useCallback((p: Punktur) => { const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined; return !!v && v[1] === 1 && v[2] === "há"; }, [visb]);
   /** Vantar hinn endann? (aðeins á yfirlitsblaði og ekki gólf) */
-  const vantarEnda = useCallback((p: Punktur) => { if (teikning?.tegund !== "yfirlit" || p.t.hopur === "Gólf") return false; const e = endar.get(p.s.id); return !e || e.hlid === "einn"; }, [teikning, endar]);
+  const vantarEnda = useCallback((p: Punktur) => { if (teikning?.tegund !== "yfirlit" || p.t.hopur === "Gólf") return false; if (iPlotu(p)) return false; const e = endar.get(p.s.id); return !e || e.hlid === "einn"; }, [teikning, endar, iPlotu]);
   const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
   /** Sía án táknasíunnar — skýringarnar sýna þá réttan fjölda per tákn. */
   const synV = useMemo(() => SYNIR.find((x) => x[0] === synFag) || null, [synFag]);
@@ -521,6 +539,7 @@ export default function KortClient() {
   const manudir = useMemo(() => [...new Set(skr.map((s) => (s.framkvaemt_til || "").slice(0, 7)).filter(Boolean))].sort(), [skr]);
   const endaVantar = useMemo(() => syndir.reduce((n, p) => n + (vantarEnda(p) ? 1 : 0), 0), [syndir, vantarEnda]);
   const samaTal = useMemo(() => syndir.reduce((n, p) => n + (samaMegin(p) ? 1 : 0), 0), [syndir, samaMegin]);
+  const kerfiSynd = useMemo(() => { const m = new Map<string, string>(); for (const p of syndir) { const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined, kk = v ? VISB_KERFI[v[0]] : undefined; if (kk) m.set(kk[1], kk[0]); } return [...m.entries()]; }, [syndir, visb]);
   const utanKorts = useMemo(() => skr.filter((s) => s.teikning_id == null).length, [skr]);
 
   // ---------------------------------------------------------------- myndir
@@ -601,7 +620,8 @@ export default function KortClient() {
        * alltaf teiknaður stakur. Val og færsla vinna áfram á hverri skráningu fyrir sig. */
       const Rs = merkisR(k, k0), R = Rs / k, D = 2.4 * R, jadar = 3 * R;
       type Hlidar = { nA: number; nB: number; fA: boolean; fB: boolean };   // kláraðar skráningar með þekkta hlið: A = ofan/vinstra megin, B = neðan/hægra megin; f = smellt með hendi
-      type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; t: Takn; hs: Hlidar };   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
+      type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; t: Takn; hs: Hlidar; kl?: string };   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
+      const kerfisLitur = (p: Punktur) => { const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined; return v ? VISB_KERFI[v[0]]?.[0] : undefined; };
       const hlidar = (p: Punktur, hs: Hlidar) => { const e = endar.get(p.s.id); if (p.s.stada !== "done" || !e?.megin) return; if (e.megin < 0) { hs.nA++; if (e.fest) hs.fA = true; } else { hs.nB++; if (e.fest) hs.fB = true; } };
       const net = new Map<number, Hop[]>(), hopar: Hop[] = [], stakir: Punktur[] = [], lykill = (gx: number, gy: number) => gx * 100003 + gy;
       for (const p of syndir) {
@@ -615,7 +635,7 @@ export default function KortClient() {
         else { h = { x: p.x, y: p.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false } }; hopar.push(h); const l = lykill(gx, gy), a = net.get(l); if (a) a.push(h); else net.set(l, [h]); }
         if (p.s.stada === "done") h.nd++; else h.no++;
         if (vantarEnda(p)) h.ve++; else { if (samaMegin(p)) h.vs++; if (hinnKlar(p)) h.nh++; }
-        hlidar(p, h.hs);
+        hlidar(p, h.hs); if (!h.kl) h.kl = kerfisLitur(p);
       }
       const vgT = veggir && veggir.lykill === veggjaLykill ? veggir.v : null;
       const tikk = (x: number, y: number, litur: string) => {
@@ -636,12 +656,13 @@ export default function KortClient() {
         cx.font = `800 ${R * 1.25}px system-ui, "Segoe UI", sans-serif`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.lineJoin = "round";
         cx.lineWidth = R * 0.42; cx.strokeStyle = "#fff"; cx.strokeText("?", x, y); cx.fillStyle = "#d97706"; cx.fillText("?", x, y);
       };
-      const merki = (x: number, y: number, t: Takn, nd: number, no: number, ve = 0, vs = 0, nh = 0, hs?: Hlidar) => {
+      const merki = (x: number, y: number, t: Takn, nd: number, no: number, ve = 0, vs = 0, nh = 0, hs?: Hlidar, kl?: string) => {
         const loft = t.hopur === "Loft", ror = t.logun === "o" || t.logun === "t", n = nd + no;
         if (t.logun === "x") plus(cx, x, y, R); else if (ror) blom(cx, x, y, R * 0.92); else slod(cx, t.logun, x, y, R * 0.9);
         cx.fillStyle = "rgba(255,255,255,.4)"; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.4 / k, R * (ror ? 0.2 : 0.26)); cx.strokeStyle = nd ? t.litur : "#dc2626"; cx.stroke();
         if (no) { cx.beginPath(); cx.arc(x, y, R * 1.7, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
         if (Rs < 7) return;   // yfirlit: aðeins merkið sjálft
+        if (kl) { cx.beginPath(); cx.arc(x - R * 0.98, y + R * 0.98, R * 0.3, 0, 6.2832); cx.fillStyle = kl; cx.fill(); cx.lineWidth = R * 0.1; cx.strokeStyle = "#fff"; cx.stroke(); }   // kerfi samkvæmt myndgreiningu
         const st = loft ? /-(\d+)\s*$/.exec(t.heiti) : null;
         if (Rs >= 11 && !synaAjour) { if (st) texti(st[1], x, y + R * 0.05, R * 0.72, "center"); else if (!loft && n >= 2) texti(String(n), x, y + R * 0.05, R * 0.95, "center"); }
         const hl = loft ? "#1f2937" : "#15803d";
@@ -667,12 +688,12 @@ export default function KortClient() {
         else if (ve > 0) raudurKross(bx, by); else if (nd >= 2) tikk(bx, by, hl);
         if (loft && n >= 3) texti("×" + n, upp ? x + R * 1.15 : x + R * 0.55, upp ? y + R * 0.1 : y + R * 0.85, R * 0.7, "left");
       };
-      for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs);
+      for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs, h.kl);
       for (const p of stakir) {
         const idr = dr?.p?.s.id === p.s.id, px = idr ? dr!.x : p.x, py = idr ? dr!.y : p.y, kl = p.s.stada === "done";
         if (p.faersla || idr) ajLina(p, px, py);   // valin eða dregin skráning: alltaf sýnt hvar hún er í Ajour
         const hs1: Hlidar = { nA: 0, nB: 0, fA: false, fB: false }; if (!idr) hlidar(p, hs1);
-        merki(px, py, p.t, kl ? 1 : 0, kl ? 0 : 1, vantarEnda(p) ? 1 : 0, samaMegin(p) ? 1 : 0, hinnKlar(p) ? 1 : 0, hs1);
+        merki(px, py, p.t, kl ? 1 : 0, kl ? 0 : 1, vantarEnda(p) ? 1 : 0, samaMegin(p) ? 1 : 0, hinnKlar(p) ? 1 : 0, hs1, kerfisLitur(p));
       }
     } else if (synaSkr) for (const umf of [1, 0]) for (const p of syndir) {
       const kl = p.s.stada === "done"; if ((kl ? 1 : 0) !== umf) continue;
@@ -683,6 +704,7 @@ export default function KortClient() {
       else if (kl) { cx.fillStyle = p.t.litur + "d8"; cx.fill(); cx.lineWidth = 0.6 / k; cx.strokeStyle = "rgba(22,21,19,.45)"; cx.stroke(); }
       else { cx.fillStyle = "#ffffffe6"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
       if (!kl) { cx.beginPath(); cx.arc(px, py, r + 3.5 * zs, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
+      { const vv = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined, kk = vv ? VISB_KERFI[vv[0]]?.[0] : undefined; if (kk) { cx.beginPath(); cx.arc(px - r * 1.1, py + r * 1.1, Math.max(1.4 / k, r * 0.42), 0, 6.2832); cx.fillStyle = kk; cx.fill(); cx.lineWidth = 0.7 / k; cx.strokeStyle = "#fff"; cx.stroke(); } }
       if (p.s.lagf) { cx.beginPath(); cx.arc(px, py, r + 2.2 * zs, 0, 6.2832); cx.lineWidth = 1.3 / k; cx.strokeStyle = p.s.lagf === "B" ? "#b45309" : p.s.lagf === "A" ? "#111827" : "#6b7280"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); }
     }
     for (const p of ajPt) { cx.beginPath(); cx.arc(p.x0, p.y0, ajR, 0, 6.2832); cx.fillStyle = "#1d4ed8"; cx.fill(); cx.lineWidth = 1 / k; cx.strokeStyle = "#fff"; cx.stroke(); }
@@ -720,7 +742,7 @@ export default function KortClient() {
       cx.beginPath(); cx.arc(lx, ly, R, 0, 6.2832); cx.lineWidth = 3 * dpr; cx.strokeStyle = "#1d4ed8"; cx.stroke();
       cx.beginPath(); cx.moveTo(lx - R, ly); cx.lineTo(lx - 9 * dpr, ly); cx.moveTo(lx + 9 * dpr, ly); cx.lineTo(lx + R, ly); cx.moveTo(lx, ly - R); cx.lineTo(lx, ly - 9 * dpr); cx.moveTo(lx, ly + 9 * dpr); cx.lineTo(lx, ly + R); cx.lineWidth = 1 * dpr; cx.strokeStyle = "rgba(29,78,216,.55)"; cx.stroke();
     }
-  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour]);
+  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -1024,8 +1046,12 @@ export default function KortClient() {
               <dt>Framkvæmt</dt><dd>{dmy(valinn.p.s.framkvaemt_til) || "—"}</dd>
               {valinn.nanar && <><dt>Teikning</dt><dd>{valinn.nanar.teikning || "—"}</dd><dt>Myndir</dt><dd>{valinn.nanar.slodir.length || (valinn.nanar.myndir ? `${valinn.nanar.myndir} í Ajour (ekki sóttar enn)` : "engar")}</dd></>}
             </dl>
+            {(() => { const sn = valinn.p!.s.ajour_serial, v = sn != null ? visb[sn] : undefined; if (!v || !VISB_HEITI[v[0]]) return null;
+              const rangt = v[0] === "kaplar" && /^(Loft|Raufar)/i.test(fl(valinn.p!.s.flokkur_id));
+              return <p className={`gk-merki ${rangt ? "gk-sama" : "gk-hja"}`}>Ljósmyndirnar sýna {VISB_HEITI[v[0]]}{rangt ? ", en flokkurinn í Ajour er loftræsting" : ""} (myndgreining, vissa {v[2]})</p>; })()}
             {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í sama merki: {valinn.hja.map((r) => "#" + r).join(", ")}</p>}
             {teikning.tegund === "yfirlit" && valinn.p.t.hopur !== "Gólf" && (() => {
+              if (iPlotu(valinn.p!)) return <p className="gk-merki gk-hinum">Gegnumtak í loftplötu samkvæmt ljósmynd: ein skráning er öll lokunin</p>;
               const e = endar.get(valinn.p!.s.id);
               if (!e) return <p className="gk-merki gk-endi">Hinn endinn: engin önnur skráning innan {(ENDI_PX / PX_M).toFixed(1).replace(".", ",")} m</p>;
               if (e.hlid === "einn") return <p className="gk-merki gk-endi">Hinn endinn: engin skráning hinum megin við brunavegginn á þessu gegnumtaki</p>;
@@ -1086,6 +1112,7 @@ export default function KortClient() {
             {teikning.tegund === "yfirlit" && <button type="button" className={`ajour${synaAjour ? " on" : ""}`} aria-pressed={synaAjour} onClick={() => setSynaAjour((x) => !x)}><i aria-hidden="true" />Ajour-staðir</button>}
             {synaTillogur && tillogur > 0 && <span><i className="ti">?</i>Tillaga ({num(tillogur)})</span>}
             {taknTal.slice(0, 5).map(({ t }) => <span key={t.heiti}><MerkiSvg t={t} />{t.heiti}</span>)}
+            {kerfiSynd.length > 0 && <span className="gk-kerfi">Greint af mynd:{kerfiSynd.map(([h, l]) => <b key={h}><i style={{ background: l }} />{h}</b>)}</span>}
           </p>
           <div className="gk-bar-rod">
             <div className="gk-bar-hopur" role="group" aria-label="Hæð">{yfirlit.map((t) => <button key={t.id} type="button" className={syn === t.id ? "on" : ""} aria-pressed={syn === t.id} onClick={() => { setSyn(t.id); setValinn(null); }}>{t.haed || t.heiti}</button>)}</div>

@@ -296,6 +296,24 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     röngum flokki; ósannreynt, flokkun ekki breytt. Hringlaga loftskráningar á raflagnaleið og ekki við stokk: 33 á 6H, 17 á 5H.
   - Mynd #5364 (6H S1, 315) sýnir stokk upp í gegnum steypta loftplötu, ekki vegg: sum rauð ✕ eru þá gegnumtök í plötu þar sem ein skráning er öll lokunin.
     ÓMÆLT hve mörg; kortið greinir ekki plötu frá vegg.
+- **Myndgreining: vísbendingar og kerfispunktur (Agnar 14.11.2026: „mögulega getur myndgreiningin hjálpað að flokka betur eða gefið vísbendingar“, „kannski
+  bæta við pínulitlum lituðum punkti eftir kerfi hvað punkturinn er þegar búið er að greina hann“):**
+  - `kort/visbendingar.json` ({utg, v: {ajour_serial: [dómur, í loftplötu 1/0/-1, vissa]}}), hlaðið í `visb`. Dómar: kaplar · ferkantadur_stokkur ·
+    hringlaga_stokkur · ror · blandad · udi · einangrad. Spjaldið segir „Ljósmyndirnar sýna …“; `taknMedVisb`: Loft-skráning með „kaplar“ og vissu „há“
+    telst RAFMAGN á kortinu; `iPlotu` (í plötu = 1, vissa há): ekki „hinn endann vantar“ (aðeins #5364 enn). Kerfispunktur (`VISB_KERFI`): lítill litaður
+    punktur neðst til vinstri á merki (rafmagn grænt, loftræsting blátt, úði rautt, vatn/hiti blágrænt) + „Greint af mynd:“ í skýringum. Aðeins birting.
+  - Aðferð (scratchpad): `lm_val.py` velur → `lm_saekja.cjs` sækir myndir úr OKKAR geymslu → `lm_litir.py` (hlutfall mettaðra grænna/blárra/fjólublárra
+    og rauðra díla) → `lm_blod.py` skoðunarblöð → undiragent dæmir hverja skráningu → ég skoða nokkur blöð sjálfur → `lm_visb.cjs` sameinar í JSON.
+  - Niðurstaða 14.11 (300 skráningar: allar 127 raufar, 49 loft á raflagnaleið, 146 sem vantar hinn endann): kaplalitir (≥ 1,2 %) hjá 99 óþekktum; skoðun:
+    29 kaplar (ALLT raufar: #8692 og 28 í röðinni 11764–12106, október 2026), 53 hringlaga stokkar, 15 ferkantaðir, 1 rör (#3768), 1 óljós (#11086).
+    Engin hringlaga loftskráning reyndist kaplar. Með þeim 18 sem áður voru staðfestar: 47 af 127 raufum eru raflagnir. Ég skoðaði blöð 8 og 13 sjálfur
+    (12 skráningar): samhljóða. Raufar ÁN kaplalita (57) eru óskoðaðar. #463, #4456, #4463 sýna sömu þrjár myndirnar (hugsanlega þrítekið).
+  - Mælt eftir (kort = `lm_nemar2.py` nema #5364 í plötu): 6H ✕ 73 (S1 21 · S2 19 · S4 11 · S5 22), sömu megin 84; 5H ✕ 64, sömu megin 34.
+  - STÁL 40-50 („sprinkler alltaf óeinangruð stálrör … vatns- og hitakerfi alltaf með einangrun“): slembiúrtak 66 af 2.841 (fræ 12345, `stalurtak.json`),
+    undiragent: 44 einangruð, 20 óeinangruð (14 rauð, 2 blá, 4 ómáluð), 2 óljós. Rautt hlutfall ≥ 2,7 % (mest yfir myndir): 12 af 14 rauðum, 0 af 44
+    einangruðum. Blá og ómáluð ber rör nást EKKI á lit, og „einangrað“ verður ekki dæmt af lit (18 % af litlausum eru ber). Fjarlægð frá úðalögn/vatnslögn
+    á teikningum greinir ekki á milli (M115/M116 liggur við flest). Í 6–7 skráningum er stuttur einangrunarhólkur í gatinu en rörið bert ofan við
+    (#5023, 6110, 7128, 10026, 10155, 11149, 3278): dæmt einangrað, skilgreiningaratriði fyrir Agnar.
 - **Hurðalínur, hlið skráningar og smellur (Agnar 14.11.2026: „smá að pæla hvort stærðarplúsarnir gætu fundið skurðinn þar sem loftræstingin fer í gegn. Og
   maður gæti dregið punktana svo þeir festast í einhvern endann á plúsnum og þá kæmi neon check ✓ á þann hluta … væri hægt að gera bláa línu í hurðagötin“,
   „það er samt næstum því bara bein lína eftir öllum ganginum“):**
