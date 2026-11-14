@@ -147,12 +147,12 @@ test("office apps live in OfficeCraft, not ArtCraft", () => {
   );
 });
 
-test("Stjórnstöð menu: OfficeCraft and Ajour-Craft groups, no office apps under ArtCraft", async () => {
+test("Stjórnstöð menu: OfficeCraft and Apex Ajour groups, no office apps under ArtCraft", async () => {
   const { QUICK_GROUPS } = await import("../data.ts");
   const { SYSTEMS } = await import("../stod-gogn.ts");
   const group = (t: string) => QUICK_GROUPS.find((g) => g.title === t);
   assert.deepEqual(
-    group("Ajour-Craft")?.items.slice(0, 2).map((i) => i.label),
+    group("Apex Ajour")?.items.slice(0, 2).map((i) => i.label),
     ["Skráning", "Yfirsýn þéttinga"],
   );
   assert.equal(group("OfficeCraft")?.items.length, OFFICECRAFT_APP_IDS.length);
@@ -162,7 +162,7 @@ test("Stjórnstöð menu: OfficeCraft and Ajour-Craft groups, no office apps und
   assert.equal(artLabels.includes("Yfirsýn þéttinga"), false);
   const names = SYSTEMS.map((s) => s.name);
   assert.ok(names.indexOf("OfficeCraft") === names.indexOf("Marks") + 1, "OfficeCraft right after Marks");
-  assert.ok(names.includes("Ajour-Craft"));
+  assert.ok(names.includes("Apex Ajour"));
   assert.ok(names.includes("Bakgrunnur"));
   assert.ok(group("Kjarni")?.items.some((i) => i.label === "Bakgrunnur"));
   assert.equal(artLabels.includes("Bakgrunnur"), false);

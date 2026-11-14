@@ -24,7 +24,7 @@ export const SYSTEMS: StodKerfi[] = [
   { name: "Marks", kind: "YTRA", desc: "Whiteboard, möppur og covers — opnast í nýjum glugga.", href: "/marks", state: "YTRA", ico: "merki" },
   /* 05.11.2026 (Agnar): skrifstofuforritin úr ArtCraft, Skráning/Yfirsýn þéttinga og Bakgrunnur fengu eigin spjöld. */
   { name: "OfficeCraft", kind: "TÓL", desc: "Ritvinnsla, töflur, kynningar, PDF, CAD, viðmót, vektorar og hljóð — skrifstofuforritin á einum stað.", href: "/kjarni/officecraft", state: "VIRKT", ico: "skrifstofa" },
-  { name: "Ajour-Craft", kind: "TÓL", desc: "Brunaþéttingar á verkstöðum — skráning, yfirsýn þéttinga og greining, í stað Ajour.", href: "/kjarni/skraning", state: "VIRKT", ico: "thetting" },
+  { name: "Apex Ajour", kind: "TÓL", desc: "Brunaþéttingar á verkstöðum — skráning, yfirsýn þéttinga og greining, í stað Ajour.", href: "/kjarni/skraning", state: "VIRKT", ico: "thetting" },
   { name: "Bakgrunnur", kind: "TÓL", desc: "Fjarlægðu vegg, borð og skugga af vörumynd — tilbúin mynd á sekúndum, í vafranum eða skýinu.", href: "/kjarni/artcraft/bakgrunnur", state: "VIRKT", ico: "skaeri" },
 ];
 

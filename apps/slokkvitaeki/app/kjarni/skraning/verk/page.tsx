@@ -5,7 +5,7 @@ import "../vinna/vinna.css";
 import "./verk.css";
 
 export const metadata: Metadata = {
-  title: "Skráning — byggingar og teikningar",
+  title: "Apex Ajour — byggingar og teikningar",
   description: "Stofna byggingu (verk) og hlaða upp grunnmyndum sem starfsmenn setja punkta á.",
 };
 
@@ -13,7 +13,8 @@ export default function VerkPage() {
   return (
     <div className="aj aj-vinna">
       <header className="aj-top">
-        <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Skráning"><span>⌂</span></a>
+        <a className="aj-logo" href="/kjarni/skraning" title="Skráning" aria-label="Apex Ajour"><span>⌂</span></a>
+        <a className="aj-apex" href="/kjarni/skraning" title="Apex Ajour" aria-label="Apex Ajour"><img className="aj-apex-full" src="/apex/apex-ajour-haus.svg" alt="Apex Ajour" /><img className="aj-apex-takn" src="/apex/apex-takn-ljost.svg" alt="" /></a>
         <nav className="aj-nav" aria-label="Skráning">
           <a href="/kjarni/skraning/yfirsyn">Yfirsýn</a>
           <a href="/kjarni/skraning/greining">Greining</a>

@@ -30,7 +30,8 @@
 .gk-upp { flex-direction: row; gap: 6px; align-items: stretch; }
 .gk-upp select { flex: 0 0 42%; }
 .gk-skra { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed #8a9199; border-radius: 4px; padding: 5px 6px; cursor: pointer; color: var(--aj-ink); font-size: 12px; text-align: center; }
-.gk-skra input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gk-skra { position: relative; }   /* falda skráarinntakið má ekki staðsetjast miðað við síðuna: það lengdi skjalið niður fyrir gluggann */
+.gk-skra input { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; }
 .gk-skra:focus-within { outline: 2px solid var(--aj-teal); }
 .gk-takn { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .gk-takn button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--aj-line); background: #fff; color: var(--aj-ink); border-radius: 20px; padding: 3px 9px 3px 7px; line-height: 1.3; }
@@ -67,11 +68,89 @@
 .gk-spjald > button:not(.gk-x) { border: 1px solid #b91c1c; color: #b91c1c; background: #fff; border-radius: 4px; padding: 5px 10px; }
 .gk-x { position: absolute; right: 8px; top: 6px; border: 0; background: none; font-size: 20px; line-height: 1; color: var(--aj-dim); }
 
-@media (max-width: 860px) {
-  .gk { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58vh auto; height: auto; }
-  .gk-kort { grid-row: 1; height: 58vh; }
-  .gk-hlid { grid-row: 2; border-right: 0; border-top: 1px solid var(--aj-line); overflow: visible; }
-}
+/* ---- Snertiskjár og mjór gluggi (12.11.2026): sviðið (strigi + hnappar + spjald) ofan á, neðri stika með stórum hnöppum undir.
+ * .gk.snerti er sett af KortClient þegar bendillinn er grófur eða glugginn ≤ 860 px. Á borðtölvu er stikan falin og allt eins og áður. */
+.gk-kort { display: flex; flex-direction: column; }
+.gk-svid { position: relative; flex: 1 1 auto; min-height: 0; }
+.gk-bar, .gk-skuffuhaus { display: none; }
+.gk-kross { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; pointer-events: none; }
+.gk-kross::before, .gk-kross::after { content: ""; position: absolute; background: #dc2626; box-shadow: 0 0 0 1px #fff; }
+.gk-kross::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
+.gk-kross::after { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
+.gk-kross i { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 2px solid #dc2626; background: rgba(255, 255, 255, .7); z-index: 1; }
+.gk.snerti .gk-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--aj-panel); border-top: 1px solid #8a9199; }
+/* Síðan sjálf má ekki stækka (klípa á hnappi eða haus stækkaði allt og neðri stikan hvarf af skjánum): kortið hefur eigin stækkun. */
+.gk.snerti { touch-action: pan-x pan-y; }
+.gk-bar-skyring { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; font-size: 12px; line-height: 1.5; color: var(--aj-ink); }
+.gk-bar-skyring span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.gk-bar-skyring i { display: inline-block; flex: none; width: 11px; height: 11px; border-radius: 50%; }
+.gk-bar-skyring i.op { background: #fff; border: 2px solid #dc2626; }
+.gk-bar-skyring i.ef { background: #dc2626; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #dc2626; }
+.gk-merki.gk-hja { background: #eef2f7; color: #1f2937; }
+.gk-bar-skyring i.lg { width: 16px; height: 6px; border-radius: 2px; background: #5fd6c9; }
+.gk-bar-rod { display: flex; gap: 6px; align-items: stretch; min-width: 0; }
+.gk-bar-hopur { display: flex; flex: 1 1 0; min-width: 0; border: 1px solid #8a9199; border-radius: 8px; overflow: hidden; background: #fff; }
+.gk-bar-hopur:first-child { flex: 3 1 0; } .gk-bar-hopur + .gk-bar-hopur { flex: 4 1 0; }
+.gk .gk-bar-hopur button { flex: 1 1 0; min-width: 0; height: 44px; padding: 0; border: 0; border-left: 1px solid #c9ced3; background: #fff; color: var(--aj-ink); font-weight: 700; font-size: 14px; }
+.gk .gk-bar-hopur button:first-child { border-left: 0; }
+.gk .gk-bar-hopur button.on { background: var(--aj-black); color: #fff; }
+.gk .gk-bar-rod > button, .gk .gk-bar-rod > select { height: 44px; min-width: 0; padding: 0 10px; border: 1px solid #8a9199; border-radius: 8px; background: #fff; color: var(--aj-ink); font-weight: 600; font-size: 14px; white-space: nowrap; }
+.gk .gk-bar-rod > select { flex: 1 1 0; width: auto; padding: 0 4px 0 8px; }
+.gk .gk-bar-rod > button { flex: 0 0 auto; }
+.gk .gk-bar-rod > button.on, .gk .gk-bar-rod > select.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.gk .gk-bar-rod > button.on.raud { background: #dc2626; border-color: #dc2626; }
+.gk .gk-bar-rod > button:disabled { opacity: .45; }
+.gk-bar-setja { display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--aj-line); }
+.gk-bar-setja p { margin: 0; font-size: 12px; line-height: 1.35; color: #92400e; }
+.gk .gk-bar-rod > button.gk-bar-adal { flex: 1 1 auto; background: #dc2626; border-color: #dc2626; color: #fff; font-weight: 700; }
+.gk-bar-fj { flex: 0 0 76px; display: flex; flex-direction: column; justify-content: space-between; font-size: 10.5px; line-height: 1; color: var(--aj-dim); }
+.gk .gk-bar-fj input { height: 30px; padding: 2px 6px; font-size: 16px; }
+.gk.snerti .gk-stjorn { right: 8px; top: 8px; }
+.gk.snerti .gk-stjorn button { min-width: 44px; height: 44px; font-size: 14px; }
+.gk.snerti .gk-stjorn .gk-fh { display: none; }
+.gk.snerti .gk-faera { left: 8px; right: 8px; top: 60px; max-width: none; font-size: 13px; }
+.gk.snerti .gk-spjald { left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 52%; overflow-y: auto; }
+/* færsluhamur á snertiskjá: spjald valda punktsins er aðeins fyrirsögn (og „Færður“-merkið), svo kortið og stækkunarglerið sjáist */
+.gk.snerti .gk-svid.faera .gk-spjald { padding: 8px 12px; }
+.gk.snerti .gk-svid.faera .gk-spjald > *:not(h3):not(.gk-x):not(.gk-faerdur) { display: none; }
+.gk.snerti .gk-svid.faera .gk-spjald h3 { margin: 0; min-height: 28px; align-items: center; }
+.gk.snerti .gk-svid.faera .gk-spjald .gk-faerdur { margin: 6px 0 0; }
+.gk.snerti .gk-x { width: 40px; height: 40px; right: 2px; top: 0; font-size: 24px; }
+
+/* ---- Mjótt útlit (.gk.mjor og .aj.gk-mjor, sett af KortClient): gluggi ≤ 860 px EÐA sími í „tölvuútgáfu“ vafrans. Í tölvuútgáfu hunsar vafrinn
+ * viewport-merkið og teiknar síðuna ~980 px breiða og smækkaða, svo @media (max-width) nær aldrei símanum (Agnar 13.11.2026: „allt voða skrítið“).
+ * KortClient stækkar þá .aj aftur með zoom og setur --gk-vh = sýnileg hæð gluggans (100vh er hærra en það sem sést í símavafra). */
+/* Hausinn má EKKI vera breiðari en skjárinn: annars stækkar útlitsglugginn í síma og fastsett skúffan lendir neðan við skjáinn. Valmyndin skrunar lárétt. */
+.aj.gk-mjor { overflow: hidden; touch-action: pan-x pan-y; }
+.aj.gk-mjor .aj-top { overflow: hidden; }
+.aj.gk-mjor .aj-logo { flex: none; }
+.aj.gk-mjor .aj-apex { padding: 0 8px; } .aj.gk-mjor .aj-apex .aj-apex-full { display: none; } .aj.gk-mjor .aj-apex .aj-apex-takn { display: block; }
+.aj.gk-mjor .aj-nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.aj.gk-mjor .aj-nav::-webkit-scrollbar { display: none; }
+.aj.gk-mjor .aj-nav a { flex: none; white-space: nowrap; }
+.aj.gk-mjor .aj-right { display: none; }
+/* snertiskjár í breiðu útliti (spjaldtölva): hæðin er sýnilegi glugginn, svo neðri stikan lendi ekki neðan við skjá */
+.gk.snerti { height: calc(var(--gk-vh, 100vh) - 50px); }
+/* kortið fyllir skjáinn; hliðarstikan verður skúffa að neðan sem opnast með „Lög og síur“ */
+.gk.mjor { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: calc(var(--gk-vh, 100dvh) - 50px); min-height: 0; }
+.gk.mjor .gk-kort { grid-row: 1; }
+.gk.mjor .gk-hlid { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: calc(var(--gk-vh, 100dvh) * 0.66); overflow-y: auto; overscroll-behavior: contain; border-right: 0; border-top: 1px solid #8a9199; border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px rgba(0, 0, 0, .28); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateY(105%); visibility: hidden; transition: transform .18s ease, visibility 0s linear .18s; font-size: 15px; }
+.gk.mjor.skuffa .gk-hlid { transform: none; visibility: visible; transition: transform .18s ease; }
+.gk.mjor .gk-skuffuhaus { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 2; padding: 8px 8px 8px 14px; background: var(--aj-head); border-bottom: 1px solid var(--aj-line); border-radius: 14px 14px 0 0; font-size: 15px; }
+.gk.mjor .gk-skuffuhaus button { height: 40px; padding: 0 16px; border: 1px solid #8a9199; border-radius: 8px; background: #fff; color: var(--aj-ink); font-weight: 600; font-size: 14px; }
+.gk.mjor .gk-hlid .gk-haus { display: none; }
+.gk.mjor .gk-hlid select, .gk.mjor .gk-hlid input[type="number"], .gk.mjor .gk-hlid textarea { font-size: 16px; padding: 9px 8px; }
+.gk.mjor .gk-hlid .gk-rod { font-size: 13px; }
+.gk.mjor .gk-hlid .gk-hnappar button { min-height: 44px; font-size: 15px; }
+.gk.mjor .gk-hlid .gk-takn button { padding: 9px 13px 9px 10px; font-size: 14px; }
+.gk.mjor .gk-hlid .gk-lag { min-height: 40px; font-size: 15px; gap: 10px; }
+.gk.mjor .gk-hlid .gk-lag-mynd label { min-height: 36px; gap: 10px; }
+.gk.mjor .gk-hlid input[type="checkbox"] { width: 22px; height: 22px; flex: none; }
+.gk.mjor .gk-hlid .gk-lag-mynd input[type="range"] { height: 30px; }
+.gk.mjor .gk-hlid .gk-smatt { font-size: 13px; }
+.gk.mjor .gk-hlid .gk-skra { min-height: 44px; font-size: 14px; }
+.gk.mjor .gk-hlid .gk-tafla table { font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .gk-hlid { transition: none !important; } }
 
 /* spjald áætlaðs gats: stærð, stök verk og athugasemd breytanleg */
 .gk-spjald .gk-rod { margin-bottom: 8px; }
@@ -83,3 +162,44 @@
 /* stöðusía: teljarar í hnöppum og rauður punktur fyrir „Eftir" */
 .gk-hnappar button small { font-weight: 400; opacity: .75; font-variant-numeric: tabular-nums; margin-left: 2px; }
 .gk-raudur { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #dc2626; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #dc2626; margin-right: 5px; vertical-align: 0; }
+
+/* tillögur tóla (uppruni 'tillaga:…'): lögn í brunavegg án skráningar — staðfest með „Já, eftir að þétta“, hafnað með „Nei, ekki gat“ */
+.gk-tillaga { margin: 0 0 8px; padding: 8px 10px; border: 1px solid #fdba74; border-radius: 6px; background: #fff7ed; }
+.gk-tillaga p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.4; color: #7c2d12; }
+.gk-tillaga div { display: flex; gap: 8px; }
+.gk .gk-tillaga button { flex: 1 1 0; min-height: 40px; padding: 0 10px; border: 1px solid #8a9199; border-radius: 6px; background: #fff; color: var(--aj-ink); font-weight: 600; }
+.gk .gk-tillaga button.ja { background: #dc2626; border-color: #dc2626; color: #fff; }
+.gk-bar-skyring i.ti { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; background: #fff; border: 1.6px solid #ea580c; color: #c2410c; font-style: normal; font-weight: 700; font-size: 10px; line-height: 1; }
+.gk.snerti .gk-svid.faera .gk-spjald .gk-tillaga { display: none; }
+
+/* hinn endinn: rautt ✕ í merki, lína í spjaldi og hnappur í skýringarlínu (pikk síar á þær skráningar) */
+.gk-merki.gk-endi { background: #fee2e2; color: #991b1b; font-weight: 600; }
+.gk .gk-bar-skyring button { display: inline-flex; align-items: center; gap: 5px; margin: -2px 0; padding: 2px 8px 2px 5px; border: 1px solid #fca5a5; border-radius: 12px; background: #fff; color: #991b1b; font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.gk .gk-bar-skyring button.on { background: #dc2626; border-color: #dc2626; color: #fff; }
+.gk .gk-bar-skyring button.on svg path { stroke: #fff; }
+
+/* hinn endinn eftir hlið veggjar: grænt = brunaveggur milli Ajour-staðanna, gult = báðar sömu megin (veikt merki) */
+.gk-merki.gk-hinum { background: #dcfce7; color: #166534; }
+.gk-merki.gk-sama { background: #fef3c7; color: #92400e; font-weight: 600; }
+.gk .gk-bar-skyring button.sama { border-color: #fcd34d; color: #92400e; }
+.gk .gk-bar-skyring button.sama b { color: #d97706; font-weight: 800; font-size: 14px; line-height: 1; }
+.gk .gk-bar-skyring button.sama.on { background: #d97706; border-color: #d97706; color: #fff; }
+.gk .gk-bar-skyring button.sama.on b { color: #fff; }
+.gk .gk-bar-skyring button.ajour { border-color: #93c5fd; color: #1e40af; }
+.gk .gk-bar-skyring button.ajour i { width: 9px; height: 9px; background: #1d4ed8; }
+.gk .gk-bar-skyring button.ajour.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.gk .gk-bar-skyring button.ajour.on i { background: #fff; }
+
+/* Myndir skráningar í spjaldi valins punkts og ljósakassi (13.11.2026) */
+.gk-myndir { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; overflow-x: auto; }
+.gk .gk-myndir button { flex: none; width: 62px; height: 82px; padding: 0; border: 1px solid #8a9199; border-radius: 6px; overflow: hidden; background: #f3f4f6; cursor: zoom-in; }
+.gk-myndir img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gk-myndir span { flex: none; font-size: 12px; font-weight: 600; color: var(--aj-dim); }
+.gk.snerti .gk-myndir button { width: 76px; height: 100px; }
+.gk.snerti .gk-svid.faera .gk-spjald .gk-myndir { display: none; }
+.gk-ljos { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 12px; background: rgba(1, 15, 36, .92); }
+.gk-ljos img { max-width: 100%; max-height: calc(100% - 64px); border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+.gk-ljos-stika { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 14px; font-weight: 600; }
+.gk .gk-ljos-stika button { min-width: 44px; height: 44px; padding: 0 14px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 10px; background: rgba(255, 255, 255, .1); color: #fff; font: inherit; font-size: 22px; }
+.gk .gk-ljos-stika button.l { font-size: 14px; font-weight: 600; background: #1d4ed8; border-color: #1d4ed8; }
+.gk-bar-skyring .gk-kerfi { gap: 8px; } .gk-bar-skyring .gk-kerfi b { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; } .gk-bar-skyring .gk-kerfi i { width: 8px; height: 8px; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }

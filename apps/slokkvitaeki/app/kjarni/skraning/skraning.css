@@ -9,6 +9,13 @@
 /* --- svarti hausinn --- */
 .aj-top { display: flex; align-items: stretch; height: 50px; background: var(--aj-black); color: #fff; }
 .aj-logo { display: flex; align-items: center; justify-content: center; width: 50px; background: #ff8a1f; color: #fff; font-size: 22px; }
+/* Apex Ajour (14.11.2026): lógó í haus; táknið eitt á mjóum skjá. Skrárnar: public/apex/ */
+.aj-apex { display: flex; align-items: center; flex: none; padding: 0 16px 0 12px; }
+/* 14.11.2026 (Agnar: „eiginlega allt of stórt þarna"): lág, ein lína — tákn + APEX + AJOUR; 18 px á hæð í 50 px haus. */
+.aj-apex img { display: block; height: 18px; width: auto; }
+.aj-apex img.aj-apex-takn { height: 20px; }
+.aj-apex .aj-apex-takn { display: none; }
+@media (max-width: 900px) { .aj-apex { padding: 0 8px; } .aj-apex .aj-apex-full { display: none; } .aj-apex .aj-apex-takn { display: block; } }
 .aj-nav { display: flex; align-items: stretch; }
 .aj-nav a { display: flex; align-items: center; padding: 0 18px; color: #fff; font-size: 14px; }
 .aj-nav a:hover { background: #333; }
