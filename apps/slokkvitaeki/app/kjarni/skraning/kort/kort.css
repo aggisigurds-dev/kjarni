@@ -214,3 +214,16 @@
 .gk-opna { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .gk-opna input { width: 18px; height: 18px; }
 .gk.snerti .gk-breyta select, .gk.snerti .gk-breyta textarea, .gk.snerti .gk-spjald select.gk-br { font-size: 16px; min-height: 40px; }
+
+/* Apex Ajour: stærð og litir tákna í Stillingum (14.11.2026) */
+.gk-sledi > span { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--aj-ink); }
+.gk-sledi > span button { margin-left: auto; border: 1px solid #8a9199; background: #fff; border-radius: 4px; padding: 1px 8px; font-size: 11.5px; }
+.gk-sledi input[type="range"] { width: 100%; height: 28px; accent-color: var(--aj-teal); }
+.gk-litir { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 6px 0 8px; font-size: 12.5px; }
+.gk-litir label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.gk-litir input[type="color"] { width: 28px; height: 24px; padding: 0; border: 1px solid #8a9199; border-radius: 4px; background: #fff; flex: none; }
+.gk-litahaus { grid-column: 1 / -1; display: flex; align-items: center; font-size: 13px; font-weight: 600; }
+.gk-litahaus button { margin-left: auto; border: 1px solid #8a9199; background: #fff; border-radius: 4px; padding: 1px 8px; font-size: 11.5px; font-weight: 400; }
+.gk.snerti .gk-sledi input[type="range"] { height: 40px; }
+.gk.snerti .gk-litir input[type="color"] { width: 40px; height: 34px; }
+.gk.snerti .gk-litir { font-size: 14px; gap: 8px 12px; }

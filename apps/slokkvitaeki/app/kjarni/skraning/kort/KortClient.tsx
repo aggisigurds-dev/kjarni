@@ -21,7 +21,10 @@ const varpa = (v: Vorpun, x: number, y: number): [number, number] => { let h: { 
 type Flisar = { kvardi: number; bx: number; by: number; dalkar: number; radir: number; slod: string; ending: string; til: string[] };
 const FLISA_MORK = 1.15;   // skjápixlar per grunnmyndarpixil: þar yfir eru flísar notaðar
 const FLISA_HAMARK = 24;   // mest þetta margar flísar í minni (hver ~15 MB afkóðuð)
-type Verk = { id: number; heiti: string; stillingar?: { breytingar?: boolean } | null };
+/* Stillingar verks (skr_verk.stillingar, á þjóni: eins á öllum tækjum). breytingar = opið fyrir handbreytingar · taknStaerd = margfaldari á stærð tákna
+ * (1 = sjálfgefið) · litir = litur per tákn, lykill er heiti táknsins (t.d. „Loft 200-315“). */
+type Stillingar = { breytingar?: boolean; taknStaerd?: number; litir?: Record<string, string> };
+type Verk = { id: number; heiti: string; stillingar?: Stillingar | null };
 /* Handbreytt svið skráningar (dálkurinn skr_skraningar.handvirkt): upprunalega gildið per svið. */
 type Svid = "flokkur_id" | "stada" | "lysing" | "athugasemd";
 type Handvirkt = Partial<Record<Svid, { fra: string | number | null; hvenaer?: string }>>;
@@ -152,7 +155,10 @@ const RAF = /Raf|Raufar/i;
 
 /* Tákn eftir tegund og stærð — sama kerfi og á Landspítalasíðu hubsins: kross = loftræsting, hringur = stálrör,
  * þríhyrningur = plaströr, ferningur = milliloft, tígull = rafmagn; litur og stærð = stærðarflokkur. */
-function takn(c: string): Takn {
+/* Litir tákna úr Stillingum. KortClient setur þetta úr skr_verk.stillingar.litir áður en tákn eru reiknuð; tómt = sjálfgefnir litir. */
+let LITIR: Record<string, string> = {};
+function takn(c: string): Takn { const t = taknGrunn(c), l = LITIR[t.heiti]; return l ? { ...t, litur: l } : t; }
+function taknGrunn(c: string): Takn {
   const m = /(\d+)\s*-\s*(\d+)/.exec(c), lo = m ? +m[1] : 0;
   if (/^Loft/i.test(c)) return !m ? { logun: "x", litur: "#64748b", r: 3.6, heiti: "Loft annað", hopur: "Loft" } : lo >= 400 ? { logun: "x", litur: "#c026d3", r: 5.2, heiti: "Loft 400-630", hopur: "Loft" } : lo >= 200 ? { logun: "x", litur: "#7c3aed", r: 4.4, heiti: "Loft 200-315", hopur: "Loft" } : { logun: "x", litur: "#2563eb", r: 3.6, heiti: "Loft 125-160", hopur: "Loft" };
   if (/^Stál/i.test(c)) return lo >= 110 ? { logun: "o", litur: "#7c2d12", r: 4.6, heiti: "Stál 110-160", hopur: "Stál" } : lo >= 75 ? { logun: "o", litur: "#c2410c", r: 3.9, heiti: "Stál 75-110", hopur: "Stál" } : lo >= 40 ? { logun: "o", litur: "#f97316", r: 3.2, heiti: "Stál 40-50", hopur: "Stál" } : { logun: "o", litur: "#fbbf24", r: 2.7, heiti: "Stál 15-35", hopur: "Stál" };
@@ -364,8 +370,13 @@ export default function KortClient() {
 
   // ---------------------------------------------------------------- afleitt
   const teikning = useMemo(() => teikn.find((t) => t.id === syn) || null, [teikn, syn]);
-  const taknAf = useMemo(() => { const m = new Map<number, Takn>(); for (const f of flokkar) m.set(f.id, takn(f.heiti)); return m; }, [flokkar]);
-  const ANNAD = useMemo(() => takn(""), []);
+  /* Stærð og litir tákna úr Stillingum (Agnar 14.11.2026: „stækka minnka icons slider … litir á táknum“). */
+  const still: Stillingar = verk?.stillingar || {}, tk = Math.max(0.4, Math.min(3, Number(still.taknStaerd) || 1)), litirLykill = JSON.stringify(still.litir || {});
+  LITIR = still.litir || {};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const taknAf = useMemo(() => { const m = new Map<number, Takn>(); for (const f of flokkar) m.set(f.id, takn(f.heiti)); return m; }, [flokkar, litirLykill]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ANNAD = useMemo(() => takn(""), [litirLykill]);
   /** Allir punktar sýnarinnar í hnitum myndarinnar sem er sýnd (yfirlit: varpað úr undirteikningum). */
   const punktar = useMemo<Punktur[]>(() => {
     if (!teikning) return [];
@@ -615,8 +626,8 @@ export default function KortClient() {
       const skil = [0, 0.179, 0.5, 0.812, 1], i = ["S1", "S2", "S4", "S5"].indexOf(einDeild);
       if (i >= 0) { cx.fillStyle = "rgba(255,255,255,.72)"; cx.fillRect(sx0 - 10, sy0 - 10, skil[i] * W - sx0 + 10, sy1 - sy0 + 20); cx.fillRect(skil[i + 1] * W, sy0 - 10, sx1 - skil[i + 1] * W + 10, sy1 - sy0 + 20); }
     }
-    const zs = Math.max(0.75, Math.min(3.2, Math.sqrt(k / k0) * 0.9)) / k; // táknstærð í skjápixlum, vex hægt með stækkun
-    const zb = snerti ? Math.min(zs, 1.45 / k) : zs;   // símasýn: áætluð göt og tillögur vaxa ekki endalaust með stækkun
+    const zs = (Math.max(0.75, Math.min(3.2, Math.sqrt(k / k0) * 0.9)) / k) * tk; // táknstærð í skjápixlum, vex hægt með stækkun; tk = sleðinn í Stillingum
+    const zb = snerti ? Math.min(zs, (1.45 * tk) / k) : zs;   // símasýn: áætluð göt og tillögur vaxa ekki endalaust með stækkun
     const dr = faerir.current;
     if (synaSkr && veggir && veggir.lykill === veggjaLykill && veggir.hurdir.length) {   // hurðaop í brunavegg: kerfið fer með þau sem vegg (stokkar fara yfir hurðir)
       const hu = veggir.hurdir; cx.beginPath(); for (let i = 0; i + 3 < hu.length; i += 4) { cx.moveTo(hu[i], hu[i + 1]); cx.lineTo(hu[i + 2], hu[i + 3]); }
@@ -624,14 +635,14 @@ export default function KortClient() {
     }
     /* Ajour-staður færðrar skráningar: strikalína frá staðnum í Ajour að merkinu (teiknuð undir merkjum) og blár punktur á staðnum (teiknaður síðast, ofan á).
      * Sést fyrir allar færðar skráningar þegar „Ajour-staðir“ er á, alltaf fyrir valda eða dregna skráningu, og í Færa-ham á borðtölvu eins og áður. */
-    const ajPt: Punktur[] = [], ajR = (snerti ? Math.max(2, Math.min(3.4, merkisR(k, k0) * 0.3)) : Math.max(1.8, 1.6 * zs * k)) / k;
+    const ajPt: Punktur[] = [], ajR = (snerti ? Math.max(2, Math.min(3.4, merkisR(k, k0) * tk * 0.3)) : Math.max(1.8, 1.6 * zs * k)) / k;
     const ajLina = (p: Punktur, px: number, py: number) => { cx.beginPath(); cx.moveTo(p.x0, p.y0); cx.lineTo(px, py); cx.lineWidth = 1.3 / k; cx.strokeStyle = "#1d4ed8"; cx.setLineDash([4 / k, 3 / k]); cx.stroke(); cx.setLineDash([]); ajPt.push(p); };
     if (synaSkr && snerti) {
       /* Símasýn (Agnar 12.11.2026: krossarnir urðu „messy og ruglingslegir“): hrein merki eins og á Miro-borðinu hans. Skráningar sama hóps sem
        * lægju hver ofan á annarri (tvær hliðar sama veggjar) eru EITT merki: útlína í lit stærðar, ✓ fyrir hvert klárað stakt verk (tvö sýnd,
        * fjöldinn stendur í merkinu ef þau eru þrjú eða fleiri), rauður hringur ef eitthvert þeirra er opið. Valinn eða dreginn punktur er
        * alltaf teiknaður stakur. Val og færsla vinna áfram á hverri skráningu fyrir sig. */
-      const Rs = merkisR(k, k0), R = Rs / k, D = 2.4 * R, jadar = 3 * R;
+      const Rs = merkisR(k, k0) * tk, R = Rs / k, D = 2.4 * R, jadar = 3 * R;
       type Hlidar = { nA: number; nB: number; fA: boolean; fB: boolean };   // kláraðar skráningar með þekkta hlið: A = ofan/vinstra megin, B = neðan/hægra megin; f = smellt með hendi
       type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; t: Takn; hs: Hlidar; kl?: string };   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
       const kerfisLitur = (p: Punktur) => { const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined; return v ? VISB_KERFI[v[0]]?.[0] : undefined; };
@@ -755,7 +766,7 @@ export default function KortClient() {
       cx.beginPath(); cx.arc(lx, ly, R, 0, 6.2832); cx.lineWidth = 3 * dpr; cx.strokeStyle = "#1d4ed8"; cx.stroke();
       cx.beginPath(); cx.moveTo(lx - R, ly); cx.lineTo(lx - 9 * dpr, ly); cx.moveTo(lx + 9 * dpr, ly); cx.lineTo(lx + R, ly); cx.moveTo(lx, ly - R); cx.lineTo(lx, ly - 9 * dpr); cx.moveTo(lx, ly + 9 * dpr); cx.lineTo(lx, ly + R); cx.lineWidth = 1 * dpr; cx.strokeStyle = "rgba(29,78,216,.55)"; cx.stroke();
     }
-  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb]);
+  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb, tk, litirLykill]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -852,7 +863,7 @@ export default function KortClient() {
     if (ba) { setValinn({ a: ba }); lyfta(+ba.y_px); return; }
     if (!best) { setValinn(null); return; }
     // símasýn: skráningar sem eru í sama merki og sú valda (sami hópur, innan merkisbreiddar) eru taldar upp í spjaldinu
-    const b0 = best, dHja = (2.4 * merkisR(s.k, s.k0)) / s.k;
+    const b0 = best, dHja = (2.4 * merkisR(s.k, s.k0) * tk) / s.k;
     const hja = snerti ? syndir.filter((q) => q !== b0 && q.t.hopur === b0.t.hopur && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja).map((q) => q.s.ajour_serial ?? q.s.radnr).slice(0, 8) : [];
     setValinn({ p: best, nanar: null, hja }); lyfta(best.y);
     const [r, mr] = await Promise.all([sb().from("skr_skraningar").select("lysing,athugasemd,created_at,ajour_gogn").eq("id", best.s.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", best.s.id).order("rod")]);
@@ -918,11 +929,15 @@ export default function KortClient() {
    * upprunalega gildið per svið (innflutningurinn yfirskrifar þá ekki sviðið og breytinguna má taka til baka) og skr_atburdir fær færslu.
    * Ajour sjálft breytist aldrei. Pörun áætlaðra gata (skr_aaetlud.parad) fylgir ekki sjálfkrafa: keyra -para.cjs eftir flokkabreytingar. */
   const opid = !!verk?.stillingar?.breytingar;
-  const setjaOpid = async (b: boolean) => {
-    if (!verk) return; const stillingar = { ...(verk.stillingar || {}), breytingar: b };
-    const r = await sb().from("skr_verk").update({ stillingar }).eq("id", verk.id); if (r.error) { setVilla(r.error.message); return; }
-    setVerk({ ...verk, stillingar });
+  /* Stillingar verks: breytast strax á skjánum og vistast á þjón; sleði og litaval vistast 0,7 s eftir síðustu hreyfingu (ein sending, ekki ein per þrep). */
+  const stillBid = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setjaStill = (breyting: Partial<Stillingar>, strax = false) => {
+    if (!verk) return; const stillingar: Stillingar = { ...(verk.stillingar || {}), ...breyting }; setVerk({ ...verk, stillingar });
+    if (stillBid.current) clearTimeout(stillBid.current);
+    const vista = async () => { stillBid.current = null; const r = await sb().from("skr_verk").update({ stillingar }).eq("id", verk.id); if (r.error) setVilla(r.error.message); };
+    if (strax) void vista(); else stillBid.current = setTimeout(vista, 700);
   };
+  const setjaOpid = (b: boolean) => setjaStill({ breytingar: b }, true);
   const breytaSkraningu = async (p: Punktur, svid: Svid, gildi: string | number | null) => {
     const nu = svid === "flokkur_id" ? p.s.flokkur_id : svid === "stada" ? p.s.stada : svid === "lysing" ? valinn?.nanar?.lysing ?? null : valinn?.nanar?.athugasemd ?? null;
     if (nu === gildi) return;
@@ -1059,6 +1074,12 @@ export default function KortClient() {
         </section>
         <section className="gk-stillingar">
           <h2>Stillingar</h2>
+          <label className="gk-rod gk-sledi"><span>Stærð tákna <b>{Math.round(tk * 100)} %</b>{tk !== 1 && <button type="button" onClick={() => setjaStill({ taknStaerd: 1 }, true)}>100 %</button>}</span><input type="range" min={0.5} max={2.5} step={0.1} value={tk} aria-label="Stærð tákna" onChange={(e) => setjaStill({ taknStaerd: Number(e.target.value) })} /></label>
+          <div className="gk-litir">
+            <div className="gk-litahaus"><span>Litir tákna</span>{Object.keys(still.litir || {}).length > 0 && <button type="button" onClick={() => setjaStill({ litir: {} }, true)}>Upprunalegir litir</button>}</div>
+            {taknTal.map(({ t }) => <label key={t.heiti}><input type="color" value={/^#[0-9a-f]{6}$/i.test(t.litur) ? t.litur : "#888888"} aria-label={`Litur: ${t.heiti}`} onChange={(e) => setjaStill({ litir: { ...(still.litir || {}), [t.heiti]: e.target.value } })} /><TaknSvg t={t} /> {t.heiti}</label>)}
+          </div>
+          <p className="gk-smatt">Stærð og litir breyta aðeins útliti kortsins, ekki skráningunum, og gilda á öllum tækjum. Litalistinn sýnir táknin sem eru á kortinu núna.</p>
           <label className="gk-opna"><input type="checkbox" checked={opid} onChange={(e) => setjaOpid(e.target.checked)} /> Opna fyrir breytingar á skráningum</label>
           <p className="gk-smatt">Þegar opið er má breyta flokki og stærð, stöðu, lýsingu og athugasemd á punktinum sem er valinn. Hver breyting er skráð og má taka til baka („Upprunalegt“). Ajour breytist ekki, og innflutningur úr Ajour yfirskrifar ekki það sem er breytt hér. Stillingin gildir á öllum tækjum.{skr.some((q) => q.handvirkt) ? ` Handbreyttar skráningar: ${num(skr.filter((q) => q.handvirkt).length)}.` : ""}</p>
         </section>
