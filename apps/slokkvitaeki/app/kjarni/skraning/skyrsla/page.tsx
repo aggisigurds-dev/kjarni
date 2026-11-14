@@ -10,6 +10,10 @@ const poppins = Poppins({ subsets: ["latin", "latin-ext"], weight: ["400", "500"
 export const metadata: Metadata = {
   title: "Skráning — stöðuskýrsla",
   description: "Stöðuskýrsla: staða verks per hæð og deild með tölum og prósentum og samanburður við upprunalegt útboð; áætlun, magn og athugasemdir eru breytanleg og vistast.",
+  // Flýtileið á heimaskjá / skjáborð með Apex-tákninu, bláu útgáfu lógósins, Agnar 15.11.2026
+  manifest: "/apex/skyrsla.webmanifest",
+  appleWebApp: { capable: true, title: "Apex skýrsla", statusBarStyle: "black" },
+  icons: { icon: [{ url: "/apex/skyrsla-icon-192.png", sizes: "192x192", type: "image/png" }], apple: [{ url: "/apex/skyrsla-apple-touch-icon.png", sizes: "180x180" }] },
 };
 
 export default function SkyrslaPage() {
