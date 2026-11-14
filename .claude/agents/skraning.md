@@ -334,6 +334,17 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     þær voru þegar rukkaðar haustið 2025 er ÓMÆLT (ekki rannsakað). Ajour sjálft er óbreytt. GILDRA: innflutningur setur `eytt` við upsert —
     `skraning-gatakort-innflutningur.cjs` heldur þeim nú földum (OFAN_FRA), en `luna-bridge/ajour-import.js` (`eytt: !!r.deleted`) myndi BIRTA ÞÆR
     AFTUR; keyra þá `skraning-ofan-fra-fela.cjs --write` á eftir. Varanlegast er að fela þær líka í Ajour (Agnar gerir það sjálfur).
+- **SKRÁNINGAR ÁN TEIKNINGAR FALDAR (Agnar 14.11.2026: „þær sem eru utan teikningar, 400+ má soft eyða“):** 466 raðir í verki 4 með tómt `teikning_id`
+  (444 opnar, 22 merktar kláraðar: #3660, 6591, 7232, 7370, 7493, 8125, 8798, 9327, 9927, 9929, 9931, 9933, 9936, 9971, 11197, 11330, 11379–11381,
+  11423, 11613, 11888; 193 með myndir; stærstu flokkar Stál Ø40-50 86, Guide point 81, Annað 50) fengu `eytt=true` með
+  `tools/skraning-an-teikningar-fela.cjs --write` (afrit: `tools/skraning-an-teikningar-afrit-20261114.json`; skr_atburdir 'eytt'; `--til-baka`
+  birtir þær aftur). Mælt fyrir/eftir: skr_skraningar eytt=false 11.175 → 10.709 (faldar alls 497 með OFAN_FRA); skr_yfirlit og skr_hub_skraningar
+  11.175 → 10.709; skr_haedarhnit óbreytt 10.624 (þær voru aldrei á korti). Stöðuskýrslan: hæðatölur ÓBREYTTAR (heild 10.260 af 11.923); aðeins
+  útboðssamanburðurinn lækkar um kláruðu 22 (1.2: 830 → 828, 2.2: 306 → 304, 2.4: 1.963 → 1.959, 2.5: 2.833 → 2.826, 2.6: 538 → 536, 2.8: 973 →
+  971, 2.9: 696 → 695, 3.1: 488 → 487, Loft annað 1 → 0) og „opið“ lækkar um 444. Skýrslan telur földu raðirnar sér (`faldarAnT`) svo afstemmingin
+  við Ajour (11.206) og liðurinn „Skráningar án teikningar: 466“ standi. Innflutningurinn (`skraning-gatakort-innflutningur.cjs`) heldur þeim földum
+  MEÐAN þær eru án teikningar í Ajour; fái skráning stað birtist hún aftur. NÝJAR skráningar án teikningar koma inn ófaldar (skýrslan telur þær
+  „utan“). `luna-bridge/ajour-import.js` myndi birta allar aftur. Ajour sjálft óbreytt.
     Óljósu þrjú (Agnar sama dag, af myndum): #12083 (5H S5) er ÚÐI → udi/há (úði há alls 25). #3129 (5H S1, hvítt yfirmálað): „held … sprinkler eða
     vatnslagnir“ → ÓDÆMT. #9178 (5H S2): „75 stál en mögulega frárennslislagnir því hún er svo neðarlega á vegg og fer líklega niður“ → ÓDÆMT, tekið
     úr `raud` (647 eftir); skráð í Stál Ø40-50 í Ajour, flokkur óbreyttur. Ber ómáluðu rörin (#1433, 4932, 10671, 11766) eru enn ósvöruð.
