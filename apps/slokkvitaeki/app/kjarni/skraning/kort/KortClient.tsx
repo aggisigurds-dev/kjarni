@@ -115,6 +115,9 @@ const NEMA_HOPUR = "Loft", N_MED = 6, N_THV = 12;
 const SMELL_PX = 4, SMELL_NAER = 14, NEON = "#00c853";
 /* Fylling merkis þegar lokunin er TILBÚIN (Agnar 14.11.2026: „í staðinn fyrir þennan stóra tígul yfir þegar eitthvað er ready … neongrænt innfill inn í táknin“). */
 const NEON_FYLL = "rgba(57, 255, 20, .8)";
+/* Sama hugmynd fyrir hinar stöðurnar (Agnar sama dag: „öll hin merkin … í samræmi … skýrara og augljósara“): fyllingin í merkinu segir stöðu lokunarinnar.
+ * Grænt = tilbúið · gult = hálfnað (klárað öðrum megin, eða sumt klárað og annað opið) · rautt = opið (ekkert klárað). Ekkert nýtt tákn ofan á merkinu. */
+const GULT_FYLL = "rgba(250, 204, 21, .85)", RAUTT_FYLL = "rgba(248, 113, 113, .8)";
 function smella(nm: number[], x: number, y: number): [number, number] | null {
   let b = 1e9, bi = -1;
   for (let i = 0; i + 4 < nm.length; i += 5) { const dx = x - nm[i], dy = y - nm[i + 1], al = Math.abs(dx * nm[i + 2] + dy * nm[i + 3]), th = Math.abs(-dx * nm[i + 3] + dy * nm[i + 2]); if (al <= nm[i + 4] + N_MED && th <= SMELL_NAER && al + th < b) { b = al + th; bi = i; } }
@@ -691,9 +694,11 @@ export default function KortClient() {
         /* Tilbúið = ekkert opið, hinn endann vantar hvergi, og annaðhvort eru bæði stöku verkin kláruð (tvö hök) eða ein skráning er öll lokunin (gólf, plata).
          * Þá fyllist merkið neongrænt; stóri græni tígullinn (parað áætlað gat) er ekki teiknaður lengur í þessum stíl. */
         const tilbuid = no === 0 && nd >= 1 && ve === 0 && (ne > 0 || nd >= 2 || nh > 0);
+        /* Hálfnað er aðeins metið á yfirlitsblaði (þar er hinn endinn leitaður uppi); á stakri Ajour-teikningu er kláruð skráning ófyllt eins og áður. */
+        const fyll = tilbuid ? NEON_FYLL : nd === 0 ? RAUTT_FYLL : no > 0 || teikning?.tegund === "yfirlit" ? GULT_FYLL : "rgba(255,255,255,.4)";
         if (t.logun === "x") plus(cx, x, y, R); else if (ror) blom(cx, x, y, R * 0.92); else slod(cx, t.logun, x, y, R * 0.9);
-        cx.fillStyle = tilbuid ? NEON_FYLL : "rgba(255,255,255,.4)"; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.4 / k, R * (ror ? 0.2 : 0.26)); cx.strokeStyle = nd ? t.litur : "#dc2626"; cx.stroke();
-        if (no) { cx.beginPath(); cx.arc(x, y, R * 1.7, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
+        cx.fillStyle = fyll; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.4 / k, R * (ror ? 0.2 : 0.26)); cx.strokeStyle = nd ? t.litur : "#dc2626"; cx.stroke();
+        if (no && nd) { cx.beginPath(); cx.arc(x, y, R * 1.7, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }   // rauður hringur aðeins á blönduðu merki (sumt klárað, annað opið); alopið merki er rautt að innan
         if (Rs < 7) return;   // yfirlit: aðeins merkið sjálft
         if (kl) { cx.beginPath(); cx.arc(x - R * 0.98, y + R * 0.98, R * 0.3, 0, 6.2832); cx.fillStyle = kl; cx.fill(); cx.lineWidth = R * 0.1; cx.strokeStyle = "#fff"; cx.stroke(); }   // kerfi samkvæmt myndgreiningu
         const st = loft ? /-(\d+)\s*$/.exec(t.heiti) : null;
@@ -748,9 +753,11 @@ export default function KortClient() {
         cx.font = `700 ${r * 1.45}px system-ui, sans-serif`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.fillStyle = "#c2410c"; cx.fillText("?", ax, ay + r * 0.08); continue;
       }
       if (aaEftir(a)) { slod(cx, "o", ax, ay, 5.6 * zb); cx.fillStyle = "#dc2626"; cx.fill(); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#ffffff"; cx.stroke(); continue; }
-      if (miro && a.parad?.stada === "fullt" && !adr && valinn?.a?.id !== a.id) continue;   // tilbúið sést sem neongræn fylling í merkinu sjálfu, ekki sem tígull yfir því
-      const r = 6.5 * zb; slod(cx, "d", ax, ay, r);
-      cx.fillStyle = (PARAD[a.parad!.stada]?.[1] ?? "#ffffff") + "dd"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
+      /* Parað áætlað gat sést aðeins ef beðið er um það („Sýna líka áætluð göt sem eiga skráningu“). Í nýja stílnum er það lítil brotin útlína í kringum
+       * merkið, ekki fylltur tígull yfir því: staðan stendur þegar í fyllingu merkisins. Valið eða dregið gat er teiknað fyllt svo það sjáist. */
+      const valid = adr || valinn?.a?.id === a.id, r = (miro && !valid ? 5.2 : 6.5) * zb; slod(cx, "d", ax, ay, r);
+      if (!miro || valid) { cx.fillStyle = (PARAD[a.parad!.stada]?.[1] ?? "#ffffff") + "dd"; cx.fill(); }
+      cx.lineWidth = (miro && !valid ? 1.4 : 2) / k; cx.strokeStyle = fagLitur(a.fag); cx.setLineDash([4 / k, 2.5 / k]); cx.stroke(); cx.setLineDash([]);
     }
     const vDreginn = !!dr && ((!!valinn?.p && dr.p?.s.id === valinn.p.s.id) || (!!valinn?.a && dr.a?.id === valinn.a.id));
     const v = vDreginn ? { x: dr!.x, y: dr!.y } : valinn?.p ? { x: valinn.p.x, y: valinn.p.y } : valinn?.a ? { x: +valinn.a.x_px, y: +valinn.a.y_px } : null;
@@ -1062,7 +1069,7 @@ export default function KortClient() {
           <div className="gk-hnappar">{([["allt", "Allt"], ["done", "Tilbúin"], ["opid", "Í vinnslu"], ["eftir", "Eftir"]] as const).map((x) => <button key={x[0]} type="button" className={stada === x[0] ? "on" : ""} onClick={() => setStada(x[0])}>{x[0] === "eftir" && <i className="gk-raudur" />}{x[1]} <small>{num(stoduTal[x[0]])}</small></button>)}</div>
           {deildir.length > 1 && <div className="gk-hnappar">{deildir.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}</div>}
           <div className="gk-takn">{taknTal.map(({ t, n }) => <button key={t.heiti} type="button" className={afTakn[t.heiti] ? "af" : ""} aria-pressed={!afTakn[t.heiti]} onClick={() => setAfTakn((x) => ({ ...x, [t.heiti]: !x[t.heiti] }))}>{miro ? <MerkiSvg t={t} /> : <TaknSvg t={t} />}{t.heiti} <small>{num(n)}</small></button>)}</div>
-          {miro && !snerti && <p className="gk-smatt">Útlína í lit stærðar er skráning. ✓ er fyrir hvert klárað stakt verk. Neongræn fylling þýðir að lokunin er tilbúin (bæði verkin kláruð), rauður hringur þýðir opið og rauður punktur er eftir, óskráð.</p>}
+          {miro && !snerti && <p className="gk-smatt">Útlína í lit stærðar er skráning. ✓ er fyrir hvert klárað stakt verk. Liturinn inni í merkinu segir stöðuna: grænt er tilbúið (bæði verkin kláruð), gult er hálfnað (klárað öðrum megin) og rautt er opið. Rauður punktur er eftir, óskráð.</p>}
           <label className="gk-rod">Starfsmaður<select value={madur} onChange={(e) => setMadur(e.target.value)}><option value="">Allir</option>{menn.filter((m) => skr.some((s) => s.starfsmadur_id === m.id)).map((m) => <option key={m.id} value={m.id}>{m.nafn || `Starfsmaður ${m.numer}`}</option>)}</select></label>
           <div className="gk-rod gk-tvo"><label>Frá<select value={fra} onChange={(e) => setFra(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label><label>Til<select value={til} onChange={(e) => setTil(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label></div>
           <label className="gk-rod">Lagfæringar<select value={lagf} onChange={(e) => setLagf(e.target.value as typeof lagf)}><option value="allt">Sýna allt</option><option value="lagf">Aðeins lagfæringar</option><option value="A">Skráðar sem nýtt verk</option><option value="B">Aðeins athugasemd</option><option value="?">Óflokkaðar</option></select></label>
@@ -1194,6 +1201,7 @@ export default function KortClient() {
           <p className="gk-bar-skyring">
             <span><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M2.5 7.5L5.8 11L11.8 3.5" fill="none" stroke="#1f2937" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>Klárað stakt verk</span>
             <span><i className="tb" />Tilbúið</span>
+            <span><i className="hn" />Hálfnað</span>
             <span><i className="op" />Opið</span>
             <span><i className="ef" />Eftir, óskráð</span>
             {(endaVantar > 0 || anEnda) && <button type="button" className={anEnda ? "on" : ""} aria-pressed={anEnda} onClick={() => setAnEnda((x) => !x)}><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3 3L11 11M11 3L3 11" stroke="#dc2626" strokeWidth="2.6" strokeLinecap="round" fill="none" /></svg>Hinn endann vantar ({num(endaVantar)})</button>}
