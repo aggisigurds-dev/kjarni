@@ -321,9 +321,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     Gólf Ø160-200 á 6H skoðaðar á blöðum `blod/golf6h_01–06.jpg`): 31 skráning á 6H S2 frá sept.–nóv. 2025 er ljósmynduð OFAN FRÁ (rör niður í
     gólfið): #145, 1060, 1061, 1063–1066, 1077–1084, 1089, 1090, 1092, 1094, 1095, 1097–1099, 1363–1370. 27 þeirra liggja innan 0,7 m frá
     Gólf-skráningu á 5H (neðri vinnan); #1065, 1066, 1368, 1369 eru 1,2–2,0 m frá næstu. Hinar fjórar á 6H (#8815, 8816, 8833, 8834, júní 2026,
-    S4/S5) eru teknar NEÐAN FRÁ. ÚRSKURÐUR Agnars sama dag um þessar 31: „Þetta er eitthvað annað. Halda þessum“ → þær TELJAST MEÐ og stöðuskýrslan
-    er óbreytt. EKKI taka þær úr talningu. Hvaða „30 eða 32“ gólfskráningar teljast ekki með er því enn ÓMÆLT (aðrar Gólf Ø160-200: 4H 367, 5H 474,
-    án teikningar 35, teikning 12: 13; myndir þeirra óskoðaðar).
+    S4/S5) eru teknar NEÐAN FRÁ. Agnar sagði fyrst „Þetta er eitthvað annað. Halda þessum“ (án þess að hafa séð myndablöðin), en eftir að hafa
+    skoðað blað `golf6h_02` (#1066–1081): „Já þessar mátti setja í hide“ → LOKAÚRSKURÐUR: þessar 31 teljast EKKI með. Útfært sem `OFAN_FRA` í
+    `skyrsla/SkyrslaClient.tsx` (Ajour-númer, síað við lestur; afstemmingin við Ajour sýnir áfram 11.206 og nýr liður í Forsendum skýrir). Fyrir/eftir
+    á öllum texta skýrslunnar (`scratchpad/gk_skyrsla_texti.cjs`): hver breytt tala lækkar um nákvæmlega 31 (heild 10.291 → 10.260, 6H S2 1.624 → 1.593,
+    milliloft 859 → 828, útboðsliður 1.2 861 → 830). ÓSNERT: skr_skraningar, Ajour, kortið, skr_yfirlit/skr_hub_skraningar og uppgjör (hub-síðan og
+    NLSH-uppgjör telja þær enn; það er sér ákvörðun Agnars). Fjórar neðan frá á 6H teljast áfram.
     Óljósu þrjú (Agnar sama dag, af myndum): #12083 (5H S5) er ÚÐI → udi/há (úði há alls 25). #3129 (5H S1, hvítt yfirmálað): „held … sprinkler eða
     vatnslagnir“ → ÓDÆMT. #9178 (5H S2): „75 stál en mögulega frárennslislagnir því hún er svo neðarlega á vegg og fer líklega niður“ → ÓDÆMT, tekið
     úr `raud` (647 eftir); skráð í Stál Ø40-50 í Ajour, flokkur óbreyttur. Ber ómáluðu rörin (#1433, 4932, 10671, 11766) eru enn ósvöruð.

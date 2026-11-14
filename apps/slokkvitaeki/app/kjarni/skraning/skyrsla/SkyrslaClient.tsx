@@ -43,7 +43,11 @@ const AN_MARKMIDS = new Set(["Raufar"]);
 const RAF_MARK = 104;                                    // rafmagnsgöt: 104 stök verk á hverja deild á 5H og 6H (Agnar 11.11.2026)
 /** Aukaverk: skráningar á teikningu sem heitir „… Viðbótarverkefni" í Ajour — sýnd sér, utan stöðu og (sjálfgefið) útboðssamanburðar. */
 const AUKA_RE = /vi[ðd]b[óo]tarverk|aukaverk/i;
-const GOLF_MARK = 110;                                   // rúmlega 100 gólfgöt á deild á 4H og 5H (eitt verk á gat)
+/** Milliloft skráð OFAN FRÁ á 6. hæð, deild S2 (24.09.–14.11.2025): í gólfi er aðeins neðri vinnan talin (Agnar 14.11.2026: „30 eða 32 … skráninga í
+ *  gólf 160 sem teljast ekki með“, „þessar mátti setja í hide“). Fundnar af ljósmyndum (rör niður í gólfið); Ajour-númer. Aðeins þessi skýrsla sleppir
+ *  þeim: skráningarnar sjálfar, Ajour og uppgjör eru óbreytt. Sjá .claude/agents/skraning.md. */
+const OFAN_FRA = new Set([145, 1060, 1061, 1063, 1064, 1065, 1066, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1089, 1090, 1092, 1094, 1095, 1097, 1098, 1099, 1363, 1364, 1365, 1366, 1367, 1368, 1369, 1370]);
+const GOLF_MARK = 110;                                  // rúmlega 100 gólfgöt á deild á 4H og 5H (eitt verk á gat)
 const MIRO_LOFT: Record<string, number> = { vidmid: 272, S1: 230, S2: 244 };   // Miro-talning lofts: 6H S2 viðmið; 5H S1 og S2 í stökum verkum
 /** Upprunalega útboðsblaðið (mynd frá Agnari 11.11.2026). per = stök verk í Ajour per einingu tilboðs. */
 const UTBOD: { nr: string; heiti: string; ein: string; magn: number; per: number | null; re: RegExp | null; kafli?: string }[] = [
@@ -88,6 +92,8 @@ export default function SkyrslaClient() {
   const [verk, setVerk] = useState<Verk | null>(null);
   const [flokkar, setFlokkar] = useState<Flokkur[]>([]);
   const [skr, setSkr] = useState<Skr[]>([]);
+  /** Skráningar sem skýrslan sleppir (OFAN_FRA): fjöldi og þar af kláraðar, fyrir afstemminguna við Ajour. */
+  const [ofanFra, setOfanFra] = useState({ n: 0, done: 0 });
   const [hnit, setHnit] = useState<Map<number, Hnit>>(new Map());
   const [yfirlit, setYfirlit] = useState<HkYfirlit[]>([]);
   const [aaetlud, setAaetlud] = useState<Aaetlad[]>([]);
@@ -123,11 +129,11 @@ export default function SkyrslaClient() {
           s.from("skr_log").select("teikning_id,fag,mynd_path").eq("verk_id", vk.id).eq("eytt", false),
         ]);
         if (f.error) throw new Error(f.error.message);
-        const allt: Skr[] = [];
+        const allt: Skr[] = []; const sleppt = { n: 0, done: 0 };
         for (let i = 0; ; i += 1000) {
           const r = await s.from("skr_skraningar").select("id,ajour_serial,flokkur_id,teikning_id,stada,framkvaemt_til,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
-          allt.push(...(r.data as unknown as Skr[]));
+          for (const q of r.data as unknown as Skr[]) { if (q.ajour_serial != null && OFAN_FRA.has(q.ajour_serial)) { sleppt.n++; if (q.stada === "done") sleppt.done++; } else allt.push(q); }
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
           if (!r.data || r.data.length < 1000) break;
         }
@@ -161,7 +167,7 @@ export default function SkyrslaClient() {
         { const th = new Map(((tk.data || []) as { id: number; haed?: string | null }[]).map((t) => [t.id, t.haed || ""])); setLog(((lg.data || []) as { teikning_id: number; fag: string; mynd_path: string | null }[]).filter((l) => l.mynd_path && th.get(l.teikning_id)).map((l) => ({ haed: th.get(l.teikning_id) as string, fag: l.fag, mynd: l.mynd_path as string }))); }
         setStarfsmenn(new Map(((sm.data || []) as { id: number; nafn: string }[]).map((x) => [x.id, x.nafn] as [number, string])));
         setYfirlit(((tk.data || []) as { id: number; tegund?: string; haed?: string | null; mynd_path?: string | null; breidd_px?: number | null; haed_px?: number | null }[]).filter((t) => t.tegund === "yfirlit" && t.haed && t.breidd_px && t.haed_px).map((t) => ({ id: t.id, haed: t.haed as string, mynd: t.mynd_path ?? null, w: Number(t.breidd_px), h: Number(t.haed_px) })));
-        setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt);
+        setVerk(vk); setFlokkar(f.data as Flokkur[]); setSkr(allt); setOfanFra(sleppt);
         setTeiknHaed(new Map(((tk.data || []) as { id: number; heiti: string }[]).flatMap((t) => { const m = /^\s*([456])\s*H/i.exec(t.heiti); return m ? [[t.id, `${m[1]}H`] as [number, string]] : []; })));
         setAukaTeikn(new Map(((tk.data || []) as { id: number; heiti: string }[]).filter((t) => AUKA_RE.test(t.heiti)).map((t) => [t.id, t.heiti] as [number, string])));
         const row = sk.data?.[0] as { id: number; gogn: Gogn } | undefined;
@@ -431,7 +437,8 @@ export default function SkyrslaClient() {
           <li><b>Einingar:</b> tölur eru stök verk, þ.e. þétting öðrum megin við vegg. Tvö stök verk eru ein lokun; í gólfi er eitt verk ein þétting.</li>
           <li><b>„Áætlað“ er áætlaður fjöldi, ekki talning á öllum götum.</b> Á 6. hæð er áætlunin það sem er skráð (klárað og opið), svo hlutfallið þar sýnir hve stórum hluta skráðra þéttinga er lokið. Á 5. hæð er miðað við sama flokk á sömu deild á 6. hæð. Milliloft: {GOLF_MARK} á deild; á gólfi 5. hæðar þó aldrei færri en skráð eru á sömu deild á 5. hæð, og við bætast stútar af 5. hæð niður í inntaksrými 4. hæðar sem eiga enga skráningu enn (viðbótarverk, 12.11.2026). Rafmagn: {RAF_MARK} á deild. Prósenturnar eru því mat á framvindu og staðfesta ekki einar sér að öllum götum hafi verið lokað.</li>
           <li><b>Staðsetning punkta:</b> punktarnir eru settir á teikningu á verkstað.{faerdirN ? ` ${num(faerdirN)} punktar hafa verið færðir að næsta skurðpunkti lagnar og brunaveggjar á teikningunni (sjálfvirkt, að miðgildi 0,3 m og mest 1,0 m); skráð staða í Ajour er óbreytt.` : ""}</li>
-          <li><b>Afstemming við Ajour:</b> í gögnunum eru {num(skr.length)} skráningar, þar af {num(klaradAlls)} kláraðar. {num(alls.klar)} þeirra eru taldar á móti áætlun. Hinar {num(klaradAlls - alls.klar)} eru raufar (engin áætlun), aukaverk ({num(aukaAlls.done)} kláruð, sýnd sér), skráningar án teikningar ({num(taln.utanDone)} merktar kláraðar; þeim verður eytt) og flokkurinn „Annað“.</li>
+          <li><b>Afstemming við Ajour:</b> í gögnunum eru {num(skr.length + ofanFra.n)} skráningar, þar af {num(klaradAlls + ofanFra.done)} kláraðar. {num(alls.klar)} þeirra eru taldar á móti áætlun. Hinar {num(klaradAlls + ofanFra.done - alls.klar)} eru raufar (engin áætlun), aukaverk ({num(aukaAlls.done)} kláruð, sýnd sér), skráningar án teikningar ({num(taln.utanDone)} merktar kláraðar; þeim verður eytt){ofanFra.n ? `, milliloft skráð ofan frá (${num(ofanFra.done)}, sjá næsta lið)` : ""} og flokkurinn „Annað“.</li>
+          {ofanFra.n > 0 && <li><b>Milliloft skráð ofan frá:</b> {num(ofanFra.n)} {ofanFra.n % 10 === 1 && ofanFra.n % 100 !== 11 ? "skráning í milliloft á 6. hæð, deild S2, frá september til nóvember 2025 var skráð ofan frá. Í gólfi er aðeins neðri vinnan talin, svo hún er ekki talin með í þessari skýrslu." : "skráningar í milliloft á 6. hæð, deild S2, frá september til nóvember 2025 voru skráðar ofan frá. Í gólfi er aðeins neðri vinnan talin, svo þær eru ekki taldar með í þessari skýrslu."}</li>}
           <li><b>Skráningar án teikningar:</b> í Ajour eru {num(taln.utan)} skráningar sem ekki eru settar á teikningu („Registrations without drawing“). Það eru vinnufærslur sem Brunahólf eyðir úr Ajour. Þær eru hvorki unnið verk né óunnið og teljast ekki með í tölum eða á kortum.</li>
         </ul>
       </div>}
