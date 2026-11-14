@@ -213,6 +213,10 @@ function blom(cx: CanvasRenderingContext2D, x: number, y: number, R: number) {
 const BLOM_D = (() => { const p = blomPunktar(7, 7, 4.6), f = (n: number) => n.toFixed(2); return `M${f(p[0].dx)} ${f(p[0].dy)}` + p.map((q, i) => `Q${f(q.tx)} ${f(q.ty)} ${f(p[(i + 1) % 8].dx)} ${f(p[(i + 1) % 8].dy)}`).join("") + "Z"; })();
 /** Hálf breidd merkis í símasýn, í skjápixlum: lítil á yfirliti, vex með stækkun (talan í merkinu sést frá 11 px). */
 /** Þak 13 px (var 17) og áætluð göt mest um 9 px í símasýn: Agnar 13.11.2026, „merki mega ekki vera of stór svo ég sjái ekki“ (teikningin undir verður að sjást). */
+/* Mesta stækkun (14.11.2026, Agnar: „geta zoomað alveg“): áður 40 × upphafsstækkun, sem á síma (k0 ≈ 0,07) stöðvaðist við um 3,5 m þvert yfir
+ * skjáinn (mælt: 200 mm veggur = 22 px). Nú aldrei minna en 6 skjápixlar á grunnpixil (1 grunnpixill ≈ 29 mm), um 1,9 m þvert yfir 390 px skjá.
+ * Flísarnar eru skarpar upp að 4; 10 var prófað og þá fyllti einn veggur skjáinn, sem nýtist ekki. Tölva (k0 ≥ 0,15) er óbreytt. */
+const kMest = (k0: number) => Math.max(k0 * 40, 6);
 const merkisR = (k: number, k0: number) => Math.max(4, Math.min(13, Math.sqrt(k / k0) * 3.4));
 /** Skýringartákn símasýnarinnar: útlína í lit stærðarflokks, hvít fylling (sama og á kortinu). */
 function MerkiSvg({ t }: { t: Takn }) {
@@ -782,7 +786,7 @@ export default function KortClient() {
   /** Staða bendils í einingum strigans. Undir zoom eru gluggahnit (clientX, getBoundingClientRect) ekki í sömu einingum og clientWidth: hlutfallið leiðréttir það. */
   const stadur = (e: { clientX: number; clientY: number }) => { const el = kassiRef.current!, r = el.getBoundingClientRect(), f = r.width ? el.clientWidth / r.width : 1; return { x: (e.clientX - r.left) * f, y: (e.clientY - r.top) * f }; };
   const staekka = useCallback((sx: number, sy: number, f: number) => {
-    const s = sjon.current, k = Math.max(s.k0 * 0.6, Math.min(s.k0 * 40, s.k * f));
+    const s = sjon.current, k = Math.max(s.k0 * 0.6, Math.min(kMest(s.k0), s.k * f));
     s.tx = sx - ((sx - s.tx) / s.k) * k; s.ty = sy - ((sy - s.ty) / s.k) * k; s.k = k; bidjaUmTeikningu();
   }, [bidjaUmTeikningu]);
   useEffect(() => {
@@ -873,7 +877,7 @@ export default function KortClient() {
     if (xs.length < 3) return;
     xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
     const q = (a: number[], f: number) => a[Math.round((a.length - 1) * f)], x0 = q(xs, 0.01) - 50, x1 = q(xs, 0.99) + 50, y0 = q(ys, 0.01) - 50, y1 = q(ys, 0.99) + 50;
-    const cw = kassi.clientWidth, ch = kassi.clientHeight, s = sjon.current, k = Math.min(s.k0 * 40, cw / (x1 - x0), ch / (y1 - y0));
+    const cw = kassi.clientWidth, ch = kassi.clientHeight, s = sjon.current, k = Math.min(kMest(s.k0), cw / (x1 - x0), ch / (y1 - y0));
     sjon.current = { ...s, k, tx: cw / 2 - ((x0 + x1) / 2) * k, ty: ch / 2 - ((y0 + y1) / 2) * k }; bidjaUmTeikningu();
   };
 
