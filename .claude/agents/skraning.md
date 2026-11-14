@@ -313,7 +313,11 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     undiragent: 44 einangruð, 20 óeinangruð (14 rauð, 2 blá, 4 ómáluð), 2 óljós. Rautt hlutfall ≥ 2,7 % (mest yfir myndir): 12 af 14 rauðum, 0 af 44
     einangruðum. Blá og ómáluð ber rör nást EKKI á lit, og „einangrað“ verður ekki dæmt af lit (18 % af litlausum eru ber). Fjarlægð frá úðalögn/vatnslögn
     á teikningum greinir ekki á milli (M115/M116 liggur við flest). Í 6–7 skráningum er stuttur einangrunarhólkur í gatinu en rörið bert ofan við
-    (#5023, 6110, 7128, 10026, 10155, 11149, 3278): dæmt einangrað, skilgreiningaratriði fyrir Agnar.
+    (#5023, 6110, 7128, 10026, 10155, 11149, 3278): dæmt einangrað. ÚRSKURÐUR Agnars 14.11.2026 (sá myndablöðin): „allt með hlutaeinangrun á bara
+    eftir að klára einangrunina og er því annaðhvort í 32mm eða 40-50mm“, „allt vatnslagnir og hitalagnir“ → öll sjö í `visbendingar.json` sem
+    einangrad/há (einangrað há alls 42). Hann merkti á myndirnar: grennri rörin með minni hólk = 32 (Stál Ø15-35), sverari = 50 (Stál Ø40-50)
+    (#5023 og #6110 sýna hvort tveggja). Sami dagur: „gegnum millihæða … skráum við aðeins neðri vinnuna“ (ein skráning er öll lokunin), og
+    eitthvað var skráð OFAN FRÁ sem er ekki talið með („30 eða 32“; hvort það er fjöldi eða rörastærð og hvaða skráningar það eru er ÓMÆLT, spurt).
     Keyrt á ALLAR 2.841 (allar eiga myndir, 959 MB sótt í scratchpad/stalallt): rautt ≥ 2,7 % hjá 671 (23,6 %). SANNPRÓFUN á nýju slembiúrtaki 12 slíkra
     (fræ 777, ég skoðaði sjálfur): 8 rauð úðarör, 3 EINANGRUÐ rör með rautt rör í bakgrunni (#7371, 8290, 10343), 1 óljós (#9178). Litur einn er því
     EKKI dómur (um 2 af 3 rétt). Þess vegna: `visbendingar.json.raud` (648 númer) er aðeins vísbending í spjaldi („Sjálfvirk litagreining: rautt rör …“),
