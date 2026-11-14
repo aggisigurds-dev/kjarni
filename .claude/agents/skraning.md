@@ -302,8 +302,12 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
   - HURÐALÍNUR: `tools/skraning-gatakort-veggir.py` tengir rauða veggbúta í sömu línu (lárétt/lóðrétt, innan 4 px; bil ≤ 4,0 m alltaf, 4,0–6,6 m aðeins með
     bláu hurðartákni; línan þarf ≥ 2 m af rauðum vegg) → `hurdir` í veggir-JSON (282 á 5H, 285 á 6H) og aftast í `seg`, svo kortið fer með þær sem vegg.
     `skraning-gatakort-nemar.py` telur þær vegg → 489 nemar á 5H (var 427), 511 á 6H (var 446). Kortið teiknar þær sem bláar línur. Ástæðan: ofan við hurðir
-    er veggurinn samfelldur, stokkarnir fara þar í gegn. ÓLEYST (mynd Agnars 14.11): við INNDREGNAR stofuhurðir (E30-S í skoti milli baðherbergja) á línan að
-    fylgja hurðinni inn í skotið; núna fer hún beint eftir ganginum fram hjá skotinu. Innri hurð (gátt → sjúkrastofa) á EKKI að fá línu; á hluta 6H S2 var
+    er veggurinn samfelldur, stokkarnir fara þar í gegn. INNDREGNAR stofuhurðir (E30-S í skoti milli baðherbergja; mynd Agnars 14.11, „reyna sjálfvirkt“):
+    tveir veggendar með 0,6–2,35 m á milli (mjórra en gangurinn), innan 15° frá ás, ekkert rautt á milli og blátt hurðartákn (≥ 30 px) við línuna → hurð í
+    skoti; ganglína FYRIR MYNNI skotsins (samsíða, 0,45–2,4 m frá, hurðin innan bilsins) er felld niður. 6H: 59 inndregnar, 4 ganglínur felldar (340 línur
+    alls, 514 nemar); 5H: 71 og 8 (345 línur, 489 nemar). Fyrsta útgáfa (bil ≤ 2,85 m, 20°) dró rangar línur þvert yfir ganginn (229 á 6H): ekki víkka aftur.
+    Skoðað á einum bút (6H S2, x 1500–2400): rétt þar; aðrir hlutar blaðanna ÓSKOÐAÐIR. Skoðunarmynd: `scratchpad/lm_hurdamynd.py <hæð> [x0 y0 b h]`.
+    Mælt eftir (kort = `lm_nemar2.py`): 6H ✕ 82 (24 · 25 · 11 · 22), sömu megin 84; 5H ✕ 64 (12 · 15 · 18 · 19), sömu megin 34. Innri hurð (gátt → sjúkrastofa) á EKKI að fá línu; á hluta 6H S2 var
     þétt þar fyrir mistök og þær skráningar parast áfram á nálægð einni.
   - HLIÐ: skráning á nema fær `megin` (−1 ofan/vinstra megin, +1 neðan/hægra megin) úr Ajour-staðnum, eða úr sýndri stöðu ef henni var SMELLT (`fest`:
     handfærð, á miðju nemans og nákvæmlega `SMELL_PX` = 4 px frá vegglínu). Hakið fer þeim megin við merkið; neongrænt (`NEON`) ef `fest`, annars dökkt.
