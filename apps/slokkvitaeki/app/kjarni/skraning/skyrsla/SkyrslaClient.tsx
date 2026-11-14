@@ -137,6 +137,11 @@ export default function SkyrslaClient() {
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
           if (!r.data || r.data.length < 1000) break;
         }
+        // OFAN_FRA-skráningarnar eru faldar í grunninum (eytt=true, 14.11.2026) en lifa áfram í Ajour: taldar hér svo afstemmingin við Ajour haldi
+        if (sleppt.n < OFAN_FRA.size) {
+          const r = await s.from("skr_skraningar").select("id,stada").eq("verk_id", vk.id).eq("eytt", true).in("ajour_serial", [...OFAN_FRA]);
+          for (const q of (r.data || []) as { stada: string }[]) { sleppt.n++; if (q.stada === "done") sleppt.done++; }
+        }
         // hæðarhnit (sýnin skr_haedarhnit): hæð og deild úr STÖÐU punktsins á yfirlitsblaðinu — ræður þar sem hún er til, svo færðir punktar fylgi nýja staðnum
         const hn = new Map<number, Hnit>();
         for (let i = 0; ; i += 1000) {
