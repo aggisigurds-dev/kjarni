@@ -19,6 +19,9 @@ const DIR = process.env.AJOUR_EXPORT_DIR || 'C:/Users/Slokkvitaeki/luna-bridge/a
 const ENVF = process.env.LUNA_ENV || 'C:/Users/Slokkvitaeki/luna-bridge/.env';
 const YFIRLIT = opt('--yfirlit');
 const HEITI = 'NLSH 5-6. hæð · gatakort';
+// Milliloft skráð OFAN FRÁ á 6H S2 (Ajour-númer): falin í grunninum (eytt=true) 14.11.2026 að ósk Agnars, því í gólfi er aðeins neðri vinnan talin.
+// Innflutningurinn má EKKI birta þær aftur. Sami listi: OFAN_FRA í skyrsla/SkyrslaClient.tsx og tools/skraning-ofan-fra-fela.cjs.
+const OFAN_FRA = new Set([145, 1060, 1061, 1063, 1064, 1065, 1066, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1089, 1090, 1092, 1094, 1095, 1097, 1098, 1099, 1363, 1364, 1365, 1366, 1367, 1368, 1369, 1370]);
 const env = {}; try { for (const l of fs.readFileSync(ENVF, 'utf8').split(/\r?\n/)) { const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/); if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, ''); } } catch {}
 const URL_ = process.env.SUPABASE_URL || env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !KEY) { console.error('Vantar SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (luna-bridge/.env)'); process.exit(1); }
@@ -163,7 +166,7 @@ const flokkTegund = (h) => (/^(Stál|Plast|Loft|Gólf|Gat)/i.test(h) ? 'gat' : /
         flokkur_id: flokkId(r.categoryGroupName), starfsmadur_id: mannId(starfsmNr(r)), tegund: 'qa', stada: r.status === 4 ? 'done' : r.status === 5 ? 'completed' : r.status === 6 ? 'rejected' : r.status === 7 ? 'not_approved' : 'created',
         lysing: r.description || null, framkvaemt_fra: dmy(r.executionFrom), framkvaemt_til: dmy(r.executionTo),
         lokid_at: r.status === 4 && r.senderStatusUpdated && !r.senderStatusUpdated.startsWith('0001') ? r.senderStatusUpdated : null,
-        abyrgd_id: brunaholf, ajour_registration_id: r.id, ajour_serial: Number(r.serialNumber), eytt: false, created_at: r.created || new Date().toISOString(),
+        abyrgd_id: brunaholf, ajour_registration_id: r.id, ajour_serial: Number(r.serialNumber), eytt: OFAN_FRA.has(Number(r.serialNumber)), created_at: r.created || new Date().toISOString(),
         ajour_gogn: { ...g, upd: r.updated || null, myndir: (r.photos || []).map((x) => x.fileId), teikning: r.blueprintName || null } }; });
     n += (await upsert('skr_skraningar', radir, 'ajour_registration_id')).length;
     process.stdout.write(`\r  ${n}/${skr.length} skráningar`);
