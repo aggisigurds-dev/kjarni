@@ -320,7 +320,7 @@ Skráningin er grunnurinn sem uppgjör Brunahólfs hvílir á; ein röng breytin
     eitthvað var skráð OFAN FRÁ sem er ekki talið með („30 eða 32“; hvort það er fjöldi eða rörastærð og hvaða skráningar það eru er ÓMÆLT, spurt).
     Óljósu þrjú (Agnar sama dag, af myndum): #12083 (5H S5) er ÚÐI → udi/há (úði há alls 25). #3129 (5H S1, hvítt yfirmálað): „held … sprinkler eða
     vatnslagnir“ → ÓDÆMT. #9178 (5H S2): „75 stál en mögulega frárennslislagnir því hún er svo neðarlega á vegg og fer líklega niður“ → ÓDÆMT, tekið
-    úr  (647 eftir); skráð í Stál Ø40-50 í Ajour, flokkur óbreyttur. Ber ómáluðu rörin (#1433, 4932, 10671, 11766) eru enn ósvöruð.
+    úr `raud` (647 eftir); skráð í Stál Ø40-50 í Ajour, flokkur óbreyttur. Ber ómáluðu rörin (#1433, 4932, 10671, 11766) eru enn ósvöruð.
     Keyrt á ALLAR 2.841 (allar eiga myndir, 959 MB sótt í scratchpad/stalallt): rautt ≥ 2,7 % hjá 671 (23,6 %). SANNPRÓFUN á nýju slembiúrtaki 12 slíkra
     (fræ 777, ég skoðaði sjálfur): 8 rauð úðarör, 3 EINANGRUÐ rör með rautt rör í bakgrunni (#7371, 8290, 10343), 1 óljós (#9178). Litur einn er því
     EKKI dómur (um 2 af 3 rétt). Þess vegna: `visbendingar.json.raud` (648 númer) er aðeins vísbending í spjaldi („Sjálfvirk litagreining: rautt rör …“),
