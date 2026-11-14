@@ -653,7 +653,7 @@ export default function KortClient() {
        * alltaf teiknaður stakur. Val og færsla vinna áfram á hverri skráningu fyrir sig. */
       const Rs = merkisR(k, k0) * tk, R = Rs / k, D = 2.4 * R, jadar = 3 * R;
       type Hlidar = { nA: number; nB: number; fA: boolean; fB: boolean };   // kláraðar skráningar með þekkta hlið: A = ofan/vinstra megin, B = neðan/hægra megin; f = smellt með hendi
-      type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; ne: number; t: Takn; hs: Hlidar; kl?: string };   // ne = kláraðar skráningar sem eru ÖLL lokunin (gólf, eða gegnumtak í plötu)   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
+      type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; ne: number; t: Takn; hs: Hlidar; kl?: string; lg: boolean; ids: number[] };   // ne = kláraðar skráningar sem eru ÖLL lokunin (gólf, eða gegnumtak í plötu)   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
       const kerfisLitur = (p: Punktur) => { const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined; return v ? VISB_KERFI[v[0]]?.[0] : undefined; };
       const hlidar = (p: Punktur, hs: Hlidar) => { const e = endar.get(p.s.id); if (p.s.stada !== "done" || !e?.megin) return; if (e.megin < 0) { hs.nA++; if (e.fest) hs.fA = true; } else { hs.nB++; if (e.fest) hs.fB = true; } };
       const net = new Map<number, Hop[]>(), hopar: Hop[] = [], stakir: Punktur[] = [], lykill = (gx: number, gy: number) => gx * 100003 + gy;
@@ -663,14 +663,27 @@ export default function KortClient() {
         if (synaAjour && (iSjon || (p.x0 > sx0 && p.x0 < sx1 && p.y0 > sy0 && p.y0 < sy1))) { if (p.faersla) ajLina(p, p.x, p.y); else ajPt.push(p); }   // ófærð: punkturinn er í merkinu sjálfu
         if (!iSjon) continue;
         const gx = Math.floor(p.x / D), gy = Math.floor(p.y / D); let h: Hop | undefined;
-        leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const q of net.get(lykill(ix, iy)) || []) if (q.t.hopur === p.t.hopur && Math.hypot(q.x - p.x, q.y - p.y) < D) { h = q; break leit; }
-        if (h) { h.x = (h.x * h.n + p.x) / (h.n + 1); h.y = (h.y * h.n + p.y) / (h.n + 1); h.n++; if (p.t.r > h.t.r) h.t = p.t; }
-        else { h = { x: p.x, y: p.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false } }; hopar.push(h); const l = lykill(gx, gy), a = net.get(l); if (a) a.push(h); else net.set(l, [h]); }
+        /* Hvað rennur saman í eitt merki (Agnar 14.11.2026: „smá hættulegt með þetta 3x 4x … hvort það séu endar á öðrum eða aðrar stærðir, eða viðgerð“).
+         * Í vinnustækkun (Rs ≥ 7) rennur aðeins SAMA STÆRÐ saman, og lagfæring skráð sem nýtt verk er alltaf sér merki (brotin útlína). „×n“ og talan í
+         * rörahring telja því aðeins stök verk af einni stærð, án lagfæringa. Prófað og hafnað sama dag: að skipta líka sömu stærð í eitt merki per lokun
+         * og raða þeim hlið við hlið; „160 ×5“ varð þá fimm merki í röð, fjarri réttum stað, hvert með tvö hök. Í yfirliti (Rs < 7) rennur sami hópur saman. */
+        const naid = Rs >= 7, lg = naid && p.s.lagf === "A";
+        leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const q of net.get(lykill(ix, iy)) || []) {
+          if (q.t.hopur !== p.t.hopur || Math.hypot(q.x - p.x, q.y - p.y) >= D) continue;
+          if (naid && (lg || q.lg || q.t.heiti !== p.t.heiti)) continue;
+          h = q; break leit;
+        }
+        if (h) { h.x = (h.x * h.n + p.x) / (h.n + 1); h.y = (h.y * h.n + p.y) / (h.n + 1); h.n++; h.ids.push(p.s.id); if (p.t.r > h.t.r) h.t = p.t; }
+        else { h = { x: p.x, y: p.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false }, lg, ids: [p.s.id] }; hopar.push(h); const l = lykill(gx, gy), a = net.get(l); if (a) a.push(h); else net.set(l, [h]); }
         if (p.s.stada === "done") { h.nd++; if (p.t.hopur === "Gólf" || iPlotu(p)) h.ne++; } else h.no++;
-        if (vantarEnda(p)) h.ve++; else { if (samaMegin(p)) h.vs++; if (hinnKlar(p)) h.nh++; }
+        if (vantarEnda(p)) h.ve++; else { if (samaMegin(p)) h.vs++; if (hinnKlar(p)) h.nh++; }   // lagfæring fylgir sömu reglum og áður; hún er aðeins sér merki
         hlidar(p, h.hs); if (!h.kl) h.kl = kerfisLitur(p);
       }
       const vgT = veggir && veggir.lykill === veggjaLykill ? veggir.v : null;
+      /* Loftræstimerki af ÓLÍKRI stærð, eða lagfæring, sem lenda á sama stað og annað merki eru sett hlið við hlið (meðfram veggnum, þvert á hakasætin),
+       * svo hvort sjáist með sínum hökum. Aðeins teikningin hliðrast; skráningarnar eru á sínum stað. */
+      if (Rs >= 7) { const sett: Hop[] = []; for (const h of hopar) { if (h.t.hopur !== "Loft") continue; const lar = !!vgT && veggurLarettur(vgT, h.x, h.y) === true;
+        for (let i = 0; i < 6 && sett.some((q) => Math.hypot(q.x - h.x, q.y - h.y) < 1.9 * R); i++) { if (lar) h.x += 2.1 * R; else h.y += 2.1 * R; } sett.push(h); } }
       const tikk = (x: number, y: number, litur: string) => {
         const t = R; cx.beginPath(); cx.moveTo(x - 0.5 * t, y - 0.1 * t); cx.lineTo(x - 0.12 * t, y + 0.38 * t); cx.lineTo(x + 0.6 * t, y - 0.55 * t);
         cx.lineJoin = "round"; cx.lineCap = "round"; cx.lineWidth = R * 0.44; cx.strokeStyle = "#fff"; cx.stroke(); cx.lineWidth = R * 0.24; cx.strokeStyle = litur; cx.stroke();
@@ -689,7 +702,7 @@ export default function KortClient() {
         cx.font = `800 ${R * 1.25}px system-ui, "Segoe UI", sans-serif`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.lineJoin = "round";
         cx.lineWidth = R * 0.42; cx.strokeStyle = "#fff"; cx.strokeText("?", x, y); cx.fillStyle = "#d97706"; cx.fillText("?", x, y);
       };
-      const merki = (x: number, y: number, t: Takn, nd: number, no: number, ve = 0, vs = 0, nh = 0, hs?: Hlidar, kl?: string, ne = 0) => {
+      const merki = (x: number, y: number, t: Takn, nd: number, no: number, ve = 0, vs = 0, nh = 0, hs?: Hlidar, kl?: string, ne = 0, lg = false) => {
         const loft = t.hopur === "Loft", ror = t.logun === "o" || t.logun === "t", n = nd + no;
         /* Tilbúið = ekkert opið, hinn endann vantar hvergi, og annaðhvort eru bæði stöku verkin kláruð (tvö hök) eða ein skráning er öll lokunin (gólf, plata).
          * Þá fyllist merkið neongrænt; stóri græni tígullinn (parað áætlað gat) er ekki teiknaður lengur í þessum stíl. */
@@ -697,7 +710,7 @@ export default function KortClient() {
         /* Hálfnað er aðeins metið á yfirlitsblaði (þar er hinn endinn leitaður uppi); á stakri Ajour-teikningu er kláruð skráning ófyllt eins og áður. */
         const fyll = tilbuid ? NEON_FYLL : nd === 0 ? RAUTT_FYLL : no > 0 || teikning?.tegund === "yfirlit" ? GULT_FYLL : "rgba(255,255,255,.4)";
         if (t.logun === "x") plus(cx, x, y, R); else if (ror) blom(cx, x, y, R * 0.92); else slod(cx, t.logun, x, y, R * 0.9);
-        cx.fillStyle = fyll; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.4 / k, R * (ror ? 0.2 : 0.26)); cx.strokeStyle = nd ? t.litur : "#dc2626"; cx.stroke();
+        cx.fillStyle = fyll; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.4 / k, R * (ror ? 0.2 : 0.26)); cx.strokeStyle = nd ? t.litur : "#dc2626"; if (lg) cx.setLineDash([R * 0.55, R * 0.35]); cx.stroke(); if (lg) cx.setLineDash([]);   // brotin útlína = lagfæring
         if (no && nd) { cx.beginPath(); cx.arc(x, y, R * 1.7, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }   // rauður hringur aðeins á blönduðu merki (sumt klárað, annað opið); alopið merki er rautt að innan
         if (Rs < 7) return;   // yfirlit: aðeins merkið sjálft
         if (kl) { cx.beginPath(); cx.arc(x - R * 0.98, y + R * 0.98, R * 0.3, 0, 6.2832); cx.fillStyle = kl; cx.fill(); cx.lineWidth = R * 0.1; cx.strokeStyle = "#fff"; cx.stroke(); }   // kerfi samkvæmt myndgreiningu
@@ -726,12 +739,12 @@ export default function KortClient() {
         else if (ve > 0) raudurKross(bx, by); else if (nd >= 2) tikk(bx, by, hl);
         if (loft && n >= 3) texti("×" + n, upp ? x + R * 1.15 : x + R * 0.55, upp ? y + R * 0.1 : y + R * 0.85, R * 0.7, "left");
       };
-      for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs, h.kl, h.ne);
+      for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs, h.kl, h.ne, h.lg);
       for (const p of stakir) {
         const idr = dr?.p?.s.id === p.s.id, px = idr ? dr!.x : p.x, py = idr ? dr!.y : p.y, kl = p.s.stada === "done";
         if (p.faersla || idr) ajLina(p, px, py);   // valin eða dregin skráning: alltaf sýnt hvar hún er í Ajour
         const hs1: Hlidar = { nA: 0, nB: 0, fA: false, fB: false }; if (!idr) hlidar(p, hs1);
-        merki(px, py, p.t, kl ? 1 : 0, kl ? 0 : 1, vantarEnda(p) ? 1 : 0, samaMegin(p) ? 1 : 0, hinnKlar(p) ? 1 : 0, hs1, kerfisLitur(p), kl && (p.t.hopur === "Gólf" || iPlotu(p)) ? 1 : 0);
+        merki(px, py, p.t, kl ? 1 : 0, kl ? 0 : 1, vantarEnda(p) ? 1 : 0, samaMegin(p) ? 1 : 0, hinnKlar(p) ? 1 : 0, hs1, kerfisLitur(p), kl && (p.t.hopur === "Gólf" || iPlotu(p)) ? 1 : 0, p.s.lagf === "A");
       }
     } else if (synaSkr) for (const umf of [1, 0]) for (const p of syndir) {
       const kl = p.s.stada === "done"; if ((kl ? 1 : 0) !== umf) continue;
@@ -1069,7 +1082,7 @@ export default function KortClient() {
           <div className="gk-hnappar">{([["allt", "Allt"], ["done", "Tilbúin"], ["opid", "Í vinnslu"], ["eftir", "Eftir"]] as const).map((x) => <button key={x[0]} type="button" className={stada === x[0] ? "on" : ""} onClick={() => setStada(x[0])}>{x[0] === "eftir" && <i className="gk-raudur" />}{x[1]} <small>{num(stoduTal[x[0]])}</small></button>)}</div>
           {deildir.length > 1 && <div className="gk-hnappar">{deildir.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}</div>}
           <div className="gk-takn">{taknTal.map(({ t, n }) => <button key={t.heiti} type="button" className={afTakn[t.heiti] ? "af" : ""} aria-pressed={!afTakn[t.heiti]} onClick={() => setAfTakn((x) => ({ ...x, [t.heiti]: !x[t.heiti] }))}>{miro ? <MerkiSvg t={t} /> : <TaknSvg t={t} />}{t.heiti} <small>{num(n)}</small></button>)}</div>
-          {miro && !snerti && <p className="gk-smatt">Útlína í lit stærðar er skráning. ✓ er fyrir hvert klárað stakt verk. Liturinn inni í merkinu segir stöðuna: grænt er tilbúið (bæði verkin kláruð), gult er hálfnað (klárað öðrum megin) og rautt er opið. Rauður punktur er eftir, óskráð.</p>}
+          {miro && !snerti && <p className="gk-smatt">Útlína í lit stærðar er skráning. ✓ er fyrir hvert klárað stakt verk. Liturinn inni í merkinu segir stöðuna: grænt er tilbúið (bæði verkin kláruð), gult er hálfnað (klárað öðrum megin) og rautt er opið. Rauður punktur er eftir, óskráð. Í einu merki er aðeins ein stærð; brotin útlína er lagfæring.</p>}
           <label className="gk-rod">Starfsmaður<select value={madur} onChange={(e) => setMadur(e.target.value)}><option value="">Allir</option>{menn.filter((m) => skr.some((s) => s.starfsmadur_id === m.id)).map((m) => <option key={m.id} value={m.id}>{m.nafn || `Starfsmaður ${m.numer}`}</option>)}</select></label>
           <div className="gk-rod gk-tvo"><label>Frá<select value={fra} onChange={(e) => setFra(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label><label>Til<select value={til} onChange={(e) => setTil(e.target.value)}><option value="">—</option>{manudir.map((m) => <option key={m} value={m}>{m.slice(5)}.{m.slice(0, 4)}</option>)}</select></label></div>
           <label className="gk-rod">Lagfæringar<select value={lagf} onChange={(e) => setLagf(e.target.value as typeof lagf)}><option value="allt">Sýna allt</option><option value="lagf">Aðeins lagfæringar</option><option value="A">Skráðar sem nýtt verk</option><option value="B">Aðeins athugasemd</option><option value="?">Óflokkaðar</option></select></label>
@@ -1204,6 +1217,7 @@ export default function KortClient() {
             <span><i className="hn" />Hálfnað</span>
             <span><i className="op" />Opið</span>
             <span><i className="ef" />Eftir, óskráð</span>
+            <span><i className="lf" />Lagfæring</span>
             {(endaVantar > 0 || anEnda) && <button type="button" className={anEnda ? "on" : ""} aria-pressed={anEnda} onClick={() => setAnEnda((x) => !x)}><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3 3L11 11M11 3L3 11" stroke="#dc2626" strokeWidth="2.6" strokeLinecap="round" fill="none" /></svg>Hinn endann vantar ({num(endaVantar)})</button>}
             {(samaTal > 0 || samaSia) && <button type="button" className={`sama${samaSia ? " on" : ""}`} aria-pressed={samaSia} onClick={() => setSamaSia((x) => !x)}><b aria-hidden="true">?</b>Sömu megin ({num(samaTal)})</button>}
             {teikning.tegund === "yfirlit" && <button type="button" className={`ajour${synaAjour ? " on" : ""}`} aria-pressed={synaAjour} onClick={() => setSynaAjour((x) => !x)}><i aria-hidden="true" />Ajour-staðir</button>}
