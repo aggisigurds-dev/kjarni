@@ -39,7 +39,7 @@ export function VeggjaYfirlit() {
     <section
       data-veggja-yfirlit
       aria-label="Samantekt veggjagreiningar"
-      className="shrink-0 border-b border-white/8 bg-[#171a29] text-[11.5px] text-stone-200"
+      className="tp-ui-scale shrink-0 border-b border-white/8 bg-[#171a29] text-[11.5px] text-stone-200"
     >
       <button
         type="button"
