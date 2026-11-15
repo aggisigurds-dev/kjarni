@@ -6,6 +6,10 @@ import "./kort.css";
 export const metadata: Metadata = {
   title: "Apex Ajour — gatakort",
   description: "Gatakort: skráningar á brunayfirlitsteikningu með lögum (fagteikningar, áætluð göt) og síum eftir deild, tegund, stöðu, starfsmanni, tímabili og lagfæringum.",
+  // Flýtileið á heimaskjá / skjáborð með Apex-tákninu, hvítu útgáfu lógósins („Bæta á heimaskjá" eða „Setja upp forrit" í vafranum), Agnar 15.11.2026
+  manifest: "/apex/kort.webmanifest",
+  appleWebApp: { capable: true, title: "Apex Ajour", statusBarStyle: "black" },
+  icons: { icon: [{ url: "/apex/icon-192.png", sizes: "192x192", type: "image/png" }], apple: [{ url: "/apex/apple-touch-icon.png", sizes: "180x180" }] },
 };
 
 /* Kortið hefur eigin stækkun (klípa, + og −). Stækkun síðunnar sjálfrar er læst: annars stækkar klípa á hnappi eða haus alla síðuna
