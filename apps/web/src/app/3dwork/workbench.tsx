@@ -243,6 +243,7 @@ import { SeamBrushBar, type SeamStrength, type SeamTool } from './seam-brush-bar
 import { RevivePanel } from './revive';
 import { ManipBar, type MoveAxis, type RotateAxis } from './manip-bar';
 import { PaintBar } from './paint-bar';
+import { AddStockDialog } from './add-stock-dialog';
 import { AddVolumeBar } from './add-volume-bar';
 import { Ribbon, type RibbonTabDef } from './ribbon';
 import { Menu, MenuBar, MenuCheckItem, MenuItem, MenuLabel, MenuScroll, MenuSeparator } from './menu';
@@ -259,6 +260,7 @@ import { HammerDialog } from './hammer-dialog';
 import { MotionPanel } from './motion-panel';
 import { DEFAULT_HAMMER, hammerStrike, springRate, type HammerInputs, type SpringCoil } from '@/lib/3dwork/hammer';
 import { cyclePhases } from '@/lib/3dwork/motion';
+import { IRON_WOLF } from '@/lib/3dwork/markers';
 import { muzzleResult, DEFAULT_SHOT, type ShotParams } from '@/lib/3dwork/muzzle';
 import { lastSaveCollection, rememberSaveCollection, SaveTargetFields, saveTargetReady, type SaveTarget } from './library-target';
 import { addFavorite, updateFavoriteMesh } from '@/lib/3dwork/favorites';
@@ -281,6 +283,8 @@ const BORE_SEARCH_MAX_TRIANGLES = 3_000_000;
 
 /** Remembers the 3D Builder view between visits. */
 const BUILDER_VIEW_KEY = 'kjarni3d_builder_view';
+/** Remembers Sticky (every click adds to the selection) between visits. */
+const STICKY_SELECT_KEY = 'kjarni3d_sticky_select';
 
 const newPartId = () =>
   `part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -410,6 +414,7 @@ export function Workbench({
   const [showSlice, setShowSlice] = useState(false);
   const [showBore, setShowBore] = useState(false);
   const [showBend, setShowBend] = useState(false);
+  const [showAddStock, setShowAddStock] = useState(false);
   const [showRevive, setShowRevive] = useState(false);
   const [showSubtract, setShowSubtract] = useState(false);
   /**
@@ -464,26 +469,12 @@ export function Workbench({
   const [motionCoil, setMotionCoil] = useState<SpringCoil>({ wireMm: 1.6, meanDiameterMm: 12, activeCoils: 18 });
   const [motionClash, setMotionClash] = useState<string[]>([]);
   const [motionShot, setMotionShot] = useState<ShotParams>(DEFAULT_SHOT);
-  // One tap seeds the test-run with Aggi's Iron wolf numbers (⌀28 body, 274 g
-  // hammer, ⌀15/1,5 spring, 70 mm stroke, CO2 57 bar, ⌀6 valve seat, ⌀25
-  // blowback face), overriding whatever the sliders (or localStorage) held.
+  // One tap seeds the test-run with Aggi's Iron wolf numbers, overriding
+  // whatever the sliders (or localStorage) held.
   const loadIronWolf = useCallback(() => {
-    setMotionInput({
-      hammerMassG: 274,
-      springRateNmm: 0.85,
-      freeLengthMm: 140,
-      strikeLengthMm: 120,
-      cockedLengthMm: 50,
-      dragN: 4,
-      pressureBar: 57,
-      valveSealMm: 6,
-      valvePreloadN: 15,
-      valveLiftMm: 2.5,
-      contactMs: 1,
-      hammerFaceMm: 25,
-    });
-    setMotionCoil({ wireMm: 1.5, meanDiameterMm: 13.5, activeCoils: 25 });
-    setMotionShot({ boreMm: 17.3, barrelMm: 130, effPct: 12, throatMm: 6, ballG: 3.2, airThrough: true });
+    setMotionInput(IRON_WOLF.input);
+    setMotionCoil(IRON_WOLF.coil);
+    setMotionShot(IRON_WOLF.shot);
   }, []);
   const [subtractSpec, setSubtractSpec] = useState({
     clearanceMm: 0.3,
@@ -2401,6 +2392,24 @@ export function Workbench({
       /* storage blocked: the view just is not remembered */
     }
   }, [builderView]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(STICKY_SELECT_KEY) === '1') setMultiSelect(true);
+    } catch {
+      /* storage blocked: Sticky starts off */
+    }
+  }, []);
+
+  const toggleMultiSelect = useCallback(() => {
+    const next = !multiSelect;
+    setMultiSelect(next);
+    try {
+      localStorage.setItem(STICKY_SELECT_KEY, next ? '1' : '0');
+    } catch {
+      /* storage blocked: Sticky just is not remembered */
+    }
+  }, [multiSelect]);
 
   // Lay every drawn part onto one vertical wall — a shared Z, the middle of
   // where they already are — so pipes can be lined up coaxially from the front
@@ -4961,8 +4970,9 @@ export function Workbench({
               rotation: { x: 0, y: 0, z: 0 },
               scale: { x: 1, y: 1, z: 1 },
             },
-            // Placed by hand: the same spot on the plain bench and in Free.
-            ...(transform ? { freePos: { ...transform.position } } : {}),
+            // Placed by hand: the same spot on the plain bench and in Free. With no
+            // place given it appears ~20 cm up like the other new shapes, not in the floor.
+            freePos: transform ? { ...transform.position } : { x: 0, y: 200, z: 0 },
             triangles: Math.floor(soup.length / 9),
             materialId: 'steel',
             notes: '',
@@ -5905,6 +5915,7 @@ export function Workbench({
           tools: [
             { icon: Cylinder, label: 'Pipe ⌀28', tone: 'primary', big: true, disabled: busyB, onClick: () => addPipeThrough(28, 1.5) },
             { icon: Cylinder, label: 'Pipe ⌀20', tone: 'primary', big: true, disabled: busyB, onClick: () => addPipeThrough(20, 2) },
+            { icon: Ruler, label: 'By size', disabled: busyB, onClick: () => setShowAddStock(true) },
           ],
         },
         {
@@ -5936,7 +5947,7 @@ export function Workbench({
             { icon: MousePointer2, label: 'Select all', onClick: selectAllParts },
             { icon: SquareDashed, label: 'Deselect', onClick: deselectAll },
             { icon: Layers, label: 'Invert', onClick: invertPicked },
-            { icon: Pin, label: 'Sticky', on: multiSelect, onClick: () => setMultiSelect((v) => !v) },
+            { icon: Pin, label: 'Sticky', on: multiSelect, onClick: toggleMultiSelect },
           ],
         },
         {
@@ -7447,7 +7458,7 @@ export function Workbench({
               setShot={(patch) => setMotionShot((cur) => ({ ...cur, ...patch }))}
               onOpenHammer={() => setShowHammer(true)}
               onLoadMarker={loadIronWolf}
-              markerName="Iron wolf"
+              markerName={IRON_WOLF.name}
             />
           )}
 
@@ -7563,13 +7574,14 @@ export function Workbench({
 
           {project.parts.length > 0 && focusId && !painting && !seamBrush && !moveModeId && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-full border border-emerald-400 bg-white/95 px-3 py-2 text-center text-[0.7rem] font-medium text-emerald-800 shadow-sm">
-              Focus · {project.parts.find((part) => part.id === focusId)?.name ?? 'part'} · View →
-              uncheck Focus to show the rest
+              Focus · {project.parts.find((part) => part.id === focusId)?.name ?? 'part'} · Object →
+              Isolate again to show the rest
             </div>
           )}
 
+          {/* Both hints sit under the floating Prufukeyrsla button, which has the top centre. */}
           {nextStep && !moveModeId && !painting && !focusId ? (
-            <div className="absolute top-3 left-1/2 z-10 flex max-w-[min(100%-8rem,34rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full border border-emerald-300 bg-white/95 px-3 py-1.5 text-[0.72rem] font-medium text-slate-700 shadow-sm">
+            <div className="absolute top-14 left-1/2 z-10 flex max-w-[min(100%-8rem,34rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full border border-emerald-300 bg-white/95 px-3 py-1.5 text-[0.72rem] font-medium text-slate-700 shadow-sm">
               <span>{nextStep.text}</span>
               {nextStep.actions.map((action) => (
                 <button
@@ -7590,7 +7602,7 @@ export function Workbench({
             !painting &&
             !seamBrush &&
             !focusId && (
-              <div className="pointer-events-none absolute top-3 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
+              <div className="pointer-events-none absolute top-14 left-1/2 max-w-[min(100%-8rem,28rem)] -translate-x-1/2 rounded-full border border-slate-300 bg-white/90 px-3 py-2 text-center text-[0.7rem] font-medium text-slate-500 shadow-sm">
                 {builderView
                   ? 'Drag a picked part to move every picked part · Ctrl-click adds or removes one'
                   : 'Double-tap a part to move or rotate it · drags snap to neighbours'}
@@ -7603,7 +7615,7 @@ export function Workbench({
               picked={pickedOnTable.length}
               total={drawnIds.length}
               sticky={multiSelect}
-              onSticky={() => setMultiSelect((value) => !value)}
+              onSticky={toggleMultiSelect}
               onSelectAll={selectAllParts}
               onDeselectAll={deselectAll}
               onInvert={invertPicked}
@@ -7638,8 +7650,8 @@ export function Workbench({
               <Upload className="h-8 w-8 text-slate-700" />
               <p className="text-sm font-bold text-slate-500">Drop your STL or 3MF files here</p>
               <p className="max-w-xs text-[0.75rem] text-slate-400">
-                Or pick a saved build under Projects. Then + ⌀28 puts a pipe down the bore, and One
-                piece makes it one printable part.
+                Or pick a saved build under Projects. Then Insert → Pipe ⌀28 puts a pipe down the
+                bore, and One piece makes it one printable part.
               </p>
             </div>
           )}
@@ -7819,9 +7831,10 @@ export function Workbench({
       )}
 
       {showSlice && (
-        // No dark backdrop, and docked low: the plane it is about to cut shows
-        // on the table behind it, and the view still turns while this is open.
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-3">
+        // No dark backdrop, and docked low — to the right on a wide screen, where
+        // it sat on top of the part: the plane it is about to cut shows on the
+        // table beside it, and the view still turns while this is open.
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-3 md:justify-end">
           <div
             className={`${PANEL} pointer-events-auto max-h-[85dvh] w-full max-w-md overflow-y-auto p-4 shadow-xl`}
           >
@@ -8260,6 +8273,16 @@ export function Workbench({
             </div>
           </div>
         </div>
+      )}
+
+      {showAddStock && (
+        <AddStockDialog
+          onAdd={(spec) => {
+            addHardware(spec);
+            setShowAddStock(false);
+          }}
+          onClose={() => setShowAddStock(false)}
+        />
       )}
 
       {showBend && (

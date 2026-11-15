@@ -84,7 +84,28 @@ export function findConcaveEdges(soup: Float32Array, minDeg = 40, maxDeg = 135):
   return out;
 }
 
-/** Concave edges whose midpoint is within `radiusMm` of `point`. */
+/** How far `p` is from the segment a–b. */
+function distanceToSegment(p: Vec3, a: Vec3, b: Vec3): number {
+  const ab = sub(b, a);
+  const span = dot(ab, ab);
+  const t = span > 0 ? Math.max(0, Math.min(1, dot(sub(p, a), ab) / span)) : 0;
+  return len(sub(p, addv(a, mul(ab, t))));
+}
+
+/** Edges within this of each other in direction belong to one straight corner (cos 3°). */
+const STRAIGHT_COS = 0.9986;
+/** Where two corners meet, an edge further off the nearest one's line than this is the other corner (cos 40°). */
+const SAME_CORNER_COS = 0.766;
+
+/**
+ * The concave edges of the corner at `point`: those passing within `radiusMm`
+ * of it. Measured to the edge itself, not its midpoint — a flat-walled part has
+ * one long edge down a corner, and a tap anywhere along it must find it.
+ *
+ * One corner at a time: from the nearest edge, the edges joined to it end to
+ * end that run its way. The far side of a narrow slot is another corner, and so
+ * is the one that turns away where two meet.
+ */
 export function concaveEdgesNear(
   soup: Float32Array,
   point: Vec3,
@@ -92,10 +113,31 @@ export function concaveEdgesNear(
   minDeg = 40,
   maxDeg = 135
 ): ConcaveEdge[] {
-  return findConcaveEdges(soup, minDeg, maxDeg).filter((e) => {
-    const mid = mul(addv(e.a, e.b), 0.5);
-    return len(sub(mid, point)) <= radiusMm;
-  });
+  const near = findConcaveEdges(soup, minDeg, maxDeg)
+    .map((edge) => ({ edge, distance: distanceToSegment(point, edge.a, edge.b) }))
+    .filter((hit) => hit.distance <= radiusMm)
+    .sort((p, q) => p.distance - q.distance);
+  if (near.length === 0) return [];
+
+  const along = nrm(sub(near[0].edge.b, near[0].edge.a));
+  const ends = (edge: ConcaveEdge) => [vkey(...edge.a), vkey(...edge.b)];
+  const corner = [near[0].edge];
+  const reached = new Set(ends(near[0].edge));
+  const rest = near
+    .slice(1)
+    .map((hit) => hit.edge)
+    .filter((edge) => Math.abs(dot(nrm(sub(edge.b, edge.a)), along)) >= SAME_CORNER_COS);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (let i = rest.length - 1; i >= 0; i--) {
+      if (!ends(rest[i]).some((key) => reached.has(key))) continue;
+      for (const key of ends(rest[i])) reached.add(key);
+      corner.push(rest[i]);
+      rest.splice(i, 1);
+      grew = true;
+    }
+  }
+  return corner;
 }
 
 /**
@@ -115,8 +157,12 @@ export function buildCornerWedge(edges: ConcaveEdge[], sizeMm: number): Float32A
     let d = nrm(sub(e.b, e.a));
     if (dot(d, ref) < 0) d = mul(d, -1);
     dir = addv(dir, d);
-    N1 = addv(N1, e.n1);
-    N2 = addv(N2, e.n2);
+    // Which face comes first depends on the order the triangles arrived in. Pair
+    // each edge's faces with the first edge's before averaging, or the two blur.
+    const swapped =
+      dot(e.n1, edges[0].n1) + dot(e.n2, edges[0].n2) < dot(e.n1, edges[0].n2) + dot(e.n2, edges[0].n1);
+    N1 = addv(N1, swapped ? e.n2 : e.n1);
+    N2 = addv(N2, swapped ? e.n1 : e.n2);
     ctr = addv(ctr, mul(addv(e.a, e.b), 0.5));
   }
   const k = edges.length;
@@ -126,17 +172,22 @@ export function buildCornerWedge(edges: ConcaveEdge[], sizeMm: number): Float32A
   ctr = mul(ctr, 1 / k);
   if (len(dir) < 1e-6) return new Float32Array(0);
 
-  // Span the wedge over the cluster's extent along the edge direction.
+  // Span the wedge along the corner. A straight corner is filled end to end, so
+  // one long edge gets a wedge its own length. A curved one keeps to the middles
+  // of its edges, a little past: a straight wedge strays from an arc at its ends.
+  const straight = edges.every((e) => Math.abs(dot(nrm(sub(e.b, e.a)), dir)) >= STRAIGHT_COS);
   let lo = Infinity;
   let hi = -Infinity;
   for (const e of edges) {
-    const m = mul(addv(e.a, e.b), 0.5);
-    const t = dot(sub(m, ctr), dir);
-    if (t < lo) lo = t;
-    if (t > hi) hi = t;
+    for (const end of straight ? [e.a, e.b] : [mul(addv(e.a, e.b), 0.5)]) {
+      const t = dot(sub(end, ctr), dir);
+      if (t < lo) lo = t;
+      if (t > hi) hi = t;
+    }
   }
-  const A = addv(ctr, mul(dir, lo - 0.3));
-  const B = addv(ctr, mul(dir, hi + 0.3));
+  const past = straight ? 0 : 0.3;
+  const A = addv(ctr, mul(dir, lo - past));
+  const B = addv(ctr, mul(dir, hi + past));
 
   // Tangents into each face, away from the corner.
   let u1 = cross(dir, n1);
