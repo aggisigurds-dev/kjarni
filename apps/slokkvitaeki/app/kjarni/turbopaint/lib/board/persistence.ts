@@ -45,6 +45,35 @@ let lastContentJson = "";
 let lastUpdatedAt = "";
 let dirtySincePush = false;
 
+// Eyðing milli tækja. Borði er mjúk-eytt (deleted=true) en pushBoard skrifar deleted=false — án varnar lifnaði eytt borð
+// við í hvert sinn sem ANNAÐ tæki opnaði sitt eintak (t.d. síðasta opna borðið við ræsingu). `eyttISkyi` man að röð opna
+// borðsins er eydd í skýinu og hvaða útgáfu hún bar þá; `ovisstUmSky` er borð sem var opnað án þess að skýið svaraði
+// (án nets) — fyrsta ýtingin spyr þá fyrst. Hvort tveggja er lyklað á auðkenni, svo ný borð þurfa enga núllstillingu.
+let eyttISkyi: { id: string; kl: string } | null = null;
+let ovisstUmSky: string | null = null;
+
+/** Er tímastimpill `a` ÖRUGGLEGA nýrri en `b`? Tölulegur samanburður: staðbundin skjöl bera `…Z` en skýið skilar
+ * `…+00:00` með styttum sekúndubrotum, svo strengjasamanburður er ónothæfur þvert á þau. Vanti annan eða sé hann
+ * óþáttanlegur er svarið nei. */
+export function erNyrra(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ta = a ? Date.parse(a) : NaN;
+  const tb = b ? Date.parse(b) : NaN;
+  return Number.isFinite(ta) && Number.isFinite(tb) && ta > tb;
+}
+
+/** Er `a` ÖRUGGLEGA ekki nýrri en `b` (báðir þekktir og a ≤ b)? Ekki það sama og !erNyrra: óvissa er nei í báðum. */
+function erEkkiNyrra(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ta = a ? Date.parse(a) : NaN;
+  const tb = b ? Date.parse(b) : NaN;
+  return Number.isFinite(ta) && Number.isFinite(tb) && ta <= tb;
+}
+
+function bita<T>(a: T[], n: number): T[][] {
+  const ut: T[][] = [];
+  for (let i = 0; i < a.length; i += n) ut.push(a.slice(i, i + n));
+  return ut;
+}
+
 /** Ský-lestur má ALDREI halda hydration í gíslingu: fetch hefur ekkert
  * sjálfgefið tímamark, svo hangandi net (símkerfi á flakki) myndi annars
  * frysta persist-áskriftina — og allt sem gert er á meðan vistast hvergi. */
@@ -203,43 +232,72 @@ async function ensureIdsLocal(ids: string[]): Promise<string[]> {
   return vantar;
 }
 
-/** Nær í doc borðsins: staðbundið fyrst, annars úr skýinu (og skrifar það þá í IndexedDB svo borðið opnist án nets). */
-async function naBordDoc(id: string): Promise<BoardDocument | null> {
-  const local = await get<BoardDocument>(boardKey(id));
-  if (local) return local;
+/** Nær í doc borðsins til að geyma það án nets — og tryggir að staðbundna eintakið sé NÝJASTA útgáfan. Áður var
+ * staðbundna eintakinu skilað óséðu ef það var til, svo „smelltu til að uppfæra" uppfærði aldrei skjalið: tæki sem átti
+ * eldra eintak sýndi ✓ en opnaði gömlu útgáfuna án nets. Reglan er sú sama og í openBoardId (LWW): skýið vinnur aðeins
+ * ef það er nýrra, svo óýtt vinna á þessu tæki tapast aldrei. Án nets: staðbundna eintakið eins og það er.
+ * `uppfaert` = eldra eintaki var skipt út fyrir nýrri útgáfu úr skýinu. */
+async function naBordDoc(id: string): Promise<{ doc: BoardDocument | null; uppfaert: boolean }> {
+  if (id === currentBoardId) {
+    // Opna borðið: minnið er sannleikurinn hér. pullIfNewer dregur nýrri útgáfu úr skýinu (nema óýtt vinna bíði).
+    const fyrir = lastUpdatedAt;
+    await pullIfNewer();
+    let doc = (await get<BoardDocument>(boardKey(id))) ?? null;
+    if (!doc) {
+      await persistBoard();
+      doc = (await get<BoardDocument>(boardKey(id))) ?? null;
+    }
+    return { doc, uppfaert: lastUpdatedAt !== fyrir };
+  }
+  const local = (await get<BoardDocument>(boardKey(id))) ?? null;
   const sb = getSupabase();
-  if (!sb) return null;
+  if (!sb) return { doc: local, uppfaert: false };
   try {
-    const query = sb.from("turbopaint_boards").select("doc, deleted").eq("id", id);
+    if (local?.updatedAt) {
+      // Ódýrt fyrst — aðeins tímastimpill raðarinnar; skjalið sjálft er aðeins sótt ef skýið á nýrri útgáfu
+      const stutt = sb.from("turbopaint_boards").select("updated_at, deleted").eq("id", id);
+      const sig = timeoutSignal(6000);
+      const { data } = await (sig ? stutt.abortSignal(sig) : stutt).maybeSingle();
+      if (!data || data.deleted || !erNyrra(data.updated_at as string, local.updatedAt)) return { doc: local, uppfaert: false };
+    }
+    const query = sb.from("turbopaint_boards").select("doc, updated_at, deleted").eq("id", id);
     const sig = timeoutSignal(10000);
     const { data } = await (sig ? query.abortSignal(sig) : query).maybeSingle();
-    if (!data || data.deleted) return null;
+    if (!data || data.deleted) return { doc: local, uppfaert: false };
     const doc = data.doc as BoardDocument;
+    const skyKl = doc.updatedAt ?? (data.updated_at as string | undefined) ?? "";
+    if (local?.updatedAt && !erNyrra(skyKl, local.updatedAt)) return { doc: local, uppfaert: false };
     await set(boardKey(id), doc);
-    return doc;
+    return { doc, uppfaert: !!local };
   } catch {
-    return null;
+    return { doc: local, uppfaert: false };
   }
 }
 
 /** Gerir borð aðgengilegt án nets: sækir doc + allar myndir (líka frumritið) í IndexedDB og man borðið í staðbundna
- *  listanum. `ok` er satt þegar ALLT náðist; `vantar` er fjöldi mynda sem náðust ekki (-1 ef borðið sjálft náðist ekki). */
-export async function g_oraBordOfflineTilbuid(id: string): Promise<{ ok: boolean; vantar: number }> {
-  const doc = await naBordDoc(id);
-  if (!doc) return { ok: false, vantar: -1 };
+ *  listanum. `ok` er satt þegar ALLT náðist; `vantar` er fjöldi mynda sem náðust ekki (-1 ef borðið sjálft náðist ekki);
+ *  `uppfaert` er satt ef tækið átti eldra eintak sem var skipt út fyrir nýrri útgáfu úr skýinu. */
+export async function g_oraBordOfflineTilbuid(id: string): Promise<{ ok: boolean; vantar: number; uppfaert: boolean }> {
+  const { doc, uppfaert } = await naBordDoc(id);
+  if (!doc) return { ok: false, vantar: -1, uppfaert: false };
   await rememberBoard(
     { id, name: doc.name || "TurboPaint", updatedAt: doc.updatedAt ?? new Date().toISOString() },
     false
   );
   const vantar = await ensureIdsLocal(bordAssetIds(doc));
-  return { ok: vantar.length === 0, vantar: vantar.length };
+  return { ok: vantar.length === 0, vantar: vantar.length, uppfaert };
 }
 
-/** Er borðið tilbúið án nets? Hreint staðbundið (ekkert net): doc í IndexedDB og hvert mynd-id til staðar. */
-export async function erBordOfflineTilbuid(id: string): Promise<boolean> {
+/** Staða borðs án nets — hreint staðbundið (ekkert net):
+ *  "ja"    = doc og allar myndir geymdar OG eintakið er nýjasta útgáfan sem kallarinn veit um (`nyjastaKl`: updatedAt
+ *            borðsins í borðalistanum, sem er sameinaður við skýið);
+ *  "eldri" = allt geymt, en skýið á nýrri útgáfu — án nets opnaðist sú eldri (✓ væri þá ósatt);
+ *  "nei"   = doc eða myndir vantar. */
+export async function offlineStadaBords(id: string, nyjastaKl?: string): Promise<"nei" | "ja" | "eldri"> {
   const doc = await get<BoardDocument>(boardKey(id));
-  if (!doc) return false;
-  return erAllarMyndirGeymdar(bordAssetIds(doc));
+  if (!doc) return "nei";
+  if (!(await erAllarMyndirGeymdar(bordAssetIds(doc)))) return "nei";
+  return erNyrra(nyjastaKl, doc.updatedAt) ? "eldri" : "ja";
 }
 
 /** Er eignin þegar í fötunni? HEAD á opinberu slóðina (engin bæti sótt). Föst auðkenni (eignalykill.ts) — sama teikning
@@ -298,10 +356,29 @@ async function pushBoard() {
   pushInFlight = true;
   useBoardStore.getState().setSyncState("saving");
   try {
+    const id = currentBoardId;
     const doc = docFromState();
+    // Upsert skrifar deleted=false — borð sem var eytt á öðru tæki myndi lifna við á ÖLLUM tækjum. Var borðið opnað án
+    // svars frá skýinu (án nets) er spurt fyrst; sé því eytt þar er aðeins ýtt ef hér er vinna NÝRRI en eydda röðin.
+    if (ovisstUmSky === id) {
+      const q = sb.from("turbopaint_boards").select("deleted, updated_at").eq("id", id);
+      const sig0 = timeoutSignal(6000);
+      const { data: rod, error: villa } = await (sig0 ? q.abortSignal(sig0) : q).maybeSingle();
+      if (villa) throw villa;
+      if (rod?.deleted) eyttISkyi = { id, kl: (rod.updated_at as string) ?? "" };
+      ovisstUmSky = null;
+    }
+    if (eyttISkyi?.id === id) {
+      if (!erNyrra(doc.updatedAt, eyttISkyi.kl)) {
+        dirtySincePush = false;
+        useBoardStore.getState().setSyncState("idle");
+        return;
+      }
+      eyttISkyi = null; // ný vinna eftir eyðinguna: borðið lifnar við MEÐ henni — engin vinna glatast
+    }
     await pushAssets(doc);
     const upsert = sb.from("turbopaint_boards").upsert({
-      id: currentBoardId,
+      id,
       name: doc.name,
       doc,
       deleted: false,
@@ -393,7 +470,12 @@ async function openBoardId(id: string, fallbackDoc?: BoardDocument) {
         .select("doc, updated_at, deleted")
         .eq("id", id);
       const sig = timeoutSignal(6000);
-      const { data } = await (sig ? query.abortSignal(sig) : query).maybeSingle();
+      const { data, error } = await (sig ? query.abortSignal(sig) : query).maybeSingle();
+      if (error) throw error;
+      // Staða raðarinnar í skýinu — pushBoard les hana svo eytt borð lifni ekki við (sjá eyttISkyi)
+      if (ovisstUmSky === id) ovisstUmSky = null;
+      if (data?.deleted) eyttISkyi = { id, kl: (data.updated_at as string) ?? "" };
+      else if (eyttISkyi?.id === id) eyttISkyi = null;
       const remoteDoc = (data && !data.deleted ? (data.doc as BoardDocument) : null) ?? null;
       const remoteTime = remoteDoc?.updatedAt ?? (data?.updated_at as string | undefined) ?? "";
       if (remoteDoc && (!local || remoteTime > (local.updatedAt ?? ""))) {
@@ -404,6 +486,7 @@ async function openBoardId(id: string, fallbackDoc?: BoardDocument) {
         useBoardStore.getState().setSyncState("synced");
       }
     } catch {
+      ovisstUmSky = id; // skýið svaraði ekki — fyrsta ýtingin spyr hvort borðinu hafi verið eytt
       useBoardStore.getState().setSyncState("error");
     }
   }
@@ -444,6 +527,12 @@ export async function loadBoard() {
 
   if (index.currentId) {
     await openBoardId(index.currentId);
+    if (eyttAnnarsStadar(index.currentId)) {
+      // Síðasta borðið á þessu tæki var eytt á öðru tæki (og hér er ekkert nýrra) — opna næsta í stað þess að sýna það
+      await fjarlaegjaOgOpnaNaesta(index.currentId);
+      useBoardStore.getState().setHydrated(true);
+      return;
+    }
     if (useBoardStore.getState().objects.length || (await get(boardKey(index.currentId)))) {
       useBoardStore.getState().setHydrated(true);
       return;
@@ -554,17 +643,58 @@ export async function listBoardsLocal(): Promise<BoardListEntry[]> {
   return [...index.boards].sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
 }
 
-/** All boards: local index merged with the cloud list, newest first. */
+/** All boards: local index merged with the cloud list, newest first. Borð sem var eytt á ÖÐRU tæki hverfur líka héðan
+ * (hreinsaEyddStadbundid) — annars sæist það áfram í listunum og lifnaði við á öllum tækjum ef það væri opnað. */
 export async function listBoards(): Promise<BoardListEntry[]> {
   const index = await readIndex();
+  const remote = await fetchRemoteBoards();
   const merged = new Map<string, BoardListEntry>();
   for (const b of index.boards) merged.set(b.id, b);
-  for (const entry of (await fetchRemoteBoards()).rows) {
+  for (const entry of remote.rows) {
     const existing = merged.get(entry.id);
     if (!existing || entry.updatedAt > existing.updatedAt) merged.set(entry.id, entry);
     else merged.set(entry.id, { ...existing, remote: true });
   }
+  if (remote.ok) {
+    const iSkyi = new Set(remote.rows.map((r) => r.id));
+    for (const id of await hreinsaEyddStadbundid(index.boards.filter((b) => !iSkyi.has(b.id)))) merged.delete(id);
+  }
   return [...merged.values()].sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+}
+
+/** Staðbundin borð sem eru EYDD í skýinu (deleted=true, eytt á öðru tæki): eintakið og listafærslan eru fjarlægð ef þau
+ * geyma ekkert nýrra en eydda röðin. Opna borðið er látið vera (pushBoard ver það) og borð með óýttri vinnu líka.
+ * Svari skýið ekki er engu breytt. Skilar auðkennum þess sem var fjarlægt. */
+async function hreinsaEyddStadbundid(stadbundin: BoardListEntry[]): Promise<string[]> {
+  const sb = getSupabase();
+  const kandidatar = stadbundin.filter((b) => b.id !== currentBoardId);
+  if (!sb || !kandidatar.length) return [];
+  const eydd = new Map<string, string>();
+  try {
+    for (const hluti of bita(kandidatar.map((b) => b.id), 50)) {
+      const q = sb.from("turbopaint_boards").select("id, updated_at").eq("deleted", true).in("id", hluti);
+      const sig = timeoutSignal(4000);
+      const { data, error } = await (sig ? q.abortSignal(sig) : q);
+      if (error) return [];
+      for (const r of data ?? []) eydd.set(String(r.id), (r.updated_at as string) ?? "");
+    }
+  } catch {
+    return [];
+  }
+  const burt: string[] = [];
+  for (const b of kandidatar) {
+    const kl = eydd.get(b.id);
+    if (kl === undefined || !erEkkiNyrra(b.updatedAt, kl)) continue;
+    const doc = await get<BoardDocument>(boardKey(b.id));
+    if (doc && !erEkkiNyrra(doc.updatedAt, kl)) continue; // óýtt vinna í skjalinu sjálfu → halda
+    burt.push(b.id);
+  }
+  if (!burt.length) return [];
+  for (const id of burt) await del(boardKey(id));
+  const ids = new Set(burt);
+  const index = await readIndex();
+  await writeIndex({ ...index, boards: index.boards.filter((b) => !ids.has(b.id)) });
+  return burt;
 }
 
 export async function switchBoard(id: string) {
@@ -612,7 +742,8 @@ export async function createBoard(name = "Nýtt borð") {
   await persistBoard();
 }
 
-/** Soft-delete the current board (cloud keeps the row with deleted=true). */
+/** Soft-delete the current board (cloud keeps the row with deleted=true). Viðmótið notar eydaBordi (ský fyrst — ekkert
+ * breytist ef skýið svarar ekki); þetta fall er eldri leiðin sem eyðir staðbundið þótt skýið náist ekki. */
 export async function deleteCurrentBoard() {
   const id = currentBoardId;
   if (!id || erSkodun()) return;
@@ -623,20 +754,47 @@ export async function deleteCurrentBoard() {
       const sig = timeoutSignal(6000);
       await (sig ? query.abortSignal(sig) : query);
     } catch {
-      // offline — row hverfur úr listanum næst þegar eyðingin nær í gegn
+      // offline — skýjaröðin stendur; eydaBordi er leiðin sem tryggir eyðingu á öllum tækjum
     }
   }
+  await fjarlaegjaOgOpnaNaesta(id);
+}
+
+/** Var opna borðinu eytt á öðru tæki, og geymir þetta tæki ekkert nýrra? (eyttISkyi er sett í openBoardId.) */
+function eyttAnnarsStadar(id: string): boolean {
+  return eyttISkyi?.id === id && !erNyrra(lastUpdatedAt, eyttISkyi.kl);
+}
+
+/** Opna borðið hverfur af ÞESSU tæki (skjal + listafærsla) og næsta borð opnast — skýið er ekki snert hér. Ekkert annað
+ * borð: nýtt autt borð. (createBoard vistar fyrst það sem er í minni, og þá yrði eydda borðið til aftur undir nýju
+ * auðkenni — sú draugafærsla birtist áður þegar síðasta borðinu var eytt.) */
+async function fjarlaegjaOgOpnaNaesta(id: string) {
+  if (typeof window !== "undefined") window.clearTimeout(pushTimer);
   await del(boardKey(id));
   const index = await readIndex();
   const rest = index.boards.filter((b) => b.id !== id);
   await writeIndex({ currentId: null, boards: rest });
   currentBoardId = null;
+  if (eyttISkyi?.id === id) eyttISkyi = null;
   const next = rest[0];
   if (next) {
     await openBoardId(next.id);
-  } else {
-    await createBoard();
+    return;
   }
+  currentBoardId = newId();
+  lastContentJson = "";
+  lastUpdatedAt = "";
+  dirtySincePush = false;
+  useBoardStore.getState().replaceBoard({
+    name: "Nýtt borð",
+    objects: [],
+    camera: { x: 80, y: 80, scale: 1 },
+    pixelsPerMeter: null,
+    grid: true,
+    snap: true,
+  });
+  useBoardStore.getState().setSyncState("idle");
+  await persistBoard();
 }
 
 /** Staðbundið eintak borðs (IndexedDB) án þess að opna það. Sync-athugunin (sync-saekja.ts) notar það í stað þess að
@@ -645,17 +803,23 @@ export async function lesaBordDocStadbundid(id: string): Promise<BoardDocument |
   return (await get<BoardDocument>(boardKey(id))) ?? null;
 }
 
-/** Eyðir borði eftir auðkenni (Verkefni-forsíðan, Agnar 15.11.2026: „ég eyði þá líklegast þeim úreltu"). Mjúk eyðing eins
- * og deleteCurrentBoard: röðin stendur í skýinu með deleted=true (og fyrri útgáfur í turbopaint_boards_history).
- * Opna borðið fer um deleteCurrentBoard, sem opnar næsta borð. Mistakist ský-eyðingin er ENGU breytt staðbundið —
- * annars kæmi borðið aftur úr skýinu við næstu hleðslu og liti út fyrir að hafa „lifnað við". */
+/** Eyðir borði eftir auðkenni (Verkefni-forsíðan og „Eyða þessu borði", Agnar 15.11.2026: „ég eyði þá líklegast þeim
+ * úreltu"). Mjúk eyðing: röðin stendur í skýinu með deleted=true (og fyrri útgáfur í turbopaint_boards_history).
+ * SKÝ FYRST, líka fyrir opna borðið: mistakist ský-eyðingin er ENGU breytt staðbundið — annars kæmi borðið aftur úr
+ * skýinu við næstu hleðslu og liti út fyrir að hafa „lifnað við". Opna borðið: ýting sem bíður eða er í gangi (upsert
+ * skrifar deleted=false) má ekki lenda á eftir eyðingunni, svo hún er stöðvuð/beðið eftir henni og eyttISkyi lokar á
+ * frekari ýtingar á meðan. Á eftir opnast næsta borð. */
 export async function eydaBordi(id: string): Promise<void> {
-  if (id === currentBoardId) {
-    await deleteCurrentBoard();
-    return;
-  }
+  const opid = id === currentBoardId;
+  if (opid && erSkodun()) return;
   const sb = getSupabase();
   if (sb) {
+    const fyrri = eyttISkyi;
+    if (opid) {
+      eyttISkyi = { id, kl: lastUpdatedAt || new Date().toISOString() };
+      if (typeof window !== "undefined") window.clearTimeout(pushTimer);
+      for (let i = 0; pushInFlight && i < 160; i++) await new Promise((r) => setTimeout(r, 100));
+    }
     let villa: unknown = null;
     try {
       const query = sb.from("turbopaint_boards").update({ deleted: true }).eq("id", id);
@@ -664,7 +828,17 @@ export async function eydaBordi(id: string): Promise<void> {
     } catch (e) {
       villa = e;
     }
-    if (villa) throw new Error("Náði ekki að eyða borðinu í skýinu — reyndu aftur með neti.");
+    if (villa) {
+      if (opid) {
+        eyttISkyi = fyrri;
+        if (dirtySincePush) schedulePush(); // óýtt vinna á opna borðinu fer áfram í skýið
+      }
+      throw new Error("Náði ekki að eyða borðinu í skýinu — reyndu aftur með neti.");
+    }
+  }
+  if (opid) {
+    await fjarlaegjaOgOpnaNaesta(id);
+    return;
   }
   await del(boardKey(id));
   const index = await readIndex();
