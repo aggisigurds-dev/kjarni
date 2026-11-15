@@ -23,7 +23,7 @@ const FLISA_MORK = 1.15;   // skjápixlar per grunnmyndarpixil: þar yfir eru fl
 const FLISA_HAMARK = 24;   // mest þetta margar flísar í minni (hver ~15 MB afkóðuð)
 /* Stillingar verks (skr_verk.stillingar, á þjóni: eins á öllum tækjum). breytingar = opið fyrir handbreytingar · taknStaerd = margfaldari á stærð tákna
  * (1 = sjálfgefið) · litir = litur per tákn, lykill er heiti táknsins (t.d. „Loft 200-315“). */
-type Stillingar = { breytingar?: boolean; taknStaerd?: number; litir?: Record<string, string>; eldriTakn?: boolean; adalmerki?: boolean };
+type Stillingar = { breytingar?: boolean; taknStaerd?: number; litir?: Record<string, string>; eldriTakn?: boolean; adalmerki?: boolean; hurdalinur?: Record<string, number[]> };
 type Verk = { id: number; heiti: string; stillingar?: Stillingar | null };
 /* Handbreytt svið skráningar (dálkurinn skr_skraningar.handvirkt): upprunalega gildið per svið. */
 type Svid = "flokkur_id" | "stada" | "lysing" | "athugasemd";
@@ -84,6 +84,17 @@ const fjarVegg = (v: Veggir, px: number, py: number): number => {
   }
   return b;
 };
+/** Næsti punktur á vegg innan mest px frá (px, py), annars null. Hurðalína smellur þannig að veggnum hvorum megin við dyraopið. */
+const naestAVegg = (v: Veggir, px: number, py: number, mest: number): [number, number] | null => {
+  let b = mest, r: [number, number] | null = null; const gx = Math.floor(px / VC), gy = Math.floor(py / VC);
+  for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const i of v.net.get(vLyk(ix, iy)) || []) {
+    const x1 = v.seg[i], y1 = v.seg[i + 1], dx = v.seg[i + 2] - x1, dy = v.seg[i + 3] - y1, L = dx * dx + dy * dy, tt = L ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / L)) : 0;
+    const qx = x1 + tt * dx, qy = y1 + tt * dy, d = Math.hypot(px - qx, py - qy); if (d < b) { b = d; r = [qx, qy]; }
+  }
+  return r;
+};
+/** Fjarlægð punkts frá línubút. */
+const fjarBut = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => { const dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy, tt = L ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / L)) : 0; return Math.hypot(px - x1 - tt * dx, py - y1 - tt * dy); };
 /** Sker beina línan A→B einhvern veggbút (lengdan um VL í hvorn enda)? Þá eru A og B sitt hvorum megin við brunavegg. */
 const skerVegg = (v: Veggir, ax: number, ay: number, bx: number, by: number): boolean => {
   const sed = new Set<number>(), rx = bx - ax, ry = by - ay;
@@ -309,6 +320,8 @@ export default function KortClient() {
   const [kerfiKort, setKerfiKort] = useState<Map<number, string>>(new Map());
   const [tilvisanir, setTilvisanir] = useState<Map<number, number[]>>(new Map());   // skráning → gatanúmer sem lýsing hennar vísar í (viðgerð á því gati)
   const [faera, setFaera] = useState(false); // færsluhamur: draga punkta á réttan stað
+  const [linuHamur, setLinuHamur] = useState(false); // draga hurðalínu yfir dyraop (fer með hana sem brunavegg)
+  const linaRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [villa, setVilla] = useState<string | null>(null);
   const [hladid, setHladid] = useState("Sæki verk…");
   const [syn, setSyn] = useState<number | null>(null); // teikning.id sem er sýnd (yfirlit eða stök)
@@ -332,7 +345,7 @@ export default function KortClient() {
   useEffect(() => { let lifir = true; import("./visbendingar.json").then((m) => { if (lifir) { setVisb(m.default.v as unknown as Visb); setVisbRaud(new Set((m.default as { raud?: number[] }).raud || [])); } }).catch(() => { /* án vísbendinga */ }); return () => { lifir = false; }; }, []);
   /** Stór mynd (ljósakassi): Agnar 13.11.2026, „yrði hægt að geta séð preview mynd úr punktunum“. */
   const [ljos, setLjos] = useState<{ slodir: string[]; i: number; nr: number } | null>(null);
-  const [veggir, setVeggir] = useState<{ lykill: string; v: Veggir; nemar: number[] | null; hurdir: number[] } | null>(null);
+  const [veggirHrar, setVeggir] = useState<{ lykill: string; v: Veggir; nemar: number[] | null; hurdir: number[] } | null>(null);
   const [aaStada, setAaStada] = useState("allt"); // sía áætlaðra gata eftir pörunarstöðu
   const [synaSkr, setSynaSkr] = useState(true); const [synaAaetlud, setSynaAaetlud] = useState(true);
   const [baetaFag, setBaetaFag] = useState(""); // fag áætlaðs gats sem er verið að setja (tómt = ekki í setja-ham)
@@ -486,6 +499,14 @@ export default function KortClient() {
     Promise.all([f(), fn ? fn().catch(() => null) : null]).then(([m, n]) => { if (lifir) setVeggir({ lykill: veggjaLykill, v: veggjaNet(m.default.seg), nemar: n ? n.default.nemar : null, hurdir: m.default.hurdir || [] }); }).catch(() => { /* án veggja: nálægðarreglan ein */ });
     return () => { lifir = false; };
   }, [veggjaLykill]);
+  /* Hurðalínur sem Agnar dregur sjálfur (15.11.2026: „draga bláa línu yfir sum dyragötin svo sé þægilegra að para saman“). Sjálfvirku hurðalínurnar
+   * (veggir.json „hurdir“) ná ekki öllum dyraopum. Línurnar hans bætast við veggina: punktar sitt hvorum megin við línu eru hinn endinn hvor annars
+   * (skerVegg) og renna í eitt merki. Vistaðar á verkinu (skr_verk.stillingar.hurdalinur[teikning_id], flatt [x1,y1,x2,y2,…]), eins á öllum tækjum.
+   * Engin skráning, færsla eða pörun áætlaðra gata breytist við þetta; aðeins hvernig kortið les hliðar veggjarins. */
+  const hlAllar = verk?.stillingar?.hurdalinur;
+  const handLinur = useMemo<number[]>(() => (teikning && hlAllar?.[String(teikning.id)]) || [], [teikning, hlAllar]);
+  const veggir = useMemo(() => (!veggirHrar || !handLinur.length ? veggirHrar : { ...veggirHrar, v: veggjaNet([...veggirHrar.v.seg, ...handLinur]) }), [veggirHrar, handLinur]);
+  const linuTol = !!veggirHrar && veggirHrar.lykill === veggjaLykill;
   const endar = useMemo(() => {
     const m = new Map<number, Endi>();
     if (teikning?.tegund !== "yfirlit") return m;
@@ -740,6 +761,12 @@ export default function KortClient() {
       const hu = veggir.hurdir; cx.beginPath(); for (let i = 0; i + 3 < hu.length; i += 4) { cx.moveTo(hu[i], hu[i + 1]); cx.lineTo(hu[i + 2], hu[i + 3]); }
       cx.lineCap = "butt"; cx.lineWidth = Math.max(1.6 / k, 1.6); cx.strokeStyle = "rgba(37,99,235,.85)"; cx.stroke();
     }
+    if ((synaSkr || linuHamur) && linuTol && (handLinur.length || linaRef.current)) {   // hurðalínur Agnars: dekkri og þykkari en sjálfvirku, með punkti á endum
+      const hl = [...handLinur], ln = linaRef.current; if (ln) hl.push(ln.x1, ln.y1, ln.x2, ln.y2);
+      cx.beginPath(); for (let i = 0; i + 3 < hl.length; i += 4) { cx.moveTo(hl[i], hl[i + 1]); cx.lineTo(hl[i + 2], hl[i + 3]); }
+      cx.lineCap = "round"; cx.lineWidth = Math.max(3 / k, 3); cx.strokeStyle = "#1d4ed8"; cx.stroke();
+      cx.fillStyle = "#1d4ed8"; for (let i = 0; i + 3 < hl.length; i += 4) for (const j of [0, 2]) { cx.beginPath(); cx.arc(hl[i + j], hl[i + j + 1], Math.max(3.2 / k, 2.6), 0, Math.PI * 2); cx.fill(); }
+    }
     /* Ajour-staður færðrar skráningar: strikalína frá staðnum í Ajour að merkinu (teiknuð undir merkjum) og blár punktur á staðnum (teiknaður síðast, ofan á).
      * Sést fyrir allar færðar skráningar þegar „Ajour-staðir“ er á, alltaf fyrir valda eða dregna skráningu, og í Færa-ham á borðtölvu eins og áður. */
     const ajPt: Punktur[] = [], ajR = (miro ? Math.max(2, Math.min(3.4, merkisR(k, k0) * tk * 0.3)) : Math.max(1.8, 1.6 * zs * k)) / k;
@@ -982,7 +1009,7 @@ export default function KortClient() {
       cx.beginPath(); cx.arc(lx, ly, R, 0, 6.2832); cx.lineWidth = 3 * dpr; cx.strokeStyle = "#1d4ed8"; cx.stroke();
       cx.beginPath(); cx.moveTo(lx - R, ly); cx.lineTo(lx - 9 * dpr, ly); cx.moveTo(lx + 9 * dpr, ly); cx.lineTo(lx + R, ly); cx.moveTo(lx, ly - R); cx.lineTo(lx, ly - 9 * dpr); cx.moveTo(lx, ly + 9 * dpr); cx.lineTo(lx, ly + R); cx.lineWidth = 1 * dpr; cx.strokeStyle = "rgba(29,78,216,.55)"; cx.stroke();
     }
-  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb, tk, litirLykill, miro, iPlotu, kerfiKort, adal, adalKlasar, tilvisanir]);
+  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb, tk, litirLykill, miro, iPlotu, kerfiKort, adal, adalKlasar, tilvisanir, handLinur, linuHamur, linuTol]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -1031,7 +1058,11 @@ export default function KortClient() {
     drag.current = { x: p.x, y: p.y, hreyft: 0, klipa: b.length === 2 ? Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y) : 0 };
     // færsluhamur: bendill niður á (eða við) sýndan punkt grípur hann; annars færist blaðið eins og venjulega
     if (skuffa) setSkuffa(false);
-    if (b.length > 1) faerir.current = null;
+    if (b.length > 1) { faerir.current = null; linaRef.current = null; }
+    else if (linuHamur && linuTol && veggirHrar) {
+      const s = sjon.current, wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k, sm = naestAVegg(veggirHrar.v, wx, wy, 16 / s.k) || [wx, wy];
+      linaRef.current = { x1: sm[0], y1: sm[1], x2: sm[0], y2: sm[1] }; faerir.current = null;
+    }
     else if (faera && !baetaFag && teikning?.tegund === "yfirlit") {
       const s = sjon.current, wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k; let bd = 14 / s.k, bp: Punktur | undefined, ba: Aaetlad | undefined;
       if (e.pointerType === "touch") {
@@ -1051,6 +1082,10 @@ export default function KortClient() {
     if (!bendlar.current.has(e.pointerId) || !drag.current) return;
     const p = stadur(e), fyrri = bendlar.current.get(e.pointerId)!; bendlar.current.set(e.pointerId, p);
     const b = [...bendlar.current.values()];
+    if (linaRef.current && b.length === 1 && veggirHrar) {
+      const s = sjon.current, wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k, sm = naestAVegg(veggirHrar.v, wx, wy, 16 / s.k) || [wx, wy];
+      linaRef.current.x2 = sm[0]; linaRef.current.y2 = sm[1]; drag.current.hreyft += Math.abs(p.x - fyrri.x) + Math.abs(p.y - fyrri.y); bidjaUmTeikningu(); return;
+    }
     if (faerir.current && b.length === 1) {
       const s = sjon.current, f = faerir.current; f.x = (p.x - s.tx) / s.k + f.dx; f.y = (p.y - s.ty) / s.k + f.dy;
       const nmS = veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null;
@@ -1069,6 +1104,20 @@ export default function KortClient() {
   const upp = async (e: React.PointerEvent) => {
     const var_ = bendlar.current.has(e.pointerId); bendlar.current.delete(e.pointerId);
     const d = drag.current; if (!bendlar.current.size) drag.current = null;
+    if (linuHamur) {
+      const ln = linaRef.current; linaRef.current = null; if (!var_ || !d || !teikning || !verk) { bidjaUmTeikningu(); return; }
+      const s = sjon.current, lid = String(teikning.id);
+      if (ln && Math.hypot(ln.x2 - ln.x1, ln.y2 - ln.y1) >= 6 && d.hreyft > 6) {
+        const r1 = (v: number) => Math.round(v * 10) / 10;
+        setjaStill({ hurdalinur: { ...(hlAllar || {}), [lid]: [...handLinur, r1(ln.x1), r1(ln.y1), r1(ln.x2), r1(ln.y2)] } }, true); return;
+      }
+      if (d.hreyft <= 6) {   // pikk á línu: eyða henni
+        const p = stadur(e), wx = (p.x - s.tx) / s.k, wy = (p.y - s.ty) / s.k; let bi = -1, bd = 18 / s.k;
+        for (let i = 0; i + 3 < handLinur.length; i += 4) { const dd = fjarBut(wx, wy, handLinur[i], handLinur[i + 1], handLinur[i + 2], handLinur[i + 3]); if (dd < bd) { bd = dd; bi = i; } }
+        if (bi >= 0 && window.confirm("Eyða þessari bláu línu?")) { const n = [...handLinur]; n.splice(bi, 4); setjaStill({ hurdalinur: { ...(hlAllar || {}), [lid]: n } }, true); return; }
+      }
+      bidjaUmTeikningu(); return;
+    }
     const f = faerir.current;
     if (f && f.hreyft && var_) { await vistaFaerslu(f); if (faerir.current === f) faerir.current = null; bidjaUmTeikningu(); return; }
     faerir.current = null;
@@ -1333,9 +1382,11 @@ export default function KortClient() {
           <button type="button" onClick={() => { const k = kassiRef.current!; staekka(k.clientWidth / 2, k.clientHeight / 2, 1.5); }} aria-label="Stækka">+</button>
           <button type="button" onClick={() => { const k = kassiRef.current!; staekka(k.clientWidth / 2, k.clientHeight / 2, 1 / 1.5); }} aria-label="Minnka">−</button>
           <button type="button" onClick={() => passa()}>Allt blaðið</button>
-          <button type="button" className={`gk-fh${faera ? " on" : ""}`} aria-pressed={faera} disabled={teikning?.tegund !== "yfirlit"} title="Draga punkta á réttan stað á yfirlitsblaðinu" onClick={() => { setFaera((x) => !x); setBaetaFag(""); }}>Færa punkta{faerdir ? ` · ${num(faerdir)}` : ""}</button>
+          <button type="button" className={`gk-fh${faera ? " on" : ""}`} aria-pressed={faera} disabled={teikning?.tegund !== "yfirlit"} title="Draga punkta á réttan stað á yfirlitsblaðinu" onClick={() => { setFaera((x) => !x); setBaetaFag(""); setLinuHamur(false); }}>Færa punkta{faerdir ? ` · ${num(faerdir)}` : ""}</button>
+          <button type="button" className={`gk-fh${linuHamur ? " on" : ""}`} aria-pressed={linuHamur} disabled={!linuTol} title="Draga bláa línu yfir dyraop: kortið fer með hana sem brunavegg" onClick={() => { setLinuHamur((x) => !x); setFaera(false); setBaetaFag(""); setValinn(null); }}>Hurðalína{handLinur.length ? ` · ${handLinur.length / 4}` : ""}</button>
         </div>
-        {faera && !baetaFag && !(snerti && valinn) && <p className="gk-faera">{snerti ? "Pikkaðu á punkt til að velja hann og dragðu hann svo á réttan stað. Staðan vistast þegar þú sleppir." : "Dragðu punkt á réttan stað; staðan vistast þegar þú sleppir. Bláa línan sýnir hvaðan hann kom."} Skráningin í Ajour breytist ekki.</p>}
+        {linuHamur && <p className="gk-faera">Dragðu bláa línu yfir dyraopið, frá vegg að vegg (endarnir smella að veggnum). Kortið fer með hana eins og brunavegg: punktar sitt hvorum megin verða hinn endinn hvor annars. Pikkaðu á bláa línu til að eyða henni. Engin skráning breytist.</p>}
+        {faera && !baetaFag && !linuHamur && !(snerti && valinn) && <p className="gk-faera">{snerti ? "Pikkaðu á punkt til að velja hann og dragðu hann svo á réttan stað. Staðan vistast þegar þú sleppir." : "Dragðu punkt á réttan stað; staðan vistast þegar þú sleppir. Bláa línan sýnir hvaðan hann kom."} Skráningin í Ajour breytist ekki.</p>}
         {valinn?.p && (
           <div className="gk-spjald">
             <button type="button" className="gk-x" onClick={() => setValinn(null)} aria-label="Loka">×</button>
@@ -1442,9 +1493,10 @@ export default function KortClient() {
             <button type="button" className={faera && !baetaFag ? "on" : ""} aria-pressed={faera && !baetaFag} disabled={teikning.tegund !== "yfirlit"} onClick={() => {
               // færsluhamur sýnir eina deild: sé engin valin er það deildin á miðjum skjánum
               if (!(faera && !baetaFag) && !virkDeild && kassiRef.current && teikning.breidd_px) { const s = sjon.current; setVirkDeild(deildAf(Math.max(0, Math.min(0.999, (kassiRef.current.clientWidth / 2 - s.tx) / s.k / teikning.breidd_px)))); }
-              setFaera((x) => !x || !!baetaFag); setBaetaFag("");
+              setFaera((x) => !x || !!baetaFag); setBaetaFag(""); setLinuHamur(false);
             }}>Færa</button>
-            <button type="button" className={baetaFag ? "on raud" : ""} aria-pressed={!!baetaFag} onClick={() => { if (baetaFag) { setBaetaFag(""); return; } const f = synV ? synV[2][0] : "loftraesting"; setBaetaFag(f); setBaetaFlokkur(""); setBaetaFjoldi(f === "golf" ? 1 : 2); setFaera(false); setValinn(null); }}>＋ Punktur</button>
+            <button type="button" className={linuHamur ? "on" : ""} aria-pressed={linuHamur} disabled={!linuTol} onClick={() => { setLinuHamur((x) => !x); setFaera(false); setBaetaFag(""); setValinn(null); }}>Lína</button>
+            <button type="button" className={baetaFag ? "on raud" : ""} aria-pressed={!!baetaFag} onClick={() => { if (baetaFag) { setBaetaFag(""); return; } const f = synV ? synV[2][0] : "loftraesting"; setBaetaFag(f); setBaetaFlokkur(""); setBaetaFjoldi(f === "golf" ? 1 : 2); setFaera(false); setLinuHamur(false); setValinn(null); }}>＋ Punktur</button>
             <button type="button" className={skuffa ? "on" : ""} aria-expanded={skuffa} onClick={() => setSkuffa((x) => !x)}>Lög og síur</button>
           </div>
         </div>
