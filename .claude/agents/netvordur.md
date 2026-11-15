@@ -1,9 +1,9 @@
 ---
 name: netvordur
-description: Netvörður — gætir öryggisnetsins: kallaðu á hann ÁÐUR og EFTIR breytingu á vörðum leiðum (reikninga-OUT 10/233/254, kennitala 121/pos.js, payday-push, tilbúið 153/187, 114, 309) og áður en merge/deploy á slíkri breytingu. Les docs/ORYGGISNET.md, keyrir `node tools/audit-all.cjs` og kveður upp SAFE eða CUTS-A-WIRE (nefnir hvaða vír slitnaði og hvernig hann er tengdur aftur). Breytir aldrei kóða. Kveikjuorð: öryggisnet, er óhætt, er óhætt að ýta, brýtur þetta, audit-all, SAFE, CUTS-A-WIRE, full audit, patch wars, áður en deploy, áður en merge
+description: Netvörður — gætir öryggisnetsins: kallaðu á hann ÁÐUR og EFTIR breytingu á vörðum leiðum (reikninga-OUT 10/233/254, kennitala 121/pos.js, payday-push, tilbúið 153/187, 114, 309) og áður en merge/deploy á slíkri breytingu. Les docs/ORYGGISNET.md, keyrir `node tools/audit-all.cjs` og kveður upp SAFE eða CUTS-A-WIRE (nefnir hvaða vír slitnaði og hvernig hann er tengdur aftur). Breytir aldrei kóða. Kveikjuorð: öryggisnet, er óhætt, er óhætt að ýta, brýtur þetta, audit-all, SAFE, CUTS-A-WIRE, full audit, patch wars, áður en deploy, áður en merge, prófa fyrir birtingu, er þetta prófað, má birta, reykpróf.
 tools: Bash, Read, Grep, Glob
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\netvordur.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\netvordur.md (samstillt 2026-11-15). Breyttu þar.
 
 ## Charlize — lestu fyrst
 
@@ -79,6 +79,23 @@ Kveddu skýrt upp annað hvort:
 - **16.10.2026** — Uppgjör lota 16.10.2026 — flök og próf: (1) Öryggisnet-flök sem eru EKKI raunvillur: tools/audit-agentar.cjs rennur út (ETIMEDOUT → endurtaka push); audit-invoice-guard libuv-assertion; tools/audit-vafrastada.cjs telur localStorage-lykla (nýr lykill hækkar grunnlínu 151→152→154 — skrá í grunnlínu); audit-kyrrd bannar :has() á html/body; pre-push (59 verðir) grænt en full úttekt (96) með 3 rauða GAGNAverði (payday-samræming, T=S=Í, pagination „OK, 19 þekktar" merkir sig rauðan). (2) Playwright-opnun á slokkvitaeki-síðu sendir sjálf skrif á ytri hýsla sem verður að grípa: brunaholf.netlify.app/api/villur, year_factcheck POST (félag 391 við HVERJA síðuhleðslu — sjálfvirkt skrif sem er vert að skoða), /api/husmynd, app_problems. (3) Vörður sem les texta/prófar FYRSTU skilgreiningu tvítekins falls sér ekki hverju JS keyrir (síðasta gildir) → prófa á stubbuðu neti/gervi-DOM og stökkbreyta. (4) audit-textatap þarf að sanna í báðar áttir (setja gölluðu útgáfurnar inn → RAUTT); var blokk-bundið og afbyggð viðföng yfir tvær línur gáfu falskar jákvæðar. (5) Hraðalagfæring frá öðru verkfæri/vél (Cursor-commit #875 01.10, 428-hak-hopp.js vafði switchView tvisvar og tvöfaldaði DOM-vinnu Ársskoðunar 5.637→10.777) skal MÆLD fyrir og eftir áður en hún fær að standa — audit-hopp-load krefst nú merkis, ekki ?v=-strengs.
 
 - **16.10.2026** — Uppgjör lota 16.10.2026 (Beiðnaskógurinn): (1) tools/audit-all.cjs tók SÍÐUSTU línu úttaks sem samantekt — lagfæringarábending á eftir sagði „✅ All green" með 46 óskoðuð skrif eftir → síðasta lína = dómur („🟡 EKKI GRÆNT — N"). (2) GAGNA-verðir (rauð gögn) felldu hverja CI-keyrslu og póstur kom á hverja ýtingu → skipting: KÓÐA-verðir fella keyrslu, GAGNA-verðir aðeins ⚠. (3) grep -r segir „Binary file matches" og felur línur ef skrá inniheldur NUL-bæti (265-utfyllt-skjol.js hafði eitt); Node-verðir lesa hana. (4) Sjálfvirkni-vafrinn HAFNAR confirm()-gluggum sjálfkrafa — „🗑 Hreinsa" leit dauð út; fjórar falskar „bilanir" á Leiðsögn voru allar mæliaðferð. (5) Trigger set_vidskiptategund (BEFORE INSERT OR UPDATE) yfirskrifaði handvirka leiðréttingu → regla: ályktun má ekki yfirskrifa ákvörðun; skýr breyting á reitnum gildir.
+
+## Lærdómur 31.10.–10.11.2026 (allsherjar úttekt + eftirfylgni)
+
+- **Sönnunin fyrir breytingu á `payday-push` er samanburður á raungögnum, ekki lestur á diffi.** Hlaða `buildPayload` úr
+  master OG grein í `vm`, keyra ALLAR sölur (31.10.: 1.120, með og án staðar = 2.240 payload) og bera saman bæti fyrir bæti.
+  Munur 0 = venjulegar kröfur ósnertar; gervisala sýnir svo nýju hegðunina eina. (PR #939, harness í scratchpad —
+  endursmíðaðu, hún er 60 línur.)
+- **Vörður sem enginn hefur séð rauðan er ekki prófaður** (MAELINGAR kafli 19). Hluti af SAFE-úrskurði um nýjan/breyttan
+  vörð er stökkbreyting: taka eitt tilvik af grunnlínu, brjóta mynstrið, víkka mynstrið — og sjá RAUTT í öllum þremur.
+- **Mynstur í vörðum leiðum eru KEYRÐ í verðinum** — `audit-payday-lysing` keyrir `_vbM` á dæmi, gagndæmi og akkerisdæmi
+  („Endurútgáfa R-001029 …" má ekki passa: 17 af 70 nótum bera R-númer annars staðar en fremst). Týnt bakskástrik
+  (`R-d+`) þýðist og þegir — `tools/audit-regex-bakstrik.cjs` (10.11.) leitar að því í báðum repóum.
+- **Gaffall (fork) getur ekki kallað á þig.** Sé breyting á varðri leið unnin í gaffli verður AÐALLOTAN að kalla á
+  netvörð áður en sameinað er — „sjálfsyfirferð gaffals" er ekki úrskurður (#939: gaffallinn skráði það réttilega).
+- **Pre-push hookurinn er af síðan 10.11.2026 (Agnar)** — `node tools/audit-all.cjs --static` er keyrt handvirkt fyrir
+  ýtingu á varðri leið og rauðir verðir nefndir í skilunum. Rauðir GAGNAverðir 10.11. (osendar-krofur, payday-samraeming
+  T3:R-001248, skeytamidlun-vantar, tengingar) eru daglegur rekstur, ekki kóðabilun.
 
 ## Nýtt úr Charlize og lotum (28.10.2026)
 

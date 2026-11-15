@@ -3,12 +3,22 @@ name: sala-reikningar
 description: Sala/POS, reikningagerð og -sending (Gmail), Payday, afslættir, verðlistar og vörur, PDF-vistun, tilboð og þjónustusamningar, reikninga-póstur og úttektartexti í Slökkvitæki-appinu. Notaðu þegar eitthvað snertir reikning, sölu, verð eða afslátt, eða þegar tala á reikningi stemmir ekki við skjáinn; kallaðu á hann sjálfur áður en krafa er send, kreditfærð eða bakfærð. Kveikjuorð: reikningur, sala, POS, söluborð, Payday, dkPlus, afsláttur, afsláttarhópar, krafa, kredit, Kreditfæra, Hreyfingarlisti, verðlisti, birgðir, Teya, Tilboð, Þjónustusamningar, Yfirferð greiðslna, Söluyfirlit, Bókhald yfirferð
 tools: Bash, Read, Grep, Glob, Edit
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\sala-reikningar.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\sala-reikningar.md (samstillt 2026-11-15). Breyttu þar.
 
 ## Charlize — lestu fyrst
 Áður en þú breytir sölu, reikningi, verði eða afslætti eða fullyrðir um greiðslustöðu: `select topic, fact, detail from v_charlize_active where scope in ('slokkvitaeki', 'baedi') and topic in ('solur', 'payday', 'reikningar', 'verd', 'verdlisti', 'vorur', 'afslattarhopar', 'sala', 'teya', 'krofur', 'rukkun', 'postur') order by created_at desc;` Tómt = óskráð — segðu það, ekki giska. Lærdómur sem næsta lota veit ekki → `charlize_knowledge` í lok lotu (skill `charlize`).
 
 Þú kannt **sölu- og reikningahliðina** — POS-inn, Payday (dkPlus er EKKI í notkun: `invoice_batch_id` aldrei sett, `solur.dk_invoice_id` ber Payday-id — mælt 04.11.2026), afsláttar-konvensjónina og PDF-vistun. Grunnregla: **ALLTAF LEYFA VISTUN** (engin form-vörn má blokka), og afsláttur er ANNAÐHVORT bakaður í línu EÐA geymdur í `afslattur` — ALDREI hvort tveggja.
+
+## Tilboð og gataverð (Agnar 08.11.2026; Charlize #2175, #2176)
+Gataverðlistinn er taflan `hole_size_rates` (scope `generic`, `heklureitur`; flokkar `hole`, `kragi`, `bordi`). Hún er ANNAR listi en verðskrá efnis (`brunaholf/js/gr-materials.js`) — ekki reikna gegnumtök úr efnisverðskránni.
+- **Gatastærð = lengsta lína gatsins, skálínan**, eins og sjónvörp eru mæld í tommum. Rétthyrnt gat: skálína = √(breidd² + hæð²) og verðið er úr þeim stærðarflokki (1100x500 = 1.208 mm → flokkur 1160-1209).
+- **Stokkur eða rör í gegnum gatið breytir engu**: verðið er per gat, aldrei per fermetra. Fermetratölur kúnna eru ekki notaðar.
+- **Verð per gat í tilboði Brunahólfs til Salblikk (18.09.2026) innifela efni, uppsetningu og skráningu hvers gats**; þétting frá annarri hlið, hver hlið aukalega er ein eining; akstur sér (10.951 kr/klst á mann án vsk, 186 kr/km með vsk). Verðin voru önnur en `hole_size_rates` generic (1100x500 51.788 á móti 48.400).
+- Kragar (`kragi`) og bönd (`bordi`) eru sér töflur og bætast við aðeins ef þau eru notuð; 315 mm kragi er ekki til.
+- Telja götin í tilboði úr póstinum sjálfum og leggja saman línu fyrir línu — í Salblikk-tilboðinu sagði ég fyrst 29 göt þegar þau voru 30.
+- **Áður en tilboð eða svar er útbúið: leita í Sent Items í Thunderbird (`ImapMail/outlook.office365-1.com/Sent Items`, líka möppunni „Tilboð send“) að viðtakanda.** `email_digest` vantar sendar sendingar — 08.11.2026 bjó ég til tilboð til Salblikk sem hafði verið sent 18.09.
+- Tilboð fer ekki út án Agnars: samþykkismál á borðið (skill `samthykki-a-bord`), Claude sendir ekkert.
 
 ## Nýtt úr Charlize og lotum (28.10.2026)
 - Kláruð úttekt með reikningi er „ritað í stein“: ekkert í kerfinu (endurteikning, endurhleðsla gagna, opna eða loka staðfestum lista, græni takkinn aftur) má snerta hana nema Agnar breyti sjálfur (yfirregla 30.08.2026) [lota 2b47ca79].
@@ -16,6 +26,7 @@ tools: Bash, Read, Grep, Glob, Edit
 - Einn staður og hann er skjárinn: reikningur telur nákvæmlega þær raðir sem eru teiknaðar, úr sömu uppsprettu og sömu síu — stemma tölurnar ekki er verkið ekki búið (yfirregla 30.08.2026) [lota 2b47ca79].
 - Reikningsupphæð er reiknuð á fjórum stöðum sem geta rekið í sundur (`pos.js`, `142-sale-editor.js`, `10-sala-receipt-redesign.js`, `payday-push.js`) — öll verða að reikna nettó línu = qty·unit·(1−disc/100) órúnnað eins [C#114].
 - Kreditnóta af afsláttaðri sölu má aldrei bera `discount_pct` á línunum — verðið er þegar skalað í nettó og Payday myndi tvöfalda afsláttinn [C#116].
+- Kröfulýsingin í Payday er `[_vegna, _vbLina, _notes]`: „Vegna: …" + (aðeins viðbótarúttekt) „Viðbót við R-… (ný tæki)" + hreinsuð nóta. `_vbLina` kviknar AÐEINS þegar `krafa_note` BYRJAR á „Viðbótarúttekt við R-<tölur>" (`^`-akkerið ver venjulegar kröfur með R-númeri í nótu). Mynstrið var brotið (`R-d+`) 28.–31.10.2026 og línan fór aldrei út; lagað í #939. ÓREYNT Í FRAMLEIÐSLU 10.11.: engin viðbótarsala hefur enn orðið til (0 raðir) — fyrsta slíka krafan á að skoðast í Payday [`payday-push.cjs:454`, `audit-payday-lysing`].
 - `payday-push` tekur sölu frá (`krafa_sendir_at`) áður en Payday er kallað; `502 gate:writeback` þýðir að reikningurinn varð til í Payday — EKKI senda aftur [C#623, C#624].
 - Hafni Payday rafrænum reikningi (XML) fellur `payday-push` hljóðlaust í póst-aðeins; frá 14.09.2026 er höfnunin skráð í `app_problems` (kind `payday_xml_hafnad`) [C#573, C#576].
 - Ógreitt (Hreyfingarlisti 167) = Kröfu yfirlit (ógreitt, ekki void, ekki kreditfært) + til að rukka (greitt_sidar) + drög sem bíða í afgreiðslu — kreditfærður reikningur telst aldrei ógreiddur [C#766; lota 6db7868a].
@@ -464,9 +475,212 @@ stubbuð. Kröfu yfirlit: `ctx.route` á `/rest/v1/solur?…greitt_med=eq.reikni
 
 - **26.10.2026** — 294 Úttektartexti (0a4d0a34, önnur lota): textinn sem 294 semur er vistaður sem trip.notesAuto. Standi reiturinn enn ÓBREYTTUR sá texti en tækjalistinn gefi nú annan, fær hann gulan ramma og takkann ↻ Uppfæra textann. Handskrifaður texti fær enga viðvörun og er aldrei yfirskrifaður — samanburðurinn er á notesAuto, ekki á reitnum einum.
 
+## Lærdómur 07.11.2026 (allt mælt)
+
+- **Tala úr talningu er ekki krafa.** `R-000716 Þangbakki 8-10, 190.987 kr.` leit út eins og kredit sem gleymdist að endurgera. Verkið var ALDREI UNNIÐ: Agnar skrifaði „misskilningur með þetta verk", málið segir „engin úttekt var gerð", og tækin 55 höfðu enga skoðunardagsetningu. Lestu söguna (`krafa_note`, athugasemdir, póstinn, málið) áður en tala er kölluð krafa.
+- **Yfirtökureikningar eru EKKI okkar krafa.** `stolpi_reikningar` merktir „opinn við yfirtöku 07.05.2026" (95 stk., 4,6 m.kr.) voru greiddir til fyrri eiganda; merkið segir aðeins að þeir stóðu opnir í bókum FYRRI EIGENDA. Þeir voru ranglega taldir sem 3,2 m.kr. í tekjum 07.11. Útilokaðu allt sem ber „yfirtöku" í stöðu eða skýringu.
+- **`invoiced_at` er TÓMT á reikningum sem bíða kröfu.** Sían `invoiced_at is not null` skilaði NÚLLI þótt níu reikningar upp á 662.759 kr. biðu. Rétta merkið er `greitt_med = 'reikningur'`.
+- **`reikningspunktar.applied` er marklaus:** NULL á öllum 26 punktunum þótt 14 séu sannanlega rukkaðir. Fáni sem er aldrei settur segir ekkert — mældu gegn `solur`. Sama með Hoppers: `krafa_sent_at` segir 28.08 en kúnninn segist aldrei hafa fengið kröfu.
+- **Samningsverð ræður reikningnum.** Hagvagnar eiga samning um 2.700 kr./tæki (Charlize #1991) en voru rukkaðir 3.065 á 177 tækjum; Hamraborg 28 á 25 % afslátt sem vantaði. Berðu verð á reikningi saman við kjörin í Charlize áður en hann fer út.
+- **Sýnur í stað handvirkrar leitar:** `v_krafa_ekki_send`, `v_kredit_an_endurgerdar`, `v_verk_an_reiknings`, `v_skodun_gleymd`, `v_taekjatolur_misraemi`, `v_erindi_osvarad`, `v_skeytamidlun_vantar`. Hver ber `comment on view` með gildrunum sínum: `select obj_description('<sýn>'::regclass)`.
+
 ## Grunnreglur allra agenta (04.11.2026)
 1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
 2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
 3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
 4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
 5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.
+
+## `v_krofu_forskodun` er LEITARTAFLA, ekki listi (07.11.2026)
+
+Sýnin inniheldur ógildar sölur (`status='void'`) VILJANDI. Patch 166 slær upp í hana per sölu og
+hefur ÞEGAR tekið void út (`_state.osendar` síar `status !== 'void'`), svo þær sjást aldrei í
+viðmótinu. Sá sem telur sýnina sem lista fær ranga tölu: 9 rauðar ábendingar, þar af 8
+„ógild sala — fer aldrei í kröfu".
+
+**Rétt mæling:** `where litur='rautt' and status <> 'void'`. Eftir stendur EITT raunverulegt mál
+(R-001264 Nesdekk Dekkjalager, 90.847 kr, „úttekt með endurteknum línum").
+
+## Verkferlis-yfirlitið (07.11.2026) — EIN keyrsla í stað átján
+
+Agnar: „Kortleggja upplýsingareiti, pósta, kröfuyfirlit og allt setja í api verkferlis combo
+yfirlit inn á Agnar þjónustuborð sem ég get keyrt til að yfirfara."
+
+- **`/api/combo-yfirlit`** (netlify/functions/combo-yfirlit.cjs) mælir 18 línur í sjö flokkum:
+  kröfur · póstur · upplýsingareitir · skoðanir · verkefnalistar · samþykktir · tengingar.
+  `?flokkur=krofur` einangrar flokk, `?radir=N` stýrir dæmum, `?skrifa=1` uppfærir málið á borðinu.
+- **`node tools/combo-yfirlit.cjs`** er sama fall úr skipanalínu (`--json`, `--flokkur`, `--skrifa`).
+- **Spjaldið** er efst á Þjónustuborðinu (js/patches/499-combo-yfirlit.js) með Keyra-takka.
+- **Mál #1540** á borðinu geymir sama yfirlit í texta; það uppfærist sjálft og titillinn breytist.
+- **Engin ný tala.** Hver lína les SÖMU sýn og vörðurinn/borðið les. Blæbrigði eru dálkar í
+  sýninni, aldrei ný sýn — tvö mælikerfi um sama hlutinn stangast alltaf á að lokum.
+- **Þak = staðan 07.11.2026.** Rautt þýðir „þetta hækkaði", ekki „gamla skuldin stendur".
+- **ÓMÆLT er ekki 0.** Svari sýnin ekki stendur `merki: 'OMAELT'`, aldrei núll.
+
+## Hvað tölurnar reyndust vera (rannsóknarumferð 07.11.2026, hver röð handlesin)
+
+**Stóru tölurnar í sýnunum eru að mestu þegar leystar. Lestu söguna áður en þú kallar þær kröfu.**
+
+| Sýn | Fyrirsögn | Hvað stendur raunverulega eftir |
+|---|---|---|
+| `v_krafa_ekki_send` | 23 raðir · 2.494.571 kr | **7 raðir · 618.409 kr.** Sex voru aldrei sendanlegar: fimm kreditfærðar í Payday og ein með ⏸ BÍÐA |
+| `v_kredit_an_endurgerdar` | 22 raðir · 992.163 kr | **20.190 kr** (Prinsinn R-000310) — og hann þarf NÝJAN REIKNING, ekki kröfu |
+| `v_krofu_forskodun` rautt | 9 | **1**, og það reyndist líka falskt (sjá Nesdekk) |
+
+**Hvers vegna sýnirnar ofmátu:**
+
+1. **`v_krafa_ekki_send` las aðeins `solur`, aldrei Payday-spegilinn.** Reikningur sem var sendur
+   og kreditfærður í Payday ber hvorki `credit_of` né `dk_invoice_id` í `solur` og lítur því út
+   eins og ósendur. Lagað: dálkarnir `payday_stada` og `i_bid`; `v_krafa_ekki_send_adgerd` sleppir
+   CANCELLED/CREDIT og ⏸. Heildartalan stendur í 23 svo hún stangist ekki á við patch 489.
+2. **`v_kredit_an_endurgerdar` krafðist endurgerðar Á EFTIR kreditinu og á SÖMU kennitölu.**
+   Endurgerðin er oft stofnuð á undan kreditinu (Grillvagninn R-000548, sama dag, greiddur) eða
+   fer á aðra kennitölu sama viðskiptavinar (Eldsalir, Sjúkraþjálfun, Breiðvangur). Nýr dálkur
+   `endurgerd_greidd` leitar frá UPPRUNALEGU sölunni og tekur `customer_base_id` með.
+   Eclipse R-000727 (1.211.117 kr) er sígilda dæmið: kreditfært, endurgert sem R-000940 og GREITT.
+3. **Stærsta talan er oftast sú sem er löngu leyst.** Það er ekki tilviljun — stórir reikningar eru
+   þeir sem oftast eru kreditfærðir og endurgerðir.
+
+**Nesdekk R-001264 (90.847 kr) — tvær ábendingar, báðar rangar.** Skýrslan var lesin og segir
+6 léttvatn + 4 duft + 2 CO₂ + 6 slöngur = 18, nákvæmlega eins og tækjaskráin og reikningurinn.
+(a) „Tvíýtt á Klára heimsókn?" — nei: slöngulínurnar eru 5+1 af því að fimm slöngur hafa tóman
+stærðarreit og ein er ný 30 m slanga skráð 05.11 kl. 17:03; tvíýting hefði afritað allar línur.
+(b) „Vantar afslátt eins og systurreikningurinn" — nei: hópur 3 gefur 20 % AÐEINS á ný tæki og
+R-001264 er hrein þjónusta. Eina sem má laga er að steypa slöngulínunum í eina `qty 6` svo
+reikningurinn líti ekki út fyrir að vera tvítekinn; fjárhæðin breytist ekki.
+
+**`teya_faerslur` er TÓM tafla.** Hver spurning um „var þetta staðgreitt?" er ÓMÆLANLEG úr
+grunninum þar til hún fyllist. Segðu ÓMÆLT, ekki „ógreitt".
+
+## 1,42 m.kr. sem voru aldrei krafin (mælt 08.11.2026)
+
+**Frá mars 2026 voru Stólpa-kröfur stofnaðar á 80 % af reikningi + 295 kr kröfugjald**, á 89
+ólíkum kennitölum. Af 96 greiddum reikningum mars–maí fellur **enginn** á `upphaed / 1,24`
+(vsk-tilgátan sem málið byggði á) en **62 falla upp á krónu** á `upphaed × 0,80 + 295`.
+295 kr er sama talan á 13.900 kr reikningi og á 933.904 kr reikningi — hlutfall getur ekki
+hagað sér þannig, svo þetta er kröfugjald.
+
+| Mánuður | reikningar | fullgreiddir | á 80 %-mynstri | vantar |
+|---|---|---|---|---|
+| 2025-09 … 2026-02 | 623 | 617 | **0** | 41 þús. alls |
+| 2026-03 | 12 | 2 | 2 | 461.622 |
+| 2026-04 | 69 | 1 | 49 | 812.166 |
+| 2026-05 | 15 | 0 | 11 | 147.257 |
+
+**Umskiptin eru rofin, ekki stigvaxandi.** Fram í febrúar voru nánast allir reikningar greiddir
+að fullu og enginn féll á mynstrið; í mars snýst það alveg við.
+
+**Þrennt sem þetta þýðir fyrir hvern sem les Stólpa-tölur:**
+1. Þetta er ekki afsláttur. Afsláttur fylgir félaginu og er ólíkur per félag; hér er hlutfallið
+   það sama hjá 89 félögum.
+2. **`opid_upphaed` er 0 á 91 af 96** — Stólpi sýnir ekkert útistandandi. Peningurinn er ekki í
+   vanskilum, hann var aldrei krafinn, og ekkert kerfi mun minna á hann.
+3. Það hélt áfram EFTIR yfirtökuna 07.05.2026, svo þetta er ekki arfur frá fyrri eigendum einum.
+
+Heimaleiga-málið (#1329) var sama mynstur í dulargervi: „ofgreitt um 122.659" reyndist 37.338 kr
+SKULD, og sú tala er nákvæmlega 20 %-vöntunin á einum reikningi (R-108266).
+
+- **10.11.2026** — Lota 10.11.2026: (1) Úttektarskýrsla (168) prentar nú undirskriftarlínu undirritanda (trip.undirritun, mynd úr app_settings.undirskriftir) og sérlínu Skoðunaraðili (sjálfgefið Hákon); skýrsla án nafns er ógild — svarstöð 447a uppfærð. (2) audit-payday-samraeming T2 „engin Payday-röð“ strax eftir sendingu er oftast úreltur spegill: payday_invoices_slokk sækist aðeins 10:00 og 15:00 UTC. Athuga solur.dk_invoice_id (sett = Payday tók við) og keyra POST /api/payday-pull-slokk?since=<dagur> áður en frávik er rannsakað (R-001282–85 mældust þannig 10.11, urðu nr. 472–475 SENT). (3) Léttvatn 3 L verðlínur: hleðsla vorur 468 = 5.000 án vsk, yfirferð vorur 454 = 2.903,23. (4) Drög-línur sýna nótuna Fyrir starfsfólk (.dr2-l3, 143/501).
+
+## Verðskrár, geymd drög og afgreiðsla án stofnunar (lota 09.–10.11.2026, allt mælt)
+
+**Verðskráin er á einum stað og hún er breytanleg.**
+- **Slökkvit. þjónusta — verð** (`410-thjonustu-tengingar.js`, Vörur og þjónusta → 🧯): ein röð per þjónustulínu í hópum (tegund → Akstur og
+  skýrslugerð → Aðrar). Verð og HEITI eru reitir sem vistast við blur í `vorur.verd_an_vsk` / `vorur.nafn`. **Heitið er reikningstextinn OG
+  Gátt finnur línur á heitinu** (regex í `netlify/functions/gatt.cjs`) — endurnefning sem tekur línu úr Gáttar-hópi spyr fyrst.
+- **Akstur og Skýrslugerð** (verð + heiti reikningslínu) búa á þjóni: `app_settings.slokk_visit_defaults` = {akstur, skyrslugerd, driveQty,
+  akstur_heiti, skyrslugerd_heiti}. Kóðasjálfgildi 3.600 / 5.600. 129 (töflumerki), 165 (reikningslínur), 488 (viðbótarúttekt) og Gátt lesa
+  þaðan; gildir þar sem ferðin hefur ekki handslegið verð. Mælt 10.11.2026: Agnar setti Skýrslugerð í 4.600 í listanum → Gátt sýndi
+  `fullt_an 4600` (3.450 m. 25 % samningsafslætti).
+- **Gátt Sérkjör = almenn verðskrá nema samið sé um annað** (Agnar 09.11): `netlify/functions/_gatt-serkjor.cjs` (`aksturSkyrsla`); samningsverð
+  (`cfg.akstur` / `cfg.skyrsla`) og flatur afsláttur leggjast ofan á. Próf: `node tools/test-gatt-serkjor.cjs` (25).
+- **Nýir verðlistar** (`502-verdlistar.js`: Sprinklerkerfi · Neyðarljós · „＋ Nýr verðlisti"): `app_settings.verdlistar[<id>]`, sjá `bord-flettur`.
+  **Tilboðsham → „Setja í körfu í Sölu"** setur línur `{type:'service', krefst_verkbeidni:false, disc_pct}` — afsláttur er LÍNUAFSLÁTTUR
+  (aldrei bæði bakaður í línu og í `afslattur`). Úttektir lesa verðin EKKI úr þessum listum enn (`Verdlistar.lidir(id)` er til reiðu).
+
+**Geymd drög eru karfa, ekki sala.** „Geyma sem drög" í greiðsluglugganum (07) → `GeymdDrog.vista()` (501) → tafla `sala_geymd` (karfa jsonb).
+Ekkert R-númer, ekkert í `solur`/Bókhaldi/Kröfu yfirliti/Payday. „Opna í Sölu" í Drög (143) hleður körfuna og merkir röðina `deleted_at`
+(„Sýna eydd" → Endurheimta). Gildra: 255 (sjálfvirkur fyrirtækjaafsláttur) núllstillir `discount_pct` þegar kúnni kemur inn með körfunni —
+`festaAfslatt()` í 501 festir geymda gildið aftur.
+
+**Afgreiðsla án stofnunar** (Agnar 10.11: „flókið að eiga við einstaklingskennitölur hjá þeim sem maður ætlar sér ekkert að skrá").
+- Rótin: `pos.js checkout` AUTO-STOFNAR `customers_base` + `fyrirtaeki` (er_i_thjonustu=false, `review_flag` ef nafn er rusl) fyrir HVERJA
+  óþekkta 10 stafa kt (kanóníska leiðin frá 09.09.2026).
+- „+ Afgreiðsla án stofnunar" í leitar-fellilistanum (114; birtist ALLTAF þegar leit finnur engan) opnar sama glugga og „Án kennitölu".
+  Með 10 stafa kt: `state.customer.an_stofnunar = <hrein kt>` → auto-stofnun sleppt; salan ber nafn (eða „Viðskiptavinur") og raun-kt í
+  `customer_kt`, `customer_id` tómt, og `solur.an_stofnunar = true` er sett eftir insert. 7 stafa tala = sími (kt 999999-9999); nafn = nafn.
+  Reikningurinn er óbreyttur (kemur eins og úr kennitölu). **Kennitala fer aldrei í nafnareit.**
+- `audit-solu-id`: undanþága AÐEINS `greitt_sidar` + merki; „reikningur" án tengingar helst rautt. `v_gengid_inn_osott` nær líka yfir
+  merktar sölur (ósótt vara dettur ekki úr vaktinni).
+
+**Greitt síðar án viðskiptavinar er EÐLILEGT** (Agnar 10.11: „óskráður viðskiptavinur … greiðir þegar hann sækir og getur ekki fengið sendan
+reikning"). Drög sýna grátt „Óskráður viðskiptavinur"; rauða merkið og kassaviðvörunin („KRÖFUNA er ekki hægt að senda", `sala_krafa_an_kunna`)
+kvikna aðeins þegar greiðslumáti er **reikningur** án kennitölu.
+
+**Smátt:** söluloka-glugginn segir „🖨 Prenta reikning" (var „Prenta aftur"; Bókhalds-yfirlit 11 á enn sitt „Prenta aftur (kvittun)").
+Flipi sem var opinn fyrir birtingu sýnir gamla textann þar til hann er endurhlaðinn — það er ekki skyndiminni.
+
+**Prófunaraðferð sem dugði (engin skrif á lifandi):** `DB.sb.from` → Proxy sem skráir köll, `DB.sb.rpc` og `storage` uppgerð, `fetch`-skrif
+blokkuð; svo raunverulegir smellir á ÁFRAM og greiðslumáta. Gildrur: tvítöku-vörnin (sama kt + upphæð < 2 mín) spyr með `Confirm.show`;
+QR-miðaglugginn (`_qrlc_modal`) opnast eftir sölu og hylur ÁFRAM.
+
+## Afgreiðsla án stofnunar — keðjan rakin til enda (lokayfirferð 10.11.2026)
+
+- **Reikningurinn:** `SalaInvoice.renderFromSale` á sölu með raun-kt og engan viðskiptavin prentar „Viðskiptavinur 110989-2889" (nafn tómt) eða
+  „Ásgeir Prófari 110989-2889" — aldrei 999999-9999. Mælt með gervi-glugga (engin skrif).
+- **Sótt ✓ (121) og Klára í Drög stofna ENGAN viðskiptavin** — sala án stofnunar helst óskráð þegar hún er kláruð við afhendingu.
+- **`audit_vernd_guard`** (BEFORE UPDATE/DELETE á `solur`) skráir aðeins eldri röð í `audit_vernd`; hann stöðvar ekkert, svo merkið
+  `an_stofnunar` kemst inn á eftir insertinu fyrir allar stöður.
+- **Greiðsluglugginn (07)** segir „Án stofnunar — enginn viðskiptavinur verður stofnaður" undir kennitölunni þegar merkið er virkt.
+- **Drög-leit:** „óskráður" finnur Greitt síðar án viðskiptavinar (áður aðeins „enginn kúnni").
+- **Óprófað:** raunveruleg sala án stofnunar á lifandi (engin slík sala til 10.11 kl. 21); Claude býr ekki til prófunarsölu með R-númeri.
+- Próf án skrifa: `tools/prof-uppgerd-skrif.js` (`Uppgerd.sala()`), sjá skill `add-feature`.
+
+## Sprinkler-þjónustusamningur (503) — 11.11.2026
+
+- **Hvað:** útfyllanlegur fjögurra greina þjónustusamningur um eftirlit með vatnsúðakerfi (`js/patches/503-sprinkler-samningur.js`),
+  eftir fyrirmynd sem Agnar sendi. Opnast á TVEIMUR stöðum: „Sprinkler-samningur" á Tilboð & samningar (201) og „📜 Þjónustusamningur"
+  í haus verðlistans Sprinklerkerfi (502), vinstra megin við „⚙ Stillingar".
+- **Gögn:** sama geymsla og önnur form síðunnar — `app_settings.tilbod_hub` (fylki, yfirskrifast heilt), tegund `sprinklersamn`,
+  auðkenni `P<tími>`. Telst með „Samningar" (flokkur). Engin ný tafla, engin tenging við `thjonustusamningar` (50/94).
+- **Verð:** nýtt form sækir þóknun úr `Verdlistar.lidir('sprinkler')` (`sp-q`, `sp-a`, `sp-akstur`) EF verð er þar; annars er
+  reiturinn tómur (`null`, ekki 0) og prentast sem auð lína til að handfylla. Aldrei fundið upp verð. Vistaður samningur heldur sínum tölum.
+- **Vistun er aldrei stöðvuð:** vanti nafn verkkaupa er vistað og sagt frá í skilaboðum.
+- **Viðbótarpunktar fyrir næsta form:** `TilbodHub.skra(tegund, { label, stutt, plata, flokkur, takki, titill, opna(form?), html(form), undir(form) })`
+  bætir takka, listaröð, breyta/prenta-grein og teljara við síðuna án þess að snerta 201; `TilbodHub.vf` gefur sama glugga
+  (`modal`), prentskel (`docShell`, `printDoc`), geymslu (`getHub`, `saveHub`) og talnasnið. `Verdlistar.hausTakki(listaId, { texti, titill, smellur })`
+  setur takka í haus verðlista.
+- **Lagað í leiðinni:** „Loka" í fæti allra forma á Tilboð & samningar var ótengdur takki — lokar nú. Smell utan glugga ver 177
+  (modal-dirty-guard) nú þegar; 503 spyr aðeins við × og „Loka" svo ekki sé spurt tvisvar.
+- **Orðalag:** fyrirmyndin vísaði í „reglugerð nr 75/2000 frá Mannvirkjastofnun" — 75/2000 eru LÖG um brunavarnir. Sjálfgefinn texti vísar í
+  lög 75/2000, byggingarreglugerð 112/2012 og leiðbeiningu HMS um sjálfvirk slökkvikerfi (ÍST EN 12845). Reiturinn er frjáls texti.
+- **Prófað á dev með uppgerðum skrifum** (`tools/prof-uppgerd-skrif.js`, raunverulegir smellir): opnun á báðum stöðum, verð úr lista,
+  samtala (4 × 24.000 + 31.000 = 127.000 án vsk → 157.480 m. vsk), prentun með auðum línum, vistun, breyta, 375 px án yfirflæðis.
+  **Óprófað:** raunveruleg vistun á lifandi `app_settings` og prentun á pappír (blaðsíðuskil).
+
+## Verkferlar (504), Verð samkeppnisaðila (505), byggingarvísitala og netfang — 11.11.2026
+
+- **Verkferlar** (`js/patches/504-verkferlar.js`): upplýsingaskjal per þjónustu — hvað er gert við skoðun, eftir hvaða reglum, verð og
+  fyrirvarar. `app_settings.verkferlar[<id>]`; skjölin tvö frá Agnari (neyðar- og útgöngulýsing, brunaviðvörunarkerfi) eru STOFN í kóðanum
+  og fara á þjóninn við fyrstu breytingu. Opnast með „📄 Verkferill" í haus allra verðglugga (502 og 410) og „Verkferlar" á Tilboð & samningar.
+  Formið Þjónustusamningur (201) hefur „Sækja verkferil…" → reiturinn Verkþættir, prentast á undan skilmálum.
+- **Verð samkeppnisaðila** (`js/patches/505-samkeppnisverd.js`, tafla `samkeppnisverd`, `sql/samkeppnisverd.sql`): ein röð per verð —
+  frá hverjum, liður, verð ÁN vsk, eining, dags, tilefni, stærð, staður, athugasemd, `okkar_lidur` (tenging við lið í okkar verðlista).
+  „📊 Verð samkeppnisaðila" í haus allra verðglugga + á Tilboð & samningar. Dálkar: „Á verðlagi í dag" (uppreiknað með vísitölu
+  byggingarkostnaðar) og „Okkar verð" með mun í %. Verð gefið upp með vsk er umreiknað við skráningu. Mjúk eyðing (`eytt`).
+  Samanburður við okkar verð virkar aðeins fyrir verðlista í 502; flokkarnir í 410 eiga ekki liði á því formi.
+- **Byggingarvísitala:** Hagstofa, tafla VIS13000 (grunnur 2021 = 100), `https://px.hagstofa.is/pxis/api/v1/is/Efnahagur/visitolur/2_byggingarvisitala/byggingarvisitala/VIS13000.px`.
+  POST með JSON-fyrirspurn **ÁN Content-Type-hauss** — með `application/json` sendir vafrinn forskoðun sem Hagstofan svarar án CORS-hausa
+  („Failed to fetch"). Sprinkler-samningurinn (503) sækir nýjasta gildið á nýju formi og prentar „130,4 stig (október 2026, grunnur 2021 = 100)".
+  Viðmið: síðasta BIRTA gildi á deginum (gildi mánaðar birtist um 23.) — fyrirmyndin frá 15.09.2022 bar 108,3 = ágúst 2022.
+- **Bráðabirgðaverð Sprinklerkerfi** (Agnar: „svona í bili"): ársfjórðungsskoðun 24.000, ársskoðun 31.000, akstur 2.676 kr. án vsk. — úr
+  samningi samkeppnisaðila frá 2022; uppreiknað til október 2026 væri það 28.898 / 37.326 / 3.222. **Neyðarljós** (verð Agnars sjálfs):
+  tímavinna 14.500 kr./klst., sjónskoðun „frá 29.000" (lágmark 2 klst.). Allt í STOFN í 502 — listi sem er vistaður á þjóninn ræður.
+- **Netfang út á við er slokkvitaeki@brunaholf.is** (Agnar 11.11.2026). Breytt á 33 stöðum sem viðskiptavinur sér (prenthausar, undirskriftir,
+  skjalasniðmát, gátt, vefverslun, AI-svör) og í `app_settings`: `branding.email`, `email.signature`, `skjalasnidmat[0|3].html`
+  (afrit: `backup_20261111_app_settings_netfang`). **EKKI breytt:** pósthólfsauðkenni (`email_digest.account = 'eldklar@eldklar.is'`),
+  Gmail-sendandi (`SJALFGEFID_FRA`, `FRA`, hub `MAIL_FROM`) og `email.from_email` — kerfið sendir og les áfram úr eldklar@-hólfinu.
+  Að skipta þeim út brýtur póstlestur og sendingu nema nýja hólfið sé tengt sem sendandi.
+- **Viðbótarpunktar:** `ThjonustuTengingar.hausTakki(o)` (410, allir þrír flokkar), `Verdlistar.hausTakki('*', o)` (allir listar í 502),
+  `TilbodHub.tol(o)` (verkfærataki hjá Verðskrá). Prófunartólið hefur nýjan ham `Uppgerd.blandad()`: lestur af þjóni, skrif uppgerð.
+- **Óprófað:** raunveruleg vistun verkferils og samkeppnisverðs á lifandi (aðeins uppgerð skrif); prentun á pappír.
