@@ -164,11 +164,26 @@ async function main() {
     .filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
   const skrar = [];
   for (const d of drif) ganga(d, skrar);
-  const diskur = skrar.map((f) => {
+  // Fjölþáttaskrár: S01E01E02 / S01E01-E02 (listi) og S01E01-03 (bil) — „-720p“ o.þ.h. telst ekki með.
+  const diskur = skrar.flatMap((f) => {
     const b = path.basename(f);
-    const m = b.match(/^(.*?)[ ._\-[(]*S(\d{1,2})[ ._]?E(\d{1,3})/i) || b.match(/^(.*?)[ ._-]+(\d{1,2})x(\d{2,3})\b/i);
-    return m && { forskeyti: norm(m[1]), s: +m[2], e: +m[3], moppur: path.dirname(f).split(path.sep).map(norm) };
-  }).filter(Boolean);
+    const m = b.match(/^(.*?)[ ._\-[(]*S(\d{1,2})[ ._]?E(\d{1,3})((?:[ ._]?-?[ ._]?E\d{1,3}|-\d{1,3}(?![\dp]))*)/i)
+      || b.match(/^(.*?)[ ._-]+(\d{1,2})x(\d{2,3})\b/i);
+    if (!m) return [];
+    const fyrsti = +m[3];
+    const fleiri = [...(m[4] ?? "").matchAll(/\d{1,3}/g)].map((x) => +x[0]);
+    let eps = [fyrsti, ...fleiri];
+    const sidasti = fleiri.length ? Math.max(...fleiri) : fyrsti;
+    if ((m[4] ?? "").includes("-") && sidasti > fyrsti && sidasti - fyrsti <= 10) {
+      eps = Array.from({ length: sidasti - fyrsti + 1 }, (_, i) => fyrsti + i);
+    }
+    const forskeyti = norm(m[1]);
+    const moppur = path.dirname(f).split(path.sep).map(norm);
+    return [...new Set(eps)].map((e) => ({ forskeyti, s: +m[2], e, moppur }));
+  });
+  // Möppuheiti passar aðeins ef það ER nafn þáttarins, mögulega með ári, seríu eða gæðamerki á eftir —
+  // ekki önnur sería með sama upphaf („The Boys Presents Diabolical“ ≠ „The Boys“).
+  const moppaPassar = (m, n) => m === n || (m.startsWith(n) && /^((19|20)\d\d|s\d|season|complete|\d{3,4}p)/.test(m.slice(n.length)));
   log(`Diskar ${drif.join(" ")}: ${skrar.length} myndbandsskrár, ${diskur.length} með þáttanúmeri`);
 
   // 3. Hvaða þáttum er fylgst með:
@@ -235,7 +250,7 @@ async function main() {
       }
       const nofn = [norm(s.name), v.plex && norm(v.plex.title)].filter(Boolean);
       const aDiski = new Set(diskur.filter((d) => nofn.includes(d.forskeyti)
-        || (d.forskeyti === "" && d.moppur.some((m) => nofn.some((n) => m.startsWith(n))))).map((d) => `${d.s}x${d.e}`));
+        || (d.forskeyti === "" && d.moppur.slice(-3).some((m) => nofn.some((n) => moppaPassar(m, n))))).map((d) => `${d.s}x${d.e}`));
       const lyklar = synt.map((e) => `${e.season}x${e.number}`);
       const utanPlex = lyklar.filter((k) => !iPlex.has(k) && aDiski.has(k));
       const vantar = lyklar.filter((k) => !iPlex.has(k) && !aDiski.has(k));
