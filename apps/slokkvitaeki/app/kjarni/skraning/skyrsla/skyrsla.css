@@ -177,6 +177,7 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-haedaspjold u { display: block; height: 100%; border-radius: 999px; background: var(--bh-or); }
 .sk-haedaspjold u.ok { background: #16a34a; }
 .sk-haedaspjold small { font-size: 12.5px; color: #5a6882; font-variant-numeric: tabular-nums; }
+.sk-haedaspjold > div.sk-vidbot { background: #fff; border: 1.5px dashed #f2a65a; }   /* viðbótarverkið: hluti af gólfi 5. hæðar, ekki sér hæð */
 .sk-v2 h2 { margin: 30px 0 10px; font-size: 20px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .sk-v2 h2 small { font-size: 12.5px; font-weight: 400; color: #5a6882; }
 .sk-falinn { display: none !important; }

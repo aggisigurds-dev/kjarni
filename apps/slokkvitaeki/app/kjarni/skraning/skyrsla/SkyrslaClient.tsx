@@ -21,7 +21,7 @@ type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null;
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
 type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
 /** parad á stútum viðbótarverksins (tools/skraning-gatakort-vidbot-stutar.cjs) ber auk stöðunnar: númer stúts, flokkun, úttekt skjalsins og skráninguna sem parast. */
-type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string; stutur?: number; flokkun?: string; uttekt?: { texti?: string | null } | null; skr?: { nr: number; stada: string } | null; naest?: { nr: number; d_m: number; stada: string } | null } | null };
+type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string; stutur?: number; flokkun?: string; uttekt?: { texti?: string | null } | null; skr?: { nr: number; stada: string } | null; ids?: number[]; naest?: { nr: number; d_m: number; stada: string } | null } | null };
 const HLUTAR = ["N", "C", "S"];
 const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), Math.floor(m / 3)][i];   // fast deildarmarkmið skipt á hlutana þrjá
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
@@ -311,6 +311,19 @@ export default function SkyrslaClient() {
     return m;
   }, [aaetlud, yfirlit]);
 
+  /** Spjald viðbótarverksins á 4. hæð (stútar af 5. hæð niður í inntaksrými 4. hæðar, 12.11.2026). Klárað = pöruð skráning sem er kláruð NÚNA
+   *  (lesið úr skr eftir parad.ids); opið = pöruð skráning sem er ekki kláruð; hinir eiga enga skráningu (úttekt skjalsins segir hvers vegna). */
+  const stutaspjald = useMemo(() => {
+    const stadaAf = new Map(skr.map((s) => [s.id, s.stada] as [number, string]));
+    let alls = 0, klar = 0, opid = 0, an = 0, ekkiKominn = 0;
+    for (const a of aaetlud) {
+      if (!a.parad || a.parad.stutur == null) continue; alls++;
+      if (a.parad.stada !== "vantar") { const ids = a.parad.ids || [], d = ids.length ? ids.some((i) => stadaAf.get(i) === "done") : a.parad.skr?.stada === "done"; if (d) klar++; else opid++; }
+      else { an++; if (a.parad.flokkun === "stutur_vantar") ekkiKominn++; }
+    }
+    return alls ? { alls, klar, opid, an, ekkiKominn, p: pros(klar, alls) } : null;
+  }, [aaetlud, skr]);
+
   const radir = useMemo(() => HAEDIR.map((haed) => ({
     haed,
     deildir: DEILDIR.map((deild) => ({
@@ -442,6 +455,12 @@ export default function SkyrslaClient() {
           <i><u style={{ width: `${Math.min(100, h.p)}%` }} className={h.p >= 95 ? "ok" : ""} /></i>
           <small>{num(h.klar)} af {num(h.mark)} stökum verkum{haedUndir(h.haed) ? ` · ${haedUndir(h.haed)}` : ""}</small>
         </div>)}
+        {stutaspjald && <div className="sk-vidbot">
+          <div><span>Viðbótarverk 4. hæðar</span><em className={stutaspjald.p >= 95 ? "ok" : stutaspjald.klar ? "vinna" : "eftir"}>{stutaspjald.klar >= stutaspjald.alls ? "Lokið" : stutaspjald.klar ? "Hafið" : "Ekki hafið"}</em></div>
+          <b>{stutaspjald.p} %</b>
+          <i><u style={{ width: `${Math.min(100, stutaspjald.p)}%` }} className={stutaspjald.p >= 95 ? "ok" : ""} /></i>
+          <small>Stútar af 5. hæð niður í inntaksrými 4. hæðar: {num(stutaspjald.klar)} af {num(stutaspjald.alls)} þéttir · {num(stutaspjald.opid)} skráðir, ekki kláraðir · {num(stutaspjald.an)} án skráningar{stutaspjald.ekkiKominn ? ` (þar af ${num(stutaspjald.ekkiKominn)} stútar ekki komnir)` : ""}. Innifalið í gólfi 5. hæðar.</small>
+        </div>}
       </div>}
 
       {synaKafla("forsendur") && <div className="sk-forsendur">
