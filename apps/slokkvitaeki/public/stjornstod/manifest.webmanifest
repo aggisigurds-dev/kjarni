@@ -1,0 +1,17 @@
+{
+  "id": "/kjarni",
+  "name": "Kjarni — Stjórnstöð",
+  "short_name": "Kjarni",
+  "description": "Stjórnstöð Kjarna — öll tól og vefir á einum stað.",
+  "start_url": "/kjarni",
+  "scope": "/kjarni",
+  "display": "browser",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "lang": "is",
+  "icons": [
+    { "src": "/stjornstod/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/stjornstod/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/stjornstod/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
