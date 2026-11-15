@@ -52,6 +52,15 @@ const LOG = [
   { skra: 'lag-6h-vatnsudi-M396.png',    haed: '6H', fag: 'sprinkler', heiti: 'Vatnsúðakerfi 6H (M396-00)',                 blad: 'M396-00', rod: 10, synilegt: true,  q: 1.1, dx: -153, dy: -53 },
   { skra: 'lag-6h-vatnslagnir-M196.png', haed: '6H', fag: 'vatn',      heiti: 'Þrifa-, hita- og kælikerfi 6H (M196-00)',    blad: 'M196-00', rod: 20, synilegt: false, q: 1.0, dx: -30.5, dy: 57.5 },
   { skra: 'lag-6h-lyfjaloft-M796.png',   haed: '6H', fag: 'gas',       heiti: 'Lyfjaloft 6H (M796-00)',                     blad: 'M796-00', rod: 30, synilegt: false, q: 1.0, dx: -14, dy: 12 },
+  // 15.11.2026 (Agnar: „sérðu fleiri layers úr teikningunum á Procore“): rafkerfi í 1:50, ENGIN ásamerki → fylgni við R1150/R1160 sama
+  // hlutanúmers (as_<blað>.json; frávik > 12 pt frá miðgildi systurblaðanna leiðrétt í miðgildið), skeytt með -skeyta-lit.py dokkt <tint>.
+  // Sýna aðallega TÆKI (tengla, ljós, nema), fáar lagnaleiðir — lög til stuðnings, engin sjálfvirk áætluð göt úr þeim.
+  { skra: 'lag-5h-lagspenna-R3150.png',      haed: '5H', fag: 'rafmagn', heiti: 'Lágspenna 5H (R3150-01…20)',      blad: 'R3150', rod: 41, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-6h-lagspenna-R3160.png',      haed: '6H', fag: 'rafmagn', heiti: 'Lágspenna 6H (R3160-01…20)',      blad: 'R3160', rod: 41, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-5h-smaspenna-R5150.png',      haed: '5H', fag: 'rafmagn', heiti: 'Smáspenna 5H (R5150-01…20)',      blad: 'R5150', rod: 42, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-6h-smaspenna-R5160.png',      haed: '6H', fag: 'rafmagn', heiti: 'Smáspenna 6H (R5160-01…20)',      blad: 'R5160', rod: 42, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-5h-brunavidvorun-R6150.png',  haed: '5H', fag: 'rafmagn', heiti: 'Brunaviðvörun 5H (R6150-01…20)',  blad: 'R6150', rod: 43, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-6h-brunavidvorun-R6160.png',  haed: '6H', fag: 'rafmagn', heiti: 'Brunaviðvörun 6H (R6160-01…20)',  blad: 'R6160', rod: 43, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
 ];
 (async () => {
   const [verk] = await rest('GET', `skr_verk?heiti=eq.${encodeURIComponent(VERK)}&select=id`);
@@ -63,7 +72,7 @@ const LOG = [
     if (!t) throw new Error('ekkert yfirlitsblað fyrir ' + l.haed);
     const f = path.join(DIR, l.skra); if (!fs.existsSync(f)) { console.log('VANTAR', l.skra); continue; }
     const buf = fs.readFileSync(f), d = pngDims(buf);
-    const uppruni = `Procore ${l.blad} ${/-00$/.test(l.blad) ? 'rev 0' : 'gildandi útgáfur'} · sótt 11.11.2026 · q=${l.q} dx=${l.dx} dy=${l.dy} pt`;
+    const uppruni = `Procore ${l.blad} ${/-00$/.test(l.blad) ? 'rev 0' : 'gildandi útgáfur'} · sótt ${l.sott || '11.11.2026'} · q=${l.q} dx=${l.dx} dy=${l.dy} pt`;
     if (til.some((x) => x.teikning_id === t.id && (x.uppruni || '').startsWith(`Procore ${l.blad} `))) { console.log('til   ', l.blad, '→ teikning', t.id); continue; }
     const sp = `verk/${verk.id}/${l.skra.replace(/\.png$/, '')}-${crypto.randomBytes(6).toString('hex')}.png`;
     console.log(WRITE ? 'skrifa' : 'DRY   ', l.blad, '→ teikning', t.id, `${d.w}×${d.h}`, (buf.length / 1024).toFixed(0) + ' kB', l.fag, l.synilegt ? 'sýnilegt' : 'falið');
