@@ -117,6 +117,9 @@ const OTENGD_PX = 45, OTENGT = "#475569";
  * meira en KLASA_BIL px í sundur meðfram veggnum eru sitt hvort merkið. PAR_PX: tveir endar sömu lokunar (hvor sínum megin við vegg, án nema) renna í eitt
  * merki ef þeir eru nær hvor öðrum en þetta, í hvaða stækkun sem er. */
 const KLASA_BIL = 6, PAR_PX = 12;
+/* Tveir endar sömu lokunar (hinn endinn handan veggjar samkvæmt endar) eru EITT merki ef þeir eru innan ENDA_SAMAN_PX (= ENDI_PX ≈ 0,9 m). Þá stendur sitt hak hvorum
+ * megin á sama merki og hakið er alltaf stakt verk Í merkinu (Agnar 15.11.2026). PAR_PX ræður áfram aðeins nálægð án veggjar (lið c í uppbroti lokana). */
+const ENDA_SAMAN_PX = 30;
 /* Hvað rennur saman í eitt merki í nærmynd: stök verk sömu stærðar innan max(D_FAST, 1,2 R) frá merkinu. Áður 2,4 R: þegar ekki var stækkað alveg inn var það
  * 0,5–0,9 m á blaðinu, svo tveir til þrír stokkar hlið við hlið urðu eitt merki með „×4“ eða „×6“ (Agnar 15.11.2026: „af hverju er oft 4x til 6x í sama merkinu“).
  * Mælt sama dag á 6H: af 403 merkjum á vegg eiga aðeins 18 í raun þrjár eða fleiri skráningar. VEGG_THYKKT = þykkt brunaveggjar á blaðinu (px). */
@@ -661,7 +664,7 @@ export default function KortClient() {
     for (let i = 0; i + 4 < nm.length; i += 5) { const l = lyk(Math.floor(nm[i] / OTENGD_PX), Math.floor(nm[i + 1] / OTENGD_PX)), a = net.get(l); if (a) a.push(i); else net.set(l, [i]); }
     let n = 0;
     for (const p of syndir) {
-      const e = endar.get(p.s.id); if (p.t.hopur !== NEMA_HOPUR || p.s.lagf === "A" || e?.nemi !== undefined || p.faersla?.uppruni === "handvirkt" || (e && e.hlid === "hinum" && e.q && e.d <= PAR_PX)) continue;
+      const e = endar.get(p.s.id); if (p.t.hopur !== NEMA_HOPUR || p.s.lagf === "A" || e?.nemi !== undefined || p.faersla?.uppruni === "handvirkt" || (e && e.hlid === "hinum" && e.q && e.d <= ENDA_SAMAN_PX)) continue;
       const gx = Math.floor(p.x / OTENGD_PX), gy = Math.floor(p.y / OTENGD_PX);
       leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const i of net.get(lyk(ix, iy)) || []) if (Math.hypot(p.x - nm[i], p.y - nm[i + 1]) < OTENGD_PX) { n++; break leit; }
     }
@@ -764,7 +767,7 @@ export default function KortClient() {
        * veggjarins, með hökin sitt hvorum megin. Skráning án nema sem er samt nálægt einum er „ótengd“: lítil og grá þar til hún er dregin að merkinu (Færa),
        * þá smellur hún á nemann og hakið birtist. Skráningar fjarri öllum nemum (veggir sem eru ekki rauðir á blaðinu) teiknast eins og áður. */
       const adalNm = adal && naerm && veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null, afNema = new Map<string, Hop>(), hopAf = new Map<number, Hop>(), notadir = new Set<number>();
-      const parHandan = (p: Punktur) => { const e = endar.get(p.s.id); return !!e && e.hlid === "hinum" && !!e.q && e.d <= PAR_PX; };
+      const parHandan = (p: Punktur) => { const e = endar.get(p.s.id); return !!e && e.hlid === "hinum" && !!e.q && e.d <= ENDA_SAMAN_PX; };
       const naerNema = (p: Punktur) => { const nm = adalNm!; for (let i = 0; i + 4 < nm.length; i += 5) if (Math.abs(p.x - nm[i]) < OTENGD_PX && Math.abs(p.y - nm[i + 1]) < OTENGD_PX && Math.hypot(p.x - nm[i], p.y - nm[i + 1]) < OTENGD_PX) return true; return false; };
       for (const p of syndir) {
         if (p.s.id === dr?.p?.s.id || p.s.id === valinn?.p?.s.id) { stakir.push(p); continue; }
@@ -786,7 +789,7 @@ export default function KortClient() {
           const ot = loftNemi && ni === undefined && naerNema(p) && p.faersla?.uppruni !== "handvirkt" && !parHandan(p);   // stakur punktur við gegnumtak; par á vegg og handfærður punktur eru venjuleg merki
           /* Tveir endar sömu lokunar (hinn endinn handan veggjar, innan PAR_PX) eru EITT merki í hvaða stækkun sem er. Áður rann parið aðeins saman meðan það
            * var innan merkisbreiddar og klofnaði í tvö merki með tvö hök hvort þegar stækkað var inn (Agnar 15.11.2026: „eru þetta 2 eða 4 göt“). */
-          const e = naid && !lg ? endar.get(p.s.id) : undefined, fel = e && e.hlid === "hinum" && e.q && e.d <= PAR_PX ? hopAf.get(e.q.s.id) : undefined;
+          const e = naid && !lg ? endar.get(p.s.id) : undefined, fel = e && e.hlid === "hinum" && e.q && e.d <= ENDA_SAMAN_PX ? hopAf.get(e.q.s.id) : undefined;
           if (fel && !fel.lg && fel.t.heiti === p.t.heiti && fel.kk === kkP) h = fel;
           else leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const q of net.get(lykill(ix, iy)) || []) {
             if (q.t.hopur !== p.t.hopur || !!q.ot !== ot || q.adal || Math.hypot(q.x - p.x, q.y - p.y) >= D) continue;
@@ -897,22 +900,21 @@ export default function KortClient() {
          * við merkið lárétt eru hliðar hans ofan og neðan við, svo hökin fara þangað; annars til vinstri og hægri. Hökin eru utan við merkið svo talan sjáist. */
         const upp = !!vgT && veggurLarettur(vgT, x, y) === true;
         const ax = upp ? x : x - R * 1.5, ay = upp ? y - R * 1.5 : y - R * 0.1, bx = upp ? x : x + R * 1.5, by = upp ? y + R * 1.6 : y - R * 0.1;
-        /* Hlið þekkt (skráning á nema): hakið fer ÞEIM megin við vegginn sem skráningin er — neongrænt ef henni var smellt þangað með hendi, annars dökkt
-         * (hlið lesin úr Ajour-staðnum). Hitt sætið: hak ef hinn endinn er skráður, annars rautt ✕. */
-        if (hs && (hs.nA > 0 || hs.nB > 0)) {
-          const baedi = hs.nA > 0 && hs.nB > 0, annar = baedi || nh > 0 || nd - hs.nA - hs.nB > 0;
-          if (hs.nA > 0) tikk(ax, ay, hs.fA ? NEON : hl); if (hs.nB > 0) tikk(bx, by, hs.fB ? NEON : hl);
-          if (!baedi) { const ox = hs.nA > 0 ? bx : ax, oy = hs.nA > 0 ? by : ay; if (annar) { if (samaSia && vs > 0) gultSpurn(ox, oy + R * 0.05); else tikk(ox, oy, hl); } else if (ve > 0) raudurKross(ox, oy); }
-          if (ve > 0 && annar) raudurKross(upp ? x + R * 0.95 : x + R * 2.2, upp ? y + R * 2.1 : y - R * 0.95, 0.62);
-          if (loft && n >= 3) texti("×" + n, upp ? x + R * 1.15 : x + R * 0.55, upp ? y + R * 0.1 : y + R * 0.85, R * 0.7, "left");
-          return;
-        }
-        if (nd >= 1) tikk(ax, ay, hl);
-        /* Seinna sætið (Agnar 13.11.2026: „teikningin sýnir næstum alls staðar að bara sé búið öðrum megin“ á 6H S2 sem er búin): hak ef hinn endinn er
-         * skráður og kláraður, líka þegar hann er teiknaður sem annað merki hinum megin við vegginn. Rautt ✕ aðeins ef ENGIN skráning merkisins á hinn
-         * endann; í blönduðu merki (yfirlit) er hakið sýnt og lítið ✕ við hornið. Gult „?“ sést aðeins þegar sían „Sömu megin“ er á. */
-        if (nh > 0) { if (samaSia && vs > 0) gultSpurn(bx, by + R * 0.05); else tikk(bx, by, hl); if (ve > 0) raudurKross(upp ? x + R * 0.95 : x + R * 2.2, upp ? y + R * 2.1 : y - R * 0.95, 0.62); }
-        else if (ve > 0) raudurKross(bx, by); else if (nd >= 2) tikk(bx, by, hl);
+        /* HVERT HAK = EITT KLÁRAÐ STAKT VERK Í ÞESSU MERKI (Agnar 15.11.2026: „brjálæðislega villandi þegar þú sýnir alltaf 2 V við merki. Þegar það er bara 1 V þarna“).
+         * Áður fékk seinna sætið hak ef hinn endinn var skráður í ÖÐRU merki, svo tvö merki með einu verki hvort sýndu fjögur hök. Hinn endinn er nú í sama merki
+         * (ENDA_SAMAN_PX); sé hann lengra frá er sætið autt. Rautt ✕ ef enginn endi finnst; gult „?“ aðeins með síunni „Sömu megin“.
+         * Hlið þekkt (skráning á nema): hakið fer þeim megin við vegginn sem skráningin er, neongrænt ef henni var smellt þangað með hendi. Verk með óþekkta hlið fylla
+         * autt sæti. Tvö verk sömu megin = tvöfalt hak í sama sæti. */
+        let tA = 0, tB = 0, nA = false, nB = false;
+        if (hs && (hs.nA > 0 || hs.nB > 0)) { const u = Math.max(0, nd - hs.nA - hs.nB); tA = hs.nA; tB = hs.nB; nA = hs.fA; nB = hs.fB; if (u) { if (tB === 0) tB = u; else if (tA === 0) tA = u; else tB += u; } }
+        else if (nd >= 1) { tA = 1; tB = nd - 1; }
+        const sAeti = (sx: number, sy: number, c: number, neon: boolean, utx: number, uty: number, tomt: boolean) => {
+          if (c >= 1) { tikk(sx, sy, neon ? NEON : hl); if (c >= 2) tikk(sx + utx * R * 0.55, sy + uty * R * 0.55, hl); return; }
+          if (!tomt) return; if (ve > 0) raudurKross(sx, sy); else if (samaSia && vs > 0) gultSpurn(sx, sy + R * 0.05);
+        };
+        sAeti(ax, ay, tA, nA, upp ? 0 : -1, upp ? -1 : 0, tB > 0);
+        sAeti(bx, by, tB, nB, upp ? 0 : 1, upp ? 1 : 0, true);
+        if (ve > 0 && tA > 0 && tB > 0) raudurKross(upp ? x + R * 0.95 : x + R * 2.2, upp ? y + R * 2.1 : y - R * 0.95, 0.62);
         if (loft && n >= 3) texti("×" + n, upp ? x + R * 1.15 : x + R * 0.55, upp ? y + R * 0.1 : y + R * 0.85, R * 0.7, "left");
       };
       for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs, h.kl, h.ne, h.lg, h.kk, h.ot);
