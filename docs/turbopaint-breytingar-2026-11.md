@@ -49,3 +49,14 @@ vinnueintak — hæð sem er opnuð úr Slökkvitæki-appinu er alltaf endurbygg
 Tailwind-klasanum `grid` — notaðu `[display:grid]` í TurboPaint-hlutum. (2) Forsíðan er með eyða-hnapp og „Sækja ferska útgáfu":
 lokaðu ALLTAF á skrif í prófun gegn raungögnum (sjá að ofan). (3) `zoom` má aldrei lenda á `.kjarni-stage` eða foreldri hennar —
 snerti-hnit teikningarinnar ruglast.
+
+## 15.11.2026 — eyðing milli tækja og offline-útgáfur
+
+| PR | Hvað | Skrár | Próf |
+|---|---|---|---|
+| #325 | Kjarna-Stjórnstöðin fær heimaskjás-tákn (hvítt K, appelsínugulur kjarni) + manifest `display: browser` (flýtileið, gleypir ekki TurboPaint/Apex) | `public/stjornstod/*`, `app/kjarni/page.tsx` | Chromium les manifestið villulaust í framleiðslu |
+| #326 | Eytt borð lifnar ekki við af öðru tæki (`eyttISkyi`/`ovisstUmSky` → `pushBoard` ýtir ekki eyddu borði nema nýrri vinna sé á því; `listBoards` hreinsar; `eydaBordi` ský fyrst líka fyrir opna borðið). ⬇ offline uppfærir eldra eintak; „eldri útgáfa í síma" | `lib/board/persistence.ts`, `Verkefni.tsx`, `TopBar.tsx` | `eyding-sync.test.ts` (6); vafri gegn raungögnum án skrifa |
+
+**Gildra:** `pushBoard` er upsert með `deleted: false` — hvert nýtt skrif-flæði sem ýtir borði verður að virða `eyttISkyi`,
+annars lífgar það eytt borð við á öllum tækjum. Tímastimplar: staðbundið `…Z`, skýið `…+00:00` → berðu saman með `erNyrra`
+(Date.parse), aldrei strengjum.

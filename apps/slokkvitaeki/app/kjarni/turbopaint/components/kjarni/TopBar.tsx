@@ -36,8 +36,8 @@ import { IMPORT_FILE_ACCEPT, IMPORT_SIZE_HINT } from "../../lib/board/import-lim
 import {
   clearBoard,
   createBoard,
-  deleteCurrentBoard,
-  erBordOfflineTilbuid,
+  eydaBordi,
+  offlineStadaBords,
   getCurrentBoardId,
   g_oraBordOfflineTilbuid,
   listBoards,
@@ -76,8 +76,8 @@ const DEFAULT_BOARD_NAMES = new Set([
   "Ónefnt borð",
 ]);
 
-/** Staða „Sækja fyrir offline" per borð í borðalistanum. */
-type OfflineStada = "nei" | "saekja" | "ja" | "villa";
+/** Staða „Sækja fyrir offline" per borð í borðalistanum. „eldri" = geymt í tækinu, en skýið á nýrri útgáfu. */
+type OfflineStada = "nei" | "saekja" | "ja" | "villa" | "eldri";
 
 export function TopBar({
   onImport,
@@ -131,11 +131,12 @@ export function TopBar({
   // „Sækja fyrir offline": staða hvers borðs í „Borðin mín".
   const [offline, setOffline] = useState<Record<string, OfflineStada>>({});
 
-  /** Merkir borð sem þegar eru tilbúin án nets með grænu ✓ (hreint staðbundið, ekkert net). */
+  /** Merkir borð sem þegar eru tilbúin án nets með grænu ✓ (hreint staðbundið, ekkert net) — eða gulbrúnu ef eintakið í
+   *  tækinu er eldra en útgáfan í listanum (sem er sameinaður við skýið). */
   const metaOffline = (list: BoardListEntry[]) => {
     for (const b of list) {
-      void erBordOfflineTilbuid(b.id).then((tilbuid) => {
-        setOffline((o) => (o[b.id] === "saekja" ? o : { ...o, [b.id]: tilbuid ? "ja" : o[b.id] ?? "nei" }));
+      void offlineStadaBords(b.id, b.updatedAt).then((s) => {
+        setOffline((o) => (o[b.id] === "saekja" ? o : { ...o, [b.id]: s === "nei" ? (o[b.id] === "villa" ? "villa" : "nei") : s }));
       });
     }
   };
@@ -147,7 +148,7 @@ export function TopBar({
       const r = await g_oraBordOfflineTilbuid(id);
       if (r.ok) {
         setOffline((o) => ({ ...o, [id]: "ja" }));
-        toast.success("Borðið er tilbúið án nets");
+        toast.success(r.uppfaert ? "Nýjasta útgáfan sótt — tilbúið án nets" : "Borðið er tilbúið án nets");
       } else {
         setOffline((o) => ({ ...o, [id]: "villa" }));
         toast.error(
@@ -284,14 +285,16 @@ export function TopBar({
                           ? "Sæki niður…"
                           : st === "villa"
                             ? "Náðist ekki alveg — reyndu aftur með neti"
-                            : "Sækja fyrir offline — geymir borðið og myndirnar í símann"
+                            : st === "eldri"
+                              ? "Eldri útgáfa geymd í símanum — smelltu til að sækja þá nýjustu"
+                              : "Sækja fyrir offline — geymir borðið og myndirnar í símann"
                     }
                     aria-label="Sækja fyrir offline"
                     className={
                       "absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-md hover:bg-stone-200 " +
                       (st === "ja"
                         ? "text-emerald-600"
-                        : st === "villa"
+                        : st === "villa" || st === "eldri"
                           ? "text-amber-600"
                           : "text-stone-400 hover:text-stone-700")
                     }
@@ -316,8 +319,10 @@ export function TopBar({
           {skodun ? null : (
             <DropdownMenuItem
               onClick={() => {
-                if (window.confirm("Eyða þessu borði? (Það hverfur af öllum tækjum)")) {
-                  void deleteCurrentBoard();
+                const id = getCurrentBoardId();
+                if (id && window.confirm("Eyða þessu borði? (Það hverfur af öllum tækjum)")) {
+                  // Ský fyrst: án nets er engu eytt (annars lifnaði borðið við úr skýinu) — notandinn fær að vita það
+                  void eydaBordi(id).catch((e) => toast.error(e instanceof Error ? e.message : "Náði ekki að eyða borðinu"));
                 }
               }}
             >

@@ -5,11 +5,11 @@ import { Check, ChevronDown, Cloud, Download, Loader2, Plus, RefreshCw, Search, 
 import { toast } from "sonner";
 import {
   eydaBordi,
-  erBordOfflineTilbuid,
   g_oraBordOfflineTilbuid,
   getCurrentBoardId,
   listBoards,
   listBoardsLocal,
+  offlineStadaBords,
   type BoardListEntry,
 } from "../../lib/board/persistence";
 import { athugaSync, synUrGeymdu, type SyncKort, type SyncSyn } from "../../lib/board/sync-saekja";
@@ -23,7 +23,8 @@ import { SYNC_HEITI, type SyncLjos } from "../../lib/board/sync-stada";
 // ljós um stöðu borðsins gagnvart úttektarteikningunni (lib/board/sync-stada.ts) — rautt úrelt, gult óvistuð vinna á
 // borði, grænt í sync, grátt ótengt — og þaðan má sækja ferska útgáfu úr úttekt eða eyða borðinu.
 
-type OfflineStada = "nei" | "saekja" | "ja" | "villa";
+/** „eldri" = borðið er geymt í tækinu, en skýið á nýrri útgáfu (án nets opnaðist sú eldri). */
+type OfflineStada = "nei" | "saekja" | "ja" | "villa" | "eldri";
 type Sia = "allt" | SyncLjos;
 
 const LITIR: Record<SyncLjos, { punktur: string; rond: string; texti: string }> = {
@@ -88,8 +89,8 @@ export function Verkefni({
       setBord(all);
       setSync(synUrGeymdu(all));
       for (const b of all) {
-        void erBordOfflineTilbuid(b.id).then((t) =>
-          setOffline((o) => (o[b.id] === "saekja" ? o : { ...o, [b.id]: t ? "ja" : o[b.id] ?? "nei" }))
+        void offlineStadaBords(b.id, b.updatedAt).then((s) =>
+          setOffline((o) => (o[b.id] === "saekja" ? o : { ...o, [b.id]: s === "nei" ? (o[b.id] === "villa" ? "villa" : "nei") : s }))
         );
       }
       if (typeof navigator === "undefined" || navigator.onLine) void keyraSync(all);
@@ -120,7 +121,7 @@ export function Verkefni({
       const r = await g_oraBordOfflineTilbuid(id);
       if (r.ok) {
         setOffline((o) => ({ ...o, [id]: "ja" }));
-        toast.success("Tilbúið án nets");
+        toast.success(r.uppfaert ? "Nýjasta útgáfan sótt — tilbúið án nets" : "Tilbúið án nets");
       } else {
         setOffline((o) => ({ ...o, [id]: "villa" }));
         toast.error(r.vantar < 0 ? "Náði ekki í borðið — ertu án nets?" : `Vantar ${r.vantar} myndir — reyndu með neti`);
@@ -347,6 +348,10 @@ export function Verkefni({
                             <span className="inline-flex items-center gap-0.5 text-emerald-400">
                               <Check className="size-3" /> án nets
                             </span>
+                          ) : st === "eldri" ? (
+                            <span className="text-amber-300" title="Síminn geymir eldri útgáfu — ýttu á ⬇ til að sækja þá nýjustu">
+                              eldri útgáfa í síma
+                            </span>
                           ) : null}
                           {kort?.mat.taeki && kort.mat.taeki.virk > 0 ? (
                             <span title="Skráð tæki staðarins sem eru komin á úttektarteikninguna">
@@ -421,12 +426,14 @@ export function Verkefni({
                           ? "Tilbúið án nets (smelltu til að uppfæra)"
                           : st === "villa"
                             ? "Náðist ekki alveg — reyndu aftur"
-                            : "Sækja fyrir offline — geymir í símann"
+                            : st === "eldri"
+                              ? "Eldri útgáfa í símanum — smelltu til að sækja þá nýjustu"
+                              : "Sækja fyrir offline — geymir í símann"
                       }
                       aria-label="Sækja fyrir offline"
                       className={
                         "flex min-h-11 flex-1 items-center justify-center hover:bg-white/5 " +
-                        (st === "ja" ? "text-emerald-400" : st === "villa" ? "text-amber-400" : "text-stone-300")
+                        (st === "ja" ? "text-emerald-400" : st === "villa" || st === "eldri" ? "text-amber-400" : "text-stone-300")
                       }
                     >
                       {st === "saekja" ? <Loader2 className="size-4 animate-spin" /> : st === "ja" ? <Check className="size-4" /> : <Download className="size-4" />}
