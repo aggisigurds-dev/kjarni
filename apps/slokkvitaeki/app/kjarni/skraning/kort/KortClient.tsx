@@ -165,7 +165,9 @@ type Aaetlad = { id: number; teikning_id: number; x_px: number; y_px: number; fa
 /** Tillaga: staður sem tól stingur upp á (t.d. stokkur gegnum brunavegg án skráningar). Sést á kortinu en telst EKKI í stöðuskýrslunni fyrr en hún er staðfest. */
 const erTillaga = (a: Aaetlad) => (a.uppruni || "").startsWith("tillaga:");
 /** Pörun áætlaðs gats við skráningar — reiknuð af tools/skraning-gatakort-para.cjs. */
-type Parad = { ids: number[]; radnr: number[]; n: number; stada: "fullt" | "hluti" | "vantar"; reiknad?: string };
+type Parad = { ids: number[]; radnr: number[]; n: number; stada: "fullt" | "hluti" | "vantar"; reiknad?: string; stutur?: number; flokkun?: string };
+/** Stútur viðbótarverksins á 4H án skráningar: litur úttektarinnar Í punktinum, sami og tíglarnir í stöðuskýrslunni (Haedir.tsx STUT). [fylling, rammi] */
+const STUT_LIT: Record<string, [string, string]> = { eftir_oskrad: ["#dc2626", "#ffffff"], thett_oskrad: ["#f59e0b", "#ffffff"], stutur_vantar: ["#ffffff", "#dc2626"], ometid: ["#ffffff", "#dc2626"] };
 const AA_SEL = "id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd,flokkur_id,parad,uppruni";
 const PARAD: Record<string, [string, string]> = { fullt: ["Fullt", "#86efac"], hluti: ["Vantar hluta", "#fde047"], vantar: ["Engin skráning", "#fca5a5"] };
 // Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
@@ -592,6 +594,14 @@ export default function KortClient() {
   const paradIds = useMemo(() => { const m = new Set<number>(); for (const a of aaetlud) if (a.teikning_id === syn && a.parad) for (const id of a.parad.ids) m.add(id); return m; }, [aaetlud, syn]);
   /** Sía án táknasíunnar — skýringarnar sýna þá réttan fjölda per tákn. */
   const synV = useMemo(() => SYNIR.find((x) => x[0] === synFag) || null, [synFag]);
+  /* Sími opnast í Loftræstisýn. 4. hæð er eingöngu gólfgöt (milliloft og stútar af 5. hæð), svo þar sást ekkert: á 4H skiptir sýnin í Gólf og aftur í
+   * Loftræstingu þegar farið er af 4H. Velji notandinn aðra sýn sjálfur á 4H stendur hún. */
+  const fyrriHaed = useRef<string | null>(null);
+  useEffect(() => {
+    const h = teikning?.haed || null, var4 = fyrriHaed.current === "4H"; fyrriHaed.current = h; if (!snertiRef.current) return;
+    if (h === "4H" && synFag === "loftraesting") setSynFag("golf");
+    else if (var4 && h !== "4H" && synFag === "golf") setSynFag("loftraesting");
+  }, [teikning?.haed]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Símasýn: ein deild í einu (Agnar 12.11.2026: „í breytingarham er alveg nóg að sjá bara eina deild í einu“). Aðeins á yfirlitsblaði. */
   const einDeild = virkDeild && teikning?.tegund === "yfirlit" ? virkDeild : "";
   const siaAn = useCallback((p: Punktur) => {
@@ -631,6 +641,8 @@ export default function KortClient() {
     return true;
   }, [aaIDeild, synV, aaStada, stada]);
   const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti] && (!miro || synaParud || !a.parad || a.parad.stada === "vantar") && (synaTillogur || !erTillaga(a))), [aaetludBlads, aaStodusia, afTakn, aaTakn, miro, synaParud, synaTillogur]);
+  /** Stútar viðbótarverksins án skráningar á þessu blaði, eftir úttekt (fyrir skýringarnar). */
+  const stutTal = useMemo(() => { let thett = 0, ekki = 0; for (const a of aaetludSynar) if (a.parad?.stutur != null && aaEftir(a)) { if (a.parad.flokkun === "thett_oskrad") thett++; else if (a.parad.flokkun !== "eftir_oskrad") ekki++; } return { thett, ekki }; }, [aaetludSynar]); // eslint-disable-line react-hooks/exhaustive-deps
   const tillogur = useMemo(() => aaetludBlads.filter((a) => erTillaga(a) && (!a.parad || a.parad.stada === "vantar") && aaStodusia(a)).length, [aaetludBlads, aaStodusia]);
   const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && !erTillaga(a) && aaIDeild(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV, aaIDeild]);
   const taknTal = useMemo(() => {
@@ -653,7 +665,7 @@ export default function KortClient() {
     return hitt ? log.filter((l) => l.teikning_id === hitt.id).map((l) => ({ ...l, lan: hitt.haed || hitt.heiti })) : eigin;
   }, [log, syn, teikning, teikn]);
   /** Sést lagið? Flýtisýn ræður ef hún er á; lánað lag er falið þar til kveikt er á því hér; annars stillingin í grunninum. */
-  const lagSest = useCallback((l: Lag) => (synV ? synV[2].includes(l.fag) : l.lan ? !!lanSyn[l.id] : l.synilegt), [synV, lanSyn]);
+  const lagSest = useCallback((l: Lag) => (synV ? synV[2].includes(l.fag) || (synV[0] === "golf" && l.fag === "vatn" && !l.lan && l.synilegt) : l.lan ? !!lanSyn[l.id] : l.synilegt), [synV, lanSyn]);   // gólfsýn: líka vatnslagnir sem eru stilltar sýnilegar (4H: frárennsli 5H)
   const manudir = useMemo(() => [...new Set(skr.map((s) => (s.framkvaemt_til || "").slice(0, 7)).filter(Boolean))].sort(), [skr]);
   const endaVantar = useMemo(() => syndir.reduce((n, p) => n + (vantarEnda(p) ? 1 : 0), 0), [syndir, vantarEnda]);
   const samaTal = useMemo(() => syndir.reduce((n, p) => n + (samaMegin(p) ? 1 : 0), 0), [syndir, samaMegin]);
@@ -978,7 +990,7 @@ export default function KortClient() {
         const r = 6.4 * zb; cx.beginPath(); cx.arc(ax, ay, r, 0, 6.2832); cx.fillStyle = miro ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.9)"; cx.fill(); cx.lineWidth = 2.2 / k; cx.strokeStyle = "#ea580c"; cx.stroke();
         cx.font = `700 ${r * 1.45}px system-ui, sans-serif`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.fillStyle = "#c2410c"; cx.fillText("?", ax, ay + r * 0.08); continue;
       }
-      if (aaEftir(a)) { slod(cx, "o", ax, ay, 5.6 * zb); cx.fillStyle = "#dc2626"; cx.fill(); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#ffffff"; cx.stroke(); continue; }
+      if (aaEftir(a)) { const sl = a.parad?.stutur != null ? STUT_LIT[a.parad.flokkun || ""] || STUT_LIT.ometid : null; slod(cx, "o", ax, ay, 5.6 * zb); cx.fillStyle = sl ? sl[0] : "#dc2626"; cx.fill(); cx.lineWidth = (sl && sl[1] !== "#ffffff" ? 2.4 : 1.6) / k; cx.strokeStyle = sl ? sl[1] : "#ffffff"; cx.stroke(); continue; }
       /* Parað áætlað gat sést aðeins ef beðið er um það („Sýna líka áætluð göt sem eiga skráningu“). Í nýja stílnum er það lítil brotin útlína í kringum
        * merkið, ekki fylltur tígull yfir því: staðan stendur þegar í fyllingu merkisins. Valið eða dregið gat er teiknað fyllt svo það sjáist. */
       const valid = adr || valinn?.a?.id === a.id, r = (miro && !valid ? 5.2 : 6.5) * zb; slod(cx, "d", ax, ay, r);
@@ -1475,6 +1487,8 @@ export default function KortClient() {
             <span><i className="hn" />Hálfnað</span>
             <span><i className="op" />Opið</span>
             <span><i className="ef" />Eftir, óskráð</span>
+            {stutTal.thett > 0 && <span><i className="st-g" />Stútur: þétt, skráningu vantar ({num(stutTal.thett)})</span>}
+            {stutTal.ekki > 0 && <span><i className="st-h" />Stútur ekki kominn / ómetið ({num(stutTal.ekki)})</span>}
             <span><i className="lf" />Lagfæring</span>
             {otengdTal > 0 && <span><i className="ot" />Ótengdur punktur ({num(otengdTal)})</span>}
             {(endaVantar > 0 || anEnda) && <button type="button" className={anEnda ? "on" : ""} aria-pressed={anEnda} onClick={() => setAnEnda((x) => !x)}><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3 3L11 11M11 3L3 11" stroke="#dc2626" strokeWidth="2.6" strokeLinecap="round" fill="none" /></svg>Hinn endann vantar ({num(endaVantar)})</button>}
