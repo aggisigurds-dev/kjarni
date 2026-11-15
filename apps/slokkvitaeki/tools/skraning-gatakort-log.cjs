@@ -61,6 +61,16 @@ const LOG = [
   { skra: 'lag-6h-smaspenna-R5160.png',      haed: '6H', fag: 'rafmagn', heiti: 'Smáspenna 6H (R5160-01…20)',      blad: 'R5160', rod: 42, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
   { skra: 'lag-5h-brunavidvorun-R6150.png',  haed: '5H', fag: 'rafmagn', heiti: 'Brunaviðvörun 5H (R6150-01…20)',  blad: 'R6150', rod: 43, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
   { skra: 'lag-6h-brunavidvorun-R6160.png',  haed: '6H', fag: 'rafmagn', heiti: 'Brunaviðvörun 6H (R6160-01…20)',  blad: 'R6160', rod: 43, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  // 15.11.2026 (síðari lota): hlutablöð úðakerfis og lyfjalofts (1:50, ÁSAMERKI → stillt við M115-NN/M116-NN, frávik ≤ 0,1 pt; M315-06/16/18
+  // án ása → fylgni). Gataplön burðarvirkis M814/M815/M816 (rev 0, 06.01.2025): göt LESIN úr texta („ø160“, „150 x 300“) og teiknuð sem
+  // hringir (blátt = Ø160–200 liður 1.2, bleikt = Ø210–300 liður 1.3 með stærð, grátt = annað). Plata yfir 4H á 4H, yfir 5H á 5H, yfir 6H á 6H.
+  { skra: 'lag-5h-udi-hluta-M315.png',         haed: '5H', fag: 'sprinkler', heiti: 'Vatnsúðakerfi hlutablöð 5H (M315-01…20)', blad: 'M315', rod: 11, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-6h-udi-hluta-M316.png',         haed: '6H', fag: 'sprinkler', heiti: 'Vatnsúðakerfi hlutablöð 6H (M316-01…20)', blad: 'M316', rod: 11, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-5h-lyfjaloft-hluta-M715.png',   haed: '5H', fag: 'gas',       heiti: 'Lyfjaloft hlutablöð 5H (M715-01…20)',     blad: 'M715', rod: 31, synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-6h-lyfjaloft-hluta-M716.png',   haed: '6H', fag: 'gas',       heiti: 'Lyfjaloft hlutablöð 6H (M716-01…20)',     blad: 'M716', rod: 31, synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-4h-gataplan-M814.png',          haed: '4H', fag: 'annad',     heiti: 'Gataplan: plata yfir 4H (M814, rev 0)',   blad: 'M814', rod: 2,  synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-5h-gataplan-M815.png',          haed: '5H', fag: 'annad',     heiti: 'Gataplan: plata yfir 5H (M815, rev 0)',   blad: 'M815', rod: 2,  synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-6h-gataplan-M816.png',          haed: '6H', fag: 'annad',     heiti: 'Gataplan: plata yfir 6H / þak (M816, rev 0)', blad: 'M816', rod: 2, synilegt: false, gegnsaei: 1, q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
 ];
 (async () => {
   const [verk] = await rest('GET', `skr_verk?heiti=eq.${encodeURIComponent(VERK)}&select=id`);
