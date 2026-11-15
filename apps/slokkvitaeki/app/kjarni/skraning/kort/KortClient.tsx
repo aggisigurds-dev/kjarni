@@ -329,7 +329,7 @@ export default function KortClient() {
   const [syn, setSyn] = useState<number | null>(null); // teikning.id sem er sýnd (yfirlit eða stök)
   // síur
   const [afTakn, setAfTakn] = useState<Record<string, boolean>>({});
-  const [stada, setStada] = useState<"allt" | "done" | "opid" | "eftir">("allt");
+  const [stada, setStada] = useState<"allt" | "done" | "opid" | "eftir" | "ogert">("allt");   // ogert = allt sem er eftir: opnar skráningar + áætluð göt án (fullrar) skráningar
   const [afDeild, setAfDeild] = useState<Record<string, boolean>>({});
   const [madur, setMadur] = useState("");
   const [fra, setFra] = useState(""); const [til, setTil] = useState("");
@@ -396,6 +396,7 @@ export default function KortClient() {
     (async () => {
       try {
         const s = sb(), q = new URLSearchParams(window.location.search), vid = Number(q.get("verk"));
+        { const s0 = q.get("stada"); if (s0 === "ogert" || s0 === "eftir" || s0 === "opid" || s0 === "done") setStada(s0); }   // ?stada=ogert opnar beint í „Ógert“
         const v = vid ? await s.from("skr_verk").select("id,heiti,stillingar").eq("id", vid).single() : await s.from("skr_verk").select("id,heiti,stillingar").eq("eytt", false).ilike("heiti", "%gatakort%").order("id").limit(1).single();
         if (v.error || !v.data) throw new Error(v.error?.message || "Verk fannst ekki");
         const vk = v.data as Verk; setVerk(vk);
@@ -623,7 +624,7 @@ export default function KortClient() {
     return true;
   }, [einDeild, synV, afDeild, madur, fra, til, lagf, tvitok, oparad, paradIds, anEnda, vantarEnda, samaSia, samaMegin, visb]);
   /** Staða: Tilbúin = kláraðar skráningar · Í vinnslu = ókláraðar skráningar · Eftir = engar skráningar sýndar (aðeins rauðir punktar áætlaðra gata). */
-  const grunnsia = useCallback((p: Punktur) => siaAn(p) && (stada === "allt" || (stada === "done" ? p.s.stada === "done" : stada === "opid" ? p.s.stada !== "done" : false)), [siaAn, stada]);
+  const grunnsia = useCallback((p: Punktur) => siaAn(p) && (stada === "allt" || (stada === "done" ? p.s.stada === "done" : stada === "opid" || stada === "ogert" ? p.s.stada !== "done" : false)), [siaAn, stada]);
   const grunn = useMemo(() => punktar.filter(grunnsia), [punktar, grunnsia]);
   const syndir = useMemo(() => grunn.filter((p) => !afTakn[p.t.heiti]), [grunn, afTakn]);
   const aaetludBlads = useMemo(() => aaetlud.filter((a) => a.teikning_id === syn), [aaetlud, syn]);
@@ -638,13 +639,14 @@ export default function KortClient() {
     if (stada === "done") return false;
     if (stada === "opid") return a.parad?.stada === "hluti";
     if (stada === "eftir") return aaEftir(a);
+    if (stada === "ogert") return aaEftir(a) || a.parad?.stada === "hluti";
     return true;
   }, [aaIDeild, synV, aaStada, stada]);
   const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti] && (!miro || synaParud || !a.parad || a.parad.stada === "vantar") && (synaTillogur || !erTillaga(a))), [aaetludBlads, aaStodusia, afTakn, aaTakn, miro, synaParud, synaTillogur]);
   /** Stútar viðbótarverksins án skráningar á þessu blaði, eftir úttekt (fyrir skýringarnar). */
   const stutTal = useMemo(() => { let thett = 0, ekki = 0, omet = 0; for (const a of aaetludSynar) if (a.parad?.stutur != null && aaEftir(a)) { const f = a.parad.flokkun; if (f === "thett_oskrad") thett++; else if (f === "stutur_vantar") ekki++; else if (f !== "eftir_oskrad") omet++; } return { thett, ekki, omet }; }, [aaetludSynar]); // eslint-disable-line react-hooks/exhaustive-deps
   const tillogur = useMemo(() => aaetludBlads.filter((a) => erTillaga(a) && (!a.parad || a.parad.stada === "vantar") && aaStodusia(a)).length, [aaetludBlads, aaStodusia]);
-  const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && !erTillaga(a) && aaIDeild(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV, aaIDeild]);
+  const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && !erTillaga(a) && aaIDeild(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e, ogert: o + e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV, aaIDeild]);
   const taknTal = useMemo(() => {
     const m = new Map<string, { t: Takn; n: number }>();
     for (const q of punktar) if (siaAn(q) && !m.has(q.t.heiti)) m.set(q.t.heiti, { t: q.t, n: 0 });
@@ -1344,7 +1346,7 @@ export default function KortClient() {
 
         <section>
           <h2>Síur</h2>
-          <div className="gk-hnappar">{([["allt", "Allt"], ["done", "Tilbúin"], ["opid", "Í vinnslu"], ["eftir", "Eftir"]] as const).map((x) => <button key={x[0]} type="button" className={stada === x[0] ? "on" : ""} onClick={() => setStada(x[0])}>{x[0] === "eftir" && <i className="gk-raudur" />}{x[1]} <small>{num(stoduTal[x[0]])}</small></button>)}</div>
+          <div className="gk-hnappar">{([["allt", "Allt"], ["ogert", "Ógert"], ["done", "Tilbúin"], ["opid", "Í vinnslu"], ["eftir", "Eftir"]] as const).map((x) => <button key={x[0]} type="button" className={stada === x[0] ? "on" : ""} onClick={() => setStada(x[0])}>{x[0] === "eftir" && <i className="gk-raudur" />}{x[1]} <small>{num(stoduTal[x[0]])}</small></button>)}</div>
           {deildir.length > 1 && <div className="gk-hnappar">{deildir.map((d) => <button key={d} type="button" className={afDeild[d] ? "" : "on"} aria-pressed={!afDeild[d]} onClick={() => setAfDeild((x) => ({ ...x, [d]: !x[d] }))}>{d}</button>)}</div>}
           <div className="gk-takn">{taknTal.map(({ t, n }) => <button key={t.heiti} type="button" className={afTakn[t.heiti] ? "af" : ""} aria-pressed={!afTakn[t.heiti]} onClick={() => setAfTakn((x) => ({ ...x, [t.heiti]: !x[t.heiti] }))}>{miro ? <MerkiSvg t={t} /> : <TaknSvg t={t} />}{t.heiti} <small>{num(n)}</small></button>)}</div>
           {miro && <p className="gk-smatt">Útlína í lit stærðar er skráning. ✓ er fyrir hvert klárað stakt verk. Liturinn inni í merkinu segir stöðuna: grænt er tilbúið (bæði verkin kláruð), gult er hálfnað (klárað öðrum megin) og rautt er opið. Rauður punktur er eftir, óskráð. Í einu merki er aðeins ein stærð; brotin útlína er lagfæring. Rör: hringur með punkti er úðakerfi, tveir hringir saman eru par af vatns- eða hitalögnum; fjögur rör eru tvö pör á veggnum, rautt og blátt (almennt tvö heit og tvö köld, litirnir eru táknrænir), punktur í hvorum hring er plast, og blómhringur með tölu þýðir að kerfið er óþekkt. Liggjandi kassi er raufar kringum ferkantaðan loftstokk, tígull með eldingu er rafmagn og kassi með haki inni í er klárað milliloft.</p>}
