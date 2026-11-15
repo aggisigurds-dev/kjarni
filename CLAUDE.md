@@ -91,7 +91,9 @@ skrána beint. **Ekki afrita innihald þeirra hingað** — ein staðreynd á ei
   brunaholf ef skráin er til þar, annars slokkvitaeki. Taflan „HVER KANN HVAÐ" hér að ofan er
   eldri en þetta — afritin eru nú 25 (rambo, rukkari, elon-musk, netvordur, samthykktir bættust við).
 - **Kjarna-frumrit** (engin afrit-merki, búa HÉR): `kjarni-vefur` 🕶️ (skelin, Vercel, Stjórnstöð,
-  Tólaskrá), `artcraft` 🎨 (`/kjarni/artcraft` + API), `skraning` 📚 (`/kjarni/skraning`, skr_*).
+  Tólaskrá), `artcraft` 🎨 (`/kjarni/artcraft` + API), `skraning` 📚 (`/kjarni/skraning`, skr_*),
+  `3dwork` 🔧 (`/3dwork` í apps/web, `work3d_projects`, Partasafnið; CAD á pörtum og merkjarafræði
+  í skill **3dJoker** á heimatölvunni).
   **`gatakort` 🥋 (Jackie Chan)** á `/kjarni/skraning/kort` + `/skyrsla` og tólin `apps/slokkvitaeki/tools/skraning-gatakort-*`
   (lög, vörpun, pörun), en BÝR í brunaholf (afrit hér): verkferlið `gatakort-nytt-husnaedi` og `NLSH-DAGBOK.md` eru í
   `brunaholf/.claude/skills/gatakort-nytt-husnaedi/`.

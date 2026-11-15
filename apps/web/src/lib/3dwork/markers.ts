@@ -16,8 +16,12 @@ export interface MarkerPreset {
 const IRON_WOLF_COIL: SpringCoil = { wireMm: 1.5, meanDiameterMm: 13.5, activeCoils: 24 };
 
 /**
- * Aggi's Iron wolf: ⌀28 body, 274 g hammer, ⌀15/1,5 spring, 70 mm stroke,
+ * Aggi's Iron wolf: ⌀28 body, 274 g hammer, ⌀15/1,5 spring, 57 mm stroke,
  * CO2 at 57 bar, ⌀6 valve seat, ⌀25 blowback face, 130 mm barrel.
+ *
+ * The stroke is what the body tube allows (v3, 1.11.2026): the two link slots
+ * on top are 64.8 mm long and 177.3 mm apart, and his link's legs are ⌀3 and
+ * 182 mm apart, so the link travels 64.8 − 3 − (182 − 177.3) = 57 mm.
  *
  * The test-run takes the spring rate from the coil and the hammer calculator
  * takes it from the input, so the input carries the coil's own rate.
@@ -30,7 +34,7 @@ export const IRON_WOLF: MarkerPreset = {
     springRateNmm: springRate(IRON_WOLF_COIL),
     freeLengthMm: 140,
     strikeLengthMm: 120,
-    cockedLengthMm: 50,
+    cockedLengthMm: 63,
     dragN: 4,
     pressureBar: 57,
     valveSealMm: 6,

@@ -1629,8 +1629,10 @@
     "apps/web/src/app/3dwork/page.tsx"
    ],
    "yfir": null,
-   "eigandi": "skill:3dJoker",
-   "undiragentar": [],
+   "eigandi": "3dwork",
+   "undiragentar": [
+    "skill:3dJoker"
+   ],
    "kveikjuord": [
     "3dwork",
     "STL",
@@ -1647,8 +1649,10 @@
     "apps/web/src/app/api/3dwork/github/geometry/[id]/route.ts"
    ],
    "yfir": null,
-   "eigandi": "skill:3dJoker",
-   "undiragentar": [],
+   "eigandi": "3dwork",
+   "undiragentar": [
+    "skill:3dJoker"
+   ],
    "kveikjuord": [],
    "app": "web"
   },
@@ -1661,8 +1665,10 @@
     "apps/web/src/app/api/3dwork/github/projects/[id]/route.ts"
    ],
    "yfir": null,
-   "eigandi": "skill:3dJoker",
-   "undiragentar": [],
+   "eigandi": "3dwork",
+   "undiragentar": [
+    "skill:3dJoker"
+   ],
    "kveikjuord": [],
    "app": "web"
   },
@@ -1675,8 +1681,10 @@
     "apps/web/src/app/api/3dwork/github/projects/route.ts"
    ],
    "yfir": null,
-   "eigandi": "skill:3dJoker",
-   "undiragentar": [],
+   "eigandi": "3dwork",
+   "undiragentar": [
+    "skill:3dJoker"
+   ],
    "kveikjuord": [],
    "app": "web"
   },
@@ -1689,8 +1697,10 @@
     "apps/web/src/app/api/3dwork/github/route.ts"
    ],
    "yfir": null,
-   "eigandi": "skill:3dJoker",
-   "undiragentar": [],
+   "eigandi": "3dwork",
+   "undiragentar": [
+    "skill:3dJoker"
+   ],
    "kveikjuord": [],
    "app": "web"
   },
