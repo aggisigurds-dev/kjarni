@@ -29,3 +29,23 @@ Vercel-forskoðun PR-a er á bak við innskráningu — sannreyndu á `slokkvita
 aðeins tiltekna reiti í `haedir[]` — ný notendastilling lifir aðeins ef BÁÐAR hliðar eru uppfærðar (`skrifaStillingarIHaed`,
 þrístig: `undefined` ósnert / `null` hreinsað / gildi skrifað). Handteiknuð gögn vistast í dílum frummyndar
 (`utlinaIFrum`/`utlinaIBord`), borðhnit lifa aðeins lotuna.
+
+## 12.–15.11.2026 — án nets, forsíða og sync-ljós
+
+| PR | Hvað | Skrár | Próf |
+|---|---|---|---|
+| #320 | TurboPaint virkar án nets: þjónustuþráður (scope `/kjarni/turbopaint`), installanlegt (manifest + tákn), „Sækja fyrir offline" per borð (doc + allar myndir, líka frumritið, í IndexedDB) | `public/turbopaint-sw.js`, `public/turbopaint/manifest.webmanifest`, `components/kjarni/OfflineReady.tsx`, `lib/board/persistence.ts` (`g_oraBordOfflineTilbuid`, `erBordOfflineTilbuid`), `lib/board/assets.ts` | `offline-tilbuid.test.ts`; Playwright: endurhleðsla án nets skilar appinu |
+| #321 | Eigið app-auðkenni (`id`) í manifest + `navigator.storage.persist()` | `manifest.webmanifest`, `OfflineReady.tsx` | framleiðsla: manifest með `id` |
+| #322 | „Aa − +" viðmótsstærð á snertiskjá: `--tp-ui` + `zoom` á stikur (`.tp-ui-scale`), ALDREI á `.kjarni-stage` | `components/kjarni/UiScale.tsx`, `styles.css`, `WhiteboardApp.tsx` | Playwright: topbar 56 → 73 px við 1,3×, strigi óbreyttur |
+| #323 | Verkefni-forsíða: listi yfir borðin, leit, opnast sjálfkrafa á síma (ekki við `?uttekt=`/`?skoda=`) | `components/kjarni/Verkefni.tsx`, `WhiteboardApp.tsx`, `TopBar.tsx` | Playwright: forsíða á síma, hnappur á tölvu |
+| #324 | Sync-ljós á forsíðunni: rautt úrelt / gult óvistað á borði / grænt í sync / grátt ótengt; „Sækja ferska útgáfu úr úttekt"; eyða eftir auðkenni | `lib/board/sync-stada.ts`, `sync-saekja.ts`, `Verkefni.tsx`, `persistence.ts` (`eydaBordi`) | `sync-stada.test.ts` (15); raungögn 54 borð: 9 græn / 16 rauð / 7 gul / 22 ótengd |
+
+**Sync-ljósin í hnotskurn:** þurrkeyrsla á „Vista í úttekt" (`utbuaVistun`, skrifar ekkert) fyrir hvert borð; `uttekt.merki` á
+myndinni segir í hvora áttina munurinn er (úttekt nýrri → rautt; óvistað á borði → gult, sem gengur fyrir). Geymt borð er aðeins
+vinnueintak — hæð sem er opnuð úr Slökkvitæki-appinu er alltaf endurbyggð úr `teikning_bord`, en borð opnað beint í TurboPaint
+(forsíðan, án nets) sýnir geymdu útgáfuna.
+
+**Gildrur:** (1) `app/globals.css` á hnattræna, ólagskipta `.grid { margin-top: 44px; gap: 18px }` (markaðssíðan) sem vinnur á
+Tailwind-klasanum `grid` — notaðu `[display:grid]` í TurboPaint-hlutum. (2) Forsíðan er með eyða-hnapp og „Sækja ferska útgáfu":
+lokaðu ALLTAF á skrif í prófun gegn raungögnum (sjá að ofan). (3) `zoom` má aldrei lenda á `.kjarni-stage` eða foreldri hennar —
+snerti-hnit teikningarinnar ruglast.
