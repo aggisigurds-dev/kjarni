@@ -1772,6 +1772,30 @@
     "Hue"
    ],
    "app": "slokkvitaeki"
+  },
+  {
+   "id": "slokkvitaeki:/bio",
+   "titill": "Bíó — Plex-yfirlit: þættir sem fylgst er með, nýir þættir og nýjar myndir",
+   "tegund": "sida",
+   "leid": "/bio",
+   "skilgreind": [
+    "apps/slokkvitaeki/app/bio/page.tsx",
+    "apps/slokkvitaeki/app/bio/BioClient.tsx",
+    "apps/database/supabase/schemas/bio.sql",
+    "tools/bio-sync/sync.mjs"
+   ],
+   "yfir": null,
+   "eigandi": "kjarni-vefur",
+   "undiragentar": [
+    "oryggi"
+   ],
+   "kveikjuord": [
+    "Bíó",
+    "Plex",
+    "þættir",
+    "nýjar myndir"
+   ],
+   "app": "slokkvitaeki"
   }
  ]
 }
