@@ -639,6 +639,38 @@ export async function deleteCurrentBoard() {
   }
 }
 
+/** Staðbundið eintak borðs (IndexedDB) án þess að opna það. Sync-athugunin (sync-saekja.ts) notar það í stað þess að
+ * sækja sama skjal úr skýinu þegar útgáfan er sú sama. */
+export async function lesaBordDocStadbundid(id: string): Promise<BoardDocument | null> {
+  return (await get<BoardDocument>(boardKey(id))) ?? null;
+}
+
+/** Eyðir borði eftir auðkenni (Verkefni-forsíðan, Agnar 15.11.2026: „ég eyði þá líklegast þeim úreltu"). Mjúk eyðing eins
+ * og deleteCurrentBoard: röðin stendur í skýinu með deleted=true (og fyrri útgáfur í turbopaint_boards_history).
+ * Opna borðið fer um deleteCurrentBoard, sem opnar næsta borð. Mistakist ský-eyðingin er ENGU breytt staðbundið —
+ * annars kæmi borðið aftur úr skýinu við næstu hleðslu og liti út fyrir að hafa „lifnað við". */
+export async function eydaBordi(id: string): Promise<void> {
+  if (id === currentBoardId) {
+    await deleteCurrentBoard();
+    return;
+  }
+  const sb = getSupabase();
+  if (sb) {
+    let villa: unknown = null;
+    try {
+      const query = sb.from("turbopaint_boards").update({ deleted: true }).eq("id", id);
+      const sig = timeoutSignal(8000);
+      villa = (await (sig ? query.abortSignal(sig) : query)).error;
+    } catch (e) {
+      villa = e;
+    }
+    if (villa) throw new Error("Náði ekki að eyða borðinu í skýinu — reyndu aftur með neti.");
+  }
+  await del(boardKey(id));
+  const index = await readIndex();
+  await writeIndex({ ...index, boards: index.boards.filter((b) => b.id !== id) });
+}
+
 export async function resetBoard() {
   const objects = await createDemoBoard();
   useBoardStore.getState().replaceBoard({
