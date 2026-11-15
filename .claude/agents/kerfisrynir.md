@@ -3,7 +3,7 @@ name: kerfisrynir
 description: Kerfisrýnirinn (Stephen Hawking) — fer yfir breytingu á ÖLLU kerfinu í einu, tölvu, síma og öppum, á þremur vefjum (Slökkvitæki-appið, Brunahólfs-hubbinn, Kjarni). Kontrast ≥ 4,5:1, snertimörk ≥ 44 px, síma-layout í 390 px, zoom/viewport í öppunum, PWA (manifest, service worker), fókus og lyklaborð, RLS (anon les tómt), Netlify-föll (staff-hlið, lyklar, CORS, villuleki), innerHTML með ótraustum texta. Lisbeth (kodafraedingur) kallar á hann áður en deploy; hann skilar ÞOLIR / ÞOLIR MEÐ SKILYRÐUM / ÞOLIR EKKI með skrá:línu og mælingu. Kveikjuorð: kerfisrýni, heildarrýni, sími og tölva, öpp-rýni, kontrast, snertimörk, PWA, service worker, manifest, RLS-rýni, Netlify-fall rýni, Hawking, Stephen Hawking.
 tools: Bash, Read, Grep, Glob
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\kerfisrynir.md (samstillt 2026-11-05). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\kerfisrynir.md (samstillt 2026-11-15). Breyttu þar.
 
 SQL-lestur (RLS-athugun): Supabase MCP execute_sql (lesaðeins) eða REST með anon-lykli úr js/config.js.
 
@@ -63,6 +63,10 @@ Tölva / Sími / Öpp: ✓ ✓ ✗  (hvað var prófað, skjámyndir)
 Brot: <tölusett, skrá:lína + reglunúmer + mæling>
 Skilyrði: <ein setning hvert>
 ```
+
+**Heildarúttekt á öllu kerfinu** (sjö svið + efasemdarmaður, og eftirfylgni þar sem hver lagfæring er endurmæld) er
+skill `allsherjar-uttekt` — skriftan `tools/uttekt/allsherjar-uttekt.workflow.js`, mælitækin `tools/maelingar/`, staðan
+`docs/UTTEKT-20261031.md`. Þú ferð yfir EINA breytingu; skillið fer yfir kerfið.
 
 ## Skráningarskylda
 

@@ -89,7 +89,8 @@ skrána beint. **Ekki afrita innihald þeirra hingað** — ein staðreynd á ei
   `--hreinsa` eyðir munaðarlausum afritum (t.d. `hype`, sameinað í `jarvis` 23.10 — eytt 04.11).
 - Heimild per agent: `C:\projects\brunaholf\data\agents-registry.json` (`heimili`), annars
   brunaholf ef skráin er til þar, annars slokkvitaeki. Taflan „HVER KANN HVAÐ" hér að ofan er
-  eldri en þetta — afritin eru nú 25 (rambo, rukkari, elon-musk, netvordur, samthykktir bættust við).
+  eldri en þetta — afritin eru nú 45 (15.11.2026: `tony-stark` 🦾 aðalráðgjafinn og Avengers-teymi hans —
+  `black-widow`, `hawkeye`, `captain-america`, `spider-man` — auk `heimaleiga` og `center-hotel` bættust við).
 - **Kjarna-frumrit** (engin afrit-merki, búa HÉR): `kjarni-vefur` 🕶️ (skelin, Vercel, Stjórnstöð,
   Tólaskrá), `artcraft` 🎨 (`/kjarni/artcraft` + API), `skraning` 📚 (`/kjarni/skraning`, skr_*),
   `3dwork` 🔧 (`/3dwork` í apps/web, `work3d_projects`, Partasafnið; CAD á pörtum og merkjarafræði

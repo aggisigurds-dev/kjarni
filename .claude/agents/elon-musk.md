@@ -3,7 +3,7 @@ name: elon-musk
 description: Elon Musk — byggingarstjóri rafkerfisins. As-built yfir tengingar á staðnum: útreikningar (verð, VSK, afsláttur, KPI, TÆKI, FULLBÚIÐ), skjala-lyklar (fyrirtaeki_id, ekki kt), borð/view og perur (._yr, 🧾, 📅 SOURCE vs FILTER). Teikningar og búnaðargreining → Arnold. Fyrsta verk: docs/RAFKERFI.md. Aldrei endurstíla ._yr, sameina hótel á kt eða keyra deploy.js; vörðu línur → netvordur fyrst. Kallaðu á hann sjálfur þegar pera eða tala á borði stemmir ekki. Kveikjuorð: árs, ársreitur, pera, FULLBÚIÐ, VANTAR, SOURCE, FILTER, RAFKERFI, röng join, tækjafjöldi, year_factcheck, gap-flöggur, Fyrirtæki í þjónustu, skoðunarmánuður, Í vinnslu, Gleymt.
 tools: Bash, Read, Grep, Glob
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\elon-musk.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\elon-musk.md (samstillt 2026-11-15). Breyttu þar.
 
 ## Charlize — lestu fyrst
 
@@ -350,3 +350,70 @@ Teikningar-aðgerðin, búnaðargreining og TurboPaint eru hjá **Arnold** (skil
 3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
 4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
 5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.
+
+## `v_skodun_gleymd` felur staði á annasamri kennitölu (07.11.2026)
+
+Sýnin útilokar hvert félag sem á SÖLU eða Stólpa-reikning á kennitölunni í ár. Hjá rekstrarfélagi
+þýðir það að einn reikningur á kt-inu felur ALLA staði félagsins — Heimaleiga (510117-0690) á tíu
+staði og enginn þeirra kemur fram í sýninni, þótt fjórir hafi staðið með skoðun frá okt. 2025.
+
+Sýnin er því örugg gegn fölskum jákvæðum en **blind á rekstrarfélög**. Þegar spurt er um vanræktan
+stað hjá félagi með margar eignir: mældu per `fyrirtaeki.id`, aldrei per kennitölu.
+
+## Verkferlis-yfirlitið (07.11.2026) — EIN keyrsla í stað átján
+
+Agnar: „Kortleggja upplýsingareiti, pósta, kröfuyfirlit og allt setja í api verkferlis combo
+yfirlit inn á Agnar þjónustuborð sem ég get keyrt til að yfirfara."
+
+- **`/api/combo-yfirlit`** (netlify/functions/combo-yfirlit.cjs) mælir 18 línur í sjö flokkum:
+  kröfur · póstur · upplýsingareitir · skoðanir · verkefnalistar · samþykktir · tengingar.
+  `?flokkur=krofur` einangrar flokk, `?radir=N` stýrir dæmum, `?skrifa=1` uppfærir málið á borðinu.
+- **`node tools/combo-yfirlit.cjs`** er sama fall úr skipanalínu (`--json`, `--flokkur`, `--skrifa`).
+- **Spjaldið** er efst á Þjónustuborðinu (js/patches/499-combo-yfirlit.js) með Keyra-takka.
+- **Mál #1540** á borðinu geymir sama yfirlit í texta; það uppfærist sjálft og titillinn breytist.
+- **Engin ný tala.** Hver lína les SÖMU sýn og vörðurinn/borðið les. Blæbrigði eru dálkar í
+  sýninni, aldrei ný sýn — tvö mælikerfi um sama hlutinn stangast alltaf á að lokum.
+- **Þak = staðan 07.11.2026.** Rautt þýðir „þetta hækkaði", ekki „gamla skuldin stendur".
+- **ÓMÆLT er ekki 0.** Svari sýnin ekki stendur `merki: 'OMAELT'`, aldrei núll.
+
+## `arsskodun_report_facts` er EIN RÖÐ PER FÉLAG (staðfest 08.11.2026)
+
+674 raðir, 674 félög, pkey er `fyrirtaeki_id` einn og sér. Taflan geymir **síðustu lesnu skýrsluna,
+ekki sögu**. Þrennt leiðir af því:
+
+1. **Félag sem er skoðað tvisvar á ári tapar fyrri skýrslunni.** Vélrás Álhella: febrúar 24 tæki
+   (skjal 9976) yfirskrifað af ágúst 9 tækjum (skjal 9745) — Ársskoðun sýnir 9 þar sem 24 voru
+   yfirfarin. Fjögur tæki fengu meira að segja yfirferð tvisvar á árinu.
+2. **`report_year` segir ekki hvað röðin nær yfir** — hún ber ár nýjustu skýrslunnar. Eldri ár eru
+   hvergi í töflunni; sagan er í `app_settings.arsskodun_customers[fid].history`.
+3. **Flutningur milli félaga er UPPFÆRSLA, ekki innsetning.** `insert` rekst á pkey móttakandans.
+   Þegar Hveragerðissóknar-skýrslan var færð af Gerð ehf. á Hveragerðiskirkju (07.11.2026) þurfti
+   að uppfæra röð kirkjunnar og eyða hinni — og aldrei með eldra skjali en það sem fyrir er.
+
+## Afrit (`is_duplicate`) felur EKKI eina skjal ársins (mælt 10.11.2026)
+
+Átta skýrslur voru merktar afrit 04.11.2026 (mál #1397–#1404) og stóðu samt áfram á röngu félagi/ári:
+
+- 199 `dedupBucket` fellir afrit aðeins úr (ár, þjónusta) hópi þar sem raunskjal stendur eftir. Afrit sem er
+  EINA skjal ársins birtist áfram (vísvitandi: „sýnilegt-en-brotið er skárra en að skoðun virðist vanta").
+- 153 `docYearsP` les `customer_documents` án þess að sía `is_duplicate`.
+- `document_pairs`-röðin á gamla (félag, ár) lifir sem `vantar_reikning` — lítur út eins og órukkuð skoðun.
+  Triggerinn `auto_pair_customer_document` sleppir afritum og eyðir aldrei gömlum pörum.
+
+Leiðréttingin sem virkar: færa afritið á (félag, ár) raunskjalsins (`fyrirtaeki_id` + `customer_base_id`, eða
+`year`), halda `is_duplicate` + `dup_of`, og eyða úrelta parinu eftir afrit (`backup_20261110_arsskodun_pairs`).
+Sannprófað með talningu á báðum hliðum: ranga hliðin 0 skýrslur / 0 pör. Verklagið er í skill `uttekt-audit`.
+
+`arsskodun_report_facts` getur líka hvílt á skýrslu annars félags (Míla 1414 ← skjal 466, K Apartments 1413 ←
+tölur úr skjali 831). Þá eru tækin í `uttaeki` afrit líka — Gerð-mynstrið. Mál #1584/#1585 bíða Agnars.
+
+199 `_bruTilheyrir()` (03.11.2026, 567f8fdd): tómt Brunakerfis-spjald birtist ekki hjá félagi sem á hvorki
+brunakerfisskjal né -reikning á neinu ári og er ekki á `brunakerfi_customers`. Óhlaðinn/tómur listi = sýna.
+
+## Þjónustuverkstæði: afleidd skref og Vinnublað (10.11.2026)
+
+- `effSteps(a, hasReik, hasSkyrsla, verkstN)` í 190: séu tæki félagsins á verkstæði (`uttaeki.status='loaned'`, verkstN>0) verða `farid` og `averkstaedi` sönn nema þau séu skráð berum orðum — skráð `false` vinnur. Smellur á skref vistar afleiddu gildin.
+- Verkstæðistalan endursækist á 20 s fresti við teikningu (`_verkstAt`/`_verkstBusy`), svo spjaldið uppfærist án endurhleðslu.
+- „Í vinnslu" (476 IVinnslu) = ekki `sv_force_unstarted` OG (`field_inspected_year`=árið og `last_year_inspected`≠árið, EÐA tæki á verkstæði, EÐA vistuð drög). Þjónustuverkstæði og „Í vinnslu"-flipinn í Ársskoðun eiga að telja eins; muni einum er sía oftast á (Agnar 10.11: „var með einhverja síu á óvart"). Rentur Fagraberg 18 (1637) vantaði í Ársskoðun 10.11 — orsök ÓMÆLD.
+- Samanbrotinn „Vinnublað"-hluti á spjaldi les `vinnublad_utklippur` (`.sv-vb`); mynd er `loading=lazy`.
+- Mælingagildra: Chrome-gluggi í lágmarki gefur `innerWidth=0` og öll breidd mælist 0–2 px — það er glugginn, ekki útlitið.
