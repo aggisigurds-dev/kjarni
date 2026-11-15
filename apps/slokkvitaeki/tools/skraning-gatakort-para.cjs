@@ -30,7 +30,9 @@ const FAG_HOPUR = { loftraesting: 'loft', rafmagn: 'rafmagn', sprinkler: 'ror', 
   if (!yf) throw new Error('ekkert yfirlitsblað fyrir ' + HAED);
   const born = new Map(teikn.filter((t) => t.yfirlit_id === yf.id && t.vorpun).map((t) => [t.id, t.vorpun]));
   const flokkar = new Map((await rest('GET', `skr_flokkar?or=(verk_id.eq.${verk.id},verk_id.is.null)&select=id,heiti`)).map((f) => [f.id, f.heiti]));
-  const aa = await allt(`skr_aaetlud?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&select=id,x_px,y_px,fag,fjoldi,flokkur_id&order=id`);
+  // Tillögur (uppruni tillaga:*, óstaðfest göt sem Agnar á eftir að samþykkja) parast ekki: þær tækju skráningar frá raunverulegum götum (15.11.2026; 71 á 5H).
+  // uppruni er aldrei tómur í verkinu (mælt 15.11: miro 992, tillaga 71, vidbot 35), svo not.like sleppir engu öðru.
+  const aa = await allt(`skr_aaetlud?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&uppruni=not.like.tillaga:*&select=id,x_px,y_px,fag,fjoldi,flokkur_id&order=id`);
   // færðir punktar (skr_faerslur): leiðrétt staða á yfirlitsblaðinu ræður í pöruninni
   const faerslur = new Map((await allt(`skr_faerslur?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&select=skraning_id,x_px,y_px&order=id`)).map((f) => [f.skraning_id, f]));
   const skr = (await allt(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.false&teikning_id=in.(${[...born.keys()].join(',')})&select=id,radnr,teikning_id,x_px,y_px,flokkur_id,framkvaemt_til,deild:ajour_gogn->>deild&order=id`))
