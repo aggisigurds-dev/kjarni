@@ -19,9 +19,9 @@ export type HkPunktur = { kerfi: string | null; kvafi: boolean; kmynd: boolean; 
 /** st = stútur úr viðbótarverkinu á 4. hæð (án skráningar): númer á teikningu, flokkun, texti úttektar í skjalinu og næsta ónotaða skráning. */
 export type HkEftir = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; n: number; st?: { nr: number; fl: string; uttekt: string | null; naest: { nr: number; d_m: number; stada: string } | null } };
 /** Samantekt stúta á hæð: allir, með skráningu (kláraða / opna) og án skráningar eftir úttekt (eftir að þétta / þéttir en óskráðir / annað). */
-export type HkStutar = { alls: number; klarad: number; opid: number; eftir: number; thett: number; annad: number };
+export type HkStutar = { alls: number; klarad: number; opid: number; eftir: number; thett: number; annad: number; ometid: number };   // annad = stútur ekki kominn
 /** Flokkun óskráðs stúts → [merki á spjaldi, litaklasi merkis, fylling tíguls, rammi tíguls]. */
-const STUT: Record<string, [string, string, string, string]> = { eftir_oskrad: ["Eftir að þétta", "op", "#dc2626", "#0b1f47"], thett_oskrad: ["Þétt, skráningu vantar", "bid", "#f59e0b", "#0b1f47"], stutur_vantar: ["Stútur ekki kominn", "gr", "#ffffff", "#dc2626"], ometid: ["Ómetið í úttekt", "gr", "#ffffff", "#dc2626"] };
+const STUT: Record<string, [string, string, string, string]> = { eftir_oskrad: ["Eftir að þétta", "op", "#dc2626", "#0b1f47"], thett_oskrad: ["Þétt, skráningu vantar", "bid", "#f97316", "#0b1f47"], stutur_vantar: ["Stútur ekki kominn", "gr", "#ffffff", "#dc2626"], ometid: ["Ómetið í úttekt", "gr", "#94a3b8", "#0b1f47"] };
 export type HkYfirlit = { id: number; haed: string; mynd: string | null; w: number; h: number };
 type Props = {
   yfirlit: HkYfirlit[]; punktar: HkPunktur[]; eftir: HkEftir[]; stutar?: Record<string, HkStutar>;
@@ -343,7 +343,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
           </div>
         )}
       </div>
-      {stutar && stutar.alls > 0 && <p className="sk-hk-skyring sk-hk-stutar"><b>Viðbótarverk, stútar af 5. hæð niður í inntaksrými ({num(stutar.alls)}):</b> {num(stutar.klarad + stutar.opid)} eiga skráningu ({num(stutar.klarad)} kláraðar, {num(stutar.opid)} opnar) · {num(stutar.eftir + stutar.thett + stutar.annad)} án skráningar: <span><i className="es" />{num(stutar.eftir)} eftir að þétta</span> <span><i className="et" />{num(stutar.thett)} þéttir í úttekt 11.11.2026, skráningu vantar</span> <span><i className="ev" />{num(stutar.annad)} þar sem stútur er ekki kominn eða ómetinn.</span> <span className="sk-skjar sk-gagnv">Smelltu á tígul til að sjá stútinn.</span></p>}
+      {stutar && stutar.alls > 0 && <p className="sk-hk-skyring sk-hk-stutar"><b>Viðbótarverk, stútar af 5. hæð niður í inntaksrými ({num(stutar.alls)}):</b> {num(stutar.klarad + stutar.opid)} eiga skráningu ({num(stutar.klarad)} kláraðar, {num(stutar.opid)} opnar) · {num(stutar.eftir + stutar.thett + stutar.annad + stutar.ometid)} án skráningar: <span><i className="es" />{num(stutar.eftir)} eftir að þétta</span> <span><i className="et" />{num(stutar.thett)} þéttir í úttekt 11.11.2026, skráningu vantar</span> <span><i className="ev" />{num(stutar.annad)} þar sem stútur er ekki kominn</span> <span><i className="eo" />{num(stutar.ometid)} ómetnir í úttekt.</span> <span className="sk-skjar sk-gagnv">Smelltu á tígul til að sjá stútinn.</span></p>}
       {stor ? <p className="sk-hk-hint">Skrunaðu eða klíptu með tveimur fingrum til að stækka og minnka · dragðu til að færa · smelltu á punkt til að sjá skráninguna · smelltu á deild til að fara að henni</p> : <p className="sk-hk-hint sk-skjar sk-gagnv">Smelltu á punkt til að sjá skráninguna · klíptu með tveimur fingrum, tvísmelltu eða notaðu + til að stækka · dragðu til að færa · stækkunarglerið opnar hæðina eða deildina í stórri sýn</p>}
       {!stor && <table className="sk-tafla sk-hk-tafla">
         <thead><tr><th>Deild</th>{HLUTAR.map(([s, nafn]) => <th key={s}>{nafn}</th>)}<th>Deildin</th><th>Opið</th><th>Eftir (áætlað)</th></tr></thead>

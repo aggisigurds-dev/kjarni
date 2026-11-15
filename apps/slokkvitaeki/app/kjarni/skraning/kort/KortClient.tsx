@@ -167,7 +167,7 @@ const erTillaga = (a: Aaetlad) => (a.uppruni || "").startsWith("tillaga:");
 /** Pörun áætlaðs gats við skráningar — reiknuð af tools/skraning-gatakort-para.cjs. */
 type Parad = { ids: number[]; radnr: number[]; n: number; stada: "fullt" | "hluti" | "vantar"; reiknad?: string; stutur?: number; flokkun?: string };
 /** Stútur viðbótarverksins á 4H án skráningar: litur úttektarinnar Í punktinum, sami og tíglarnir í stöðuskýrslunni (Haedir.tsx STUT). [fylling, rammi] */
-const STUT_LIT: Record<string, [string, string]> = { eftir_oskrad: ["#dc2626", "#ffffff"], thett_oskrad: ["#f59e0b", "#ffffff"], stutur_vantar: ["#ffffff", "#dc2626"], ometid: ["#ffffff", "#dc2626"] };
+const STUT_LIT: Record<string, [string, string]> = { eftir_oskrad: ["#dc2626", "#ffffff"], thett_oskrad: ["#f97316", "#ffffff"], stutur_vantar: ["#ffffff", "#dc2626"], ometid: ["#94a3b8", "#ffffff"] };
 const AA_SEL = "id,teikning_id,x_px,y_px,fag,fjoldi,athugasemd,flokkur_id,parad,uppruni";
 const PARAD: Record<string, [string, string]> = { fullt: ["Fullt", "#86efac"], hluti: ["Vantar hluta", "#fde047"], vantar: ["Engin skráning", "#fca5a5"] };
 // Flokkar (stærðir) sem eiga við hvert fag — notað til að stinga upp á stærð þegar áætlað gat er sett.
@@ -642,7 +642,7 @@ export default function KortClient() {
   }, [aaIDeild, synV, aaStada, stada]);
   const aaetludSynar = useMemo(() => aaetludBlads.filter((a) => aaStodusia(a) && !afTakn[aaTakn(a).heiti] && (!miro || synaParud || !a.parad || a.parad.stada === "vantar") && (synaTillogur || !erTillaga(a))), [aaetludBlads, aaStodusia, afTakn, aaTakn, miro, synaParud, synaTillogur]);
   /** Stútar viðbótarverksins án skráningar á þessu blaði, eftir úttekt (fyrir skýringarnar). */
-  const stutTal = useMemo(() => { let thett = 0, ekki = 0; for (const a of aaetludSynar) if (a.parad?.stutur != null && aaEftir(a)) { if (a.parad.flokkun === "thett_oskrad") thett++; else if (a.parad.flokkun !== "eftir_oskrad") ekki++; } return { thett, ekki }; }, [aaetludSynar]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stutTal = useMemo(() => { let thett = 0, ekki = 0, omet = 0; for (const a of aaetludSynar) if (a.parad?.stutur != null && aaEftir(a)) { const f = a.parad.flokkun; if (f === "thett_oskrad") thett++; else if (f === "stutur_vantar") ekki++; else if (f !== "eftir_oskrad") omet++; } return { thett, ekki, omet }; }, [aaetludSynar]); // eslint-disable-line react-hooks/exhaustive-deps
   const tillogur = useMemo(() => aaetludBlads.filter((a) => erTillaga(a) && (!a.parad || a.parad.stada === "vantar") && aaStodusia(a)).length, [aaetludBlads, aaStodusia]);
   const stoduTal = useMemo(() => { let d = 0, o = 0; for (const q of punktar) if (siaAn(q) && !afTakn[q.t.heiti]) { if (q.s.stada === "done") d++; else o++; } const e = aaetludBlads.filter((a) => aaEftir(a) && !erTillaga(a) && aaIDeild(a) && (!synV || synV[2].includes(a.fag)) && !afTakn[aaTakn(a).heiti]).length; return { allt: d + o, done: d, opid: o, eftir: e }; }, [punktar, siaAn, afTakn, aaetludBlads, aaTakn, synV, aaIDeild]);
   const taknTal = useMemo(() => {
@@ -1488,7 +1488,8 @@ export default function KortClient() {
             <span><i className="op" />Opið</span>
             <span><i className="ef" />Eftir, óskráð</span>
             {stutTal.thett > 0 && <span><i className="st-g" />Stútur: þétt, skráningu vantar ({num(stutTal.thett)})</span>}
-            {stutTal.ekki > 0 && <span><i className="st-h" />Stútur ekki kominn / ómetið ({num(stutTal.ekki)})</span>}
+            {stutTal.ekki > 0 && <span><i className="st-h" />Stútur ekki kominn ({num(stutTal.ekki)})</span>}
+            {stutTal.omet > 0 && <span><i className="st-o" />Stútur ómetinn í úttekt ({num(stutTal.omet)})</span>}
             <span><i className="lf" />Lagfæring</span>
             {otengdTal > 0 && <span><i className="ot" />Ótengdur punktur ({num(otengdTal)})</span>}
             {(endaVantar > 0 || anEnda) && <button type="button" className={anEnda ? "on" : ""} aria-pressed={anEnda} onClick={() => setAnEnda((x) => !x)}><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3 3L11 11M11 3L3 11" stroke="#dc2626" strokeWidth="2.6" strokeLinecap="round" fill="none" /></svg>Hinn endann vantar ({num(endaVantar)})</button>}

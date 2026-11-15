@@ -303,10 +303,10 @@ export default function SkyrslaClient() {
     for (const a of aaetlud) {
       if (!a.parad || a.parad.stutur == null) continue;
       const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y) continue;
-      const t = m[y.haed] || (m[y.haed] = { alls: 0, klarad: 0, opid: 0, eftir: 0, thett: 0, annad: 0 });
+      const t = m[y.haed] || (m[y.haed] = { alls: 0, klarad: 0, opid: 0, eftir: 0, thett: 0, annad: 0, ometid: 0 });
       t.alls++;
       if (a.parad.stada !== "vantar") { if (a.parad.skr?.stada === "done") t.klarad++; else t.opid++; }
-      else if (a.parad.flokkun === "eftir_oskrad") t.eftir++; else if (a.parad.flokkun === "thett_oskrad") t.thett++; else t.annad++;
+      else if (a.parad.flokkun === "eftir_oskrad") t.eftir++; else if (a.parad.flokkun === "thett_oskrad") t.thett++; else if (a.parad.flokkun === "stutur_vantar") t.annad++; else t.ometid++;
     }
     return m;
   }, [aaetlud, yfirlit]);
