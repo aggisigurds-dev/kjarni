@@ -671,6 +671,9 @@ umferðum undir límdu stikuna. Teiknað EINU SINNI þegar öll gögn eru komin.
 - **Sniðið í `notes`** (þáttarinn `Adalmal.greina(m)`): lína „A · …", „B · …", „C · …" = hluti (A fundir og frestir · C gera · B gerðist);
   „• " og „1. " = atriði; lína sem byrjar á „Spurningar…:" = spurningar aðskildar með „ · "; **lína sem byrjar á þankastriki „— " =
   leiðréttingarkafli** (hluti `ath`, „Leiðrétt eftir endurmælingu", nýjasti kaflinn efst, samanbrotinn á síma). Punktalínur á eftir fylgja kaflanum.
+  **Fyrirsögn án tvípunkts („SPURNINGAR TIL ÞÍN") er aðeins haus (492c, 11.11.2026)** og spurningarnar koma sem númeraðar línur á eftir.
+  Í 492 og 492b varð fyrirsögnin sjálf að fyrstu „spurningunni" með eigin ✓ (mælt á #1587: 6 í stað 5). 492c færir því sæti spurninga
+  um eitt niður á slíku máli: athugaðu `thjonustubord_falid` (`adalmal:atridi:<mál>-sp-%`) FYRIR birtingu; 11.11.2026 voru engin hök á #1587.
 - **Regla fyrir þann sem bætir við yfirlit:** viðbót aftan við `notes` byrjar ALLTAF á „— <Orð> dd.mm.áááá (höfundur): …" (Athugasemd /
   Endurmælt / Leiðrétt og lokað). Fyrir 492b rann slík viðbót inn í Spurningar: mælt á #1376 10.11.2026 voru 10 af 13 „spurningum"
   endurmælingar og borðið taldi 39 atriði í stað 29. Dagsetningin í kaflahausnum birtist sem „leiðrétt dd.mm" í titli. `updated_at` málsins
@@ -686,10 +689,11 @@ umferðum undir límdu stikuna. Teiknað EINU SINNI þegar öll gögn eru komin.
   þegar borðið sýndi 39.
 - **Prófun:** lifandi síðan er á bak við innskráningu starfsfólks [C#2261, C#2236]. Án innskráningar má staðfesta birtingu með `build.json`
   og leit að `__adalmal492` í `_bundle-*.js` (lifandi `index.html` nefnir ekki patch-skrána því build-dist búntar). Eftir innskráningu:
-  `window.Adalmal.version` á að vera `'492b'`. Lokað mál er prófað staðbundið með því að hlera fyrirspurnina og skila röðinni með status
+  `window.Adalmal.version` á að vera `'492c'`. Lokað mál er prófað staðbundið með því að hlera fyrirspurnina og skila röðinni með status
   `nytt` í vafranum einum — aldrei opna málið í grunninum til að prófa.
 - **Nýtt yfirlit 10.11.2026: #1587** (vika 03.11–10.11; merki `adalmal`, `vikuyfirlit`, `claude:vikuyfirlit-2026-11-10`; EKKI `samthykki`,
-  ekki `important`). Borðið er því ekki lengur tómt: 1 yfirlit, 27 atriði (A 6 · B 8 · C 7 · spurningar 5), staðfest staðbundið. Skrifað í
+  ekki `important`). Borðið er því ekki lengur tómt: 1 yfirlit, 26 atriði (A 6 · B 8 · C 7 · spurningar 5), mælt með 492c 11.11.2026
+  (492 og 492b sýndu 27 því fyrirsögnin „SPURNINGAR TIL ÞÍN" taldist atriði). Skrifað í
   lotu-yfirferð lotu 2ef635f0 úr mældum gögnum; það sem ekki tókst að mæla (fundartími „E og G í Fossvogi", greiðslur til birgja) er
   merkt þannig í textanum. Þegar næsta yfirlit er skrifað: loka #1587 í sama skrefi.
 
