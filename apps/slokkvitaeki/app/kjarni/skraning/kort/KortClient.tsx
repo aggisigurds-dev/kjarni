@@ -329,7 +329,7 @@ export default function KortClient() {
   const [synaSkr, setSynaSkr] = useState(true); const [synaAaetlud, setSynaAaetlud] = useState(true);
   const [baetaFag, setBaetaFag] = useState(""); // fag áætlaðs gats sem er verið að setja (tómt = ekki í setja-ham)
   const [baetaFlokkur, setBaetaFlokkur] = useState<number | "">(""); const [baetaFjoldi, setBaetaFjoldi] = useState(2); // stærð (flokkur) og stök verk nýs gats
-  const [valinn, setValinn] = useState<{ p?: Punktur; a?: Aaetlad; nanar?: Nanar | null; hja?: number[] } | null>(null);
+  const [valinn, setValinn] = useState<{ p?: Punktur; a?: Aaetlad; nanar?: Nanar | null; hja?: number[]; hjaTexti?: string; hjaStadir?: number } | null>(null);
   const [myndTeljari, setMyndTeljari] = useState(0); // hækkar þegar mynd hleðst → endurteikna
   const [synFag, setSynFag] = useState(""); // flýtisýn eftir fagi (SYNIR); tómt = lög og síur eins og þau eru stillt
   const [lanSyn, setLanSyn] = useState<Record<number, boolean>>({}); // lánuð lög sem kveikt er á (aðeins á þessum skjá)
@@ -1054,7 +1054,12 @@ export default function KortClient() {
     const b0 = best, r0 = merkisR(s.k, s.k0), dHja = r0 >= 7 ? Math.max(D_FAST, (1.2 * r0 * tk) / s.k) : (2.4 * r0 * tk) / s.k;
     const ak0 = adalKlasar.get(b0.s.id);
     const hja = miro ? syndir.filter((q) => q !== b0 && (ak0 ? ak0.ids.includes(q.s.id) : q.t.hopur === b0.t.hopur && !adalKlasar.has(q.s.id) && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja)).map((q) => q.s.ajour_serial ?? q.s.radnr).slice(0, 12) : [];
-    setValinn({ p: best, nanar: null, hja }); lyfta(best.y);
+    /* Samsetning merkisins eftir stað (Ajour-hnit): skráningar á nákvæmlega sömu hnitum eru tengdar með „=“, staðir aðskildir með „·“. Þá sést strax hvort „×6“ er
+     * sex staðir eða t.d. þrjár skráningar sem hver er skráð tvisvar á sama punkti. */
+    const hjaP = miro ? syndir.filter((q) => q !== b0 && (ak0 ? ak0.ids.includes(q.s.id) : q.t.hopur === b0.t.hopur && !adalKlasar.has(q.s.id) && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja)) : [];
+    const stadir = new Map<string, number[]>(); for (const q of [b0, ...hjaP]) { const l = q.x0.toFixed(1) + "|" + q.y0.toFixed(1), a = stadir.get(l), nr = q.s.ajour_serial ?? q.s.radnr; if (a) a.push(nr); else stadir.set(l, [nr]); }
+    const hjaTexti = [...stadir.values()].map((a) => a.sort((u, v) => u - v).map((r) => "#" + r).join(" = ")).join(" · ");
+    setValinn({ p: best, nanar: null, hja, hjaTexti, hjaStadir: stadir.size }); lyfta(best.y);
     const [r, mr] = await Promise.all([sb().from("skr_skraningar").select("lysing,athugasemd,created_at,ajour_gogn").eq("id", best.s.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", best.s.id).order("rod")]);
     const slodir = ((mr.data || []) as { path: string }[]).map((x) => x.path);
     if (!r.error && r.data) { const g = (r.data.ajour_gogn || {}) as { myndir?: string[]; teikning?: string; lagf_dags?: string; a_stad?: number }; setValinn((v) => (v && v.p && v.p.s.id === best!.s.id ? { ...v, nanar: { lysing: r.data.lysing, athugasemd: r.data.athugasemd, created_at: r.data.created_at, myndir: (g.myndir || []).length, teikning: g.teikning || null, lagf_dags: g.lagf_dags || null, a_stad: g.a_stad ?? null, slodir } } : v)); }
@@ -1295,6 +1300,7 @@ export default function KortClient() {
           <div className="gk-spjald">
             <button type="button" className="gk-x" onClick={() => setValinn(null)} aria-label="Loka">×</button>
             <h3>#{valinn.p.s.ajour_serial ?? valinn.p.s.radnr} <span className={valinn.p.s.stada === "done" ? "g" : "r"}>{valinn.p.s.stada === "done" ? "Klárað" : "Opið"}</span></h3>
+            {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í þessu merki: {valinn.hja.length + 1} stök verk{valinn.hjaStadir && valinn.hjaStadir < valinn.hja.length + 1 ? ` á ${valinn.hjaStadir} ${valinn.hjaStadir === 1 ? "stað" : "stöðum"} („=“ merkir sömu hnit í Ajour)` : ""}: {valinn.hjaTexti || valinn.hja.map((r) => "#" + r).join(", ")}</p>}
             {valinn.nanar && valinn.nanar.slodir.length > 0 && (() => { const sl = valinn.nanar!.slodir, nr = valinn.p!.s.ajour_serial ?? valinn.p!.s.radnr; return (
               <div className="gk-myndir">{sl.slice(0, 6).map((m, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -1312,7 +1318,6 @@ export default function KortClient() {
               const rangt = v[0] === "kaplar" && /^(Loft|Raufar)/i.test(fl(valinn.p!.s.flokkur_id));
               return <p className={`gk-merki ${rangt ? "gk-sama" : "gk-hja"}`}>Ljósmyndirnar sýna {VISB_HEITI[v[0]]}{rangt ? ", en flokkurinn í Ajour er loftræsting" : ""} {v[2] === "litur" ? "(sjálfvirk litagreining, myndirnar ekki skoðaðar)" : `(myndgreining, vissa ${v[2]})`}</p>; })()}
             {valinn.p.s.ajour_serial != null && !visb[valinn.p.s.ajour_serial] && visbRaud.has(valinn.p.s.ajour_serial) && <p className="gk-merki gk-hja">Sjálfvirk litagreining: rautt rör á ljósmynd, gæti verið úðakerfi (óskoðað; rétt í um 2 af hverjum 3 í prófun)</p>}
-            {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í sama merki ({valinn.hja.length + 1} stök verk): {valinn.hja.map((r) => "#" + r).join(", ")}</p>}
             {teikning.tegund === "yfirlit" && valinn.p.t.hopur !== "Gólf" && (() => {
               if (iPlotu(valinn.p!)) return <p className="gk-merki gk-hinum">Gegnumtak í loftplötu samkvæmt ljósmynd: ein skráning er öll lokunin</p>;
               const e = endar.get(valinn.p!.s.id);
