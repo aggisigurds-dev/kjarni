@@ -645,7 +645,7 @@ export default function KortClient() {
     for (let i = 0; i + 4 < nm.length; i += 5) { const l = lyk(Math.floor(nm[i] / OTENGD_PX), Math.floor(nm[i + 1] / OTENGD_PX)), a = net.get(l); if (a) a.push(i); else net.set(l, [i]); }
     let n = 0;
     for (const p of syndir) {
-      if (p.t.hopur !== NEMA_HOPUR || p.s.lagf === "A" || endar.get(p.s.id)?.nemi !== undefined) continue;
+      const e = endar.get(p.s.id); if (p.t.hopur !== NEMA_HOPUR || p.s.lagf === "A" || e?.nemi !== undefined || p.faersla?.uppruni === "handvirkt" || (e && e.hlid === "hinum" && e.q && e.d <= PAR_PX)) continue;
       const gx = Math.floor(p.x / OTENGD_PX), gy = Math.floor(p.y / OTENGD_PX);
       leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const i of net.get(lyk(ix, iy)) || []) if (Math.hypot(p.x - nm[i], p.y - nm[i + 1]) < OTENGD_PX) { n++; break leit; }
     }
@@ -742,6 +742,7 @@ export default function KortClient() {
        * veggjarins, með hökin sitt hvorum megin. Skráning án nema sem er samt nálægt einum er „ótengd“: lítil og grá þar til hún er dregin að merkinu (Færa),
        * þá smellur hún á nemann og hakið birtist. Skráningar fjarri öllum nemum (veggir sem eru ekki rauðir á blaðinu) teiknast eins og áður. */
       const adalNm = adal && Rs >= 7 && veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null, afNema = new Map<string, Hop>(), hopAf = new Map<number, Hop>(), otengd: Punktur[] = [], notadir = new Set<number>();
+      const parHandan = (p: Punktur) => { const e = endar.get(p.s.id); return !!e && e.hlid === "hinum" && !!e.q && e.d <= PAR_PX; };
       const naerNema = (p: Punktur) => { const nm = adalNm!; for (let i = 0; i + 4 < nm.length; i += 5) if (Math.abs(p.x - nm[i]) < OTENGD_PX && Math.abs(p.y - nm[i + 1]) < OTENGD_PX && Math.hypot(p.x - nm[i], p.y - nm[i + 1]) < OTENGD_PX) return true; return false; };
       for (const p of syndir) {
         if (p.s.id === dr?.p?.s.id || p.s.id === valinn?.p?.s.id) { stakir.push(p); continue; }
@@ -759,7 +760,7 @@ export default function KortClient() {
         if (ak) {   // aðalmerki: á miðlínu veggjar, við stöðu klasans meðfram veggnum
           h = afNema.get(ak.lykill);
           if (h) { h.n++; h.ids.push(p.s.id); } else { h = { x: ak.x, y: ak.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false }, lg: false, ids: [p.s.id], kk: kkP, adal: true }; hopar.push(h); afNema.set(ak.lykill, h); }
-        } else if (loftNemi && ni === undefined && naerNema(p)) { otengd.push(p); continue; }
+        } else if (loftNemi && ni === undefined && naerNema(p) && p.faersla?.uppruni !== "handvirkt" && !parHandan(p)) { otengd.push(p); continue; }   // stakur punktur við gegnumtak; par á vegg og handfærður punktur eru venjuleg merki
         else {
           /* Tveir endar sömu lokunar (hinn endinn handan veggjar, innan PAR_PX) eru EITT merki í hvaða stækkun sem er. Áður rann parið aðeins saman meðan það
            * var innan merkisbreiddar og klofnaði í tvö merki með tvö hök hvort þegar stækkað var inn (Agnar 15.11.2026: „eru þetta 2 eða 4 göt“). */
