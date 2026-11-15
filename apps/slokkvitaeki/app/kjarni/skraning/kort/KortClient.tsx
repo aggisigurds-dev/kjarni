@@ -111,6 +111,11 @@ const NEMAR: Record<string, () => Promise<{ default: { nemar: number[] } }>> = {
 const NEMA_HOPUR = "Loft", N_MED = 6, N_THV = 12;
 /* Ótengdur Ajour-punktur: loftræstiskráning sem á engan nema en er innan OTENGD_PX (≈ 1,35 m) frá einum. Teiknuð lítil og grá þar til hún er dregin að aðalmerkinu. */
 const OTENGD_PX = 45, OTENGT = "#64748b";
+/* Nemi er oft BREIÐARI en eitt gegnumtak (hb: miðgildi 7,5 px, mest 32 px = tæpir 2 m; stokkur sem liggur meðfram veggnum eða tveir stokkar hlið við hlið renna
+ * í einn nema). Aðalmerkið stendur því á miðlínu veggjarins þar sem SKRÁNINGARNAR eru meðfram veggnum, ekki á miðju nemans, og skráningar sama nema sem eru
+ * meira en KLASA_BIL px í sundur meðfram veggnum eru sitt hvort merkið. PAR_PX: tveir endar sömu lokunar (hvor sínum megin við vegg, án nema) renna í eitt
+ * merki ef þeir eru nær hvor öðrum en þetta, í hvaða stækkun sem er. */
+const KLASA_BIL = 6, PAR_PX = 12;
 /** Smellur (Agnar 14.11.2026: „maður gæti dregið punktana svo þeir festast í einhvern endann á plúsnum og þá kæmi neon check ✓ á þann hluta“): punktur sem
  *  er dreginn innan SMELL_NAER px frá nema lendir á miðju gegnumtaksins, SMELL_PX px frá miðlínu veggjar þeim megin sem honum var sleppt. Slík staða er
  *  þekkt aftur á hnitunum einum (handfærð, á miðju nemans, nákvæmlega SMELL_PX frá vegg) og ræður þá hlið skráningarinnar í stað Ajour-staðarins. */
@@ -120,12 +125,15 @@ const NEON_FYLL = "rgba(57, 255, 20, .8)";
 /* Sama hugmynd fyrir hinar stöðurnar (Agnar sama dag: „öll hin merkin … í samræmi … skýrara og augljósara“): fyllingin í merkinu segir stöðu lokunarinnar.
  * Grænt = tilbúið · gult = hálfnað (klárað öðrum megin, eða sumt klárað og annað opið) · rautt = opið (ekkert klárað). Ekkert nýtt tákn ofan á merkinu. */
 const GULT_FYLL = "rgba(250, 204, 21, .85)", RAUTT_FYLL = "rgba(248, 113, 113, .8)";
-function smella(nm: number[], x: number, y: number): [number, number] | null {
+/* 15.11.2026: smellurinn færir punktinn aðeins ÞVERT á vegginn (að SMELL_PX frá miðlínu). Meðfram veggnum stendur hann þar sem honum var sleppt, innan
+ * breiddar nemans. Áður dró hann punktinn alltaf á MIÐJU nemans, sem á breiðum nema er fjarri gegnumtakinu („Nú get ég ekki fært helvítis draslið“).
+ * thMest = hve langt frá vegg smellurinn nær; kallarinn minnkar það í djúpri stækkun svo hægt sé að sleppa punkti rétt við vegg án þess að hann sogist að. */
+function smella(nm: number[], x: number, y: number, thMest = SMELL_NAER): [number, number] | null {
   let b = 1e9, bi = -1;
-  for (let i = 0; i + 4 < nm.length; i += 5) { const dx = x - nm[i], dy = y - nm[i + 1], al = Math.abs(dx * nm[i + 2] + dy * nm[i + 3]), th = Math.abs(-dx * nm[i + 3] + dy * nm[i + 2]); if (al <= nm[i + 4] + N_MED && th <= SMELL_NAER && al + th < b) { b = al + th; bi = i; } }
+  for (let i = 0; i + 4 < nm.length; i += 5) { const dx = x - nm[i], dy = y - nm[i + 1], al = Math.abs(dx * nm[i + 2] + dy * nm[i + 3]), th = Math.abs(-dx * nm[i + 3] + dy * nm[i + 2]); if (al <= nm[i + 4] + N_MED && th <= thMest && th + Math.max(0, al - nm[i + 4]) < b) { b = th + Math.max(0, al - nm[i + 4]); bi = i; } }
   if (bi < 0) return null;
-  const sg = -(x - nm[bi]) * nm[bi + 3] + (y - nm[bi + 1]) * nm[bi + 2] >= 0 ? 1 : -1;
-  return [nm[bi] - nm[bi + 3] * SMELL_PX * sg, nm[bi + 1] + nm[bi + 2] * SMELL_PX * sg];
+  const tx = nm[bi + 2], ty = nm[bi + 3], dx = x - nm[bi], dy = y - nm[bi + 1], hb = nm[bi + 4], al = Math.max(-hb, Math.min(hb, dx * tx + dy * ty)), sg = -dx * ty + dy * tx >= 0 ? 1 : -1;
+  return [nm[bi] + tx * al - ty * SMELL_PX * sg, nm[bi + 1] + ty * al + tx * SMELL_PX * sg];
 }
 /** einn = eina skráningin á sínu gegnumtaki og engin hinum megin · samaNemi = allar skráningar gegnumtaksins sömu megin (báðar rautt ✕). */
 type Endi = { q: Punktur | null; nr: number | null; d: number; hlid: "hinum" | "sama" | "ovist" | "einn" | "samaNemi"; nemi?: number; vitt?: boolean; megin?: number; fest?: boolean };
@@ -254,7 +262,9 @@ const BLOM_D = (() => { const p = blomPunktar(7, 7, 4.6), f = (n: number) => n.t
  * skjáinn (mælt: 200 mm veggur = 22 px). Nú aldrei minna en 6 skjápixlar á grunnpixil (1 grunnpixill ≈ 29 mm), um 1,9 m þvert yfir 390 px skjá.
  * Flísarnar eru skarpar upp að 4; 10 var prófað og þá fyllti einn veggur skjáinn, sem nýtist ekki. Tölva (k0 ≥ 0,15) er óbreytt. */
 const kMest = (k0: number) => Math.max(k0 * 40, 6);
-const merkisR = (k: number, k0: number) => Math.max(4, Math.min(13, Math.sqrt(k / k0) * 3.4));
+/* Merkið vex með stækkun upp í 13 px og svo hægar áfram upp í 22 px í dýpstu stækkun. Fasta þakið 13 px gerði merkin agnarsmá miðað við teikninguna þegar
+ * stækkað var alveg inn (Agnar 15.11.2026: „punktarnir minnka svo extreme með“). */
+const merkisR = (k: number, k0: number) => { const x = Math.sqrt(k / k0) * 3.4; return x <= 13 ? Math.max(4, x) : Math.min(22, 13 * Math.pow(x / 13, 0.6)); };
 /** Skýringartákn símasýnarinnar: útlína í lit stærðarflokks, hvít fylling (sama og á kortinu). */
 function MerkiSvg({ t }: { t: Takn }) {
   const p = { fill: "#fff", stroke: t.litur, strokeWidth: 1.8, strokeLinejoin: "round" as const };
@@ -477,7 +487,7 @@ export default function KortClient() {
         if (bi < 0) continue;
         nemiAf.set(p.s.id, bi);
         const tx = nm[bi + 2], ty = nm[bi + 3], s0 = -(p.x0 - nm[bi]) * ty + (p.y0 - nm[bi + 1]) * tx, sd = -(p.x - nm[bi]) * ty + (p.y - nm[bi + 1]) * tx, ald = (p.x - nm[bi]) * tx + (p.y - nm[bi + 1]) * ty;
-        const fest = p.faersla?.uppruni === "handvirkt" && Math.abs(ald) <= 0.35 && Math.abs(Math.abs(sd) - SMELL_PX) <= 0.35, sv = fest ? (sd > 0 ? 99 : -99) : s0;
+        const fest = p.faersla?.uppruni === "handvirkt" && Math.abs(ald) <= nm[bi + 4] + 0.35 && Math.abs(Math.abs(sd) - SMELL_PX) <= 0.35, sv = fest ? (sd > 0 ? 99 : -99) : s0;
         hl.set(p.s.id, { megin: Math.abs(sv) <= A_LINU ? 0 : (Math.abs(tx) > Math.abs(ty) ? sv * tx : sv * -ty) > 0 ? 1 : -1, fest });
         const h = hopar.get(bi), e = { p, s: sv };
         if (h) h.push(e); else hopar.set(bi, [e]);
@@ -607,6 +617,27 @@ export default function KortClient() {
   const manudir = useMemo(() => [...new Set(skr.map((s) => (s.framkvaemt_til || "").slice(0, 7)).filter(Boolean))].sort(), [skr]);
   const endaVantar = useMemo(() => syndir.reduce((n, p) => n + (vantarEnda(p) ? 1 : 0), 0), [syndir, vantarEnda]);
   const samaTal = useMemo(() => syndir.reduce((n, p) => n + (samaMegin(p) ? 1 : 0), 0), [syndir, samaMegin]);
+  /* Aðalmerki: hvaða loftræstiskráningar standa saman í einu merki á veggnum og hvar. Skráningar sama nema og sömu stærðar eru flokkaðar eftir stöðu sinni
+   * MEÐFRAM veggnum (bil > KLASA_BIL = nýtt merki); merkið stendur á miðlínu veggjarins við meðalstöðu klasans. Handfærð skráning sem var EKKI sleppt á
+   * vegginn (ekki „fest“) er ekki með: hún stendur nákvæmlega þar sem henni var sleppt. Lagfæring (A) er alltaf sér merki. */
+  const adalKlasar = useMemo(() => {
+    const m = new Map<number, { x: number; y: number; lykill: string; ids: number[] }>();
+    const nm = adal && veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null; if (!nm) return m;
+    const eftir = new Map<string, { id: number; al: number }[]>();
+    for (const p of syndir) {
+      if (p.t.hopur !== NEMA_HOPUR || p.s.lagf === "A") continue; const e = endar.get(p.s.id), ni = e?.nemi; if (!e || ni === undefined) continue;
+      if (p.faersla?.uppruni === "handvirkt" && !e.fest) continue;
+      const l = ni + "|" + p.t.heiti, a = eftir.get(l), u = { id: p.s.id, al: (p.x - nm[ni]) * nm[ni + 2] + (p.y - nm[ni + 1]) * nm[ni + 3] }; if (a) a.push(u); else eftir.set(l, [u]);
+    }
+    for (const [l, a] of eftir) {
+      const ni = +l.slice(0, l.indexOf("|")); a.sort((u, v) => u.al - v.al); let i0 = 0;
+      for (let i = 1; i <= a.length; i++) if (i === a.length || a[i].al - a[i - 1].al > KLASA_BIL) {
+        const hl = a.slice(i0, i), mal = hl.reduce((s, u) => s + u.al, 0) / hl.length, kl = { x: nm[ni] + nm[ni + 2] * mal, y: nm[ni + 1] + nm[ni + 3] * mal, lykill: l + "|" + i0, ids: hl.map((u) => u.id) };
+        for (const u of hl) m.set(u.id, kl); i0 = i;
+      }
+    }
+    return m;
+  }, [syndir, endar, veggir, veggjaLykill, adal]);
   /* Ótengdir Ajour-punktar á blaðinu öllu: loftræstiskráning án nema sem er innan OTENGD_PX frá einum (sama regla og í teikningunni). */
   const otengdTal = useMemo(() => {
     const nm = adal && veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null; if (!nm) return 0;
@@ -701,7 +732,7 @@ export default function KortClient() {
        * alltaf teiknaður stakur. Val og færsla vinna áfram á hverri skráningu fyrir sig. */
       const Rs = merkisR(k, k0) * tk, R = Rs / k, D = 2.4 * R, jadar = 3 * R;
       type Hlidar = { nA: number; nB: number; fA: boolean; fB: boolean };   // kláraðar skráningar með þekkta hlið: A = ofan/vinstra megin, B = neðan/hægra megin; f = smellt með hendi
-      type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; ne: number; t: Takn; hs: Hlidar; kl?: string; lg: boolean; ids: number[]; kk?: string };   // ne = kláraðar skráningar sem eru ÖLL lokunin (gólf, eða gegnumtak í plötu)   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
+      type Hop = { x: number; y: number; n: number; nd: number; no: number; ve: number; vs: number; nh: number; ne: number; t: Takn; hs: Hlidar; kl?: string; lg: boolean; ids: number[]; kk?: string; adal?: boolean };   // adal = aðalmerki á vegg: staðan er föst (klasinn), ekki meðaltal   // ne = kláraðar skráningar sem eru ÖLL lokunin (gólf, eða gegnumtak í plötu)   // ve = vantar hinn endann · vs = hinn endinn sömu megin við vegg · nh = hinn endinn skráður og kláraður
       const kerfisLitur = (p: Punktur) => { const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined; return v ? VISB_KERFI[v[0]]?.[0] : undefined; };
       /* Kerfi stálrörs: úrskurður af ljósmynd gengur fyrir, annars lagnateikningin (skr_kerfi án vafa). Annað en stálrör: ekkert kerfi. */
       const kerfiP = (p: Punktur): string | undefined => { if (p.t.logun !== "o") return undefined; const v = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined; return v && v[0] === "udi" ? "udi" : v && v[0] === "einangrad" ? "vatn" : kerfiKort.get(p.s.id); };
@@ -710,7 +741,7 @@ export default function KortClient() {
       /* Aðalmerki: loftræstiskráningar sem eiga nema (gegnumtak stokks gegnum rauðan brunavegg) renna í EITT merki sem stendur á gegnumtakinu sjálfu, á miðlínu
        * veggjarins, með hökin sitt hvorum megin. Skráning án nema sem er samt nálægt einum er „ótengd“: lítil og grá þar til hún er dregin að merkinu (Færa),
        * þá smellur hún á nemann og hakið birtist. Skráningar fjarri öllum nemum (veggir sem eru ekki rauðir á blaðinu) teiknast eins og áður. */
-      const adalNm = adal && Rs >= 7 && veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null, afNema = new Map<string, Hop>(), otengd: Punktur[] = [], notadir = new Set<number>();
+      const adalNm = adal && Rs >= 7 && veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null, afNema = new Map<string, Hop>(), hopAf = new Map<number, Hop>(), otengd: Punktur[] = [], notadir = new Set<number>();
       const naerNema = (p: Punktur) => { const nm = adalNm!; for (let i = 0; i + 4 < nm.length; i += 5) if (Math.abs(p.x - nm[i]) < OTENGD_PX && Math.abs(p.y - nm[i + 1]) < OTENGD_PX && Math.hypot(p.x - nm[i], p.y - nm[i + 1]) < OTENGD_PX) return true; return false; };
       for (const p of syndir) {
         if (p.s.id === dr?.p?.s.id || p.s.id === valinn?.p?.s.id) { stakir.push(p); continue; }
@@ -723,17 +754,27 @@ export default function KortClient() {
          * rörahring telja því aðeins stök verk af einni stærð, án lagfæringa. Prófað og hafnað sama dag: að skipta líka sömu stærð í eitt merki per lokun
          * og raða þeim hlið við hlið; „160 ×5“ varð þá fimm merki í röð, fjarri réttum stað, hvert með tvö hök. Í yfirliti (Rs < 7) rennur sami hópur saman. */
         const naid = Rs >= 7, lg = naid && p.s.lagf === "A", kkP = kerfiP(p);
-        const loftNemi = !!adalNm && !lg && p.t.hopur === NEMA_HOPUR, ni = loftNemi ? endar.get(p.s.id)?.nemi : undefined;
-        if (ni !== undefined) { const nl = ni + "|" + p.t.heiti; notadir.add(ni); h = afNema.get(nl); if (h) { h.n++; h.ids.push(p.s.id); } else { h = { x: adalNm![ni], y: adalNm![ni + 1], n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false }, lg: false, ids: [p.s.id], kk: kkP }; hopar.push(h); afNema.set(nl, h); } }
-        else if (loftNemi && naerNema(p)) { otengd.push(p); continue; }
-        if (ni === undefined) leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const q of net.get(lykill(ix, iy)) || []) {
-          if (q.t.hopur !== p.t.hopur || Math.hypot(q.x - p.x, q.y - p.y) >= D) continue;
-          if (naid && (lg || q.lg || q.t.heiti !== p.t.heiti || q.kk !== kkP)) continue;   // úðakerfi og vatn renna ekki saman
-          h = q; break leit;
+        const loftNemi = !!adalNm && !lg && p.t.hopur === NEMA_HOPUR, ni = loftNemi ? endar.get(p.s.id)?.nemi : undefined, ak = loftNemi ? adalKlasar.get(p.s.id) : undefined;
+        if (ni !== undefined) notadir.add(ni);
+        if (ak) {   // aðalmerki: á miðlínu veggjar, við stöðu klasans meðfram veggnum
+          h = afNema.get(ak.lykill);
+          if (h) { h.n++; h.ids.push(p.s.id); } else { h = { x: ak.x, y: ak.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false }, lg: false, ids: [p.s.id], kk: kkP, adal: true }; hopar.push(h); afNema.set(ak.lykill, h); }
+        } else if (loftNemi && ni === undefined && naerNema(p)) { otengd.push(p); continue; }
+        else {
+          /* Tveir endar sömu lokunar (hinn endinn handan veggjar, innan PAR_PX) eru EITT merki í hvaða stækkun sem er. Áður rann parið aðeins saman meðan það
+           * var innan merkisbreiddar og klofnaði í tvö merki með tvö hök hvort þegar stækkað var inn (Agnar 15.11.2026: „eru þetta 2 eða 4 göt“). */
+          const e = naid && !lg ? endar.get(p.s.id) : undefined, fel = e && e.hlid === "hinum" && e.q && e.d <= PAR_PX ? hopAf.get(e.q.s.id) : undefined;
+          if (fel && !fel.lg && fel.t.heiti === p.t.heiti && fel.kk === kkP) h = fel;
+          else leit: for (let ix = gx - 1; ix <= gx + 1; ix++) for (let iy = gy - 1; iy <= gy + 1; iy++) for (const q of net.get(lykill(ix, iy)) || []) {
+            if (q.t.hopur !== p.t.hopur || Math.hypot(q.x - p.x, q.y - p.y) >= D) continue;
+            if (naid && (lg || q.lg || q.t.heiti !== p.t.heiti || q.kk !== kkP)) continue;   // úðakerfi og vatn renna ekki saman
+            h = q; break leit;
+          }
+          if (h) { if (!h.adal) { h.x = (h.x * h.n + p.x) / (h.n + 1); h.y = (h.y * h.n + p.y) / (h.n + 1); } h.n++; h.ids.push(p.s.id); if (p.t.r > h.t.r) h.t = p.t; }
+          else { h = { x: p.x, y: p.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false }, lg, ids: [p.s.id], kk: kkP }; hopar.push(h); const l = lykill(gx, gy), a = net.get(l); if (a) a.push(h); else net.set(l, [h]); }
         }
-        if (ni !== undefined) { h = h as Hop; }   // aðalmerki: staðan er gegnumtakið sjálft, ekki meðaltal punktanna
-        else if (h) { h.x = (h.x * h.n + p.x) / (h.n + 1); h.y = (h.y * h.n + p.y) / (h.n + 1); h.n++; h.ids.push(p.s.id); if (p.t.r > h.t.r) h.t = p.t; }
-        else { h = { x: p.x, y: p.y, n: 1, nd: 0, no: 0, ve: 0, vs: 0, nh: 0, ne: 0, t: p.t, hs: { nA: 0, nB: 0, fA: false, fB: false }, lg, ids: [p.s.id], kk: kkP }; hopar.push(h); const l = lykill(gx, gy), a = net.get(l); if (a) a.push(h); else net.set(l, [h]); }
+        if (!h) continue;
+        hopAf.set(p.s.id, h);
         if (p.s.stada === "done") { h.nd++; if (p.t.hopur === "Gólf" || iPlotu(p)) h.ne++; } else h.no++;
         if (vantarEnda(p)) h.ve++; else { if (samaMegin(p)) h.vs++; if (hinnKlar(p)) h.nh++; }   // lagfæring fylgir sömu reglum og áður; hún er aðeins sér merki
         hlidar(p, h.hs); if (!h.kl) h.kl = kerfisLitur(p);
@@ -813,7 +854,7 @@ export default function KortClient() {
       /* Ótengdir Ajour-punktar: lítill grár plús. Í færsluham sjást líka auð gegnumtök (enginn punktur tengdur) sem daufar brotnar útlínur, svo hægt sé að draga þangað. */
       for (const p of otengd) { plus(cx, p.x, p.y, R * 0.6); cx.fillStyle = "rgba(255,255,255,.8)"; cx.fill(); cx.lineJoin = "round"; cx.lineWidth = Math.max(1.2 / k, R * 0.18); cx.strokeStyle = OTENGT; cx.stroke(); }
       if (adalNm && faera) { cx.setLineDash([R * 0.4, R * 0.3]); cx.lineWidth = Math.max(1 / k, R * 0.14); cx.strokeStyle = "rgba(100,116,139,.75)";
-        for (let i = 0; i + 4 < adalNm.length; i += 5) { if (notadir.has(i)) continue; const nx = adalNm[i], ny = adalNm[i + 1]; if (nx < sx0 - jadar || nx > sx1 + jadar || ny < sy0 - jadar || ny > sy1 + jadar) continue; plus(cx, nx, ny, R * 0.8); cx.stroke(); }
+        for (let i = 0; i + 4 < adalNm.length; i += 5) { if (notadir.has(i)) continue; const nx = adalNm[i], ny = adalNm[i + 1]; if (nx < sx0 - jadar || nx > sx1 + jadar || ny < sy0 - jadar || ny > sy1 + jadar) continue; const hb = adalNm[i + 4]; if (hb > 6) { cx.beginPath(); cx.moveTo(nx - adalNm[i + 2] * hb, ny - adalNm[i + 3] * hb); cx.lineTo(nx + adalNm[i + 2] * hb, ny + adalNm[i + 3] * hb); } else plus(cx, nx, ny, R * 0.8); cx.stroke(); }
         cx.setLineDash([]); }
       for (const p of stakir) {
         const idr = dr?.p?.s.id === p.s.id, px = idr ? dr!.x : p.x, py = idr ? dr!.y : p.y, kl = p.s.stada === "done";
@@ -871,7 +912,7 @@ export default function KortClient() {
       cx.beginPath(); cx.arc(lx, ly, R, 0, 6.2832); cx.lineWidth = 3 * dpr; cx.strokeStyle = "#1d4ed8"; cx.stroke();
       cx.beginPath(); cx.moveTo(lx - R, ly); cx.lineTo(lx - 9 * dpr, ly); cx.moveTo(lx + 9 * dpr, ly); cx.lineTo(lx + R, ly); cx.moveTo(lx, ly - R); cx.lineTo(lx, ly - 9 * dpr); cx.moveTo(lx, ly + 9 * dpr); cx.lineTo(lx, ly + R); cx.lineWidth = 1 * dpr; cx.strokeStyle = "rgba(29,78,216,.55)"; cx.stroke();
     }
-  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb, tk, litirLykill, miro, iPlotu, kerfiKort, adal]);
+  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, synaAjour, visb, tk, litirLykill, miro, iPlotu, kerfiKort, adal, adalKlasar]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -942,7 +983,7 @@ export default function KortClient() {
     if (faerir.current && b.length === 1) {
       const s = sjon.current, f = faerir.current; f.x = (p.x - s.tx) / s.k + f.dx; f.y = (p.y - s.ty) / s.k + f.dy;
       const nmS = veggir && veggir.lykill === veggjaLykill ? veggir.nemar : null;
-      if (f.p && nmS && f.p.t.hopur === NEMA_HOPUR) { const sm = smella(nmS, f.x, f.y); if (sm) { f.x = sm[0]; f.y = sm[1]; } }
+      if (f.p && nmS && f.p.t.hopur === NEMA_HOPUR) { const sm = smella(nmS, f.x, f.y, Math.min(SMELL_NAER, 30 / s.k)); if (sm) { f.x = sm[0]; f.y = sm[1]; } }
       drag.current.hreyft += Math.abs(p.x - fyrri.x) + Math.abs(p.y - fyrri.y); if (drag.current.hreyft > 4) f.hreyft = true;
       bidjaUmTeikningu(); return;
     }
@@ -968,7 +1009,7 @@ export default function KortClient() {
     if (synaSkr) for (const q of syndir) { const dd = Math.hypot(q.x - wx, q.y - wy); if (dd < bd) { bd = dd; best = q; } }
     /* Aðalmerkið stendur á gegnumtakinu, ekki á punktunum sjálfum: pikk á merkið velur þá tengdu skráningu sem er næst pikkinu. */
     if (!best && synaSkr && adal && veggir && veggir.lykill === veggjaLykill && veggir.nemar) { const nm = veggir.nemar; let bq = 1e9;
-      for (const q of syndir) { const ni = q.t.hopur === NEMA_HOPUR ? endar.get(q.s.id)?.nemi : undefined; if (ni === undefined || Math.hypot(nm[ni] - wx, nm[ni + 1] - wy) >= mork * 1.4) continue; const dq = Math.hypot(q.x - wx, q.y - wy); if (dq < bq) { bq = dq; best = q; } } }
+      void nm; for (const q of syndir) { const ak = adalKlasar.get(q.s.id); if (!ak || Math.hypot(ak.x - wx, ak.y - wy) >= mork * 1.4) continue; const dq = Math.hypot(q.x - wx, q.y - wy); if (dq < bq) { bq = dq; best = q; } } }
     let ba: Aaetlad | null = null; if (synaAaetlud) for (const a of aaetludSynar) { const dd = Math.hypot(+a.x_px - wx, +a.y_px - wy); if (dd < bd) { bd = dd; ba = a; } }
     /* Símasýn: spjaldið þekur allt að neðri helming kortsins. Lendi valdi punkturinn undir því er kortinu hliðrað upp svo hann (og línan milli
      * Ajour-staðanna) sjáist ofan við spjaldið. Ekki í færsluham: þar er spjaldið samanbrotið. */
@@ -977,7 +1018,8 @@ export default function KortClient() {
     if (!best) { setValinn(null); return; }
     // símasýn: skráningar sem eru í sama merki og sú valda (sami hópur, innan merkisbreiddar) eru taldar upp í spjaldinu
     const b0 = best, dHja = (2.4 * merkisR(s.k, s.k0) * tk) / s.k;
-    const hja = miro ? syndir.filter((q) => q !== b0 && q.t.hopur === b0.t.hopur && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja).map((q) => q.s.ajour_serial ?? q.s.radnr).slice(0, 8) : [];
+    const ak0 = adalKlasar.get(b0.s.id);
+    const hja = miro ? syndir.filter((q) => q !== b0 && (ak0 ? ak0.ids.includes(q.s.id) : q.t.hopur === b0.t.hopur && !adalKlasar.has(q.s.id) && Math.hypot(q.x - b0.x, q.y - b0.y) < dHja)).map((q) => q.s.ajour_serial ?? q.s.radnr).slice(0, 12) : [];
     setValinn({ p: best, nanar: null, hja }); lyfta(best.y);
     const [r, mr] = await Promise.all([sb().from("skr_skraningar").select("lysing,athugasemd,created_at,ajour_gogn").eq("id", best.s.id).single(), sb().from("skr_myndir").select("path").eq("skraning_id", best.s.id).order("rod")]);
     const slodir = ((mr.data || []) as { path: string }[]).map((x) => x.path);
@@ -1235,7 +1277,7 @@ export default function KortClient() {
               const rangt = v[0] === "kaplar" && /^(Loft|Raufar)/i.test(fl(valinn.p!.s.flokkur_id));
               return <p className={`gk-merki ${rangt ? "gk-sama" : "gk-hja"}`}>Ljósmyndirnar sýna {VISB_HEITI[v[0]]}{rangt ? ", en flokkurinn í Ajour er loftræsting" : ""} {v[2] === "litur" ? "(sjálfvirk litagreining, myndirnar ekki skoðaðar)" : `(myndgreining, vissa ${v[2]})`}</p>; })()}
             {valinn.p.s.ajour_serial != null && !visb[valinn.p.s.ajour_serial] && visbRaud.has(valinn.p.s.ajour_serial) && <p className="gk-merki gk-hja">Sjálfvirk litagreining: rautt rör á ljósmynd, gæti verið úðakerfi (óskoðað; rétt í um 2 af hverjum 3 í prófun)</p>}
-            {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í sama merki: {valinn.hja.map((r) => "#" + r).join(", ")}</p>}
+            {valinn.hja && valinn.hja.length > 0 && <p className="gk-merki gk-hja">Í sama merki ({valinn.hja.length + 1} stök verk): {valinn.hja.map((r) => "#" + r).join(", ")}</p>}
             {teikning.tegund === "yfirlit" && valinn.p.t.hopur !== "Gólf" && (() => {
               if (iPlotu(valinn.p!)) return <p className="gk-merki gk-hinum">Gegnumtak í loftplötu samkvæmt ljósmynd: ein skráning er öll lokunin</p>;
               const e = endar.get(valinn.p!.s.id);
