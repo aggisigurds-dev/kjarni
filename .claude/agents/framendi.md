@@ -3,7 +3,7 @@ name: framendi
 description: Framendi og flipar Brunahólfs-hubbsins — hvaða síður eru til, hvað hver gerir, hvernig þær tengjast og hvar í index.html (2 MB, aldrei lesin í heilu) eitthvað býr. Notaðu þegar breyta á síðu, bæta við flipa, hnappi eða dálki, laga hliðarstikuna eða finna hvar eitthvað í viðmótinu er; kallaðu á hann sjálfur áður en index.html er snert. Rödd í Jarvis: Lara Croft (Angelina Jolie) 🗺️. Kveikjuorð: flipi, nýr flipi, hub, index.html, hliðarstika, ui.vidmot.hlidarstika, DEFAULT_STATE, ensureNewTabs, hub_state, Stjórnborð, Vinnustofa, Yfirlit, Dagurinn, Vefrýni, Kröfu yfirlit, Fjármála-yfirlit, dálkastjórn, prófa alla takka, hvar býr þetta
 tools: Bash, Read, Grep, Glob, Edit
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\framendi.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\framendi.md (samstillt 2026-11-15). Breyttu þar.
 
 ## Charlize — lestu fyrst
 
@@ -464,6 +464,23 @@ og Landsbanka-kröfur teljast EKKI. Sótt úr `load()` í Kröfu yfirliti (ekki 
   við Payday-röð SJÁLFVIRKT (aðeins reiknað, ekkert skrifað): sama kt, upphæð innan 1 kr, Payday SENT/PAID, gjalddagi ≥ upphaf vinnumánaðar, einn-á-einn
   (elsta drög fyrst), raðir sem hanga á drögum (payday_invoice_id) frátekin. Tengd drög detta úr Ósent en lifa í töflunni/draftKeys; svarið ber `sjalfvirk_tenging[]`.
   Próf: `node tools/test-krofu-sjalfvirk-tenging.cjs` (13 atriði; fellur á gamla kóðanum). Mælt 20.10: sex tengingar á lifandi gögnum (R-371, 377, 378, 379, 380, 381), allar nákvæmar.
+- **10.11.2026 — „📄 Efnislisti · sundurliðun" á sendum reikningi (þrep 1):** Agnar: „setja aftur Efnislistann þangað sem var sendur svo
+  ég sjái sundurliðunina". Röðin finnur sig í `state.data.sjalfvirk_tenging` (tilvísun → `draftinv|verkstaður|mánuður`) og sækir PDF-ið úr
+  `EFDOCS[verkstaður|mánuður]` (aðalskjal fyrst, aldrei `innra`/`timabok_pdf`); tengillinn `[data-ky-sendpdf]` opnar í nýjum flipa og
+  stöðvar smellinn svo röðin opnist ekki. Aðeins lestur. Drög sem hanga á `payday_invoice_id` (ekki í sjalfvirk_tenging) fá EKKI tengil enn.
+  Próf án skrifa: scratchpad `ky_pdf_test.cjs` (skrár af diski á `bh.test`, GET → lifandi API): R-386/387/388 fengu tengil.
+  **Mundu:** tengingin er aðeins reiknuð — ekkert skrifar `payday_invoice_id` á drögin, svo NLSH-mánuður frystist ekki sjálfur (sjá skill `gata-manadarlok`).
+
+## Ógreitt og ósent: EIN skilgreining fyrir Kröfu yfirlit og Viðskiptavini (31.10.2026, endurmælt 10.11.)
+- Reglurnar búa í `netlify/functions/_krofu-flokkun.js` (`flokkaReikning`, `erOsent`, `iSummu`, `greidendur`, `sjalfvirkTenging`,
+  síðar `tvifarar`/öryggisfé) og BÆÐI `krofu-yfirlit-bru.js` og `verkkaupar.js` kalla á þær. Áður hélt `verkkaupar.js` eigin
+  afriti sem fékk ekki lagfæringuna frá 20.10. — Viðskiptavinir sýndi 70,4 m.kr. ógreitt á móti 6,2 í Kröfu yfirliti.
+  Breyting á reglu fer í ÞESSA skrá, aldrei í annað fallið; próf `test/krofu-flokkun-*.test.js`.
+- Mæling sem á að halda (10.11.: 13.150.501 = 13.150.501, 0 kr munur per nafn): summa `ogreitt` úr `/api/verkkaupar` =
+  `tier1.total` úr `/api/krofu-yfirlit-bru`. Ósent má víkja um drög sem eiga engan greiðanda (NESDEKK 2026-10, 358.918 kr) —
+  Viðskiptavinir sleppir þeim, Kröfu yfirlit sýnir þau undir verkstaðarnafni. Listinn í Viðskiptavinum sýnir aðeins `skrad`-greiðendur.
+- „Stofna stað í Slökkvitæki" krefst kennitölu greiðandans (þjónninn svarar 400, viðmótið segir hvað vantar) — án hennar
+  varð til kt-laus tvífari við hvern smell. Pillan `drog` (Payday-drög) ber sama lit og `osent`.
 
 ## Nýtt úr Charlize og lotum (28.10.2026)
 

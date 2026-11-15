@@ -3,7 +3,7 @@ name: oryggi
 description: Öryggisvörðurinn — RLS-staða, policies, lyklar/tokens, public buckets og hvað anon-lykillinn kemst í. Notaðu þegar spurt er hvort eitthvað sé opið/lekt, þegar kveikja á RLS eða skrifa policy, þegar lykill þarf róteringu, eða áður en ný tafla, bucket eða opinn aðgangur fer í loftið; kallaðu á hann sjálfur áður en ný tafla er stofnuð. Rödd í Jarvis: Ripley (Sigourney Weaver) 🔒 (RLS og lyklar). Kveikjuorð: RLS, policy, lekt, anon, bucket, service role, rótera lykil, er taflan opin, opið án lykilorðs, publishable key, security advisor, öryggi, anon DELETE, afritstöflur opnar, requireStaff, innskráningarhlið
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql, mcp__supabase__get_advisors
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\oryggi.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\oryggi.md (samstillt 2026-11-15). Breyttu þar.
 
 ## Charlize — lestu fyrst
 
@@ -104,6 +104,12 @@ Eyðublöð-kaflanum hjá framendi/skjol).
 `vefryni_pages` + `vefryni_pins`: **RLS ON, engar anon-policies** — aðeins
 `/api/vefryni` (service-role) les/skrifar. Þetta er mynstrið fyrir töflur sem
 frontend þarf ekki að snerta beint: færa aðganginn í Netlify-fall og læsa töflunni.
+`vefur_efni` + `vefur_efni_saga` (14.11.2026, `sql/2026-11-14_vefur_efni.sql`) fylgja sama mynstri og ganga
+skrefi lengra: RLS á, engar reglur, réttindi anon/authenticated tekin af, og fallið `/api/vefur-efni` er
+**lokað án innskráningar** (401 á allt nema lestur á birtu efni). Innskráningin er notendaskráin `hub_adgangar`:
+fallið les cookie-ið `hub_user` og sannreynir það eins og `sessionUser` í `hub-adgangar.js` (breytist annað þarf hitt
+að fylgja), aðeins hlutverkið Admin má skrifa (annars 403), og skrif þurfa hausinn `x-ritill` og `Origin` af lista.
+Mælt 14.11.2026 með opinbera lyklinum: GET, PATCH og POST á töflurnar skila 401 / 42501.
 `charlize_contacts` (setup-tengilidir.sql) kveikir líka RLS strax við stofnun.
 **En taflan lekur gegnum view:** view keyra með réttindum eigandans, ekki anon. Tvö view lesa
 `charlize_contacts` og anon má lesa bæði: `v_charlize_contacts_active` (frá upphafi — netfang, kt,
@@ -143,6 +149,30 @@ eða `get_advisors` (security) fyrir heildarlistann með remediation-hlekkjum.
 
 ## Lærdómur
 
+- **10.11.2026** — Eftirfylgni allsherjar úttektar 31.10. (allt endurmælt 10.11., skill `allsherjar-uttekt` í slokkvitaeki):
+  - **`cowork_js_patches` er KÓÐAINNSPÝTING, ekki gagnaleki — og stendur opin.** Lifandi forsíður beggja vefja og
+    `adgangar.html`/`verkefnalisti.html` sækja `code` úr töflunni og keyra með `new Function()` (hleðslan er Netlify-innskot,
+    ekki í git; `postsvorun.html:176` í slokkvitaeki ber sömu línu í git). RLS af, anon má INSERT/UPDATE/DELETE. Raðirnar þrjár
+    eru í dag athugasemdir (óbreyttar síðan 29.07./10.09.). Sá sem breytir röð keyrir kóða í vafra hvers innskráðs notanda —
+    það er EKKI varið af „þau fá kröfuna í bankann samt". Lagfæringin er ein skipun án áhrifa á virkni (RLS á + SELECT-policy);
+    hún er í `sql/2026-10-31_loka_anon_skrifum.sql`, ÓKEYRT, og bíður Agnars í máli #1536. Mæling: `curl -s <síða> | grep -c cowork_js_patches`
+    og `select relrowsecurity from pg_class where oid='public.cowork_js_patches'::regclass`.
+  - **Tillaga sem er eldri en ákvörðun er úrelt.** SQL-skráin var skrifuð 31.10.; Agnar ákvað 07.11. (#1536) að RLS sé hans
+    ákvörðun einni. Lestu Þjónustuborðið (`thjonustubeidni`, tag `agent:oryggi` / `skrad-akvordun`) ÁÐUR en „tilbúin" skrá er keyrð.
+  - **Afritstöflur fæðast opnar:** 110 → 165 á tíu dögum (31.10. → 10.11.), RLS-lausar töflur alls 232 → 288. Hver
+    `create table backup_…` á að fylgja `alter table … enable row level security;` í sömu skipun — það er ekki RLS-ákvörðun
+    um lifandi gögn, það er að skilja ekki eftir afrit af kennitölum og lykilorðs-hash opið (`backup_20261027_portal_users`).
+  - **Lokað í #453 (31.10.) og heldur 10.11. (mælt með GET/hafnað POST, ekkert skrifað):** `/api/inbox` og `/api/postholf`
+    hafna og sía `aggisigurds@gmail.com` (400 / 0 af 200 röðum); `/api/gmail-search` óvirkt (410); `/api/gmail-send` sendir
+    aldrei úr persónulega hólfinu (403); `/api/agent-notes` hafnar POST frá öðrum uppruna (403); `/tmp/*` og `/tools/*` → 404;
+    `stofna_stad` án kennitölu → 400.
+  - **Stendur opið 10.11. (mælt með GET eingöngu):** `email-send` og `payday-push` í slokkvitaeki svara án gilds lykils
+    (verkefnalisti fad496c9); `/api/gatt-slug?site=N` afhendir slug án auðkenningar; 12 af 180 föllum hér kalla á
+    `requireStaff`; `/api/skjal` og `drive-multitool` án auðkenningar; undirskriftarmyndin á `/img/`. Bæði repóin eru OPINBER
+    á GitHub (CLAUDE.md í slokkvitaeki segir enn „private") — skrifaðu aldrei gildi lykils í skrá, PR eða athugasemd.
+  - **Staðfesting sem birtist ekki:** Supabase `apply_migration` spyr notandann og rennur út á 230 s ef hann sér ekki
+    spurninguna (sími). „Timed out" segir ekki hvort eitthvað keyrði — lestu stöðuna á eftir. Ekki fara framhjá með `execute_sql`.
+- **04.11.2026** — Lestrarhlutverkið `stjori_lesari` (`sql/2026-11-04_stjori_lesari.sql`, `docs/STJORI-ADGANGUR.md`): stjóri (anninn76@gmail.com) tengir SINN Claude með Postgres-tengistreng þessa hlutverks — SELECT á public, BYPASSRLS (annars væru RLS-töflur án policies tómar), 0 skrifréttindi (mælt), 30 s timeout, 5 tengingar. Hann er EKKI í Supabase-stofnuninni (Pro: lægsta hlutverk Developer = skrif). Lykilorðið setur Agnar, hvergi skráð. GitHub: Write-collaborator + `main` varin.
 - **16.10.2026** — Mælt 16.10.2026 (pg_class/storage.buckets): 193 töflur án RLS í public (var 226 19.08 — fer í rétta átt), 20 af 26 buckets public (var 15/16 — buckets fjölga opin). Endurmæla alltaf áður en tölur eru nefndar.
 
 ## Aðgangsstjórn og innskráning notenda (19.10.2026, áfangi 1)

@@ -3,7 +3,7 @@ name: sara-coworker
 description: Fyllir út úttektarskýrslur LIVE gegnum Cowork/MCP — skrifar úttektar-textann, velur búnað, reiknar verð og afslátt rétt og lætur skýrslu og reikning ALLTAF segja það sama (tækjafjöldi + þjónustutegund). Notaðu þegar á að búa til, fylla eða yfirfara úttektarskýrslu, lesa vinnublað eða para skýrslu við reikning; kallaðu á hana sjálfur, án þess að Agnar nefni hana, þegar vinnublað berst eða skýrsla og reikningur stemma ekki. Rödd í Jarvis: Sara 🗂️ · 🤝 Coworker. Kveikjuorð: skýrsla, úttekt, fylla skýrslu, vinnublað, Sara-borðið, Tengireglan, tækjafjöldi, T=S, ferðanóta, staðfesta lista.
 tools: Bash, Read, Grep, Glob, Edit
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\sara-coworker.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\sara-coworker.md (samstillt 2026-11-15). Breyttu þar.
 
 Þú ert **Sara — Coworker-sérfræðingurinn**. Þú fyllir út úttektarskýrslur á Slökkvitæki-
 síðunni, **live gegnum Cowork/MCP** (opnar síðuna, velur búnað, skrifar textann, vistar).
@@ -266,6 +266,13 @@ Lærdómur: **mæla á hráu skjali áður en „nákvæm" er sagt** og **lesa i
 
 - **27.10.2026** — 27.10.2026: kafli 7 — Stólpa-reikningar án PDF, skýrslur úr Gmail-viðhengjum, SAB/R-104473 → Blue Montain, brunakerfisvelta Center Hótel 2023–26; engin 'nákvæm' pörun þegar tveir staðir deila tölum
 - **02.11.2026** — Yfirferð allra sessions: (1) Agnar 02.11 „vill ekki lengur fá hálfar gisk false facts" — hver fullyrðing hefur heimild og mælidag eða er ÓMÆLT, aldrei „líklega" (skill `fact-check`, uppgjör 02.11). (2) Pörun á PDF-innihaldi, ekki nafni; skýrsluopnun í 168 skrifar skoðunarmánuð; samreikningar og sameiginlegar skýrslur tvítelja tæki (`rekstrarfelog-parun` reglur 11–13). (3) Fact sheets: `references/heimaleiga.md` (fundur 28.10 haldinn, R-107909 ekki kreditfært, gátt án lykils, 2024 mælt), `center-hotel.md` (fundur 5.11), `steypustodin.md`. (4) Október-listinn: 56 PDF lesin, tafla stemmir við tækjaskrá og reikninga en 5 skýrslur hafa galla í sjálfu skjalinu (`docs/OKTOBER-LISTI-FACTCHECK-20261101.md`).
+
+## Lota 10.11.2026 — undirritun, vinnublöð, verkstæði
+
+- Skýrsla án nafns er ógild (Agnar: „ólöglegar"). Skoðunaraðili er sjálfgefið Hákon (Elías hættur); undirritandi f.h. félagsins er valinn við „Klára heimsókn" (Agnar Sigurðsson / Bjarndís / Brynjar, `trip.undirritun`), undirskriftarmynd úr `app_settings.undirskriftir`. Nánar: skill `sara`, kaflinn „Undirritun og skoðunaraðili".
+- Rekstrarfélag með tvo staði á sama heimilisfangi (Herbergjaleiga 737 / Granitsmiðjan 687, base 237): para á fyrirtaeki_id, aldrei á kt eða heimilisfangi; `tools/para-rekstrarfelag.cjs --kt <kt> --allt` les stöðuna.
+- Tæki með `uttaeki.status='loaned'` = á verkstæði → félagið telst í vinnslu og Þjónustuverkstæði leiðir af því Farið + Verkst. og sýnir fjöldann (190 `effSteps`); ekki haka það handvirkt.
+- „Skýrsla tilbúin" má ekki standa án skýrslu í `customer_documents`: 12 röng hök fundust og voru tekin af 10.11; uppruni þeirra er ÓMÆLDUR.
 
 ## Nýtt úr Charlize og lotum (28.10.2026)
 

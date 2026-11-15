@@ -3,7 +3,7 @@ name: bord-flettur
 description: Flettur, borð og navigation í Slökkvitæki-appinu — Þjónustuborð (368) og undirborð, Bakendi, Bílstjóri, Aksturslisti, URL-routing (218), bakk (3 lög) og app-síður (261). Notaðu þegar flipa, borði, app-síðu eða deep-linki er bætt við eða breytt, eða bakk/endurhleðsla á síma hegðar sér rangt; kallaðu á hann sjálfur áður en ný síða er tengd. Kveikjuorð: flipi, borð, nav, Þjónustuborð, Mitt borð, Afmerkja, Aðalmál, Vinnusamantekt, bílstjóri, aksturslisti, Akstursdagbók, Tæknimenn, Uppfærsluborð, Mælaborð, Stjórnstöð, Geymsla, Mínar síður, bakk, back, deep link, #company, Öpp-síða, app finnst ekki í síma, uppsetning appa.
 tools: Bash, Read, Grep, Glob, Edit
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\bord-flettur.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\slokkvitaeki\.claude\agents\bord-flettur.md (samstillt 2026-11-15). Breyttu þar.
 
 ## Charlize — lestu fyrst
 
@@ -616,9 +616,97 @@ umferðum undir límdu stikuna. Teiknað EINU SINNI þegar öll gögn eru komin.
 
 - **03.11.2026** — 03.11.2026 útlitsúttekt (docs/UTLITSUTTEKT-20261103.md): 333 siduLykill leysir hash sem er nav-lykill (#brunayfirlit → view-brunakerfi-yfirlit) í sýn — annars festist vistað zoom (0,3) á öllum flipum; 346 vakta() kippir ekki aftur í Mælaborð eftir ferð burt; 368 .modgrid column-gap:0 í mjóum reit + Hamur-stika skrunast í body.appmode; 219 Bílstjóri standalone (data-app=bilstjori) án haus/botnstiku-bils; 401 💬 telst í appi (appmode) þó innerWidth sé 980; index.html titill fyrir verkstjorar/skyrslustod/threedwork. Mælt í hermdum síma (375) — raunsími ÓMÆLT.
 
+- **04.11.2026** — J.A.R.V.I.S.-appið (key `jarvis`, 261 APPS, home `br-jarvis`, ein síða, tákn `img/app-tokn/29-jarvis.svg` + PNG úr `tools/app-tokn-png.cjs`, `manifest-jarvis.json`) er INNBYGGT app: skráð í `261` APPS + manifest-listann (l.755), `316` APP_KEYS, `354` BUILTIN, `netlify/functions/app-manifest.js` BUILTIN og `index.html` MAN/TITLES — nýtt innbyggt app þarf ALLA þessa staði (skyrslustod/threedwork/verkstjorar vantar enn í 316/354/MAN, sjá `references/opp/opp-villur-2026-11-04.json`). `br-jarvis` er `touch: true`: ramminn fylgir krómzoominu og jarvis.html fær 412 px símaútlit (án þess: 1032 px skjáborðsútlit sem skreppur í ólæsilegt letur á S26; mælt í Playwright, isMobile 412×915). Prófun: `NODE_PATH=../luna-bridge/node_modules node` með isMobile-hermi, `?app=jarvis` — innbyggði vafrinn í Claude Desktop birtir ekki cross-origin iframe frá localhost (blank), svo notaðu Playwright.
+
 ## Grunnreglur allra agenta (04.11.2026)
 1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
 2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
 3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
 4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
 5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.
+
+- **09.11.2026** — 09.11.2026 (Agnar): Þjónustuborð 368 fékk fasta flýtileið 'Nýr aðgangur' (data-t5=adgangar-nyr, sést aðeins þegar AS/admin er skráður inn — sama skilyrði og Aðgangsstýring, Adgangsstyring.flytileid()) sem opnar brunaholf.netlify.app/adgangar.html?nyr=1 í nýjum flipa; adgangar.html opnar 'Bæta við aðgangi' einu sinni við ?nyr=1. Haus Aðgangsstýringar (495) fékk líka hlekkina '+ Bæta við aðgangi' og 'Innskráning starfsfólks' (/innskraning.html). Innskráning varir: hub_adgangar_stilling.session_alltaf = true (09.11, nýjar innskráningar haldast allt að ár).
+
+- **10.11.2026** — Þjónustuborð 368, lota 09.–10.11.2026 [C#2222–2225]: (1) Dagskráin er teiknuð af `dagskraHtml` í 368, EKKI 303; „Þarf að gera í vikunni" (fjórir 2x2 reitir, 2 línur sjálfgefið, dragast stærri) er `js/patches/500-dagskra-oakvedin.js` og vistast í `skipulagsbord.by_staff.<nafn>.oakvedin` sem hlutur per reit. (2) Checklistar eru tveir, eining 23 `checklisti` og eining 26 `checklisti2` (`CHK_FELT`); titill í `<svæði>_titill`, samanbrot í `chk_opid.<svæði>`, bæði á þjóni; titilreitur verður að vera í biðlistanum sem frestar endurteikningu (3493712f). (3) Skiptilínur `.mspl` milli allra eininga í röð: spönn í 60 dálka rist, lágmark 16, vistast í `mitt.breidd` / `hamir[].breidd`. HÖRÐ REGLA Agnars: allt sem er skrifað inn á hvaða síðu sem er vistast á þjóni og samstillist milli tækja; aldrei setja reit á síðu sem getur ekki vistast. ÓGERT úr sömu lotu (aðeins hönnun): Hunter inn á Þjónustuborðið + hlekkur efst í hliðarstiku, „Stjörnumerkt"-borð yfir alla hami, flutningur spjalda af Skipulagsborði · lítið í checklista.
+
+## Drög-flipinn og takkaröðin í Vörur og þjónustu (10.11.2026)
+
+- **Drög (143):** „Geymd drög N" chip HÆGRA megin í síuræmunni + flokkur „Geymd drög" efst í „Allt" (körfur úr `sala_geymd`, 501; miði með
+  „Opna í Sölu" + ruslatákn). Sala með „Greitt síðar" án viðskiptavinar ber grátt „Óskráður viðskiptavinur" (`.dr2-oskr`); rauða
+  „Enginn viðskiptavinur" (`.dr2-vant`, `data-vantar-kunna`) er aðeins fyrir „reikningur" án viðskiptavinar.
+- **Vörur og þjónusta — takkaröðin** (`#view-vorur .page-title__tools`): vorur.js á þrjá takka + „Ný vara", 469 bætir Verkstæði verð og
+  Vinnuliðum við, **502 setur verðlistatakkana FREMST** (einn per lista í `app_settings.verdlistar` + „＋ Nýr verðlisti"). vorur.js teiknar
+  röðina upp á nýtt við hverja síun, svo 469 og 502 setja sína takka aftur inn (MutationObserver + 1,5 s vakt). Nýr verðlisti = takki sjálfkrafa.
+- **Gildra (mæld 10.11.2026): `requestAnimationFrame` keyrir ekki í földum eða huldum glugga þótt `document.hidden` sé false.** Pappi sem
+  setur inn hnappa/hluta um MutationObserver → rAF eingöngu birtir þá aldrei þar. Hafðu `setTimeout` til vara (502 `schedule()`), eða
+  kallaðu beint úr vaktinni (469 `setInterval → setja()`).
+- **Verðlistaglugginn (502):** hópar, liðir (verð fast/frá/tilboð, eining, vsk, athugasemd, virkur), % verð, líma inn, CSV, prenta, tilboðsham.
+  Skrif í sama lista fara í röð og úreldingarvörður (`u`) neitar að yfirskrifa lista sem önnur vél breytti. Eyða lista = mjúkt (`eytt:true`),
+  endurheimt í „＋ Nýr verðlisti".
+
+- **11.11.2026** — Þjónustuborð 368, framhald [docs/THJONUSTUBORD-CHECKLISTAR.md]: Hunter er order 0 efst í hliðarstiku (68, óháð vistaðri röð) og takki á Þjónustuborði (493); röð hliðarstiku býr í `sidebar_order` í app_settings (ekki `ui.vidmot.hlidarstika`). Eining 27 „Stjörnumerkt“ les beint úr upprunanum (checklistar, spjöld merkt á þig, 5 efstu áríðandi) og tekur merki af með aðgerðum upprunans, engin afrit. Spjald á Skipulagsborði: „Í checklista ›“ býr til atriði `nafn — texti`; spjaldið helst nema staðfest sé að eyða. Commit 2ddf4489, 9f75e43b, d44a7315. Worktree á grein eldri en 534f8cbc er enn með virkan pre-push hook: sameina origin/master inn í greinina.
+
+## Verðlistaglugginn (502) — hamir og breiddir (lokayfirferð 10.11.2026, mælt)
+
+- **Tveir hamir, báðir 8 dálkar.** Ritháttur: Liður · Verð án vsk (tegund fast/frá/tilboð + reitur) · Eining · Vsk · Verð m/vsk · Hópur ·
+  Athugasemd · aðgerðir. **Tilboðsham er LÆSTUR:** sömu fimm fyrstu dálkar sem TEXTI + Magn · Afsl. % · Samtals m/vsk; óvirkir liðir sjást
+  ekki, verkfæri og „Nýr liður" hverfa. (Áður 11 dálkar sem flæddu út fyrir gluggann, og verð gat breyst óvart í miðju tilboði.)
+- **Undir 1150 px** (sími, spjaldtölva, lítil fartölva) verður hver liður spjald í tveggja dálka grind; reitirnir bera merki úr `data-l`
+  (`td[data-l]::before`). Mælt: 0 px lárétt yfirflæði við 375, 1024 og 1400 px í báðum hömum. Undir 700 px er hausinn þéttur (81 px, var 171).
+- **Tölur:** verð með aukastaf birtist með þúsundapunkti („148.000,5"); í tilboði er samtala og án-vsk rúnnuð og VSK tekur afgangskrónuna
+  (sama regla og kassinn), svo án vsk + vsk = samtals alltaf.
+- **Takkarnir:** `schedule()` notar rAF + `setTimeout` til vara (sjá gildruna um falinn glugga hér að ofan).
+- **Raunveruleg vistun á lifandi `app_settings` er ÓPRÓFUÐ af Claude** (skrifum neitað 10.11). Sannað í staðinn: kóðinn sendir
+  `{verdlistar:{<id>:<listi>}}` á `app_settings_merge`; `jsonb_deep_merge` með þeirri lögun heldur öðrum listum og öðrum stillingum og
+  yfirskrifar `lidir`-fylkið heilt (lesfyrirspurn); og sama vistunarleið (`AppSettings.save`) skilaði verðbreytingu Agnars (Skýrslugerð 4.600) alla leið í Gátt.
+
+## Aðalmál (492, `#adalmal`) — vikuyfirlit á eigin borði (02.11.2026 · 492b 10.11.2026)
+
+- **Hvað:** `js/patches/492-adalmal.js`, sýn `view-adalmal`, 261 PAGES `adalmal` (Þjónustuborðs- og Boss-appið á eftir `bord`, merki
+  `__adm1`/`__adm2`). Engin eigin tafla: borðið les `thjonustubeidni` með merkinu `adalmal` í `tags` og teiknar `notes`. `tags` er jsonb,
+  svo sían er `.contains('tags', JSON.stringify(['adalmal']))`; fylki gefur „invalid input syntax for type json".
+- **Aðeins OPIN mál.** Sían er `deleted_at is null`, `archived_at is null`, `status <> 'lokad'`. Lokað yfirlit = tómt borð. #1376 var lokað
+  07.11.2026 („úrelt af sjálfu sér") og borðið var tómt frá þeim degi. 492b sýnir þá „Síðasta yfirlit (#N) var lokað dd.mm af X" ásamt
+  `lokid_lysing`. Kvörtun um að Aðalmál sýni ekkert → athugaðu FYRST status málsins, ekki kóðann.
+- **Sniðið í `notes`** (þáttarinn `Adalmal.greina(m)`): lína „A · …", „B · …", „C · …" = hluti (A fundir og frestir · C gera · B gerðist);
+  „• " og „1. " = atriði; lína sem byrjar á „Spurningar…:" = spurningar aðskildar með „ · "; **lína sem byrjar á þankastriki „— " =
+  leiðréttingarkafli** (hluti `ath`, „Leiðrétt eftir endurmælingu", nýjasti kaflinn efst, samanbrotinn á síma). Punktalínur á eftir fylgja kaflanum.
+- **Regla fyrir þann sem bætir við yfirlit:** viðbót aftan við `notes` byrjar ALLTAF á „— <Orð> dd.mm.áááá (höfundur): …" (Athugasemd /
+  Endurmælt / Leiðrétt og lokað). Fyrir 492b rann slík viðbót inn í Spurningar: mælt á #1376 10.11.2026 voru 10 af 13 „spurningum"
+  endurmælingar og borðið taldi 39 atriði í stað 29. Dagsetningin í kaflahausnum birtist sem „leiðrétt dd.mm" í titli. `updated_at` málsins
+  hreyfist EKKI við viðbót (engin kveikja), svo hann segir ekkert um hvenær textinn breyttist síðast.
+- **Ný vika = NÝTT mál** með merkinu `adalmal`; gamla málinu er lokað, því er ekki breytt. Enginn sjálfvirkur keyrari skrifar yfirlit (mælt
+  10.11.2026: engin tímasett keyrsla til) — það gerist aðeins þegar Agnar biður. Yfirlit sem er 7 daga eða eldra fær rautt aldursmerki.
+  Uppskriftin: summary í mesta lagi 4 línur og 600 stafir, ekkert „✓ Samþykkja / ✕ Hafna"-snið í notes (368 `adgerdirUrNotu` les það sem
+  aðgerðir), launamál ekki með, hver lína mæld með heimild eða merkt ÓMÆLT.
+- **✓ klárað** skrifar `thjonustubord_falid` með lykli `adalmal:atridi:<mál>-<hluti>-<nr>`. CHECK á töflunni er `^[a-z_]+:[a-z_]+:[^\s]+$`
+  (tala má ekki vera í 2. sæti). Númerið er SÆTI atriðisins í þáttuðum texta: sé atriði bætt inn í miðjan hluta færast hökin á rangt atriði.
+  Bættu aðeins við aftast, eða skrifaðu nýtt mál.
+- **Fjöldi atriða** er talinn með `Adalmal.greina(m)`, aldrei úr minni eða eldri nótu. 04.11.2026 sagði Claude „29 atriði" eftir minnisnótu
+  þegar borðið sýndi 39.
+- **Prófun:** lifandi síðan er á bak við innskráningu starfsfólks [C#2261, C#2236]. Án innskráningar má staðfesta birtingu með `build.json`
+  og leit að `__adalmal492` í `_bundle-*.js` (lifandi `index.html` nefnir ekki patch-skrána því build-dist búntar). Eftir innskráningu:
+  `window.Adalmal.version` á að vera `'492b'`. Lokað mál er prófað staðbundið með því að hlera fyrirspurnina og skila röðinni með status
+  `nytt` í vafranum einum — aldrei opna málið í grunninum til að prófa.
+- **Nýtt yfirlit 10.11.2026: #1587** (vika 03.11–10.11; merki `adalmal`, `vikuyfirlit`, `claude:vikuyfirlit-2026-11-10`; EKKI `samthykki`,
+  ekki `important`). Borðið er því ekki lengur tómt: 1 yfirlit, 27 atriði (A 6 · B 8 · C 7 · spurningar 5), staðfest staðbundið. Skrifað í
+  lotu-yfirferð lotu 2ef635f0 úr mældum gögnum; það sem ekki tókst að mæla (fundartími „E og G í Fossvogi", greiðslur til birgja) er
+  merkt þannig í textanum. Þegar næsta yfirlit er skrifað: loka #1587 í sama skrefi.
+
+## Vinnusamantekt (489) — það sem yfirferðin 10.11.2026 breytti og mældi (lota 2ef635f0, sem smíðaði hana 29.10)
+
+- **Staða:** 29 mælingar, allar skila tölu á um 4 sek.; Brunahólfs-föllin átta (`/api/krofu-yfirlit-bru`, `fjarmal-yfirlit`,
+  `nlsh-dashboard`, `kerfisheilsa`, `veidin?tolur=1`, `worksites`, `krofu-greidslur`, `villur`) svara án innskráningar. „Mál á borðinu"
+  og verkefnalistinn stemmdu við SQL upp á tölu 10.11.
+- **Tekjulínan** (8642c13d, ?v=20261110a, óbirt þar til næsta birting fer út): ljósið dæmdi eftir framreiknaðri spá en undirtextinn
+  sýndi hráa mánaðartölu á móti HEILUM síðasta mánuði („−86,8 %" á 10. degi). Nú: „stefnir í X · ±N % miðað við síðasta mánuð";
+  fyrstu 7 dagana „of snemmt að spá". Regla: texti og ljós verða að segja það sama — annars les Agnar rautt ljós með rangri skýringu.
+- **Póstlínan:** `HOLF` telur aðeins eldklar@ og bokhald@eldklar. `slokkvitaeki@brunaholf.is` (þriðja hólfið í 448 frá 10.11) er nefnt
+  sér í punktalínu og ALDREI talið ósvarað (enginn sendur póstur þaðan í `email_digest`). RLS hleypir vafranum ekki í hólfið
+  (Charlize #2287, verkefnalisti `81f09e2c`) → línan segir „ekki mælt" þar til regla er komin; þá birtist talan sjálfkrafa.
+  Nýtt pósthólf í 448 þarf alltaf (1) RLS-reglu og (2) ákvörðun um hvort „svarað" sé mælanlegt, áður en það fer í `HOLF`.
+- **Artifact-línan** (`artifact_listar`) er frá 29.10 og uppfærist ekki sjálf — Agnar sagði nei við sjálfvirkni; endurlesa aðeins að beiðni.
+- **Prófun án innskráningar:** staðbundinn þjónn á vinnutré (`/app/*` → index.html), `await Vinnusamantekt.load(true)`, lesa
+  `Vinnusamantekt.S.res` (hlutur með lykli per mæling; `samthykki` og `claude` eru lifandi og vantar þar). **Gildra:** service worker og
+  skyndiminni vafrans skila gömlu patch-skránni — `window.__vinnusamantekt489 = false` og hlaða skránni með `?t=<tími>`.
+- **Sími (375 px):** nothæf án láréttrar skrunar en ▸-hnapparnir eru 27×20 px (undir 44 px snertimörkum) — ólagað.
