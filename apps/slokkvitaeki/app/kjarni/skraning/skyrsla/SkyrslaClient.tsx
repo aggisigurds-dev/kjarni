@@ -55,7 +55,7 @@ const UTBOD: { nr: string; heiti: string; ein: string; magn: number; per: number
   { nr: "1.2", heiti: "Ø160-200", ein: "stk", magn: 100, per: 1, re: /^Gólf/i },
   { nr: "1.3", heiti: "Ø210-300", ein: "stk", magn: 25, per: 1, re: null },
   { nr: "2.1", heiti: "Ø20-34 plaströr", ein: "stk", magn: 600, per: 2, re: /^Plast Ø20-34/i, kafli: "2 Frágangur lagnagata í gegnum létta veggi" },
-  { nr: "2.2", heiti: "Ø35-50 plaströr með eldv. kraga", ein: "stk", magn: 600, per: 2, re: /^Plast Ø35-50/i },
+  { nr: "2.2", heiti: "Ø35-50 plaströr með eldv. kraga", ein: "stk", magn: 600, per: 1, re: /^Plast Ø35-50/i },   // ein kragaskráning = heil lokun gatsins (Agnar 16.11.2026)
   { nr: "2.3", heiti: "Ø75-100 plaströr", ein: "stk", magn: 100, per: 2, re: /^Plast Ø75-100/i },
   { nr: "2.4", heiti: "Ø15-35 stálrör", ein: "stk", magn: 800, per: 2, re: /^Stál Ø15-35/i },
   { nr: "2.5", heiti: "Ø40-50 stálrör", ein: "stk", magn: 1100, per: 2, re: /^Stál Ø40-50/i },
@@ -229,6 +229,21 @@ export default function SkyrslaClient() {
     }
     return m;
   }, [aaetlud, yfirlit]);
+  /** Óskráð áætluð göt gatakortsins (rauðir punktar, ekki tillögur) í STÖKUM VERKUM (fjoldi) per hæð|deild|hópur og hæð|deild|hluti|hópur
+   *  (Agnar 16.11.2026: „uppfæra“ skýrsluna eftir fyrirmyndaraðferðina). Hópur af flokki gatsins, annars af fagi. Markmið hóps á deild verður
+   *  minnst klárað + opið + þetta, svo óbyrjaðir húshlutar (t.d. rafmagn 6H S4/S5) teljast ekki „búnir“. */
+  const eftirHop = useMemo(() => {
+    const m = new Map<string, number>();
+    const FAG_HOP: Record<string, string> = { rafmagn: "Rafmagn", loftraesting: "Loft", golf: "Gólf", fravatn: "Plast", vatn: "Stál", hiti: "Stál", sprinkler: "Stál", gas: "Stál", annad: "Stál" };
+    for (const a of aaetlud) {
+      if (a.parad && a.parad.stada !== "vantar") continue;
+      const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y) continue;
+      const fh = a.flokkur_id != null ? heitiAf.get(a.flokkur_id) || "" : "", hop = (fh && HOPAR.find((x) => x[2].test(fh))?.[0]) || FAG_HOP[a.fag]; if (!hop) continue;
+      const fx = Number(a.x_px) / y.w, fy = Number(a.y_px) / y.h, d = fx < 0.179 ? "S1" : fx < 0.5 ? "S2" : fx < 0.812 ? "S4" : "S5", hl = fy < 0.288 ? "N" : fy < 0.7116 ? "C" : "S", fj = a.fjoldi || 1;
+      m.set(`${y.haed}|${d}|${hop}`, (m.get(`${y.haed}|${d}|${hop}`) || 0) + fj); m.set(`${y.haed}|${d}|${hl}|${hop}`, (m.get(`${y.haed}|${d}|${hl}|${hop}`) || 0) + fj);
+    }
+    return m;
+  }, [aaetlud, yfirlit, heitiAf]);
   /** Áætluð milliloft á deild: 110 á 5H; á 4H (gólf 5. hæðar) það sem er skráð á sömu deild á 5H ef það er meira (Agnar 12.11.2026),
    *  að viðbættu óskráðu viðbótarverki á 4H (vidbot4). */
   const golfMark = useCallback((haed: string, deild: string) => { if (haed === "6H") return 0; if (haed !== "4H") return GOLF_MARK; const t5 = taln.hd.get(`5H|${deild}|Gólf`) || { done: 0, open: 0 }; return Math.max(GOLF_MARK, t5.done + t5.open) + (vidbot4.get(deild) || 0); }, [taln, vidbot4]);
@@ -251,8 +266,8 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
-    return Math.max(mark, x.done + x.open);
-  }, [taln, golfMark]);
+    return Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${hop}`) || 0));
+  }, [taln, golfMark, eftirHop]);
 
   /** Markmið hóps á HLUTA deildar (Norður/Center/Suður): sama regla og deildin, reiknuð á hlutann; föstu deildarmarkmiðin (milliloft,
    *  rafmagn) skiptast jafnt á hlutana þrjá. Summa hluta getur því vikið lítillega frá markmiði deildar. */
@@ -274,8 +289,8 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
-    return Math.max(mark, x.done + x.open);
-  }, [taln, golfMark, vidbot4]);
+    return Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${HLUTAR[i]}|${hop}`) || 0));
+  }, [taln, golfMark, vidbot4, eftirHop]);
   /** Punktar hæðakortsins: skráningar með hæðarhnit (aukaverk eru sér). */
   const hkPunktar = useMemo<HkPunktur[]>(() => {
     const ut: HkPunktur[] = [];
@@ -421,7 +436,7 @@ export default function SkyrslaClient() {
             <div className="sk-merki">Einingar</div>
             <p>Tölur eru stök verk eins og Ajour telur þau. Tvö stök verk eru ein lokun; gólfgöt: eitt verk er ein þétting. Samanburður við útboð er í einingum tilboðsins.</p>
             <div className="sk-merki">Áætlað</div>
-            <p>6. hæð: það sem er klárað. 5. hæð: sami flokkur á sömu deild á 6. hæð. Milliloft {GOLF_MARK} á deild (gólf 5. hæðar: minnst jafnmörg og á sömu deild á 5. hæð, auk óskráðra stúta úr viðbótarverki) og rafmagn {RAF_MARK} á deild. Áætlað og klárað má leiðrétta í töflunni „Tölur eftir hæð og deild“.</p>
+            <p>6. hæð: það sem er klárað. 5. hæð: sami flokkur á sömu deild á 6. hæð. Milliloft {GOLF_MARK} á deild (gólf 5. hæðar: minnst jafnmörg og á sömu deild á 5. hæð, auk óskráðra stúta úr viðbótarverki) og rafmagn {RAF_MARK} á deild. Áætlað er þó aldrei minna en klárað + opið + óskráð áætluð göt gatakortsins á deildinni (rauðir punktar: fagteikningar, gataplön og fullskráður húshluti 6H sem fyrirmynd). Áætlað og klárað má leiðrétta í töflunni „Tölur eftir hæð og deild“.</p>
           </div>
         </div>
         <div className="sk-spjald">
