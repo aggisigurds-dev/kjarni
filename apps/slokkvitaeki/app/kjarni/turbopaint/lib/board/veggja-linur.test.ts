@@ -2,7 +2,7 @@
 // bekkjum, og „koma leiðinlega þykkir út"). Tilbúin mynd í kvarða Berjavalla (≈ 33 dílar á metra, 1:100 á A1).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fellaSmaklasa, linuSnid, mynsturGrima, siaVeggi, smellaALinu, veggKjarni, VEGGUR_HAMARK_CM } from "./veggja-linur";
+import { fellaSmaklasa, linuSnid, mynsturGrima, siaVeggi, smellaALinu, textaLinur, veggKjarni, VEGGUR_HAMARK_CM } from "./veggja-linur";
 import { skiptaTillogum, tillagaVid, tillogurIKassa } from "./veggja-tillogur";
 
 const DPM = 33.3;
@@ -168,4 +168,20 @@ test("tillögur: smellur hittir næstu tillögu, kassi velur inni / snerta, skip
   const s = skiptaTillogum(v, [1]);
   assert.equal(s.valdar.length, 1);
   assert.deepEqual(s.eftir.map((x) => x.p[1]), [0, 0]);
+});
+
+test("textaLinur (lota 5): lína í gegnum stafi fellur; fylltur og holur veggur standa", () => {
+  const dpm = 70, W = 500, H = 200, gra = new Uint8Array(W * H).fill(250);
+  const kassi = (x0: number, y0: number, x1: number, y1: number) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) gra[y * W + x] = 20; };
+  // „texti": 9 stafir, 14 díla háir, 8 breiðir með 6 díla bili (enginn samfelldur strengur)
+  for (let k = 0; k < 9; k++) { kassi(40 + k * 14, 30, 42 + k * 14, 44); kassi(42 + k * 14, 30, 48 + k * 14, 32); kassi(42 + k * 14, 42, 48 + k * 14, 44); }
+  kassi(40, 100, 360, 114);                          // fylltur veggur 0,2 m
+  kassi(40, 150, 360, 152); kassi(40, 160, 360, 162); // holur veggur: tvær línur
+  const linur = [
+    { p: [40, 37, 166, 37], t: 14 },
+    { p: [40, 107, 360, 107], t: 14 },
+    { p: [40, 156, 360, 156], t: 12 },
+    { p: [40, 37, 166, 37], t: 14, tegund: "gler" },
+  ];
+  assert.deepEqual([...textaLinur(linur, gra, W, H, dpm)], [0]);
 });

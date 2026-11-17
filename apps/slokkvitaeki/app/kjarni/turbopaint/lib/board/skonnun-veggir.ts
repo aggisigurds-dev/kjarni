@@ -860,6 +860,8 @@ export interface Talning {
   ms?: number;
   /** Felldir / klipptir í síun veggja (parket, skástrik, húsgögn, þykktarþak). */
   sia?: SiaTalning;
+  /** Langir veggir sem bættust við úr teygðri greiningu fölrar skönnunar (lota 5). */
+  folvi?: number;
 }
 
 /** 383 veggirUrMynd: veggir skönnunar sem heilir bútar í dílum myndarinnar sem hreinsað var (skurðurinn). */
@@ -1027,4 +1029,44 @@ export function butarIBord(
   const X = (v: number) => plan.x + (g.sk.x - g.myndSvaedi.x + v) * kx;
   const Y = (v: number) => plan.y + (g.sk.y - g.myndSvaedi.y + v) * ky;
   return butar.map((v) => ({ p: [X(v[0]), Y(v[1]), X(v[2]), Y(v[3])], t: Math.max(1, (v[4] || 0) * kx) }));
+}
+
+/** FÖL SKÖNNUN (Powerplan lota 5, 17.11.2026): blek sem er grátt (1 % dekkstu dílanna ≥ `folvi`, t.d. 174 á iðnaðarskönnun
+ * þar sem aðeins 1,5 % díla náðu blekmörkunum 185) er teygt: `lagt` hlutfallsmark → `svart` (80), miðgildi (bakgrunnur) → 250.
+ * Skilar SÖMU fylkingu óbreyttri ef blaðið er ekki fölt (hreinar teikningar og dökkar skannanir ósnertar). */
+/** Teygð greining FÖLRAR skönnunar finnur útveggi sem sú óteygða missir, en líka bíla, tákn og texta — svo aðeins LANGIR
+ * veggir (≥ `langirM`, sjálfgefið 6 m) úr henni bætast við. Mælt (lota 5, R3 iðnaðarskönnun): 57,0 / 73,3 → 66,3 / 73,0
+ * (hittni / nákvæmni); öll teygða greiningin: 77,1 / 66,6 (svart 80) eða 80,0 / 56,0 (svart 40). */
+export function langirVeggir(veggir: Butur5[], fb: number, fh: number, dilarAMetra: number | null, langirM = 6): Butur5[] {
+  const dpm = dilarAMetra && dilarAMetra > 0 ? dilarAMetra : PT_A_METRA_1_100 * (Math.max(fb, fh) / 2384);
+  return veggir.filter((v) => Math.hypot(v[2] - v[0], v[3] - v[1]) >= langirM * dpm);
+}
+
+export function teygjaFolva(gra: Uint8Array, o: { folvi?: number; lagt?: number; svart?: number } = {}): Uint8Array {
+  const n = gra.length;
+  if (!n) return gra;
+  const h = new Uint32Array(256);
+  const skref = Math.max(1, Math.floor(n / 400000));
+  let t = 0;
+  for (let i = 0; i < n; i += skref) {
+    h[gra[i]]++;
+    t++;
+  }
+  const hlutfall = (q: number) => {
+    let c = 0;
+    for (let v = 0; v < 256; v++) {
+      c += h[v];
+      if (c >= q * t) return v;
+    }
+    return 255;
+  };
+  const p1 = hlutfall(0.01), lo = hlutfall(o.lagt ?? 0.003), bg = hlutfall(0.5);
+  if (p1 < (o.folvi ?? 150) || bg - lo < 20) return gra;
+  const ut = new Uint8Array(n);
+  const svart = o.svart ?? 80, k = (250 - svart) / (bg - lo);
+  for (let i = 0; i < n; i++) {
+    const v = svart + (gra[i] - lo) * k;
+    ut[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+  }
+  return ut;
 }

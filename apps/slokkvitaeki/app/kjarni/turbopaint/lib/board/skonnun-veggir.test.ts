@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pdfErSkonnun } from "./pdf-veggjaflokkar";
-import { butarIBord, greiningarkvardi, greiningarSvaedi, skonnunarVeggir } from "./skonnun-veggir";
+import { butarIBord, greiningarkvardi, greiningarSvaedi, skonnunarVeggir, teygjaFolva } from "./skonnun-veggir";
 
 test("skönnun: þykkir veggir hússins finnast; strik-punkta ásalína þvert yfir blaðið verður EKKI veggur", () => {
   const fb = 6006, fh = 4298, kv = greiningarkvardi(fb, fh);
@@ -63,4 +63,16 @@ test("skönnuð PDF (FotoWeb: ein mynd, engin strik) er skönnun; vigur-PDF ekki
   const veggir: number[][] = [];
   for (let i = 0; i < 40; i++) veggir.push([0, i * 10, 1000, i * 10]);
   assert.equal(pdfErSkonnun({ "0.48": veggir as [number, number, number, number][] }), false);
+});
+
+test("teygjaFolva (lota 5): föl skönnun teygist, dökk teikning er óbreytt (sama fylking)", () => {
+  const W = 400, H = 100;
+  const folt = new Uint8Array(W * H).fill(243);
+  for (let x = 0; x < W; x++) for (let y = 40; y < 43; y++) folt[y * W + x] = 175;
+  const t = teygjaFolva(folt);
+  assert.notEqual(t, folt);
+  assert.ok(t[41 * W + 10] < 120 && t[10 * W + 10] > 240, `${t[41 * W + 10]} / ${t[10 * W + 10]}`);
+  const dokk = new Uint8Array(W * H).fill(250);
+  for (let x = 0; x < W; x++) for (let y = 40; y < 43; y++) dokk[y * W + x] = 30;
+  assert.equal(teygjaFolva(dokk), dokk);
 });

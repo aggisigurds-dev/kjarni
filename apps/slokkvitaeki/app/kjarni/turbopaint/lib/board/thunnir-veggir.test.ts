@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bakgrunnsTonn, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
+import { bakgrunnsTonn, finnaHarlinuPor, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 
 const DPM = 50;
 // BLAÐIÐ ER 3000 DÍLA BREITT AF ÁSTÆÐU (Lisbeth 05.11.2026): á 1200 dílum dregst 0,6° skökk lína aðeins 11 díla og lifir
@@ -96,4 +96,15 @@ test("halli blaðsins: beint blað mælist 0 og leitin er óbreytt", () => {
   for (let i = 0; i < m.length; i++) m[i] = g[i] < thr ? 1 : 0;
   assert.equal(maelaHallaMyndar(m, W, H), 0);
   assert.deepEqual(finnaThunnaVeggi(g, W, H, { dpm: DPM }), finnaThunnaVeggi(g, W, H, { dpm: DPM, skekkja: 0 }));
+});
+
+test("hárlínupör (lota 5): tvær hárlínur með 0,1 m bili verða veggur; stigaþrep (regluleg röð) og ein lína ekki", () => {
+  const dpm = 50, W = 600, H = 400, gra = new Uint8Array(W * H).fill(254);
+  const lina = (y: number, x0: number, x1: number) => { for (let x = x0; x < x1; x++) gra[y * W + x] = 150; };
+  lina(100, 50, 400); lina(105, 50, 400);           // skilveggur 7 m, bil 0,1 m
+  lina(200, 50, 400);                               // stök lína (málsetning)
+  for (let k = 0; k < 8; k++) lina(260 + k * 14, 300, 380); // stigi: 8 þrep, 0,28 m bil, 1,6 m breið
+  const v = finnaHarlinuPor(gra, W, H, { dpm, skekkja: 0 });
+  assert.equal(v.length, 1, JSON.stringify(v));
+  assert.ok(Math.abs(v[0][1] - 103) < 2 && v[0][2] - v[0][0] > 300);
 });

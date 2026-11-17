@@ -413,3 +413,48 @@ export function smellaALinu(
     gerd: k.gerd,
   };
 }
+
+// ── texti sem varð að vegg (Powerplan lota 5, 17.11.2026) ────────────────────────────────────────────────────────
+// Feitletruð herbergjaheiti renna saman í ~0,3 m dökkan borða í vinnuupplausn myndgreiningarinnar (~2800 dílar á blaðið)
+// og skonnunarVeggir les hann sem fylltan vegg. Í FULLRI upplausn er textinn stafir: hver dökk röð meðfram línunni skiptir
+// oft milli bleks og auðs, en veggur (fylltur, holur eða skástrikaður) á alltaf a.m.k. eina samfellda brún.
+// Mælt á 4 raunhæðum (tools/veggja-maeling.ts): nákvæmni vafraleiðar 77,4 → 80,7 %, hittni 78,4 → 78,3 %. Á úttaki
+// Veggjavélarinnar (sem hefur eigin textasíu) lækkaði hittnin — þess vegna aðeins á myndgreiningu vafrans.
+
+export interface TextaStillingar {
+  /** Lengri línur eru aldrei texti (m). Sjálfgefið 8. */
+  hamarkM?: number;
+  /** Skipti bleks/auðs á metra í BESTU (samfelldustu) röðinni sem gera línuna að texta. Sjálfgefið 4. */
+  skiptiM?: number;
+  blek?: number;
+}
+
+/** Vísar línanna (dílar `gra`, W × H) sem eru texti en ekki veggur. Aðeins tegund veggur; gler/hurðir ósnert. */
+export function textaLinur(linur: { p: number[]; t: number; tegund?: string }[], gra: Uint8Array, W: number, H: number, dpm: number, o: TextaStillingar = {}): Set<number> {
+  const hamarkM = o.hamarkM ?? 8, skiptiM = o.skiptiM ?? 4, blek = o.blek ?? BLEK;
+  const ut = new Set<number>();
+  linur.forEach((l, i) => {
+    if (l.tegund && l.tegund !== "veggur") return;
+    const ax = l.p[0], ay = l.p[1], bx = l.p[l.p.length - 2], by = l.p[l.p.length - 1];
+    const Lp = Math.hypot(bx - ax, by - ay);
+    if (Lp < 2 || Lp > hamarkM * dpm) return;
+    const ux = (bx - ax) / Lp, uy = (by - ay) / Lp, nx = -uy, ny = ux;
+    const hb = Math.ceil(l.t / 2) + 2;
+    let minSkipti = Infinity, einhver = false;
+    for (let h = -hb; h <= hb; h++) {
+      let dokk = 0, skipti = 0, fyrri = -1;
+      for (let q = 0; q <= Lp; q++) {
+        const x = Math.round(ax + ux * q + nx * h), y = Math.round(ay + uy * q + ny * h);
+        const d = x >= 0 && y >= 0 && x < W && y < H && gra[y * W + x] < blek ? 1 : 0;
+        dokk += d;
+        if (fyrri >= 0 && d !== fyrri) skipti++;
+        fyrri = d;
+      }
+      if (dokk < 0.3 * (Lp + 1)) continue;
+      einhver = true;
+      minSkipti = Math.min(minSkipti, skipti / (Lp / dpm));
+    }
+    if (einhver && minSkipti > skiptiM) ut.add(i);
+  });
+  return ut;
+}

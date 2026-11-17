@@ -245,3 +245,147 @@ export function finnaThunnaVeggi(gra: Uint8Array, W: number, H: number, o: Thunn
   for (const r of v) ut.push([r.c + t * r.a, r.a, r.c + t * r.b, r.b, r.th]);
   return ut;
 }
+
+// ── HÁRLÍNUPÖR (Powerplan lota 5, 17.11.2026) ─────────────────────────────────────────────────────────────────────
+// Hreinar (ekki skannaðar) rastateikningar teikna skilveggi, glerveggi og framhliðar sem TVÆR hárfínar línur (1–3 dílar,
+// grátónn ~120–190) með ~0,1 m hvítu bili. finnaThunnaVeggi rýfur þær burt (krefst ~0,1 m samfelldrar dökkrar rákar) og
+// krefst ≥ 6 m — mælt á R1 (tools/veggja-maeling.ts): ~40 % af lengd raunveggja tapaðist þannig.
+// Hér: hárlínur (rák ≤ `hamarksLinaM` þykk, ≥ `lagmarkM` löng, fyllt ≥ `fylling` — punktalínur og texti detta út) og
+// samsíða hárlínupör með bili [bilMinM, bilMaxM] sem skarast ≥ lagmarkM → veggur á miðlínunni.
+
+export interface HarlinuStillingar {
+  dpm: number;
+  /** Stysti veggur (m). Sjálfgefið 1. */
+  lagmarkM?: number;
+  /** Bil milli línanna í pari (m). Sjálfgefið 0,05–0,3. */
+  bilMinM?: number;
+  bilMaxM?: number;
+  /** Þykkasta hárlína (m). Sjálfgefið 0,05. */
+  hamarksLinaM?: number;
+  /** Hlutfall dökkra díla á línunni (punkta-/strikalínur og texti falla). Sjálfgefið 0,85. */
+  fylling?: number;
+  /** Lágmarksmunur á bakgrunni og línu (grátónar). Sjálfgefið 40. */
+  munur?: number;
+  /** Par sem er hluti af reglulegri röð svo margra lína (stigi, klæðning) er hafnað. 0 = slökkt. Sjálfgefið 4. */
+  rodHamark?: number;
+  skekkja?: number;
+}
+
+type HRak = { a: number; b: number; c: number; th: number; f: number };
+
+function harlinur(m: Uint8Array, W: number, H: number, lagmark: number, gat: number, hamark: number, fylling: number): HRak[] {
+  type Rn = { y0: number; y1: number; a: number; b: number; f: number };
+  const rakir: Rn[] = [];
+  let opnar: Rn[] = [];
+  for (let y = 0; y < H; y++) {
+    const o = y * W;
+    const runur: [number, number, number][] = [];
+    let x = 0;
+    while (x < W) {
+      while (x < W && !m[o + x]) x++;
+      if (x >= W) break;
+      const a = x;
+      let b = x, d = 0;
+      while (x < W) {
+        if (m[o + x]) {
+          b = x + 1;
+          d++;
+          x++;
+        } else {
+          let g = 0;
+          while (x + g < W && !m[o + x + g] && g <= gat) g++;
+          if (g > gat || x + g >= W) break;
+          x += g;
+        }
+      }
+      if (b - a >= lagmark) runur.push([a, b, d / (b - a)]);
+    }
+    const naest: Rn[] = [];
+    for (const [a, b, f] of runur) {
+      const r = opnar.find((q) => q.y1 === y - 1 && Math.min(b, q.b) - Math.max(a, q.a) > 0.7 * Math.min(b - a, q.b - q.a));
+      if (r) {
+        r.y1 = y;
+        r.a = Math.min(r.a, a);
+        r.b = Math.max(r.b, b);
+        r.f = Math.max(r.f, f);
+        naest.push(r);
+      } else {
+        const n: Rn = { y0: y, y1: y, a, b, f };
+        rakir.push(n);
+        naest.push(n);
+      }
+    }
+    opnar = naest;
+  }
+  return rakir
+    .filter((r) => r.y1 - r.y0 + 1 <= hamark && r.f >= fylling)
+    .map((r) => ({ a: r.a, b: r.b, c: (r.y0 + r.y1) / 2 + 0.5, th: r.y1 - r.y0 + 1, f: r.f }));
+}
+
+function porin(L: HRak[], bilMin: number, bilMax: number, lagmark: number, rodHamark = 0): Rak[] {
+  const s = [...L].sort((p, q) => p.c - q.c);
+  const ut: Rak[] = [];
+  // Regluleg röð (stigaþrep, klæðning, skástrikun): parið heldur áfram með sama bili til hliðanna → ekki veggur.
+  const iRod = (i: number, j: number, d: number, a: number, b: number) => {
+    if (!(rodHamark > 0)) return false;
+    const vik = Math.max(1.5, 0.25 * d);
+    let n = 2;
+    for (const [fra, att] of [[s[i].c, -1], [s[j].c, 1]] as const) {
+      let c = fra;
+      for (;;) {
+        const markmid = c + att * d;
+        const k = s.find((q) => Math.abs(q.c - markmid) <= vik && Math.min(b, q.b) - Math.max(a, q.a) >= 0.5 * (b - a));
+        if (!k) break;
+        n++;
+        c = k.c;
+        if (n >= rodHamark) return true;
+      }
+    }
+    return false;
+  };
+  for (let i = 0; i < s.length; i++)
+    for (let j = i + 1; j < s.length && s[j].c - s[i].c <= bilMax; j++) {
+      const d = s[j].c - s[i].c;
+      if (d < bilMin) continue;
+      const a = Math.max(s[i].a, s[j].a), b = Math.min(s[i].b, s[j].b);
+      if (b - a < lagmark) continue;
+      if (iRod(i, j, d, a, b)) continue;
+      ut.push({ a, b, c: (s[i].c + s[j].c) / 2, th: d + (s[i].th + s[j].th) / 2 });
+    }
+  return ut;
+}
+
+/** Hárlínupör (þunnir holir veggir, glerveggir) á grátónamynd `gra` (W × H). Skilar [ax, ay, bx, by, þykkt] í dílum myndarinnar. */
+export function finnaHarlinuPor(gra: Uint8Array, W: number, H: number, o: HarlinuStillingar): ThunnVeggur[] {
+  const dpm = o.dpm;
+  if (!(dpm > 0) || W < 8 || H < 8) return [];
+  const lagmark = Math.max(10, Math.round((o.lagmarkM ?? 1) * dpm));
+  const gat = Math.max(1, Math.round(0.03 * dpm));
+  const hamark = Math.max(2, Math.round((o.hamarksLinaM ?? 0.05) * dpm));
+  const bilMin = Math.max(2, (o.bilMinM ?? 0.05) * dpm), bilMax = Math.max(bilMin + 1, (o.bilMaxM ?? 0.3) * dpm);
+  const fylling = o.fylling ?? 0.85;
+  const thr = bakgrunnsTonn(gra) - (o.munur ?? 40);
+  const m = new Uint8Array(W * H);
+  for (let i = 0; i < m.length; i++) m[i] = gra[i] < thr ? 1 : 0;
+  const t = o.skekkja != null ? o.skekkja : maelaHallaMyndar(m, W, H);
+  const thvert = Math.round(0.06 * dpm), samBil = Math.round(0.1 * dpm);
+  const ut: ThunnVeggur[] = [];
+  {
+    const mh = t ? skekkja(m, W, H, t) : m;
+    const h = sameinaRaka(porin(harlinur(mh, W, H, lagmark, gat, hamark, fylling), bilMin, bilMax, lagmark, o.rodHamark ?? 4), thvert, samBil);
+    for (const r of h) ut.push([r.a, r.c - t * r.a, r.b, r.c - t * r.b, r.th]);
+  }
+  const mv = new Uint8Array(W * H);
+  if (t) {
+    for (let y = 0; y < H; y++) {
+      const d = Math.round(y * t), r0 = y * W;
+      const x0 = Math.max(0, d), x1 = Math.min(W, W + d);
+      for (let x = x0; x < x1; x++) mv[(x - d) * H + y] = m[r0 + x];
+    }
+  } else {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) mv[x * H + y] = m[y * W + x];
+  }
+  const v = sameinaRaka(porin(harlinur(mv, H, W, lagmark, gat, hamark, fylling), bilMin, bilMax, lagmark, o.rodHamark ?? 4), thvert, samBil);
+  for (const r of v) ut.push([r.c + t * r.a, r.a, r.c + t * r.b, r.b, r.th]);
+  return ut;
+}
