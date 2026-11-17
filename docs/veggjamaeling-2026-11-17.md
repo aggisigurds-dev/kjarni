@@ -78,29 +78,57 @@ Keyrt aftur í appinu með báðum breytingum (17.11, 673 s, vörður: ekkert sk
 
 \* tilraunir 1–2 voru mældar fyrir vörpunarleiðréttingu R1 (Veggjavél keyrði á annarri útgáfu blaðsins) — samanburður innan línu gildir.
 
+## Umferð 2 (sama mælikvarði, sama sett — vafraleiðin)
+
+| # | Breyting | Hittni / nákv. | Niðurstaða |
+|---|---|---|---|
+| — | grunnur (eftir umferð 1) | 65,2 / 77,2 | — |
+| 6a | **hárlínupör** í fullri upplausn (`finnaHarlinuPor`): tvær hárlínur 0,05–0,3 m, fylltar ≥ 85 %, ≥ 1 m | 78,5 / 68,7 | of margar rangar (klæðning, stigar) |
+| **6b** | **+ par í reglulegri röð ≥ 4 lína hafnað** | **78,4 / 77,4** | **haldið** (aðeins vafraleið; á Veggjavél 93,5 / 84,0 — nákv. −4,4) |
+| 6c | röð ≥ 3 lína | 76,4 / 77,0 | verra |
+| 7 | „stök mjó lína" í fullri upplausn (`veggKjarni`) fellur | 77,0 / 78,2 | hafnað |
+| 8 | `lokunM` 2 / 3 m svo útlínan lokist | 78,4 / 77,4 | engin breyting, hafnað |
+| 9 | **textasía** (`textaLinur`): stutt lína án samfelldrar dökkrar raðar (stafir) fellur; skiptiM 6, ≤ 4 m | 78,3 / 79,4 | betra |
+| **9b** | **skiptiM 4, ≤ 8 m** | **78,3 / 80,7** | **haldið** (skiptiM 3: 77,1 / 82,0; allar uppsprettur: 77,7 / 82,0; Veggjavél: verra) |
+| 10 | föl skönnun: öll greiningin á teygðri mynd (`teygjaFolva`, svart 40) | 84,0 / 75,6 | nákv. −4,9, hafnað |
+| 10c | svart 80 / 110 / 140 (R3: 77,1 / 66,6 · 59,2 / 65,4 · 49,1 / 77,3) | — | hafnað |
+| 11 | einangraðir smáklasar ≤ 6 m felldir í hreinsun | (R2: 88,2 / 81,9 → 80,4 / 88,7) | felldi 45 m raunveggja í R2 — hafnað, fjarlægt. Heildartala keyrslunnar ógild: R3-línur hennar voru úr svart-140-tilraun |
+| **12** | **óteygð greining + aðeins langir veggir (≥ 6 m) úr teygðri (svart 80)** | **80,6 / 80,4** | **haldið** (R3 57,0 / 73,3 → 66,3 / 73,0) |
+| 13 | sleppa hárlínupörum á fölri skönnun | settið: R3 66,1 / 75,2; **í appinu R3: 53,6 / 82,0 (með: 87,5 / 58,8)** | hafnað — kostar 34 stig hittni í appinu |
+| 14 | einangraðar LOKAÐAR smámyndir ≤ 6 / 8 m felldar (bílar, reitir) | óbreytt (settið og línur appsins) | engin áhrif — hafnað, fjarlægt |
+
+Tvær tilraunir í röð (13, 14) bættu ekkert; eftirstandandi rangar línur eru tákn og hlutir sem þarf að ÞEKKJA (bílar,
+gryfjur, skástrikaðir reitir, skrifborð) — ekki rúmfræðiregla. Lykkjunni hætt.
+
+### Í appinu eftir umferð 2 (`turbopaint-sjalfvirkt.cjs --hreinsa --leid vafri --sleppa ocr`, vörður: ekkert skrif fór út)
+
+| Hæð | Fyrir umferð 2 | Eftir umferð 2 |
+|---|---|---|
+| R3 (TIF-frumrit 9044 dílar) | 53,7 / 69,4 | **87,4 / 58,1** |
+| R1 | (ekki keyrt í appinu; utan vafra 53,3 / 89,1) | **81,3 / 81,0** |
+
+Í appinu les R3 skarpara TIF-frumrit en mælitólið (JPEG) og hárlínupörin finna þar útveggi og innveggi (hittni +34) en líka
+útlínur bíla, gryfju, skástrikaðra reita og skrifborða (nákvæmni −11). Rekkarnir greinast EKKI (hillusían heldur).
+
 ## Eftir
 
 | Leið | R1 | R2 | R3 | R4 | **Allt** |
 |---|---|---|---|---|---|
-| Vafri + hreinsun | 53,3 / 89,1 | 78,2 / 79,0 | 56,8 / 74,8 | 91,1 / 53,5 | **65,2 / 77,2** |
+| Vafri + hreinsun (eftir umferð 1) | 53,3 / 89,1 | 78,2 / 79,0 | 56,8 / 74,8 | 91,1 / 53,5 | 65,2 / 77,2 |
+| **Vafri + hreinsun (eftir umferð 2)** | **80,7 / 89,9** | **88,2 / 81,9** | **66,3 / 73,0** | **96,0 / 59,3** | **80,6 / 80,4** |
 | Veggjavél + hreinsun | 89,6 / 98,1 | 96,7 / 95,0 | 79,5 / 68,1 | 85,4 / 88,2 | **89,7 / 88,4** |
 
-Markmiðið (≥ 85 % / ≥ 85 % á öllu settinu) **næst ekki á vafraleiðinni**. Veggjavélarleiðin mælist yfir því,
+Markmiðið (≥ 85 % / ≥ 85 % á öllu settinu) **næst ekki á vafraleiðinni** (80,6 / 80,4 eftir umferð 2; grunnlína 49,7 / 77,6). Veggjavélarleiðin mælist yfir því,
 en sá sannleikur er hlutdrægur henni í hag (sjá fyrirvara).
 
-## Hvað stendur eftir (vafraleiðin)
+## Hvað stendur eftir (vafraleiðin, eftir umferð 2)
 
 Mælt af yfirlögum (rautt = týndur raunveggur, fjólublátt = rangur greindur veggur):
 
-1. **Þunnir holir/glerjaðir skrifstofuveggir og glerframhlið** (R1: ~40 % af lengdinni). Teiknaðir sem tvær hárfínar
-   gráar línur (1–2 dílar) — hvorki `skonnunarVeggir` (þykkir/fylltir) né `finnaThunnaVeggi` (rák ~0,15 m) sjá þá.
-   Þarf: pörun samsíða hárlína í fullri upplausn (eins og `pdf-veggir.ts` gerir á vigrum) — eða Veggjavélina.
+1. ~~Þunnir holir/glerjaðir veggir~~ — hárlínupör (6b): R1 53 → 81 %. Eftir standa stuttir (< 1 m) stubbar og veggir við hurðir.
 2. **Gluggaveggir út að svölum og stuttir stubbar milli glugga** (R2). Glugginn sjálfur greinist ekki sem gler.
-3. **Föl skönnun** (R3): `skonnunarVeggir` einn finnur 28 %; `thunnir` bjarga upp í 67 % hrátt. Stuttir frístandandi
-   raunveggir (7–12 m) falla enn í hillusíunni (~40 m).
-4. **Rangir veggir (nákvæmni):** málsetningarkeðjur með merkjum, punktalínur (loft/bitar), herbergjaheiti (lína í
-   gegnum texta), stigar (R4 nákvæmni 53 %). Þarf textasíu (OCR-reitir eins og Veggjavélin notar) og
-   málsetningarsíu (lína með reglulegum þverstrikum + tölum).
+3. **Föl skönnun** (R3 66 %): teygð mynd finnur útveggina (80 %) en líka bíla, lyftur, tákn og texta (nákv. 56 %); aðeins langir veggir þaðan eru teknir. Stuttir innveggir á fölri skönnun vantar enn.
+4. **Rangir veggir (nákvæmni):** textasían (9b) tók herbergjaheitin (R2 76,5 → 81,9). Eftir standa málsetningarkeðjur, hellulögn, bekkir og stigar á verönd UTAN hússins en innan skurðar (R4 nákvæmni 59 %) — útlínan lokast ekki svo „utan húss" getur ekki fellt þá. Þarf: málsetningarsíu (lína með reglulegum þverstrikum + tölum) eða þrengri skurð.
 5. **Veggjavélin er sjaldan notuð** (22 keyrslur, 2 villur: `torchvision::nms`, PDF-slóð). Hún skilar 89,7 / 88,6
    þegar hún keyrir. Að hún svari alltaf er líklega stærsta einstaka umbótin fyrir Agnar — en það er rekstrarmál
    skrifstofutölvunnar, ekki kóði hér.
