@@ -72,6 +72,10 @@ Sömu hráu línur appsins (geymdar í `fixtures/veggjamaeling/hrar/R3-app.json`
 | aðeins hillusía ný (tilraun 4) | 40,6 % | 64,3 % |
 | **báðar nýjar (4 + 5)** | **53,7 %** | **69,6 %** |
 
+Keyrt aftur í appinu með báðum breytingum (17.11, 673 s, vörður: ekkert skrif fór út): lokalínur appsins
+**53,7 % / 69,4 %** (fyrri keyrsla í appinu með tilraun 4 eingöngu: 40,5 % / 64,2 %). Skrefið segir nú
+„utan húss: 0 fjarlægð (útlínan lokaðist ekki — engu hent, hæðin er skorin að húsinu)“.
+
 \* tilraunir 1–2 voru mældar fyrir vörpunarleiðréttingu R1 (Veggjavél keyrði á annarri útgáfu blaðsins) — samanburður innan línu gildir.
 
 ## Eftir
