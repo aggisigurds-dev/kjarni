@@ -12,6 +12,7 @@ import { useUttektGogn } from "../../lib/board/uttekt-gogn";
 import { StaerdValinna } from "./StaerdAllra";
 import { TaekjaListi } from "./TaekjaListi";
 import { TengjaVidHaed } from "./TengjaVidHaed";
+import { useStadurOgHaed } from "./StadurOgHaed";
 import { raesaFjolcrop } from "../../lib/board/fjolcrop";
 import { useBoardStore } from "../../lib/board/store";
 import { getSymbol } from "../../lib/board/symbols";
@@ -205,6 +206,17 @@ export function RightPanel({
             {primary.type === "image" ? (
               <>
                 {primary.bladhluti ? <TengjaVidHaed mynd={primary} /> : null}
+                {primary.bladhluti || !primary.uttekt ? (
+                  <button
+                    type="button"
+                    data-stadur-og-haed-mynd
+                    onClick={() => useStadurOgHaed.getState().opna(primary.id)}
+                    className="w-full rounded-md border border-amber-300/40 bg-amber-300/10 px-2 py-1.5 text-left text-[12px] font-semibold text-amber-200 hover:bg-amber-300/20"
+                    title="Fletta upp stað eða heimilisfangi í kerfinu og velja hæð — eða stofna nýja hæð"
+                  >
+                    🏢 Staður og hæð…
+                  </button>
+                ) : null}
                 <p className="text-xs leading-relaxed text-stone-400">
                   Dragðu gólfplönið til að færa skjalið. Merkingar, tákn og minnismiðar ofan á síðunni
                   fylgja með. Læstu síðunni ef þú vilt ekki hreyfa hana óvart.

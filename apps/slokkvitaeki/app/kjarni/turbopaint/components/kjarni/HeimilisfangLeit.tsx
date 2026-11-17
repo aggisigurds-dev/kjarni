@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Search, X, ExternalLink, MapPin } from "lucide-react";
+import { Check, Search, X, ExternalLink, MapPin } from "lucide-react";
 import { hreinsaEignir, LISTI_HAMARK } from "../../lib/board/heimilisfang-leit";
 
 /* Heimilisfang → landnúmer → teikning beint á borðið.
@@ -32,10 +32,23 @@ type Eign = {
   ytriSlod: string | null;
 };
 
+/** Teikning sem er valin/skoðuð í innfelldum ham (Verkefni-glugginn). */
+export type TeikningVal = {
+  infoUrl: string;
+  /** Hæðin/lýsingin eins og spjaldið sýnir hana. */
+  titill: string;
+  thumb: string | null;
+  /** Stór forskoðun (Reykjavík) — null á map.is (PDF). */
+  stor: string | null;
+  /** Heimilisfangið (eignin) sem teikningin fannst undir. */
+  eign: string | null;
+};
+
 type Teikning = {
   filename: string;
   infoUrl: string;
   thumb: string | null;
+  stor?: string | null;
   stada: string | null;
   dags: string | null;
   tegund: string | null;
@@ -87,10 +100,24 @@ function sjalfgefinTegund(res: Teikning[]): string {
 export function HeimilisfangLeit({
   onVelja,
   compact = false,
+  inline = false,
+  valdar,
+  onSkiptaVali,
+  onSkoda,
+  onEign,
 }: {
   onVelja: (infoUrl: string) => void;
   /** Aðeins leitar-táknið — spjaldið opnast sem portal undir stikunni. */
   compact?: boolean;
+  /** Innfellt (Verkefni-glugginn, Agnar 17.11.2026): alltaf opið, í flæði síðunnar, stærri spjöld. */
+  inline?: boolean;
+  /** Valdar teikningar (infoUrl) — með `onSkiptaVali` fær hvert spjald hak. */
+  valdar?: ReadonlySet<string>;
+  onSkiptaVali?: (t: TeikningVal) => void;
+  /** Smellur á spjald: skoða (í stað þess að setja á borðið). */
+  onSkoda?: (t: TeikningVal) => void;
+  /** Eignin sem var valin (null = engin). */
+  onEign?: (label: string | null) => void;
 }) {
   const [q, setQ] = useState("");
   const [eignir, setEignir] = useState<Eign[]>([]);
@@ -102,7 +129,10 @@ export function HeimilisfangLeit({
   const [synaUrelt, setSynaUrelt] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [opid, setOpid] = useState(false);
+  const [opidState, setOpid] = useState(false);
+  const opid = inline || opidState;
+  const eignRef = useRef(onEign);
+  eignRef.current = onEign;
   const [panelPos, setPanelPos] = useState({ top: 0, left: 8, width: 390, maxH: 0 });
   const wrap = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -110,6 +140,7 @@ export function HeimilisfangLeit({
 
   const velja = useCallback(async (e: Eign) => {
     setValin(e);
+    eignRef.current?.(e.label);
     setTeikningar([]);
     setSia("allt");
     setTegundSia("allt");
@@ -172,6 +203,7 @@ export function HeimilisfangLeit({
     const t = term.normalize("NFC").trim();
     setTeikningar([]);
     setValin(null);
+    eignRef.current?.(null);
     // seq hækkar líka hér: svar við eldri fyrirspurn („Br") á ekki að lenda á listanum eftir að innsláttur var styttur.
     const my = ++seq.current;
     if (t.length < 2) { setEignir([]); setMsg(null); setBusy(false); return; }
@@ -232,6 +264,7 @@ export function HeimilisfangLeit({
 
   // Loka við smell utan reitsins OG portal-spjaldsins, eða Escape.
   useEffect(() => {
+    if (inline) return;
     const onDown = (ev: MouseEvent) => {
       const t = ev.target as Node;
       if (wrap.current?.contains(t) || panelRef.current?.contains(t)) return;
@@ -246,10 +279,10 @@ export function HeimilisfangLeit({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [inline]);
 
   useLayoutEffect(() => {
-    if (!opid) return;
+    if (!opid || inline) return;
     const place = () => {
       const el = wrap.current;
       if (!el) return;
@@ -271,7 +304,7 @@ export function HeimilisfangLeit({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [opid, eignir.length, teikningar.length, msg, compact]);
+  }, [opid, inline, eignir.length, teikningar.length, msg, compact]);
 
   // Lifandi leit, hömluð svo hvert stafabil verði ekki að fyrirspurn.
   useEffect(() => {
@@ -359,28 +392,18 @@ export function HeimilisfangLeit({
     </div>
   );
 
-  const panel = showPanel && typeof document !== "undefined" ? createPortal(
-    <div
-      ref={panelRef} data-hleit=""
-      style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width, maxHeight: panelPos.maxH ? `min(70vh, calc(100dvh - 5rem), ${panelPos.maxH}px)` : undefined }}
-      className="fixed z-[80] max-h-[min(70vh,calc(100dvh-5rem))] overflow-auto rounded-xl border border-stone-300 bg-white p-2 text-stone-800 shadow-2xl"
-    >
-      {compact && (
-        <div className="mb-2 flex items-center gap-1.5 rounded-md bg-stone-100 px-2 py-1.5">
-          <Search className="size-3.5 shrink-0 text-stone-500" />
-          <input
-            autoFocus
-            value={q}
-            onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
-            onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
-            placeholder="Heimilisfang — t.d. Skútuvogur 4"
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-stone-900 placeholder:text-stone-400 focus:outline-none"
-          />
-          <button type="button" onClick={() => setOpid(false)} className="text-[12px] text-stone-500">
-            Loka
-          </button>
-        </div>
-      )}
+  const teiknVal = (t: Teikning): TeikningVal => {
+    const s = skipta(t);
+    return {
+      infoUrl: t.infoUrl,
+      titill: s.auka ? `${s.adal} · ${s.auka}` : s.adal,
+      thumb: t.thumb,
+      stor: t.stor ?? null,
+      eign: valin?.label ?? null,
+    };
+  };
+
+  const innihald = (
       <div>
           {/* 14.10.2026: „Leita…" og villur fara EFST — áður stóð gamli listinn efst meðan beðið var eftir nýju
               svari og skýringin leyndist fyrir neðan hann (Agnar: „random efst á lista en aðal alveg neðst"). */}
@@ -404,7 +427,7 @@ export function HeimilisfangLeit({
             <div className="mb-1.5 flex items-center gap-2 border-b border-stone-200 px-1 pb-1.5">
               <button
                 type="button"
-                onClick={() => { setValin(null); setTeikningar([]); setMsg(null); }}
+                onClick={() => { setValin(null); setTeikningar([]); setMsg(null); eignRef.current?.(null); }}
                 className="text-[12px] text-stone-500 hover:text-stone-900"
               >
                 ← Til baka
@@ -487,20 +510,29 @@ export function HeimilisfangLeit({
           )}
 
           {virk.length > 0 && (
-            <div className="grid grid-cols-2 gap-1.5 pt-1">
-              {synd.map((t) => (
-                <button
+            <div className={inline ? "[display:grid] grid-cols-2 gap-2.5 pt-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" : "grid grid-cols-2 gap-1.5 pt-1"}>
+              {synd.map((t) => {
+                const hakad = !!valdar?.has(t.infoUrl);
+                return (
+                <div
                   key={t.infoUrl}
+                  data-teikning-spjald={t.infoUrl}
+                  className={`relative overflow-hidden rounded-lg border bg-white ${hakad ? "border-[#FE653F] ring-2 ring-[#FE653F]/25" : "border-stone-200 hover:border-blue-500"}`}
+                >
+                <button
                   type="button"
-                  onClick={() => { onVelja(t.infoUrl); setOpid(false); }}
-                  className="overflow-hidden rounded-lg border border-stone-200 text-left hover:border-blue-500"
-                  title={`${t.lysing || t.filename}${t.stada ? " · " + t.stada : ""} — smelltu til að setja á borðið`}
+                  onClick={() => {
+                    if (onSkoda) onSkoda(teiknVal(t));
+                    else { onVelja(t.infoUrl); setOpid(false); }
+                  }}
+                  className="block w-full text-left"
+                  title={`${t.lysing || t.filename}${t.stada ? " · " + t.stada : ""} — ${onSkoda ? "smelltu til að skoða" : "smelltu til að setja á borðið"}`}
                 >
                   {t.thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.thumb} alt={t.filename} className="h-24 w-full bg-white object-contain" />
+                    <img src={t.thumb} alt={t.filename} loading="lazy" className={`${inline ? "h-36" : "h-24"} w-full bg-white object-contain`} />
                   ) : (
-                    <div className="flex h-24 flex-col items-center justify-center gap-1 bg-stone-100 px-2 text-center">
+                    <div className={`flex ${inline ? "h-36" : "h-24"} flex-col items-center justify-center gap-1 bg-stone-100 px-2 text-center`}>
                       <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
                         {/\.tiff?$/i.test(t.filename) ? "TIF" : "PDF"}
                       </span>
@@ -532,7 +564,22 @@ export function HeimilisfangLeit({
                     </div>
                   </div>
                 </button>
-              ))}
+                {onSkiptaVali ? (
+                  <button
+                    type="button"
+                    data-velja-teikningu
+                    aria-pressed={hakad}
+                    aria-label={hakad ? "Taka úr vali" : "Velja til að opna á borði"}
+                    title={hakad ? "Taka úr vali" : "Velja — opnaðu valdar teikningar saman á einu borði"}
+                    onClick={() => onSkiptaVali(teiknVal(t))}
+                    className={`absolute top-1.5 left-1.5 flex size-7 items-center justify-center rounded-md border shadow-sm ${hakad ? "border-[#FE653F] bg-[#FE653F] text-white" : "border-stone-300 bg-white/95 text-stone-300 hover:border-stone-400 hover:text-stone-500"}`}
+                  >
+                    <Check className="size-4" strokeWidth={3} />
+                  </button>
+                ) : null}
+                </div>
+                );
+              })}
             </div>
           )}
 
@@ -567,9 +614,72 @@ export function HeimilisfangLeit({
             </a>
           )}
       </div>
+  );
+
+  const panel = showPanel && !inline && typeof document !== "undefined" ? createPortal(
+    <div
+      ref={panelRef} data-hleit=""
+      style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width, maxHeight: panelPos.maxH ? `min(70vh, calc(100dvh - 5rem), ${panelPos.maxH}px)` : undefined }}
+      className="fixed z-[80] max-h-[min(70vh,calc(100dvh-5rem))] overflow-auto rounded-xl border border-stone-300 bg-white p-2 text-stone-800 shadow-2xl"
+    >
+      {compact && (
+        <div className="mb-2 flex items-center gap-1.5 rounded-md bg-stone-100 px-2 py-1.5">
+          <Search className="size-3.5 shrink-0 text-stone-500" />
+          <input
+            autoFocus
+            value={q}
+            onChange={(ev) => { setQ(ev.target.value); setOpid(true); }}
+            onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
+            placeholder="Heimilisfang — t.d. Skútuvogur 4"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-stone-900 placeholder:text-stone-400 focus:outline-none"
+          />
+          <button type="button" onClick={() => setOpid(false)} className="text-[12px] text-stone-500">
+            Loka
+          </button>
+        </div>
+      )}
+      {innihald}
     </div>,
     document.body
   ) : null;
+
+  // Innfellt (Verkefni-glugginn): stór leitarreitur og listinn beint undir, í flæði síðunnar.
+  if (inline) {
+    return (
+      <div ref={wrap} data-hleit="" data-hleit-innfellt="" className="space-y-2">
+        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 shadow-sm focus-within:border-[#FE653F] focus-within:ring-2 focus-within:ring-[#FE653F]/20">
+          <Search className="size-4 shrink-0 text-stone-400" />
+          <input
+            autoFocus
+            value={q}
+            onChange={(ev) => setQ(ev.target.value)}
+            onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); void leita(q); } }}
+            placeholder="Heimilisfang — t.d. Barónsstígur 18"
+            enterKeyHint="search"
+            className="min-w-0 flex-1 bg-transparent py-3 text-base text-stone-900 outline-none placeholder:text-stone-400"
+          />
+          {q && (
+            <button
+              type="button"
+              onClick={() => { setQ(""); setEignir([]); setTeikningar([]); setValin(null); setMsg(null); eignRef.current?.(null); }}
+              className="flex size-9 shrink-0 items-center justify-center text-stone-400 hover:text-stone-800"
+              title="Hreinsa"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </label>
+        {eignir.length > 0 || msg || teikningar.length > 0 ? (
+          <div className="rounded-2xl border border-stone-200 bg-white p-2.5 text-stone-800 shadow-sm">{innihald}</div>
+        ) : (
+          <p className="px-1 pt-2 text-sm text-stone-500">
+            Skrifaðu heimilisfang til að sjá teikningar hússins úr skjalasafninu. Smelltu á teikningu til að skoða hana — hakaðu við
+            nokkrar og opnaðu þær saman á einu borði.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={wrap} className="relative" data-hleit="">

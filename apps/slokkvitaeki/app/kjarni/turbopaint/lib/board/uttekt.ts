@@ -1003,7 +1003,9 @@ export function finnaTengduMynd(objects: BoardObject[]): MyndMedTengingu | null 
   return (m as MyndMedTengingu) || null;
 }
 
-export async function saekjaUttekt(companyId: number) {
+/** Úttekt staðarins: hæðirnar (teikning_bord) og tækin. `leyfaTomt`: staður án úttektarteikningar skilar engum hæðum
+ * og `anRadar: true` (fyrsta „Vista í úttekt" stofnar röðina) í stað villu. */
+export async function saekjaUttekt(companyId: number, opts: { leyfaTomt?: boolean } = {}) {
   const sb = getSupabase();
   if (!sb) throw new Error("Engin tenging við gagnagrunn");
   const [rod, fyr, taeki] = await Promise.all([
@@ -1012,18 +1014,86 @@ export async function saekjaUttekt(companyId: number) {
     sb.from("uttaeki").select("id,serial,type,status").eq("fyrirtaeki_id", companyId),
   ]);
   if (rod.error) throw new Error(rod.error.message);
-  if (!rod.data) throw new Error("Þessi staður á enga vistaða úttektarteikningu — vistaðu hana fyrst í Slökkvitæki-appinu.");
+  const nafn = (fyr.data as { nafn?: string } | null)?.nafn || "Staður " + companyId;
+  const taekiStadar = ((taeki.data as UttektTaeki[] | null) || []).filter(Boolean);
+  if (!rod.data) {
+    if (!opts.leyfaTomt) throw new Error("Þessi staður á enga vistaða úttektarteikningu — vistaðu hana fyrst í Slökkvitæki-appinu.");
+    if (fyr.error) throw new Error(fyr.error.message);
+    if (!fyr.data) throw new Error(`Staður ${companyId} fannst ekki í kerfinu.`);
+    return { nafn, haedir: [] as UttektHaed[], taeki: taekiStadar, anRadar: true };
+  }
   const r = rod.data as { markers: UttektMerki[]; image_url: string | null; haedir: UttektHaed[] | null };
   // Eldri raðir (fyrir hæðir): ein hæð í markers/image_url.
   const haedir: UttektHaed[] =
     Array.isArray(r.haedir) && r.haedir.length
       ? r.haedir
       : [{ id: "h1", nafn: "1. hæð", image_url: r.image_url, markers: r.markers || [] }];
-  return {
-    nafn: (fyr.data as { nafn?: string } | null)?.nafn || "Staður " + companyId,
-    haedir,
-    taeki: ((taeki.data as UttektTaeki[] | null) || []).filter(Boolean),
+  return { nafn, haedir, taeki: taekiStadar, anRadar: false };
+}
+
+/** Staður í kerfinu (fyrirtaeki) fyrir „Staður og hæð": nafn, heimilisfang og hve margar hæðir úttektin á (0 = engin
+ * úttektarteikning enn). */
+export type StadurILeit = { id: number; nafn: string; heimilisfang: string | null; ovirkur: boolean; haedir: number };
+
+/** Leitarstrengur án kommu/sviga (PostgREST `or`-sía) — og sérhljóðar sem `_` svo „baronsstigur" finni „Barónsstígur". */
+export function leitarMynstur(q: string): string {
+  const hreinn = q.replace(/[,()*%\\]/g, " ").replace(/\s+/g, " ").trim();
+  return hreinn.replace(/[aeiouyáéíóúýöæ]/gi, "_");
+}
+
+/** Samanburðarform: lágstafir án kommna/brodda, ð→d, þ→th, æ→ae, ö→o. */
+export function einfalda(s: string | null | undefined): string {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/ð/g, "d")
+    .replace(/þ/g, "th")
+    .replace(/æ/g, "ae")
+    .replace(/ö/g, "o")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Röðun leitarniðurstaðna: nafn sem byrjar á leitinni fyrst, svo nafn/heimilisfang sem inniheldur hana, svo staðir
+ * með úttektarteikningu, svo stafrófsröð. Virkir á undan óvirkum. */
+export function radaStodum(q: string, stadir: StadurILeit[]): StadurILeit[] {
+  const e = einfalda(q);
+  const stig = (s: StadurILeit) => {
+    const n = einfalda(s.nafn), h = einfalda(s.heimilisfang);
+    return (n.startsWith(e) ? 0 : h.startsWith(e) ? 1 : n.includes(e) || h.includes(e) ? 2 : 3) * 4 + (s.ovirkur ? 2 : 0) + (s.haedir > 0 ? 0 : 1);
   };
+  return [...stadir].sort((a, b) => stig(a) - stig(b) || a.nafn.localeCompare(b.nafn, "is"));
+}
+
+/** Leit í fyrirtaeki eftir nafni, heimilisfangi eða númeri (id). */
+export async function leitaStodum(q: string, hamark = 12): Promise<StadurILeit[]> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Engin tenging við gagnagrunn");
+  const m = leitarMynstur(q);
+  if (m.replace(/[_\s]/g, "").length < 2) return [];
+  const numer = /^\d+$/.test(q.trim()) ? Number(q.trim()) : null;
+  const sia = [`nafn.ilike.%${m}%`, `heimilisfang.ilike.%${m}%`, ...(numer ? [`id.eq.${numer}`] : [])].join(",");
+  const { data, error } = await sb.from("fyrirtaeki").select("id,nafn,heimilisfang,status").or(sia).limit(40);
+  if (error) throw new Error(error.message);
+  const rodir = (data as { id: number; nafn: string | null; heimilisfang: string | null; status: string | null }[] | null) || [];
+  const ids = rodir.map((r) => r.id);
+  const fjoldi = new Map<number, number>();
+  if (ids.length) {
+    const tb = await sb.from("teikning_bord").select("company_id,haedir").in("company_id", ids);
+    if (tb.error) throw new Error(tb.error.message);
+    for (const r of (tb.data as { company_id: number; haedir: unknown }[] | null) || []) {
+      fjoldi.set(r.company_id, Array.isArray(r.haedir) && r.haedir.length ? r.haedir.length : 1);
+    }
+  }
+  const stadir = rodir.map((r) => ({
+    id: r.id,
+    nafn: r.nafn || "Staður " + r.id,
+    heimilisfang: r.heimilisfang,
+    ovirkur: r.status === "óvirkur",
+    haedir: fjoldi.get(r.id) ?? 0,
+  }));
+  return radaStodum(q, stadir).slice(0, hamark);
 }
 
 /** Nýtt hæðar-id á sniði Teikning-gluggans (383 nyttId): `h<tími36><slembi3>`. */
@@ -1294,20 +1364,23 @@ export async function vistaIUttekt(objects: BoardObject[], stimpilBound = 56, op
   const t = mynd.uttekt;
   const sb = getSupabase();
   if (!sb) throw new Error("Engin tenging við gagnagrunn");
-  const nu = await saekjaUttekt(t.companyId);
+  // Staður án úttektarteikningar („Staður og hæð" → + Ný hæð): fyrsta vistun stofnar röðina.
+  const nu = await saekjaUttekt(t.companyId, { leyfaTomt: true });
   // Sjálftenging við tæki staðarins (ferskur listi): ótengd tækjatákn → óstaðsett tæki af sömu tegund, afgangurinn Nýtt
   const u = utbuaVistun(objects, nu.haedir, new Date().toISOString(), nyttStimpilId, stimpilBound, { taeki: nu.taeki }, opts);
   const fyrsta = u.haedir[0];
-  const { error, data } = await sb
-    .from("teikning_bord")
-    .update({
-      haedir: u.haedir,
-      markers: fyrsta.markers || [],
-      updated_at: new Date().toISOString(),
-      updated_by: "TurboPaint",
-    })
-    .eq("company_id", t.companyId)
-    .select("company_id");
+  const rod = {
+    haedir: u.haedir,
+    markers: fyrsta.markers || [],
+    updated_at: new Date().toISOString(),
+    updated_by: "TurboPaint",
+  };
+  const { error, data } = nu.anRadar
+    ? await sb
+        .from("teikning_bord")
+        .insert({ company_id: t.companyId, image_url: fyrsta.image_url ?? null, ...rod })
+        .select("company_id")
+    : await sb.from("teikning_bord").update(rod).eq("company_id", t.companyId).select("company_id");
   if (error) throw new Error(error.message);
   if (!data || !data.length) throw new Error("Ekkert var skrifað — röðin fannst ekki eða aðgangi var hafnað.");
   return { ...u, nafn: nu.nafn, taeki: nu.taeki };

@@ -19,6 +19,7 @@ import {
   tillagaHaedarNafns,
 } from "../../lib/board/uttekt";
 import { useUttektGogn } from "../../lib/board/uttekt-gogn";
+import { useStadurOgHaed } from "./StadurOgHaed";
 
 export function TengjaVidHaed({ mynd }: { mynd: ImageObject }) {
   const objects = useBoardStore((s) => s.objects);
@@ -111,10 +112,19 @@ export function TengjaVidHaed({ mynd }: { mynd: ImageObject }) {
       </button>
       {opid ? (
         <div role="menu" className="space-y-1">
-          {!cid ? (
-            <div className="text-[11px] text-stone-400">Staðurinn er óþekktur — opnaðu teikninguna úr úttekt staðarins fyrst.</div>
+          {!cid || (!rett && villa) ? (
+            <div className="space-y-1">
+              <div className="text-[11px] text-stone-400">{!cid ? "Staðurinn er óþekktur." : villa}</div>
+              <button
+                type="button"
+                onClick={() => useStadurOgHaed.getState().opna(mynd.id)}
+                className="w-full rounded px-2 py-1 text-left text-[12px] font-semibold text-amber-200 hover:bg-white/10"
+              >
+                🏢 Velja stað og hæð…
+              </button>
+            </div>
           ) : !rett ? (
-            <div className="text-[11px] text-stone-400">{villa || "Sæki hæðir staðarins…"}</div>
+            <div className="text-[11px] text-stone-400">Sæki hæðir staðarins…</div>
           ) : (
             <>
               {kostir.map((k) => {
