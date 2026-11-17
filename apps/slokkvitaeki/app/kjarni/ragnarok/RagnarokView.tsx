@@ -6,7 +6,7 @@ import { ARTCRAFT_INTERFACES, OFFICECRAFT_INTERFACES } from "../artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SKINS, type SkinId } from "../skins";
 import { useStationSkin } from "../StationChrome";
-import { RagnarokRing } from "./Ring";
+import { ApocalypseRing } from "./ApocalypseRing";
 import { SYSTEMS, FILTERS, ext, dags, type Filter } from "../stod-gogn";
 
 /* Stjórnstöðin í Ragnarök-útliti (bráðið gull á svörtu stáli).
@@ -113,7 +113,7 @@ export function RagnarokView(d: RagnarokData) {
             </p>
           </div>
           <div className="rgk-core">
-            <RagnarokRing size={340} label="KJARNI" bearings />
+            <ApocalypseRing label="KJARNI" />
           </div>
         </header>
 
