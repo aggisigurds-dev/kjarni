@@ -34,16 +34,16 @@ test("mæling: greindur veggur á gluggalínu sannleikans er ekki rangur; týndu
 });
 
 type Fix = { id: string; dpm: number; svaedi: { x: number; y: number; w: number; h: number }; linur: MaelLinaInn[] };
-type Hrar = { vafri: HLina[]; thunnir: HLina[]; vel: HLina[] | null };
+type Hrar = { vafri: HLina[]; thunnir: HLina[]; harlinur: HLina[]; vel: HLina[] | null };
 const lesa = <T>(s: string) => JSON.parse(readFileSync(new URL(s, import.meta.url), "utf8")) as T;
 const SETT = ["R1", "R2", "R3", "R4"].map((id) => ({ f: lesa<Fix>(`./fixtures/veggjamaeling/${id}.json`), h: lesa<Hrar>(`./fixtures/veggjamaeling/hrar/${id}.json`) }));
 
-function heild(leid: "vafri" | "vel", vik: Vikmork) {
+function heild(leid: "vafri" | "vel", vik: Vikmork, o: { harlinur?: boolean } = {}) {
   let hR = 0, R = 0, nG = 0, G = 0;
   for (const { f, h } of SETT) {
     const grunnur = leid === "vel" ? h.vel : h.vafri;
     if (!grunnur) continue;
-    const greint = hreinsunSkonnunar([...grunnur, ...h.thunnir], f.dpm, vik).linur;
+    const greint = hreinsunSkonnunar([...grunnur, ...h.thunnir, ...(o.harlinur ? h.harlinur : [])], f.dpm, vik).linur;
     const m = maelaVeggi(f.linur, greint, { dpm: f.dpm, svaedi: f.svaedi });
     hR += m.hittni * m.raunM;
     R += m.raunM;
@@ -68,6 +68,12 @@ test("raungögn úr appinu (R3, TIF-frumrit): opin útlína hendir engu — hitt
   const m = maelaVeggi(f.linur, hreinsunSkonnunar(app.hrar, app.dpm).linur, { dpm: f.dpm, svaedi: f.svaedi });
   assert.ok(m.hittni >= 0.53, `hittni ${m.hittni.toFixed(3)}`);
   assert.ok(m.nakvaemni >= 0.69, `nákvæmni ${m.nakvaemni.toFixed(3)}`);
+});
+
+test("raungögn (4 hæðir): vafraleiðin MEÐ hárlínupörum (sjalfvirkt.ts síðan lota 5) — hittni ≥ 78 %, nákvæmni ≥ 77 %", () => {
+  const n = heild("vafri", SJALFGEFIN_VIKMORK, { harlinur: true });
+  assert.ok(n.hittni >= 0.78, `hittni ${n.hittni.toFixed(3)}`);
+  assert.ok(n.nakvaemni >= 0.77, `nákvæmni ${n.nakvaemni.toFixed(3)}`);
 });
 
 test("raungögn (4 hæðir): Veggjavélin + hreinsun — hittni ≥ 89,5 %, nákvæmni ≥ 88 % (sannleikurinn er leiðrétting á úttaki hennar)", () => {

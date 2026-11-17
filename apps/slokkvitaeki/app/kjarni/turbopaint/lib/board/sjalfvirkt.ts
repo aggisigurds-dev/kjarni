@@ -35,7 +35,7 @@ import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
 import { flokkaYfirlit, klemmaGreindaThykkt, erNotanlegtVigurPdf, ptIBord, skurdurIPt, sjalfvirkirPdfVeggirPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
-import { greinaThunnaVeggi, greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
+import { greinaHarlinuPor, greinaThunnaVeggi, greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
 import { beitaSltBrsl } from "./slt-brsl-bord";
 import { sltBrslUrTexta } from "./slt-brsl-lestur";
 import { TEGUND_HEITI } from "./sjalftenging";
@@ -713,7 +713,16 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         ljuka("veggir", vel.texti + thunnirTexti);
       } else {
         S().setja("veggir", { texti: `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} — greini í vafranum…` });
-        hrar = [...(await vafri), ...thunnir];
+        // Hárlínupör (lota 5): aðeins á vafraleiðinni — mælt: vafri 65,2/77,2 → 78,4/77,4 (hittni/nákvæmni), en á
+        // úttaki Veggjavélarinnar lækkaði nákvæmnin 88,4 → 84,0, svo þau fara ekki þangað.
+        let harlinur: HLina[] = [];
+        try {
+          harlinur = klemmaGreindaThykkt(await greinaHarlinuPor(p, dpm), dpm).filter(innan);
+          talning.harlinur = harlinur.length;
+        } catch (err) {
+          console.warn("[sjálfvirkt] hárlínupör", err);
+        }
+        hrar = [...(await vafri), ...thunnir, ...harlinur];
         leid = "vafri";
         const gl = hrar.filter((v) => v.tegund === "gler").length;
         ljuka("veggir", `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} → myndgreining í vafranum: ${hrar.length - gl} veggir · ${gl} gler${thunnirTexti}`, "lokid");

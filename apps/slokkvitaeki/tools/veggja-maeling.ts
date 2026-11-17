@@ -19,7 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import { klemmaGreindaThykkt } from "../app/kjarni/turbopaint/lib/board/pdf-veggjaflokkar";
 import { graTonar, greiningarkvardi, skonnunarVeggir } from "../app/kjarni/turbopaint/lib/board/skonnun-veggir";
-import { finnaThunnaVeggi } from "../app/kjarni/turbopaint/lib/board/thunnir-veggir";
+import { finnaHarlinuPor, finnaThunnaVeggi, type HarlinuStillingar } from "../app/kjarni/turbopaint/lib/board/thunnir-veggir";
 import { f1, hreinsunSkonnunar, maelaVeggi, type MaelLinaInn } from "../app/kjarni/turbopaint/lib/board/veggja-maeling";
 import { lesaVikmork, type HLina } from "../app/kjarni/turbopaint/lib/board/veggja-hreinsun";
 
@@ -113,6 +113,21 @@ async function thunnir(f: Fixture): Promise<HLina[]> {
   );
 }
 
+/** Hárlínupör (finnaHarlinuPor) — fullri upplausn svæðisins upp að 40 MP. --hp '{"lagmarkM":1}' prófar stillingar. */
+async function harlinuPor(f: Fixture): Promise<HLina[]> {
+  const sk = f.svaedi;
+  let k = 1;
+  const mp = sk.w * sk.h;
+  if (mp > 40e6) k = Math.sqrt(40e6 / mp);
+  const W = Math.max(1, Math.round(sk.w * k)), H = Math.max(1, Math.round(sk.h * k));
+  const gra = await graSvaedis(f.id, f.frum, sk, W, H);
+  const st: HarlinuStillingar = { dpm: f.dpm * k, ...(arg("hp") ? JSON.parse(arg("hp")) : {}) };
+  return klemmaGreindaThykkt(
+    finnaHarlinuPor(gra, W, H, st).map((v) => ({ p: [v[0] / k + sk.x, v[1] / k + sk.y, v[2] / k + sk.x, v[3] / k + sk.y], t: Math.max(1, v[4] / k) }) as HLina),
+    f.dpm
+  );
+}
+
 function vel(f: Fixture): HLina[] | null {
   const s = path.join(CACHE, f.id + ".vel.json");
   if (!fs.existsSync(s)) return null;
@@ -191,6 +206,8 @@ async function main() {
       return l;
     };
     const th = await geymd("thunnir", () => thunnir(f));
+    // hárlínupör: ALDREI úr skyndiminni þegar --hp er gefið (stillingatilraun)
+    const hpL = leidir.some((l) => l.includes("+hp")) ? (arg("hp") ? await harlinuPor(f) : await geymd("harlinur", () => harlinuPor(f))) : [];
     const vafriL = leidir.some((l) => l.startsWith("vafri")) ? await geymd("vafri", () => vafri(f)) : [];
     const velL = vel(f);
     if (flagg("vista-hrar")) {
@@ -198,14 +215,14 @@ async function main() {
       // hreinsunin sé prófuð á raungögnum án mynda og nets.
       const r = (L: HLina[]) => L.map((l) => ({ p: l.p.map((n) => Math.round(n * 10) / 10), t: Math.round(l.t * 10) / 10, ...(l.tegund ? { tegund: l.tegund } : {}) }));
       fs.mkdirSync(path.join(FIX, "hrar"), { recursive: true });
-      fs.writeFileSync(path.join(FIX, "hrar", f.id + ".json"), JSON.stringify({ vafri: r(vafriL), thunnir: r(th), vel: velL ? r(velL) : null }));
+      fs.writeFileSync(path.join(FIX, "hrar", f.id + ".json"), JSON.stringify({ vafri: r(vafriL), thunnir: r(th), harlinur: r(hpL), vel: velL ? r(velL) : null }));
     }
     for (const leid of leidir) {
       // leiðir: vafri | vel | th (þunnir einir); viðskeyti -th = án þunnra veggja, +h = hreinsun, +hn = hreinsun án „utan húss"
       const grunnur = leid.startsWith("vel") ? velL : leid.startsWith("th") ? [] : vafriL;
       if (!grunnur) continue;
-      const hrar = leid.includes("-th") ? [...grunnur] : [...grunnur, ...th];
-      const greint = leid.endsWith("+h") ? hreinsa(hrar, f.dpm, false, f) : leid.endsWith("+hn") ? hreinsa(hrar, f.dpm, true, f) : hrar;
+      const hrar = [...grunnur, ...(leid.includes("-th") ? [] : th), ...(leid.includes("+hp") ? hpL : [])];
+      const greint = leid.endsWith("+hn") ? hreinsa(hrar, f.dpm, true, f) : leid.endsWith("+h") ? hreinsa(hrar, f.dpm, false, f) : hrar;
       const m = maelaVeggi(f.linur, greint, { dpm: f.dpm, svaedi: f.svaedi });
       const s = (samtals[leid] ??= { hulidR: 0, R: 0, rett: 0, G: 0 });
       s.hulidR += m.hittni * m.raunM;
