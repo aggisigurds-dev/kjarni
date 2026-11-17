@@ -6,7 +6,9 @@ import {
   butarIBord,
   graTonar,
   greiningarSvaedi,
+  langirVeggir,
   skonnunarVeggir,
+  teygjaFolva,
   type SkonnunarVeggir,
   type Talning,
 } from "./skonnun-veggir";
@@ -183,7 +185,7 @@ export function fellaTexta<T extends { p: number[]; t: number; tegund?: string }
     t: (l.t / kx) * fm.k,
     tegund: l.tegund,
   }));
-  const burt = textaLinur(iMynd, fm.gra, fm.W, fm.H, fm.dpm);
+  const burt = textaLinur(iMynd, teygjaFolva(fm.gra), fm.W, fm.H, fm.dpm);
   return linur.filter((_, i) => !burt.has(i));
 }
 
@@ -351,6 +353,14 @@ export async function greinaVeggiSkonnunar(plan: ImageObject, onProgress?: (perc
   // borðdílar á metra → dílar frummyndar á metra (myndin á borðinu sýnir myndSvaedi af frummyndinni)
   const dpmFrum = dpmBord && dpmBord > 0 && plan.width > 0 ? dpmBord * (g.myndSvaedi.w / plan.width) : null;
   const r = await keyra(gra, g.W, g.H, g.kvardi, g.frum.b, g.frum.h, dpmFrum);
+  // Föl skönnun (lota 5): teygð mynd greind líka — aðeins langir veggir þaðan bætast við (langirVeggir).
+  const gT = teygjaFolva(gra);
+  if (gT !== gra) {
+    const t = await keyra(gT, g.W, g.H, g.kvardi, g.frum.b, g.frum.h, dpmFrum);
+    const l = langirVeggir(t.veggir, g.frum.b, g.frum.h, dpmFrum);
+    r.veggir.push(...l);
+    r.talning.folvi = l.length;
+  }
   onProgress?.(95);
   const veggir = [
     ...butarIBord(r.veggir, g, plan),

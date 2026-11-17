@@ -18,7 +18,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { klemmaGreindaThykkt } from "../app/kjarni/turbopaint/lib/board/pdf-veggjaflokkar";
-import { graTonar, greiningarkvardi, skonnunarVeggir } from "../app/kjarni/turbopaint/lib/board/skonnun-veggir";
+import { graTonar, greiningarkvardi, langirVeggir, skonnunarVeggir, teygjaFolva } from "../app/kjarni/turbopaint/lib/board/skonnun-veggir";
 import { finnaHarlinuPor, finnaThunnaVeggi, type HarlinuStillingar } from "../app/kjarni/turbopaint/lib/board/thunnir-veggir";
 import { f1, hreinsunSkonnunar, maelaVeggi, type MaelLinaInn } from "../app/kjarni/turbopaint/lib/board/veggja-maeling";
 import { lesaVikmork, type HLina } from "../app/kjarni/turbopaint/lib/board/veggja-hreinsun";
@@ -94,10 +94,18 @@ const VEGG = new Set(["veggur", "ei60", "ei30"]);
 async function vafri(f: Fixture): Promise<HLina[]> {
   const k = greiningarkvardi(f.frum.b, f.frum.h);
   const sk = f.svaedi, W = Math.max(1, Math.round(sk.w * k)), H = Math.max(1, Math.round(sk.h * k));
-  const gra = await graSvaedis(f.id, f.frum, sk, W, H);
-  const r = skonnunarVeggir(gra, W, H, k, f.frum.b, f.frum.h, { dilarAMetra: f.dpm });
+  const gra0 = await graSvaedis(f.id, f.frum, sk, W, H);
   const til = (v: number[], tegund?: "gler"): HLina => ({ p: [v[0] + sk.x, v[1] + sk.y, v[2] + sk.x, v[3] + sk.y], t: Math.max(1, v[4] || 0), ...(tegund ? { tegund } : {}) });
-  return klemmaGreindaThykkt([...r.veggir.map((v) => til(v)), ...r.gler.map((v) => til(v, "gler"))], f.dpm);
+  const r = skonnunarVeggir(gra0, W, H, k, f.frum.b, f.frum.h, { dilarAMetra: f.dpm });
+  const linur = [...r.veggir.map((v) => til(v)), ...r.gler.map((v) => til(v, "gler"))];
+  // Föl skönnun → teygð mynd greind líka og AÐEINS langir veggir þaðan bætast við (eins og greinaVeggiSkonnunar)
+  const gra = process.env.VEGGJAMAELING_TEYGJA === "0" ? gra0 : teygjaFolva(gra0, process.env.VEGGJAMAELING_SVART ? { svart: Number(process.env.VEGGJAMAELING_SVART) } : {});
+  if (process.env.VEGGJAMAELING_TALNING) console.log("  teygt:", gra !== gra0);
+  if (gra !== gra0) {
+    const t = skonnunarVeggir(gra, W, H, k, f.frum.b, f.frum.h, { dilarAMetra: f.dpm });
+    linur.push(...langirVeggir(t.veggir, f.frum.b, f.frum.h, f.dpm, Number(process.env.VEGGJAMAELING_LANGIR ?? 6)).map((v) => til(v)));
+  }
+  return klemmaGreindaThykkt(linur, f.dpm);
 }
 
 async function thunnir(f: Fixture): Promise<HLina[]> {
@@ -160,7 +168,8 @@ async function textaVisar(f: Fixture, L: HLina[]): Promise<Set<number>> {
   let k = 1;
   if (sk.w * sk.h > 40e6) k = Math.sqrt(40e6 / (sk.w * sk.h));
   const W = Math.max(1, Math.round(sk.w * k)), H = Math.max(1, Math.round(sk.h * k));
-  const gra = await graSvaedis(f.id, f.frum, sk, W, H);
+  const gra0 = await graSvaedis(f.id, f.frum, sk, W, H);
+  const gra = process.env.VEGGJAMAELING_TEYGJA === "0" ? gra0 : teygjaFolva(gra0, process.env.VEGGJAMAELING_SVART ? { svart: Number(process.env.VEGGJAMAELING_SVART) } : {});
   const iMynd = L.map((l) => ({ ...l, p: l.p.map((n, i) => (n - (i % 2 ? sk.y : sk.x)) * k), t: l.t * k }));
   const burt = textaLinur(iMynd, gra, W, H, f.dpm * k, arg("ts") ? JSON.parse(arg("ts")) : {});
   if (process.env.VEGGJAMAELING_TALNING) console.log("  textasía felldi", burt.size, "af", L.length);

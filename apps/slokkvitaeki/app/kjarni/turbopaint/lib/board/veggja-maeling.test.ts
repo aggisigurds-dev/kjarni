@@ -77,10 +77,10 @@ test("raungögn (4 hæðir): vafraleiðin MEÐ hárlínupörum (sjalfvirkt.ts s�
   assert.ok(n.nakvaemni >= 0.77, `nákvæmni ${n.nakvaemni.toFixed(3)}`);
 });
 
-test("raungögn (4 hæðir): vafraleiðin með hárlínupörum OG textasíu (sjalfvirkt.ts síðan lota 5) — hittni ≥ 78 %, nákvæmni ≥ 80,5 %", () => {
+test("raungögn (4 hæðir): vafraleiðin með hárlínupörum, textasíu og teygðri fölri skönnun (sjalfvirkt.ts síðan lota 5) — hittni ≥ 80 %, nákvæmni ≥ 80 %", () => {
   const n = heild("vafri", SJALFGEFIN_VIKMORK, { harlinur: true, texti: true });
-  assert.ok(n.hittni >= 0.78, `hittni ${n.hittni.toFixed(3)}`);
-  assert.ok(n.nakvaemni >= 0.805, `nákvæmni ${n.nakvaemni.toFixed(3)}`);
+  assert.ok(n.hittni >= 0.8, `hittni ${n.hittni.toFixed(3)}`);
+  assert.ok(n.nakvaemni >= 0.8, `nákvæmni ${n.nakvaemni.toFixed(3)}`);
 });
 
 test("raungögn (4 hæðir): Veggjavélin + hreinsun — hittni ≥ 89,5 %, nákvæmni ≥ 88 % (sannleikurinn er leiðrétting á úttaki hennar)", () => {
