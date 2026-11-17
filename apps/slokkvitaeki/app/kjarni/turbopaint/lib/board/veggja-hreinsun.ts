@@ -53,6 +53,14 @@ export interface Vikmork {
    * 30 m „veggur"). Veggur sem endar hvergi í öðrum vegg er ekki veggur. 0 = slökkt. Mælt 04.11.2026 á Nesdekk Breiðhöfða 13 1. hæð:
    * 6 langar línur, 28–35 m, allar frístandandi. Sjálfgefið 6 m. */
   hillurM: number;
+  /** Endi „hillu" telst tengdur ef annar veggur er nær en þetta (auk hálfrar þykktar beggja). Sjálfgefið 0,15 m. */
+  hillurTengingM: number;
+  /** Rekkar standa í RÖÐ: frístandandi löng lína fer aðeins ef a.m.k. svo margar AÐRAR frístandandi línur eru samsíða henni,
+   * álíka langar (−20 % / +25 %) og skarast að hálfu, innan hillurRodM þvert á hana. 0 = gamla reglan (hver frístandandi lína fer). */
+  hillurSystkini: number;
+  hillurRodM: number;
+  /** Frístandandi línur styttri en þetta fara ÞÓTT þær standi ekki í röð (gamla reglan) — röðin verndar aðeins langar línur. */
+  hillurEinarUndirM: number;
   /** Op í útlínu hússins sem lokast þegar „utan húss" er metið (hurðargöt sem fundust ekki). Sjálfgefið 1,30 m. */
   lokunM: number;
   /** Hlutfall af heildar veggjaþunga sem gerir klasa að hluta hússins óháð fjarlægð (husKassi). Sjálfgefið 0,08. */
@@ -86,6 +94,10 @@ export const SJALFGEFIN_VIKMORK: Vikmork = {
   stakurM: 0.5,
   stakurSkonnunM: 1,
   hillurM: 6,
+  hillurTengingM: 0.15,
+  hillurSystkini: 2,
+  hillurRodM: 15,
+  hillurEinarUndirM: 12,
   lokunM: 1.3,
   husHlutur: 0.08,
   strikPunkt: { butar: 4, bilMinM: 0.03, bilMaxM: 0.65, spannM: 3 },
@@ -505,7 +517,7 @@ function endiTengdur(x: number, y: number, t: number, sjalfur: number, allar: HL
 
 /** Vísar langra búta (≥ lagmark) sem tengjast engu í hvorugum enda — hvort sem þeir skera aðra línu eða ekki (rekki með
  * þverstrikum sker aðrar línur en er samt enginn veggur). Aðeins veggir, ekki gler/hurðir/svalir/stigar. */
-export function hillurButar(butar: HLina[], fastar: HLina[], lagmark: number, bil: number): Set<number> {
+export function hillurButar(butar: HLina[], fastar: HLina[], lagmark: number, bil: number, systkini = 0, rod = Infinity, einarUndir = 0): Set<number> {
   const allar = [...butar, ...fastar];
   const ut = new Set<number>();
   if (!(lagmark > 0)) return ut;
@@ -517,7 +529,36 @@ export function hillurButar(butar: HLina[], fastar: HLina[], lagmark: number, bi
     if (endiTengdur(b.p[n - 2], b.p[n - 1], b.t, i, allar, bil)) return;
     ut.add(i);
   });
-  return ut;
+  if (!(systkini > 0) || ut.size === 0) return ut;
+  // RÖÐ (Powerplan lota 5, 17.11.2026 — mælt á 4 raunhæðum, tools/veggja-maeling.ts): gamla reglan felldi HVERJA langa
+  // frístandandi línu, líka útveggi og brunaveggi sem greiningin náði ekki að tengja í hornum (iðnaðarhús: hittni
+  // myndgreiningarinnar 67 % → 12 %). Rekkar standa hins vegar í röð: frambjóðendur sem eru samsíða (≤ ~3°), álíka langir
+  // (−20 % / +25 %), skarast að hálfu og liggja innan `rod` þvert hver á annan mynda klasa (keðja — endarekki raðarinnar er með).
+  // Klasi með ≥ `systkini` + 1 línum fer; stakur langur veggur stendur. Styttri en `einarUndir` fara eins og áður.
+  const C = [...ut].map((i) => {
+    const p = butar[i].p, n = p.length, ax = p[0], ay = p[1], bx = p[n - 2], by = p[n - 1], L = Math.hypot(bx - ax, by - ay) || 1;
+    return { i, ax, ay, ux: (bx - ax) / L, uy: (by - ay) / L, L };
+  });
+  const foreldri = C.map((_, k) => k);
+  const rot = (k: number): number => (foreldri[k] === k ? k : (foreldri[k] = rot(foreldri[k])));
+  for (let x = 0; x < C.length; x++)
+    for (let y = x + 1; y < C.length; y++) {
+      const a = C[x], b = C[y];
+      if (Math.abs(a.ux * b.ux + a.uy * b.uy) < 0.9986) continue;
+      if (b.L < a.L * 0.8 || b.L > a.L * 1.25) continue;
+      const d = Math.abs((b.ax - a.ax) * -a.uy + (b.ay - a.ay) * a.ux);
+      if (d > rod) continue;
+      const s0 = (b.ax - a.ax) * a.ux + (b.ay - a.ay) * a.uy, s1 = s0 + b.L * (a.ux * b.ux + a.uy * b.uy);
+      const ov = Math.min(Math.max(s0, s1), a.L) - Math.max(Math.min(s0, s1), 0);
+      if (ov >= 0.5 * Math.min(a.L, b.L)) foreldri[rot(x)] = rot(y);
+    }
+  const staerd = new Map<number, number>();
+  C.forEach((_, k) => staerd.set(rot(k), (staerd.get(rot(k)) ?? 0) + 1));
+  const rodin = new Set<number>();
+  C.forEach((a, k) => {
+    if ((staerd.get(rot(k)) ?? 0) >= systkini + 1 || a.L < einarUndir) rodin.add(a.i);
+  });
+  return rodin;
 }
 
 /** Vísar stuttra búta (< lagmark) sem tengjast engu í hvorugum enda og skera enga aðra línu. `fastar` telja sem tengi. */
@@ -601,7 +642,7 @@ export function hreinsaVeggi(nyjar: HLina[], fastar: HLina[], dpm: number, vik: 
     talning.stakir += st.size;
   }
   // 6b. hillur: langir bútar sem enda hvergi í vegg (einn skammtur — rekkar tengjast ekki hver öðrum)
-  const hi = hillurButar(butar, fastar, m(vik.hillurM), m(0.15));
+  const hi = hillurButar(butar, fastar, m(vik.hillurM), m(vik.hillurTengingM), vik.hillurSystkini, m(vik.hillurRodM), m(vik.hillurEinarUndirM));
   if (hi.size) {
     butar.forEach((b, i) => hi.has(i) && fjarlaegdar.push({ p: b.p, astaeda: "hilla" }));
     butar = butar.filter((_, i) => !hi.has(i));

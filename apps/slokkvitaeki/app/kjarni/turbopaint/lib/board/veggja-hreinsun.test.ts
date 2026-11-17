@@ -216,13 +216,31 @@ test("hillur: langar frístandandi línur (rekkar) fara, veggir sem tengjast sta
   assert.equal(lag.talning.hillur, 0);
 });
 
+test("hillur (lota 5): útveggur og brunaveggur sem greiningin tengdi ekki í hornum standa — aðeins rekkaröð fer", () => {
+  const dpm = 49.4;
+  // 60 × 40 m lager: hornin opin (~1 m bil) eins og þegar þverveggurinn greinist ekki alla leið
+  const veggir = [L(50, 0, 2950, 0, 12), L(0, 50, 0, 1950, 12), L(3000, 50, 3000, 1950, 12), L(50, 2000, 2950, 2000, 12), L(1500, 50, 1500, 1950, 12)];
+  const rekkar = [600, 800, 1000, 1200].map((x) => L(x, 300, x, 1700, 4));
+  const r = hreinsaVeggi([...veggir, ...rekkar], [], dpm);
+  assert.equal(r.talning.hillur, 4, "rekkaröðin fer");
+  for (const v of veggir)
+    assert.ok(r.linur.some((l) => Math.abs(l.p[0] - v.p[0]) < 30 && Math.abs(l.p[1] - v.p[1]) < 30), `veggur ${v.p.join(",")} stendur`);
+  // gamla reglan (hillurSystkini 0) felldi útveggina og brunavegginn líka
+  const gamla = hreinsaVeggi([...veggir, ...rekkar], [], dpm, { ...SJALFGEFIN_VIKMORK, hillurSystkini: 0, hillurEinarUndirM: 0 });
+  assert.ok(gamla.talning.hillur > 4);
+});
+
 test("hillur: raungögn Breiðhöfða 13 (2018-skönnun) — engin frístandandi lína ≥ 6 m eftir hreinsun, ytri veggur hússins stendur", () => {
   const raun = JSON.parse(readFileSync(new URL("./fixtures/veggjavel-breidhofdi-13-2018.json", import.meta.url), "utf8")) as { linur: HLina[] };
   const dpm = 49.4;
   const vik = { ...SJALFGEFIN_VIKMORK, stakurM: Math.max(SJALFGEFIN_VIKMORK.stakurM, SJALFGEFIN_VIKMORK.stakurSkonnunM) };
   const r = hreinsaVeggi(raun.linur, [], dpm, vik);
   assert.ok(r.talning.hillur >= 6, "hillur fjarlægðar: " + r.talning.hillur);
-  assert.equal(hillurButar(r.linur, [], 6 * dpm, 0.15 * dpm).size, 0);
+  // Engin rekkaröð eftir. Stakur frístandandi langur bútur (≥ 12 m) má standa — hann gæti verið útveggur sem greiningin
+  // tengdi ekki í hornum (lota 5, 17.11.2026: gamla reglan felldi útveggi og brunaveggi iðnaðarhúsa).
+  const v = SJALFGEFIN_VIKMORK;
+  assert.equal(hillurButar(r.linur, [], v.hillurM * dpm, v.hillurTengingM * dpm, v.hillurSystkini, v.hillurRodM * dpm, v.hillurEinarUndirM * dpm).size, 0);
+  assert.ok(hillurButar(r.linur, [], 6 * dpm, 0.15 * dpm).size <= 1, "fleiri en einn stakur langur bútur eftir");
   assert.ok(r.linur.length >= 80, "of fáar línur eftir: " + r.linur.length);
 });
 

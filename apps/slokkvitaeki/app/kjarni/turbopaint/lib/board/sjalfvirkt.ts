@@ -436,7 +436,13 @@ export async function vinnaLinur(
     // Útlínan sem Agnar teiknaði (uttekt.husUtlina) GENGUR ALLTAF FYRIR — vélin reiknar ekki neitt þegar hún er til.
     const handUtlina = lesaHandUtlinu(plan()?.uttekt?.husUtlina);
     const u = husUtlina(allar, dpm, vik.lokunM, vik.husHlutur, handUtlina);
-    const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
+    // Opin útlína (lokaðist ekki, ekki handteiknuð): kassinn skar burt hálft iðnaðarhús — mælt í lota 5 (17.11.2026,
+    // tools/veggja-maeling.ts): hittni 53,7 → 40,6 %, og allt sem fór var raunveggir. Hæðin er þegar skorin að húsinu
+    // (skref b), svo þá er engu hent. Lokuð eða handteiknuð útlína gildir eins og áður.
+    const opin = !u.lokud && !u.handvirk;
+    const burtV = opin ? new Set<number>() : utanHuss(hreinar, u);
+    const burtH = opin ? new Set<number>() : utanHuss(hurdir, u);
+    const burtG = opin ? new Set<number>() : utanHuss(nyttGler, u);
     hreinar = hreinar.filter((_, i) => !burtV.has(i));
     hurdir = hurdir.filter((_, i) => !burtH.has(i));
     lokaNy = [...hreinar, ...nyttGler.filter((_, i) => !burtG.has(i)), ...hurdir];
@@ -450,7 +456,7 @@ export async function vinnaLinur(
         (snunarHurdir.length ? ` · ${snunarHurdir.length} úr snúnum veggjum (staðfestur bogi)` : "") +
         (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
         (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
-        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.handvirk ? " (útlína hússins er handteiknuð)" : u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
+        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.handvirk ? " (útlína hússins er handteiknuð)" : u.lokud ? "" : " (útlínan lokaðist ekki — engu hent, hæðin er skorin að húsinu)"}` +
         (d.talning.hafnad.kross || d.talning.hafnad.skavegg ? ` · hafnað: ${d.talning.hafnad.kross} í krossi` : "")
     );
   } catch (err) {
