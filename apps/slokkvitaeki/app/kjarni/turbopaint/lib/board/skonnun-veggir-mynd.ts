@@ -13,6 +13,7 @@ import {
 import { bakgrunnsTonn, finnaHarlinuPor, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 import { SJALFGEFIN_VIKMORK } from "./veggja-hreinsun";
 import type { VeggTegund } from "./teikning-veggir";
+import { textaLinur } from "./veggja-linur";
 import type { ImageObject } from "./types";
 import { anda } from "./anda";
 
@@ -133,17 +134,27 @@ export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Pro
   return butarIBord(frum, g, plan);
 }
 
-/** Hárlínupör (lota 5, 17.11.2026): skilveggir / glerveggir teiknaðir sem tvær hárfínar línur með ~0,1 m bili — í FULLRI
- * upplausn svæðisins (hárlínan er 1–3 dílar og hverfur við smækkun), upp að 20 MP. Toppurinn er ~4 × W·H bæti (grátónn, gríma,
- * skekkt gríma, umsnúin gríma) = 80 MB á þakinu — helmingur af þaki þunnu veggjanna því þetta keyrir líka í síma. */
-export async function greinaHarlinuPor(plan: ImageObject, dpmBord: number): Promise<{ p: number[]; t: number; tegund?: VeggTegund }[]> {
+/** Svæði hæðarinnar í FULLRI upplausn myndarinnar (lota 5, 17.11.2026) — fyrir hárlínupör og textasíu, sem sjá hvorugt í
+ * vinnuupplausn greiningarinnar (hárlína er 1–3 dílar; stafir renna saman í borða). Upp að 20 MP: toppurinn er ~4 × W·H bæti
+ * (grátónn, gríma, skekkt gríma, umsnúin gríma) = 80 MB á þakinu — helmingur af þaki þunnu veggjanna því þetta keyrir í síma. */
+export interface FullMynd {
+  gra: Uint8Array;
+  W: number;
+  H: number;
+  /** vinnudílar á díl frummyndar */
+  k: number;
+  /** vinnudílar á metra */
+  dpm: number;
+  g: ReturnType<typeof greiningarSvaedi>;
+}
+
+export async function fullMyndSvaedis(plan: ImageObject, dpmBord: number): Promise<FullMynd | null> {
   const blob = getAssetBlob(plan.assetId);
-  if (!blob || !(dpmBord > 0) || !(plan.width > 0)) return [];
+  if (!blob || !(dpmBord > 0) || !(plan.width > 0)) return null;
   const bmp = await createImageBitmap(blob);
   const g0 = greiningarSvaedi(plan, { w: bmp.width, h: bmp.height });
   const dpmFrum = dpmBord * (g0.myndSvaedi.w / plan.width);
-  // full upplausn MYNDARINNAR (ekki frummyndar): uppspretta er svæðið í dílum myndarinnar
-  let k = g0.uppspretta.w / g0.sk.w;
+  let k = g0.uppspretta.w / g0.sk.w; // full upplausn MYNDARINNAR
   const mp = g0.sk.w * g0.sk.h * k * k;
   if (mp > 20e6) k *= Math.sqrt(20e6 / mp);
   const g = { ...g0, kvardi: k, W: Math.max(1, Math.round(g0.sk.w * k)), H: Math.max(1, Math.round(g0.sk.h * k)) };
@@ -154,8 +165,26 @@ export async function greinaHarlinuPor(plan: ImageObject, dpmBord: number): Prom
     bmp.close();
   }
   await andaUI();
-  const hp = finnaHarlinuPor(gra, g.W, g.H, { dpm: dpmFrum * k });
-  return butarIBord(hp.map((v) => [v[0] / k, v[1] / k, v[2] / k, v[3] / k, v[4] / k] as number[]), g, plan);
+  return { gra, W: g.W, H: g.H, k, dpm: dpmFrum * k, g };
+}
+
+/** Hárlínupör (skilveggir / glerveggir teiknaðir sem tvær hárfínar línur með ~0,1 m bili) — borðhnit. */
+export function harlinuPorUrMynd(fm: FullMynd, plan: ImageObject): { p: number[]; t: number; tegund?: VeggTegund }[] {
+  const hp = finnaHarlinuPor(fm.gra, fm.W, fm.H, { dpm: fm.dpm });
+  return butarIBord(hp.map((v) => [v[0] / fm.k, v[1] / fm.k, v[2] / fm.k, v[3] / fm.k, v[4] / fm.k] as number[]), fm.g, plan);
+}
+
+/** Línur myndgreiningarinnar (borðhnit) án þeirra sem eru texti í fullri upplausn (veggja-linur.ts textaLinur). */
+export function fellaTexta<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject): T[] {
+  const kx = plan.width / fm.g.myndSvaedi.w, ky = plan.height / fm.g.myndSvaedi.h;
+  const ox = fm.g.sk.x - fm.g.myndSvaedi.x, oy = fm.g.sk.y - fm.g.myndSvaedi.y;
+  const iMynd = linur.map((l) => ({
+    p: l.p.map((n, i) => (i % 2 ? ((n - plan.y) / ky - oy) * fm.k : ((n - plan.x) / kx - ox) * fm.k)),
+    t: (l.t / kx) * fm.k,
+    tegund: l.tegund,
+  }));
+  const burt = textaLinur(iMynd, fm.gra, fm.W, fm.H, fm.dpm);
+  return linur.filter((_, i) => !burt.has(i));
 }
 
 /** SVIGRÚM Á HALLANUM (Agnar 05.11.2026: „geturðu ekki sett smá buffer á lesinguna, 1% halli leyfður eða álíka").

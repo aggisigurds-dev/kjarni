@@ -22,6 +22,7 @@ import { graTonar, greiningarkvardi, skonnunarVeggir } from "../app/kjarni/turbo
 import { finnaHarlinuPor, finnaThunnaVeggi, type HarlinuStillingar } from "../app/kjarni/turbopaint/lib/board/thunnir-veggir";
 import { f1, hreinsunSkonnunar, maelaVeggi, type MaelLinaInn } from "../app/kjarni/turbopaint/lib/board/veggja-maeling";
 import { lesaVikmork, type HLina } from "../app/kjarni/turbopaint/lib/board/veggja-hreinsun";
+import { rettaHalla, textaLinur, veggKjarni, type Pt } from "../app/kjarni/turbopaint/lib/board/veggja-linur";
 
 type Svaedi = { x: number; y: number; w: number; h: number };
 type Fixture = { id: string; gerd: string; haed: string; cid: number; frum: { b: number; h: number }; svaedi: Svaedi; dpm: number; linur: MaelLinaInn[]; velVorpun?: { s: number; dx: number; dy: number } };
@@ -128,6 +129,48 @@ async function harlinuPor(f: Fixture): Promise<HLina[]> {
   );
 }
 
+/** TILRAUN 7: lína sem er „stök mjó lína" í FULLRI upplausn (málsetning, húsgagnsbrún) fellur. Aðeins veggir (ekki gler). */
+async function fullSia(f: Fixture, L: HLina[]): Promise<HLina[]> {
+  const sk = f.svaedi;
+  let k = 1;
+  if (sk.w * sk.h > 40e6) k = Math.sqrt(40e6 / (sk.w * sk.h));
+  const W = Math.max(1, Math.round(sk.w * k)), H = Math.max(1, Math.round(sk.h * k));
+  const gra = await graSvaedis(f.id, f.frum, sk, W, H);
+  const dpm = f.dpm * k, hamark = 0.35 * dpm, lagmark = Math.max(1.5, 0.05 * dpm);
+  let n = 0;
+  const ut = L.filter((l) => {
+    if (l.tegund && l.tegund !== "veggur") return true;
+    const A0: Pt = [(l.p[0] - sk.x) * k, (l.p[1] - sk.y) * k], B0: Pt = [(l.p[2] - sk.x) * k, (l.p[3] - sk.y) * k];
+    const L0 = Math.hypot(B0[0] - A0[0], B0[1] - A0[1]);
+    if (L0 < 2) return true;
+    const breidd = Math.max(l.t * k, hamark) / 2 + 2;
+    const { snid } = rettaHalla(gra, W, H, A0, B0, breidd, Math.min(12, L0 * 0.12));
+    const kj = veggKjarni(snid, { hamark, lagmark });
+    const burt = !kj || kj.gerd === "stok";
+    if (burt) n++;
+    return !burt;
+  });
+  if (process.env.VEGGJAMAELING_TALNING) console.log("  fullSia felldi", n, "af", L.length);
+  return ut;
+}
+
+/** Textasía (lib/board/veggja-linur.ts textaLinur) í fullri upplausn — skilar vísum línanna sem falla. --ts '{"skiptiM":4}' prófar mörk. */
+async function textaVisar(f: Fixture, L: HLina[]): Promise<Set<number>> {
+  const sk = f.svaedi;
+  let k = 1;
+  if (sk.w * sk.h > 40e6) k = Math.sqrt(40e6 / (sk.w * sk.h));
+  const W = Math.max(1, Math.round(sk.w * k)), H = Math.max(1, Math.round(sk.h * k));
+  const gra = await graSvaedis(f.id, f.frum, sk, W, H);
+  const iMynd = L.map((l) => ({ ...l, p: l.p.map((n, i) => (n - (i % 2 ? sk.y : sk.x)) * k), t: l.t * k }));
+  const burt = textaLinur(iMynd, gra, W, H, f.dpm * k, arg("ts") ? JSON.parse(arg("ts")) : {});
+  if (process.env.VEGGJAMAELING_TALNING) console.log("  textasía felldi", burt.size, "af", L.length);
+  return burt;
+}
+async function textaSia(f: Fixture, L: HLina[]): Promise<HLina[]> {
+  const burt = await textaVisar(f, L);
+  return L.filter((_, i) => !burt.has(i));
+}
+
 function vel(f: Fixture): HLina[] | null {
   const s = path.join(CACHE, f.id + ".vel.json");
   if (!fs.existsSync(s)) return null;
@@ -215,13 +258,16 @@ async function main() {
       // hreinsunin sé prófuð á raungögnum án mynda og nets.
       const r = (L: HLina[]) => L.map((l) => ({ p: l.p.map((n) => Math.round(n * 10) / 10), t: Math.round(l.t * 10) / 10, ...(l.tegund ? { tegund: l.tegund } : {}) }));
       fs.mkdirSync(path.join(FIX, "hrar"), { recursive: true });
-      fs.writeFileSync(path.join(FIX, "hrar", f.id + ".json"), JSON.stringify({ vafri: r(vafriL), thunnir: r(th), harlinur: r(hpL), vel: velL ? r(velL) : null }));
+      fs.writeFileSync(path.join(FIX, "hrar", f.id + ".json"), JSON.stringify({ vafri: r(vafriL), vafriTexti: [...(await textaVisar(f, vafriL))], thunnir: r(th), harlinur: r(hpL), vel: velL ? r(velL) : null }));
     }
     for (const leid of leidir) {
       // leiðir: vafri | vel | th (þunnir einir); viðskeyti -th = án þunnra veggja, +h = hreinsun, +hn = hreinsun án „utan húss"
-      const grunnur = leid.startsWith("vel") ? velL : leid.startsWith("th") ? [] : vafriL;
+      const grunnur0 = leid.startsWith("vel") ? velL : leid.startsWith("th") ? [] : vafriL;
+      const grunnur1 = grunnur0 && leid.includes("+fs") ? await fullSia(f, grunnur0) : grunnur0;
+      const grunnur = grunnur1 && (leid.includes("+ts+") || leid.endsWith("+ts")) ? await textaSia(f, grunnur1) : grunnur1;
       if (!grunnur) continue;
-      const hrar = [...grunnur, ...(leid.includes("-th") ? [] : th), ...(leid.includes("+hp") ? hpL : [])];
+      const hrar0 = [...grunnur, ...(leid.includes("-th") ? [] : th), ...(leid.includes("+hp") ? hpL : [])];
+      const hrar = leid.includes("+tsa") ? await textaSia(f, hrar0) : hrar0;
       const greint = leid.endsWith("+hn") ? hreinsa(hrar, f.dpm, true, f) : leid.endsWith("+h") ? hreinsa(hrar, f.dpm, false, f) : hrar;
       const m = maelaVeggi(f.linur, greint, { dpm: f.dpm, svaedi: f.svaedi });
       const s = (samtals[leid] ??= { hulidR: 0, R: 0, rett: 0, G: 0 });

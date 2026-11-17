@@ -35,7 +35,7 @@ import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
 import { flokkaYfirlit, klemmaGreindaThykkt, erNotanlegtVigurPdf, ptIBord, skurdurIPt, sjalfvirkirPdfVeggirPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
-import { greinaHarlinuPor, greinaThunnaVeggi, greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
+import { fellaTexta, fullMyndSvaedis, greinaThunnaVeggi, greinaVeggiSkonnunar, harlinuPorUrMynd } from "./skonnun-veggir-mynd";
 import { beitaSltBrsl } from "./slt-brsl-bord";
 import { sltBrslUrTexta } from "./slt-brsl-lestur";
 import { TEGUND_HEITI } from "./sjalftenging";
@@ -715,14 +715,23 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         S().setja("veggir", { texti: `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} — greini í vafranum…` });
         // Hárlínupör (lota 5): aðeins á vafraleiðinni — mælt: vafri 65,2/77,2 → 78,4/77,4 (hittni/nákvæmni), en á
         // úttaki Veggjavélarinnar lækkaði nákvæmnin 88,4 → 84,0, svo þau fara ekki þangað.
+        // Textasía (lota 5): herbergjaheiti sem urðu að „fylltum veggjum" í vinnuupplausn falla — sama fullupplausnarmynd.
+        // Mælt: nákvæmni 77,4 → 80,7 %, hittni 78,4 → 78,3 %.
         let harlinur: HLina[] = [];
+        let vafriL = await vafri;
         try {
-          harlinur = klemmaGreindaThykkt(await greinaHarlinuPor(p, dpm), dpm).filter(innan);
-          talning.harlinur = harlinur.length;
+          const fm = await fullMyndSvaedis(p, dpm);
+          if (fm) {
+            harlinur = klemmaGreindaThykkt(harlinuPorUrMynd(fm, p), dpm).filter(innan);
+            const n = vafriL.length;
+            vafriL = fellaTexta(vafriL, fm, p);
+            talning.harlinur = harlinur.length;
+            talning.texti = n - vafriL.length;
+          }
         } catch (err) {
-          console.warn("[sjálfvirkt] hárlínupör", err);
+          console.warn("[sjálfvirkt] hárlínupör / textasía", err);
         }
-        hrar = [...(await vafri), ...thunnir, ...harlinur];
+        hrar = [...vafriL, ...thunnir, ...harlinur];
         leid = "vafri";
         const gl = hrar.filter((v) => v.tegund === "gler").length;
         ljuka("veggir", `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} → myndgreining í vafranum: ${hrar.length - gl} veggir · ${gl} gler${thunnirTexti}`, "lokid");
