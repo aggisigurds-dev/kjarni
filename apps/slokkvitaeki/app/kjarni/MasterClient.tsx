@@ -70,7 +70,7 @@ function StationShell({
  * uppröðun í þemasýninni (thema/StodView), hvert með hlutum síns hönnunarkerfis. Sömu gögn í báðum. */
 function SkinSwitch({ data }: { data: RagnarokData }) {
   const { skin } = useStationSkin();
-  return skin === "ragnarok" ? <RagnarokView {...data} /> : <StodView {...data} />;
+  return skin === "ragnarok" || skin === "fenrir" ? <RagnarokView {...data} /> : <StodView {...data} />;
 }
 
 export default function MasterClient() {

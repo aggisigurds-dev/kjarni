@@ -1,0 +1,109 @@
+/* Fenrir-útlitið á Stjórnstöðinni (Agnar 17.11.2026: „setja fenrir theme á alla kjarna forsíðuna").
+ * Litir, spjöld, flipar og tólaspjöld úr Fenrir-hönnunarkerfinu (tokens.css + components/bundle.css).
+ * StationChrome setur data-kjarni-skin="ragnarok" OG data-fenrir, svo allar Ragnarök-reglurnar gilda áfram
+ * og þessar leggjast ofan á — aðeins innan .rgk[data-fenrir] og html[data-fenrir]; Ragnarök er óbreytt. */
+
+html[data-fenrir] {
+  --fn-primary:#f59e0b; --fn-accent:#fbbf24; --fn-signal:#ff9a3a; --fn-danger:#ef4444;
+  --fn-void:#000000; --fn-surface:#0f1116; --fn-card:#141922; --fn-border:#2a3340;
+  --fn-text-hi:#fff0c0; --fn-text-gold:#e6b04a; --fn-text-lead:#d3ac66; --fn-text:#bf9a5d; --fn-text-dim:#9c7a45;
+  --fn-primary-tint:rgba(245,158,11,.14);
+  --fn-rest:0 0 0 1px #2a3340, 0 8px 24px rgba(0,0,0,.6);
+  --fn-glow-primary:0 0 0 1px rgba(245,158,11,.9), 0 0 14px rgba(245,158,11,.45);
+  --fn-glow-accent:0 0 10px rgba(251,191,36,.6);
+}
+html[data-fenrir] body { background:var(--fn-void); }
+
+/* grunnurinn: hreint svart, engar skannlínur né glóðarblettir */
+.rgk[data-fenrir] { --rg-ground:none; background:var(--fn-void); overflow-x:clip; }
+.rgk[data-fenrir]::after { display:none; }
+.rgk[data-fenrir] :focus-visible { outline-color:var(--fn-primary); }
+
+/* hetjan: Fenrir-landslag undir svörtum halla, út að brúnum skjásins */
+.rgk[data-fenrir] .rgk-hero { position:relative; isolation:isolate; }
+.rgk[data-fenrir] .rgk-hero::before {
+  content:""; position:absolute; z-index:-1; pointer-events:none;
+  top:-28px; bottom:-28px; left:calc(50% - 50vw); right:calc(50% - 50vw);
+  background:
+    linear-gradient(90deg,rgba(0,0,0,.94) 0%,rgba(0,0,0,.74) 45%,rgba(0,0,0,.3) 78%,rgba(0,0,0,.6) 100%),
+    linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,0) 40%,#000 100%),
+    url("/kjarni/fenrir/bg-molten-peaks.webp") center 30%/cover no-repeat;
+}
+.rgk[data-fenrir] .rgk-proto { color:var(--fn-text-gold); font-weight:400; }
+.rgk[data-fenrir] .rgk-proto-tags span { color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rg-h1.rg-gold-text {
+  background:linear-gradient(180deg,var(--fn-text-hi) 0%,var(--fn-accent) 55%,var(--fn-primary) 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 12px rgba(245,158,11,.35));
+}
+.rgk[data-fenrir] .rg-bar.rgk-bar {
+  height:6px; background:repeating-linear-gradient(90deg,var(--fn-accent) 0 4px,var(--fn-primary) 4px 8px);
+  box-shadow:var(--fn-glow-accent);
+}
+.rgk[data-fenrir] .rgk-lead { color:var(--fn-text-lead); }
+.rgk[data-fenrir] .rgk-hud { color:var(--fn-text-dim); }
+
+/* tölureitir undir hetjunni (StatTile) */
+.fnk-stats { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr)); gap:16px; }
+.fnk-stat {
+  display:grid; justify-items:center; gap:4px; padding:16px 12px; text-align:center;
+  background:var(--fn-card); border-radius:12px; box-shadow:var(--fn-rest);
+}
+.fnk-stat.on { box-shadow:var(--fn-glow-primary); }
+.fnk-ico {
+  width:30px; height:30px; margin-bottom:4px; fill:none; stroke:var(--fn-accent); stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 0 10px rgba(251,191,36,.6));
+}
+.fnk-stat b { font:700 30px/1.1 var(--rg-font); color:var(--fn-text-hi); }
+.fnk-stat span { font:500 14px/1.2 var(--rg-font); color:var(--fn-text); }
+
+/* hnappar og flipar (SegmentTabs): stálhalli, hárlína, skáskorin horn; valinn = primary-kantur */
+.rgk[data-fenrir] .rg-btn {
+  padding:0; background:linear-gradient(180deg,var(--fn-card),var(--fn-void)); border:1px solid var(--fn-border);
+  box-shadow:none; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+}
+.rgk[data-fenrir] .rg-btn > span { background:transparent; clip-path:none; color:var(--fn-text); }
+.rgk[data-fenrir] .rg-btn:hover > span { color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rg-btn.on { border-color:var(--fn-primary); background:linear-gradient(180deg,var(--fn-primary-tint),var(--fn-void)); box-shadow:inset 0 -2px 0 var(--fn-primary); }
+.rgk[data-fenrir] .rg-btn.on > span { background:transparent; color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rg-btn.dim > span { color:var(--fn-text); }
+.rgk[data-fenrir] .rg-btn.gold { background:var(--fn-primary-tint); border-color:var(--fn-primary); box-shadow:var(--fn-glow-primary); }
+.rgk[data-fenrir] .rg-btn.gold > span { color:var(--fn-text-hi); font-weight:600; }
+.rgk[data-fenrir] .rg-btn.danger { background:rgba(239,68,68,.16); border-color:var(--fn-danger); }
+.rgk[data-fenrir] a.rg-btn { color:var(--fn-text); }
+
+/* spjöld (Card): stálblátt spjald, ávöl horn, hárlína + djúpur skuggi í stað gullramma og nagla */
+.rgk[data-fenrir] .rg-panel { padding:0; background:var(--fn-card); clip-path:none; border-radius:12px; box-shadow:var(--fn-rest); }
+.rgk[data-fenrir] .rg-panel::before { display:none; }
+.rgk[data-fenrir] .rg-panel > .rg-face { background:transparent; clip-path:none; border-radius:12px; }
+.rgk[data-fenrir] .rg-panel.hot { box-shadow:var(--fn-glow-primary); }
+.rgk[data-fenrir] .rg-h2 { color:var(--fn-text-hi); text-shadow:none; font-size:22px; letter-spacing:.06em; }
+.rgk[data-fenrir] .rgk-sub { color:var(--fn-text); }
+.rgk[data-fenrir] .rg-rule { background:var(--fn-border); }
+.rgk[data-fenrir] .rgk-link { color:var(--fn-signal); }
+
+/* tólaspjöldin (ToolCard): primary-rammi, hallandi stál, neðra hægra horn skáskorið með primary-línu */
+.rgk[data-fenrir] .rgk-sys {
+  border-radius:0; background:linear-gradient(180deg,var(--fn-card),var(--fn-void)); box-shadow:none;
+  border:1px solid var(--fn-primary); clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+}
+.rgk[data-fenrir] .rgk-sys::after {
+  content:""; position:absolute; right:0; bottom:0; width:14px; height:14px; pointer-events:none;
+  background:linear-gradient(to top left,transparent calc(50% - 1px),var(--fn-primary) calc(50% - 1px),var(--fn-primary) calc(50% + .5px),transparent calc(50% + .5px));
+}
+.rgk[data-fenrir] .rgk-sys > .rg-face { background:transparent; border-radius:0; }
+.rgk[data-fenrir] .rgk-sys-top { color:var(--fn-text-gold); font-weight:400; }
+.rgk[data-fenrir] .rgk-sys-name { color:var(--fn-text-hi); text-shadow:none; }
+.rgk[data-fenrir] .rgk-sys-desc { color:var(--fn-text); }
+.rgk[data-fenrir] .rgk-sys-foot { color:var(--fn-text-dim); }
+.rgk[data-fenrir] .rgk-go { color:var(--fn-signal); }
+
+/* ArtCraft/OfficeCraft- og einingaspjöld: lítil Card */
+.rgk[data-fenrir] .rgk-mod { padding:0; background:var(--fn-card); clip-path:none; border-radius:12px; box-shadow:var(--fn-rest); }
+.rgk[data-fenrir] a.rgk-mod:hover { background:var(--fn-card); box-shadow:var(--fn-glow-primary); filter:none; }
+.rgk[data-fenrir] .rgk-mod.wip { background:var(--fn-surface); }
+.rgk[data-fenrir] .rgk-mod-face,
+.rgk[data-fenrir] .rgk-mod.wip .rgk-mod-face { background:transparent; clip-path:none; border-radius:12px; }
+.rgk[data-fenrir] .rgk-mod-top b { color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rgk-mod-kind { color:var(--fn-text-gold); }
+.rgk[data-fenrir] .rgk-mod-desc { color:var(--fn-text); }

@@ -75,9 +75,12 @@ export function RagnarokView(d: RagnarokData) {
   const [sub, setSub] = useState<string>("rg-yfirlit");
   const [filter, setFilter] = useState<Filter>("allt");
   const current = SKINS.find((s) => s.id === skin);
+  /* Fenrir (17.11.2026) = þessi sama Stjórnstöð með Fenrir-hönnunarkerfinu: tölureitir undir hetjunni,
+   * landslag bak við hana og engin emoji (stílar í kjarni-fenrir.css undir .rgk[data-fenrir]). */
+  const fenrir = skin === "fenrir";
 
   return (
-    <div className="rg rgk">
+    <div className="rg rgk" data-fenrir={fenrir ? "" : undefined}>
       <div className="rgk-in">
         {/* einingar-röðin = útlitin; Ragnarök er þetta, hin fara í klassíska útlitið */}
         <div className="rgk-row" role="tablist" aria-label="Útlit">
@@ -116,6 +119,24 @@ export function RagnarokView(d: RagnarokData) {
             <ApocalypseRing label="KJARNI" emblem="/kjarni/apocalypse/kjarni-merki.webp" />
           </div>
         </header>
+
+        {fenrir && (
+          <div className="fnk-stats" role="list" aria-label="Staðan í tölum">
+            {[
+              { l: "Tól", v: String(SYSTEMS.length), on: true, ico: <><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></> },
+              { l: "Vefir", v: String(d.sites.length), on: false, ico: <><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></> },
+              { l: "Einingar", v: `${d.readyCount} / ${d.totalCount}`, on: false, ico: <><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" /><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" /><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" /></> },
+              { l: "Pantanir", v: String(d.ordersCount), on: false, ico: <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></> },
+              { l: "Viðskiptavinir", v: String(d.kKunnar), on: false, ico: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></> },
+            ].map((s) => (
+              <div key={s.l} role="listitem" className={`fnk-stat${s.on ? " on" : ""}`}>
+                <svg className="fnk-ico" viewBox="0 0 24 24" aria-hidden="true">{s.ico}</svg>
+                <b>{s.v}</b>
+                <span>{s.l}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <nav className="rgk-row" aria-label="Kaflar">
           {SECTIONS.map((s) => (
@@ -199,7 +220,7 @@ export function RagnarokView(d: RagnarokData) {
                   <a key={item.id} href={item.href} className="rgk-mod">
                     <span className="rgk-mod-face">
                       <span className="rgk-mod-top">
-                        <b>{item.icon} {item.name}</b>
+                        <b>{fenrir ? null : <>{item.icon} </>}{item.name}</b>
                         <span className="rgk-mod-kind">{item.role}</span>
                       </span>
                       <span className="rgk-mod-desc">{item.desc}</span>
@@ -218,7 +239,7 @@ export function RagnarokView(d: RagnarokData) {
             </Panel>
           ))}
 
-          <div className="rgk-stats">
+          {!fenrir && <div className="rgk-stats">
             {[
               { l: "Vefir & kerfi", v: d.sites.length, of: "" },
               { l: "Einingar tilbúnar", v: d.readyCount, of: `/${d.totalCount}` },
@@ -233,7 +254,7 @@ export function RagnarokView(d: RagnarokData) {
                 </div>
               </Panel>
             ))}
-          </div>
+          </div>}
 
           <div className="rgk-overview">
             <div className="rgk-col">

@@ -1,4 +1,6 @@
 export const SKINS = [
+  /* 17.11.2026 (Agnar): Fenrir-hönnunarkerfið — sama Stjórnstöð og Ragnarök (RagnarokView) með Fenrir-litum, -spjöldum og -hetju (ragnarok/kjarni-fenrir.css) */
+  { id: "fenrir", label: "Fenrir", hint: "Raf á svörtu · rúnir · stál" },
   { id: "ragnarok", label: "Ragnarök", hint: "Bráðið gull · svart stál" },
   /* 15.10.2026 (Agnar): þemun úr hönnunarkerfum fyrirtækjanna í stað Command/Atlas/Pulse/Helix/Vector/Don — skins.css */
   { id: "midakerfi", label: "Miðakerfi", hint: "Miðar á stálplötu · málmhaus" },

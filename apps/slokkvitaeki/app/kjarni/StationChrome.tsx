@@ -8,6 +8,7 @@ import { rgFont, rgMono } from "./ragnarok/fonts";
 import { playfair, plexMono, plexSans, poppins } from "./skin-fonts";
 import "./ragnarok/ragnarok.css";
 import "./ragnarok/kjarni-ragnarok.css";
+import "./ragnarok/kjarni-fenrir.css";
 import "./artcraft/artcraft.css";
 import "./skins.css";
 
@@ -38,16 +39,19 @@ export function StationChrome({
   useEffect(() => {
     if (!ready) return;
     window.localStorage.setItem(SKIN_KEY, skin);
-    document.documentElement.dataset.kjarniSkin = skin;
+    /* Fenrir byggir á Ragnarök: síðan fær ragnarok-reglurnar + data-fenrir ofan á (kjarni-fenrir.css) */
+    document.documentElement.dataset.kjarniSkin = skin === "fenrir" ? "ragnarok" : skin;
+    document.documentElement.toggleAttribute("data-fenrir", skin === "fenrir");
     return () => {
       delete document.documentElement.dataset.kjarniSkin;
+      document.documentElement.removeAttribute("data-fenrir");
     };
   }, [skin, ready]);
 
   return (
     <SkinCtx.Provider value={{ skin, setSkin }}>
       <DesktopView enabled={tool !== "turbopaint" && tool !== "artcraft" && tool !== "officecraft" && tool !== "bord" && tool !== "kjarni" && tool !== "borgarferdir"}>
-        <div className={`stn ${rgFont.variable} ${rgMono.variable} ${plexSans.variable} ${plexMono.variable} ${playfair.variable} ${poppins.variable}`} data-skin={skin} data-tool={tool}>
+        <div className={`stn ${rgFont.variable} ${rgMono.variable} ${plexSans.variable} ${plexMono.variable} ${playfair.variable} ${poppins.variable}`} data-skin={skin === "fenrir" ? "ragnarok" : skin} data-tool={tool}>
           <header className="stn-bar">
             <a className="stn-home" href="/kjarni">
               <span className="stn-mark" aria-hidden="true"><i /><i /></span>
@@ -67,7 +71,7 @@ export function StationChrome({
                 </a>
               ))}
             </nav>
-            {skin === "ragnarok" && <Klukka />}
+            {(skin === "ragnarok" || skin === "fenrir") && <Klukka />}
             <div className="stn-skins" role="tablist" aria-label="Þema og útlit">
               {SKINS.map((option) => (
                 <button
