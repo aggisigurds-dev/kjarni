@@ -458,3 +458,175 @@ export function textaLinur(linur: { p: number[]; t: number; tegund?: string }[],
   });
   return ut;
 }
+
+export interface MalsetningStillingar {
+  /** Hálf breidd leitarbeltisins utan línunnar sjálfrar (m). Sjálfgefið 0,3. */
+  bandM?: number;
+  /** Auka raðir utan beltisins (m) sem lesnar eru með (þverlínupróf við ystu línur beltisins). Sjálfgefið 0,1. */
+  hringM?: number;
+  /** Raðir (samsíða línunni) með meira bleki en þetta hlutfall eru línur — andlit, hárlínur, samsíða keðjur. Sjálfgefið 0,5. */
+  linuHlutfall?: number;
+  /** Bil (m) innan sama merkis (tölustafir í sömu tölu). Sjálfgefið 0,05. */
+  bilM?: number;
+  /** Lengsta merki (m) eftir línunni. Sjálfgefið 0,9. */
+  merkiHamarkM?: number;
+  /** Lengsta lína sem er prófuð (m) — útveggur er aldrei málsetning. Sjálfgefið 25. */
+  hamarkM?: number;
+  /** Stysta lína sem er prófuð (m). Sjálfgefið 1,5. */
+  lagmarkM?: number;
+  /** Merki ≥ fylltLagmarkM (m) með röð fyllta ≥ fylltHlutfall eftir sér — og AUÐA röð milli hennar og línunnar — er gluggi /
+   * samsíða strik, ekki tala (feitletruð tala er samfelld frá línunni út að brún). */
+  fylltHlutfall?: number;
+  fylltLagmarkM?: number;
+  /** Fæstar tölur á línunni. Sjálfgefið 3. */
+  minTolur?: number;
+  /** …eða þetta margar tölur ásamt minStrik strikum (×, /). Sjálfgefið 2 + 2. */
+  minTolurMedStrikum?: number;
+  minStrik?: number;
+  /** Fleiri tölur á metra en þetta = reglulegir póstar (glerhlið), ekki málsetning — á línum ≥ thakLagmarkM. */
+  tolurAMetraHamark?: number;
+  thakLagmarkM?: number;
+  /** Samlína bútur (≤ samlinaM þvert, ≤ samlinaBilM eftir ás) við málsetningu fellur líka. 0 = slökkt. Sjálfgefið 0,05 / 10. */
+  samlinaM?: number;
+  samlinaBilM?: number;
+  /** Tala þar sem línuröðin er heil undir (≥ hlutfallið) getur verið merking á vegg („EI 60") — telst ekki í fræ samlínunnar. */
+  heilLinaHlutfall?: number;
+  blek?: number;
+  /** Greiningarskýrsla hverrar línu (tilraunir / mæling). */
+  skyrsla?: (i: number, s: { metrar: number; tolur: number; strik: number; tolurRof: number }) => void;
+}
+
+const radSumma = (D: Uint8Array, r: number, N: number) => {
+  let s = 0;
+  for (let q = 0; q < N; q++) s += D[r * N + q];
+  return s;
+};
+
+/** MÁLSETNINGAR (Powerplan lota 5 umferð 3, 17.11.2026 — mælt í appinu á R3 og á 4 raunhæðum): málsetningarkeðjur eru mjóar
+ * línur með TÖLUM inni í línunni („—538—") og STRIKUM (× /) á ásum; hárlínupörin og myndgreiningin taka þær sem veggi
+ * (R3 í appinu: ~120 m af 339 m röngum). Prófið: belti ±(t/2 + bandM) um línuna; við hverja samfellda röð (línu) í beltinu
+ * er leitað að þéttu bleki sem situr ÞVERT á röðinni — bæði ofan og neðan innan ±0,15 m, ekkert lengra út — og fyllir enga
+ * sjálfstæða röð (gluggi). 0,12–0,9 m langt = tala, styttra = strik. Lína með ≥ minTolur tölum, eða minTolurMedStrikum +
+ * minStrik, er málsetning — nema tölurnar séu of þéttar (póstar í glerhlið, R1). Bútar samlína henni falla líka (sama keðja).
+ * Vísar línanna; aðeins tegund veggur. Hafnað (sjá docs/veggjamaeling-2026-11-17.md): raðapar, brúarpróf, hallaleit. */
+export function malsetningaLinur(linur: { p: number[]; t: number; tegund?: string }[], gra: Uint8Array, W: number, H: number, dpm: number, o: MalsetningStillingar = {}): Set<number> {
+  const blek = o.blek ?? BLEK, linuH = o.linuHlutfall ?? 0.5, heilH = o.heilLinaHlutfall ?? 0.96;
+  const minTolur = o.minTolur ?? 3, minTolurS = o.minTolurMedStrikum ?? 2, minStrik = o.minStrik ?? 2;
+  const tolurHamark = o.tolurAMetraHamark ?? 0.7, thakLagmark = o.thakLagmarkM ?? 5;
+  const R = Math.max(3, Math.round((o.bandM ?? 0.3) * dpm)), hringur = Math.max(2, Math.round((o.hringM ?? 0.1) * dpm));
+  const hamarkL = (o.hamarkM ?? 25) * dpm, lagmark = (o.lagmarkM ?? 1.5) * dpm;
+  const bil = Math.max(1, Math.round((o.bilM ?? 0.05) * dpm)), merkiHam = (o.merkiHamarkM ?? 0.9) * dpm;
+  const fylltH = o.fylltHlutfall ?? 0.8, fylltLagmark = Math.max(3, (o.fylltLagmarkM ?? 0.15) * dpm);
+  const T = Math.max(3, Math.round(0.15 * dpm)), tMin = Math.round(0.12 * dpm);
+  const ut = new Set<number>(), fra = new Set<number>();
+  linur.forEach((l, i) => {
+    if (l.tegund && l.tegund !== "veggur") return;
+    const ax = l.p[0], ay = l.p[1], bx = l.p[l.p.length - 2], by = l.p[l.p.length - 1];
+    const Lp = Math.hypot(bx - ax, by - ay);
+    if (Lp < lagmark || Lp > hamarkL) return;
+    const ux = (bx - ax) / Lp, uy = (by - ay) / Lp, nx = -uy, ny = ux;
+    const hb = Math.ceil(l.t / 2) + R, hy = hb + hringur, N = Math.floor(Lp) + 1, rH = 2 * hy + 1;
+    const D = new Uint8Array(rH * N);
+    for (let h = -hy; h <= hy; h++)
+      for (let q = 0; q < N; q++) {
+        const x = Math.round(ax + ux * q + nx * h), y = Math.round(ay + uy * q + ny * h);
+        if (x >= 0 && y >= 0 && x < W && y < H && gra[y * W + x] < blek) D[(h + hy) * N + q] = 1;
+      }
+    // samfelldar raðir (línur); þær og nágrannar þeirra (mýking) eru ekki merki
+    const rs = new Float64Array(rH), linuRod = new Uint8Array(rH), lina = new Uint8Array(rH);
+    for (let r = 0; r < rH; r++) {
+      rs[r] = radSumma(D, r, N);
+      linuRod[r] = rs[r] > linuH * N ? 1 : 0;
+    }
+    for (let r = 0; r < rH; r++) if (linuRod[r]) for (let k = Math.max(0, r - 1); k <= Math.min(rH - 1, r + 1); k++) lina[k] = 1;
+    let tolur = 0, strik = 0, tolurRof = 0;
+    for (let r = 0; r < rH; r++) {
+      // ein röð per línu: sú dekksta
+      if (!linuRod[r] || (r > 0 && linuRod[r - 1] && rs[r - 1] >= rs[r]) || (r + 1 < rH && linuRod[r + 1] && rs[r + 1] > rs[r])) continue;
+      const ofan = new Uint16Array(N), nedan = new Uint16Array(N), utan = new Uint8Array(N);
+      for (let h = 2; h <= T + 3; h++)
+        for (const sg of [-1, 1]) {
+          const rr = r + sg * h;
+          if (rr < 0 || rr >= rH || lina[rr]) continue;
+          for (let q = 0; q < N; q++) {
+            if (!D[rr * N + q]) continue;
+            if (h > T) utan[q] = 1;
+            else if (sg < 0) ofan[q]++;
+            else nedan[q]++;
+          }
+        }
+      let a = -1, z = -1, sO = 0, sN = 0, uti = false;
+      const loka = () => {
+        if (a < 0) return;
+        const n = z - a + 1;
+        let fyllt = false;
+        for (let h = -T; h <= T && !fyllt; h++) {
+          const rr = r + h;
+          if (h === 0 || rr < 0 || rr >= rH || lina[rr]) continue;
+          let s = 0;
+          for (let q = a; q <= z; q++) s += D[rr * N + q];
+          if (n < fylltLagmark || s < fylltH * n) continue;
+          // fyllt röð er sjálfstætt strik (gluggi) aðeins ef auð röð skilur hana frá línunni
+          for (let k = Math.sign(h); Math.abs(k) < Math.abs(h); k += Math.sign(h)) {
+            const rk = r + k;
+            if (lina[rk]) continue;
+            let sk = 0;
+            for (let q = a; q <= z; q++) sk += D[rk * N + q];
+            if (sk < 0.1 * n) fyllt = true;
+          }
+        }
+        if (!uti && !fyllt && sO >= 2 && sN >= 2 && n <= merkiHam) {
+          if (n >= tMin) {
+            tolur++;
+            // línuröðin undir tölunni rofin (málsetning) — heil getur verið merking skrifuð á vegg („EI 60")
+            let undir = 0;
+            for (let q = a; q <= z; q++) if (D[r * N + q] || (r > 0 && D[(r - 1) * N + q]) || (r + 1 < rH && D[(r + 1) * N + q])) undir++;
+            if (undir / n <= heilH) tolurRof++;
+          } else strik++;
+        }
+        a = -1;
+        sO = sN = 0;
+        uti = false;
+      };
+      for (let q = 0; q < N; q++) {
+        if (!ofan[q] && !nedan[q]) continue;
+        if (a >= 0 && q - z > bil) loka();
+        if (a < 0) a = q;
+        z = q;
+        sO += ofan[q];
+        sN += nedan[q];
+        if (utan[q] || (q > 0 && utan[q - 1]) || (q + 1 < N && utan[q + 1])) uti = true;
+      }
+      loka();
+    }
+    const metrar = Lp / dpm;
+    o.skyrsla?.(i, { metrar, tolur, strik, tolurRof });
+    const regla = (t: number) => (t >= minTolur || (t >= minTolurS && strik >= minStrik)) && (t / metrar <= tolurHamark || metrar < thakLagmark);
+    if (regla(tolur)) ut.add(i);
+    if (regla(tolurRof)) fra.add(i);
+  });
+  // SAMA KEÐJA: bútur milli talna (0–1 tala) er samsíða og SAMLÍNA fallinni málsetningu (≤ samlinaM þvert, ≤ samlinaBilM
+  // eftir ásnum) — hann er sama keðjan. Veggur liggur nær aldrei upp á sentimetra í ás málsetningar.
+  const tolM = (o.samlinaM ?? 0.05) * dpm, bilM = (o.samlinaBilM ?? 10) * dpm;
+  if (tolM > 0 && fra.size) {
+    // fræ: aðeins línur sem eru málsetning líka þegar tölur á HEILLI línu (merking á vegg, „EI 60") teljast ekki
+    const fallnar = [...fra].map((i) => linur[i]);
+    linur.forEach((l, j) => {
+      if (ut.has(j) || (l.tegund && l.tegund !== "veggur")) return;
+      const a = [l.p[0], l.p[1]], b = [l.p[l.p.length - 2], l.p[l.p.length - 1]];
+      for (const f of fallnar) {
+        const fa = [f.p[0], f.p[1]], fb = [f.p[f.p.length - 2], f.p[f.p.length - 1]];
+        const L = Math.hypot(fb[0] - fa[0], fb[1] - fa[1]) || 1, ux = (fb[0] - fa[0]) / L, uy = (fb[1] - fa[1]) / L;
+        const thv = (p: number[]) => Math.abs((p[0] - fa[0]) * -uy + (p[1] - fa[1]) * ux);
+        if (thv(a) > tolM || thv(b) > tolM) continue;
+        const sa = (a[0] - fa[0]) * ux + (a[1] - fa[1]) * uy, sb = (b[0] - fa[0]) * ux + (b[1] - fa[1]) * uy;
+        const bilA = Math.max(0, Math.min(sa, sb) - L, -Math.max(sa, sb));
+        if (bilA <= bilM) {
+          ut.add(j);
+          break;
+        }
+      }
+    });
+  }
+  return ut;
+}

@@ -14,7 +14,7 @@
 // Hreinar föll — engin DOM, ekkert net. Prófað í veggja-maeling.test.ts; á raunteikningum: tools/veggja-maeling.ts.
 
 import { finnaHurdir } from "./hurdagreining";
-import { hreinsaVeggi, husUtlina, SJALFGEFIN_VIKMORK, utanHuss, type HLina, type HreinsunNidurstada, type Vikmork } from "./veggja-hreinsun";
+import { hreinsaVeggi, husUtlina, SJALFGEFIN_VIKMORK, skeraUtstaedaEnda, utanHuss, type HLina, type HreinsunNidurstada, type Vikmork } from "./veggja-hreinsun";
 
 export type MaelLinaInn = { p: ReadonlyArray<number>; t?: number; tegund?: string };
 
@@ -177,8 +177,10 @@ export function hreinsunSkonnunar(
   const u = husUtlina([...hreinar, ...d.hurdir, ...d.gler], dpm, vik.lokunM, vik.husHlutur, null);
   // opin útlína → engu hent (eins og sjalfvirkt.ts síðan lota 5)
   if (!u.lokud) return { linur: [...hreinar, ...d.gler], fjarlaegdar: h.fjarlaegdar, talning: h.talning };
-  const bV = utanHuss(hreinar, u), bG = utanHuss(d.gler, u);
-  return { linur: [...hreinar.filter((_, i) => !bV.has(i)), ...d.gler.filter((_, i) => !bG.has(i))], fjarlaegdar: h.fjarlaegdar, talning: h.talning };
+  const uD = (vik.utstaedM ?? 0) * dpm;
+  const bV = utanHuss(hreinar, u, uD), bG = utanHuss(d.gler, u);
+  const skornar = vik.utstaedirEndar ? skeraUtstaedaEnda(hreinar, u, uD, Math.max(2, 0.25 * dpm), 0.5 * dpm).linur : hreinar;
+  return { linur: [...skornar.filter((_, i) => !bV.has(i)), ...d.gler.filter((_, i) => !bG.has(i))], fjarlaegdar: h.fjarlaegdar, talning: h.talning };
 }
 
 /** F1 (samræmt meðaltal) — ein tala til að raða tilraunum; ákvörðun tekur samt mið af hvorri fyrir sig. */

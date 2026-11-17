@@ -2,7 +2,7 @@
 // bekkjum, og „koma leiðinlega þykkir út"). Tilbúin mynd í kvarða Berjavalla (≈ 33 dílar á metra, 1:100 á A1).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fellaSmaklasa, linuSnid, mynsturGrima, siaVeggi, smellaALinu, textaLinur, veggKjarni, VEGGUR_HAMARK_CM } from "./veggja-linur";
+import { fellaSmaklasa, linuSnid, malsetningaLinur, mynsturGrima, siaVeggi, smellaALinu, textaLinur, veggKjarni, VEGGUR_HAMARK_CM } from "./veggja-linur";
 import { skiptaTillogum, tillagaVid, tillogurIKassa } from "./veggja-tillogur";
 
 const DPM = 33.3;
@@ -184,4 +184,34 @@ test("textaLinur (lota 5): lína í gegnum stafi fellur; fylltur og holur veggur
     { p: [40, 37, 166, 37], t: 14, tegund: "gler" },
   ];
   assert.deepEqual([...textaLinur(linur, gra, W, H, dpm)], [0]);
+});
+
+test("malsetningaLinur (lota 5, umferð 3): keðja með tölum í línunni fellur — og samlína bútur hennar; veggir og glerhlið með póstum standa", () => {
+  const dpm = 60, W = 1420, H = 300, gra = new Uint8Array(W * H).fill(250);
+  const kassi = (x0: number, y0: number, x1: number, y1: number) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) gra[y * W + x] = 20; };
+  // málsetningarkeðja (y = 50): lína rofin undir fjórum tölum („—538—"), þrír 5 × 12 díla stafir, × á ásunum
+  const tolur = [200, 520, 840, 1160], asar = [40, 360, 680, 1000, 1280];
+  for (let x = 20; x < 1300; x++) if (!tolur.some((c) => Math.abs(x - c) <= 12)) { gra[50 * W + x] = 20; gra[51 * W + x] = 20; }
+  for (const c of tolur) for (let k = 0; k < 3; k++) { const x0 = c - 9 + k * 7; kassi(x0, 44, x0 + 5, 46); kassi(x0, 56, x0 + 5, 58); kassi(x0, 44, x0 + 2, 58); kassi(x0 + 3, 44, x0 + 5, 58); }
+  for (const c of asar) for (let d = -4; d <= 4; d++) { gra[(50 + d) * W + c + d] = 20; gra[(50 + d) * W + c - d] = 20; }
+  kassi(1320, 50, 1395, 52); // stuttur bútur sömu keðju (engar tölur)
+  // glerhlið (y = 150–160) með póstum á 1 m fresti — tölur „á metra" yfir þakinu
+  kassi(20, 150, 1300, 152); kassi(20, 159, 1300, 161);
+  for (let x = 30; x < 1300; x += 60) kassi(x, 146, x + 8, 165);
+  kassi(20, 230, 1300, 233); // hreinn veggur
+  const linur = [
+    { p: [20, 50.5, 1300, 50.5], t: 3 },
+    { p: [20, 155, 1300, 155], t: 14 },
+    { p: [20, 231, 1300, 231], t: 3 },
+    { p: [1320, 51, 1395, 51], t: 3 },
+  ];
+  const burt = malsetningaLinur(linur, gra, W, H, dpm);
+  assert.ok(burt.has(0), "keðjan með tölum fellur");
+  assert.ok(burt.has(3), "samlína bútur keðjunnar fellur líka");
+  assert.ok(!burt.has(1), "glerhlið með póstum stendur");
+  assert.ok(!burt.has(2), "hreinn veggur stendur");
+  // línan heldur áfram undir tölunum (merking skrifuð á vegg) → engin útbreiðsla til samlína búta
+  for (let x = 20; x < 1300; x++) { gra[50 * W + x] = 20; gra[51 * W + x] = 20; }
+  const heil = malsetningaLinur(linur, gra, W, H, dpm);
+  assert.ok(!heil.has(3), "samlína dreifist ekki frá heilli línu (merking á vegg)");
 });
