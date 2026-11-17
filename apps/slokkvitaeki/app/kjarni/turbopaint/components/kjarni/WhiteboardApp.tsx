@@ -1249,7 +1249,7 @@ export function WhiteboardApp() {
                 nafn: sk.nafn,
                 b: sk.frum.b,
                 h: sk.frum.h,
-                lykill: skonnunarLykill(trimmed, quality, opts?.fokus, sk.frum),
+                lykill: skonnunarLykill(trimmed, quality, opts?.fokus, sk.frum, sk.skerpt ? undefined : "anskerpu"),
               },
             });
             merkjaHeimild(komnar);

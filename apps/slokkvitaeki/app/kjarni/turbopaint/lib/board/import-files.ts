@@ -3,7 +3,8 @@ import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from "pdfjs-dist"
 import * as UTIF from "utif";
 import { canvasToBlob, fitSize, putAsset } from "./assets";
 import { eignarIdUrLykli, frumEignarId, hashSkrar, skjamyndarLykill } from "./eignalykill";
-import { boostSheetCanvas } from "./sheet-contrast";
+import { lesaBirtuskerpu } from "./birtuskerpa";
+import { skerpaEftirStillingu } from "./sheet-contrast";
 import type { OcrWord } from "./firewall-rating";
 import { newId } from "./ids";
 import { fileSizeWarning, planPdfRaster, PDF_SAFE_AREA } from "./import-limits";
@@ -28,12 +29,14 @@ export type ImportResult = {
 type ProgressFn = (percent: number, message: string) => void;
 
 /** Auðkenni skjámyndar síðu `sida` (0-grunnur): fast (eignalykill.ts) ef hash frumskrárinnar náðist, annars slembi. */
-type IdFyrir = (sida: number) => Promise<string>;
+/** `afbrigdi`: „anskerpu" þegar birtuskerpu var sleppt — önnur mynd en áður, því annað auðkenni (eignalykill.ts). */
+type IdFyrir = (sida: number, afbrigdi?: string) => Promise<string>;
 const slembiId: IdFyrir = async () => newId();
+const ANSKERPU = "anskerpu";
 
 function idFyrirSkra(skraHash: string | null, gaedi: ImportQuality): IdFyrir {
   if (!skraHash) return slembiId;
-  return async (sida) => (await eignarIdUrLykli(skjamyndarLykill(skraHash, gaedi, sida))) ?? newId();
+  return async (sida, afbrigdi) => (await eignarIdUrLykli(skjamyndarLykill(skraHash, gaedi, sida, afbrigdi))) ?? newId();
 }
 
 const yieldUi = anda;
@@ -130,7 +133,7 @@ async function importPdf(
     const page = await pdf.getPage(i);
     const base = page.getViewport({ scale: 1 });
     const target = fitSize(base.width, base.height, maxPx);
-    const { canvas, warnings: rasterWarnings } = await rasterizePdfPage(
+    const { canvas, warnings: rasterWarnings, skerpt } = await rasterizePdfPage(
       page,
       base.width,
       base.height,
@@ -140,7 +143,7 @@ async function importPdf(
     const worldViewport = page.getViewport({ scale: target.scale });
     const words = await extractPdfWords(page, worldViewport);
     const blob = file.size > SCAN_PDF_BYTES ? await scanBlob(canvas) : await canvasToBlob(canvas);
-    const assetId = await idFyrir(i - 1);
+    const assetId = await idFyrir(i - 1, skerpt ? undefined : ANSKERPU);
     await putAsset(assetId, blob);
     const name =
       pdf.numPages > 1 ? `${file.name} · síða ${i}` : file.name.replace(/\.[^.]+$/, "");
@@ -196,8 +199,10 @@ async function rasterizePdfPage(
       // skjáramma — í földum flipa koma engir og innflutningurinn stöðvast (Dalshraun 1, 11.10.2026: biðröð
       // „Veggjavél · N" stóð í 25 mín á „PDF tilbúið" þar til flipinn var sýndur).
       await page.render({ canvasContext: ctx, viewport, canvas, intent: "print" }).promise;
-      boostSheetCanvas(canvas);
-      return { canvas, warnings: [...new Set(warnings)] };
+      // Birtuskerpa eftir stillingunni — sjálfgefið aðeins á teikningar; litrík PDF heldur litunum (17.11.2026).
+      const sk = skerpaEftirStillingu(canvas, lesaBirtuskerpu());
+      if (sk.ath) warnings.push(sk.ath);
+      return { canvas, warnings: [...new Set(warnings)], skerpt: sk.skerpt };
     } catch (err) {
       lastErr = err;
       warnings.push(
@@ -300,9 +305,10 @@ async function importTiff(
       const sctx = canvas.getContext("2d");
       if (!sctx) throw new Error("Gat ekki opnað canvas");
       sctx.putImageData(imageData, 0, 0);
-      boostSheetCanvas(canvas);
+      const sk = skerpaEftirStillingu(canvas, lesaBirtuskerpu());
+      if (sk.ath) warnings.push(sk.ath);
       const blob = await scanBlob(canvas);
-      const assetId = await idFyrir(ifds.indexOf(ifd));
+      const assetId = await idFyrir(ifds.indexOf(ifd), sk.skerpt ? undefined : ANSKERPU);
       await putAsset(assetId, blob);
       const name =
         pages.length > 1 ? `${file.name} · síða ${i + 1}` : file.name.replace(/\.[^.]+$/, "");
@@ -341,9 +347,10 @@ async function importRaster(
       img.naturalHeight,
       IMPORT_MAX_PX[quality]
     );
-    boostSheetCanvas(canvas);
+    // Litmynd (gegnsæi, dökkir fletir, sterkir litir) heldur litunum; teikning fær birtuskerpu eins og áður (stilling í ⋯).
+    const sk = skerpaEftirStillingu(canvas, lesaBirtuskerpu());
     const blob = await canvasToBlob(canvas);
-    const assetId = await idFyrir(0);
+    const assetId = await idFyrir(0, sk.skerpt ? undefined : ANSKERPU);
     await putAsset(assetId, blob);
     onProgress(100, "Mynd tilbúin");
     return {
@@ -357,7 +364,7 @@ async function importRaster(
           origin.y
         ),
       ],
-      warnings: [],
+      warnings: sk.ath ? [sk.ath] : [],
       textByObjectId: {},
     };
   } finally {

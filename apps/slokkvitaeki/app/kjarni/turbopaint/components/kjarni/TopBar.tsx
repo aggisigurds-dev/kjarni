@@ -47,6 +47,7 @@ import {
   type BoardListEntry,
 } from "../../lib/board/persistence";
 import { skodunBreytt, useSkodun } from "../../lib/board/skodun";
+import { BIRTUSKERPA_KOSTIR, setjaBirtuskerpu, useBirtuskerpa } from "../../lib/board/birtuskerpa";
 import { useBoardStore } from "../../lib/board/store";
 import { Button } from "../ui/button";
 import { HeimilisfangLeit } from "./HeimilisfangLeit";
@@ -124,6 +125,7 @@ export function TopBar({
   const grid = useBoardStore((s) => s.grid);
   const snap = useBoardStore((s) => s.snap);
   const quality = useBoardStore((s) => s.importQuality);
+  const birtuskerpa = useBirtuskerpa((s) => s.ham);
   const syncState = useBoardStore((s) => s.syncState);
   const skodun = useSkodun((s) => s.virk);
   const skodunUttekt = useSkodun((s) => s.uttekt);
@@ -559,6 +561,34 @@ export function TopBar({
             <DropdownMenuItem key={id} onClick={() => useBoardStore.getState().setImportQuality(id)}>
               {quality === id ? "● " : "○ "}
               {texti}
+            </DropdownMenuItem>
+          ))}
+          {/* Birtuskerpa (Agnar 17.11.2026: „hafa samt kannski hak, einhvers staðar í settings — það sem maður þarf sjaldan að
+              nota"). Sjálfvirkt = teikningar skerptar, litmyndir halda litunum. Eins á öllum vélum (lib/board/birtuskerpa.ts). */}
+          <div
+            className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-stone-500 uppercase"
+            title="Innfluttar teikningar fá birtuskerpu svo daufar línur sjáist — litmyndir halda litunum. Gildir um næsta innflutning, ekki myndir sem eru þegar á borðinu."
+          >
+            Birtuskerpa á innfluttar myndir
+          </div>
+          {BIRTUSKERPA_KOSTIR.map((k) => (
+            <DropdownMenuItem
+              key={k.id}
+              data-birtuskerpa={k.id}
+              title={k.skyring}
+              className="flex-col items-start gap-0"
+              onClick={() =>
+                void setjaBirtuskerpu(k.id).then((villa) => {
+                  if (villa) toast.error(`Birtuskerpa: ${villa}`);
+                  else toast.success(`Birtuskerpa: ${k.heiti} — gildir um næstu teikningu sem kemur inn`);
+                })
+              }
+            >
+              <span>
+                {birtuskerpa === k.id ? "● " : "○ "}
+                {k.heiti}
+              </span>
+              <span className="pl-3.5 text-[11px] leading-tight text-stone-400">{k.skyring}</span>
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />

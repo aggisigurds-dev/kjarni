@@ -14,6 +14,7 @@
 
 import { canvasToBlob } from "./assets";
 import { PDF_SAFE_AREA } from "./import-limits";
+import { lesaBirtuskerpu } from "./birtuskerpa";
 import { boostSheetCanvas, SHEET_CONTRAST_FILTER } from "./sheet-contrast";
 import { fylgni, midgildi, rammaStaerd, snuningsKostir, type SnuningsKostur } from "./skonnun-kjarni";
 import { SLOKKVITAEKI_ROT } from "./teikn-thjonusta";
@@ -51,6 +52,8 @@ export interface SkarpSkonnun {
   frum: { b: number; h: number };
   /** Dílar borðmyndarinnar. */
   upplausn: { w: number; h: number };
+  /** Fékk myndin birtuskerpu? (false = stillingin Aldrei — annað auðkenni eignar, sjá eignalykill.ts) */
+  skerpt: boolean;
   tif: {
     W: number;
     H: number;
@@ -355,8 +358,10 @@ export async function saekjaSkarpaSkonnun(
     );
     const stofn = rammaStaerd(b.dW, frum, IMPORT_MAX_PX[quality], PDF_SAFE_AREA);
     fv(65, `Teikna skarpa mynd ${stofn.w}×${stofn.h}…`);
+    // Skannanir skjalasafnsins eru teikningar: skerpa nema slökkt sé á henni í stillingunum (⋯ → Birtuskerpa → Aldrei).
+    const skerpa = lesaBirtuskerpu() !== "aldrei";
     const t = await verk.senda(
-      { cmd: "teikna", o: b.o, w: stofn.w, h: stofn.h, frum, vorpun: { kpx: b.kp, kpy: b.kp, fx: hl.fx, fy: hl.fy }, sia: SHEET_CONTRAST_FILTER },
+      { cmd: "teikna", o: b.o, w: stofn.w, h: stofn.h, frum, vorpun: { kpx: b.kp, kpy: b.kp, fx: hl.fx, fy: hl.fy }, sia: skerpa ? SHEET_CONTRAST_FILTER : undefined },
       [],
       (h) => fv(65 + Math.round(h * 25), `Teikna skarpa mynd ${stofn.w}×${stofn.h}…`)
     );
@@ -374,7 +379,7 @@ export async function saekjaSkarpaSkonnun(
       const cx = c.getContext("2d");
       if (!cx) return vara("Gat ekki opnað canvas — JPEG notað");
       cx.putImageData(new ImageData(new Uint8ClampedArray(t.px as ArrayBuffer), stofn.w, stofn.h), 0, 0);
-      boostSheetCanvas(c);
+      if (skerpa) boostSheetCanvas(c);
       blob = await canvasToBlob(c, "image/jpeg", 0.9);
       c.width = 0;
       c.height = 0;
@@ -385,6 +390,7 @@ export async function saekjaSkarpaSkonnun(
       nafn: grunnnafn,
       frum,
       upplausn: stofn,
+      skerpt: skerpa,
       tif: { W, H, merki, o: b.o, fylgni: +b.r.toFixed(3), kp: b.kp, fx: hl.fx, fy: hl.fy, reitir: hl.reitir },
     };
   } catch (e) {
