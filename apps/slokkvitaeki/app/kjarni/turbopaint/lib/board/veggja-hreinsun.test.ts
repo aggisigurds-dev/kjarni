@@ -37,12 +37,14 @@ import {
   husKassi,
   HAND_SPASSIA_M,
   husUtlina,
+  kassaButar,
   lesaHandUtlinu,
   lesaVikmork,
   punktIFjolhyrningi,
   retta,
   sameinaSamlinur,
   SJALFGEFIN_VIKMORK,
+  skeraUtstaedaEnda,
   stakirButar,
   strikPunktLinur,
   utanHuss,
@@ -460,4 +462,43 @@ test("handteiknuð útlína: 2. hæðar-tilfellið — útlína vélarinnar loka
   assert.ok(hand.lokud && hand.handvirk, "handteiknuð: lokuð");
   assert.ok(hand.inni(500, 300));
   assert.ok(!hand.inni(1500, 300), "og það sem er utan hennar er utan húss");
+});
+
+test("kassar (lota 5, umferð 3): einangruð smurgryfja (lokaður mjór kassi) og bíll (smár opinn hópur) fara — kassi við vegg og stakur veggur standa", () => {
+  const dpm = 50, t = 8;
+  const L = (x0: number, y0: number, x1: number, y1: number): HLina => ({ p: [x0, y0, x1, y1], t });
+  const hus = [L(0, 0, 3000, 0), L(3000, 0, 3000, 1500), L(3000, 1500, 0, 1500), L(0, 1500, 0, 0)];
+  const gryfja = [L(500, 300, 500, 1500 - 300), L(570, 300, 570, 1200), L(500, 300, 570, 300), L(500, 1200, 570, 1200)]; // 18 × 1,4 m
+  const bill = [L(1500, 400, 1720, 400), L(1500, 480, 1720, 480), L(1500, 400, 1500, 470), L(1730, 410, 1730, 480)]; // 4,4 × 1,6 m, opinn
+  const vidVegg = [L(2600, 0, 2600, 400), L(2680, 0, 2680, 400), L(2600, 400, 2680, 400)]; // skápur upp við útvegg
+  const stakur = [L(1000, 1000, 1400, 1000)];
+  const k = kassaButar([...hus, ...gryfja, ...bill, ...vidVegg, ...stakur], [], 0.15 * dpm, 0.5 * dpm, 2.5 * dpm, 6 * dpm, 4);
+  const vis = (fyrsti: number, n: number) => Array.from({ length: n }, (_, i) => fyrsti + i);
+  for (const i of vis(4, 4)) assert.ok(k.has(i), "gryfjan fer (" + i + ")");
+  for (const i of vis(8, 4)) assert.ok(k.has(i), "bíllinn fer (" + i + ")");
+  for (const i of [...vis(0, 4), ...vis(12, 3), 15]) assert.ok(!k.has(i), "stendur (" + i + ")");
+  // og í heildarhreinsuninni
+  const h = hreinsaVeggi([...hus, ...gryfja, ...vidVegg], [], dpm);
+  assert.ok((h.talning.kassar ?? 0) >= 4, JSON.stringify(h.talning));
+  assert.ok(!h.linur.some((l) => l.p[0] > 450 && l.p[0] < 620 && l.p[1] > 250), "engin lína gryfjunnar eftir");
+});
+
+test("útstæðar línur (lota 5, umferð 3): áslína sem stendur út úr útvegg fer; veggur sem rann saman við hana er skorinn við útlínuna", () => {
+  const dpm = 50, t = 8;
+  const L = (x0: number, y0: number, x1: number, y1: number): HLina => ({ p: [x0, y0, x1, y1], t });
+  const hus = [L(0, 0, 1000, 0), L(1000, 0, 1000, 600), L(1000, 600, 0, 600), L(0, 600, 0, 0), L(500, 0, 500, 300)];
+  const as = L(200, 600, 200, 850); // 5 m út úr neðri útveggnum
+  const eldveggur = L(700, 0, 700, 800); // innveggur sem rann saman við áslínu 4 m niður fyrir húsið
+  const allar = [...hus, as, eldveggur];
+  const u = husUtlina(allar, dpm);
+  assert.ok(u.lokud);
+  const D = 0.95 * dpm;
+  const burt = utanHuss(allar, u, D);
+  assert.ok(burt.has(5), "áslínan fer");
+  for (const i of [0, 1, 2, 3, 4, 6]) assert.ok(!burt.has(i), "stendur (" + i + ")");
+  assert.equal(utanHuss(allar, u).size, 0, "án útstæðuprófsins fer ekkert (útlínan nær utan um línurnar)");
+  const sk = skeraUtstaedaEnda(allar, u, D, 0.25 * dpm, 0.5 * dpm);
+  const e = sk.linur[6].p;
+  assert.ok(e[3] <= 600 + 0.5 * dpm && e[3] >= 600 - 0.5 * dpm, "eldveggurinn endar við útvegginn: " + e.join(","));
+  assert.deepEqual(sk.linur[1].p, allar[1].p, "útveggur óbreyttur");
 });

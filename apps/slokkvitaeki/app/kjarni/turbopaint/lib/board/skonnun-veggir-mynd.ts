@@ -15,7 +15,7 @@ import {
 import { bakgrunnsTonn, finnaHarlinuPor, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 import { SJALFGEFIN_VIKMORK } from "./veggja-hreinsun";
 import type { VeggTegund } from "./teikning-veggir";
-import { textaLinur } from "./veggja-linur";
+import { malsetningaLinur, textaLinur } from "./veggja-linur";
 import type { ImageObject } from "./types";
 import { anda } from "./anda";
 
@@ -176,16 +176,26 @@ export function harlinuPorUrMynd(fm: FullMynd, plan: ImageObject): { p: number[]
   return butarIBord(hp.map((v) => [v[0] / fm.k, v[1] / fm.k, v[2] / fm.k, v[3] / fm.k, v[4] / fm.k] as number[]), fm.g, plan);
 }
 
-/** Línur myndgreiningarinnar (borðhnit) án þeirra sem eru texti í fullri upplausn (veggja-linur.ts textaLinur). */
-export function fellaTexta<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject): T[] {
+/** Borðhnit → dílar fullupplausnarmyndarinnar. */
+function iFullMynd<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject) {
   const kx = plan.width / fm.g.myndSvaedi.w, ky = plan.height / fm.g.myndSvaedi.h;
   const ox = fm.g.sk.x - fm.g.myndSvaedi.x, oy = fm.g.sk.y - fm.g.myndSvaedi.y;
-  const iMynd = linur.map((l) => ({
+  return linur.map((l) => ({
     p: l.p.map((n, i) => (i % 2 ? ((n - plan.y) / ky - oy) * fm.k : ((n - plan.x) / kx - ox) * fm.k)),
     t: (l.t / kx) * fm.k,
     tegund: l.tegund,
   }));
-  const burt = textaLinur(iMynd, teygjaFolva(fm.gra), fm.W, fm.H, fm.dpm);
+}
+
+/** Línur myndgreiningarinnar (borðhnit) án þeirra sem eru texti í fullri upplausn (veggja-linur.ts textaLinur). */
+export function fellaTexta<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject, gT = teygjaFolva(fm.gra)): T[] {
+  const burt = textaLinur(iFullMynd(linur, fm, plan), gT, fm.W, fm.H, fm.dpm);
+  return linur.filter((_, i) => !burt.has(i));
+}
+
+/** Línur (borðhnit) án málsetningarkeðja — tölur og strik á línunni í fullri upplausn (veggja-linur.ts malsetningaLinur). */
+export function fellaMalsetningar<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject, gT = teygjaFolva(fm.gra)): T[] {
+  const burt = malsetningaLinur(iFullMynd(linur, fm, plan), gT, fm.W, fm.H, fm.dpm);
   return linur.filter((_, i) => !burt.has(i));
 }
 

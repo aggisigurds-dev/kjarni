@@ -133,6 +133,24 @@ const { ok, bad, check } = teljari();
   // nærmynd: rammað á húsið (⌘0 = allt borðið)
   fs.writeFileSync(path.join(OUT, "skref.json"), JSON.stringify({ lykill: LYKILL, cid: CID, haed: HAED, hreinsa: HREINSA, anSkurdar: AN_SKURDAR, sek: Number(sek), ...st, maeling: undefined, log }, null, 1));
   if (st.maeling) fs.writeFileSync(path.join(OUT, "maeling.json"), JSON.stringify(st.maeling));
+  // --mynd <skrá>: myndin sem greiningin vann á (stærsta mynd borðsins, t.d. TIF-frumritið í ramma JPEG-sins) vistuð
+  // til að prófa síur utan vafra (tools/veggja-maeling.ts). ALDREI í repóið — höfundaréttur arkitekta.
+  const MYND = arg("mynd", "");
+  if (MYND) {
+    const d = await page.evaluate(async () => {
+      const K = window.Konva;
+      const myndir = (K?.stages || []).flatMap((s) => s.find("Image")).map((n) => n.image()).filter((i) => i && i.src);
+      const st = myndir.sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight)[0];
+      if (!st) return null;
+      const blob = await (await fetch(st.src)).blob();
+      const b64 = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+      return { b64, w: st.naturalWidth, h: st.naturalHeight, type: blob.type };
+    });
+    if (d) {
+      fs.writeFileSync(MYND, Buffer.from(d.b64, "base64"));
+      console.log("mynd vistuð:", MYND, d.w + "×" + d.h, d.type);
+    } else console.log("mynd fannst ekki á borðinu");
+  }
   const vist = vistanir.find((v) => v.body && v.body.haedir);
   if (vist) {
     const h = vist.body.haedir.find((x) => x.id === HAED);

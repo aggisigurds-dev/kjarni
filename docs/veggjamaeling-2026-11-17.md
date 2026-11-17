@@ -132,3 +132,49 @@ Mælt af yfirlögum (rautt = týndur raunveggur, fjólublátt = rangur greindur 
 5. **Veggjavélin er sjaldan notuð** (22 keyrslur, 2 villur: `torchvision::nms`, PDF-slóð). Hún skilar 89,7 / 88,6
    þegar hún keyrir. Að hún svari alltaf er líklega stærsta einstaka umbótin fyrir Agnar — en það er rekstrarmál
    skrifstofutölvunnar, ekki kóði hér.
+
+## Umferð 3 — táknasía (mælt Í APPINU á R3, auk settsins)
+
+Markmið umferðarinnar: nákvæmni ≥ 80 % í appinu á R3 með hittni ≥ 85 %. Grunnur (main 72d5bc2): **87,4 / 58,1**.
+Rangar línur í appinu flokkaðar (339 m af 809 m): málsetningarkeðjur ofan við húsið ~120 m, smurgryfja ~69 m, bílar á
+lyftum ~35 m, línur sem standa út úr húsinu ~15 m, skástrikaðir reitir / borð afgangurinn.
+
+Hröð lykkja: `tools/turbopaint-sjalfvirkt.cjs --mynd <skrá>` vistar myndina sem appið greinir (TIF-frumritið í ramma
+JPEG-sins, utan repósins); síurnar eru prófaðar á hráu línum appsins + þeirri mynd á sömu upplausn og appið notar
+(skurður hæðarinnar, ≤ 20 MP, ~64 dílar/m). Á heilli mynd (~54 dílar/m) mældust sumar síur betur en í appinu — því var
+skipt yfir í upplausn appsins og hver haldin breyting keyrð í appinu sjálfu.
+
+| # | Breyting | Appið R3 (hittni / nákv.) | Settið | Niðurstaða |
+|---|---|---|---|---|
+| — | grunnur | 87,4 / 58,1 (utan vafra 87,5 / 58,8) | 80,6 / 80,4 | — |
+| 15 | **málsetningasía** (`malsetningaLinur`): ≥ 3 tölur í línunni; þak 0,7 tölur/m á línum ≥ 5 m (póstar í glerhlið R1) | heil mynd 71,0; **í appinu 58,2** | 80,6 / 80,8 | feitletraðar tölur féllu á „fyllt"-prófinu í upplausn appsins → 17 |
+| 16 | raðapar (skökk hárlína á tveimur röðum) | ekkert fellt | R1 −4 hittni | hafnað |
+| 17 | **tala telst þótt brún hennar sé fyllt** (aðeins sjálfstætt strik með auðri röð á milli er gluggi) + **2 tölur + 2 strik** duga | 64,4 → 72,5 (ofan á 18) | 79,8 / 80,7 | haldið (R3 −2,1, R2 −0,7 hittni) |
+| 18 | **einangraðir lokaðir mjóir kassar** (0,5–2,5 m; tengjast engu): smurgryfja | 58,8 → 64,4 | óbreytt | haldið |
+| 19 | **opnir einangraðir smáhópar** ≤ 6 m, ≥ 4 línur: bílar, borð | 72,5 → 76,7 | 79,3 / 81,0 | haldið (≥ 3 línur: R2 −2,3 hittni, hafnað) |
+| 20 | **samlínudreifing**: bútur í ás málsetningar (≤ 0,05 m, ≤ 10 m) fellur — fræ aðeins línur þar sem línan er ROFIN undir tölunum | 76,7 → 78,7 (hittni 87,3) | óbreytt | haldið (án strangra fræja: 85,8 / 79,7 — dreifðist eftir eldvegg merktum „EI 60") |
+| 21 | **útstæðar línur**: utan húss á BÁÐA vegu (0,95 m) → utan húss | 78,7 → 80,1 | óbreytt | haldið |
+| 22 | **útstæðir endar skornir** við útlínuna (eldveggur sem rann saman við áslínu) | 80,1 → 80,7; **í appinu 87,4 / 79,8** | 79,2 / 81,0 | haldið |
+| 23 | hallaleit (±0,4°) fyrir málsetningaprófið | utan vafra 80,7; **í appinu 74,6 / 81,0** | 79,0 / 81,6 | hafnað — tók grannan útvegg, útlínan breyttist |
+| 24 | 23 + lína > 25 m aldrei málsetning | í appinu 87,4 / 79,2 | — | hafnað (25 m vörnin stendur sem öryggi, tölur óbreyttar) |
+
+Tvær tilraunir í röð (23, 24) bættu ekkert í appinu — lykkjunni hætt.
+
+### Í appinu eftir umferð 3 (`turbopaint-sjalfvirkt.cjs --hreinsa --leid vafri --sleppa ocr`, vörður: ekkert skrif fór út)
+
+| Hæð | Eftir umferð 2 | Eftir umferð 3 |
+|---|---|---|
+| R3 (TIF-frumrit) | 87,4 / 58,1 | **87,4 / 79,8** |
+| R1 | 81,3 / 81,0 | **81,3 / 86,9** |
+
+Settið (vafraleið, utan vafra): 80,6 / 80,4 → **79,2 / 81,0** (R1 80,7 / 91,3 · R2 85,9 / 81,8 · R3 64,2 / 72,9 · R4 96,0 / 60,4).
+Veggjavél + hreinsun: 89,7 / 88,4 → 89,4 / 88,4 (kassasían, R2). Markmiðið (≥ 80 / ≥ 85 í appinu) næst EKKI — 0,2 stig vantar.
+
+### Hvað stendur eftir í appinu á R3 (117 m af 581 m)
+
+1. Málsetningar með einni tölu: heildarmál („2900", ~10 m) og „141" þvert yfir bílastæði (~6 m) — of lítið til að greina á tölunum.
+2. Bútar efri keðjanna (~8 m) sem liggja ekki í ás fallinnar keðju.
+3. Bílar sem tengjast áslínu eða málsetningu (~15 m) — þá eru þeir ekki einangraðir.
+4. Eldveggslína sem heldur áfram niður fyrir húsið (~5 m): svæðið undir húsinu er lokað af málsetningarkeðjunum, svo
+   útlínan telur það inni.
+5. Á settinu kostar umferðin 1,4 stig hittni (R2 −2,3: brot raunveggja sem urðu einangruð; R3 −2,1: merking á vegg).

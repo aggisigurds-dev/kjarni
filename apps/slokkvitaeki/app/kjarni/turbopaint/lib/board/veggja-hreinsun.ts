@@ -61,6 +61,18 @@ export interface Vikmork {
   hillurRodM: number;
   /** Frístandandi línur styttri en þetta fara ÞÓTT þær standi ekki í röð (gamla reglan) — röðin verndar aðeins langar línur. */
   hillurEinarUndirM: number;
+  /** KASSAR (lota 5, umferð 3): einangraður LOKAÐUR hópur lína (tengist engu utan sín, enginn laus endi) sem er mjór —
+   * skemmri hlið ≥ kassiMinM og ≤ kassiMaxM — er hlutur (smurgryfja, afgreiðsluborð, bekkur), ekki veggir. 0 = slökkt. */
+  kassiMinM: number;
+  kassiMaxM: number;
+  /** Opinn (laus endi) einangraður hópur fer líka ef hann er ekki lengri en þetta (bílar, borð). 0 = aðeins lokaðir. */
+  kassiOpinnM?: number;
+  /** Fæstar línur í opnum hópi. */
+  kassiOpinnFjoldi?: number;
+  /** Útstæðar línur (utan húss á báða vegu í þessari fjarlægð, m) falla með „utan húss". 0 = slökkt. */
+  utstaedM?: number;
+  /** 1 = endar sem standa út úr húsinu eru skornir af línunum (skeraUtstaedaEnda). */
+  utstaedirEndar?: number;
   /** Op í útlínu hússins sem lokast þegar „utan húss" er metið (hurðargöt sem fundust ekki). Sjálfgefið 1,30 m. */
   lokunM: number;
   /** Hlutfall af heildar veggjaþunga sem gerir klasa að hluta hússins óháð fjarlægð (husKassi). Sjálfgefið 0,08. */
@@ -98,6 +110,12 @@ export const SJALFGEFIN_VIKMORK: Vikmork = {
   hillurSystkini: 2,
   hillurRodM: 15,
   hillurEinarUndirM: 12,
+  kassiMinM: 0.5,
+  kassiMaxM: 2.5,
+  kassiOpinnM: 6,
+  kassiOpinnFjoldi: 4,
+  utstaedM: 0.95,
+  utstaedirEndar: 1,
   lokunM: 1.3,
   husHlutur: 0.08,
   strikPunkt: { butar: 4, bilMinM: 0.03, bilMaxM: 0.65, spannM: 3 },
@@ -153,14 +171,16 @@ export interface HreinsunTalning {
   skekkja: number;
   /** Langir frístandandi bútar (hillurekkar) fjarlægðir. */
   hillur: number;
+  /** Línur einangraðra mjórra kassa (smurgryfja, borð) fjarlægðar. */
+  kassar?: number;
 }
 
 export interface Fjarlaegd {
   p: number[];
-  astaeda: "strikpunkt" | "stakur" | "hilla" | "utan";
+  astaeda: "strikpunkt" | "stakur" | "hilla" | "kassi" | "utan";
 }
 
-const tomTalning = (): HreinsunTalning => ({ strikPunkt: 0, rettir: 0, sameinadir: 0, smellt: 0, lengdir: 0, stakir: 0, hillur: 0, skekkja: 0 });
+const tomTalning = (): HreinsunTalning => ({ strikPunkt: 0, rettir: 0, sameinadir: 0, smellt: 0, lengdir: 0, stakir: 0, hillur: 0, kassar: 0, skekkja: 0 });
 
 // ── grunnur ────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -561,6 +581,50 @@ export function hillurButar(butar: HLina[], fastar: HLina[], lagmark: number, bi
   return rodin;
 }
 
+/** Vísar lína í EINANGRUÐUM, LOKUÐUM, MJÓUM hópum: hópur = línur tengdar enda-í-línu (≤ bil + hálf þykkt) eða í krossi;
+ * einangraður = engin lína hópsins tengist línu utan hans (né föstum veggjum); lokaður = enginn laus endi; mjór = skemmri
+ * hlið rammans (í stefnu lengstu línunnar) á bilinu [minL, maxL]. Aðeins veggir; hópur með gleri/hurð stendur. */
+export function kassaButar(butar: HLina[], fastar: HLina[], bil: number, minL: number, maxL: number, opinnLang = 0, opinnFjoldi = 3): Set<number> {
+  const ut = new Set<number>();
+  if (!(maxL > 0) || butar.length < 3) return ut;
+  const allar = [...butar, ...fastar], n = allar.length;
+  const f = allar.map((_, k) => k);
+  const rot = (k: number): number => (f[k] === k ? k : (f[k] = rot(f[k])));
+  const nalaegt = (a: HLina, b: HLina) => {
+    const q = a.p.length;
+    for (const [x, y] of [[a.p[0], a.p[1]], [a.p[q - 2], a.p[q - 1]]]) if (fjarlaegdFraLinu(x, y, b.p) <= (a.t + b.t) / 2 + bil) return true;
+    return false;
+  };
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const a = allar[i], b = allar[j];
+      const A: P = [a.p[0], a.p[1]], B: P = [a.p[a.p.length - 2], a.p[a.p.length - 1]], C: P = [b.p[0], b.p[1]], D: P = [b.p[b.p.length - 2], b.p[b.p.length - 1]];
+      if (nalaegt(a, b) || nalaegt(b, a) || skerast(A, B, C, D)) f[rot(i)] = rot(j);
+    }
+  const hopar = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) hopar.set(rot(i), [...(hopar.get(rot(i)) ?? []), i]);
+  for (const h of hopar.values()) {
+    if (h.length < 3 || h.some((i) => i >= butar.length || (butar[i].tegund && butar[i].tegund !== "veggur"))) continue;
+    const L = h.map((i) => butar[i]);
+    // lokaður: báðir endar hverrar línu snerta aðra línu hópsins (opinn hópur: aðeins ef hann er smár, ≤ opinnLang á lengd)
+    const lokadur = h.every((i) => { const b = butar[i], q = b.p.length; return endiTengdur(b.p[0], b.p[1], b.t, i, butar, bil) && endiTengdur(b.p[q - 2], b.p[q - 1], b.t, i, butar, bil); });
+    if (!lokadur && !(opinnLang > 0)) continue;
+    // rammi í stefnu lengstu línunnar
+    const lengst = L.reduce((x, y) => (lengdLinu(y.p) > lengdLinu(x.p) ? y : x));
+    const q = lengst.p.length, ll = lengdLinu(lengst.p) || 1, ux = (lengst.p[q - 2] - lengst.p[0]) / ll, uy = (lengst.p[q - 1] - lengst.p[1]) / ll;
+    let s0 = Infinity, s1 = -Infinity, t0 = Infinity, t1 = -Infinity;
+    for (const b of L)
+      for (let k = 0; k + 1 < b.p.length; k += 2) {
+        const s = b.p[k] * ux + b.p[k + 1] * uy, t = -b.p[k] * uy + b.p[k + 1] * ux;
+        s0 = Math.min(s0, s); s1 = Math.max(s1, s); t0 = Math.min(t0, t); t1 = Math.max(t1, t);
+      }
+    const mjo = Math.min(s1 - s0, t1 - t0), langt = Math.max(s1 - s0, t1 - t0);
+    if (!lokadur && (langt > opinnLang || h.length < opinnFjoldi)) continue;
+    if (mjo >= minL && mjo <= maxL) for (const i of h) ut.add(i);
+  }
+  return ut;
+}
+
 /** Vísar stuttra búta (< lagmark) sem tengjast engu í hvorugum enda og skera enga aðra línu. `fastar` telja sem tengi. */
 export function stakirButar(butar: HLina[], fastar: HLina[], lagmark: number, bil: number): Set<number> {
   const allar = [...butar, ...fastar];
@@ -647,6 +711,13 @@ export function hreinsaVeggi(nyjar: HLina[], fastar: HLina[], dpm: number, vik: 
     butar.forEach((b, i) => hi.has(i) && fjarlaegdar.push({ p: b.p, astaeda: "hilla" }));
     butar = butar.filter((_, i) => !hi.has(i));
     talning.hillur = hi.size;
+  }
+  // 6c. einangraðir mjóir kassar (smurgryfja, borð)
+  const ka = kassaButar(butar, fastar, m(vik.hillurTengingM), m(vik.kassiMinM), m(vik.kassiMaxM), m(vik.kassiOpinnM ?? 0), vik.kassiOpinnFjoldi ?? 3);
+  if (ka.size) {
+    butar.forEach((b, i) => ka.has(i) && fjarlaegdar.push({ p: b.p, astaeda: "kassi" }));
+    butar = butar.filter((_, i) => !ka.has(i));
+    talning.kassar = ka.size;
   }
   butar = butar.filter((b) => lengdLinu(b.p) > m(0.02));
   return { linur: butar, talning, fjarlaegdar };
@@ -913,21 +984,54 @@ export function husUtlina(
   return { inni, lokud, kassi, reitur };
 }
 
-/** Vísar línanna (`nyjar`) sem standa utan húss: minna en helmingur sýna á miðlínunni er innan útlínunnar. */
-export function utanHuss(nyjar: HLina[], hus: HusUtlina): Set<number> {
+/** Vísar línanna (`nyjar`) sem standa utan húss: minna en helmingur sýna á miðlínunni er innan útlínunnar.
+ * ÚTSTÆÐAR (lota 5, umferð 3; `utstaedD` > 0, dílar): lína sem stendur ÚT úr húsinu — ás-, málsetningar- og hjálparlínur
+ * sem byrja á útvegg — telst líka utan: meirihluti sýnanna hefur utanhúss á BÁÐA vegu í `utstaedD` fjarlægð þvert á línuna
+ * (útlínan er flóð um þykkt teiknaðar línur, svo slík lína fær sína eigin „inni"-rönd). Útveggur hefur hús öðrum megin. */
+export function utanHuss(nyjar: HLina[], hus: HusUtlina, utstaedD = 0): Set<number> {
   const ut = new Set<number>();
   nyjar.forEach((l, i) => {
-    let alls = 0, inni = 0;
+    let alls = 0, inni = 0, utst = 0;
     for (let k = 2; k + 1 < l.p.length; k += 2) {
       const ax = l.p[k - 2], ay = l.p[k - 1], bx = l.p[k], by = l.p[k + 1];
+      const L = Math.hypot(bx - ax, by - ay) || 1, nx = (-(by - ay) / L) * utstaedD, ny = ((bx - ax) / L) * utstaedD;
       for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
         alls++;
-        if (hus.inni(ax + (bx - ax) * f, ay + (by - ay) * f)) inni++;
+        const x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+        if (hus.inni(x, y)) inni++;
+        if (utstaedD > 0 && !hus.inni(x + nx, y + ny) && !hus.inni(x - nx, y - ny)) utst++;
       }
     }
-    if (alls && inni * 2 < alls) ut.add(i);
+    if (alls && (inni * 2 < alls || utst * 2 > alls)) ut.add(i);
   });
   return ut;
+}
+
+/** ÚTSTÆÐIR ENDAR (lota 5, umferð 3): lína sem nær út fyrir húsið — eldveggur sem rann saman við áslínu, útveggur sem
+ * lengdist í málsetningu — er skorin við útlínuna: endabútar þar sem sýnin (á `skref` dílum) eru utan húss eða hafa utanhúss á
+ * BÁÐA vegu í `utstaedD` fjarlægð falla af. Skilar nýjum línum (sami fjöldi og röð; óbreyttar þar sem ekkert stóð út). */
+export function skeraUtstaedaEnda(linur: HLina[], hus: HusUtlina, utstaedD: number, skref: number, lagmark: number): { linur: HLina[]; skornir: number } {
+  let skornir = 0;
+  const ut = linur.map((l) => {
+    if (l.p.length !== 4 || !(utstaedD > 0)) return l;
+    const [ax, ay, bx, by] = l.p, L = Math.hypot(bx - ax, by - ay);
+    if (L < 2 * skref) return l;
+    const n = Math.ceil(L / skref), nx = (-(by - ay) / L) * utstaedD, ny = ((bx - ax) / L) * utstaedD;
+    const gott = (k: number) => {
+      const f = k / n, x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+      return hus.inni(x, y) && (hus.inni(x + nx, y + ny) || hus.inni(x - nx, y - ny));
+    };
+    let k0 = 0, k1 = n;
+    while (k0 <= n && !gott(k0)) k0++;
+    while (k1 >= k0 && !gott(k1)) k1--;
+    if (k0 > k1) return l; // öll lína utan — utanHuss sér um hana
+    if (k0 === 0 && k1 === n) return l;
+    const f0 = k0 / n, f1 = k1 / n;
+    if ((f1 - f0) * L < lagmark) return l;
+    skornir++;
+    return { ...l, p: [ax + (bx - ax) * f0, ay + (by - ay) * f0, ax + (bx - ax) * f1, ay + (by - ay) * f1] };
+  });
+  return { linur: ut, skornir };
 }
 
 // ── húsið á blaðinu (skurður) ──────────────────────────────────────────────────────────────────────────────

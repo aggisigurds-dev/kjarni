@@ -22,7 +22,7 @@ import { graTonar, greiningarkvardi, langirVeggir, skonnunarVeggir, teygjaFolva 
 import { finnaHarlinuPor, finnaThunnaVeggi, type HarlinuStillingar } from "../app/kjarni/turbopaint/lib/board/thunnir-veggir";
 import { f1, hreinsunSkonnunar, maelaVeggi, type MaelLinaInn } from "../app/kjarni/turbopaint/lib/board/veggja-maeling";
 import { lesaVikmork, type HLina } from "../app/kjarni/turbopaint/lib/board/veggja-hreinsun";
-import { rettaHalla, textaLinur, veggKjarni, type Pt } from "../app/kjarni/turbopaint/lib/board/veggja-linur";
+import { malsetningaLinur, rettaHalla, textaLinur, veggKjarni, type Pt } from "../app/kjarni/turbopaint/lib/board/veggja-linur";
 
 type Svaedi = { x: number; y: number; w: number; h: number };
 type Fixture = { id: string; gerd: string; haed: string; cid: number; frum: { b: number; h: number }; svaedi: Svaedi; dpm: number; linur: MaelLinaInn[]; velVorpun?: { s: number; dx: number; dy: number } };
@@ -175,6 +175,23 @@ async function textaVisar(f: Fixture, L: HLina[]): Promise<Set<number>> {
   if (process.env.VEGGJAMAELING_TALNING) console.log("  textasía felldi", burt.size, "af", L.length);
   return burt;
 }
+/** Málsetningasía (lib/board/veggja-linur.ts malsetningaLinur) í fullri upplausn. --ms '{"minTolur":3}' prófar mörk. */
+async function malsVisar(f: Fixture, L: HLina[]): Promise<Set<number>> {
+  const sk = f.svaedi;
+  let k = 1;
+  if (sk.w * sk.h > 40e6) k = Math.sqrt(40e6 / (sk.w * sk.h));
+  const W = Math.max(1, Math.round(sk.w * k)), H = Math.max(1, Math.round(sk.h * k));
+  const gra = teygjaFolva(await graSvaedis(f.id, f.frum, sk, W, H));
+  const iMynd = L.map((l) => ({ ...l, p: l.p.map((n, i) => (n - (i % 2 ? sk.y : sk.x)) * k), t: l.t * k }));
+  const diag = process.env.VEGGJAMAELING_MSDIAG ? (j: number, x: { metrar: number; tolur: number; strik: number; tolurRof: number }) => { if (x.tolur < 2) return; const m = maelaVeggi(f.linur, [L[j]], { dpm: f.dpm, svaedi: f.svaedi }); console.log(`  ms ${m.nakvaemni < 0.5 ? "RANGT" : "rétt "} ${x.metrar.toFixed(1)} m tölur ${x.tolur} (rof ${x.tolurRof}) strik ${x.strik} ${L[j].p.map(Math.round).join(",")}`); } : undefined;
+  const burt = malsetningaLinur(iMynd, gra, W, H, f.dpm * k, { ...(arg("ms") ? JSON.parse(arg("ms")) : {}), skyrsla: diag });
+  if (process.env.VEGGJAMAELING_TALNING) console.log("  málsetningasía felldi", burt.size, "af", L.length);
+  return burt;
+}
+async function malsSia(f: Fixture, L: HLina[]): Promise<HLina[]> {
+  const burt = await malsVisar(f, L);
+  return L.filter((_, i) => !burt.has(i));
+}
 async function textaSia(f: Fixture, L: HLina[]): Promise<HLina[]> {
   const burt = await textaVisar(f, L);
   return L.filter((_, i) => !burt.has(i));
@@ -267,7 +284,11 @@ async function main() {
       // hreinsunin sé prófuð á raungögnum án mynda og nets.
       const r = (L: HLina[]) => L.map((l) => ({ p: l.p.map((n) => Math.round(n * 10) / 10), t: Math.round(l.t * 10) / 10, ...(l.tegund ? { tegund: l.tegund } : {}) }));
       fs.mkdirSync(path.join(FIX, "hrar"), { recursive: true });
-      fs.writeFileSync(path.join(FIX, "hrar", f.id + ".json"), JSON.stringify({ vafri: r(vafriL), vafriTexti: [...(await textaVisar(f, vafriL))], thunnir: r(th), harlinur: r(hpL), vel: velL ? r(velL) : null }));
+      // vafriMals / harlinurMals (umferð 3): vísar málsetningasíunnar — á myndgreininguna EFTIR textasíu (vísar í vafri) og á hárlínupörin
+      const texti = await textaVisar(f, vafriL), eftirTexta = vafriL.map((_, i) => i).filter((i) => !texti.has(i));
+      const mV = await malsVisar(f, eftirTexta.map((i) => vafriL[i]));
+      const vafriMals = [...mV].map((k) => eftirTexta[k]).sort((a, b) => a - b), harlinurMals = [...(await malsVisar(f, hpL))].sort((a, b) => a - b);
+      fs.writeFileSync(path.join(FIX, "hrar", f.id + ".json"), JSON.stringify({ vafri: r(vafriL), vafriTexti: [...texti], vafriMals, thunnir: r(th), harlinur: r(hpL), harlinurMals, vel: velL ? r(velL) : null }));
     }
     for (const leid of leidir) {
       // leiðir: vafri | vel | th (þunnir einir); viðskeyti -th = án þunnra veggja, +h = hreinsun, +hn = hreinsun án „utan húss"
@@ -275,7 +296,9 @@ async function main() {
       const grunnur1 = grunnur0 && leid.includes("+fs") ? await fullSia(f, grunnur0) : grunnur0;
       const grunnur = grunnur1 && (leid.includes("+ts+") || leid.endsWith("+ts")) ? await textaSia(f, grunnur1) : grunnur1;
       if (!grunnur) continue;
-      const hrar0 = [...grunnur, ...(leid.includes("-th") ? [] : th), ...(leid.includes("+hp") ? hpL : [])];
+      // +ms: málsetningasía á myndgreininguna og hárlínupörin (eins og sjalfvirkt.ts gerir síðan umferð 3)
+      const ms = leid.includes("+ms");
+      const hrar0 = [...(ms ? await malsSia(f, grunnur) : grunnur), ...(leid.includes("-th") ? [] : th), ...(leid.includes("+hp") ? (ms ? await malsSia(f, hpL) : hpL) : [])];
       const hrar = leid.includes("+tsa") ? await textaSia(f, hrar0) : hrar0;
       const greint = leid.endsWith("+hn") ? hreinsa(hrar, f.dpm, true, f) : leid.endsWith("+h") ? hreinsa(hrar, f.dpm, false, f) : hrar;
       const m = maelaVeggi(f.linur, greint, { dpm: f.dpm, svaedi: f.svaedi });
