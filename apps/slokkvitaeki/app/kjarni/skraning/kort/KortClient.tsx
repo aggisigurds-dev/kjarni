@@ -911,7 +911,7 @@ export default function KortClient() {
         cx.font = `800 ${R * 1.25}px system-ui, "Segoe UI", sans-serif`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.lineJoin = "round";
         cx.lineWidth = R * 0.42; cx.strokeStyle = "#fff"; cx.strokeText("?", x, y); cx.fillStyle = "#d97706"; cx.fillText("?", x, y);
       };
-      const merki = (x: number, y: number, t: Takn, nd: number, no: number, ve = 0, vs = 0, nh = 0, hs?: Hlidar, kl?: string, ne = 0, lg = false, kk?: string, ot = false) => {
+      const merki = (x: number, y: number, t: Takn, nd: number, no: number, ve = 0, vs = 0, nh = 0, hs?: Hlidar, kl?: string, ne = 0, lg = false, kk?: string, ot = false, pr = false) => {
         const loft = t.hopur === "Loft", ror = t.logun === "o" || t.logun === "t", n = nd + no;
         /* Tilbúið = ekkert opið, hinn endann vantar hvergi, og annaðhvort eru bæði stöku verkin kláruð (tvö hök) eða ein skráning er öll lokunin (gólf, plata).
          * Þá fyllist merkið neongrænt; stóri græni tígullinn (parað áætlað gat) er ekki teiknaður lengur í þessum stíl. */
@@ -932,6 +932,7 @@ export default function KortClient() {
         if (no && nd) { cx.beginPath(); cx.arc(x, y, R * 1.7, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }   // rauður hringur aðeins á blönduðu merki (sumt klárað, annað opið); alopið merki er rautt að innan
         if (!naerm) return;   // yfirlit: aðeins merkið sjálft
         if (kl) { cx.beginPath(); cx.arc(x - R * 0.98, y + R * 0.98, R * 0.3, 0, 6.2832); cx.fillStyle = kl; cx.fill(); cx.lineWidth = R * 0.1; cx.strokeStyle = "#fff"; cx.stroke(); }   // kerfi samkvæmt myndgreiningu
+        if (pr) { cx.beginPath(); cx.arc(x + R * 0.98, y - R * 0.98, R * 0.36, 0, 6.2832); cx.lineWidth = Math.max(1.2 / k, R * 0.17); cx.strokeStyle = "#fff"; cx.stroke(); cx.lineWidth = Math.max(0.8 / k, R * 0.1); cx.strokeStyle = "#0f766e"; cx.stroke(); }   // efst til hægri: grænblár hringur = búin skráning merkisins tengist áætluðu gati (sama og hringurinn í punktasýn)
         const st = loft ? /-(\d+)\s*$/.exec(t.heiti) : null;
         if (Rs >= 11 && !synaAjour) { if (st) texti(st[1], x, y + R * 0.05, R * 0.72, "center"); else if (!loft && n >= 2 && !par && !udi && t.logun !== "d" && t.hopur !== "Gólf") texti(String(n), x, y + R * 0.05, R * 0.95, "center"); }
         if (t.logun === "d" && Rs >= 9) { elding(cx, x, y, R * 0.9); cx.fillStyle = "#101e43"; cx.fill(); }
@@ -958,7 +959,7 @@ export default function KortClient() {
         if (ve > 0 && tA > 0 && tB > 0) raudurKross(upp ? x + R * 0.95 : x + R * 2.2, upp ? y + R * 2.1 : y - R * 0.95, 0.62);
         if (loft && n >= 3) texti("×" + n, upp ? x + R * 1.15 : x + R * 0.55, upp ? y + R * 0.1 : y + R * 0.85, R * 0.7, "left");
       };
-      for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs, h.kl, h.ne, h.lg, h.kk, h.ot);
+      for (const h of hopar) merki(h.x, h.y, h.t, h.nd, h.no, h.ve, h.vs, h.nh, h.hs, h.kl, h.ne, h.lg, h.kk, h.ot, h.ps.some((p) => p.s.stada === "done" && paradIds.has(p.s.id)));
       /* Ótengdir Ajour-punktar: lítill grár plús. Í færsluham sjást líka auð gegnumtök (enginn punktur tengdur) sem daufar brotnar útlínur, svo hægt sé að draga þangað. */
       /* Færsluhamur: auð gegnumtök (nemi án skráningar) sjást sem brotin dökk lína á hvítu undirlagi, þvert yfir breidd stokksins á miðlínu veggjar. Þangað má draga punkt. */
       if (adalNm && faera) { cx.lineCap = "butt";
@@ -971,7 +972,7 @@ export default function KortClient() {
         const idr = dr?.p?.s.id === p.s.id, px = idr ? dr!.x : p.x, py = idr ? dr!.y : p.y, kl = p.s.stada === "done";
         if (p.faersla || idr) ajLina(p, px, py);   // valin eða dregin skráning: alltaf sýnt hvar hún er í Ajour
         const hs1: Hlidar = { nA: 0, nB: 0, fA: false, fB: false }; if (!idr) hlidar(p, hs1);
-        merki(px, py, p.t, kl ? 1 : 0, kl ? 0 : 1, vantarEnda(p) ? 1 : 0, samaMegin(p) ? 1 : 0, hinnKlar(p) ? 1 : 0, hs1, kerfisLitur(p), kl && (p.t.hopur === "Gólf" || iPlotu(p)) ? 1 : 0, p.s.lagf === "A", kerfiP(p));
+        merki(px, py, p.t, kl ? 1 : 0, kl ? 0 : 1, vantarEnda(p) ? 1 : 0, samaMegin(p) ? 1 : 0, hinnKlar(p) ? 1 : 0, hs1, kerfisLitur(p), kl && (p.t.hopur === "Gólf" || iPlotu(p)) ? 1 : 0, p.s.lagf === "A", kerfiP(p), undefined, kl && paradIds.has(p.s.id));
       }
     } else if (synaSkr) for (const umf of [1, 0]) for (const p of syndir) {
       const kl = p.s.stada === "done"; if ((kl ? 1 : 0) !== umf) continue;
