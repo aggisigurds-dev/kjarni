@@ -79,7 +79,8 @@ html[data-kjarni-skin="ragnarok"] body { background:#020202; }
 @keyframes rg-apoc-cw { to { transform:rotate(360deg); } }
 @keyframes rg-apoc-ccw { to { transform:rotate(-360deg); } }
 @keyframes rg-apoc-breathe { 50% { opacity:.5; filter:brightness(1.18); } }
-@media (prefers-reduced-motion:reduce) { .rg-apoc * { animation:none !important; } }
+/* Draga úr hreyfingu (t.d. Android „Fjarlægja hreyfimyndir“): hringurinn snýst áfram, hægar (0,6×); aðeins ljósið hættir að anda. Agnar 17.11.2026 vill hægu hreyfinguna alltaf. */
+@media (prefers-reduced-motion:reduce) { .rg-apoc { --rg-apoc-motion:.6; } .rg-apoc-light { animation:none; } }
 
 /* fyrirsagnir kafla */
 .rgk-h2row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
