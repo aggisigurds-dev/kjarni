@@ -75,6 +75,7 @@ html[data-kjarni-skin="ragnarok"] body { background:#020202; }
   font:600 clamp(14px,1.2vw,20px)/1 var(--rg-font); letter-spacing:.3em; padding-left:.3em; color:#ffcf6a; pointer-events:none;
   text-shadow:0 0 3px #000,0 0 8px #000,0 0 14px rgba(255,140,40,.9); }
 .rg-apoc-txt small { font-size:.6em; letter-spacing:.2em; }
+.rg-apoc-emblem { position:absolute; inset:28%; width:44%; height:44%; object-fit:contain; pointer-events:none; filter:drop-shadow(0 0 10px #ff851c55); }
 @keyframes rg-apoc-cw { to { transform:rotate(360deg); } }
 @keyframes rg-apoc-ccw { to { transform:rotate(-360deg); } }
 @keyframes rg-apoc-breathe { 50% { opacity:.5; filter:brightness(1.18); } }

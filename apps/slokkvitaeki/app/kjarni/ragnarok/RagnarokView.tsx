@@ -113,7 +113,7 @@ export function RagnarokView(d: RagnarokData) {
             </p>
           </div>
           <div className="rgk-core">
-            <ApocalypseRing label="KJARNI" />
+            <ApocalypseRing label="KJARNI" emblem="/kjarni/apocalypse/kjarni-merki.webp" />
           </div>
         </header>
 
