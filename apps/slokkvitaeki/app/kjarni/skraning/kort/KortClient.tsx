@@ -982,6 +982,7 @@ export default function KortClient() {
       else if (kl) { cx.fillStyle = p.t.litur + "d8"; cx.fill(); cx.lineWidth = 0.6 / k; cx.strokeStyle = "rgba(22,21,19,.45)"; cx.stroke(); }
       else { cx.fillStyle = "#ffffffe6"; cx.fill(); cx.lineWidth = 2 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
       if (!kl) { cx.beginPath(); cx.arc(px, py, r + 3.5 * zs, 0, 6.2832); cx.lineWidth = 1.6 / k; cx.strokeStyle = "#dc2626"; cx.stroke(); }
+      if (kl && paradIds.has(p.s.id)) { cx.beginPath(); cx.arc(px, py, r + 2.8 * zs, 0, 6.2832); cx.lineWidth = 1.4 / k; cx.strokeStyle = "#0f766e"; cx.stroke(); }   // búin skráning sem á sér áætlað gat: þunnur grænblár hringur — sést strax hverjir hanga lausir
       { const vv = p.s.ajour_serial != null ? visb[p.s.ajour_serial] : undefined, kk = vv ? VISB_KERFI[vv[0]]?.[0] : undefined; if (kk) { cx.beginPath(); cx.arc(px - r * 1.1, py + r * 1.1, Math.max(1.4 / k, r * 0.42), 0, 6.2832); cx.fillStyle = kk; cx.fill(); cx.lineWidth = 0.7 / k; cx.strokeStyle = "#fff"; cx.stroke(); } }
       if (p.s.lagf) { cx.beginPath(); cx.arc(px, py, r + 2.2 * zs, 0, 6.2832); cx.lineWidth = 1.3 / k; cx.strokeStyle = p.s.lagf === "B" ? "#b45309" : p.s.lagf === "A" ? "#111827" : "#6b7280"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); }
     }
