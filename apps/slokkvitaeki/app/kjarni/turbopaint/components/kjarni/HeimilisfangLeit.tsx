@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, Search, X, ExternalLink, MapPin } from "lucide-react";
 import { hreinsaEignir, LISTI_HAMARK } from "../../lib/board/heimilisfang-leit";
@@ -42,7 +42,17 @@ export type TeikningVal = {
   stor: string | null;
   /** Heimilisfangið (eignin) sem teikningin fannst undir. */
   eign: string | null;
+  /** Landnúmer lóðarinnar — lykill teikningasafns fasteignarinnar („Vista á fasteign"). */
+  landnr: number | null;
+  /** Hæðin/aðalheitið og afgangurinn sér (sömu reitir og „Vista í safn" í Greiningu fasteignar). */
+  adal: string;
+  undir: string | null;
+  tegund: string | null;
+  dags: string | null;
 };
+
+/** Eignin sem var valin í leitinni. */
+export type EignVal = { label: string; landnr: number };
 
 type Teikning = {
   filename: string;
@@ -105,6 +115,7 @@ export function HeimilisfangLeit({
   onSkiptaVali,
   onSkoda,
   onEign,
+  eignTakkar,
 }: {
   onVelja: (infoUrl: string) => void;
   /** Aðeins leitar-táknið — spjaldið opnast sem portal undir stikunni. */
@@ -117,7 +128,9 @@ export function HeimilisfangLeit({
   /** Smellur á spjald: skoða (í stað þess að setja á borðið). */
   onSkoda?: (t: TeikningVal) => void;
   /** Eignin sem var valin (null = engin). */
-  onEign?: (label: string | null) => void;
+  onEign?: (eign: EignVal | null) => void;
+  /** Aðgerðir við valda eign (t.d. „Greining fasteignar") — í línunni með heiti hennar. */
+  eignTakkar?: (eign: EignVal) => ReactNode;
 }) {
   const [q, setQ] = useState("");
   const [eignir, setEignir] = useState<Eign[]>([]);
@@ -140,7 +153,7 @@ export function HeimilisfangLeit({
 
   const velja = useCallback(async (e: Eign) => {
     setValin(e);
-    eignRef.current?.(e.label);
+    eignRef.current?.({ label: e.label, landnr: e.landnr });
     setTeikningar([]);
     setSia("allt");
     setTegundSia("allt");
@@ -400,6 +413,11 @@ export function HeimilisfangLeit({
       thumb: t.thumb,
       stor: t.stor ?? null,
       eign: valin?.label ?? null,
+      landnr: valin && valin.landnr > 0 ? valin.landnr : null,
+      adal: s.adal,
+      undir: s.auka,
+      tegund: t.tegund ?? null,
+      dags: t.dags ?? null,
     };
   };
 
@@ -435,6 +453,7 @@ export function HeimilisfangLeit({
               <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
                 {valin.label}
               </span>
+              {eignTakkar ? eignTakkar({ label: valin.label, landnr: valin.landnr }) : null}
             </div>
           )}
 
