@@ -8,6 +8,8 @@
 //   … --radius 45            mesta færsla á rauðan brunavegg í px (45 px ≈ 1,35 m); á svarta vegglínu mest 20 px
 //   … --prufa <mynd.jpg> x y w h   teiknar svæði á yfirlitinu með færslunum
 //   … --afturkalla           merkir allar sjálfvirkar færslur hæðarinnar eytt (með --write)
+//   … --hopar loft,rafmagn   aðeins þessir hópar (loft | plast | ror | udi | stal | rafmagn); aðrir eru ekki snertir
+//   Veggjamynd með brunahurðaopum máluðum rauðum (E-merktar hurðir) má gefa sem --yfirlit: stokkar og leiðir yfir hurð finna þá skurðpunkt.
 // <mappa> yfirlit: yfirlit-6h.jpg / yfirlit-5h.jpg (brunayfirlit 5790 × 2850). <mappa> log: lag-6h-<fag>-<blað>.png í sömu stærð.
 // Hópar (18.11.2026): Loft og Raufar → Loftræsikerfi; Plast og Stál (vatn) → Vatnslagnir í lit; Stál (úði) → Vatnsúðakerfi hlutablöð;
 // Raf → Raflagnaleiðir. Lagaskrár í möppunni: lag-<hæð>-loftraesing-*, -vatn-litur-*, -udi-hluta-*, -raflagnaleidir-*.png.
@@ -15,6 +17,7 @@
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), { spawnSync } = require('node:child_process');
 const ARGS = process.argv.slice(2), WRITE = ARGS.includes('--write'), AFTUR = ARGS.includes('--afturkalla'), opt = (f, d) => { const i = ARGS.indexOf(f); return i >= 0 ? ARGS[i + 1] : d; };
 const HAED = opt('--haed'), RAD = +opt('--radius', 45), YF = opt('--yfirlit'), LOG = opt('--log'), iP = ARGS.indexOf('--prufa'), PRUFA = iP >= 0 ? ARGS.slice(iP + 1, iP + 6) : [];
+const HOPAR = opt('--hopar') ? new Set(opt('--hopar').split(',')) : null;   // t.d. --hopar loft,rafmagn: aðeins þeir hópar færast; hinir standa óhreyfðir
 const ENVF = process.env.LUNA_ENV || 'C:/Users/Slokkvitaeki/luna-bridge/.env';
 const env = {}; try { for (const l of fs.readFileSync(ENVF, 'utf8').split(/\r?\n/)) { const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/); if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, ''); } } catch {}
 const URL_ = process.env.SUPABASE_URL || env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
@@ -35,7 +38,8 @@ const hopur = (heiti, kerfi) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/
   const kerfi = new Map((await allt(`skr_kerfi?verk_id=eq.${verk.id}&select=skraning_id,kerfi&order=skraning_id`)).map((k) => [k.skraning_id, k.kerfi]));
   // Aðeins sjálfvirkar færslur í hópum sem ÞETTA tól ræður yfir. Milliloft (Gólf) er fært á hringtákn frárennslis með öðru tóli (18.11.2026)
   // og ber líka uppruna 'sjalfvirkt': þær færslur má hvorki afturkalla hér né merkja úreltar við endurkeyrslu.
-  const sjalf = faerslur.filter((f) => f.uppruni === 'sjalfvirkt' && hopur(flAf.get(f.skraning_id) || '', kerfi.get(f.skraning_id)));
+  const iVali = (id) => { const hp = hopur(flAf.get(id) || '', kerfi.get(id)); return !!hp && (!HOPAR || HOPAR.has(hp)); };
+  const sjalf = faerslur.filter((f) => f.uppruni === 'sjalfvirkt' && iVali(f.skraning_id));
   if (AFTUR) {
     console.log(`${HAED}: ${sjalf.length} sjálfvirkar færslur${WRITE ? ' — merktar eytt' : ' (þurrkeyrsla)'}`);
     if (WRITE) for (let i = 0; i < sjalf.length; i += 200) await rest('PATCH', `skr_faerslur?id=in.(${sjalf.slice(i, i + 200).map((f) => f.id).join(',')})`, { eytt: true }, 'return=minimal');
@@ -46,7 +50,7 @@ const hopur = (heiti, kerfi) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/
   const inn = []; let handv = 0;
   for (const h of hnit) {
     const f = fAf.get(h.skraning_id); if (f && f.uppruni !== 'sjalfvirkt') { handv++; continue; }
-    const hp = hopur(flAf.get(h.skraning_id) || '', kerfi.get(h.skraning_id)); if (!hp) continue;
+    const hp = hopur(flAf.get(h.skraning_id) || '', kerfi.get(h.skraning_id)); if (!hp || (HOPAR && !HOPAR.has(hp))) continue;
     inn.push({ id: h.skraning_id, x: f && f.fra_x != null ? +f.fra_x : +h.x_px, y: f && f.fra_y != null ? +f.fra_y : +h.y_px, hopur: hp });
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'skr-festa-')), fInn = path.join(tmp, 'inn.json'), fUt = path.join(tmp, 'ut.json');
