@@ -824,7 +824,7 @@ export default function KortClient() {
     const dr = faerir.current;
     if ((synaSkr || linuHamur) && veggir && veggir.lykill === veggjaLykill && veggir.hurdir.length) {   // hurðaop í brunavegg: kerfið fer með þau sem vegg (stokkar fara yfir hurðir)
       const hu = veggir.hurdir, sj = strokRef.current?.sjalf; cx.beginPath(); for (let i = 0; i + 3 < hu.length; i += 4) { if (sj?.has(i / 4)) continue; cx.moveTo(hu[i], hu[i + 1]); cx.lineTo(hu[i + 2], hu[i + 3]); }
-      cx.lineCap = "butt"; cx.lineWidth = linuHamur ? Math.max(2.4 / k, 2.2) : Math.max(1.6 / k, 1.6); cx.strokeStyle = "rgba(37,99,235,.85)"; cx.stroke();
+      cx.lineCap = "butt"; cx.lineWidth = linuHamur ? Math.max(3 / k, 2.8) : Math.max(2.4 / k, 2.2); cx.strokeStyle = "#3b82f6"; cx.stroke();   // jafnþykkar og línur Agnars (18.11.2026: „voru þínar kannski of þunnar“), ljósari og án endapunkta
     }
     if ((synaSkr || linuHamur) && linuTol) {   // línur Agnars: dekkri og þykkari en sjálfvirku, með punkti á endum. Rauð = brunaveggur, blá = hurðaop/gler, græn (strikuð) = valfrjáls festilína
       const ln = linaRef.current, st = strokRef.current, sofn: Record<LinuLykill, number[]> = { hurdalinur: handLinur, vegglinur: raudLinur, graenlinur: graenLinur };
