@@ -9,7 +9,9 @@
 //   … --prufa <mynd.jpg> x y w h   teiknar svæði á yfirlitinu með færslunum
 //   … --afturkalla           merkir allar sjálfvirkar færslur hæðarinnar eytt (með --write)
 // <mappa> yfirlit: yfirlit-6h.jpg / yfirlit-5h.jpg (brunayfirlit 5790 × 2850). <mappa> log: lag-6h-<fag>-<blað>.png í sömu stærð.
-// Hópar: Loft og Raufar → loftræsting; Stál og Plast → vatnslagnir, vatnsúði, lyfjaloft; Raf → raflagnaleiðir. Milliloft er ekki fært.
+// Hópar (18.11.2026): Loft og Raufar → Loftræsikerfi; Plast og Stál (vatn) → Vatnslagnir í lit; Stál (úði) → Vatnsúðakerfi hlutablöð;
+// Raf → Raflagnaleiðir. Lagaskrár í möppunni: lag-<hæð>-loftraesing-*, -vatn-litur-*, -udi-hluta-*, -raflagnaleidir-*.png.
+// Milliloft er ekki fært hér (sjá skraning-gatakort-milliloft/).
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), { spawnSync } = require('node:child_process');
 const ARGS = process.argv.slice(2), WRITE = ARGS.includes('--write'), AFTUR = ARGS.includes('--afturkalla'), opt = (f, d) => { const i = ARGS.indexOf(f); return i >= 0 ? ARGS[i + 1] : d; };
 const HAED = opt('--haed'), RAD = +opt('--radius', 45), YF = opt('--yfirlit'), LOG = opt('--log'), iP = ARGS.indexOf('--prufa'), PRUFA = iP >= 0 ? ARGS.slice(iP + 1, iP + 6) : [];
@@ -21,7 +23,7 @@ const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'applic
 async function rest(method, p, body, prefer = 'return=representation') { const r = await fetch(`${URL_}/rest/v1/${p}`, { method, headers: { ...H, Prefer: prefer }, body: body ? JSON.stringify(body) : undefined }); const t = await r.text(); if (!r.ok) throw new Error(`${method} ${p.slice(0, 70)} → ${r.status} ${t.slice(0, 300)}`); return t ? JSON.parse(t) : null; }
 async function allt(p) { let ut = [], fra = 0; for (;;) { const b = await rest('GET', `${p}&limit=1000&offset=${fra}`); ut = ut.concat(b); if (b.length < 1000) break; fra += 1000; } return ut; }
 // Stálrör skiptast eftir kerfi (skr_kerfi): úðakerfi festist aðeins á úðalagnir, önnur stálrör á vatns- og lyfjaloftslagnir (12.11.2026).
-const hopur = (heiti, kerfi) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/i.test(heiti) ? 'rafmagn' : /^Stál/i.test(heiti) ? (kerfi === 'udi' ? 'udi' : kerfi ? 'stal' : 'ror') : /^Plast/i.test(heiti) ? 'ror' : null);
+const hopur = (heiti, kerfi) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/i.test(heiti) ? 'rafmagn' : /^Stál/i.test(heiti) ? (kerfi === 'udi' ? 'udi' : kerfi ? 'stal' : 'ror') : /^Plast/i.test(heiti) ? 'plast' : null);
 (async () => {
   const [verk] = await rest('GET', `skr_verk?heiti=eq.${encodeURIComponent('NLSH 5-6. hæð · gatakort')}&select=id`);
   const yf = (await rest('GET', `skr_teikningar?verk_id=eq.${verk.id}&eytt=eq.false&tegund=eq.yfirlit&haed=eq.${HAED}&select=id,heiti`))[0];
