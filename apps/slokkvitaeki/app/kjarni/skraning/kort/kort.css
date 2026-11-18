@@ -237,3 +237,18 @@
 .gk.snerti .gk-sledi input[type="range"] { height: 40px; }
 .gk.snerti .gk-litir input[type="color"] { width: 40px; height: 34px; }
 .gk.snerti .gk-litir { font-size: 14px; gap: 8px 12px; }
+
+/* Línutólið (18.11.2026): rauð lína = brunaveggur, blá = hurðaop/glerveggur, græn = valfrjáls festilína, strokleður eyðir. Situr ofan á striganum og tekur við smellum. */
+.gk-strigi.lina, .gk-strigi.lina:active { cursor: crosshair; }
+.gk-strigi.strok, .gk-strigi.strok:active { cursor: cell; }
+.gk-linutol { position: absolute; right: 12px; top: 54px; width: 300px; padding: 8px; border-radius: 8px; background: rgba(255, 255, 255, .96); border: 1px solid #8a9199; box-shadow: 0 1px 6px rgba(0, 0, 0, .18); display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+.gk-linutol .gk-lt-rod { display: flex; flex-wrap: wrap; gap: 6px; }
+.gk-linutol button { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 4px 8px; border: 1px solid #8a9199; border-radius: 6px; background: #fff; color: #161513; font: inherit; font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.gk-linutol button i { width: 18px; height: 4px; border-radius: 2px; background: var(--lt); flex: 0 0 auto; }
+.gk-linutol button.on { background: var(--lt, #1d4ed8); border-color: var(--lt, #1d4ed8); color: #fff; }
+.gk-linutol button.on i { background: #fff; }
+.gk-linutol button:disabled { opacity: .45; cursor: default; }
+.gk-linutol p { margin: 0; font-size: 12px; line-height: 1.35; color: #374151; }
+.gk.snerti .gk-linutol { left: 8px; right: 8px; top: 60px; width: auto; }
+.gk.snerti .gk-linutol button { min-height: 44px; font-size: 14px; }
+.gk.snerti .gk-linutol p { font-size: 12.5px; }
