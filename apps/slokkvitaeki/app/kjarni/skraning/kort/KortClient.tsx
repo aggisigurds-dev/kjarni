@@ -62,6 +62,8 @@ type StillBreyting = Partial<Stillingar> | ((nu: Stillingar) => Partial<Stilling
 /** Línutólið: þrjú línusöfn á verkinu (skr_verk.stillingar[lykill][teikning_id]) og strokleður. */
 type LinuLykill = "hurdalinur" | "vegglinur" | "graenlinur";
 type LinuLitur = "raud" | "bla" | "graen" | "strok";
+/** Þykkt blárra og rauðra lína á teikningunni: eins og rauðu brunaveggirnir (mældir 6 til 8 px á yfirlitinu), svo línan hylji þunnu bláu hurðarstrikin undir (Agnar 18.11.2026). */
+const VEGG_THYKKT = 8;
 const LINU_LYKLAR: LinuLykill[] = ["vegglinur", "hurdalinur", "graenlinur"];
 const LINU_LIT: Record<LinuLykill, string> = { vegglinur: "#b91c1c", hurdalinur: "#1d4ed8", graenlinur: "#15803d" };
 const LINU_LITIR: Partial<Record<LinuLitur, LinuLykill>> = { raud: "vegglinur", bla: "hurdalinur", graen: "graenlinur" };
@@ -824,7 +826,7 @@ export default function KortClient() {
     const dr = faerir.current;
     if ((synaSkr || linuHamur) && veggir && veggir.lykill === veggjaLykill && veggir.hurdir.length) {   // hurðaop í brunavegg: kerfið fer með þau sem vegg (stokkar fara yfir hurðir)
       const hu = veggir.hurdir, sj = strokRef.current?.sjalf; cx.beginPath(); for (let i = 0; i + 3 < hu.length; i += 4) { if (sj?.has(i / 4)) continue; cx.moveTo(hu[i], hu[i + 1]); cx.lineTo(hu[i + 2], hu[i + 3]); }
-      cx.lineCap = "butt"; cx.lineWidth = linuHamur ? Math.max(3 / k, 5) : Math.max(2.4 / k, 4); cx.strokeStyle = "#3b82f6"; cx.stroke();   // jafnþykkar og línur Agnars (18.11.2026: „voru þínar kannski of þunnar“), ljósari og án endapunkta
+      cx.lineCap = "butt"; cx.lineWidth = Math.max((linuHamur ? 3 : 2.6) / k, VEGG_THYKKT); cx.strokeStyle = "#3b82f6"; cx.stroke();   // jafnþykkar og línur Agnars (18.11.2026: „voru þínar kannski of þunnar“), ljósari og án endapunkta
     }
     if ((synaSkr || linuHamur) && linuTol) {   // línur Agnars: dekkri og þykkari en sjálfvirku, með punkti á endum. Rauð = brunaveggur, blá = hurðaop/gler, græn (strikuð) = valfrjáls festilína
       const ln = linaRef.current, st = strokRef.current, sofn: Record<LinuLykill, number[]> = { hurdalinur: handLinur, vegglinur: raudLinur, graenlinur: graenLinur };
@@ -835,8 +837,8 @@ export default function KortClient() {
         if (!hl.length) continue; const lit = LINU_LIT[lyk];
         cx.beginPath(); for (let i = 0; i + 3 < hl.length; i += 4) { cx.moveTo(hl[i], hl[i + 1]); cx.lineTo(hl[i + 2], hl[i + 3]); }
         cx.lineCap = "round"; if (lyk === "graenlinur") cx.setLineDash([Math.max(7 / k, 6), Math.max(5 / k, 4.5)]);
-        cx.lineWidth = Math.max(3.4 / k, 6); cx.strokeStyle = lit; cx.stroke(); cx.setLineDash([]);
-        cx.fillStyle = lit; for (let i = 0; i + 3 < hl.length; i += 4) for (const j of [0, 2]) { cx.beginPath(); cx.arc(hl[i + j], hl[i + j + 1], Math.max(3.8 / k, 4.5), 0, Math.PI * 2); cx.fill(); }
+        cx.lineWidth = Math.max(3.4 / k, lyk === "graenlinur" ? 6 : VEGG_THYKKT); cx.strokeStyle = lit; cx.stroke(); cx.setLineDash([]);
+        cx.fillStyle = lit; for (let i = 0; i + 3 < hl.length; i += 4) for (const j of [0, 2]) { cx.beginPath(); cx.arc(hl[i + j], hl[i + j + 1], Math.max(3.8 / k, 5.5), 0, Math.PI * 2); cx.fill(); }
       }
     }
     /* Ajour-staður færðrar skráningar: strikalína frá staðnum í Ajour að merkinu (teiknuð undir merkjum) og blár punktur á staðnum (teiknaður síðast, ofan á).
