@@ -28,16 +28,18 @@ const hopur = (heiti, kerfi) => (/^(Loft|Raufar)/i.test(heiti) ? 'loft' : /^Raf/
   if (!yf) throw new Error('ekkert yfirlitsblað fyrir ' + HAED);
   const faerslur = await allt(`skr_faerslur?verk_id=eq.${verk.id}&teikning_id=eq.${yf.id}&eytt=eq.false&select=id,skraning_id,uppruni,fra_x,fra_y&order=id`);
   const fAf = new Map(faerslur.map((f) => [f.skraning_id, f]));
-  const sjalf = faerslur.filter((f) => f.uppruni === 'sjalfvirkt');
+  const flokkar = new Map((await rest('GET', `skr_flokkar?or=(verk_id.eq.${verk.id},verk_id.is.null)&select=id,heiti`)).map((f) => [f.id, f.heiti]));
+  const flAf = new Map((await allt(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.false&select=id,flokkur_id&order=id`)).map((s) => [s.id, flokkar.get(s.flokkur_id) || '']));
+  const kerfi = new Map((await allt(`skr_kerfi?verk_id=eq.${verk.id}&select=skraning_id,kerfi&order=skraning_id`)).map((k) => [k.skraning_id, k.kerfi]));
+  // Aðeins sjálfvirkar færslur í hópum sem ÞETTA tól ræður yfir. Milliloft (Gólf) er fært á hringtákn frárennslis með öðru tóli (18.11.2026)
+  // og ber líka uppruna 'sjalfvirkt': þær færslur má hvorki afturkalla hér né merkja úreltar við endurkeyrslu.
+  const sjalf = faerslur.filter((f) => f.uppruni === 'sjalfvirkt' && hopur(flAf.get(f.skraning_id) || '', kerfi.get(f.skraning_id)));
   if (AFTUR) {
     console.log(`${HAED}: ${sjalf.length} sjálfvirkar færslur${WRITE ? ' — merktar eytt' : ' (þurrkeyrsla)'}`);
     if (WRITE) for (let i = 0; i < sjalf.length; i += 200) await rest('PATCH', `skr_faerslur?id=in.(${sjalf.slice(i, i + 200).map((f) => f.id).join(',')})`, { eytt: true }, 'return=minimal');
     return;
   }
-  const flokkar = new Map((await rest('GET', `skr_flokkar?or=(verk_id.eq.${verk.id},verk_id.is.null)&select=id,heiti`)).map((f) => [f.id, f.heiti]));
-  const flAf = new Map((await allt(`skr_skraningar?verk_id=eq.${verk.id}&eytt=eq.false&select=id,flokkur_id&order=id`)).map((s) => [s.id, flokkar.get(s.flokkur_id) || '']));
   const hnit = await allt(`skr_haedarhnit?verk_id=eq.${verk.id}&yfirlit_id=eq.${yf.id}&select=skraning_id,x_px,y_px&order=skraning_id`);
-  const kerfi = new Map((await allt(`skr_kerfi?verk_id=eq.${verk.id}&select=skraning_id,kerfi&order=skraning_id`)).map((k) => [k.skraning_id, k.kerfi]));
   // upprunaleg (vörpuð) staða: handvirkt færðir punktar eru látnir í friði; sjálfvirkt færðir reiknast aftur frá fra_x/fra_y
   const inn = []; let handv = 0;
   for (const h of hnit) {
