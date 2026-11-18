@@ -66,20 +66,6 @@ html[data-fenrir] body { background:var(--fn-void); }
 .rgk[data-fenrir] .rgk-lead { color:var(--fn-text-lead); }
 .rgk[data-fenrir] .rgk-hud { color:var(--fn-text-dim); }
 
-/* tölureitir undir hetjunni (StatTile) */
-.fnk-stats { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr)); gap:16px; }
-.fnk-stat {
-  display:grid; justify-items:center; gap:4px; padding:16px 12px; text-align:center;
-  background:var(--fn-card); border-radius:12px; box-shadow:var(--fn-rest);
-}
-.fnk-stat.on { box-shadow:var(--fn-glow-primary); }
-.fnk-ico {
-  width:30px; height:30px; margin-bottom:4px; fill:none; stroke:var(--fn-accent); stroke-width:2;
-  stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 0 10px rgba(255,80,30,.65));
-}
-.fnk-stat b { font:700 30px/1.1 var(--rg-font); color:var(--fn-text-hi); }
-.fnk-stat span { font:500 14px/1.2 var(--rg-font); color:var(--fn-text); }
-
 /* hnappar og flipar (SegmentTabs): stálhalli, hárlína, skáskorin horn; valinn = primary-kantur */
 .rgk[data-fenrir] .rg-btn {
   padding:0; background:linear-gradient(180deg,var(--fn-card),var(--fn-void)); border:1px solid var(--fn-border);
@@ -141,7 +127,7 @@ html[data-fenrir] body { background:var(--fn-void); }
 .rgk[data-fenrir] .rg-h1.rg-gold-text,
 .rgk[data-fenrir] .rg-h2,
 .rgk[data-fenrir] .rgk-sys-name,
-.rgk[data-fenrir] .fnk-stat b,
+.rgk[data-fenrir] .rgk-stat-v b,
 html[data-fenrir] .stn[data-skin="ragnarok"] .stn-home {
   background:var(--fn-metal); -webkit-background-clip:text; background-clip:text; color:transparent;
   text-shadow:none; filter:var(--fn-metal-shadow);
