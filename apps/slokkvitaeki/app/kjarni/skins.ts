@@ -12,9 +12,12 @@ export const SKINS = [
 export type SkinId = (typeof SKINS)[number]["id"];
 export const SKIN_IDS: SkinId[] = SKINS.map((skin) => skin.id);
 /* v2 (24.09.2026): Ragnarök varð sjálfgefið útlit. Nýr lykill svo allir lendi
- * einu sinni á því — eldra val (kjarni_skin) er hunsað; hin útlitin eru enn í röðinni. */
-export const SKIN_KEY = "kjarni_skin_v2";
-export const DEFAULT_SKIN: SkinId = "ragnarok";
+ * einu sinni á því — eldra val (kjarni_skin) er hunsað; hin útlitin eru enn í röðinni.
+ * v3 (18.11.2026, Agnar: „Fenrir sjálfgefið"): Fenrir varð sjálfgefið — aftur nýr lykill svo öll tæki
+ * lendi einu sinni á Fenrir (eldra val í kjarni_skin_v2 er hunsað); Ragnarök og hin eru áfram í röðinni.
+ * Ef lykillinn breytist: uppfæra líka layout-skriftuna (app/layout.tsx), hún les hann fyrir fyrstu málun. */
+export const SKIN_KEY = "kjarni_skin_v3";
+export const DEFAULT_SKIN: SkinId = "fenrir";
 
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
@@ -37,7 +40,8 @@ export type ToolId = (typeof TOOLS)[number]["id"];
 export function readSkin(): SkinId {
   if (typeof window === "undefined") return DEFAULT_SKIN;
   const stored = window.localStorage.getItem(SKIN_KEY);
-  const fromHtml = document.documentElement.dataset.kjarniSkin;
+  /* Fenrir málast sem data-kjarni-skin="ragnarok" + data-fenrir (layout-skriftan) — lesa það sem fenrir */
+  const fromHtml = document.documentElement.hasAttribute("data-fenrir") ? "fenrir" : document.documentElement.dataset.kjarniSkin;
   if (SKIN_IDS.includes(stored as SkinId)) return stored as SkinId;
   return SKIN_IDS.includes(fromHtml as SkinId) ? (fromHtml as SkinId) : DEFAULT_SKIN;
 }
