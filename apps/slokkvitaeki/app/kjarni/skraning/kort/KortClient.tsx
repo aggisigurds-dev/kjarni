@@ -58,6 +58,7 @@ type Veggir = { seg: number[]; net: Map<number, number[]> };
  *  A_LINU = Ajour-staða nær miðlínu veggjar en þetta er Á veggnum sjálfum (hann er um 5,6 px þykkur á blaðinu) og segir ekkert um hlið. */
 const VC = 64, VL = 8, VEGG_NAER = 20, A_LINU = 3;
 const vLyk = (gx: number, gy: number) => gx * 4096 + gy;
+type StillBreyting = Partial<Stillingar> | ((nu: Stillingar) => Partial<Stillingar>);
 /** Línutólið: þrjú línusöfn á verkinu (skr_verk.stillingar[lykill][teikning_id]) og strokleður. */
 type LinuLykill = "hurdalinur" | "vegglinur" | "graenlinur";
 type LinuLitur = "raud" | "bla" | "graen" | "strok";
@@ -1192,19 +1193,27 @@ export default function KortClient() {
       const ln = linaRef.current, st = strokRef.current; linaRef.current = null; strokRef.current = null;
       if (!var_ || !d || !teikning || !verk) { bidjaUmTeikningu(); return; }
       const lid = String(teikning.id), fyrir = { hurdalinur: handLinur, vegglinur: raudLinur, graenlinur: graenLinur, hurdalinurFaldar: faldarLinur };
-      const allar: Record<LinuLykill, Record<string, number[]> | undefined> = { hurdalinur: hlAllar, vegglinur: vlAllar, graenlinur: glAllar };
+      const lyk4 = (a: number[], i: number) => `${a[i]},${a[i + 1]},${a[i + 2]},${a[i + 3]}`;
       if (st) {   // strokleður: allt sem það snerti fer í einni vistun. Eigin línur hverfa, sjálfvirkar bláar eru faldar á þessu blaði (skráin er óbreytt).
-        const br: Partial<Stillingar> = {};
-        for (const lyk of LINU_LYKLAR) if (st[lyk].size) { const a = linuSofn[lyk], ny: number[] = []; for (let i = 0; i + 3 < a.length; i += 4) if (!st[lyk].has(i / 4)) ny.push(a[i], a[i + 1], a[i + 2], a[i + 3]); br[lyk] = { ...(allar[lyk] || {}), [lid]: ny }; }
-        if (st.sjalf.size) { const hu = veggir && veggir.lykill === veggjaLykill ? veggir.hurdir : [], ny = [...faldarLinur]; for (const j of st.sjalf) ny.push(hu[j * 4], hu[j * 4 + 1], hu[j * 4 + 2], hu[j * 4 + 3]); br.hurdalinurFaldar = { ...(hfAllar || {}), [lid]: ny }; }
-        if (Object.keys(br).length) { setLinuSaga((l) => [...l.slice(-19), { lid, fyrir }]); setjaStill(br, true); }
+        const burt: Record<LinuLykill, Set<string>> = { hurdalinur: new Set(), vegglinur: new Set(), graenlinur: new Set() }, fela: number[] = [];
+        for (const lyk of LINU_LYKLAR) for (const j of st[lyk]) burt[lyk].add(lyk4(linuSofn[lyk], j * 4));
+        const hu = veggir && veggir.lykill === veggjaLykill ? veggir.hurdir : []; for (const j of st.sjalf) fela.push(hu[j * 4], hu[j * 4 + 1], hu[j * 4 + 2], hu[j * 4 + 3]);
+        if (fela.length || LINU_LYKLAR.some((l) => burt[l].size)) {
+          setLinuSaga((l) => [...l.slice(-19), { lid, fyrir }]);
+          setjaStill((nu) => {
+            const br: Partial<Stillingar> = {};
+            for (const lyk of LINU_LYKLAR) if (burt[lyk].size) { const a = nu[lyk]?.[lid] || [], ny: number[] = []; for (let i = 0; i + 3 < a.length; i += 4) if (!burt[lyk].has(lyk4(a, i))) ny.push(a[i], a[i + 1], a[i + 2], a[i + 3]); br[lyk] = { ...(nu[lyk] || {}), [lid]: ny }; }
+            if (fela.length) { const a = nu.hurdalinurFaldar?.[lid] || [], til = new Set<string>(); for (let i = 0; i + 3 < a.length; i += 4) til.add(lyk4(a, i)); const ny = [...a]; for (let i = 0; i + 3 < fela.length; i += 4) if (!til.has(lyk4(fela, i))) ny.push(fela[i], fela[i + 1], fela[i + 2], fela[i + 3]); br.hurdalinurFaldar = { ...(nu.hurdalinurFaldar || {}), [lid]: ny }; }
+            return br;
+          }, true);
+        }
         bidjaUmTeikningu(); return;
       }
       const lyk = LINU_LITIR[linuLitur];
       if (lyk && ln && Math.hypot(ln.x2 - ln.x1, ln.y2 - ln.y1) >= 6 && d.hreyft > 6) {
-        const r1 = (v: number) => Math.round(v * 10) / 10, br: Partial<Stillingar> = {};
-        br[lyk] = { ...(allar[lyk] || {}), [lid]: [...linuSofn[lyk], r1(ln.x1), r1(ln.y1), r1(ln.x2), r1(ln.y2)] };
-        setLinuSaga((l) => [...l.slice(-19), { lid, fyrir }]); setjaStill(br, true); return;
+        const r1 = (v: number) => Math.round(v * 10) / 10, ny = [r1(ln.x1), r1(ln.y1), r1(ln.x2), r1(ln.y2)];
+        setLinuSaga((l) => [...l.slice(-19), { lid, fyrir }]);
+        setjaStill((nu) => { const br: Partial<Stillingar> = {}; br[lyk] = { ...(nu[lyk] || {}), [lid]: [...(nu[lyk]?.[lid] || []), ...ny] }; return br; }, true); return;
       }
       bidjaUmTeikningu(); return;
     }
@@ -1304,11 +1313,26 @@ export default function KortClient() {
   const opid = !!verk?.stillingar?.breytingar;
   /* Stillingar verks: breytast strax á skjánum og vistast á þjón; sleði og litaval vistast 0,7 s eftir síðustu hreyfingu (ein sending, ekki ein per þrep). */
   const stillBid = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const setjaStill = (breyting: Partial<Stillingar>, strax = false) => {
-    if (!verk) return; const stillingar: Stillingar = { ...(verk.stillingar || {}), ...breyting }; setVerk({ ...verk, stillingar });
+  /* Stillingar verksins. Breytingin er sýnd strax á þessu tæki, en VISTUÐ ofan á nýjustu stöðu af þjóni: annað tæki (sími og borðtölva opin samtímis)
+   * getur hafa teiknað línur eða breytt öðru síðan þetta tæki sótti verkið, og heill staðbundinn hlutur myndi þá yfirskrifa það. Fall sem breyting
+   * fær nýjustu stöðuna og skilar aðeins því sem á að breytast (línutólið notar það). Vistanir fara í röð, ein í einu. */
+  const stillBreyt = useRef<StillBreyting[]>([]);
+  const stillRod = useRef<Promise<void>>(Promise.resolve());
+  const setjaStill = (breyting: StillBreyting, strax = false) => {
+    if (!verk) return; const verkId = verk.id;
+    const beita = (nu: Stillingar, b: StillBreyting): Stillingar => ({ ...nu, ...(typeof b === "function" ? b(nu) : b) });
+    setVerk({ ...verk, stillingar: beita(verk.stillingar || {}, breyting) }); stillBreyt.current.push(breyting);
     if (stillBid.current) clearTimeout(stillBid.current);
-    const vista = async () => { stillBid.current = null; const r = await sb().from("skr_verk").update({ stillingar }).eq("id", verk.id); if (r.error) setVilla(r.error.message); };
-    if (strax) void vista(); else stillBid.current = setTimeout(vista, 700);
+    const vista = async () => {
+      const bidur = stillBreyt.current; stillBreyt.current = []; if (!bidur.length) return;
+      const nyj = await sb().from("skr_verk").select("stillingar").eq("id", verkId).single();
+      if (nyj.error) { setVilla(nyj.error.message); return; }
+      const stillingar = bidur.reduce(beita, ((nyj.data as { stillingar: Stillingar | null }).stillingar || {}) as Stillingar);
+      const r = await sb().from("skr_verk").update({ stillingar }).eq("id", verkId); if (r.error) { setVilla(r.error.message); return; }
+      if (!stillBreyt.current.length) setVerk((v) => (v && v.id === verkId ? { ...v, stillingar } : v));   // það sem annað tæki bætti við sést líka hér
+    };
+    const setjaIRod = () => { stillBid.current = null; stillRod.current = stillRod.current.then(vista, vista); };
+    if (strax) setjaIRod(); else stillBid.current = setTimeout(setjaIRod, 700);
   };
   const setjaOpid = (b: boolean) => setjaStill({ breytingar: b }, true);
   const breytaSkraningu = async (p: Punktur, svid: Svid, gildi: string | number | null) => {
@@ -1481,13 +1505,13 @@ export default function KortClient() {
           </div>
           <div className="gk-lt-rod">
             <button type="button" disabled={!linuSaga.length} onClick={() => {
-              const sd = linuSaga[linuSaga.length - 1]; if (!sd) return; const st0 = verk?.stillingar || {}; setLinuSaga((l) => l.slice(0, -1));
-              setjaStill({ hurdalinur: { ...(st0.hurdalinur || {}), [sd.lid]: sd.fyrir.hurdalinur }, vegglinur: { ...(st0.vegglinur || {}), [sd.lid]: sd.fyrir.vegglinur }, graenlinur: { ...(st0.graenlinur || {}), [sd.lid]: sd.fyrir.graenlinur }, hurdalinurFaldar: { ...(st0.hurdalinurFaldar || {}), [sd.lid]: sd.fyrir.hurdalinurFaldar } }, true);
+              const sd = linuSaga[linuSaga.length - 1]; if (!sd) return; setLinuSaga((l) => l.slice(0, -1));
+              setjaStill((nu) => ({ hurdalinur: { ...(nu.hurdalinur || {}), [sd.lid]: sd.fyrir.hurdalinur }, vegglinur: { ...(nu.vegglinur || {}), [sd.lid]: sd.fyrir.vegglinur }, graenlinur: { ...(nu.graenlinur || {}), [sd.lid]: sd.fyrir.graenlinur }, hurdalinurFaldar: { ...(nu.hurdalinurFaldar || {}), [sd.lid]: sd.fyrir.hurdalinurFaldar } }), true);
             }}>↶ Til baka</button>
             {faldarLinur.length > 0 && <button type="button" onClick={() => {
               if (!window.confirm(`Sýna aftur ${faldarLinur.length / 4} sjálfvirkar bláar línur sem voru fjarlægðar?`)) return;
               setLinuSaga((l) => [...l.slice(-19), { lid: String(teikning.id), fyrir: { hurdalinur: handLinur, vegglinur: raudLinur, graenlinur: graenLinur, hurdalinurFaldar: faldarLinur } }]);
-              setjaStill({ hurdalinurFaldar: { ...(hfAllar || {}), [String(teikning.id)]: [] } }, true);
+              const lid = String(teikning.id); setjaStill((nu) => ({ hurdalinurFaldar: { ...(nu.hurdalinurFaldar || {}), [lid]: [] } }), true);
             }}>Sýna aftur {faldarLinur.length / 4} faldar</button>}
           </div>
           <p>{linuLitur === "strok" ? "Strjúktu yfir línu til að eyða henni. Þínar línur hverfa; sjálfvirkar bláar línur eru faldar á þessu blaði." : linuLitur === "raud" ? "Rauð lína = brunaveggur. Dragðu hana þar sem vegginn vantar á kortið." : linuLitur === "graen" ? "Græn lína = festilína. Punktar mega sitja á henni en hún bætir engu við það sem þarf að klára." : "Blá lína = hurðaop eða glerveggur. Dragðu frá vegg að vegg; kortið fer með hana eins og brunavegg."}{snerti ? " Tveir fingur færa blaðið." : " Hægri músartakki færir blaðið."} Engin skráning breytist.</p>
