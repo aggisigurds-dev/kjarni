@@ -3,14 +3,26 @@
  * StationChrome setur data-kjarni-skin="ragnarok" OG data-fenrir, svo allar Ragnarök-reglurnar gilda áfram
  * og þessar leggjast ofan á — aðeins innan .rgk[data-fenrir] og html[data-fenrir]; Ragnarök er óbreytt. */
 
+/* 18.11.2026 (Agnar: „letrið allt of gullt — meira shiny gull metal með rauðum tón eins og Kjarna hringurinn"):
+ * gula gullið víkur fyrir kopar/rósagulli í tónum hringsins. Meginmál ≥ 4,5:1 á #141922 og svörtu;
+ * fyrirsagnir og stórar tölur fá málmhalla (dekksti tónn #b9512a ≥ 3:1 á spjaldi = stór texti). */
 html[data-fenrir] {
-  --fn-primary:#f59e0b; --fn-accent:#fbbf24; --fn-signal:#ff9a3a; --fn-danger:#ef4444;
+  --fn-primary:#dd7a3e; --fn-accent:#f3a46c; --fn-signal:#ff8a4c; --fn-danger:#ef4444;
   --fn-void:#000000; --fn-surface:#0f1116; --fn-card:#141922; --fn-border:#2a3340;
-  --fn-text-hi:#fff0c0; --fn-text-gold:#e6b04a; --fn-text-lead:#d3ac66; --fn-text:#bf9a5d; --fn-text-dim:#9c7a45;
-  --fn-primary-tint:rgba(245,158,11,.14);
+  --fn-text-hi:#ffe6d2; --fn-text-gold:#e9a07a; --fn-text-lead:#e7b293; --fn-text:#d4a587; --fn-text-dim:#b07b61;
+  --fn-primary-tint:rgba(221,122,62,.14);
   --fn-rest:0 0 0 1px #2a3340, 0 8px 24px rgba(0,0,0,.6);
-  --fn-glow-primary:0 0 0 1px rgba(245,158,11,.9), 0 0 14px rgba(245,158,11,.45);
-  --fn-glow-accent:0 0 10px rgba(251,191,36,.6);
+  --fn-glow-primary:0 0 0 1px rgba(221,122,62,.9), 0 0 14px rgba(221,98,46,.45);
+  --fn-glow-accent:0 0 10px rgba(243,140,90,.55);
+  /* gljáandi málmgull með rauðum tón: hápunktur → ferskja → kopar → rauðbrúnn skuggi → kopar → hápunktur */
+  --fn-metal:linear-gradient(180deg,#fff4e8 0%,#ffd6b0 20%,#ec9a62 40%,#b9512a 54%,#dc7c42 66%,#ffc996 82%,#fff0dc 100%);
+  --fn-metal-shadow:drop-shadow(0 1px 0 rgba(60,15,5,.9)) drop-shadow(0 0 10px rgba(226,90,40,.35));
+  /* Ragnarök-breyturnar (á :root) í sömu tónum — efsta stikan, klukkan, merki og annað sem les þær */
+  --rg-gold-100:#fff1e4; --rg-gold-200:#ffdcc0; --rg-gold-300:#f7c09a; --rg-gold-400:#f0a878;
+  --rg-gold-500:#d98a5f; --rg-gold-600:#c06a3f; --rg-gold-700:#9c4520; --rg-gold-800:#6b2610; --rg-gold-900:#3a1208;
+  --rg-ember-100:#ffe8d8; --rg-ember-300:#ff9f6a; --rg-ember-500:#f2763d; --rg-ember-600:#e3632b; --rg-ember-700:#b8481a; --rg-ember-900:#561c08;
+  --rg-text:#f5dfcf; --rg-text-gold:#f0a878; --rg-text-dim:#d4a587; --rg-text-muted:#b07b61;
+  --rg-gold-text:var(--fn-metal);
 }
 html[data-fenrir] body { background:var(--fn-void); }
 
@@ -31,11 +43,6 @@ html[data-fenrir] body { background:var(--fn-void); }
 }
 .rgk[data-fenrir] .rgk-proto { color:var(--fn-text-gold); font-weight:400; }
 .rgk[data-fenrir] .rgk-proto-tags span { color:var(--fn-text-hi); }
-.rgk[data-fenrir] .rg-h1.rg-gold-text {
-  background:linear-gradient(180deg,var(--fn-text-hi) 0%,var(--fn-accent) 55%,var(--fn-primary) 100%);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
-  filter:drop-shadow(0 0 12px rgba(245,158,11,.35));
-}
 .rgk[data-fenrir] .rg-bar.rgk-bar {
   height:6px; background:repeating-linear-gradient(90deg,var(--fn-accent) 0 4px,var(--fn-primary) 4px 8px);
   box-shadow:var(--fn-glow-accent);
@@ -107,3 +114,15 @@ html[data-fenrir] body { background:var(--fn-void); }
 .rgk[data-fenrir] .rgk-mod-top b { color:var(--fn-text-hi); }
 .rgk[data-fenrir] .rgk-mod-kind { color:var(--fn-text-gold); }
 .rgk[data-fenrir] .rgk-mod-desc { color:var(--fn-text); }
+
+/* (aftast svo það vinni lita-reglurnar að ofan) */
+/* málmletrið á fyrirsögnum, tólaheitum, stórum tölum og KJARNI-merkinu í stikunni */
+.rgk[data-fenrir] .rg-h1.rg-gold-text,
+.rgk[data-fenrir] .rg-h2,
+.rgk[data-fenrir] .rgk-sys-name,
+.rgk[data-fenrir] .fnk-stat b,
+html[data-fenrir] .stn[data-skin="ragnarok"] .stn-home {
+  background:var(--fn-metal); -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:none; filter:var(--fn-metal-shadow);
+}
+html[data-fenrir] .stn[data-skin="ragnarok"] .stn-tools a.on { text-shadow:0 0 8px rgba(226,90,40,.6); }
