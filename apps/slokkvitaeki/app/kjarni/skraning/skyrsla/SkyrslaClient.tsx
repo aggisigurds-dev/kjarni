@@ -549,8 +549,14 @@ export default function SkyrslaClient() {
           <table className="sk-tafla sk-flokkar">
             <thead><tr><th>Flokkur</th><th>Klárað</th><th>Opið</th><th>Áætlað</th><th>%</th><th className="sk-stikud">Staða</th></tr></thead>
             <tbody>
-              {flokkaheild.map((x) => { const p = x.mark ? pros(x.klar, x.mark) : null; return (
-                <tr key={x.k}><td className="sk-v"><b>{x.nafn}</b></td><td>{num(x.done)}</td><td>{x.open ? num(x.open) : ""}</td><td>{x.mark ? num(x.mark) : "—"}</td><td><b>{p == null ? "—" : `${p} %`}</b></td><td className="sk-stikud">{p == null ? null : <i style={{ width: `${p}%` }} className={p < 75 ? "lagt" : ""} />}</td></tr>
+              {flokkaheild.map((x) => {
+                // 19.11.2026 (Agnar): raufar eru metraverk (útboðsliður 2.11) — sýndar í metrum úr „Lokið“ liðarins (gogn.utbod["2.11"].lokid,
+                // sama tala og NLSH-uppgjör hubsins) á móti útboðsmagni. Utan heildarinnar í stökum, eins og áður.
+                const um = x.k === "Raufar" ? utbod.find((u) => u.nr === "2.11") : null, mLok = um && um.lokid != null ? Number(um.lokid) : null;
+                const p = mLok != null && um ? Math.min(100, pros(Math.min(mLok, um.magn), um.magn)) : x.mark ? pros(x.klar, x.mark) : null;
+                const metrar = (v: number) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+                return (
+                <tr key={x.k}><td className="sk-v"><b>{x.nafn}</b></td><td>{num(x.done)}{mLok != null ? ` · ${metrar(mLok)} m` : ""}</td><td>{x.open ? num(x.open) : ""}</td><td>{mLok != null && um ? `${num(um.magn)} m` : x.mark ? num(x.mark) : "—"}</td><td><b>{p == null ? "—" : `${p} %`}</b></td><td className="sk-stikud">{p == null ? null : <i style={{ width: `${p}%` }} className={p < 75 ? "lagt" : ""} />}</td></tr>
               ); })}
               <tr className="sk-sum"><td className="sk-v">Heild með áætlun</td><td>{num(alls.klar)}</td><td></td><td>{num(alls.mark)}</td><td>{pros(alls.klar, alls.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(alls.klar, alls.mark)}%` }} /></td></tr>
             </tbody>
