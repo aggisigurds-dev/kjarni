@@ -27,7 +27,7 @@ const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), M
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; itarlegt?: boolean; alag?: number; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; starfsmenn_nofn?: Record<string, string>; starfsmenn_fela?: string[]; itarlegt?: boolean; alag?: number; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
 const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["framvinda", "Framvinda eftir mánuðum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"], ["starfsmenn", "Starfsmenn og þjálfun"], ["gaedi", "Gæði og eftirlit"]];
@@ -428,11 +428,15 @@ export default function SkyrslaClient() {
       const k = q.starfsmadur_id ?? 0, e = m.get(k) || { n: 0, fra: "", til: "" }, d = (q.framkvaemt_til || "").slice(0, 10);
       e.n++; if (d) { if (!e.fra || d < e.fra) e.fra = d; if (d > e.til) e.til = d; } m.set(k, e);
     }
-    return [...m.entries()].map(([id, e]) => ({ id, nafn: id ? starfsmenn.get(id) || `Starfsmaður ${id}` : "Aðrir", ...e })).sort((a, b) => (a.id === 0 ? 1 : b.id === 0 ? -1 : b.n - a.n));
-  }, [skr, starfsmenn]);
+    // Nöfn eins og á skírteinum (gogn.starfsmenn_nofn: nafn í kerfinu → birt nafn) og starfsmenn sem eru ranglega skráðir á
+    // verkið (gogn.starfsmenn_fela, nafn í kerfinu). Athugasemdir Anna í máli #1686, 19.11.2026. Skráningunum sjálfum er ekki breytt.
+    const nofn = gogn.starfsmenn_nofn || {}, fela = new Set(gogn.starfsmenn_fela || []);
+    return [...m.entries()].map(([id, e]) => { const kerfi = id ? starfsmenn.get(id) || `Starfsmaður ${id}` : "Aðrir"; return { id, kerfi, nafn: nofn[kerfi] || kerfi, ...e }; })
+      .filter((r) => !fela.has(r.kerfi)).sort((a, b) => (a.id === 0 ? 1 : b.id === 0 ? -1 : b.n - a.n));
+  }, [skr, starfsmenn, gogn.starfsmenn_nofn, gogn.starfsmenn_fela]);
   const myndir = useMemo(() => { if (!myndaTal) return null; let n = 0, med = 0; for (const q of skr) { const k = myndaTal.get(q.id) || 0; n += k; if (k) med++; } return { n, med }; }, [myndaTal, skr]);
   const manAr = (d: string) => (d ? `${MAN[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "");
-  const SJ_THJALFUN = "Allir starfsmenn sem hafa unnið við brunaþéttingarnar hafa lokið tveimur námskeiðum sem ÞG Verk lagði fyrir og sendi með tengli. Staðfestingar á þátttöku eru hjá ÞG Verki.";
+  const SJ_THJALFUN = "Allir starfsmenn sem hafa unnið við brunaþéttingarnar hafa lokið tveimur námskeiðum sem ÞG Verk lagði fyrir. Auk þess hafa starfsmenn lokið Protecta Fire Stop Training & Installation Programme hjá Redder (11.11.2025 og 23.03.2026) og námskeiði FSi í brunaþéttingum. Staðfestingar á þátttöku eru hjá ÞG Verki og Redder.";
   const SJ_GAEDI = "Hver þétting er skráð í Ajour um leið og hún er unnin, með staðsetningu á teikningu, flokki, starfsmanni, dagsetningu og ljósmyndum. Þéttingin er merkt á staðnum með miða Brunahólfs með dagsetningu og upphafsstöfum starfsmanns. Lagfæringar og athugasemdir eftirlits eru skráðar sem nýjar skráningar, svo saga hvers gats haldist.";
   const dagsTexti = `${Number(dags.slice(8, 10))}. ${MAN[Number(dags.slice(5, 7)) - 1] || ""} ${dags.slice(0, 4)}`;
   /** Lykiltölur hverrar hæðar (sömu tölur og í töflunum). */
@@ -681,6 +685,9 @@ export default function SkyrslaClient() {
             <tbody>
               {starfsTafla.map((r) => <tr key={r.id}><td className="sk-v">{r.nafn}</td><td>{num(r.n)}</td><td>{manAr(r.fra)}</td><td>{manAr(r.til)}</td></tr>)}
               <tr className="sk-sum"><td className="sk-v">Alls {starfsTafla.filter((r) => r.id).length} starfsmenn</td><td>{num(starfsTafla.reduce((a, r) => a + r.n, 0))}</td><td /><td /></tr>
+              {/* Sundurliðun svo summan stemmi við forsíðuna: innan áætlunar = sama tala og þar (Anni #1686, nr. 2). */}
+              <tr><td className="sk-v">þar af innan áætlunar</td><td>{num(alls.klar)}</td><td /><td /></tr>
+              <tr><td className="sk-v">þar af utan áætlunar (raufar við kantaða stokka o.fl.)</td><td>{num(Math.max(0, starfsTafla.reduce((a, r) => a + r.n, 0) - alls.klar))}</td><td /><td /></tr>
             </tbody>
           </table>
           <p className="sk-smatt sk-halda">Taflan er dregin úr skráningunum: sá sem skráir þéttinguna í Ajour er sá sem vann hana. Fjöldinn er kláruð stök verk, ekki vinnustundir.</p>
@@ -695,7 +702,7 @@ export default function SkyrslaClient() {
           {!les && <textarea className="sk-texti" rows={4} value={gogn.gaedi ?? SJ_GAEDI} onChange={(e) => breyta({ gaedi: e.target.value })} aria-label="Texti um gæði og eftirlit" />}
           <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.gaedi ?? SJ_GAEDI}</p>
           <ul className="sk-gaedi">
-            <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(klaradAlls)} kláraðar.{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
+            <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(alls.klar)} kláraðar innan áætlunar og {num(Math.max(0, klaradAlls - alls.klar))} utan hennar (raufar við kantaða stokka o.fl.).{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
             {myndir && <li><b>Ljósmyndir:</b> {num(myndir.n)} myndir fylgja {num(myndir.med)} af {num(skr.length)} skráningum ({num(Math.floor((1000 * myndir.med) / Math.max(1, skr.length)) / 10, 1)} %).</li>}
             <li><b>Rekjanleiki:</b> hver skráning ber raðnúmer, starfsmann og dagsetningu, og sést á sínum stað á teikningu hæðarinnar í kaflanum „Staðan á hæðunum“.</li>
           </ul>

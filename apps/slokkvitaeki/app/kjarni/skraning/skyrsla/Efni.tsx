@@ -19,7 +19,7 @@
 
 export type EfniGogn = { verkferli?: Record<string, string>; verkferli_ok?: boolean };
 
-const EFNI: { k: string; heiti: string; vara: string; nr: string; mynd: string; sida: string; lysing: string; notkun: string; skjol: [string, string][]; vott?: string }[] = [
+const EFNI: { k: string; heiti: string; vara: string; nr?: string; mynd?: string; sida?: string; lysing: string; notkun: string; skjol: [string, string][]; vott?: string }[] = [
   { k: "akril", heiti: "Hvítt eldvarnarakríl", vara: "Protecta FR Acrylic", nr: "POL PRO005 (310 ml) · POL PRO022 (600 ml)",
     mynd: "https://redder.is/wp-content/uploads/2023/06/POL-PRO005.jpg", sida: "https://redder.is/voruflokkar/protecta-eldvarnar-akril/",
     lysing: "Eldvarnarþéttiefni fyrir samskeyti og op í brunahólfandi veggjum og gólfum. Helst sveigjanlegt eftir hörðnun, heldur hljóðeinangrun byggingarhlutans og þenst út við hita.",
@@ -45,6 +45,16 @@ const EFNI: { k: string; heiti: string; vara: string; nr: string; mynd: string; 
     lysing: "Útþenjandi vafningur sem er settur utan um plaströr inni í gegnumtakinu og lokar því þegar rörið bráðnar.",
     notkun: "Plaströr og rafmagnsrör í gegnum veggi og gólf.",
     skjol: [["Yfirlýsing um nothæfi (DoP)", "https://protecta.si/wp-content/uploads/2026/02/FR-Pipe-Wrap-DoP.pdf"], ["ETA 24/0957", "https://www.eota.eu/etassessments/19596"], ["Uppsetningarleiðbeiningar", "https://s3.eu-west-1.amazonaws.com/static.fw1.biz/Templates/80674/myimages/protecta%20pipe%20wrap%20-%20installation%20instructions_1755090852546.pdf"], ["Tækniblað", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-Technical-Data-Sheet.pdf"], ["Öryggisblað", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-Safety-Data-Sheet.pdf"], ], vott: "DoP PS-14015 (12.08.2025) · ETA 22/0733, ETA 22/0748, ETA 24/0957" },
+  // FSi-efnin (Anni, mál #1686 nr. 5, 19.11.2026): akrýlið er skráð „Akríl / Pyrocoustic Sealant“ í gátlistum Ajour og PipeBloc EL
+  // er í efnisyfirlitinu. DoP-, ETA- og UL-númer eru frá Anna; tenglar og vörunúmer ekki sannreynd, því engir tenglar.
+  { k: "fsi-akril", heiti: "Hvítt eldvarnarakríl (FSi)", vara: "FSi Pyrocoustic Sealant",
+    lysing: "Hljóð- og eldvarnarþéttiefni úr akríli fyrir samskeyti og op í brunahólfandi veggjum og gólfum.",
+    notkun: "Þétting umhverfis lagnir og meðfram eldvarnarþéttull, sama notkun og FR Acrylic.",
+    skjol: [], vott: "DoP05-PS-21 · ETA 21/0049 · DoP05-LGS-21 · ETA 21/0050 · UL-EU-00500" },
+  { k: "fsi-band", heiti: "Eldvarnarband (FSi)", vara: "FSi PipeBloc EL",
+    lysing: "Útþenjandi vafningur sem er settur utan um plaströr í gegnumtakinu og lokar því þegar rörið bráðnar.",
+    notkun: "Plaströr í gegnum veggi og gólf, sama notkun og FR Pipe Wrap.",
+    skjol: [], vott: "DoP022 · ETA 20/1007 · UL-EU-01023" },
 ];
 
 export function Efni() {
@@ -53,17 +63,19 @@ export function Efni() {
       <div className="sk-efni-rist">
         {EFNI.map((e) => (
           <article key={e.k}>
-            <a className="sk-efni-mynd" href={e.sida} target="_blank" rel="noreferrer" aria-label={`${e.vara} hjá Redder`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={e.mynd} alt={e.vara} loading="lazy" referrerPolicy="no-referrer" onError={(ev) => { ev.currentTarget.style.visibility = "hidden"; }} />
-            </a>
+            {e.mynd ? (
+              <a className="sk-efni-mynd" href={e.sida} target="_blank" rel="noreferrer" aria-label={`${e.vara} hjá Redder`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={e.mynd} alt={e.vara} loading="lazy" referrerPolicy="no-referrer" onError={(ev) => { ev.currentTarget.style.visibility = "hidden"; }} />
+              </a>
+            ) : <span className="sk-efni-mynd" aria-hidden="true" />}
             <div>
               <h3>{e.heiti}</h3>
               <b>{e.vara}</b>
               <p>{e.lysing}</p>
               <dl>
                 <dt>Ætlað fyrir</dt><dd>{e.notkun}</dd>
-                <dt>Vörunúmer</dt><dd>{e.nr}</dd>
+                {e.nr && <><dt>Vörunúmer</dt><dd>{e.nr}</dd></>}
                 {e.vott && <><dt>Vottun</dt><dd>{e.vott}</dd></>}
               </dl>
               {e.skjol.length > 0 && <div className="sk-efni-skjol">{e.skjol.map(([n, u]) => <a key={u} href={u} target="_blank" rel="noreferrer">{n}</a>)}</div>}
@@ -71,7 +83,7 @@ export function Efni() {
           </article>
         ))}
       </div>
-      <p className="sk-smatt">Efnin eru úr Protecta-línunni og keypt hjá Redder ehf. Á tveimur reikningum vegna verksins sumarið 2026 eru auk þess hvítt eldvarnarakríl og eldvarnarband á rúllu frá FSi (FSI FS310CW25 og FSI PWPEL). Brunamótstaða hverrar þéttingar ræðst af prófaðri útfærslu samkvæmt gögnum framleiðanda (gerð veggjar eða gólfs, stærð ops og tegund lagnar). Tenglarnir vísa á tækniblöð og leiðbeiningar á vef Redder. Myndir: Redder ehf.</p>
+      <p className="sk-smatt">Efnin eru frá Protecta (Polyseam Ltd.) og FSi, keypt hjá Redder ehf. Brunamótstaða hverrar þéttingar ræðst af prófaðri útfærslu samkvæmt gögnum framleiðanda (gerð veggjar eða gólfs, stærð ops og tegund lagnar). Tenglarnir vísa á tækniblöð og leiðbeiningar á vef Redder. Myndir: Redder ehf.</p>
     </div>
   );
 }
@@ -80,17 +92,17 @@ export function Efni() {
  * Vísað er í gögn framleiðanda í heild (DoP, ETA, uppsetningarleiðbeiningar, tæknihandbók), ekki í einstakar greinar: ETA-skjölin
  * hafa ekki verið lesin í smáatriðum, svo engar tölur (dýpt, bil, stærðarmörk) eru settar fram. Tilvísanalistinn er dreginn úr EFNI. */
 const SKREF: { k: string; heiti: string; texti: string }[] = [
-  { k: "gogn", heiti: "Gögn framleiðanda", texti: "Allar þéttingar eru gerðar með vörum úr Protecta-línunni (framleiðandi Polyseam Ltd.) og samkvæmt gögnum framleiðanda: yfirlýsingu um nothæfi (DoP), evrópsku tæknimati (ETA) og uppsetningarleiðbeiningum hverrar vöru, ásamt tæknihandbók Protecta. Gögnin eru talin upp í tilvísunum hér að neðan og fylgja skýrslunni." },
+  { k: "gogn", heiti: "Gögn framleiðanda", texti: "Allar þéttingar eru gerðar með vörum frá Protecta (framleiðandi Polyseam Ltd.) og FSi, og samkvæmt gögnum framleiðanda: yfirlýsingu um nothæfi (DoP), evrópsku tæknimati (ETA) og uppsetningarleiðbeiningum hverrar vöru, ásamt tæknihandbók Protecta. Gögnin eru talin upp í tilvísunum hér að neðan og fylgja skýrslunni." },
   // Skref 2–4 og 7–8 eru vinnulagið eins og Agnar lýsti því 19.11.2026: punktur í Ajour, mæla gatið og rétt stærð, mynd,
   // blása úr, þétta, miði (fyrirtæki, efni, dagsetning, upphafsstafir), sömu upplýsingar í kerfið og mynd í lokin (og í miðju verki).
   { k: "punktur", heiti: "Skráning í Ajour", texti: "Áður en vinna hefst við nýja þéttingu er punktur skráður í Ajour á réttum stað á teikningu hæðarinnar." },
   { k: "flokkun", heiti: "Mæling og val á lausn", texti: "Gatið er mælt og rétt stærð og flokkur skráð í Ajour. Metið er í hvaða byggingarhluta gegnumtakið er (veggur eða gólf), tegund lagnar (stálrör, plaströr, loftstokkur, raflögn), þvermál og einangrun. Út frá því er valin sú lausn sem ETA vörunnar nær yfir. Gegnumtak sem fellur utan prófaðra útfærslna er borið undir verkkaupa áður en þétt er." },
   { k: "undirbuningur", heiti: "Mynd og hreinsun", texti: "Tekin er mynd af gatinu áður en unnið er í því. Síðan er blásið úr opinu svo ryk og laust efni hverfi og þéttiefnið nái viðloðun eins og uppsetningarleiðbeiningar gera ráð fyrir." },
   { k: "fylling", heiti: "Fylling stærri opa", texti: "Stærri op eru fyllt með eldvarnarþéttull (FR Board) sem er skorin þétt að lögnum og brúnum opsins. Samskeyti, jaðrar og bil við lagnir eru þétt með eldvarnarakríli (FR Acrylic), samkvæmt uppsetningarleiðbeiningum FR Board." },
-  { k: "thetting", heiti: "Þétting eftir tegund lagnar", texti: "Stálrör og óeinangruð málmrör: eldvarnarakríl (FR Acrylic) allan hringinn.\nEinangruð málmrör, kaplar og kapalbakkar: háþenslukítti (FR Graphite).\nPlaströr: háþenslukítti (FR Graphite), og eldvarnarkragi (FR Collar) eða eldvarnarband (FR Pipe Wrap) þar sem ETA gerir kröfu um það miðað við efni og þvermál rörs.\nLoftstokkar: opið fyllt með FR Board og þétt með FR Acrylic að stokknum.\nÍ öllum tilvikum er farið eftir uppsetningarleiðbeiningum viðkomandi vöru um magn, dýpt og frágang." },
+  { k: "thetting", heiti: "Þétting eftir tegund lagnar", texti: "Stálrör og óeinangruð málmrör: eldvarnarakríl (FR Acrylic eða FSi Pyrocoustic Sealant) allan hringinn.\nEinangruð málmrör, kaplar og kapalbakkar: háþenslukítti (FR Graphite).\nPlaströr: háþenslukítti (FR Graphite), og eldvarnarkragi (FR Collar) eða eldvarnarband (FR Pipe Wrap eða FSi PipeBloc EL) þar sem ETA gerir kröfu um það miðað við efni og þvermál rörs.\nLoftstokkar: opið fyllt með FR Board og þétt með FR Acrylic að stokknum.\nÍ öllum tilvikum er farið eftir uppsetningarleiðbeiningum viðkomandi vöru um magn, dýpt og frágang." },
   // Milliloft eftir lýsingu Agnars 19.11.2026; dýpt og frágangur úr uppsetningarleiðbeiningum FR Acrylic (rigid floors, lesið sama dag):
   // stoðefni skorið aðeins í yfirstærð og þrýst þétt í gatið (almennt lið 8), akríl 15–25 mm eftir útfærslu, á steinull.
-  { k: "milliloft", heiti: "Milliloftsþéttingar (gólf)", texti: "Lagnirnar í gólfinu eru stálrör, steypt föst að ofanverðu, og þar er þétt með eldvarnarakríli (FR Acrylic) umhverfis rörið. Að neðan er blásið úr gatinu, eldvarnarakríl sett í hringinn í gatinu og á rörið til festu, eldvarnarþéttull skorin aðeins í yfirstærð og þrýst þétt í gatið umhverfis rörið, og loks er eldvarnarakríl lagt vel yfir. Dýpt akríls og steinullar fylgir uppsetningarleiðbeiningum FR Acrylic fyrir stálrör í gólfi (ETA 22/0735, ETA 23/0257)." },
+  { k: "milliloft", heiti: "Milliloftsþéttingar (gólf)", texti: "Lagnirnar í gólfinu eru stálrör, steypt föst að ofanverðu, og þar er þétt með eldvarnarakríli (FR Acrylic eða FSi Pyrocoustic Sealant) umhverfis rörið. Að neðan er blásið úr gatinu, eldvarnarakríl sett í hringinn í gatinu og á rörið til festu, eldvarnarþéttull skorin aðeins í yfirstærð og þrýst þétt í gatið umhverfis rörið, og loks er eldvarnarakríl lagt vel yfir. Dýpt akríls og steinullar fylgir uppsetningarleiðbeiningum framleiðanda fyrir stálrör í gólfi (FR Acrylic: ETA 22/0735, ETA 23/0257; Pyrocoustic Sealant: ETA 21/0049)." },
   { k: "merking", heiti: "Merking", texti: "Við hverja þéttingu er settur miði með nafni fyrirtækisins, efninu sem notað var, dagsetningu og upphafsstöfum starfsmanns." },
   { k: "skraning", heiti: "Lokaskráning og mynd", texti: "Sömu upplýsingar eru skráðar í Ajour og tekin mynd af fullgerðri þéttingu. Sé þéttingin unnin í fleiri skrefum er einnig tekin mynd á milli skrefa. Skráningin er staðfestingin á verkinu og grunnur þessarar skýrslu." },
   { k: "eftirlit", heiti: "Eftirlit og lagfæringar", texti: "Opnar skráningar og athugasemdir eftirlits eru unnar jafnóðum. Lagfæring er skráð sem ný skráning, svo saga hvers gats haldist." },
