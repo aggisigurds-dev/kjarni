@@ -89,7 +89,7 @@ export function Verkferli({ gogn, onChange, les }: { gogn: EfniGogn; onChange: (
   const setja = (k: string, v: string) => { const n = { ...br }; if (v.trim() && v !== SKREF.find((s) => s.k === k)?.texti) n[k] = v; else delete n[k]; onChange({ verkferli: n }); };
   return (
     <div className="sk-vf">
-      {!gogn.verkferli_ok && <p className="sk-vf-drog"><b>Drög.</b> Textinn hér að neðan er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu skrefin og hakaðu við þegar textinn er réttur — þá hverfur þessi merking. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => onChange({ verkferli_ok: true })} /> Yfirfarið</label></span>}</p>}
+      {!gogn.verkferli_ok && <p className="sk-vf-drog sk-skjar"><b>Drög.</b> Textinn hér að neðan er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu skrefin og hakaðu við þegar textinn er réttur — þá hverfur þessi merking. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => onChange({ verkferli_ok: true })} /> Yfirfarið</label></span>}</p>}
       <ol className="sk-vf-skref">
         {SKREF.map((s, i) => (
           <li key={s.k}>

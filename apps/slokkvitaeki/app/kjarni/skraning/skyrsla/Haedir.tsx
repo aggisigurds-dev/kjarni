@@ -15,6 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { publicUrl, sb } from "../lib/sb";
 
 export type HkPunktur = { kerfi: string | null; kvafi: boolean; kmynd: boolean; id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
+/** „Eftir (áætlað)“ í samtölum: það sem vantar upp á áætlunina (áætlað − klárað − opið), svo línan stemmi; án áætlunar: talin áætluð göt. */
+const eftirTala = (r: { m: number | null; kl: number; open: number }, talid: number) => (r.m != null ? Math.max(0, r.m - r.kl - r.open) : talid);
 /** Áætlað gat án skráningar („eftir“): n = stök verk sem vantar. */
 /** st = stútur úr viðbótarverkinu á 4. hæð (án skráningar): númer á teikningu, flokkun, texti úttektar í skjalinu og næsta ónotaða skráning. */
 export type HkEftir = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; n: number; st?: { nr: number; fl: string; uttekt: string | null; naest: { nr: number; d_m: number; stada: string } | null } };
@@ -144,7 +146,7 @@ function Framvinda({ punktar, haedir, fra, til, onVelja }: { punktar: HkPunktur[
   return (
     <div className="sk-fv">
       <div className="sk-fv-haus">
-        <h3>Framvinda eftir mánuðum <span>kláraðar skráningar · {num(gogn[gogn.length - 1].upps)} alls{anDags ? ` · ${num(anDags)} án dagsetningar eru ekki í ritinu` : ""}</span></h3>
+        <h3>Framvinda eftir mánuðum <span>kláraðar skráningar · {num(gogn[gogn.length - 1].upps)} alls{anDags ? <i className="sk-itar"> · {num(anDags)} án dagsetningar eru ekki í ritinu</i> : ""}</span></h3>
         <div className="sk-fv-skyring">{haedir.map((h) => <span key={h}><i style={{ background: LITUR_H[h] }} />{haedHeiti(h)}</span>)}</div>
       </div>
       <div className="sk-fv-rit" ref={ref} onPointerLeave={() => setYfir(null)}>
@@ -353,7 +355,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
               <td className="sk-v"><b>Deild {d}</b> <small>{haedHeiti(haed)}</small></td>
               {HLUTAR.map(([s], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null; return <td key={s} style={{ background: litur(p)[0] }}>{p != null ? <b>{p} % </b> : null}<small>{texti(r)}{r.open ? ` · +${num(r.open)}` : ""}</small></td>; })}
               <td style={{ background: litur(pd)[0] }}>{pd != null ? <b>{pd} % </b> : null}<small>{texti(rd)}</small></td>
-              <td>{rd.open ? num(rd.open) : ""}</td><td>{eDeild(d) ? num(eDeild(d)) : ""}</td>
+              <td>{rd.open ? num(rd.open) : ""}</td><td>{eftirTala(rd, eDeild(d)) ? num(eftirTala(rd, eDeild(d))) : ""}</td>
             </tr>
           ); })}
         </tbody>
@@ -490,7 +492,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
     setValinn(p); setFokus({ id: p.id, t: Date.now() });
   };
 
-  const hausAf = (haed: string) => { const ha = haedAlls(haed), eH = eftirSiad.filter((e) => e.haed === haed); return `${haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}${ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}${ha.open ? ` · ${num(ha.open)} opið` : ""}${eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}`; };
+  const hausAf = (haed: string) => { const ha = haedAlls(haed), eH = eftirSiad.filter((e) => e.haed === haed); return `${haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}${ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}${ha.open ? ` · ${num(ha.open)} opið` : ""}${eftirTala(ha, eH.reduce((a, e) => a + e.n, 0)) ? ` · ${num(eftirTala(ha, eH.reduce((a, e) => a + e.n, 0)))} eftir (áætlað)` : ""}`; };
   const siuradir = (
     <>
         <div className="sk-sia-rod"><span>Flokkur</span>
@@ -539,7 +541,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
       <div className="sk-hk-tolur">
         <div><span>Klárað</span><b>{num(alls.done)}</b></div>
         <div><span>Opið</span><b>{num(alls.open)}</b></div>
-        <div><span>Eftir, áætlað og óskráð</span><b>{num(eftirAlls)}</b></div>
+        <div><span>Eftir (áætlað)</span><b>{num(eftirTala(alls, eftirAlls))}</b></div>
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>

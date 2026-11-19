@@ -27,7 +27,7 @@ const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), M
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; itarlegt?: boolean; alag?: number; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
 const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"], ["starfsmenn", "Starfsmenn og þjálfun"], ["gaedi", "Gæði og eftirlit"]];
@@ -35,6 +35,9 @@ const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold
 const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"], ["k-starfsmenn", "Starfsmenn", "starfsmenn"], ["k-gaedi", "Gæði", "gaedi"]];
 /** Kaflar sem eru faldir nema kveikt sé á þeim (gogn.kaflar[lykill] === true). */
 const SJALFG_FALDIR = new Set(["anstadar"]);
+/** Sjálfgefið álag á áætlaðan fjölda (%), gogn.alag yfirskrifar. Áætlunin var of lág og prósentan því of há (Agnar 19.11.2026).
+ *  Viðmið: á 6. hæð sker loftstokkur brunaskil á um 10 % fleiri stöðum á teikningu en skráðir eru (548 á móti 491). */
+const SJ_ALAG = 10;
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5", "—"];   // „—" = skráningar á hæðinni sem skiptast ekki á deild (rafmagn á sérteikningum)
 const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i], ["Raufar", "Raufar við kantaða stokka", /^Raufar/i], ["Rafmagn", "Rafmagn", /^Raf/i]];
@@ -259,6 +262,7 @@ export default function SkyrslaClient() {
    *  að viðbættu óskráðu viðbótarverki á 4H (vidbot4). */
   const golfMark = useCallback((haed: string, deild: string) => { if (haed === "6H") return 0; if (haed !== "4H") return GOLF_MARK; const t5 = taln.hd.get(`5H|${deild}|Gólf`) || { done: 0, open: 0 }; return Math.max(GOLF_MARK, t5.done + t5.open) + (vidbot4.get(deild) || 0); }, [taln, vidbot4]);
   /** Sjálfgefið markmið hóps (sama aðferð og Landspítalasíða hubsins). */
+  const alagF = 1 + Math.max(0, Math.min(50, gogn.alag ?? SJ_ALAG)) / 100;
   const markmidReiknad = useCallback((haed: string, deild: string, hop: string): number | null => {
     if (deild === "—" || AN_MARKMIDS.has(hop)) return null;
     const t = (h: string, d: string, k: string) => taln.hd.get(`${h}|${d}|${k}`) || { done: 0, open: 0 };
@@ -277,8 +281,8 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
-    return Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${hop}`) || 0));
-  }, [taln, golfMark, eftirHop]);
+    return Math.round(Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${hop}`) || 0)) * alagF);
+  }, [taln, golfMark, eftirHop, alagF]);
 
   /** Markmið hóps á HLUTA deildar (Norður/Center/Suður): sama regla og deildin, reiknuð á hlutann; föstu deildarmarkmiðin (milliloft,
    *  rafmagn) skiptast jafnt á hlutana þrjá. Summa hluta getur því vikið lítillega frá markmiði deildar. */
@@ -300,8 +304,8 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
-    return Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${HLUTAR[i]}|${hop}`) || 0));
-  }, [taln, golfMark, vidbot4, eftirHop]);
+    return Math.round(Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${HLUTAR[i]}|${hop}`) || 0)) * alagF);
+  }, [taln, golfMark, vidbot4, eftirHop, alagF]);
   /** Punktar hæðakortsins: skráningar með hæðarhnit (aukaverk eru sér). */
   const hkPunktar = useMemo<HkPunktur[]>(() => {
     const ut: HkPunktur[] = [];
@@ -405,8 +409,8 @@ export default function SkyrslaClient() {
     setOvistad(false);
   };
   const nBr = Object.keys(gogn.stada || {}).length + Object.keys(gogn.utbod || {}).length;
-  const sjInngangur = () => `Skýrslan sýnir stöðu brunaþéttinga Brunahólfs á 5. og 6. hæð samkvæmt skráningum í Ajour${nyjast ? ` til og með ${dmy(nyjast)}` : ""}. Lokið er ${num(alls.klar)} stökum verkum af áætluðum ${num(alls.mark)}, eða ${pros(alls.klar, alls.mark)} %. Verkið er enn í vinnslu og tölurnar breytast með hverri skráningu.\n\nSkýrslan er tekin saman vegna óskar verkeftirlits um gögn: efni og kerfi, staða verks eftir hæðum og deildum, starfsmenn og þjálfun, og gæðagögn. Hún er samantektarskýrsla úr Ajour, dregin beint úr skráningunum.`;
-  const SJ_LOK = "Verkið er í vinnslu. Skýrsluna má uppfæra hvenær sem er og tölurnar fylgja þá nýjustu skráningum. Áætlaður fjöldi er mat en ekki talning á öllum götum, sjá kaflann Forsendur og fyrirvarar.";
+  const sjInngangur = () => `Skýrslan sýnir stöðu brunaþéttinga Brunahólfs á 5. og 6. hæð samkvæmt skráningum í Ajour${nyjast ? ` til og með ${dmy(nyjast)}` : ""}. Lokið er ${num(alls.klar)} stökum verkum af áætluðum ${num(alls.mark)}, eða ${pros(alls.klar, alls.mark)} %. Verkið er í vinnslu.\n\nSkýrslan er tekin saman vegna óskar verkeftirlits um gögn: efni og kerfi, staða verks eftir hæðum og deildum, starfsmenn og þjálfun, og gæðagögn. Hún er samantektarskýrsla úr Ajour, dregin beint úr skráningunum.`;
+  const SJ_LOK = "Verkið er í vinnslu og skýrslan er uppfærð eftir því sem því miðar.";
   const synaKafla = (k: string) => (SJALFG_FALDIR.has(k) ? gogn.kaflar?.[k] === true : gogn.kaflar?.[k] !== false);
   /** Fyrir kaflann „Forsendur og fyrirvarar“: hve margir punktar eru færðir á teikningunni og dagsetning nýjustu kláruðu skráningar. */
   const faerdirN = [...hnit.values()].filter((h) => h.faerdur).length;
@@ -443,7 +447,7 @@ export default function SkyrslaClient() {
   if (stadaTexti) return <p className="sk-hl">{stadaTexti}</p>;
   if (villa && !verk) return <p className="sk-hl">Villa: {villa}</p>;
   return (
-    <div className={`sk sk-v2${les ? " sk-les" : ""}`}>
+    <div className={`sk sk-v2${les ? " sk-les" : ""}${gogn.itarlegt ? "" : " sk-stutt"}`}>
       {les && <div className="sk-lesstika"><b>Brunahólf ehf</b><span>{verk?.heiti}</span><button type="button" onClick={() => window.print()}>Prenta / PDF</button></div>}
       <div className="sk-stika">
         <span>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</span>
@@ -463,6 +467,8 @@ export default function SkyrslaClient() {
             <div className="sk-merki">Kaflar</div>
             {KAFLAR.map(([k, nafn]) => <label key={k} className="sk-rofi"><input type="checkbox" checked={synaKafla(k)} onChange={() => skiptaKafla(k)} /><i /><span>{nafn}</span></label>)}
             <label className="sk-rofi"><input type="checkbox" checked={!gogn.an_staerda} onChange={(e) => breyta({ an_staerda: !e.target.checked })} /><i /><span>Stærðir undir hverjum flokki</span></label>
+            <label className="sk-rofi"><input type="checkbox" checked={!!gogn.itarlegt} onChange={(e) => breyta({ itarlegt: e.target.checked })} /><i /><span>Ítarlegar skýringar og forsendur</span></label>
+            <label className="sk-alag"><span>Álag á áætlun</span><input type="number" min={0} max={50} step={1} value={gogn.alag ?? SJ_ALAG} onChange={(e) => breyta({ alag: Math.max(0, Math.min(50, Number(e.target.value) || 0)) })} aria-label="Álag á áætlaðan fjölda í prósentum" /><i>%</i></label>
             <div className="sk-merki">Dagsetning skýrslu</div>
             <input type="date" value={dags} onChange={(e) => breyta({ dags: e.target.value })} aria-label="Dagsetning" />
             <div className="sk-merki">Einingar</div>
@@ -506,12 +512,12 @@ export default function SkyrslaClient() {
           <div><span>Viðbótarverk 4. hæðar</span><em className={stutaspjald.p >= 95 ? "ok" : stutaspjald.heildKlar ? "vinna" : "eftir"}>{stutaspjald.heildKlar >= stutaspjald.heildAlls ? "Lokið" : stutaspjald.heildKlar ? "Hafið" : "Ekki hafið"}</em></div>
           <b>{stutaspjald.p} %</b>
           <i><u style={{ width: `${Math.min(100, stutaspjald.p)}%` }} className={stutaspjald.p >= 95 ? "ok" : ""} /></i>
-          <small>{num(stutaspjald.heildKlar)} af {num(stutaspjald.heildAlls)} stökum verkum.<br />{stutaspjald.alls ? <>Stútar af 5. hæð niður í inntaksrými 4. hæðar: {num(stutaspjald.klar)} af {num(stutaspjald.alls)} þéttir · {num(stutaspjald.opid)} skráðir, ekki kláraðir · {num(stutaspjald.an)} án skráningar{stutaspjald.ekkiKominn ? ` (þar af ${num(stutaspjald.ekkiKominn)} stútar ekki komnir)` : ""}.<br /></> : null}{stutaspjald.nytt.alls ? <>Nýtt viðbótarverk: {num(stutaspjald.nytt.klar)} af {num(stutaspjald.nytt.alls)} gólfgötum þétt · {num(stutaspjald.nytt.opid)} skráð, ekki kláruð{stutaspjald.nytt.an ? ` · ${num(stutaspjald.nytt.an)} án skráningar` : ""}.<br /></> : null}Innifalið í gólfi 5. hæðar.</small>
+          <small>{num(stutaspjald.heildKlar)} af {num(stutaspjald.heildAlls)} stökum verkum.<br />{gogn.itarlegt && stutaspjald.alls ? <>Stútar af 5. hæð niður í inntaksrými 4. hæðar: {num(stutaspjald.klar)} af {num(stutaspjald.alls)} þéttir · {num(stutaspjald.opid)} skráðir, ekki kláraðir · {num(stutaspjald.an)} án skráningar{stutaspjald.ekkiKominn ? ` (þar af ${num(stutaspjald.ekkiKominn)} stútar ekki komnir)` : ""}.<br /></> : null}{gogn.itarlegt && stutaspjald.nytt.alls ? <>Nýtt viðbótarverk: {num(stutaspjald.nytt.klar)} af {num(stutaspjald.nytt.alls)} gólfgötum þétt · {num(stutaspjald.nytt.opid)} skráð, ekki kláruð{stutaspjald.nytt.an ? ` · ${num(stutaspjald.nytt.an)} án skráningar` : ""}.<br /></> : null}Innifalið í gólfi 5. hæðar.</small>
         </div>}
       </div>}
 
       {synaKafla("forsendur") && <div className="sk-forsendur">
-        <h2>Forsendur og fyrirvarar</h2>
+        <h2>{gogn.itarlegt ? "Forsendur og fyrirvarar" : "Um tölurnar"}</h2>
         <ul>
           <li><b>Gögnin:</b> skráningar Brunahólfs í Ajour. Hver þétting er skráð með staðsetningu á teikningu, flokki, starfsmanni, dagsetningu og að jafnaði myndum.{nyjast ? ` Nýjasta kláraða skráning í þessari skýrslu er frá ${dmy(nyjast)}.` : ""}</li>
           <li><b>Einingar:</b> tölur eru stök verk, þ.e. þétting öðrum megin við vegg. Tvö stök verk eru ein lokun; í gólfi er eitt verk ein þétting.</li>
@@ -665,7 +671,7 @@ export default function SkyrslaClient() {
       {synaKafla("starfsmenn") && (
         <section id="k-starfsmenn">
           <h2>Starfsmenn og þjálfun <small>Þeir sem hafa unnið við brunaþéttingarnar samkvæmt skráningum</small></h2>
-          {!gogn.starfsmenn_ok && <p className="sk-vf-drog"><b>Drög.</b> Textinn um þjálfun er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ starfsmenn_ok: true })} /> Yfirfarið</label></span>}</p>}
+          {!gogn.starfsmenn_ok && <p className="sk-vf-drog sk-skjar"><b>Drög.</b> Textinn um þjálfun er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ starfsmenn_ok: true })} /> Yfirfarið</label></span>}</p>}
           {!les && <textarea className="sk-texti" rows={3} value={gogn.thjalfun ?? SJ_THJALFUN} onChange={(e) => breyta({ thjalfun: e.target.value })} aria-label="Texti um námskeið og þjálfun" />}
           <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.thjalfun ?? SJ_THJALFUN}</p>
           <table className="sk-tafla sk-starfs">
@@ -675,7 +681,7 @@ export default function SkyrslaClient() {
               <tr className="sk-sum"><td className="sk-v">Alls {starfsTafla.filter((r) => r.id).length} starfsmenn</td><td>{num(starfsTafla.reduce((a, r) => a + r.n, 0))}</td><td /><td /></tr>
             </tbody>
           </table>
-          <p className="sk-smatt">Taflan er dregin úr skráningunum: sá sem skráir þéttinguna í Ajour er sá sem vann hana. Fjöldinn er kláruð stök verk, ekki vinnustundir.</p>
+          <p className="sk-smatt sk-halda">Taflan er dregin úr skráningunum: sá sem skráir þéttinguna í Ajour er sá sem vann hana. Fjöldinn er kláruð stök verk, ekki vinnustundir.</p>
           {gogn.starfsmenn_ok && !les && <p className="sk-smatt sk-skjar">Kaflinn er merktur yfirfarinn. <label className="sk-val"><input type="checkbox" checked onChange={() => breyta({ starfsmenn_ok: false })} /> Yfirfarið</label></p>}
         </section>
       )}
@@ -683,7 +689,7 @@ export default function SkyrslaClient() {
       {synaKafla("gaedi") && (
         <section id="k-gaedi">
           <h2>Gæði og eftirlit <small>Hvernig hver þétting er skjalfest</small></h2>
-          {!gogn.gaedi_ok && <p className="sk-vf-drog"><b>Drög.</b> Textinn hér að neðan er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ gaedi_ok: true })} /> Yfirfarið</label></span>}</p>}
+          {!gogn.gaedi_ok && <p className="sk-vf-drog sk-skjar"><b>Drög.</b> Textinn hér að neðan er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ gaedi_ok: true })} /> Yfirfarið</label></span>}</p>}
           {!les && <textarea className="sk-texti" rows={4} value={gogn.gaedi ?? SJ_GAEDI} onChange={(e) => breyta({ gaedi: e.target.value })} aria-label="Texti um gæði og eftirlit" />}
           <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.gaedi ?? SJ_GAEDI}</p>
           <ul className="sk-gaedi">
