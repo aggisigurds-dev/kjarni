@@ -76,13 +76,23 @@ export function Efni() {
   );
 }
 
+/* Verkferlið með tilvísunum (Agnar 19.11.2026: „gera textann um verkferlana með tilvísun, eins og á að gera þetta“).
+ * Vísað er í gögn framleiðanda í heild (DoP, ETA, uppsetningarleiðbeiningar, tæknihandbók), ekki í einstakar greinar: ETA-skjölin
+ * hafa ekki verið lesin í smáatriðum, svo engar tölur (dýpt, bil, stærðarmörk) eru settar fram. Tilvísanalistinn er dreginn úr EFNI. */
 const SKREF: { k: string; heiti: string; texti: string }[] = [
-  { k: "flokkun", heiti: "Yfirferð og flokkun", texti: "Hvert gat er skoðað áður en þétt er: tegund lagnar (stálrör, plaströr, loftstokkur, raflögn), stærð ops og hvort það er í vegg eða gólfi. Flokkurinn ræður því hvaða lausn er notuð og er sá sami og þéttingin er skráð á." },
-  { k: "undirbuningur", heiti: "Undirbúningur", texti: "Opið og lögnin eru hreinsuð af ryki og lausu efni svo þéttiefnið nái góðri viðloðun." },
-  { k: "fylling", heiti: "Fylling", texti: "Stærri op eru fyllt með eldvarnarþéttull sem er skorin þétt að lögnunum og brúnum opsins." },
-  { k: "thetting", heiti: "Þétting", texti: "Þétt er með hvítu eldvarnarakríli umhverfis lagnir og meðfram þéttull. Við plaströr og kapla er notað svart háþenslukítti, og eldvarnarkragi eða eldvarnarband á plaströr þar sem lausnin gerir kröfu um það. Unnið er eftir uppsetningarleiðbeiningum framleiðanda." },
+  { k: "gogn", heiti: "Gögn framleiðanda", texti: "Allar þéttingar eru gerðar með vörum úr Protecta-línunni (framleiðandi Polyseam Ltd.) og samkvæmt gögnum framleiðanda: yfirlýsingu um nothæfi (DoP), evrópsku tæknimati (ETA) og uppsetningarleiðbeiningum hverrar vöru, ásamt tæknihandbók Protecta. Gögnin eru talin upp í tilvísunum hér að neðan og fylgja skýrslunni." },
+  { k: "flokkun", heiti: "Yfirferð og val á lausn", texti: "Hvert gegnumtak er skoðað áður en þétt er: byggingarhluti (veggur eða gólf), tegund lagnar (stálrör, plaströr, loftstokkur, raflögn), þvermál, einangrun og stærð ops. Út frá því er valin sú lausn sem ETA vörunnar nær yfir. Gegnumtak sem fellur utan prófaðra útfærslna er borið undir verkkaupa áður en þétt er." },
+  { k: "undirbuningur", heiti: "Undirbúningur", texti: "Opið og lögnin eru hreinsuð af ryki, lausu efni og fitu og eiga að vera þurr, svo þéttiefnið nái viðloðun eins og uppsetningarleiðbeiningar gera ráð fyrir." },
+  { k: "fylling", heiti: "Fylling stærri opa", texti: "Stærri op eru fyllt með eldvarnarþéttull (FR Board) sem er skorin þétt að lögnum og brúnum opsins. Samskeyti, jaðrar og bil við lagnir eru þétt með eldvarnarakríli (FR Acrylic), samkvæmt uppsetningarleiðbeiningum FR Board." },
+  { k: "thetting", heiti: "Þétting eftir tegund lagnar", texti: "Stálrör og óeinangruð málmrör: eldvarnarakríl (FR Acrylic) allan hringinn.\nEinangruð málmrör, kaplar og kapalbakkar: háþenslukítti (FR Graphite).\nPlaströr: háþenslukítti (FR Graphite), og eldvarnarkragi (FR Collar) eða eldvarnarband (FR Pipe Wrap) þar sem ETA gerir kröfu um það miðað við efni og þvermál rörs.\nLoftstokkar: opið fyllt með FR Board og þétt með FR Acrylic að stokknum.\nÍ öllum tilvikum er farið eftir uppsetningarleiðbeiningum viðkomandi vöru um magn, dýpt og frágang." },
   { k: "skraning", heiti: "Skráning", texti: "Hver þétting er skráð í Ajour á teikningu af hæðinni: staðsetning, flokkur, starfsmaður, dagsetning og ljósmyndir. Skráningin er staðfestingin á verkinu og grunnur þessarar skýrslu." },
   { k: "eftirlit", heiti: "Eftirlit og lagfæringar", texti: "Opnar skráningar og athugasemdir eftirlits eru unnar jafnóðum. Lagfæring er skráð sem ný skráning, svo saga hvers gats haldist." },
+];
+
+/** Tilvísanir verkferlisins: ein lína á vöru (DoP, ETA, leiðbeiningar) úr EFNI, auk tæknihandbókarinnar. */
+const TILVISANIR: { heiti: string; texti: string; leid?: string }[] = [
+  ...EFNI.map((e) => ({ heiti: e.vara, texti: e.vott || "", leid: e.skjol.find(([n]) => n === "Uppsetningarleiðbeiningar")?.[1] })),
+  { heiti: "Protecta tæknihandbók", texti: "Technical Manual, 8. útgáfa (2024)" },
 ];
 
 export function Verkferli({ gogn, onChange, les }: { gogn: EfniGogn; onChange: (b: EfniGogn) => void; les: boolean }) {
@@ -103,6 +113,12 @@ export function Verkferli({ gogn, onChange, les }: { gogn: EfniGogn; onChange: (
           </li>
         ))}
       </ol>
+      <div className="sk-vf-tilv">
+        <h3>Tilvísanir</h3>
+        <ul>
+          {TILVISANIR.map((t) => <li key={t.heiti}><b>{t.heiti}</b>{t.texti ? ` · ${t.texti}` : ""}{t.leid ? <> · <a href={t.leid} target="_blank" rel="noreferrer">uppsetningarleiðbeiningar</a></> : null}</li>)}
+        </ul>
+      </div>
       {gogn.verkferli_ok && !les && <p className="sk-smatt sk-skjar">Verkferlið er merkt yfirfarið. <label className="sk-val"><input type="checkbox" checked onChange={() => onChange({ verkferli_ok: false })} /> Yfirfarið</label></p>}
     </div>
   );
