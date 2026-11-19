@@ -460,3 +460,6 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-gaedi { margin: 10px 0 0; padding-left: 20px; line-height: 1.6; max-width: 100ch; }
 #k-starfsmenn .sk-malsgr, #k-gaedi .sk-malsgr { max-width: 100ch; margin: 8px 0; }
 @media print { #k-starfsmenn, #k-gaedi { break-inside: avoid-page; } }
+/* Titillinn skarst af í prentun og á mjóum skjá („staða verk“): dálkurinn tók aðeins breidd innihaldsins þegar hetjan er í dálkauppsetningu. */
+@media print { .sk-hetja-v { align-self: stretch; width: 100%; } }
+@media (max-width: 760px) { .sk-hetja-v { align-self: stretch; width: 100%; } }
