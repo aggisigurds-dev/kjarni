@@ -50,7 +50,7 @@ const AUKA_RE = /vi[ðd]b[óo]tarverk|aukaverk/i;
  *  gólf 160 sem teljast ekki með“, „þessar mátti setja í hide“). Fundnar af ljósmyndum (rör niður í gólfið); Ajour-númer. Aðeins þessi skýrsla sleppir
  *  þeim: skráningarnar sjálfar, Ajour og uppgjör eru óbreytt. Sjá .claude/agents/skraning.md. */
 const OFAN_FRA = new Set([145, 1060, 1061, 1063, 1064, 1065, 1066, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1089, 1090, 1092, 1094, 1095, 1097, 1098, 1099, 1363, 1364, 1365, 1366, 1367, 1368, 1369, 1370]);
-const GOLF_MARK = 110;                                  // rúmlega 100 gólfgöt á deild á 4H og 5H (eitt verk á gat)
+const GOLF_MARK = 100;                                  // um 100 milliloftaþéttingar á deild á 4H og 5H, um 800 alls (Agnar 19.11.2026; var 110 með viðbótum)
 const MIRO_LOFT: Record<string, number> = { vidmid: 272, S1: 230, S2: 244 };   // Miro-talning lofts: 6H S2 viðmið; 5H S1 og S2 í stökum verkum
 /** Upprunalega útboðsblaðið (mynd frá Agnari 11.11.2026). per = stök verk í Ajour per einingu tilboðs. */
 const UTBOD: { nr: string; heiti: string; ein: string; magn: number; per: number | null; re: RegExp | null; kafli?: string }[] = [
@@ -260,7 +260,7 @@ export default function SkyrslaClient() {
   }, [aaetlud, yfirlit, heitiAf]);
   /** Áætluð milliloft á deild: 110 á 5H; á 4H (gólf 5. hæðar) það sem er skráð á sömu deild á 5H ef það er meira (Agnar 12.11.2026),
    *  að viðbættu óskráðu viðbótarverki á 4H (vidbot4). */
-  const golfMark = useCallback((haed: string, deild: string) => { if (haed === "6H") return 0; if (haed !== "4H") return GOLF_MARK; const t5 = taln.hd.get(`5H|${deild}|Gólf`) || { done: 0, open: 0 }; return Math.max(GOLF_MARK, t5.done + t5.open) + (vidbot4.get(deild) || 0); }, [taln, vidbot4]);
+  const golfMark = useCallback((haed: string, deild: string) => { if (haed === "6H") return 0; return GOLF_MARK; }, []);   // föst tala á deild; hvorki viðmið af 5. hæð né óskráðir stútar bætast við (Agnar 19.11.2026)
   /** Sjálfgefið markmið hóps (sama aðferð og Landspítalasíða hubsins). */
   const alagF = 1 + Math.max(0, Math.min(50, gogn.alag ?? SJ_ALAG)) / 100;
   const markmidReiknad = useCallback((haed: string, deild: string, hop: string): number | null => {
@@ -281,6 +281,7 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
+    if (hop === "Gólf") return Math.max(mark, x.done + x.open);   // milliloft: föst tala á deild, ekkert álag og engin áætluð göt ofan á
     return Math.round(Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${hop}`) || 0)) * alagF);
   }, [taln, golfMark, eftirHop, alagF]);
 
@@ -304,6 +305,7 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
+    if (hop === "Gólf") return Math.max(mark, x.done + x.open);
     return Math.round(Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${HLUTAR[i]}|${hop}`) || 0)) * alagF);
   }, [taln, golfMark, vidbot4, eftirHop, alagF]);
   /** Punktar hæðakortsins: skráningar með hæðarhnit (aukaverk eru sér). */
