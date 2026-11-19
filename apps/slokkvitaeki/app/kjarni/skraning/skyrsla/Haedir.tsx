@@ -364,7 +364,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
   );
 }
 
-export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsmenn, log, markDeild, markHluta }: Props) {
+export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsmenn, log, markDeild, markHluta, synaFramvindu = true }: Props & { synaFramvindu?: boolean }) {
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
@@ -547,7 +547,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
       </div>
       {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Úðakerfi er greint af rauðum lit á ljósmynd; önnur stálrör teljast vatn og hiti: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar. ${KERFI_URTAK}` : ""}</p>}
 
-      <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
+      {synaFramvindu && <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />}
 
       {syndarHaedir.map((haed) => {
         const y = yfirlit.find((q) => q.haed === haed)!; const ha = haedAlls(haed);

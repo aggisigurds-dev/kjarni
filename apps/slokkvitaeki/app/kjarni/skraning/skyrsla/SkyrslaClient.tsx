@@ -30,7 +30,7 @@ type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
 type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; itarlegt?: boolean; alag?: number; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
-const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"], ["starfsmenn", "Starfsmenn og þjálfun"], ["gaedi", "Gæði og eftirlit"]];
+const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["framvinda", "Framvinda eftir mánuðum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"], ["starfsmenn", "Starfsmenn og þjálfun"], ["gaedi", "Gæði og eftirlit"]];
 /** Efnisyfirlit: akkeri kaflanna (sýnd aðeins ef kaflinn er sýnilegur). */
 const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"], ["k-starfsmenn", "Starfsmenn", "starfsmenn"], ["k-gaedi", "Gæði", "gaedi"]];
 /** Kaflar sem eru faldir nema kveikt sé á þeim (gogn.kaflar[lykill] === true). */
@@ -535,7 +535,7 @@ export default function SkyrslaClient() {
       {synaKafla("kort") && yfirlit.length > 0 && (
         <section id="k-haedir">
           <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
-          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} stutar={hkStutar} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone + faldarAnT.n - faldarAnT.done} markDeild={markDeild} markHluta={markmidHluta} />
+          <Haedir synaFramvindu={synaKafla("framvinda")} yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} stutar={hkStutar} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone + faldarAnT.n - faldarAnT.done} markDeild={markDeild} markHluta={markmidHluta} />
         </section>
       )}
 
