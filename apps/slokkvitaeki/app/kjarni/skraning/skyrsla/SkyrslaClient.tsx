@@ -688,7 +688,7 @@ export default function SkyrslaClient() {
           <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.gaedi ?? SJ_GAEDI}</p>
           <ul className="sk-gaedi">
             <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(klaradAlls)} kláraðar.{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
-            {myndir && <li><b>Ljósmyndir:</b> {num(myndir.n)} myndir fylgja {num(myndir.med)} af {num(skr.length)} skráningum ({pros(myndir.med, skr.length)} %).</li>}
+            {myndir && <li><b>Ljósmyndir:</b> {num(myndir.n)} myndir fylgja {num(myndir.med)} af {num(skr.length)} skráningum ({num(Math.floor((1000 * myndir.med) / Math.max(1, skr.length)) / 10, 1)} %).</li>}
             <li><b>Rekjanleiki:</b> hver skráning ber raðnúmer, starfsmann og dagsetningu, og sést á sínum stað á teikningu hæðarinnar í kaflanum „Staðan á hæðunum“.</li>
           </ul>
           {gogn.gaedi_ok && !les && <p className="sk-smatt sk-skjar">Kaflinn er merktur yfirfarinn. <label className="sk-val"><input type="checkbox" checked onChange={() => breyta({ gaedi_ok: false })} /> Yfirfarið</label></p>}
