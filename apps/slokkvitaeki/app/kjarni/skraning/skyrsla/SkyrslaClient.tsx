@@ -702,7 +702,7 @@ export default function SkyrslaClient() {
           {!les && <textarea className="sk-texti" rows={4} value={gogn.gaedi ?? SJ_GAEDI} onChange={(e) => breyta({ gaedi: e.target.value })} aria-label="Texti um gæði og eftirlit" />}
           <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.gaedi ?? SJ_GAEDI}</p>
           <ul className="sk-gaedi">
-            <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(alls.klar)} kláraðar innan áætlunar og {num(Math.max(0, klaradAlls - alls.klar))} utan hennar (raufar við kantaða stokka o.fl.).{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
+            <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(alls.klar)} kláraðar innan áætlunar og {num(Math.max(0, starfsTafla.reduce((a, r) => a + r.n, 0) - alls.klar))} utan hennar (raufar við kantaða stokka o.fl.).{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
             {myndir && <li><b>Ljósmyndir:</b> {num(myndir.n)} myndir fylgja {num(myndir.med)} af {num(skr.length)} skráningum ({num(Math.floor((1000 * myndir.med) / Math.max(1, skr.length)) / 10, 1)} %).</li>}
             <li><b>Rekjanleiki:</b> hver skráning ber raðnúmer, starfsmann og dagsetningu, og sést á sínum stað á teikningu hæðarinnar í kaflanum „Staðan á hæðunum“.</li>
           </ul>
