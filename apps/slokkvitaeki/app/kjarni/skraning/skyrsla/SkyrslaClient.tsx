@@ -17,7 +17,7 @@ import { Efni, Verkferli, type EfniGogn } from "./Efni";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null; handvirkt: { flokkur_id?: unknown; stada?: unknown } | null };
+type Skr = { id: number; ajour_serial: number | null; starfsmadur_id?: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null; handvirkt: { flokkur_id?: unknown; stada?: unknown } | null };
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
 type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
 /** parad á stútum viðbótarverksins (tools/skraning-gatakort-vidbot-stutar.cjs) ber auk stöðunnar: númer stúts, flokkun, úttekt skjalsins og skráninguna sem parast. */
@@ -27,12 +27,12 @@ const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), M
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
-const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"]];
+const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"], ["starfsmenn", "Starfsmenn og þjálfun"], ["gaedi", "Gæði og eftirlit"]];
 /** Efnisyfirlit: akkeri kaflanna (sýnd aðeins ef kaflinn er sýnilegur). */
-const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"]];
+const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"], ["k-starfsmenn", "Starfsmenn", "starfsmenn"], ["k-gaedi", "Gæði", "gaedi"]];
 /** Kaflar sem eru faldir nema kveikt sé á þeim (gogn.kaflar[lykill] === true). */
 const SJALFG_FALDIR = new Set(["anstadar"]);
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
@@ -107,6 +107,7 @@ export default function SkyrslaClient() {
   const [stadaTexti, setStadaTexti] = useState("Sæki skráningar…");
   const [villa, setVilla] = useState("");
   const [starfsmenn, setStarfsmenn] = useState<Map<number, string>>(new Map());
+  const [myndaTal, setMyndaTal] = useState<Map<number, number> | null>(null);   // skráning → fjöldi ljósmynda (kaflinn „Gæði og eftirlit“)
   /** Lagnakerfi stálröraþéttinga (skr_kerfi): lesið af lagnateikningum, áætlun. */
   const [kerfi, setKerfi] = useState<Map<number, { k: string; v: boolean; m: boolean }>>(new Map());
   /** Lagnateikningar gatakortsins (skr_log) per hæð og fag — sýndar ofan á hæðinni þegar síað er á kerfi. */
@@ -133,7 +134,7 @@ export default function SkyrslaClient() {
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = []; const sleppt = { n: 0, done: 0 };
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("id,ajour_serial,flokkur_id,teikning_id,stada,framkvaemt_til,handvirkt,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,ajour_serial,starfsmadur_id,flokkur_id,teikning_id,stada,framkvaemt_til,handvirkt,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           for (const q of r.data as unknown as Skr[]) { if (q.ajour_serial != null && OFAN_FRA.has(q.ajour_serial)) { sleppt.n++; if (q.stada === "done") sleppt.done++; } else allt.push(q); }
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
@@ -186,6 +187,16 @@ export default function SkyrslaClient() {
         setAukaTeikn(new Map(((tk.data || []) as { id: number; heiti: string }[]).filter((t) => AUKA_RE.test(t.heiti)).map((t) => [t.id, t.heiti] as [number, string])));
         const row = sk.data?.[0] as { id: number; gogn: Gogn } | undefined;
         if (row) { setSkyrslaId(row.id); setGogn(row.gogn || {}); }
+        void (async () => {   // ljósmyndir: aðeins talning, sótt eftir að skýrslan er komin upp
+          const tal = new Map<number, number>();
+          for (let i = 0; ; i += 1000) {
+            const r = await s.from("skr_myndir").select("skraning_id").order("id").range(i, i + 999);
+            if (r.error || !r.data) return;
+            for (const q of r.data as { skraning_id: number }[]) tal.set(q.skraning_id, (tal.get(q.skraning_id) || 0) + 1);
+            if (r.data.length < 1000) break;
+          }
+          if (lifir) setMyndaTal(tal);
+        })();
         setStadaTexti("");
       } catch (e) { if (lifir) { setVilla(e instanceof Error ? e.message : String(e)); setStadaTexti(""); } }
     })();
@@ -394,6 +405,8 @@ export default function SkyrslaClient() {
     setOvistad(false);
   };
   const nBr = Object.keys(gogn.stada || {}).length + Object.keys(gogn.utbod || {}).length;
+  const sjInngangur = () => `Skýrslan sýnir stöðu brunaþéttinga Brunahólfs á 5. og 6. hæð samkvæmt skráningum í Ajour${nyjast ? ` til og með ${dmy(nyjast)}` : ""}. Lokið er ${num(alls.klar)} stökum verkum af áætluðum ${num(alls.mark)}, eða ${pros(alls.klar, alls.mark)} %. Verkið er enn í vinnslu og tölurnar breytast með hverri skráningu.\n\nSkýrslan er tekin saman vegna óskar verkeftirlits um gögn: efni og kerfi, staða verks eftir hæðum og deildum, starfsmenn og þjálfun, og gæðagögn. Hún er samantektarskýrsla úr Ajour, dregin beint úr skráningunum.`;
+  const SJ_LOK = "Verkið er í vinnslu. Skýrsluna má uppfæra hvenær sem er og tölurnar fylgja þá nýjustu skráningum. Áætlaður fjöldi er mat en ekki talning á öllum götum, sjá kaflann Forsendur og fyrirvarar.";
   const synaKafla = (k: string) => (SJALFG_FALDIR.has(k) ? gogn.kaflar?.[k] === true : gogn.kaflar?.[k] !== false);
   /** Fyrir kaflann „Forsendur og fyrirvarar“: hve margir punktar eru færðir á teikningunni og dagsetning nýjustu kláruðu skráningar. */
   const faerdirN = [...hnit.values()].filter((h) => h.faerdur).length;
@@ -401,6 +414,20 @@ export default function SkyrslaClient() {
   const nyjast = skr.reduce((m, s) => (s.framkvaemt_til && s.framkvaemt_til.slice(0, 10) > m ? s.framkvaemt_til.slice(0, 10) : m), "");
   const skiptaKafla = (k: string) => breyta({ kaflar: { ...(gogn.kaflar || {}), [k]: !synaKafla(k) } });
   const dags = gogn.dags ?? new Date().toISOString().slice(0, 10);
+  /** Starfsmenn sem eiga skráningar í verkinu: fjöldi kláraðra stakra verka og tímabil (beiðni verkeftirlits, liður 4). */
+  const starfsTafla = useMemo(() => {
+    const m = new Map<number, { n: number; fra: string; til: string }>();
+    for (const q of skr) {
+      if (q.stada !== "done") continue;
+      const k = q.starfsmadur_id ?? 0, e = m.get(k) || { n: 0, fra: "", til: "" }, d = (q.framkvaemt_til || "").slice(0, 10);
+      e.n++; if (d) { if (!e.fra || d < e.fra) e.fra = d; if (d > e.til) e.til = d; } m.set(k, e);
+    }
+    return [...m.entries()].map(([id, e]) => ({ id, nafn: id ? starfsmenn.get(id) || `Starfsmaður ${id}` : "Starfsmaður ekki skráður", ...e })).sort((a, b) => (a.id === 0 ? 1 : b.id === 0 ? -1 : b.n - a.n));
+  }, [skr, starfsmenn]);
+  const myndir = useMemo(() => { if (!myndaTal) return null; let n = 0, med = 0; for (const q of skr) { const k = myndaTal.get(q.id) || 0; n += k; if (k) med++; } return { n, med }; }, [myndaTal, skr]);
+  const manAr = (d: string) => (d ? `${MAN[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "");
+  const SJ_THJALFUN = "Allir starfsmenn sem hafa unnið við brunaþéttingarnar hafa lokið tveimur námskeiðum sem ÞG Verk lagði fyrir og sendi með tengli. Staðfestingar á þátttöku eru hjá ÞG Verki.";
+  const SJ_GAEDI = "Hver þétting er skráð í Ajour um leið og hún er unnin, með staðsetningu á teikningu, flokki, starfsmanni, dagsetningu og ljósmyndum. Þéttingin er merkt á staðnum með miða Brunahólfs með dagsetningu og upphafsstöfum starfsmanns. Lagfæringar og athugasemdir eftirlits eru skráðar sem nýjar skráningar, svo saga hvers gats haldist.";
   const dagsTexti = `${Number(dags.slice(8, 10))}. ${MAN[Number(dags.slice(5, 7)) - 1] || ""} ${dags.slice(0, 4)}`;
   /** Lykiltölur hverrar hæðar (sömu tölur og í töflunum). */
   const haedaspjold = radir.map((r) => { const hs = summa(r.deildir.flatMap((d) => d.hopar)); return { haed: r.haed, klar: hs.klar, mark: hs.mark, p: pros(hs.klar, hs.mark) }; }).filter((h) => h.mark > 0);
@@ -465,8 +492,8 @@ export default function SkyrslaClient() {
       <nav className="sk-yfirlit sk-skjar sk-gagnv" aria-label="Efnisyfirlit">{AKKERI.filter((a) => synaKafla(a[2])).map(([id, nafn]) => <a key={id} href={`#${id}`}>{nafn}</a>)}</nav>
       <div className="sk-efni">
       {synaKafla("texti") && <div className="sk-inngangur">
-        <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? ""} onChange={(e) => breyta({ inngangur: e.target.value })} />
-        <p className="sk-prent sk-malsgr">{gogn.inngangur}</p>
+        <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? sjInngangur()} onChange={(e) => breyta({ inngangur: e.target.value })} />
+        <p className="sk-prent sk-malsgr">{gogn.inngangur ?? sjInngangur()}</p>
       </div>}
       {synaKafla("spjold") && <div className="sk-haedaspjold" id="k-yfirlit">
         {haedaspjold.map((h) => <div key={h.haed}>
@@ -635,9 +662,42 @@ export default function SkyrslaClient() {
         </section>
       )}
 
+      {synaKafla("starfsmenn") && (
+        <section id="k-starfsmenn">
+          <h2>Starfsmenn og þjálfun <small>Þeir sem hafa unnið við brunaþéttingarnar samkvæmt skráningum</small></h2>
+          {!gogn.starfsmenn_ok && <p className="sk-vf-drog"><b>Drög.</b> Textinn um þjálfun er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ starfsmenn_ok: true })} /> Yfirfarið</label></span>}</p>}
+          {!les && <textarea className="sk-texti" rows={3} value={gogn.thjalfun ?? SJ_THJALFUN} onChange={(e) => breyta({ thjalfun: e.target.value })} aria-label="Texti um námskeið og þjálfun" />}
+          <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.thjalfun ?? SJ_THJALFUN}</p>
+          <table className="sk-tafla sk-starfs">
+            <thead><tr><th>Starfsmaður</th><th>Kláruð stök verk</th><th>Fyrsta skráning</th><th>Síðasta skráning</th></tr></thead>
+            <tbody>
+              {starfsTafla.map((r) => <tr key={r.id}><td className="sk-v">{r.nafn}</td><td>{num(r.n)}</td><td>{manAr(r.fra)}</td><td>{manAr(r.til)}</td></tr>)}
+              <tr className="sk-sum"><td className="sk-v">Alls {starfsTafla.filter((r) => r.id).length} starfsmenn</td><td>{num(starfsTafla.reduce((a, r) => a + r.n, 0))}</td><td /><td /></tr>
+            </tbody>
+          </table>
+          <p className="sk-smatt">Taflan er dregin úr skráningunum: sá sem skráir þéttinguna í Ajour er sá sem vann hana. Fjöldinn er kláruð stök verk, ekki vinnustundir.</p>
+          {gogn.starfsmenn_ok && !les && <p className="sk-smatt sk-skjar">Kaflinn er merktur yfirfarinn. <label className="sk-val"><input type="checkbox" checked onChange={() => breyta({ starfsmenn_ok: false })} /> Yfirfarið</label></p>}
+        </section>
+      )}
+
+      {synaKafla("gaedi") && (
+        <section id="k-gaedi">
+          <h2>Gæði og eftirlit <small>Hvernig hver þétting er skjalfest</small></h2>
+          {!gogn.gaedi_ok && <p className="sk-vf-drog"><b>Drög.</b> Textinn hér að neðan er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ gaedi_ok: true })} /> Yfirfarið</label></span>}</p>}
+          {!les && <textarea className="sk-texti" rows={4} value={gogn.gaedi ?? SJ_GAEDI} onChange={(e) => breyta({ gaedi: e.target.value })} aria-label="Texti um gæði og eftirlit" />}
+          <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.gaedi ?? SJ_GAEDI}</p>
+          <ul className="sk-gaedi">
+            <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(klaradAlls)} kláraðar.{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
+            {myndir && <li><b>Ljósmyndir:</b> {num(myndir.n)} myndir fylgja {num(myndir.med)} af {num(skr.length)} skráningum ({pros(myndir.med, skr.length)} %).</li>}
+            <li><b>Rekjanleiki:</b> hver skráning ber raðnúmer, starfsmann og dagsetningu, og sést á sínum stað á teikningu hæðarinnar í kaflanum „Staðan á hæðunum“.</li>
+          </ul>
+          {gogn.gaedi_ok && !les && <p className="sk-smatt sk-skjar">Kaflinn er merktur yfirfarinn. <label className="sk-val"><input type="checkbox" checked onChange={() => breyta({ gaedi_ok: false })} /> Yfirfarið</label></p>}
+        </section>
+      )}
+
       <section className={synaKafla("texti") ? "" : "sk-falinn"}>
-        <textarea className="sk-texti" rows={3} placeholder="Lokaorð / næstu skref (valfrjálst) …" value={gogn.lok ?? ""} onChange={(e) => breyta({ lok: e.target.value })} />
-        <p className="sk-prent sk-malsgr">{gogn.lok}</p>
+        <textarea className="sk-texti" rows={3} placeholder="Lokaorð / næstu skref (valfrjálst) …" value={gogn.lok ?? SJ_LOK} onChange={(e) => breyta({ lok: e.target.value })} />
+        <p className="sk-prent sk-malsgr">{gogn.lok ?? SJ_LOK}</p>
       </section>
       </div>
       </div>

@@ -452,3 +452,11 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-hk-stutar { margin: 6px 0 2px; line-height: 1.7; } .sk-hk-stutar span { white-space: nowrap; } .sk-hk-stutar b { color: var(--bh-navy, #101e43); font-weight: 600; }
 .sk-hk-haed.stor .sk-hk-stutar { margin: 6px 12px 0; }
 .sk-hk-kort-h em.bid { background: #fef3c7; color: #92400e; } .sk-hk-kort-h em.gr { background: #e2e8f0; color: #334155; }
+
+/* Starfsmenn og þjálfun · Gæði og eftirlit (19.11.2026, beiðni verkeftirlits, liðir 4 og 5) */
+.sk-starfs { max-width: 760px; margin-top: 10px; }
+.sk-starfs th, .sk-starfs td { text-align: right; }
+.sk-starfs th:first-child, .sk-starfs td:first-child { text-align: left; }
+.sk-gaedi { margin: 10px 0 0; padding-left: 20px; line-height: 1.6; max-width: 100ch; }
+#k-starfsmenn .sk-malsgr, #k-gaedi .sk-malsgr { max-width: 100ch; margin: 8px 0; }
+@media print { #k-starfsmenn, #k-gaedi { break-inside: avoid-page; } }
