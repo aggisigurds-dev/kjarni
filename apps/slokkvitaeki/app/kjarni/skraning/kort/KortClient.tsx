@@ -353,6 +353,7 @@ export default function KortClient() {
   const [samaSia, setSamaSia] = useState(false); // aðeins skráningar þar sem hinn endinn er skráður SÖMU megin við brunavegginn
   /** Ajour-staðir (Agnar 13.11.2026: „myndi vilja geta séð Ajour punktana hvar þeir eru“): blár punktur þar sem pikkað var í Ajour, lína í merkið ef það var fært. */
   const [synaAjour, setSynaAjour] = useState(false);
+  const [upprunaleg, setUpprunaleg] = useState(false);   // sýn: hver skráning sem einn lítill punktur á upprunalegum stað úr Ajour (Agnar 19.11.2026)
   const [visb, setVisb] = useState<Visb>({});
   /** Stálrör þar sem sjálfvirk litagreining fann RAUTT á ljósmynd (líklega úðarör, óskoðað). Aðeins vísbending í spjaldi: í prófun 14.11.2026 voru 8 af 12
    *  slíkum rauð úðarör, 3 einangruð rör með rautt rör í bakgrunni og 1 óljós. Þess vegna enginn kerfispunktur og engin áhrif á sýnir. */
@@ -845,7 +846,18 @@ export default function KortClient() {
      * Sést fyrir allar færðar skráningar þegar „Ajour-staðir“ er á, alltaf fyrir valda eða dregna skráningu, og í Færa-ham á borðtölvu eins og áður. */
     const ajPt: Punktur[] = [], ajR = (miro ? Math.max(2, Math.min(3.4, merkisR(k, k0) * tk * 0.3)) : Math.max(1.8, 1.6 * zs * k)) / k;
     const ajLina = (p: Punktur, px: number, py: number) => { cx.beginPath(); cx.moveTo(p.x0, p.y0); cx.lineTo(px, py); cx.lineWidth = 1.3 / k; cx.strokeStyle = "#1d4ed8"; cx.setLineDash([4 / k, 3 / k]); cx.stroke(); cx.setLineDash([]); ajPt.push(p); };
-    if (synaSkr && miro) {
+    if (synaSkr && upprunaleg) {
+      /* Upprunaleg staðsetning (Agnar 19.11.2026: „sýn sem er bara orginal staðsetningarnar á punktunum, stökum punktum“): hver skráning er EINN lítill punktur
+       * þar sem hún var sett í Ajour (x0, y0), óháð færslum og án samruna í merki. Klárað = litur flokksins, opið = hvítt með rauðri útlínu. */
+      const rp = Math.max(1.6 / k, 2.4 * zs), mork = 20 / k;
+      for (const umf of [1, 0]) for (const p of syndir) {
+        const kl = p.s.stada === "done"; if ((kl ? 1 : 0) !== umf) continue;
+        if (p.x0 < sx0 - mork || p.x0 > sx1 + mork || p.y0 < sy0 - mork || p.y0 > sy1 + mork) continue;
+        cx.beginPath(); cx.arc(p.x0, p.y0, rp, 0, 6.2832);
+        cx.fillStyle = kl ? p.t.litur : "#ffffff"; cx.fill(); cx.lineWidth = kl ? 0.8 / k : 1.6 / k; cx.strokeStyle = kl ? "rgba(255,255,255,.95)" : "#dc2626"; cx.stroke();
+      }
+      if (valinn?.p) { const q = valinn.p; cx.beginPath(); cx.arc(q.x0, q.y0, rp * 2.4, 0, 6.2832); cx.lineWidth = 2 / k; cx.strokeStyle = "#111827"; cx.stroke(); }
+    } else if (synaSkr && miro) {
       /* Símasýn (Agnar 12.11.2026: krossarnir urðu „messy og ruglingslegir“): hrein merki eins og á Miro-borðinu hans. Skráningar sama hóps sem
        * lægju hver ofan á annarri (tvær hliðar sama veggjar) eru EITT merki: útlína í lit stærðar, ✓ fyrir hvert klárað stakt verk (tvö sýnd,
        * fjöldinn stendur í merkinu ef þau eru þrjú eða fleiri), rauður hringur ef eitthvert þeirra er opið. Valinn eða dreginn punktur er
@@ -1085,7 +1097,7 @@ export default function KortClient() {
       cx.beginPath(); cx.arc(lx, ly, R, 0, 6.2832); cx.lineWidth = 3 * dpr; cx.strokeStyle = "#1d4ed8"; cx.stroke();
       cx.beginPath(); cx.moveTo(lx - R, ly); cx.lineTo(lx - 9 * dpr, ly); cx.moveTo(lx + 9 * dpr, ly); cx.lineTo(lx + R, ly); cx.moveTo(lx, ly - R); cx.lineTo(lx, ly - 9 * dpr); cx.moveTo(lx, ly + 9 * dpr); cx.lineTo(lx, ly + R); cx.lineWidth = 1 * dpr; cx.strokeStyle = "rgba(29,78,216,.55)"; cx.stroke();
     }
-  }, [teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, raudLinur, graenLinur, linuLitur, synaAjour, visb, tk, litirLykill, miro, iPlotu, kerfiKort, adal, adalKlasar, tilvisanir, handLinur, linuHamur, linuTol]);
+  }, [upprunaleg, teikning, W, H, mynd, flis, logSynar, lagSest, syndir, aaetludSynar, synaSkr, synaAaetlud, valinn, faera, snerti, einDeild, vantarEnda, samaMegin, hinnKlar, samaSia, endar, veggir, veggjaLykill, raudLinur, graenLinur, linuLitur, synaAjour, visb, tk, litirLykill, miro, iPlotu, kerfiKort, adal, adalKlasar, tilvisanir, handLinur, linuHamur, linuTol]);
   const bidjaUmTeikningu = useCallback(() => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(teikna); }, [teikna]);
   useEffect(() => { bidjaUmTeikningu(); }, [bidjaUmTeikningu, myndTeljari]);
 
@@ -1228,9 +1240,10 @@ export default function KortClient() {
     if (baetaFag && !snerti) { await setjaAaetlad(wx, wy); return; }
     const mork = (e.pointerType === "touch" ? 24 : 12) / s.k; let best: Punktur | null = null, bd = mork, iMerki: Set<number> | null = null;
     /* Fyrst merkið sem er TEIKNAÐ undir fingrinum (það getur staðið á vegg eða hafa ýtst frá öðru merki): valin er sú skráning þess sem er næst pikkinu. */
-    if (synaSkr && merkiRef.current.length) { let bm: { x: number; y: number; ids: number[] } | null = null, bmd = mork * 1.2; for (const m of merkiRef.current) { const dd = Math.hypot(m.x - wx, m.y - wy); if (dd < bmd) { bmd = dd; bm = m; } }
+    if (synaSkr && upprunaleg) { for (const q of syndir) { const dd = Math.hypot(q.x0 - wx, q.y0 - wy); if (dd < bd) { bd = dd; best = q; } } }   // upprunaleg sýn: pikk velur punktinn sem sést
+    else if (synaSkr && merkiRef.current.length) { let bm: { x: number; y: number; ids: number[] } | null = null, bmd = mork * 1.2; for (const m of merkiRef.current) { const dd = Math.hypot(m.x - wx, m.y - wy); if (dd < bmd) { bmd = dd; bm = m; } }
       if (bm) { const ids = new Set(bm.ids); let bq = 1e9; for (const q of syndir) { if (!ids.has(q.s.id)) continue; const dq = Math.hypot(q.x - wx, q.y - wy); if (dq < bq) { bq = dq; best = q; } } if (best) iMerki = ids; } }
-    if (!best && synaSkr) for (const q of syndir) { const dd = Math.hypot(q.x - wx, q.y - wy); if (dd < bd) { bd = dd; best = q; } }
+    if (!best && synaSkr && !upprunaleg) for (const q of syndir) { const dd = Math.hypot(q.x - wx, q.y - wy); if (dd < bd) { bd = dd; best = q; } }
     /* Aðalmerkið stendur á gegnumtakinu, ekki á punktunum sjálfum: pikk á merkið velur þá tengdu skráningu sem er næst pikkinu. */
     if (!best && synaSkr && adal && veggir && veggir.lykill === veggjaLykill && veggir.nemar) { const nm = veggir.nemar; let bq = 1e9;
       void nm; for (const q of syndir) { const ak = adalKlasar.get(q.s.id); if (!ak || Math.hypot(ak.x - wx, ak.y - wy) >= mork * 1.4) continue; const dq = Math.hypot(q.x - wx, q.y - wy); if (dq < bq) { bq = dq; best = q; } } }
@@ -1495,6 +1508,7 @@ export default function KortClient() {
         {snerti && baetaFag && <div className="gk-kross" aria-hidden="true"><i /></div>}
         <label className="gk-msledi" title="Stærð merkja á kortinu"><span>Merki</span><input type="range" min={0.5} max={2.5} step={0.1} value={tk} aria-label="Stærð merkja" onChange={(e) => setjaStill({ taknStaerd: Number(e.target.value) })} /></label>
         <div className="gk-stjorn">
+          <button type="button" className={upprunaleg ? "on" : ""} aria-pressed={upprunaleg} title="Sýna hverja skráningu sem einn punkt á upprunalegum stað úr Ajour (óháð færslum)" onClick={() => setUpprunaleg((x) => !x)}>Upprunalegt</button>
           <button type="button" onClick={() => { const k = kassiRef.current!; staekka(k.clientWidth / 2, k.clientHeight / 2, 1.5); }} aria-label="Stækka">+</button>
           <button type="button" onClick={() => { const k = kassiRef.current!; staekka(k.clientWidth / 2, k.clientHeight / 2, 1 / 1.5); }} aria-label="Minnka">−</button>
           <button type="button" onClick={() => passa()}>Allt blaðið</button>
