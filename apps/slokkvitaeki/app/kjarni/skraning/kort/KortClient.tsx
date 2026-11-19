@@ -825,11 +825,11 @@ export default function KortClient() {
     const zs = (Math.max(0.75, Math.min(3.2, Math.sqrt(k / k0) * 0.9)) / k) * tk; // táknstærð í skjápixlum, vex hægt með stækkun; tk = sleðinn í Stillingum
     const zb = miro ? Math.min(zs, (1.45 * tk) / k) : zs;   // símasýn: áætluð göt og tillögur vaxa ekki endalaust með stækkun
     const dr = faerir.current;
-    if ((synaSkr || linuHamur) && veggir && veggir.lykill === veggjaLykill && veggir.hurdir.length) {   // hurðaop í brunavegg: kerfið fer með þau sem vegg (stokkar fara yfir hurðir)
+    if (((synaSkr && !upprunaleg) || linuHamur) && veggir && veggir.lykill === veggjaLykill && veggir.hurdir.length) {   // hurðaop í brunavegg: kerfið fer með þau sem vegg (stokkar fara yfir hurðir)
       const hu = veggir.hurdir, sj = strokRef.current?.sjalf; cx.beginPath(); for (let i = 0; i + 3 < hu.length; i += 4) { if (sj?.has(i / 4)) continue; cx.moveTo(hu[i], hu[i + 1]); cx.lineTo(hu[i + 2], hu[i + 3]); }
       cx.lineCap = "butt"; cx.lineWidth = Math.max((linuHamur ? 3 : 2.6) / k, LINU_THYKKT); cx.strokeStyle = "#3b82f6"; cx.stroke();   // jafnþykkar og línur Agnars (18.11.2026: „voru þínar kannski of þunnar“), ljósari og án endapunkta
     }
-    if ((synaSkr || linuHamur) && linuTol) {   // línur Agnars: dekkri og þykkari en sjálfvirku, með punkti á endum. Rauð = brunaveggur, blá = hurðaop/gler, græn (strikuð) = valfrjáls festilína
+    if (((synaSkr && !upprunaleg) || linuHamur) && linuTol) {   // línur Agnars: dekkri og þykkari en sjálfvirku, með punkti á endum. Rauð = brunaveggur, blá = hurðaop/gler, græn (strikuð) = valfrjáls festilína
       const ln = linaRef.current, st = strokRef.current, sofn: Record<LinuLykill, number[]> = { hurdalinur: handLinur, vegglinur: raudLinur, graenlinur: graenLinur };
       for (const lyk of LINU_LYKLAR) {
         const a = sofn[lyk], hl: number[] = [], strokid = st?.[lyk];
@@ -1060,7 +1060,7 @@ export default function KortClient() {
       if (p.s.lagf) { cx.beginPath(); cx.arc(px, py, r + 2.2 * zs, 0, 6.2832); cx.lineWidth = 1.3 / k; cx.strokeStyle = p.s.lagf === "B" ? "#b45309" : p.s.lagf === "A" ? "#111827" : "#6b7280"; cx.setLineDash([3 / k, 2 / k]); cx.stroke(); cx.setLineDash([]); }
     }
     for (const p of ajPt) { cx.beginPath(); cx.arc(p.x0, p.y0, ajR, 0, 6.2832); cx.fillStyle = "#1d4ed8"; cx.fill(); cx.lineWidth = 1 / k; cx.strokeStyle = "#fff"; cx.stroke(); }
-    if (synaAaetlud) for (const a of aaetludSynar) {
+    if (synaAaetlud && !upprunaleg) for (const a of aaetludSynar) {   // upprunaleg sýn: aðeins skráðu punktarnir
       const adr = dr?.a?.id === a.id, ax = adr ? dr!.x : +a.x_px, ay = adr ? dr!.y : +a.y_px;
       if (aaEftir(a) && erTillaga(a)) {   // tillaga: holur appelsínugulur hringur með spurningarmerki — ekki rauður punktur fyrr en staðfest
         const r = 6.4 * zb; cx.beginPath(); cx.arc(ax, ay, r, 0, 6.2832); cx.fillStyle = miro ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.9)"; cx.fill(); cx.lineWidth = 2.2 / k; cx.strokeStyle = "#ea580c"; cx.stroke();
@@ -1247,7 +1247,7 @@ export default function KortClient() {
     /* Aðalmerkið stendur á gegnumtakinu, ekki á punktunum sjálfum: pikk á merkið velur þá tengdu skráningu sem er næst pikkinu. */
     if (!best && synaSkr && adal && veggir && veggir.lykill === veggjaLykill && veggir.nemar) { const nm = veggir.nemar; let bq = 1e9;
       void nm; for (const q of syndir) { const ak = adalKlasar.get(q.s.id); if (!ak || Math.hypot(ak.x - wx, ak.y - wy) >= mork * 1.4) continue; const dq = Math.hypot(q.x - wx, q.y - wy); if (dq < bq) { bq = dq; best = q; } } }
-    let ba: Aaetlad | null = null; if (synaAaetlud) for (const a of aaetludSynar) { const dd = Math.hypot(+a.x_px - wx, +a.y_px - wy); if (dd < bd) { bd = dd; ba = a; } }
+    let ba: Aaetlad | null = null; if (synaAaetlud && !upprunaleg) for (const a of aaetludSynar) { const dd = Math.hypot(+a.x_px - wx, +a.y_px - wy); if (dd < bd) { bd = dd; ba = a; } }
     /* Símasýn: spjaldið þekur allt að neðri helming kortsins. Lendi valdi punkturinn undir því er kortinu hliðrað upp svo hann (og línan milli
      * Ajour-staðanna) sjáist ofan við spjaldið. Ekki í færsluham: þar er spjaldið samanbrotið. */
     const lyfta = (y: number) => { const kassi = kassiRef.current; if (!snerti || faera || !kassi) return; const sy = y * s.k + s.ty; if (sy > kassi.clientHeight * 0.4) { s.ty -= sy - kassi.clientHeight * 0.25; bidjaUmTeikningu(); } };
