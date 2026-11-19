@@ -541,7 +541,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
       <div className="sk-hk-tolur">
         <div><span>Klárað</span><b>{num(alls.done)}</b></div>
         <div><span>Opið</span><b>{num(alls.open)}</b></div>
-        <div><span>Eftir (áætlað)</span><b>{num(eftirTala(alls, eftirAlls))}</b></div>
+        <div><span>Eftir (áætlað)</span><b>{num(eftirTala({ m: alls.m, kl: alls.done, open: alls.open }, eftirAlls))}</b></div>
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
@@ -569,7 +569,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
                 <div><span>Áætlað</span><b>{ha.m != null ? num(ha.m) : "—"}</b></div>
                 <div className="p"><span>Hlutfall</span><b>{ha.m != null ? `${pros(ha.kl, ha.m)} %` : "—"}</b></div>
               </div>
-              <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið <i className="e" />áætlað gat án skráningar</p>
+              <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið <i className="e" />eftir (áætlað)</p>
             </aside>
             <div className="sk-sko-adal">
               <div className="sk-sko-stika">
@@ -594,7 +594,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
           </div>
         </div>
       )}
-      <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />engin áætlun</p>
+      <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />eftir (áætlað) · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />engin áætlun</p>
       <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Áætlun hluta fylgir sömu reglu og deildin; föst áætlun á deild (milliloft, rafmagn) skiptist jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá áætlun deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
     </div>
   );

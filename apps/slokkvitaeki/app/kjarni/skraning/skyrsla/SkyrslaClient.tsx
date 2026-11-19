@@ -426,7 +426,7 @@ export default function SkyrslaClient() {
       const k = q.starfsmadur_id ?? 0, e = m.get(k) || { n: 0, fra: "", til: "" }, d = (q.framkvaemt_til || "").slice(0, 10);
       e.n++; if (d) { if (!e.fra || d < e.fra) e.fra = d; if (d > e.til) e.til = d; } m.set(k, e);
     }
-    return [...m.entries()].map(([id, e]) => ({ id, nafn: id ? starfsmenn.get(id) || `Starfsmaður ${id}` : "Starfsmaður ekki skráður", ...e })).sort((a, b) => (a.id === 0 ? 1 : b.id === 0 ? -1 : b.n - a.n));
+    return [...m.entries()].map(([id, e]) => ({ id, nafn: id ? starfsmenn.get(id) || `Starfsmaður ${id}` : "Aðrir", ...e })).sort((a, b) => (a.id === 0 ? 1 : b.id === 0 ? -1 : b.n - a.n));
   }, [skr, starfsmenn]);
   const myndir = useMemo(() => { if (!myndaTal) return null; let n = 0, med = 0; for (const q of skr) { const k = myndaTal.get(q.id) || 0; n += k; if (k) med++; } return { n, med }; }, [myndaTal, skr]);
   const manAr = (d: string) => (d ? `${MAN[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "");
