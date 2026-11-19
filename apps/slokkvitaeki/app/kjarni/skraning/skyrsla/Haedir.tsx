@@ -539,9 +539,10 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
       <p className="sk-prent sk-smatt">Síur: {siulysing}</p>
 
       <div className="sk-hk-tolur">
-        <div><span>Klárað</span><b>{num(alls.done)}</b></div>
+        {/* Klárað = sama tala og forsíðan og hæðarhausarnir (kl, talið upp að áætlun hvers hluta), svo Klárað + Opið + Eftir = Áætlað (19.11.2026). */}
+        <div><span>Klárað</span><b>{num(alls.m != null ? alls.kl : alls.done)}</b></div>
         <div><span>Opið</span><b>{num(alls.open)}</b></div>
-        <div><span>Eftir (áætlað)</span><b>{num(eftirTala({ m: alls.m, kl: alls.done, open: alls.open }, eftirAlls))}</b></div>
+        <div><span>Eftir (áætlað)</span><b>{num(eftirTala({ m: alls.m, kl: alls.kl, open: alls.open }, eftirAlls))}</b></div>
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>

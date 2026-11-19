@@ -548,7 +548,7 @@ export default function SkyrslaClient() {
               {flokkaheild.map((x) => { const p = x.mark ? pros(x.klar, x.mark) : null; return (
                 <tr key={x.k}><td className="sk-v"><b>{x.nafn}</b></td><td>{num(x.done)}</td><td>{x.open ? num(x.open) : ""}</td><td>{x.mark ? num(x.mark) : "—"}</td><td><b>{p == null ? "—" : `${p} %`}</b></td><td className="sk-stikud">{p == null ? null : <i style={{ width: `${p}%` }} className={p < 75 ? "lagt" : ""} />}</td></tr>
               ); })}
-              <tr className="sk-sum"><td className="sk-v">Heild með áætlun</td><td>{num(alls.klar)}</td><td></td><td>{num(alls.mark)}</td><td>{pros(alls.klar, alls.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(alls.klar, alls.mark)}%` }} /></td></tr>
+              <tr className="sk-sum"><td className="sk-v">Heild með áætlun</td><td>{num(alls.klar)}</td><td>{num(flokkaheild.reduce((a, x) => a + (x.mark ? x.open : 0), 0))}</td><td>{num(alls.mark)}</td><td>{pros(alls.klar, alls.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(alls.klar, alls.mark)}%` }} /></td></tr>
             </tbody>
           </table>
         </section>
