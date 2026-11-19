@@ -19,32 +19,32 @@
 
 export type EfniGogn = { verkferli?: Record<string, string>; verkferli_ok?: boolean };
 
-const EFNI: { k: string; heiti: string; vara: string; nr: string; mynd: string; sida: string; lysing: string; notkun: string; skjol: [string, string][] }[] = [
+const EFNI: { k: string; heiti: string; vara: string; nr: string; mynd: string; sida: string; lysing: string; notkun: string; skjol: [string, string][]; vott?: string }[] = [
   { k: "akril", heiti: "Hvítt eldvarnarakríl", vara: "Protecta FR Acrylic", nr: "POL PRO005 (310 ml) · POL PRO022 (600 ml)",
     mynd: "https://redder.is/wp-content/uploads/2023/06/POL-PRO005.jpg", sida: "https://redder.is/voruflokkar/protecta-eldvarnar-akril/",
     lysing: "Eldvarnarþéttiefni fyrir samskeyti og op í brunahólfandi veggjum og gólfum. Helst sveigjanlegt eftir hörðnun, heldur hljóðeinangrun byggingarhlutans og þenst út við hita.",
     notkun: "Þétting umhverfis lagnir og meðfram eldvarnarþéttull.",
-    skjol: [["Tækniblað", "https://redder.is/wp-content/uploads/2023/11/Technical-Data-Sheet.pdf"]] },
+    skjol: [["Yfirlýsing um nothæfi (DoP)", "https://protecta.si/wp-content/uploads/2026/02/FR-Acrylic-DoP.pdf"], ["Tækniblað", "https://redder.is/wp-content/uploads/2023/11/Technical-Data-Sheet.pdf"]], vott: "DoP PS-14010 (30.07.2024) · ETA 22/0735, ETA 23/0257 · vottorð 0843-CPR-1226" },
   { k: "grafit", heiti: "Svart háþenslukítti", vara: "Protecta FR Graphite", nr: "POL PRO010 (310 ml)",
     mynd: "https://redder.is/wp-content/uploads/2026/09/772a1563-9c9f-471b-b128-394f3d84f3f0.jpg", sida: "https://redder.is/voruflokkar/eldv-hathennslukitti-iso14001-310mm25/",
     lysing: "Þéttiefni með grafíti sem þenst mikið út í hita og lokar opinu þegar brennanleg lögn gefur sig. Ætlað þar sem hefðbundið eldvarnarkítti dugar ekki.",
     notkun: "Plaströr, kaplar, kapalbakkar og einangruð málmrör.",
-    skjol: [] },
+    skjol: [["Yfirlýsing um nothæfi (DoP)", "https://protecta.si/wp-content/uploads/2026/02/FR-Graphite-DoP.pdf"]], vott: "DoP PS-14016 (05.07.2024) · ETA 22/0749 · vottorð 0843-CPR-1223" },
   { k: "ull", heiti: "Eldvarnarþéttull 50 mm", vara: "Protecta FR Board", nr: "POL A006 (1200 × 600 mm)",
     mynd: "https://redder.is/wp-content/uploads/2026/09/ed9771bd-2f1c-40fe-9544-40382eb19dd3.jpg", sida: "https://redder.is/voruflokkar/eldvarnar-thettull-50mm-1200x600/",
     lysing: "Plata úr þéttri steinull með eldvarnarhúð. Lokar stærri opum í brunahólfandi veggjum og gólfum þar sem lagnir fara í gegn og heldur hljóðeinangrun byggingarhlutans.",
     notkun: "Fylling í stærri op; þétt með FR Acrylic allan hringinn.",
-    skjol: [["Tækniblað", "https://redder.is/wp-content/uploads/2023/06/Technical-Data-Sheet.pdf"], ["Uppsetning", "https://redder.is/wp-content/uploads/2023/06/Installation-Instructions.pdf"], ["Myndband", "https://youtu.be/mSRlSbdhZJQ"]] },
+    skjol: [["Yfirlýsing um nothæfi (DoP)", "https://fireprotect.dk/wp-content/uploads/2024/01/FR-Board-DoP.pdf"], ["Tækniblað", "https://redder.is/wp-content/uploads/2023/06/Technical-Data-Sheet.pdf"], ["Uppsetning", "https://redder.is/wp-content/uploads/2023/06/Installation-Instructions.pdf"], ["Myndband", "https://youtu.be/mSRlSbdhZJQ"]], vott: "DoP PS-14013 (22.06.2023) · ETA 22/0733, ETA 22/0771 · vottorð 0843-CPR-1221" },
   { k: "kragi", heiti: "Eldvarnarkragi", vara: "Protecta FR Collar", nr: "POL PRO0039-30 (110 mm)",
     mynd: "https://redder.is/wp-content/uploads/2026/06/0018_Protecta-FR-Collar-white.jpg", sida: "https://redder.is/voruflokkar/protecta-eldvarnarkragar/",
     lysing: "Stálkragi með útþenjandi efni sem lokar opinu þegar plaströrið bráðnar. Settur utan um rörið og festur við vegg eða gólf.",
     notkun: "Plaströr í gegnum brunahólfandi veggi og gólf.",
-    skjol: [["Tækniblað", "https://redder.is/wp-content/uploads/2026/06/FR-Collar-Technical-Data-Sheet.pdf"], ["Öryggisblað", "https://redder.is/wp-content/uploads/2026/06/FR-Collar-Safety-Data-Sheet.pdf"]] },
+    skjol: [["Yfirlýsing um nothæfi (DoP)", "https://fireprotect.dk/wp-content/uploads/2024/01/FR-Collar-DOP.pdf"], ["Tækniblað", "https://redder.is/wp-content/uploads/2026/06/FR-Collar-Technical-Data-Sheet.pdf"], ["Öryggisblað", "https://redder.is/wp-content/uploads/2026/06/FR-Collar-Safety-Data-Sheet.pdf"]], vott: "DoP PS-14011 (14.07.2023) · ETA 22/0752 · vottorð 0843-CPR-1222" },
   { k: "band", heiti: "Eldvarnarband", vara: "Protecta FR Pipe Wrap", nr: "POL PRO276 (50 mm × 25 m)",
     mynd: "https://redder.is/wp-content/uploads/2026/06/0011_Protecta-FR-Pipe-Wrap.jpg", sida: "https://redder.is/voruflokkar/protecta-eldvarnarband/",
     lysing: "Útþenjandi vafningur sem er settur utan um plaströr inni í gegnumtakinu og lokar því þegar rörið bráðnar.",
     notkun: "Plaströr og rafmagnsrör í gegnum veggi og gólf.",
-    skjol: [["Tækniblað", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-Technical-Data-Sheet.pdf"], ["Öryggisblað", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-Safety-Data-Sheet.pdf"], ["DoP", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-DoP.pdf"]] },
+    skjol: [["Yfirlýsing um nothæfi (DoP)", "https://protecta.si/wp-content/uploads/2026/02/FR-Pipe-Wrap-DoP.pdf"], ["Tækniblað", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-Technical-Data-Sheet.pdf"], ["Öryggisblað", "https://redder.is/wp-content/uploads/2026/06/FR-Pipe-Wrap-Safety-Data-Sheet.pdf"], ], vott: "DoP PS-14015 (12.08.2025) · ETA 22/0733, ETA 22/0748, ETA 24/0957" },
 ];
 
 export function Efni() {
@@ -64,6 +64,7 @@ export function Efni() {
               <dl>
                 <dt>Ætlað fyrir</dt><dd>{e.notkun}</dd>
                 <dt>Vörunúmer</dt><dd>{e.nr}</dd>
+                {e.vott && <><dt>Vottun</dt><dd>{e.vott}</dd></>}
               </dl>
               {e.skjol.length > 0 && <div className="sk-efni-skjol">{e.skjol.map(([n, u]) => <a key={u} href={u} target="_blank" rel="noreferrer">{n}</a>)}</div>}
             </div>
