@@ -19,8 +19,8 @@ import {
   officecraftHubHref,
 } from "./apps.ts";
 
-test("all thirteen Crafting Apps are installed in Kjarni", () => {
-  assert.equal(ARTCRAFT_APPS.length, 13);
+test("all fourteen Crafting Apps are installed in Kjarni", () => {
+  assert.equal(ARTCRAFT_APPS.length, 14);
   assert.deepEqual(ARTCRAFT_APP_IDS, [
     "photocraft",
     "vectorcraft",
@@ -35,6 +35,7 @@ test("all thirteen Crafting Apps are installed in Kjarni", () => {
     "deckcraft",
     "cadcraft",
     "gridcraft",
+    "craft-anything",
   ]);
 });
 
@@ -71,6 +72,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
       "lightcraft",
       "effectcraft",
       "designcraft",
+      "craft-anything",
       "tol",
       "bakgrunnur",
       "svidsmynd",
@@ -107,6 +109,7 @@ test("kjarni can open every ArtCraft interface from one list", () => {
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft"), "hub");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/"), "hub");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/photocraft"), "photocraft");
+  assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/craft-anything"), "craft-anything");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/tol"), "tol");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/bakgrunnur"), "bakgrunnur");
   assert.equal(artcraftInterfaceFromPath("/kjarni/artcraft/studio?x=1"), "studio");
@@ -123,9 +126,13 @@ test("kjarni can open every ArtCraft interface from one list", () => {
 
 test("lookup rejects unknown slugs", () => {
   assert.equal(isArtcraftAppId("photocraft"), true);
+  assert.equal(isArtcraftAppId("craft-anything"), true);
   assert.equal(isArtcraftAppId("photoshop"), false);
   assert.equal(getArtcraftApp("missing"), undefined);
   assert.equal(getArtcraftApp("pdfcraft")?.name, "PdfCraft");
+  assert.equal(getArtcraftApp("craft-anything")?.name, "Craft Anything");
+  assert.equal(isOfficecraftApp("craft-anything"), false);
+  assert.equal(artcraftAppHref("craft-anything"), "/kjarni/artcraft/craft-anything");
 });
 
 test("office apps live in OfficeCraft, not ArtCraft", () => {

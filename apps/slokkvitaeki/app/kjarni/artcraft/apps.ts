@@ -196,6 +196,21 @@ export const ARTCRAFT_APPS = [
     site: "https://getartcraft.com/apps/gridcraft",
     license: "MIT OR Apache-2.0",
   },
+  {
+    id: "craft-anything",
+    name: "Craft Anything",
+    role: "Hugbúnaður",
+    desc: "Skoðaðu vefsíður, öpp, leiki og skrár með sönnun, og smíðaðu þína eigin útgáfu. WASM-útgáfan greinir skrár í vafranum — skráin fer hvergi.",
+    icon: "🔍",
+    status: "Snemm-alfa",
+    version: "0.6.1",
+    tag: "v0.6.1",
+    zip: "craft-anything-web-0.6.1.zip",
+    sha256: "e87273b5c0181785ce9059f5348353be44e18b4ba6485203babc26ef17f71d84",
+    repo: "https://github.com/storytold/craft-anything",
+    site: "https://getartcraft.com/apps/craft-anything",
+    license: "MIT OR Apache-2.0",
+  },
 ] as const;
 
 export type ArtcraftApp = (typeof ARTCRAFT_APPS)[number];
@@ -401,6 +416,7 @@ const ARTCRAFT_USES = {
   deckcraft: ["Tilboðskynning fyrir húsfélag eða hótel", "Kynning fyrir nýtt starfsfólk"],
   cadcraft: ["Bæta „Brunavarnir“-lagi á DXF frá arkitekt", "Málsett skissa af hlut áður en hann er smíðaður"],
   gridcraft: ["Verðtafla með VSK og afsláttardálki", "Skoðunardagatal eftir mánuðum", "Bera Payday-útdrátt saman við úttektir"],
+  "craft-anything": ["Opna óþekkta skrá og sjá hvaða snið hún er", "Skoða JavaScript-búnt eða WASM í vafranum — skráin fer hvergi", "Lesa forritsskrá og sjá föll og strengjahluti áður en hún er keyrð"],
 } satisfies Record<(typeof ARTCRAFT_APPS)[number]["id"], string[]>;
 
 /** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio.

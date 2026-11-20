@@ -76,7 +76,7 @@ function writeLock(app) {
 const RETRIES = 4;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** GitHub-útgáfur skila stöku sinnum 502/503/504 þegar 13 skrár eru sóttar í
+/** GitHub-útgáfur skila stöku sinnum 502/503/504 þegar 14 skrár eru sóttar í
  *  einu — ein slík felldi alla Vercel-bygginguna. Reynt aftur (2, 4, 8 s) við
  *  5xx, 429 og netvillur; 404 og aðrar 4xx-villur stöðva strax. */
 export async function download(url, dest, { retries = RETRIES, wait = sleep, fetchImpl = fetch } = {}) {
@@ -198,7 +198,7 @@ async function installOne(app, tmp) {
 async function main() {
   if (!existsSync(APPS_PATH)) throw new Error(`missing ${APPS_PATH}`);
   const apps = parseApps(readFileSync(APPS_PATH, "utf8"));
-  if (apps.length !== 13) throw new Error(`expected 13 apps, got ${apps.length}`);
+  if (apps.length !== 14) throw new Error(`expected 14 apps, got ${apps.length}`);
   mkdirSync(DEST, { recursive: true });
   const tmp = path.join(os.tmpdir(), `kjarni-artcraft-${process.pid}`);
   mkdirSync(tmp, { recursive: true });

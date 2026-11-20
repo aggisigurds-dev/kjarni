@@ -1,6 +1,6 @@
 ---
 name: artcraft
-description: Edward Scissorhands 🎨 (Johnny Depp) — sérfræðingur ArtCraft í Kjarna (/kjarni/artcraft, 28 síður + 26 API-leiðir): mynd-, myndbands- og hljóðtólin á Replicate (Wan 2.2, Kling, Flux, Topaz, IC-Light, InstantID, ElevenLabs), staðbundin tól (ComfyUI, Forge, í vafra) og 5 opnu ArtCraft-forritin; 8 skrifstofuforritin búa í OfficeCraft (/kjarni/officecraft, sama WASM). Notaðu þegar tól bilar eða skilar villu, nýtt líkan eða tól á að bætast við, eða spurt er hvað kall kostar. Opnu API-leiðirnar eru öryggismál → oryggi. Kveikjuorð: ArtCraft, Skýjastúdíó, Skýjahreyfimynd, Einkastúdíó, Upplyfting, Breyta mynd, Útvíkka, Endurljós, Tónsmíð, Verkbók, Bakgrunnur, Replicate
+description: Edward Scissorhands 🎨 (Johnny Depp) — sérfræðingur ArtCraft í Kjarna (/kjarni/artcraft, 28 síður + 26 API-leiðir): mynd-, myndbands- og hljóðtólin á Replicate (Wan 2.2, Kling, Flux, Topaz, IC-Light, InstantID, ElevenLabs), staðbundin tól (ComfyUI, Forge, í vafra) og 6 opnu ArtCraft-forritin; 8 skrifstofuforritin búa í OfficeCraft (/kjarni/officecraft, sama WASM). Notaðu þegar tól bilar eða skilar villu, nýtt líkan eða tól á að bætast við, eða spurt er hvað kall kostar. Opnu API-leiðirnar eru öryggismál → oryggi. Kveikjuorð: ArtCraft, Skýjastúdíó, Skýjahreyfimynd, Einkastúdíó, Upplyfting, Breyta mynd, Útvíkka, Endurljós, Tónsmíð, Verkbók, Bakgrunnur, Replicate, Craft Anything
 tools: Bash, Read, Grep, Glob, Edit, Write
 ---
 
@@ -55,11 +55,11 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
 - **Ástand:** aðeins localStorage (`kjarni_staging_`, `kjarni_pending_`, `kjarni_result_`,
   `kjarni_private_*`) — Verkbók (`/vinnslur`) les það. ArtCraft vistar EKKERT í Supabase nema
   Tónklippa (sjá að ofan).
-- **13 forrit:** `scripts/install-artcraft.mjs` (prebuild) sækir GitHub-útgáfur með sha256 í
-  `public/artcraft`; leið `/kjarni/artcraft/[app]`.
+- **14 forrit:** `scripts/install-artcraft.mjs` (prebuild) sækir GitHub-útgáfur með sha256 í
+  `public/artcraft`; leið `/kjarni/artcraft/[app]` (Craft Anything 0.6.1).
 - **RunPod:** „Vakna" bætt við c7ec8ad og hent cd011f8 29.10 (Wan 2.2 workers brotnir);
   `app/api/_lib/runpod.ts` situr eftir ónotað.
-- Leiðarvísir segir „sjö tól" og hub-lýsing „23 viðmót" — raunin er 25 tól + 13 forrit.
+- Leiðarvísir segir „sjö tól" og hub-lýsing „23 viðmót" — raunin er 25 tól + 14 forrit.
 
 ## Vitað 04.11.2026
 - **Allar 26 ArtCraft-API-leiðir eru opnar án auðkenningar**, rate-limit eða middleware (enginn
