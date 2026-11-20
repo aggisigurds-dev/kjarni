@@ -52,6 +52,7 @@ samstillt aftur 2026-08-31 (níu eintök höfðu dregist aftur úr — joker van
 | QR-merki, miðaprentun (Brother PT-P750W), raðnúmer | `prentun` | slokkvitaeki |
 | Kort, Leaflet, mapfix, geocode/Nominatim | `kort` | slokkvitaeki |
 | Staðreyndayfirferð — kerfið segir eitt, gögnin annað (factcheck_bord) | `natalie` 🌸 | slokkvitaeki |
+| Hvar búnaður á að vera, lög og reglur brunavarna, byggingarlýsing, sameign í fjölbýli, búnaðargreining, TurboPaint — **yfirmaður Expendables** | agent+skill `arnold` 💪 | slokkvitaeki |
 | Tilboð í brunaviðvörunarkerfi (372 kúnnar, EN 54) — Arnolds Expendables | `dolph-lundgren` 🔫 | slokkvitaeki |
 | Tilboð í sprinkler / vatnsúðakerfi (246 kúnnar, EN 12845) — Arnolds Expendables | `terry-crews` 💪 | slokkvitaeki |
 | Tilboð í slökkvikerfi eldhús (79 kúnnar, EN 16282) — Arnolds Expendables | `wesley-snipes` 🗡️ | slokkvitaeki |
