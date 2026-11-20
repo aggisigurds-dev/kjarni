@@ -38,8 +38,8 @@ export default function ArtCraftHub() {
           <h1>Myndir og myndbönd. Eitt handverk.</h1>
           <p className="ac-lead">
             Opin uppspretta sköpunartól frá ArtCraft, hýst í Kjarnanum: myndvinnsla,
-            myndbönd, RAW, hreyfimyndir, síðuhönnun og Craft Anything til að skoða
-            vef og skrár og smíða hrein drög — allt í vafranum, á þínum skrám.
+            myndbönd, RAW, hreyfimyndir, síðuhönnun og Craft Anything (vefskoðari
+            og sækja heila borðtölvu-appið) — allt í vafranum, á þínum skrám.
             Skrifstofuforritin (ritvinnsla, töflur, kynningar, PDF, CAD …) eru nú í{" "}
             <a href={officecraftHubHref()}>OfficeCraft</a>.
           </p>

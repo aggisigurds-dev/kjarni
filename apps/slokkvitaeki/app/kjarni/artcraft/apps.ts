@@ -200,7 +200,7 @@ export const ARTCRAFT_APPS = [
     id: "craft-anything",
     name: "Craft Anything",
     role: "Hugbúnaður",
-    desc: "Skoðaðu vefsíður og skrár með sönnun (HTML, JS, WASM) og smíðaðu hrein HTML-drög. WASM-útgáfan greinir tvíundarskrár í vafranum — skráin fer hvergi.",
+    desc: "Heila forritið (Study → Build → Check) er borðtölvu-app. Vefútgáfan greinir skrár í vafranum — skráin fer hvergi. macOS, Windows og Linux eru á Sækja-flipanum.",
     icon: "🔍",
     status: "Snemm-alfa",
     version: "0.6.1",
@@ -417,9 +417,9 @@ const ARTCRAFT_USES = {
   cadcraft: ["Bæta „Brunavarnir“-lagi á DXF frá arkitekt", "Málsett skissa af hlut áður en hann er smíðaður"],
   gridcraft: ["Verðtafla með VSK og afsláttardálki", "Skoðunardagatal eftir mánuðum", "Bera Payday-útdrátt saman við úttektir"],
   "craft-anything": [
-    "Skoða HTML og JS á okkar vefjum og sjá stafla, valmynd og liti",
-    "Sleppa WASM eða forritsskrá og greina hana í vafranum — skráin fer hvergi",
-    "Smíða hrein HTML-drög úr því sem sést, án upprunalegra skriftna",
+    "Opna skrár í opinbera vefskoðaranum — skráin fer hvergi",
+    "Sækja macOS, Windows eða Linux — heila vélin með 320 tólum og MCP",
+    "Skoða okkar vefi og smíða hrein HTML-drög án upprunalegra skriftna",
   ],
 } satisfies Record<(typeof ARTCRAFT_APPS)[number]["id"], string[]>;
 

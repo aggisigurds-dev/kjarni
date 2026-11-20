@@ -5,16 +5,17 @@ import { StationChrome } from "../../StationChrome";
 import { type ArtcraftApp, artcraftHubHref, artcraftStaticPath } from "../apps";
 import "../artcraft.css";
 import { craftHtml } from "./craft";
+import { CRAFT_ANYTHING_NATIVE, craftAnythingNativeUrl, craftAnythingSumsUrl } from "./downloads";
 import { STUDY_SITES, studyBytes, studyHtml, type Study } from "./study";
 
-type Hamur = "skra" | "vefur" | "smida";
+type Hamur = "forrit" | "saekja" | "vefur" | "smida";
 
 const STORE = "kjarni_craft_anything";
 
 export default function CraftAnythingClient({ app }: { app: ArtcraftApp }) {
   const src = artcraftStaticPath(app.id);
   const [missing, setMissing] = useState(false);
-  const [hamur, setHamur] = useState<Hamur>("vefur");
+  const [hamur, setHamur] = useState<Hamur>("forrit");
   const [url, setUrl] = useState(STUDY_SITES[0]?.url ?? "");
   const [paste, setPaste] = useState("");
   const [want, setWant] = useState("Endurgerðu hausinn og valmyndina í hreinu HTML.");
@@ -102,7 +103,7 @@ export default function CraftAnythingClient({ app }: { app: ArtcraftApp }) {
   async function onFile(file: File) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const next = studyBytes(file.name, bytes);
-    applyStudy(next, next.kind === "binary" ? "skra" : "vefur");
+    applyStudy(next, next.kind === "binary" ? "forrit" : "vefur");
   }
 
   function makeCraft() {
@@ -136,16 +137,17 @@ export default function CraftAnythingClient({ app }: { app: ArtcraftApp }) {
             ← ArtCraft
           </a>
           <b>{app.name}</b>
-          <span>Skoða · smíða</span>
-          <a href={app.site} target="_blank" rel="noreferrer">
-            ArtCraft
+          <span>{app.role}</span>
+          <a href={src} target="_blank" rel="noreferrer">
+            Opna stórt
           </a>
         </div>
         <div className="ac-modes ac-ca-modes" role="tablist" aria-label="Hamur">
           {(
             [
+              ["forrit", "Forrit"],
+              ["saekja", "Sækja fullt"],
               ["vefur", "Skoða vef"],
-              ["skra", "Skoða skrá"],
               ["smida", "Smíða"],
             ] as const
           ).map(([id, label]) => (
@@ -161,7 +163,63 @@ export default function CraftAnythingClient({ app }: { app: ArtcraftApp }) {
             </button>
           ))}
         </div>
-        {error ? <p className="ac-error ac-ca-error">{error}</p> : null}
+        {error && hamur !== "forrit" ? <p className="ac-error ac-ca-error">{error}</p> : null}
+
+        {hamur === "forrit" ? (
+          missing ? (
+            <div className="ac-missing">
+              <h2>Craft Anything er ekki uppsett hér</h2>
+              <p>
+                WASM-útgáfan vantar í <code>public/artcraft/{app.id}</code>. Á Vercel sækir{" "}
+                <code>prebuild</code> hana. Staðbundið:{" "}
+                <code>pnpm --filter slokkvitaeki-vefur artcraft:install</code>
+              </p>
+            </div>
+          ) : (
+            <iframe
+              className="ac-ca-app"
+              src={src}
+              title={`${app.name} — ${app.role}`}
+              allow="clipboard-read; clipboard-write; fullscreen"
+              allowFullScreen
+            />
+          )
+        ) : null}
+
+        {hamur === "saekja" ? (
+          <div className="ac-ca-pane ac-studio">
+            <p className="ac-hint">
+              Heila forritið (Study → Build → Check, 320 tól, MCP, Claude Code) er borðtölvu-app.
+              Flipinn Forrit er skoðarinn sem ArtCraft birtir. Sæktu sama 0.6.1 og þeir gefa út —
+              Kjarni hýsir ekki 67 MB tvíundarskrár.
+            </p>
+            <ul className="ac-ca-downloads">
+              {CRAFT_ANYTHING_NATIVE.map((pack) => (
+                <li key={pack.id}>
+                  <a className="ac-btn" href={craftAnythingNativeUrl(pack.file)} rel="noreferrer">
+                    {pack.label}
+                  </a>
+                  <span>
+                    {pack.hint}
+                    <code>{pack.file}</code>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="ac-hint">
+              Prófaðu niðurhalið með{" "}
+              <a href={craftAnythingSumsUrl()} rel="noreferrer">
+                SHA256SUMS.txt
+              </a>
+              . Frumkóði:{" "}
+              <a href={app.repo} target="_blank" rel="noreferrer">
+                storytold/craft-anything
+              </a>
+              . Bygging:{" "}
+              <code>cargo run --release -p craft-anything</code> (Rust 1.97+).
+            </p>
+          </div>
+        ) : null}
 
         {hamur === "vefur" ? (
           <div className="ac-ca-pane ac-studio">
@@ -212,40 +270,6 @@ export default function CraftAnythingClient({ app }: { app: ArtcraftApp }) {
             </button>
             <Drop drag={drag} setDrag={setDrag} onFile={(file) => void onFile(file)} label="Eða slepptu HTML, JS eða CSS hér" />
             {study ? <Evidence study={study} /> : null}
-          </div>
-        ) : null}
-
-        {hamur === "skra" ? (
-          <div className="ac-ca-split">
-            <div className="ac-ca-pane ac-studio">
-              <p className="ac-hint">
-                WASM-vélin greinir forrit og tvíundarskrár í vafranum. Texta og vefskrár eru lesnar
-                hér ofan við — dýpra en opinbera vefútgáfan gerir ein.
-              </p>
-              <Drop
-                drag={drag}
-                setDrag={setDrag}
-                onFile={(file) => void onFile(file)}
-                label="Slepptu skrá — forrit, WASM, HTML, JS…"
-              />
-              {study ? <Evidence study={study} /> : null}
-            </div>
-            {missing ? (
-              <div className="ac-missing">
-                <h2>WASM-skoðarinn er ekki uppsettur</h2>
-                <p>
-                  Á Vercel sækir <code>prebuild</code> hann. Staðbundið:{" "}
-                  <code>pnpm --filter slokkvitaeki-vefur artcraft:install</code>
-                </p>
-              </div>
-            ) : (
-              <iframe
-                src={src}
-                title="Craft Anything WASM"
-                allow="clipboard-read; clipboard-write; fullscreen"
-                allowFullScreen
-              />
-            )}
           </div>
         ) : null}
 

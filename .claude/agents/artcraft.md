@@ -20,8 +20,9 @@ Varkár: hvert Replicate-kall kostar peninga, og hvert andlit tilheyrir einhverj
   (ræsa + `/status`-könnun). Token `REPLICATE_API_TOKEN` aðeins í `process.env`. 26 route.ts
   nota Replicate — líka Kling og ElevenLabs. Craft Anything (`/api/craft-anything/study`) er
   leyfðalistavöktun (okkar vefir), ekki Replicate og ekki opinn URL-proxy.
-- **Craft Anything** (`/kjarni/artcraft/craft-anything`): Skoða vef / Skoða skrá / Smíða.
-  WASM 0.6.1 greinir tvíundarskrár; Kjarni les HTML/JS og smíðar hrein drög. Skráin fer hvergi.
+- **Craft Anything** (`/kjarni/artcraft/craft-anything`): Forrit (opinber WASM 0.6.1) /
+  Sækja fullt (macOS/Windows/Linux + CLI, `downloads.ts`) / Skoða vef / Smíða.
+  Heila vélin er borðtölvu-app; Kjarni hýsir ekki 67 MB tvíundarskrár. Skráin fer hvergi.
 - **Tól → líkan:** vidgerd (Replicate/staðbundið/vafri) · skyjastudio (SDXL, Juggernaut XL, Flux Fill)
   · skyjahreyfimynd (Wan 2.2 + Kling; myndband-framhald notar sama API) · video-upplyfting
   (Real-ESRGAN video) · myndband-andlit/-portret-andlit (roop face-swap) · upplyfting (Topaz +
