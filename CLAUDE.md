@@ -52,6 +52,7 @@ samstillt aftur 2026-08-31 (níu eintök höfðu dregist aftur úr — joker van
 | QR-merki, miðaprentun (Brother PT-P750W), raðnúmer | `prentun` | slokkvitaeki |
 | Kort, Leaflet, mapfix, geocode/Nominatim | `kort` | slokkvitaeki |
 | Staðreyndayfirferð — kerfið segir eitt, gögnin annað (factcheck_bord) | `natalie` 🌸 | slokkvitaeki |
+| Landspítalaverkið (NLSH) í heild: hvernig allt reiknast, uppgjör á móti stöðuskýrslu, hvað er búið og eftir | `dr-house` 🩻 | brunaholf |
 
 `kunnaskra` er brunaholf-útgáfan (kúnna-líkanið sjálft — brunaholf á
 `customers_base`); app-hliðar útgáfa slokkvitaeki var ekki afrituð til að forðast

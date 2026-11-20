@@ -3,7 +3,7 @@ name: gagnaleidslur
 description: Gagnaleiðslurnar — Tímavera, Ajour, Payday, Redder, email-innsog, luna-bridge róbótarnir og sjálfvirkni-skráin. Notaðu þegar gögn vantar, innsog brotnar eða spurt er hvað keyrir hvenær; kallaðu á hann sjálfur, án þess að Agnar nefni hann, þegar nýleg gögn (póstur, Tímavera, Ajour, Redder) vantar eða eru gömul. Rödd í Jarvis: Jason Statham 🥊. Kveikjuorð: Tímavera, Ajour, Redder, luna-bridge, innsog, póstur skilar sér ekki, sjálfvirkni, automation_triggers, redder lesari bilaður, 1000 raða þak, tímabók, samstilla Ajour, gögn vantar, Sent Items-1, undirmöppur, email_digest, bank_transactions, Teya
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql, mcp__supabase__get_logs
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\gagnaleidslur.md (samstillt 2026-11-15). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\gagnaleidslur.md (samstillt 2026-11-20). Breyttu þar.
 
 ## Charlize — lestu fyrst
 
@@ -162,7 +162,7 @@ for several Supabase tables this app reads:
 - **`ajour-ingest.py`** — reads the latest `AjourRegistrationData*.csv`
   from Downloads, upserts to `ajour_registrations`. CSV is
   semicolon-delimited UTF-8-with-BOM. Dedupe key:
-  `(serial_number, project_name, execution_date)`. Maps:
+  `(serial_number, project_name)` (frá 16.11.2026; var með `execution_date`). Maps:
   `SerialNumber`, `RegistrationType`, `RegistrationStatus`,
   `ProjectName`, `CategoryGroup`, `Category`, `Category1`,
   `CheckListItem`, `CheckListItemCheckedDate`,
@@ -464,6 +464,12 @@ ANNAÐ kerfi en „Efniskostnaður / Kostnaðarreikningar (endurrukkun)" hér a�
   völdum flokkum. Breyta á BÁÐUM stöðum: `kjarni/.../skyrsla/SkyrslaClient.tsx` (`RAF_MARK`, `markmidReiknad`).
 - **Kortin á Landspítalasíðunni endurbætt 10.11.2026 (brunaholf 6f60ce4):** `tools/nlsh-stukur.cjs` skrifar nú `utan` í `data/nlsh-stukur.json` (rafmagnsteikningar, Viðbótarverkefni, „(engin teikning)" — summa stúkna + utan = heild). `js/nlsh-sections.js`: `hopStada()` = flokkahópar (Loft/Stál/Plast/Gólf) með markmið = sami hópur á 6H en aldrei minna en klárað + opið; `loftFactor()` kvarðar loft á 5H við Miro-talninguna (`MIRO_LOFT`: viðmið 272 = 6H S2 á Miro, S1 230, S2 244; S4/S5 meðalhlutfall); `deildirHtml()` = deildaspjöld, `utanHtml()` = rafmagn og annað utan deilda, `opidLina()` = sundurliðun opinna. `wingTarget` byggir á hópunum. Útkoma 10.11: 6H 99 %, 5H 77 % (S1 100, S2 96, S4 81, S5 33 — milliloft S4/S5 0 af ~200 dregur niður), 4H 44 % (84–107 af ~200 á deild). **Punktakortið (sama dag, v=20261110b):** hver punktur í `data/nlsh-punktar.json` ber nú 7. gildi = vísir í `flokkar[]` (stærðarflokkur Ajour); `mountKort` teiknar tákn eftir tegund og stærð (kross = loft, hringur = stál, þríhyrningur = plast, ferningur = milliloft, tígull = rafmagn; `TAKN()`), skýringarnar eru síur (`st.af`), „S1 + S2" / „S4 + S5" stækka kortið (`.nl-kort-in` breikkað og hliðrað), táknstærð fylgir kvarða (`zs`). Agnar leyfði 10.11 að nota TurboPaint eða Miro í staðinn; valið var að halda kortinu í hubnum því það les Ajour beint — ekkert hefur verið skrifað á Miro. **Einingar (Agnar 11.11.2026, orðrétt efni):** Ajour telur STÖK verk; tvö stök verk eru ein lokun í Landspítalatilboðinu — NEMA gólfgötin: rörið kemur gegnum gólfið og er aðeins þétt neðan frá, svo eitt stakt gólfverk er heil þétting. GOLF_TGT var því lækkað úr 200 í 110 á deild (brunaholf, v=20261111a): 4H fór úr 44 % í 81 % (S1 76, S2 97, S4 82, S5 68), 5H í 80 % (S4 86, S5 35), heild 90 %. **Gólf 5. hæðar — LEIÐRÉTT 11.11.2026:** teikningin `5H. Ceiling` er HEILT hæðarblað (sama snið og `6H.pdf`, A1, 3763×2658 px) með öllum fjórum deildum, ekki S1+S2. Gólfgöt 5H kláruð: **S1 119, S2 150, S4 101 (+5 opin), S5 97 (+2 opin)** — „rúmlega 100 á deild" stenst og stemmir við Miro (5H1S 110/115, 5H2S 128/135). Fyrri niðurstaða sama dag („5H S1 um 248 stök rör, S2 um 193, ekkert á S4/S5") var RÖNG: `tools/nlsh-stukur.cjs` skipti blaðinu við stærsta x-bilið (atríum) og kallaði S1+S2 „S1" og S4+S5 „S2"; Landspítalasíðan sýndi þess vegna 0 gólfgöt á 5H S4/S5 frá 30.10. Lagað: regla með fylki af deildum (`deildFall`, skipt við þrjú stærstu bilin) og TRANS fyrir `5H. Ceiling` (1.58, 12.3, 34.1) svo gólfpunktar 5H birtast á kortinu. Eftir lagfæringu: 5H 83 % (S1 100, S2 97, S4 94, S5 43), heild 91 %. Það sem stendur óhaggað: hver gólfskráning er sérstakt rör (ljósmyndir af 24 skoðaðar), 2 hrein tvítök (#4454 = #1311, #4453 = #2374) og um 22 nýjar skráningar á stað eldri á öllu blaðinu. **Lærdómur: áður en blaði er skipt í deildir — bera x-svið punktanna við blað sem er þekkt; fleiri en eitt stórt bil = fleiri en tvær deildir.** Aukafundur: í öllu verkinu sitja 67 kláraðar skráningar á nákvæmlega sömu hnitum og önnur (58 hópar, 46 á `6H.pdf`, 42 stofnaðar í mars 2026; 16 hópar með ólíkan flokk, 9 með ólíkan dag) — fyrir vegggöt getur afrit verið hin hlið veggjarins, ÓMÆLT hvort myndirnar eru þær sömu. Aðferð: `/api/construction/registration/file/scaled/print?id=<photos[].fileId>` skilar ljósmynd skráningar. **Lagfæringar (Agnar 11.11.2026): lagfæring á að koma sem NÝTT verk** — ekki draga þær frá sem tvítök. Talning úr lýsingum allra 11.206 skráninga (leitarorð fix/lagf/repair/extra work/laga/damage; dagsetning í lýsingu borin við framkvæmdadag): 521 skráning ber lagfæringarmerki — 98 eru lagfæring skráð sem nýtt verk (5H 41, 6H 39, Viðbótarverk 14, 4H 4), 248 eru upphaflega skráningin með athugasemd um lagfæringu meira en 7 dögum eftir framkvæmdadag („had Fix it 3.6.26 (Nour)", „repaired by RA40", „fixed on … by starfs"; 5H 106, 6H 91, 4H 36) og þar fannst engin sérstök skráning fyrir lagfæringuna í lýsingunni, 175 eru óflokkaðar (lýsing án dagsetningar: „Repair work", „fix", „extra work"). Flokkunin A/B er túlkun á texta, ekki staðfest mynd fyrir mynd.
 
+## NLSH frá 20.11.2026: Dr. House og gatakortið
+Landspítalaverkið í heild (uppgjör á móti stöðuskýrslu, hvað er búið og eftir) á `dr-house`. Gatakortið (greiningarverk 4 í Kjarna)
+uppfærist úr Ajour með `luna-bridge/ajour-export-allt.js --project NLSH --no-photos --no-pdf` og innflutningi Jackie Chan (verkferlið
+`gatakort-nytt-husnaedi`, skref 10) — ekki `ajour-import.js`. Breytingar í Ajour-vefnum sjálfum: skref 11 þar. Innskráning brúarinnar
+(`ajour-state.json`) svaraði 200 á GetAllProjects 20.11.2026.
+
 ## Ajour-innlestur: sókn eftir beiðni og NULL-dagsetningar sem tvítakast (mælt 04.–10.11.2026, lota 2ef635f0)
 
 - **Sækja núna:** `insert into automation_triggers (workflow, status, requested_by) values ('ajour','bida','<hver>') returning id;`
@@ -471,21 +477,42 @@ ANNAÐ kerfi en „Efniskostnaður / Kostnaðarreikningar (endurrukkun)" hér a�
   result endar á „Ajour sótt: N færslur uppfærðar · yfirlit vistað"; ótekin beiðni í 30 mín → úrelt. **Watcher keyrir á BÁÐUM
   vélum** (`LunaBridge-Watcher` á DESKTOP-M5FO3I6, `LunaBridge2-Watcher` á skrifstofuvélinni; `schtasks` 10.11) — sú sem tekur
   beiðnina þarf lifandi `ajour-state.json`. Daglega sóknin 06:45 (`LunaBridge2-Ajour`) er aðeins á skrifstofuvélinni.
-- **Hvað sókn uppfærir:** `ajour-ingest.py:128` upsertar á `(serial_number, project_name, execution_date)` með merge-duplicates og
+- **Hvað sókn uppfærir:** `ajour-ingest.py` upsertar á `(serial_number, project_name)` (frá 16.11.2026) með merge-duplicates og
   sendir `category_group` og `registration_status` → flokka- og stöðubreyting í Ajour skrifast yfir (staðfest: 12068 fór úr
   Raufar/Published í Gólf Ø 160-200/Done). `imported_at` er aðeins sett við innsetningu og segir ekkert um uppfærslur.
-- **VILLA (verkefnalisti `1bd6ccae`, ólagað):** þegar `execution_date` er NULL passar einkvæmi vísirinn ekki (NULL ≠ NULL) og röðin
-  er SETT INN aftur við hverja sókn. 10.11: 63 raðir án dags á 62 NLSH-skráningum (12271 tvisvar: 09.11 og 10.11) → um +62 raðir
-  á dag. `nlsh_stada*` og `nlsh-uppgjor` telja `count(distinct serial_number)` og skekkjast ekki; allt sem telur raðir gerir það,
-  og þegar skráning fær dag verður NULL-röðin eftir með gamla stöðu (telst í `ekki_done`). Sama rót: breytist framkvæmdadagur
-  í Ajour verður gamla röðin eftir. Rétt lagfæring er lykill á `(project_name, serial_number)` — vísir + báðir innlesarar
-  (`ajour-ingest.py` og `netlify/functions/ajour-ingest-drive-background.js`) í SAMA skrefi á báðum vélum; gamall kóði á móti
-  nýjum vísi fellir 500 raða lotu (409), nýr kóði á móti gömlum vísi fær 42P10. Í dag er aðeins eitt tvítekið par í töflunni.
+- **LAGAÐ 16.11.2026 (verkefnalisti `1bd6ccae`; `sql/2026-11-16_ajour_registrations_einkvaemt_radnumer.sql`):** þegar
+  `execution_date` var NULL passaði einkvæmi vísirinn ekki (NULL ≠ NULL) og röðin var SETT INN aftur við hverja sókn. Mælt 16.11:
+  83 NLSH-númer tvítekin 2–13×, 655 aukaraðir. `nlsh-uppgjor` telur einstök raðnúmer per flokk með Done, svo hrein tvítök
+  skekktu ekki, EN gömul eintök með eldri stöðu lifðu: 12 skráningar sem voru Done 10.11 og Published síðan töldust enn
+  (93.758 kr m/vsk oftalið í nóvember). Lagfæringin: eldri eintökum eytt (afrit `ajour_registrations_afrit_tvitok_20261116`,
+  655 raðir, RLS á), nýr lykill `ajour_registrations_radnumer_verkefni_key` á `(serial_number, project_name)` og báðir innlesarar
+  (`ajour-ingest.py`, `netlify/functions/ajour-ingest-drive-background.js`) upserta á hann. Gamli þriggja dálka lykillinn stendur
+  áfram sem `NULLS NOT DISTINCT`, svo óuppfærður kóði (luna-bridge á Heimatölvu) tvítekur ekki heldur; breytist framkvæmdadagur
+  í Ajour fellur þó 500 raða lota hjá ÓUPPFÆRÐUM kóða (409, `post` prentar ERR og heldur áfram) → `git pull` þar.
+  Sannreynt: full sókn á nýja lyklinum, 26.153 raðir fyrir og eftir, 0 tvítekin.
+- **Ein röð per skráningu yfir ALLA skrána (16.11.2026):** CSV-ið ber eina línu per gátlistalið (14 á skráningu). Báðir innlesarar
+  safna nú í eitt kort á `(serial_number, project_name)`: fyrsta línan (EI60) ræður `checklist_item/checked_date/checked_by_user`,
+  eins og áður. Áður var þetta gert per 500 lína lotu, svo ~286 skráningar á lotumörkum fengu gildi síðari línu og hakdagurinn
+  flökti milli sókna. **Undantekning:** sé fyrsti liður óhakaður OG `execution_date` tómur er hakið tekið af fyrsta HAKAÐA lið;
+  annars lenti skráningin í engum uppgjörsmánuði (12272, 12396, 12397, 12329 voru hakaðar í EI 90/Þéttull/Akríl en ekki EI60).
+  **Ekki víkka regluna** í „fyrsti hakaði liður alltaf": þurrkeyrsla færði þá 170 kláraðar NLSH-skráningar milli mánaða, þar af
+  22 úr frosnum október í nóvember (tvírukkun). Próf án skrifa: hub-fallið keyrt með gervi-fetch og borið saman við
+  `ajour-ingest.lesa()` = 11.218 raðir, enginn mismunur. `ajour-ingest.py` skilar nú villukóða ef lota fellur í upsert.
 - **Lesa aldrei `count(*)` úr `ajour_registrations` sem fjölda skráninga** — notaðu `count(distinct serial_number)` per verk.
+
+## Thunderbird-brúin á heimavélinni DESKTOP-M5FO3I6 (mælt 16.11.2026, lota 2ef635f0)
+
+- **Pósthólf tengjast ekki möppum með nafni; bridge.js les prefs.js og mappar:** `outlook.office365.com` = **Brunaholf@brunaholf.is**, `outlook.office365-1.com` = **bokhald@brunaholf.is**, `outlook.office365-2.com` = **slokkvitaeki@brunaholf.is**; `imap.gmail-1.com` = eldklar@, `-2.com` = brunaholfehf@, `-3.com` = bokhald@eldklar@. **Þessi mapping er ÖFUG við skrifstofuvélina DESKTOP-509MN7M** (sjá `slokkvitaeki/.claude/agents/postur.md`). Ekki treysta hostnafni — les prefs.js. Profíll heimavélarinnar er `euqr38aw.default-release`.
+- **Möppuheiti á diski eru Modified UTF-7 (IMAP-útgáfa):** „Sl&APY-kkvit&AOY-ki.sbd" = „Slökkvitæki.sbd" (ö → &APY-, æ → &AOE-, á → &AM0-, ð → &APA-). bridge.js afkóðar sjálfvirkt þegar skrifað er í state.json og email_digest.
+- **Lykill í state.json er „<host>/MAPPA:<notandavæn slóð>"**, t.d. `outlook.office365-1.com/MAPPA:INBOX/Reikninga - 2026`. position = byte-offset í mbox sem síðast var lesin.
+- **20 MB-þakið per keyrslu á möppu:** stór mappa (INBOX/Reikninga - 2026, 190 MB) þarf 8–10 keyrslur. Þegar `position >= skráarstærð` birtist sem „0 msgs (skipped)". Heiti sem er þegar fullesið er hunsað þar til ný skeyti bætast við. **Ein brú í einu** (bridge.lock); ekki keyra tvær samtímis. Ekki keyra fulla möppu-endurlesningu (yfirskrifar handvirka verkstaða-tengingu — sjá Redder kafla).
+- **Keyra núna úr hubbnum:** `uppskrift='bru'` í `vel_skipanir` tekur heartbeat.js við á vélinni. **Ein skipun per heartbeat-keyrslu** — fyrir margar þarf að keyra heartbeat endurtekið (eða bíða eftir áætlaðri LunaBridge-Heartbeat 30 mín.). Útkoma er læs þegar `stada='lokid'`; „bid" = ekki tekin, „villa" = exit ≠ 0.
+- **Gæsalappir á Windows-slóðir:** heartbeat.js kallar `spawn(cmd, args, {shell: true})` á Windows → slóð með bili (`C:\Program Files\nodejs\node.exe`) verður að hafa gæsalappir (q()-fallið í heartbeat.js, PR #15, 9299aa6). Bygging skipunarlínu annars staðar þarf sama.
+- **Hugsa fyrir ANNARRI vélinni:** DESKTOP-M5FO3I6 keyrir LunaBridge- (Watcher 1 mín, Email 15 mín, Heartbeat 30 mín, Redder daglega 07:45). DESKTOP-509MN7M keyrir LunaBridge2- (sama + Ajour 06:45, AjourYfirlit 07:15, AjourVakandi 10 mín). Heimavélin sendir heartbeat (VEL_HEARTBEAT_TOKEN), skrifstofan EKKI (token vantar í .env hennar).
 
 ## Grunnreglur allra agenta (04.11.2026)
 1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
 2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
-3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+3. Villa eða gat sem þú finnur: LAGAÐU það sjálfur ef það er innan verksins sem þú ert í og lagfæringin er afturkræf (prófa, segja frá í lokasvari). Verkefnalistinn er listi Agnars — stofnaðu röð þar AÐEINS ef hann biður um það, eða mest EINA á lotu fyrir það sem er utan verksins og of stórt til að laga núna (skrá:lína og sönnun). Annað fer í lokasvarið og charlize_knowledge, ekki á listann. (Agnar 16.11.2026: „setja allt á verkefnalista í stað þess að laga það“ · „ég vil geta sett á verkefnalista en ekki að ég fái mörg hundruð atriði á móti“; mælt: 137 ný verk á 14 dögum, 21 kláruð.)
 4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
 5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.
