@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import ArtCraftClient from "../ArtCraftClient";
+import CraftAnythingClient from "../craft-anything/CraftAnythingClient";
 import { ARTCRAFT_APPS, artcraftAppHref, getArtcraftApp, isOfficecraftApp } from "../apps";
 
 type Params = { app: string };
@@ -34,5 +35,6 @@ export default async function ArtCraftAppPage({
   if (!app) notFound();
   // Gamlir hlekkir (/kjarni/artcraft/wordcraft o.fl.) fara á nýja OfficeCraft-staðinn.
   if (isOfficecraftApp(app.id)) permanentRedirect(artcraftAppHref(app.id));
+  if (app.id === "craft-anything") return <CraftAnythingClient app={app} />;
   return <ArtCraftClient app={app} />;
 }

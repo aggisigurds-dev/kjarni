@@ -200,7 +200,7 @@ export const ARTCRAFT_APPS = [
     id: "craft-anything",
     name: "Craft Anything",
     role: "Hugbúnaður",
-    desc: "Skoðaðu vefsíður, öpp, leiki og skrár með sönnun, og smíðaðu þína eigin útgáfu. WASM-útgáfan greinir skrár í vafranum — skráin fer hvergi.",
+    desc: "Skoðaðu vefsíður og skrár með sönnun (HTML, JS, WASM) og smíðaðu hrein HTML-drög. WASM-útgáfan greinir tvíundarskrár í vafranum — skráin fer hvergi.",
     icon: "🔍",
     status: "Snemm-alfa",
     version: "0.6.1",
@@ -416,7 +416,11 @@ const ARTCRAFT_USES = {
   deckcraft: ["Tilboðskynning fyrir húsfélag eða hótel", "Kynning fyrir nýtt starfsfólk"],
   cadcraft: ["Bæta „Brunavarnir“-lagi á DXF frá arkitekt", "Málsett skissa af hlut áður en hann er smíðaður"],
   gridcraft: ["Verðtafla með VSK og afsláttardálki", "Skoðunardagatal eftir mánuðum", "Bera Payday-útdrátt saman við úttektir"],
-  "craft-anything": ["Opna óþekkta skrá og sjá hvaða snið hún er", "Skoða JavaScript-búnt eða WASM í vafranum — skráin fer hvergi", "Lesa forritsskrá og sjá föll og strengjahluti áður en hún er keyrð"],
+  "craft-anything": [
+    "Skoða HTML og JS á okkar vefjum og sjá stafla, valmynd og liti",
+    "Sleppa WASM eða forritsskrá og greina hana í vafranum — skráin fer hvergi",
+    "Smíða hrein HTML-drög úr því sem sést, án upprunalegra skriftna",
+  ],
 } satisfies Record<(typeof ARTCRAFT_APPS)[number]["id"], string[]>;
 
 /** Every ArtCraft UI that opens on the Kjarni page — hub, editors, auto tools, studio.

@@ -66,7 +66,7 @@ export const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "📷", nafn: "LightCraft", desc: "Myndasafn og RAW-framköllun", tag: "Tól", ready: true, href: "/kjarni/artcraft/lightcraft" },
       { icon: "✨", nafn: "EffectCraft", desc: "Hreyfimyndir og sjónbrellur", tag: "Tól", ready: true, href: "/kjarni/artcraft/effectcraft" },
       { icon: "📰", nafn: "DesignCraft", desc: "Síðuhönnun og umbrot", tag: "Tól", ready: true, href: "/kjarni/artcraft/designcraft" },
-      { icon: "🔍", nafn: "Craft Anything", desc: "Skoða hugbúnað og skrár í vafranum", tag: "Tól", ready: true, href: "/kjarni/artcraft/craft-anything" },
+      { icon: "🔍", nafn: "Craft Anything", desc: "Skoða vef og skrár, smíða hrein drög", tag: "Tól", ready: true, href: "/kjarni/artcraft/craft-anything" },
       { icon: "⚡", nafn: "Autogenerator", desc: "Sjálfvirk tól — bakgrunnur, hvítt, einkastúdíó", tag: "Tól", ready: true, href: "/kjarni/artcraft/tol" },
       { icon: "✂️", nafn: "Bakgrunnur", desc: "Fjarlægðu vegg, borð og skugga af vörumynd", tag: "Tól", ready: true, href: "/kjarni/artcraft/bakgrunnur" },
       { icon: "🔓", nafn: "Einkastúdíó", desc: "Staðbundið líkan — fullorðinsmyndefni, engin skýjasía", tag: "Tól", ready: true, href: "/kjarni/artcraft/studio" },

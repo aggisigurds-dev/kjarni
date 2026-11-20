@@ -131,6 +131,7 @@ test("lookup rejects unknown slugs", () => {
   assert.equal(getArtcraftApp("missing"), undefined);
   assert.equal(getArtcraftApp("pdfcraft")?.name, "PdfCraft");
   assert.equal(getArtcraftApp("craft-anything")?.name, "Craft Anything");
+  assert.match(getArtcraftApp("craft-anything")!.desc, /HTML-drög/);
   assert.equal(isOfficecraftApp("craft-anything"), false);
   assert.equal(artcraftAppHref("craft-anything"), "/kjarni/artcraft/craft-anything");
 });

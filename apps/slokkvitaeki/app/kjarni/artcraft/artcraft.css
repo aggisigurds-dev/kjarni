@@ -2237,3 +2237,159 @@
   color: var(--rg-text, #f3e4bf);
 }
 
+.ac-ca {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--m-bg, #eef3f8);
+}
+
+.ac-ca-modes {
+  flex: none;
+  margin: 10px 14px 0;
+}
+
+.ac-ca-error {
+  margin: 8px 14px 0;
+}
+
+.ac-ca-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ac-ca-pane.ac-studio label {
+  flex: 0 0 auto;
+}
+
+.ac-ca-pane > .ac-btn {
+  align-self: flex-start;
+}
+
+.ac-ca-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) 1fr;
+  gap: 0;
+}
+
+.ac-ca-split .ac-ca-pane {
+  border-right: 1px solid var(--m-line, #d5dee8);
+}
+
+.ac-ca-split iframe,
+.ac-ca-split .ac-missing {
+  min-height: 0;
+  height: 100%;
+}
+
+.ac-ca-drop.on {
+  border-color: var(--m-navy, #102038);
+  background: var(--m-muted, #eef1f5);
+}
+
+.ac-ca-evidence {
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  background: var(--m-card, #fff);
+}
+
+.ac-ca-evidence h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.ac-ca-evidence p,
+.ac-ca-evidence dl {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.ac-ca-evidence dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+}
+
+.ac-ca-evidence dl > div {
+  display: contents;
+}
+
+.ac-ca-evidence dt {
+  font-weight: 700;
+  color: var(--m-soft, #5a6b80);
+}
+
+.ac-ca-evidence dd {
+  margin: 0;
+}
+
+.ac-ca-tech {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ac-ca-tech span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--m-muted, #eef1f5);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ac-ca-preview {
+  width: 100%;
+  min-height: 360px;
+  border: 1px solid var(--m-line, #d5dee8);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.stn[data-skin="ragnarok"] .ac-ca {
+  background: #070707;
+}
+
+.stn[data-skin="ragnarok"] .ac-ca-evidence,
+.stn[data-skin="ragnarok"] .ac-ca-preview {
+  background: #0a0a0a;
+  border-color: rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+  color: var(--rg-text, #f3e4bf);
+}
+
+.stn[data-skin="ragnarok"] .ac-ca-tech span {
+  background: #111;
+  border: 1px solid rgba(201, 152, 47, 0.35);
+  border-radius: 0;
+}
+
+@media (max-width: 860px) {
+  .ac-ca-split {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .ac-ca-split .ac-ca-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--m-line, #d5dee8);
+    flex: none;
+    overflow: visible;
+  }
+  .ac-ca-split iframe {
+    min-height: 52vh;
+  }
+}
+

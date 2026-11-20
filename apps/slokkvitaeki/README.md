@@ -8,6 +8,8 @@ EffectCraft, DesignCraft, FigCraft, WordCraft, SoundCraft, DeckCraft, CADCraft,
 GridCraft, Craft Anything) eru opin WASM-útgáfur frá
 [getartcraft.com/apps](https://getartcraft.com/apps). Þau eru sótt við
 `pnpm artcraft:install` / `prebuild` og hýst undir `/artcraft/<app>/`.
+Craft Anything á `/kjarni/artcraft/craft-anything` er vinnustöð: skoða leyfðar
+síður og skrár, og smíða hrein HTML-drög ofan á WASM-skoðarann.
 
 Einkastúdíó (`/kjarni/artcraft/studio`) er skipt í þrjá hama við titilinn: Stakar
 (prompt og ein mynd), Videó (hreyfimynd og athafnir) og Persóna (prófíll, hringur,
