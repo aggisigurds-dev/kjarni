@@ -15,6 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { publicUrl, sb } from "../lib/sb";
 
 export type HkPunktur = { kerfi: string | null; kvafi: boolean; kmynd: boolean; id: number; nr: number | null; haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; fl: string; done: boolean; man: string | null; dags: string | null };
+/** „Eftir (áætlað)“ í samtölum: það sem vantar upp á áætlunina (áætlað − klárað − opið), svo línan stemmi; án áætlunar: talin áætluð göt. */
+const eftirTala = (r: { m: number | null; kl: number; open: number }, talid: number) => (r.m != null ? Math.max(0, r.m - r.kl - r.open) : talid);
 /** Áætlað gat án skráningar („eftir“): n = stök verk sem vantar. */
 /** st = stútur úr viðbótarverkinu á 4. hæð (án skráningar): númer á teikningu, flokkun, texti úttektar í skjalinu og næsta ónotaða skráning. */
 export type HkEftir = { haed: string; deild: string; hluti: string; x: number; y: number; hop: string | null; n: number; st?: { nr: number; fl: string; uttekt: string | null; naest: { nr: number; d_m: number; stada: string } | null } };
@@ -144,7 +146,7 @@ function Framvinda({ punktar, haedir, fra, til, onVelja }: { punktar: HkPunktur[
   return (
     <div className="sk-fv">
       <div className="sk-fv-haus">
-        <h3>Framvinda eftir mánuðum <span>kláraðar skráningar · {num(gogn[gogn.length - 1].upps)} alls{anDags ? ` · ${num(anDags)} án dagsetningar eru ekki í ritinu` : ""}</span></h3>
+        <h3>Framvinda eftir mánuðum <span>kláraðar skráningar · {num(gogn[gogn.length - 1].upps)} alls{anDags ? <i className="sk-itar"> · {num(anDags)} án dagsetningar eru ekki í ritinu</i> : ""}</span></h3>
         <div className="sk-fv-skyring">{haedir.map((h) => <span key={h}><i style={{ background: LITUR_H[h] }} />{haedHeiti(h)}</span>)}</div>
       </div>
       <div className="sk-fv-rit" ref={ref} onPointerLeave={() => setYfir(null)}>
@@ -353,7 +355,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
               <td className="sk-v"><b>Deild {d}</b> <small>{haedHeiti(haed)}</small></td>
               {HLUTAR.map(([s], i) => { const r = reiturH(haed, d, i), p = r.m != null ? pros(r.kl, r.m) : null; return <td key={s} style={{ background: litur(p)[0] }}>{p != null ? <b>{p} % </b> : null}<small>{texti(r)}{r.open ? ` · +${num(r.open)}` : ""}</small></td>; })}
               <td style={{ background: litur(pd)[0] }}>{pd != null ? <b>{pd} % </b> : null}<small>{texti(rd)}</small></td>
-              <td>{rd.open ? num(rd.open) : ""}</td><td>{eDeild(d) ? num(eDeild(d)) : ""}</td>
+              <td>{rd.open ? num(rd.open) : ""}</td><td>{eftirTala(rd, eDeild(d)) ? num(eftirTala(rd, eDeild(d))) : ""}</td>
             </tr>
           ); })}
         </tbody>
@@ -362,7 +364,7 @@ function Haedarkort({ haed, y, punktar, eftir, stada, deildir, stutar, reiturD, 
   );
 }
 
-export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsmenn, log, markDeild, markHluta }: Props) {
+export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsmenn, log, markDeild, markHluta, synaFramvindu = true }: Props & { synaFramvindu?: boolean }) {
   const [hopVal, setHopVal] = useState<Set<string>>(new Set());     // tómt = allir flokkahópar
   const [flVal, setFlVal] = useState<Set<string>>(new Set());       // stærðir (flokkar) — aðeins þegar einn hópur er valinn
   const [stada, setStada] = useState<Stada>("allt");
@@ -490,7 +492,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
     setValinn(p); setFokus({ id: p.id, t: Date.now() });
   };
 
-  const hausAf = (haed: string) => { const ha = haedAlls(haed), eH = eftirSiad.filter((e) => e.haed === haed); return `${haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}${ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}${ha.open ? ` · ${num(ha.open)} opið` : ""}${eH.length ? ` · ${num(eH.reduce((a, e) => a + e.n, 0))} eftir (áætlað)` : ""}`; };
+  const hausAf = (haed: string) => { const ha = haedAlls(haed), eH = eftirSiad.filter((e) => e.haed === haed); return `${haedUndir(haed) ? `${haedUndir(haed)} · ` : ""}${ha.m != null ? `${num(ha.kl)} af ${num(ha.m)} · ${pros(ha.kl, ha.m)} %` : `${num(ha.done)} klárað`}${ha.open ? ` · ${num(ha.open)} opið` : ""}${eftirTala(ha, eH.reduce((a, e) => a + e.n, 0)) ? ` · ${num(eftirTala(ha, eH.reduce((a, e) => a + e.n, 0)))} eftir (áætlað)` : ""}`; };
   const siuradir = (
     <>
         <div className="sk-sia-rod"><span>Flokkur</span>
@@ -537,15 +539,16 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
       <p className="sk-prent sk-smatt">Síur: {siulysing}</p>
 
       <div className="sk-hk-tolur">
-        <div><span>Klárað</span><b>{num(alls.done)}</b></div>
+        {/* Klárað = sama tala og forsíðan og hæðarhausarnir (kl, talið upp að áætlun hvers hluta), svo Klárað + Opið + Eftir = Áætlað (19.11.2026). */}
+        <div><span>Klárað</span><b>{num(alls.m != null ? alls.kl : alls.done)}</b></div>
         <div><span>Opið</span><b>{num(alls.open)}</b></div>
-        <div><span>Eftir, áætlað og óskráð</span><b>{num(eftirAlls)}</b></div>
+        <div><span>Eftir (áætlað)</span><b>{num(eftirTala({ m: alls.m, kl: alls.kl, open: alls.open }, eftirAlls))}</b></div>
         <div><span>Áætlað</span><b>{alls.m != null ? num(alls.m) : "—"}</b></div>
         <div className="sk-hk-pros"><span>Hlutfall</span><b>{alls.m != null ? `${pros(alls.kl, alls.m)} %` : "—"}</b></div>
       </div>
       {!medMarkmid && <p className="sk-smatt">Prósentur eru ekki sýndar með stærðarsíu, kerfissíu eða „Frá“-mánuði: áætlunin er skilgreind á flokkahóp, ekki á stærð, kerfi eða tímabil.{kerfiVal.size ? ` Úðakerfi er greint af rauðum lit á ljósmynd; önnur stálrör teljast vatn og hiti: ${num(kerfiTal.vafi)} af ${num(kerfiTal.alls)} stálröraþéttingum eru óvissar. ${KERFI_URTAK}` : ""}</p>}
 
-      <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />
+      {synaFramvindu && <Framvinda punktar={anTima} haedir={syndarHaedir} fra={fra} til={til} onVelja={veljaManud} />}
 
       {syndarHaedir.map((haed) => {
         const y = yfirlit.find((q) => q.haed === haed)!; const ha = haedAlls(haed);
@@ -567,7 +570,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
                 <div><span>Áætlað</span><b>{ha.m != null ? num(ha.m) : "—"}</b></div>
                 <div className="p"><span>Hlutfall</span><b>{ha.m != null ? `${pros(ha.kl, ha.m)} %` : "—"}</b></div>
               </div>
-              <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið <i className="e" />áætlað gat án skráningar</p>
+              <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið <i className="e" />eftir (áætlað)</p>
             </aside>
             <div className="sk-sko-adal">
               <div className="sk-sko-stika">
@@ -592,7 +595,7 @@ export default function Haedir({ yfirlit, punktar, eftir, stutar, hopar, starfsm
           </div>
         </div>
       )}
-      <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />áætlað gat án skráningar · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />engin áætlun</p>
+      <p className="sk-hk-skyring"><i className="g" />klárað <i className="o" />opið í Ajour <i className="e" />eftir (áætlað) · litur hluta: <i className="l1" />95 % eða meira <i className="l2" />75–94 % <i className="l3" />undir 75 % <i className="l0" />engin áætlun</p>
       <p className="sk-smatt">Hver punktur er ein skráning á sínum stað á hæðinni (færðir punktar á gatakortinu ráða). Deild og hluti ráðast af stöðu punktsins. Áætlun hluta fylgir sömu reglu og deildin; föst áætlun á deild (milliloft, rafmagn) skiptist jafnt á hlutana þrjá, svo summa hluta getur vikið lítillega frá áætlun deildar. „Gólf 5. hæðar“ eru þéttingar í gólfplötu 5. hæðar, unnar neðan frá á 4. hæð; milliloft á 5. hæð er á sama hátt gólf 6. hæðar. „Eftir“ eru áætluð göt af gatakortinu sem engin skráning parast við — þau eru aðeins til þar sem göt hafa verið áætluð (6. hæð S1 og S2, loftræsting á 5. hæð S1 og S2).</p>
     </div>
   );

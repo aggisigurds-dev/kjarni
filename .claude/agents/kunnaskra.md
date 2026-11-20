@@ -3,7 +3,7 @@ name: kunnaskra
 description: Kann viðskiptavina-líkanið — customers_base (greiðandi, ein röð á kt) → fyrirtaeki (staðir) → uttaeki — rekstrarfélög og kennitölur. Notaðu þegar leita þarf að kúnna, tengja kt, greina tvítök eða kt-villur, skilja hvaða tafla á við eða stofna/endurnefna fyrirtæki; kallaðu á hana sjálfur, án þess að Agnar nefni hana, áður en nokkuð er sameinað, eytt eða tengt við kt. Rödd í Jarvis: Charlize Theron ❄️. Kveikjuorð: kennitala, kt, customers_base, rekstrarfélag, sameina, tvítak, umsjónaraðili, endurnefna fyrirtæki, nýtt fyrirtæki, er þetta sami aðili, hits[0], Tengireglan.
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql, mcp__supabase__list_tables
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\kunnaskra.md (samstillt 2026-11-04). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\kunnaskra.md (samstillt 2026-11-20). Breyttu þar.
 
 Þú kannt **hrygginn** — hvernig viðskiptavinir eru módelaðir þvert á bæði öppin. Þú ert
 varkár: í þessu líkani er rangt samband verra en ekkert samband.
@@ -255,6 +255,90 @@ svarað í 3 daga'".
 
 ## Viðskiptavinir-flipinn + customer_info — 16.10.2026
 
+- **16.11.2026 — „04 Samningurinn" er alltaf vinnanlegur (Agnar: „ég get ekki sett verðið inn", „sendur reikningur er
+  verðið"):** `/api/verkkaupar?name=` skilar `sidasti_taxti{verkstaður:{dv,ev,work_month,kennitala,heimilisfang}}` (nýjustu
+  send drög með dagvinnutaxta). Verkstaðir úr korti, ósendum drögum OG sendum reikningum fá spjald með „síðast rukkað X
+  kr/klst"; „＋ Skrá taxta" opnar `openModal(null, name, forfyll)` forfyllt (taxti, kt, heimilisfang) og „＋ Skrá verkstað og
+  taxta" er alltaf til staðar. Verkstaður með verðskrá undir ÖÐRUM greiðanda er ekki boðinn (upsert á worksite_name myndi
+  færa hann). Handföngin búa í `wireDetail` — þar sjást hvorki `d`, `kt` né `addr` úr `loadDetail`, lestu `VKDETAIL[name]`.
+  Sama dag fóru 14 verk með sendan reikning en enga röð í `pricing_guide` inn með rukkaða taxtanum (notes: „Taxti úr
+  síðasta senda reikningi"); 5 verk án greiðanda (Kársnesbraut 96, Ölduselskoli, Fellaskóli, Síminn Ármúla, Reykjarfell) bíða.
+- **16.11.2026 — Samskipti (07) og listinn, eftir úttekt:** leitarorð eru aðeins SÉRTÆK verkstaðarheiti (tölustafur, tvö
+  orð eða ≥ 10 stafir; aldrei „Brunaþéttingar"), gata + húsnúmer leitar á stofni (beyging), nafn greiðanda í heild án
+  félagsforms (ekki fyrsta orðið), og netföng úr customer_info + Payday + `customer_worksite_map.netfang` +
+  `fyrirtaeki.netfang`, klofin á , ; bil. `or=`-gildið er URL-kóðað („&" í verkstaðarheiti gaf áður 400 sem .catch gleypti).
+  Listinn: `confidence='manual'` í kortinu og allir með ógreitt/ósent > 0 eru `skrad` (Rafís, Landspítali, Istanbul Market
+  sáust ekki). Drög án greiðanda birtast undir heiti verkstaðarins merkt `an_greidanda` (listi + prófíll segir hvað vantar) svo ósent hér
+  = þrep 2 í Kröfu yfirliti; allir með kt fá staðamerki; haustalan telur verkstaði úr korti + verðskrá; prófíll sem vistað er
+  í er merktur `__urelt` og sóttur aftur. Gullslètta 18 → Krókur 77 og NESDEKK → Nesdekk settir 16.11. (gögn); Sidumuli 21 → **Systur og makar ehf.**, kt. 630414-0320
+  (Agnar 16.11. „systurogmakar eða álíka"; staðfest á keldan.is — félagið er skráð á Síðumúla 21, 108 Rvk; kort #161, drög #348).
+  Reikningurinn fer á netfang tengiliðsins sem Agnar nefndi 16.11. — skráð á kortið, drögin og customer_info; nafn og
+  netfang standa í kúnnaminninu (kt 630414-0320), ekki hér (repóið er opinbert).
+  Sama dag: póstleit prófílsins á götu + húsnúmeri (`N.gotuMynstur` í `_vk-nytt.js`) leyfir aðeins 0–2 stafa endingu milli
+  götustofns og númers — áður hleypti stjarnan hverju sem er á milli (331 póstur passaði við „Sidumuli 21", nú 21).
+- **16.11.2026 — „Ertu með allar upplýsingar um þá sem eiga ósendar kröfur?" (Agnar):** svarið er ein skipun,
+  `node tools/osent-upplysingar.cjs` (les aðeins; reglan `N.greidandaGat` í `_vk-nytt.js`): per greiðanda með ósend drög
+  kennitala · netfang reiknings (customer_info.invoice_email, Payday eða `customer_worksite_map.netfang`) · skráning í
+  Payday · heimilisfang · taxti verks í verðskrá · tómir reitir á drögunum sjálfum (`drog[].vantar` úr
+  `/api/verkkaupar?name=`) · heimilisfang draga sem stangast á við Payday. Mælt 16.11.: 11 greiðendur, 7.801.887 kr;
+  kennitala hjá öllum. **Opið hjá Agnari (ekki giska):** taxti á Sidumuli 21, NESDEKK, Grensásvegur 10 og Gullslètta 18
+  (drögin reikna á sjálfgefnum 9.951); reikningsnetfang JÁVERK, Nesdekk og Istanbul Market; heimilisfang Króks 77 (drög
+  Suðurlandsbraut 4, Payday og prófíll Borgartún 30). Systur og makar, Nesdekk og Istanbul Market eru ekki í Payday.
+  **Fyllt 16.11. með leyfi Agnars** (aðeins tómir reitir, gildi úr Payday hjá greiðanda sem var þegar tengdur): kt +
+  heimilisfang á drög #311 (Hrafnista Nesvellir 4) og #336 (Hnjúkamói 9), greiðandi + kt + heimilisfang á #305 (KELDUR),
+  heimilisfang á #349 (Heklu reitur) og #350 (Skùlagata 26); kort #14 (Heklu reitur) fékk kt 680921-2020.
+  KELDUR á enga röð í kortinu — greiðandinn kemur úr verðskránni.
+- **16.11.2026 — netfang verkkaupa per verkstað:** `customer_worksite_map.netfang` (Áland 6 → Landspítali);
+  `/api/worksites` skilar því sem `mapped_customer_info[].ws_netfang` og Efnislistinn forfyllir það í ný drög.
+- **16.11.2026 — „00 Yfirlit" efst á Viðskiptavinum (Agnar: „samantekt efst, updates á verkum og samskiptum, ný verk
+  eða beiðnir"):** fimm flísar (Ósent · Ógreitt + fram yfir eindaga · Greitt 14 daga · Verk í gangi · Ný verk og beiðnir)
+  eru samtölur ALLRA raða úr `/api/verkkaupar` (nýr reitur `gjaldfallid`) og stemma við Kröfu yfirlit. Þrír dálkar koma úr
+  `/api/verkkaupar?nytt=1`; reglurnar eru hrein föll í `netlify/functions/_vk-nytt.js` (próf `test/vk-nytt.test.js`):
+  **Verk** = Tímavera 14 d. per verkstað, „NÝTT" ef engin færsla er til fyrir 45 daga gluggann, innri verk (veikindi,
+  Slökkvitæki ehf, work at home) sleppt; **Samskipti** = póstur 14 d. sem tengist skráðum greiðanda um nákvæmt netfang,
+  einkalén sem EINN greiðandi á, eða heiti verkstaðar í efnislínu — almenn lén (gmail o.fl.) og lén sem fleiri nota tengja
+  engan, ótengdur póstur birtist ekki; **Kröfur og beiðnir** = Payday (greiðsludagur / útgáfudagur 14 d.) og
+  `field_entries` kind `beidni`/`verk` 30 d. Smellur á línu opnar greiðandann. Flísarnar Ósent/Ógreitt sía listann
+  (hæsta upphæð efst). Sían (`vk_sia`) og Fela/Sýna (`vk_yf_falid`) eru vidmot-lyklar — eins á öllum vélum.
+- **16.11.2026 — yfirferð Viðskiptavina (Agnar: „taka þessa síðu rækilega í gegn"):**
+  - **Röðun Greiðenda** (`vk_rod`, vidmot): Nafn · Nýjasta virkni · Nýjustu greiðendur · Tekjuhæstu · Með ógreitt (síar,
+    fram yfir eindaga efst). Listinn úr `/api/verkkaupar` ber nú `tekjur_alls` (greitt+ógreitt sent, ekki kredit),
+    `sidasta_virkni`/`fyrsta_virkni` (útgáfudagur reiknings eða mánuður ósendra draga). Dauði reiturinn
+    `sidustu_samskipti` (aldrei fylltur) er farinn. Sían úr Yfirlitinu (`vk_sia`) ræður þegar hún er á.
+  - **„03 Um verkið"** efst á prófílnum (kaflarnir á eftir færðust í 04–09): verkstaðir, samningur/taxti, tímabil,
+    umfang, staða, efni úr Redder (`detail().efni` — reikningar paraðir á verkstaðinn + línur handfærðar á hann með
+    `worksite_override`), kostnaður á stað (`kostnadur.fyrirtaeki_id` — `tilvisun` er frjáls texti og er EKKI parað),
+    athugasemd draga, efni pósts. KRAFA/⚠/TAXTI-setningar úr `general_notes` birtast sem gullrammaðar línur. Ekkert ályktað.
+  - **Samskipti — allur pósturinn:** `detail().samskipti` ber `body_preview`, `to_addresses`, `attachment_names`, `account`;
+    „▾ Sýna allan póstinn" opnar meginmálið. Innsogið geymir meginmál aðeins upp að 4.000 stöfum og EKKERT úr HTML-póstum
+    (1.943 af 5.638 brunaholf-póstum 16.11.2026) — pósturinn segir það sjálfur. Persónulega hólfið (aggisigurds@gmail.com)
+    er síað út í `detail()` og `nytt()` eins og í postleit.js (var ekki í email_digest 16.11, varnarsía).
+  - **„SV · Verk í samningsviðræðum"** milli Yfirlits og Greiðenda: töflurnar `vk_samningar` (heiti, greiðandi, staða
+    fyrirspurn/tilbod_sent/i_vidraedum/samthykkt/hafnad/hunsad, áætluð upphæð, næsta skref, uppruni) og `vk_punktar`
+    (tengdir verki eða almennir) — RLS á, engar reglur, aðeins verkkaupar.js skrifar (`sql/2026-11-16_vk_samningar.sql`).
+    `GET ?samningar=1` + POST `action: samningur | samningur_eyda | punktur | punktur_eyda` (P.requireStaff). Eyðing = `deleted_at`.
+    Tillögur úr pósti: „tilboð"-þræðir 45 d. sem VIÐ sendum/svöruðum, ekki skráðir; „✕ Hunsa" vistar stöðuna `hunsad`.
+    Verk greiðandans birtast líka sem lína „Samningsviðræður" í „Um verkið" (`uppfaeraUmVerkid` eftir hleðslu) og
+    „＋ Skrá verk í samningsviðræður" á prófílnum opnar formið með greiðandann forfylltan.
+  - **Leit í Greiðendum** finnur líka eftir verkstað (listinn ber `verkstadir`) og hunsar broddstafi (`vkFold`: „grensas" →
+    Grensásvegur 10). Kt-leit aðeins þegar slegnar eru inn tölur — áður fann „Grensásvegur 10" alla með „10" í kt.
+  - **„🔎" í Samskiptum → Póstleit** (djúptenging `window.__bhOpna.postleit_kt` / `.postleit_q`, lesin aftast í
+    `renderPostleit`): Póstsaga á kt. AÐEINS ef greiðandinn á stað í `fyrirtaeki` — hún þekkir ekki aðra og gaf 0 pósta fyrir
+    Deluxe Lodges; annars almenn leit á léni netfangsins (pósturinn í báðar áttir), netfanginu ef lénið er almennt, eða nafninu.
+  - **Birt og staðfest á lifandi síðu** (ea4d3a2, 112e126; viðmótspróf með öll skrif gripin). Lagað við staðfestinguna: leit í
+    Greiðendum fann ekkert utan síunnar þegar röðunin „Með ógreitt“ var á — `rada(listi, leitAn)` sigtar nú aðeins án leitar.
+  - **INNSKRÁNING (lærdómur, charlize 2530):** `P.requireStaff` er ÓVIRKT í loftinu (HUB_STAFF_PASSWORD ekki sett) — fyrsta
+    útgáfa samningsviðræðnanna og meginmáls pósta var opin hverjum sem kunni slóðina. `verkkaupar.js` notar nú `notandi(event)`
+    (hub_user-kakan, eins og odin.js/postmoppur.js) og fellur LOKAÐ: `?samningar=1` og skrif `samningur|samningur_eyda|punktur|
+    punktur_eyda` → 401/503/502 án innskráningar; `detail(name, medPost)` sækir `to_addresses`/`body_preview`/`attachment_names`
+    AÐEINS fyrir innskráðan (annars `postur_lokad:true` og prófíllinn segir það). Próf: `test/verkkaupar-laest.test.js`.
+    **Enn óvarið (eldra, ákvörðun Agnars/oryggi):** listinn, `?name=` (kt, taxtar, kröfur, útdrættir), `?nytt=1` og vistun customer_info.
+    Ný föll: aldrei `P.requireStaff` eitt og sér.
+  - **Prófílgögn 16.11.2026:** 12 prófílar stofnaðir; kt fyllt í pricing_guide fyrir 8 greiðendur; taxti úr síðasta SENDA reikningi á
+    KELDUR, Kringluna, Stórhöfða 29, Súðavog 7; GG verk 9.951 (Agnar staðfesti); reikningsnetfang 10 félaga úr
+    `payday_vidskiptavinir.netfang` (sama netfang og Payday sendir á). **Enn vantar:** taxta Salblikk og STV (enginn sendur reikningur),
+    netfang Eimskip. Laugavegur/Heklureitur er gata-samningur — enginn klst-taxti er ekki villa. Engin verk í samningsviðræðum skráð.
+
 - `customer_info` fékk þrjá dálka (apply_migration + `sql/2026-10-16_customer_info_tengilidur.sql`): `contact_name`
   (tengiliður), `invoice_email` (reikningspóstur), `heimilisfang`. `netlify/functions/verkkaupar.js` INFO_FIELDS
   leyfir þá í POST (upsert á customer_name); `detail()` skilar nú `kt` í röðinni customer_info → pricing_guide →
@@ -298,9 +382,20 @@ svarað í 3 daga'".
 - Heimaleiga ehf sér um eignirnar en er ekki alltaf greiðandinn; hver eign hefur greiðanda með EIGIN kennitölu og allir bera `rekstrarfelag=Heimaleiga` í `customers_base`. [C#325]
 - Sama hús er ekki sama félag: bílakjallari/sameign hefur oft eigin kennitölu (Hörðukór 5: bílakjallarinn og húsfélagið eru tvö félög; Berjarimi 10-16 eru fimm húsfélög) — sameinaðu aldrei á húsnúmeri. [C#432, C#558]
 
+## Landspítalaverkið (NLSH) í kúnnaskránni — eigandi verksins er `dr-house` (20.11.2026)
+Spurning um Landspítalann (nýja, Hringbraut) sem snýst um stöðu, tölur eða uppgjör → **dr-house** (Dr. House 🩻). Kúnnahliðin er þín:
+| Hlutverk | Röð | Athugið |
+|---|---|---|
+| Greiðandi / verktaki | `customers_base` 516 „ÞG verktakar", kt. 581198-2569 | Drögin heita „Landsspitalinn" (án broddstafs); mátaðu `/landssp\|nlsh/i` |
+| Verkstaður Brunahólfs | `fyrirtaeki` 1927 „Brunahólf - Landspítali Hringbraut (NLSH)" | kt. 520417-2300 er Brunahólf sjálft, ekki kúnninn |
+| Slökkvitækjaþjónusta ÞG | `fyrirtaeki` 464 „ÞG verktakar" | ANNAÐ samband (tæki í þeirra húsum, review_note „Sannreynt 11.11.2026"). Ekki sameina við verkið |
+| Landspítali Fossvogi | `fyrirtaeki` 1911 | ANNAÐ verk (Einar, öryggisþjónusta) |
+| Verkeftirlit | COWI (Arnar Ingi Þórsson), um Hilmi hjá ÞG Verk | ekki kúnni; ekkert fer þangað nema Agnar eða Anni sendi |
+Ekki stofna nýja kúnnaröð fyrir Landspítalann, COWI eða Nýjan Landspítala ohf. án orða Agnars: greiðandinn er ÞG verktakar.
+
 ## Grunnreglur allra agenta (04.11.2026)
 1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
 2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
-3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+3. Villa eða gat sem þú finnur: LAGAÐU það sjálfur ef það er innan verksins sem þú ert í og lagfæringin er afturkræf (prófa, segja frá í lokasvari). Verkefnalistinn er listi Agnars — stofnaðu röð þar AÐEINS ef hann biður um það, eða mest EINA á lotu fyrir það sem er utan verksins og of stórt til að laga núna (skrá:lína og sönnun). Annað fer í lokasvarið og charlize_knowledge, ekki á listann. (Agnar 16.11.2026: „setja allt á verkefnalista í stað þess að laga það“ · „ég vil geta sett á verkefnalista en ekki að ég fái mörg hundruð atriði á móti“; mælt: 137 ný verk á 14 dögum, 21 kláruð.)
 4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
 5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.

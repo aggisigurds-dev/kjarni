@@ -18,6 +18,7 @@ import {
   innanSvaedis,
   merkiLykill,
   myndSlodBlads,
+  OTENGT_MIDI,
   samaBlad,
   svaediMyndar,
   taknFyrirMerki,
@@ -120,11 +121,15 @@ function innan(p: { x: number; y: number }, r: Rammi) {
   return p.x >= r.x && p.y >= r.y && p.x <= r.x + r.width && p.y <= r.y + r.height;
 }
 
-/** Hvaða hluti erfir úttektartengingu blaðsins: sá sem ber flest tengd tæki/merki hæðarinnar, annars sá sem skarast
- * mest við skurð hæðarinnar. Engin vísbending = enginn (notandinn tengir sjálfur). */
+/** Hvaða hluti erfir úttektartengingu blaðsins: einn hluti erfir hana alltaf; af fleirum sá sem ber flest tengd
+ * tæki/merki hæðarinnar, annars sá sem skarast mest við skurð hæðarinnar. Engin vísbending = enginn (notandinn tengir
+ * sjálfur). */
 export function erfingiTengingar(plan: ImageObject, objects: BoardObject[], hlutar: HlutiAetlun[]): number | null {
   const t = plan.uttekt;
   if (!t || !hlutar.length) return null;
+  // Einn kassi = notandinn skar hæðina sem var opnuð (Agnar 17.11.2026, Barónsstígur 18 B: Kjallari án merkja og
+  // skurðar varð „Hluti 1 · ótengdur" og „Vista í úttekt" stoppaði).
+  if (hlutar.length === 1) return 0;
   const fylgjendur = objectsOnDocument(plan, objects);
   const taln = hlutar.map(() => 0);
   for (const o of fylgjendur) {
@@ -335,10 +340,14 @@ export function afleidingTengingar(
   objects: BoardObject[],
   mynd: ImageObject,
   haedId: string,
-  haedir: UttektHaed[]
+  haedir: UttektHaed[],
+  companyId?: number
 ): { onnurMynd: ImageObject | null; annadBlad: boolean; merkiAnnarsBlads: number } {
   const onnurMynd =
-    objects.find((o): o is ImageObject => o.type === "image" && o.id !== mynd.id && !!o.uttekt && o.uttekt.haedId === haedId) ?? null;
+    objects.find(
+      (o): o is ImageObject =>
+        o.type === "image" && o.id !== mynd.id && !!o.uttekt && o.uttekt.haedId === haedId && (companyId == null || o.uttekt.companyId === companyId)
+    ) ?? null;
   const h = haedir.find((x) => x.id === haedId);
   const annadBlad = !!(h?.image_url && mynd.bladhluti?.imageUrl && !samaBlad(h.image_url, mynd.bladhluti.imageUrl));
   return { onnurMynd, annadBlad, merkiAnnarsBlads: annadBlad ? (h?.markers || []).length : 0 };
@@ -351,7 +360,8 @@ export function afleidingTengingar(
 export function tengjaVidHaed(
   objects: BoardObject[],
   myndId: string,
-  val: { haedId: string; nyttNafn?: string },
+  /** `companyId`: staðurinn (sjá tengjaVidStad) — annars staður myndarinnar/blaðsins. */
+  val: { haedId: string; nyttNafn?: string; companyId?: number },
   haedir: UttektHaed[],
   opts: {
     taeki?: UttektTaeki[];
@@ -366,17 +376,18 @@ export function tengjaVidHaed(
   if (!mynd) throw new Error("Myndin fannst ekki á borðinu.");
   const bh = mynd.bladhluti;
   if (!bh) throw new Error("Aðeins hlutar úr „Croppa oft“ eru tengdir hæðum hér — opnaðu hæðina úr úttektinni.");
-  const companyId = mynd.uttekt?.companyId ?? bh.companyId;
-  if (!companyId) throw new Error("Staðurinn er óþekktur — opnaðu teikninguna úr úttekt staðarins fyrst.");
+  const companyId = val.companyId ?? mynd.uttekt?.companyId ?? bh.companyId;
+  if (!companyId) throw new Error("Staðurinn er óþekktur — veldu hann í „Staður og hæð“.");
   const til = haedir.find((h) => h.id === val.haedId);
   if (!til && !val.nyttNafn) throw new Error("Hæðin fannst ekki í úttektinni.");
   // Án slóðar blaðsins gæti hæð fengið skurð í hnitum annars blaðs — ekki tengt.
   if (!bh.imageUrl) throw new Error("Slóð blaðsins er óþekkt (ekki úr skjalasafninu) — opnaðu hæðina úr úttektinni og croppaðu þar.");
-  if (mynd.uttekt?.haedId === val.haedId) return { objects, vikid: null, sett: 0, veggir: 0 };
+  if (mynd.uttekt?.haedId === val.haedId && mynd.uttekt.companyId === companyId) return { objects, vikid: null, sett: 0, veggir: 0 };
   const svaedi = bh.svaedi;
   const frum = { b: bh.frumB, h: bh.frumH };
   const onnur = objects.find(
-    (o): o is ImageObject => o.type === "image" && o.id !== myndId && !!o.uttekt && o.uttekt.haedId === val.haedId
+    (o): o is ImageObject =>
+      o.type === "image" && o.id !== myndId && !!o.uttekt && o.uttekt.haedId === val.haedId && o.uttekt.companyId === companyId
   );
   const takn = objects.filter((o): o is SymbolObject => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== "");
   const aBordi = new Set(takn.map((s) => merkiLykill(s.uttektUnitId)));
@@ -423,7 +434,7 @@ export function tengjaVidHaed(
     ...(opts.grunnT && opts.taknEining ? { stimpilStaerd: opts.grunnT, taknEining: opts.taknEining, ...(til ? { stimpilStaerdVid: opts.grunnT } : {}) } : {}),
   };
   const ut = objects.map((o) => {
-    if (o.id === myndId) return { ...mynd, uttekt: t };
+    if (o.id === myndId) return { ...mynd, uttekt: t, bladhluti: bh.companyId === companyId ? bh : { ...bh, companyId } };
     if (onnur && o.id === onnur.id) {
       const n = { ...onnur };
       delete n.uttekt;
@@ -434,6 +445,98 @@ export function tengjaVidHaed(
   // Tákn á lagið „Almennt" og veggir á „Veggir", eins og við opnun úttektar.
   const nyir = nyTakn.map((o) => (o.layerId ? o : { ...o, layerId: o.type === "symbol" ? LAYER_ALMENNT : LAYER_VEGGIR }));
   return { objects: [...ut, ...nyir], vikid: onnur?.id ?? null, sett: nyTakn.length - veggirSett, veggir: veggirSett };
+}
+
+// ── „Staður og hæð" (Agnar 17.11.2026) ────────────────────────────────────────────────────────────────────────────
+// „Geturðu bætt við override, að ég geti flett upp fyrirtækjum eða heimilisföngum sem eru í kerfinu og valið hæð til að
+// setja inn eða sett inn sem nýja hæð … hefur svo oft verið að ergja mann að festast þarna." Hvaða mynd sem er á borðinu
+// (skorinn hluti eða heil ótengd teikning úr skjalasafni) fær stað + hæð, óháð því hvaðan borðið var opnað.
+
+/** Myndir sem „Staður og hæð" getur tengt: skornir hlutar, og heilar ótengdar teikningar. (Heil mynd sem var opnuð úr
+ * úttekt ber skurð hæðarinnar sinnar — henni er ekki breytt hér; croppaðu hana til að færa á aðra hæð.) */
+export function myndirTilTengingar(objects: BoardObject[]): ImageObject[] {
+  return objects.filter((o): o is ImageObject => o.type === "image" && !o.hidden && (!!o.bladhluti || !o.uttekt));
+}
+
+/** Hluti úr HEILLI ótengdri teikningu (allt blaðið) svo hún tengist eins og skorinn hluti. null = slóð blaðsins óþekkt. */
+export function hlutiUrHeilliMynd(mynd: ImageObject, companyId: number): BladHluti | null {
+  if (mynd.bladhluti) return mynd.bladhluti;
+  const blad = bladMyndar(mynd, null, companyId);
+  if (!blad.imageUrl) return null;
+  return {
+    nr: 1,
+    svaedi: blad.svaedi ?? { x: 0, y: 0, w: blad.frum.b, h: blad.frum.h },
+    frumB: blad.frum.b,
+    frumH: blad.frum.h,
+    imageUrl: blad.imageUrl,
+    companyId,
+  };
+}
+
+/** Tákn á myndinni sem bera tæki/merki staðar — skipti um stað losar þau. */
+function tengdTaknMyndar(objects: BoardObject[], mynd: ImageObject): SymbolObject[] {
+  return objectsOnDocument(mynd, objects).filter(
+    (o): o is SymbolObject => o.type === "symbol" && o.uttektUnitId != null && o.uttektUnitId !== ""
+  );
+}
+
+/** Hvað „Staður og hæð" hefur í för með sér — fyrir staðfestingu: skipti um stað (tákn myndarinnar missa tæki gamla
+ * staðarins) og myndir tengdar öðrum stað sem aftengjast (vistun skrifar einn stað í einu). */
+export function afleidingStadar(
+  objects: BoardObject[],
+  myndId: string,
+  companyId: number
+): { gamall: number | null; skipti: boolean; losud: number; adrar: ImageObject[] } {
+  const mynd = objects.find((o): o is ImageObject => o.type === "image" && o.id === myndId);
+  if (!mynd) return { gamall: null, skipti: false, losud: 0, adrar: [] };
+  const gamall = mynd.uttekt?.companyId ?? mynd.bladhluti?.companyId ?? null;
+  const skipti = gamall != null && gamall !== companyId;
+  const adrar = objects.filter(
+    (o): o is ImageObject => o.type === "image" && o.id !== myndId && !!o.uttekt && o.uttekt.companyId !== companyId
+  );
+  return { gamall, skipti, losud: skipti ? tengdTaknMyndar(objects, mynd).length : 0, adrar };
+}
+
+/** „Staður og hæð": myndin fær staðinn `companyId` og hæðina `val` (til eða + Ný hæð). Heil ótengd teikning verður
+ * hluti alls blaðsins. Skipti um stað: tækjatákn myndarinnar verða ótengd (sjálftenging við tæki nýja staðarins við
+ * vistun) og merki (ÚT, NÚ …) verða ný; myndir tengdar öðrum stað aftengjast. Ekkert skrifast fyrr en „Vista í úttekt". */
+export function tengjaVidStad(
+  objects: BoardObject[],
+  myndId: string,
+  companyId: number,
+  val: { haedId: string; nyttNafn?: string },
+  haedir: UttektHaed[],
+  opts: Parameters<typeof tengjaVidHaed>[4] = {}
+): ReturnType<typeof tengjaVidHaed> & { aftengdar: number; losud: number } {
+  const mynd = objects.find((o): o is ImageObject => o.type === "image" && o.id === myndId);
+  if (!mynd) throw new Error("Myndin fannst ekki á borðinu.");
+  if (mynd.uttekt && !mynd.bladhluti) {
+    throw new Error("Þessi teikning var opnuð úr úttekt — croppaðu hana („Croppa oft“) til að setja hana á aðra hæð eða annan stað.");
+  }
+  const bh = hlutiUrHeilliMynd(mynd, companyId);
+  if (!bh) throw new Error("Slóð teikningarinnar er óþekkt (ekki úr skjalasafninu) — sæktu hana með heimilisfangaleitinni eða „Af slóð“.");
+  const af = afleidingStadar(objects, myndId, companyId);
+  const losa = new Set(af.skipti ? tengdTaknMyndar(objects, mynd).map((s) => s.id) : []);
+  const aftengja = new Set(af.adrar.map((m) => m.id));
+  const grunnur = objects.map((o): BoardObject => {
+    if (o.id === myndId) {
+      const n: ImageObject = { ...mynd, bladhluti: { ...bh, companyId } };
+      if (af.skipti) delete n.uttekt;
+      return n;
+    }
+    if (aftengja.has(o.id) && o.type === "image") {
+      const n = { ...o };
+      delete n.uttekt;
+      return n;
+    }
+    if (losa.has(o.id) && o.type === "symbol") {
+      // Tæki gamla staðarins: ótengt (vistun sjálftengir við nýja staðinn). Merki: nýtt merki á nýja staðnum.
+      return o.uttektKind === "sign" ? { ...o, uttektUnitId: undefined } : { ...o, uttektUnitId: undefined, label: OTENGT_MIDI };
+    }
+    return o;
+  });
+  const r = tengjaVidHaed(grunnur, myndId, { ...val, companyId }, haedir, opts);
+  return { ...r, aftengdar: aftengja.size, losud: losa.size };
 }
 
 /** „Finna sjálfkrafa": kassar utan um aðskildar blekþyrpingar á blaðinu (grunnmyndir), úr smækkaðri grámynd (0–255,

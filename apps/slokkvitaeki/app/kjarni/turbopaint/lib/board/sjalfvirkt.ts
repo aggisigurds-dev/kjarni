@@ -35,7 +35,8 @@ import { bogarTeikningar } from "./hurdabogar-mynd";
 import { bladMyndar } from "./margar-haedir";
 import { flokkaYfirlit, klemmaGreindaThykkt, erNotanlegtVigurPdf, ptIBord, skurdurIPt, sjalfvirkirPdfVeggirPt } from "./pdf-veggjaflokkar";
 import { useSjalfvirkt, type MaelLina, type SkrefId } from "./sjalfvirkt-stada";
-import { greinaThunnaVeggi, greinaVeggiSkonnunar } from "./skonnun-veggir-mynd";
+import { fellaMalsetningar, fellaTexta, fullMyndSvaedis, greinaThunnaVeggi, greinaVeggiSkonnunar, harlinuPorUrMynd } from "./skonnun-veggir-mynd";
+import { teygjaFolva } from "./skonnun-veggir";
 import { beitaSltBrsl } from "./slt-brsl-bord";
 import { sltBrslUrTexta } from "./slt-brsl-lestur";
 import { TEGUND_HEITI } from "./sjalftenging";
@@ -47,7 +48,7 @@ import type { BoardObject, ImageObject, LineObject } from "./types";
 import { bladIBordi, gilturSkurdur, saekjaUttekt, skurdurIBord, veggirIBord, veggirIFrum, vorpunMyndar, type LeidrettAf, type UttektHaed } from "./uttekt";
 import { useUttektGogn } from "./uttekt-gogn";
 import { hurdirBogarUrVegghjalpi, saekjaVegghjalp } from "./vegghjalp";
-import { husKassi, husUtlina, hreinsaVeggi, kassiUtlinu, lesaHandUtlinu, lesaVikmork, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
+import { husKassi, husUtlina, hreinsaVeggi, kassiUtlinu, lesaHandUtlinu, lesaVikmork, skeraUtstaedaEnda, utanHuss, VIKMORK_LYKILL, type HLina, type Rammi, type Vikmork } from "./veggja-hreinsun";
 import { heimsPunktar, nyGreiningarLota, nyrVeggur, sameinaVidVeggi } from "./veggja-ritill";
 import { ritillDilarAMetra } from "./veggja-ritill-adgerdir";
 import { bladDilarAMetra, bladSlod, pdfDilarAMetra } from "./hus3d";
@@ -436,12 +437,27 @@ export async function vinnaLinur(
     // Útlínan sem Agnar teiknaði (uttekt.husUtlina) GENGUR ALLTAF FYRIR — vélin reiknar ekki neitt þegar hún er til.
     const handUtlina = lesaHandUtlinu(plan()?.uttekt?.husUtlina);
     const u = husUtlina(allar, dpm, vik.lokunM, vik.husHlutur, handUtlina);
-    const burtV = utanHuss(hreinar, u), burtH = utanHuss(hurdir, u), burtG = utanHuss(nyttGler, u);
+    // Opin útlína (lokaðist ekki, ekki handteiknuð): kassinn skar burt hálft iðnaðarhús — mælt í lota 5 (17.11.2026,
+    // tools/veggja-maeling.ts): hittni 53,7 → 40,6 %, og allt sem fór var raunveggir. Hæðin er þegar skorin að húsinu
+    // (skref b), svo þá er engu hent. Lokuð eða handteiknuð útlína gildir eins og áður.
+    const opin = !u.lokud && !u.handvirk;
+    // Útstæðar línur (lota 5, umferð 3): ás-/málsetningarlínur sem standa út úr útvegg — utan húss á báða vegu.
+    const burtV = opin ? new Set<number>() : utanHuss(hreinar, u, (vik.utstaedM ?? 0) * dpm);
+    const burtH = opin ? new Set<number>() : utanHuss(hurdir, u);
+    const burtG = opin ? new Set<number>() : utanHuss(nyttGler, u);
+    // Útstæðir endar (lota 5, umferð 3): veggur sem rann saman við ás-/málsetningarlínu út fyrir húsið er skorinn við útlínuna.
+    // Mælt í appinu á R3 (TIF): nákvæmni 80,1 → 80,7 %, hittni óbreytt.
+    let skornirEndar = 0;
+    if (!opin && vik.utstaedirEndar) {
+      const sk = skeraUtstaedaEnda(hreinar, u, (vik.utstaedM ?? 0) * dpm, Math.max(2, 0.25 * dpm), 0.5 * dpm);
+      hreinar = sk.linur;
+      skornirEndar = sk.skornir;
+    }
     hreinar = hreinar.filter((_, i) => !burtV.has(i));
     hurdir = hurdir.filter((_, i) => !burtH.has(i));
     lokaNy = [...hreinar, ...nyttGler.filter((_, i) => !burtG.has(i)), ...hurdir];
     talning.hurdir = d.talning;
-    talning.utan = { veggir: burtV.size, hurdir: burtH.size, gler: burtG.size, lokud: u.lokud };
+    talning.utan = { veggir: burtV.size, hurdir: burtH.size, gler: burtG.size, lokud: u.lokud, skornirEndar };
     k.ljuka?.(
       "hurdir",
       `${hurdir.length} hurðir` +
@@ -450,7 +466,7 @@ export async function vinnaLinur(
         (snunarHurdir.length ? ` · ${snunarHurdir.length} úr snúnum veggjum (staðfestur bogi)` : "") +
         (d.talning.medBoga ? ` · ${d.talning.medBoga} með boga` : "") +
         (nyttGler.length ? ` · ${nyttGler.length - burtG.size} gluggar → gler` : "") +
-        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.handvirk ? " (útlína hússins er handteiknuð)" : u.lokud ? "" : " (útlínan lokaðist ekki — aðeins kassinn)"}` +
+        ` · utan húss: ${burtV.size + burtH.size + burtG.size} fjarlægð${u.handvirk ? " (útlína hússins er handteiknuð)" : u.lokud ? "" : " (útlínan lokaðist ekki — engu hent, hæðin er skorin að húsinu)"}` +
         (d.talning.hafnad.kross || d.talning.hafnad.skavegg ? ` · hafnað: ${d.talning.hafnad.kross} í krossi` : "")
     );
   } catch (err) {
@@ -707,7 +723,32 @@ export async function keyraSjalfvirkt(planId: string, deps: SjalfvirktDeps): Pro
         ljuka("veggir", vel.texti + thunnirTexti);
       } else {
         S().setja("veggir", { texti: `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} — greini í vafranum…` });
-        hrar = [...(await vafri), ...thunnir];
+        // Hárlínupör (lota 5): aðeins á vafraleiðinni — mælt: vafri 65,2/77,2 → 78,4/77,4 (hittni/nákvæmni), en á
+        // úttaki Veggjavélarinnar lækkaði nákvæmnin 88,4 → 84,0, svo þau fara ekki þangað.
+        // Textasía (lota 5): herbergjaheiti sem urðu að „fylltum veggjum" í vinnuupplausn falla — sama fullupplausnarmynd.
+        // Mælt: nákvæmni 77,4 → 80,7 %, hittni 78,4 → 78,3 %.
+        let harlinur: HLina[] = [];
+        let vafriL = await vafri;
+        try {
+          const fm = await fullMyndSvaedis(p, dpm);
+          if (fm) {
+            const gT = teygjaFolva(fm.gra);
+            harlinur = klemmaGreindaThykkt(harlinuPorUrMynd(fm, p), dpm).filter(innan);
+            const n = vafriL.length;
+            vafriL = fellaTexta(vafriL, fm, p, gT);
+            talning.texti = n - vafriL.length;
+            // Málsetningasía (lota 5, umferð 3): keðjur með tölum á línunni falla — úr myndgreiningunni og hárlínupörunum.
+            // Mælt í appinu á R3 (TIF-frumrit): 87,4/58,1 → 87,5/71,0; settið 80,6/80,4 → 80,6/80,8 (hittni/nákvæmni).
+            const nM = vafriL.length + harlinur.length;
+            vafriL = fellaMalsetningar(vafriL, fm, p, gT);
+            harlinur = fellaMalsetningar(harlinur, fm, p, gT);
+            talning.harlinur = harlinur.length;
+            talning.malsetningar = nM - vafriL.length - harlinur.length;
+          }
+        } catch (err) {
+          console.warn("[sjálfvirkt] hárlínupör / textasía / málsetningar", err);
+        }
+        hrar = [...vafriL, ...thunnir, ...harlinur];
         leid = "vafri";
         const gl = hrar.filter((v) => v.tegund === "gler").length;
         ljuka("veggir", `Veggjavélin: ${"villa" in vel ? vel.villa : "engir veggir"} → myndgreining í vafranum: ${hrar.length - gl} veggir · ${gl} gler${thunnirTexti}`, "lokid");

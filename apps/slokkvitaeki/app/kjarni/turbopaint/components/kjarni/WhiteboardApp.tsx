@@ -130,6 +130,7 @@ import type { BoardDocument, BoardObject, ImageObject, UttektTenging } from "../
 import { BoardCanvas } from "./BoardCanvas";
 import { CountTable } from "./CountTable";
 import { RightPanel } from "./RightPanel";
+import { StadurOgHaed, useStadurOgHaed } from "./StadurOgHaed";
 import { StyleStrip, Toolbar } from "./Toolbar";
 import { SymbolTray } from "./SymbolTray";
 import { TopBar } from "./TopBar";
@@ -1248,7 +1249,7 @@ export function WhiteboardApp() {
                 nafn: sk.nafn,
                 b: sk.frum.b,
                 h: sk.frum.h,
-                lykill: skonnunarLykill(trimmed, quality, opts?.fokus, sk.frum),
+                lykill: skonnunarLykill(trimmed, quality, opts?.fokus, sk.frum, sk.skerpt ? undefined : "anskerpu"),
               },
             });
             merkjaHeimild(komnar);
@@ -1300,6 +1301,36 @@ export function WhiteboardApp() {
     [runImport]
   );
 
+  // Verkefni → „Teikningar eftir heimilisfangi" → hakaðar teikningar saman á NÝJU borði (Agnar 17.11.2026: „haka kannski
+  // við nokkrar teikningar og þær opnist saman á einu borði"). Hver teikning sótt eins og úr heimilisfangaleitinni (sama
+  // gæðaleið, heimild merkt) og raðast undir þá síðustu; myndavélin rammar þær allar í lokin.
+  const opnaTeikningar = useCallback(
+    async (val: { infoUrl: string; titill: string }[], nafn: string) => {
+      if (!val.length) return;
+      await bidaHydrunar();
+      await createBoard(nafn);
+      setHeimaOpin(false);
+      let komnar = 0;
+      const villur: string[] = [];
+      for (const [i, t] of val.entries()) {
+        useBoardStore.getState().setImportProgress({ fileName: t.titill, percent: Math.round((i / val.length) * 100), message: `Sæki ${i + 1} af ${val.length}: ${t.titill}` });
+        try {
+          await runUrlImport(t.infoUrl, { throwOnError: true });
+          komnar++;
+        } catch (err) {
+          villur.push(`${t.titill}: ${err instanceof Error ? err.message : "náðist ekki"}`);
+        }
+      }
+      useBoardStore.getState().setImportProgress(null);
+      const view = shellRef.current;
+      const allt = useBoardStore.getState().objects;
+      if (view && allt.length) useBoardStore.getState().setCamera(cameraFit(boardBounds(allt), view.clientWidth, view.clientHeight));
+      if (komnar) toast.success(`${komnar} ${komnar === 1 ? "teikning" : "teikningar"} á borðinu „${nafn}“`);
+      for (const v of villur) toast.error(v, { duration: 8000 });
+    },
+    [bidaHydrunar, runUrlImport]
+  );
+
   // ── Úttektarteikning úr Slökkvitæki-appinu: ?uttekt=<fyrirtæki>&haed=<hæð>[&plan=] ─────────────────────
   // FloorPlan er sannleikurinn: blaðið og merkin eru alltaf sótt úr teikning_bord, ekki úr gömlu TurboPaint-borði.
   // Eitt borð per stað+hæð er endurnýtt (svo listinn fyllist ekki) en innihaldið er endurbyggt. Vista í úttekt
@@ -1332,6 +1363,8 @@ export function WhiteboardApp() {
   const simi = useErSimi();
   // Í skoðun er „Vista í úttekt" falið — skoðun skrifar hvergi (aðeins „Vista sem borð").
   const vistaSyn = (!skodunVirk || skodunUttekt) && (!!tengdMynd?.uttekt || hlutarABordi > 0);
+  // „Staður og hæð" (Agnar 17.11.2026): borðinn býður hann fram — áberandi þegar eitthvað er ótengt.
+  const otengtABordi = !tengdMynd?.uttekt || tengdirHlutar < hlutarABordi;
   const uttektFromQuery = useRef(false);
   const planFromQuery = useRef(false);
   useEffect(() => {
@@ -1582,6 +1615,13 @@ export function WhiteboardApp() {
 
   // `leidrettAf`: „Vista í úttekt"-takkinn = turbopaint (Agnar lagaði); sjálfvirka verkferlið vistar með „sjalfvirkt".
   const vistaUttekt = useCallback(async (opts?: { leidrettAf?: LeidrettAf }): Promise<{ ok: true; texti: string } | { ok: false; villa: string }> => {
+    // Ekkert tengt (t.d. eftir „Croppa oft"): beint í „Staður og hæð" í stað villu — þar festist Agnar áður.
+    if (!finnaTengduMynd(useBoardStore.getState().objects)) {
+      useStadurOgHaed.getState().opna();
+      const villa = "Veldu stað og hæð fyrir teikninguna — svo vistast hún.";
+      toast.message(villa);
+      return { ok: false, villa };
+    }
     setUttektVistar(true);
     try {
       // Opnað í skoðun (ekkert borð enn): „Vista í úttekt“ festir borðið líka — vistun þýðir vistað, líka borðið.
@@ -2107,6 +2147,7 @@ export function WhiteboardApp() {
       {thrividd ? (
         <Hus3D objects={objects} pixelsPerMeter={pixelsPerMeter} onClose={() => setThrividd(false)} />
       ) : null}
+      <StadurOgHaed />
       {vistaSyn && !simi && (
         <div className="pointer-events-none absolute inset-x-0 top-[6.75rem] z-30 flex justify-center px-2">
           <div data-vista-uttekt-bordi className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#1a1d2e]/95 py-1.5 pl-4 pr-1.5 text-[12.5px] text-stone-100 shadow-xl">
@@ -2116,6 +2157,15 @@ export function WhiteboardApp() {
                 ? `${tengdirHlutar} af ${hlutarABordi} hlutum tengdir hæðum`
                 : "staðsetningar tækja"}
             </span>
+            <button
+              type="button"
+              data-stadur-og-haed-takki
+              onClick={() => useStadurOgHaed.getState().opna()}
+              className={`shrink-0 rounded-full px-3 py-1.5 font-semibold whitespace-nowrap ${otengtABordi ? "bg-amber-300 text-stone-900 hover:bg-amber-200" : "bg-white/10 text-stone-100 hover:bg-white/20"}`}
+              title="Fletta upp stað eða heimilisfangi í kerfinu og velja hæð — eða stofna nýja hæð"
+            >
+              🏢 {otengtABordi ? "Velja stað og hæð" : "Staður og hæð"}
+            </button>
             <button
               type="button"
               disabled={uttektVistar}
@@ -2349,7 +2399,13 @@ export function WhiteboardApp() {
         </div>
       ) : null}
       {heimaOpin ? (
-        <Verkefni onOpen={opnaVerkefni} onNew={nyttVerkefni} onClose={() => setHeimaOpin(false)} maLoka={hydrated} />
+        <Verkefni
+          onOpen={opnaVerkefni}
+          onNew={nyttVerkefni}
+          onOpnaTeikningar={(val, nafn) => void opnaTeikningar(val, nafn)}
+          onClose={() => setHeimaOpin(false)}
+          maLoka={hydrated}
+        />
       ) : null}
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} initialTarget={exportTarget} />
       <StripDialog

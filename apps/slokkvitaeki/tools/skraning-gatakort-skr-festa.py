@@ -15,7 +15,12 @@ Image.MAX_IMAGE_PIXELS = None
 YF, LOG, H, INN, UT, R = sys.argv[1], sys.argv[2], sys.argv[3].lower(), sys.argv[4], sys.argv[5], float(sys.argv[6])
 R2, HLID = 20.0, 5.0
 # udi = stálrör úðakerfis (greind af rauðum lit á ljósmynd): aðeins úðalagnir. stal = önnur stálrör: vatn, hiti og lyfjaloft, ekki úðalagnir.
-LAGSKRAR = {'loft': ['loftraesing'], 'ror': ['vatn-litur', 'vatnslagnir', 'vatnsudi', 'lyfjaloft'], 'udi': ['vatnsudi'], 'stal': ['vatn-litur', 'vatnslagnir', 'lyfjaloft'], 'rafmagn': ['raflagnaleidir']}
+# Lagaskipan frá 18.11.2026 (Agnar, með kortið opið: „ef þú notar bara þessi 5 layers, þá ættirðu að geta fengið mun betri niðurstöður“):
+#   loft → Loftræsikerfi · plast og stál (vatn) → Vatnslagnir í lit · úði → Vatnsúðakerfi HLUTABLÖÐ · rafmagn → Raflagnaleiðir.
+#   Yfirlitsmyndirnar M195/M196, M395/M396 og M795/M796 eru ekki lengur notaðar (voru: ror = vatn-litur + vatnslagnir + vatnsudi + lyfjaloft, udi = vatnsudi).
+#   ror = stál án kerfisgreiningar: má vera vatn eða úði.
+LAGSKRAR = {'loft': ['loftraesing'], 'plast': ['vatn-litur'], 'ror': ['vatn-litur', 'udi-hluta'], 'udi': ['udi-hluta'], 'stal': ['vatn-litur'], 'rafmagn': ['raflagnaleidir']}
+if os.environ.get('FESTA_LAGSKRAR'): LAGSKRAR = json.loads(os.environ['FESTA_LAGSKRAR'])   # prófun á annarri lagauppsetningu
 grunnur = Image.open(YF).convert('RGB'); W, Hh = grunnur.size
 g = np.asarray(grunnur, dtype=np.int16)
 rautt = (g[..., 0] > 190) & (g[..., 1] < 100) & (g[..., 2] < 100)

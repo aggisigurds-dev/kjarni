@@ -452,3 +452,30 @@ td.sk-stikud i { position: relative; display: block; height: 8px; margin-left: 0
 .sk-hk-stutar { margin: 6px 0 2px; line-height: 1.7; } .sk-hk-stutar span { white-space: nowrap; } .sk-hk-stutar b { color: var(--bh-navy, #101e43); font-weight: 600; }
 .sk-hk-haed.stor .sk-hk-stutar { margin: 6px 12px 0; }
 .sk-hk-kort-h em.bid { background: #fef3c7; color: #92400e; } .sk-hk-kort-h em.gr { background: #e2e8f0; color: #334155; }
+
+/* Starfsmenn og þjálfun · Gæði og eftirlit (19.11.2026, beiðni verkeftirlits, liðir 4 og 5) */
+.sk-starfs { max-width: 760px; margin-top: 10px; }
+.sk-starfs th, .sk-starfs td { text-align: right; }
+.sk-starfs th:first-child, .sk-starfs td:first-child { text-align: left; }
+.sk-gaedi { margin: 10px 0 0; padding-left: 20px; line-height: 1.6; max-width: 100ch; }
+#k-starfsmenn .sk-malsgr, #k-gaedi .sk-malsgr { max-width: 100ch; margin: 8px 0; }
+@media print { #k-starfsmenn, #k-gaedi { break-inside: avoid-page; } }
+/* Titillinn skarst af í prentun og á mjóum skjá („staða verk“): dálkurinn tók aðeins breidd innihaldsins þegar hetjan er í dálkauppsetningu. */
+@media print { .sk-hetja-v { align-self: stretch; width: 100%; } }
+@media (max-width: 1100px) { .sk-hetja-v { align-self: stretch; width: 100%; } }
+
+/* Stutt skýrsla (sjálfgefið, 19.11.2026): aðeins tölur og það sem þarf til að lesa þær. „Ítarlegar skýringar og forsendur“ í stillingum sýnir allt. */
+.sk-stutt .sk-forsendur li:nth-child(n+3), .sk-stutt .sk-smatt:not(.sk-halda):not(.sk-skjar), .sk-stutt .sk-hk-stutar, .sk-stutt .sk-itar { display: none !important; }
+.sk-itar { font-style: normal; }
+.sk-les .sk-vf-drog { display: none !important; }
+.sk-alag { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13.5px; }
+.sk-alag span { flex: 1 1 auto; }
+.sk-alag input { width: 64px; padding: 5px 6px; border: 1px solid var(--bh-lina2, #b9bec4); border-radius: 8px; font: inherit; text-align: right; }
+.sk-alag i { font-style: normal; color: var(--aj-dim); }
+
+/* Verkferli með tilvísunum (19.11.2026): línuskil í skrefatexta (lausnir eftir tegund lagnar) og tilvísanalisti undir skrefunum. */
+.sk-vf-skref p { white-space: pre-line; }
+.sk-vf-tilv { margin-top: 14px; padding: 12px 16px; border: 1px solid var(--bh-lina, #e2e8f0); border-radius: 12px; background: #f6f8fb; break-inside: avoid; }
+.sk-vf-tilv h3 { margin: 0 0 6px; font-size: 14px; }
+.sk-vf-tilv ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
+.sk-vf-tilv a { color: #0b3a75; }

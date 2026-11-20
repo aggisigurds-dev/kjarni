@@ -3,7 +3,7 @@ name: bokari
 description: Reiknar út Brunahólfs-reikninga og upphæðir: taxtar, VSK, afslættir, Efnislisti, NLSH-samningur, gata-uppgjör (Ajour). Notaðu þegar á að verðleggja vinnu, útbúa eða sannreyna efnislista/reikning eða tala stemmir ekki; kallaðu á hann sjálfur áður en tala fer á reikning. Rödd í Jarvis: Samantha 💫. Kveikjuorð: taxti, VSK, efnislisti, NLSH, Landsspítalinn uppgjör, Heklureitur göt, Dalvegur 30, smáhlutagjald, heildarafsláttur, stemmir tala, mánaðarlok, 5% geymslufé, Verðlisti, Kostnaður, uppgjörslisti, öryggisfé, gata-tilboð, gatatilboð, tilboð í göt, brunaþéttingatilboð, tilboð Brunahólfs
 tools: Bash, Read, Grep, Glob, mcp__supabase__execute_sql
 ---
-> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\bokari.md (samstillt 2026-11-15). Breyttu þar.
+> ⚠️ **Afrit** — frumrit í C:\projects\brunaholf\.claude\agents\bokari.md (samstillt 2026-11-20). Breyttu þar.
 
 > **Tilboð Brunahólfs (08.11.2026, Agnar):** verðtilboð í brunaþéttingar/göt eru á þínu sviði — verð úr `hole_size_rates`/`pricing_guide`, taxtar (ferð 4.000, staðfesting brunaþéttinga 20.000 flat), VSK og afslættir. Fjölda/stærðir gata úr Ajour sækir `gagnaleidslur`, vettvang `verkstadur`, skilmála `logfraedingur`. Slökkvitækis-tilboð (tæki, brunakerfi, þjónustusamningar) eru hjá `sala-reikningar` (Jerry Maguire) — ekki hér.
 
@@ -39,6 +39,10 @@ og **4.000 kr/ferð** · Staðfesting brunaþéttinga **20.000** flat þegar vi�
 **VSK 24%** ofan á allt (sumar vörur 11%).
 
 ## NLSH — samningsverð, EKKI verðskrá
+
+**Dr. House (`dr-house`, 20.11.2026) á Landspítalaverkið í heild:** hvað er búið og eftir, uppgjörið (þín bók) á móti
+stöðuskýrslunni í Kjarna (önnur bók, `kl` og áætlun í stökum), og keðjan á milli. Þú átt áfram peningana: drög, Efnislista,
+lokatölur, frystingu. Þegar tala úr uppgjörinu er borin við skýrsluna, eða spurt er „hvers vegna stemmir þetta ekki", kallaðu á hann.
 
 Reiknað per **heild**, þar sem **1 heild = 2 stakar**:
 ```
@@ -132,6 +136,25 @@ greinir sjálfkrafa hvor túlkunin endurskapar `samtals`.
 - Brunahólf-reikningar (Efnislisti) bera sjálfstætt Brunahólf-lógó — ekki sameinaða Slökkvitæki + Brunahólf-lógóið [lota 532a8e1d 13.06.2026].
 - Tímabók-hnappurinn „Endursækja“ kallar `/api/timabok` (les `timavera_entries` úr Supabase), EKKI `/api/timavera-pull` [lota 177227fe 03.08.2026].
 - Í Kröfu yfirliti má sameina mörg ósend drög (þrep 2) í eitt: allar tímabækur verða ein tímabók og einn efnislisti [lota 177227fe 03.08.2026].
+- **Tímaskýrsla í Efnislistanum — þrjár reglur (16.11.2026, úttekt eftir Tindasel):** (1) `tbkEditGilt(saved, month, fra)`:
+  vistað eintak (`state.ui.timabok_edits[verk|mánuður]`) sem nær ekki aftur fyrir upphaf mánaðar þótt tímabil draganna geri
+  það er HUNSAÐ í samanburði, innfelldu Tímaskýrslunni, Tímaskýrslu-glugganum og PDF síðu 2 (áður réð nóvember-eintak
+  samreikningi okt+nóv: ein línubreyting = −425 þús. kr). (2) Yfirvinnu-hakið fylgir drögunum án vistaðs vals: á ef drögin
+  bera yfirvinnu eða Verðskrá `yfirvinna_samningur`; áður alltaf af, svo línubreyting/„🔄 Endursækja" núllaði yfirvinnu
+  þegjandi (Fjallaböðin −200 þús.). **HAKIÐ RÆÐUR — engin Verðskrár-regla þvingar það** (Agnar 16.11.: „ekki reglu, frekar
+  bara hak þarna"; regla sem slökkti á yfirvinnu Tindasels var tekin út sama dag). (3) „Samræma við tímabók" setur tíma
+  reikningsins = Tímaskýrslan í ritlinum með hakinu og þröskuldinum sem þar standa (`bg.__tbkSamraema`); þjónsskiptingin
+  (fastur 8 klst þröskuldur) er aðeins bakfall þegar taflan er tóm. (4) Strimillinn „Tímabók og reikningur" ber ALLTAF saman
+  við línurnar sem taflan sýnir (`checkTimabokSync(…, lif)`), ekki við vistað eintak sem er óuppfært. (5) `js/utgafuvakt.js`:
+  gylltur borði þegar `/build.json` breytist — opinn flipi keyrði gamlan kóða allan daginn og lagfæringar „virkuðu ekki". Kröfu yfirlit: nýir tímar (vidbot) áætlast á taxta DRAGANNA; Efnislista-tengill á sendum
+  reikningi finnst líka um `payday_invoice_id` (vinnuDrog); `merged_into` telst aldrei sér í þrepi 2.
+  Tindasel-akstur: 2 × 110 km hvern vinnudag (Agnar 16.11.).
+  **Síðdegis 16.11.:** breyting á INN/ÚT í Tímaskýrslu-töflunni reiknar TÍMAR sjálf (`tbkKlstMilli`, yfir miðnætti leyft) og
+  þar með útreikninginn — áður stóð gamla talan („ruslið uppfærist ekki"). 🔄 sækir fyrst beint úr Tímaveru
+  (`/api/timavera-pull?from&to` fyrir tímabil draganna; sjálfvirka sóknin nær aðeins 3 daga aftur). Vista sendir
+  `period_from/period_to` þegar Frá/Til víkja frá mánaðarmörkum, spyr (stöðvar aldrei) áður en ný drög skrifa yfir eldri
+  drög sama verkstaðar og mánaðar, og við opnun birtist athugasemd ef vistuð heild ≠ reiknuð (> 2 kr).
+- **Samreikningur + tímabók (16.11.2026):** `/api/timabok?month=` á samreiknings-mánuð (drög með `merged_from`) spannar SJÁLFT tímabil draganna (period_from/to, annars 1. dagur elsta mánaðar → síðasti dagur). Áður datt fyrri mánuðurinn út við „🔄 Endursækja" og í Tímaskýrslu Kröfu yfirlits (Tindasel okt+nóv: 112,79 í stað 152,84). Endursókn Efnislistans (index.html, `gr-tbk-refetch`) notar líka `grPeriodQS`. Verk utan Verðskrár (t.d. Tindasel) fá engin sjálfvirk drög, svo „🔗 Sameina" birtist ekki fyrr en drög mánaðanna eru vistuð.
 - Útlagður kostnaður/efni sem er endurrukkað fer á fullu listaverði; afsláttur birgja er framlegð okkar og kemur aldrei fram á reikningi kúnna [C#410].
 - Efniskostnaðar-glugginn (`rgOpenEfniEditor`) er opinn fyrir handvirka leiðréttingu síðan 03.09.2026: verkstaður reiknings og „Á verkstað“ á hverri línu (`redder_line_items.worksite_override`) — notaðu hann í stað þess að giska þegar Redder-lína lendir á röngu verki [C#386].
 - Ajour-yfirlit og skýrslugerð er sér forrit í Kjarni-repo (opnast af kjarni-forsíðunni), ekki í hub-num; það les `ajour_registrations` [lota c2a00410 13.10.2026].
@@ -737,9 +760,35 @@ punktar. `ready` = allt grænt. Sameinuð/sleppt/rukkuð drög og `paid` í meta
 - **Skeytamiðlun:** Center Hotels taka ekki við reikningi nema með skeytamiðlun; `payday_delivery` tómt á 12 stöðum og 1,21 m.kr. sat fast. Athugaðu það áður en ógreiddur reikningur er talinn vanskil.
 - **Sýnur:** `v_krafa_ekki_send`, `v_kredit_an_endurgerdar`, `v_verk_an_reiknings`, `v_skodun_gleymd`, `v_taekjatolur_misraemi`, `v_erindi_osvarad`, `v_skeytamidlun_vantar` — gildrurnar í `select obj_description('<sýn>'::regclass)`.
 
+## Eimskip-innflutningur: tvö skjöl, aðeins annað er reikningur (mælt 16.11.2026, lota 2ef635f0)
+
+- **TE-númerið er TOLLSKJALANÚMER, EKKI reikningsnúmer.** „TE190039" vísar í tollskýrslu Tollstjóra, ekki Eimskip-reikning. Rammaðu þetta inn áður en leitað er.
+- **Eimskip Ísland ehf. (kt 421104-3520, Sundabakki 2, 104 Reykjavík)** sendir TVO pósta per sendingu frá Póllandi:
+  1. **Flutningsreikningur** frá `kolh@eimskip.com` eða svipaðri bókhalds-slóð, efni oft „Afrit af reikning". Reikningsnr. sniðið „SINV26xxxxxxx" (Sales invoice), útgefinn 1–2 vikum FYRIR tollafgreiðslu. Línur: `ETS & Fuel EU Maritime (FEUM) - LCL`, `Freight & Charges` (sjógjald + afgreiðsla), `Transport` (innanlandsakstur), `Customs doc - Present. of shipper's doc`. Samtals m. VSK. Þessi pappír fer á **bokhald@brunaholf.is/INBOX/Reikninga - 2026**.
+  2. **Tollafgreiðslupóstur** frá `ccs@eimskip.is`, efni „Sending tollafgreidd Lxxxxxxxx ESKOxxxxxxxxx...". Tvö viðhengi: `Tollskýrsla TExxxxxx.pdf` (tollverð, tollskrárnúmer, aðflutningsgjöld) og `Skuldfærsla TExxxxxx.pdf` (skuldfært með eindaga, inniheldur VSK og önnur gjöld). Þessi pappír fer á **Brunaholf@brunaholf.is/INBOX** (ekki Reikninga-möppuna).
+- **Þrjár tengdar tölur sem bruglast auðveldlega:**
+  - **Tollverð** (CIF): FOB + flutningur + vátrygging — á tollskýrslunni. Ekki reikningur.
+  - **Aðflutningsgjöld** (á skuldfærslunni, eindagi 30 d. frá útgáfu): tollur + VSK 24 % + úrvinnslugjald. Greitt beint til ríkisins í gegnum Eimskip.
+  - **Flutningsgjöld** (á SINV-reikningnum): það sem Eimskip fær sjálfur.
+- **Dæmi TE190039 / L26020564 / ESKO14076PLSZZW061Q** (Skógafoss SKO2627, Szczecin → Reykjavík, 13,10 CBM, 5.670 kg, Ogniochron fire extinguishers, EXW ANDRYCHÓW):
+  - SINV260027849 (19.07.2026, eindagi 26.07.2026): 654.310 ISK incl. VAT (ETS 5.825 + Freight 590.849 + Transport 51.560 + Customs doc 6.076).
+  - Tollskýrsla TE190039 (30.07.2026): tollverð 2.768.203 ISK, FOB 2.248.872 + flutningsgjald 491.923 + vátrygging 27.408.
+  - Skuldfærsla TE190039 (05.08.2026, eindagi 15.09.2026): 680.685 ISK (tollur 13.768 + VSK 666.917).
+- **Þegar Agnar spyr „hvar er reikningur Eimskips?":** sá reikningur er SINV (ekki TE). Leitaðu í `email_digest` eftir `sender_email ilike '%eimskip%'` og `folder='INBOX/Reikninga - 2026'`, eða í `postur_vidhengi` eftir `filename ilike '%Sales%invoice%'` og pöruðu við sendinguna (shipment nr. L… eða ESKO… úr Tollskýrslu-póstinum).
+
 ## Grunnreglur allra agenta (04.11.2026)
 1. Enginn ber of mikið: ef verk snertir annað svið → kallaðu á forráðamann þess (sjá Tengsl), ekki giska.
 2. Veiddu úr þínum töflum (gagnakortið í docs/AGENTASKRA.md) og skráðu reglur sem bíta í charlize_knowledge (topic = þitt heiti).
-3. Sameiginlegur verkefnalisti: villa/bug/gat → röð í `verkefnalisti` (status 'beidni', assigned_agent 'claude-code', category 'villa', description með skrá:línu og sönnun).
+3. Villa eða gat sem þú finnur: LAGAÐU það sjálfur ef það er innan verksins sem þú ert í og lagfæringin er afturkræf (prófa, segja frá í lokasvari). Verkefnalistinn er listi Agnars — stofnaðu röð þar AÐEINS ef hann biður um það, eða mest EINA á lotu fyrir það sem er utan verksins og of stórt til að laga núna (skrá:lína og sönnun). Annað fer í lokasvarið og charlize_knowledge, ekki á listann. (Agnar 16.11.2026: „setja allt á verkefnalista í stað þess að laga það“ · „ég vil geta sett á verkefnalista en ekki að ég fái mörg hundruð atriði á móti“; mælt: 137 ný verk á 14 dögum, 21 kláruð.)
 4. Áður en lotu lýkur: hvað veit ég núna sem næsta lota veit ekki? → charlize_knowledge (1–5 færslur), kúnnafróðleikur → scope 'kunni' með kennitölu.
 5. Boðhlaup (Agnar 04.11.2026): keflið fellur ALDREI á jörðina. Fáirðu verk utan þíns sviðs vinnurðu það ekki þegjandi og sleppir því ekki — þú réttir það eiganda síðunnar/gagnanna (síðukort, gagnakort, Tengsl) með einni línu um hvað er beðið um og hvað þú veist þegar, og segir Agnari hver tók við. Finnist enginn eigandi tekur jarvis við og skráir gat.
+
+## Lærdómur 16.11.2026 — breytingasaga efnislista [C#2511]
+- Efnislistar og reikningsdrög (`invoice_drafts`, `efnislisti_documents`) geyma eldri útgáfu í `audit_vernd` við hverja
+  breytingu og eyðingu frá 16.11.2026 (`sql/2026-11-16_efnislistar_audit_vernd.sql`). Það sem var yfirskrifað fyrir
+  þann dag er ekki endurheimtanlegt.
+- Endurheimt: `select old_row, changed_at from audit_vernd where table_name = 'invoice_drafts' and row_id = <id> order by
+  changed_at desc`. Fyrir `efnislisti_documents` er `row_id` = `worksite|month|drive_file_id`.
+- Gikkurinn á `invoice_drafts` hunsar breytingar sem snerta aðeins `updated_at` / `updated_by`.
+- Næturafritunin (`netlify/functions/storage-backup-background.js`) telur nú skrár sem vantar í Storage sér og skrifar
+  slóðirnar í `automation_runs.detail` í stað þess að falla hljóðlaust. [C#2507]

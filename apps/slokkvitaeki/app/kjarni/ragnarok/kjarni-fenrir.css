@@ -1,0 +1,135 @@
+/* Fenrir-útlitið á Stjórnstöðinni (Agnar 17.11.2026: „setja fenrir theme á alla kjarna forsíðuna").
+ * Litir, spjöld, flipar og tólaspjöld úr Fenrir-hönnunarkerfinu (tokens.css + components/bundle.css).
+ * StationChrome setur data-kjarni-skin="ragnarok" OG data-fenrir, svo allar Ragnarök-reglurnar gilda áfram
+ * og þessar leggjast ofan á — aðeins innan .rgk[data-fenrir] og html[data-fenrir]; Ragnarök er óbreytt. */
+
+/* 18.11.2026 (Agnar: „letrið allt of gullt — meira shiny gull metal með rauðum tón eins og Kjarna hringurinn",
+ * svo „settu bara alla litina í rauðglóandi gull — hraun/lava kannski einhvers staðar"):
+ * allir Fenrir-litir í rauðglóandi gulli; hraun í rennandi rák undir titlinum og glóandi sprungu neðst í hetjunni.
+ * Meginmál ≥ 4,5:1 á #141922 og svörtu; málmhallinn (dekksti tónn #c22f1c) ≥ 3:1 á spjaldi = stór texti. */
+html[data-fenrir] {
+  --fn-primary:#e8521f; --fn-accent:#ff8a4a; --fn-signal:#ff6a2b; --fn-danger:#ef4444;
+  --fn-void:#000000; --fn-surface:#0f1116; --fn-card:#141922; --fn-border:#2a3340;
+  --fn-text-hi:#ffe1cc; --fn-text-gold:#f2906a; --fn-text-lead:#f0a58a; --fn-text:#e09f86; --fn-text-dim:#c07a62;
+  --fn-primary-tint:rgba(232,82,31,.16);
+  --fn-rest:0 0 0 1px #2a3340, 0 8px 24px rgba(0,0,0,.6);
+  --fn-glow-primary:0 0 0 1px rgba(232,82,31,.95), 0 0 16px rgba(255,60,20,.5);
+  --fn-glow-accent:0 0 10px rgba(255,90,40,.6);
+  /* rauðglóandi málmgull: hvítglóð → gull → rauðgult → djúprautt → glóð → gull → hvítglóð */
+  --fn-metal:linear-gradient(180deg,#fff1e0 0%,#ffc58a 18%,#ff7a3a 38%,#c22f1c 54%,#e8501f 66%,#ffb36b 82%,#ffe6c4 100%);
+  --fn-metal-shadow:drop-shadow(0 1px 0 rgba(50,8,2,.9)) drop-shadow(0 0 12px rgba(255,60,20,.45));
+  /* hraun: svart storkuberg → djúprautt → glóandi appelsínugult → hvítgult kjarnahraun */
+  --fn-lava:linear-gradient(90deg,#2a0601 0%,#8e1406 12%,#e2380f 26%,#ff8a2a 38%,#ffe08a 46%,#ff8a2a 54%,#e2380f 66%,#8e1406 80%,#2a0601 100%);
+  /* Ragnarök-breyturnar (á :root) í sömu tónum — efsta stikan, klukkan, merki og annað sem les þær */
+  --rg-gold-100:#ffeee0; --rg-gold-200:#ffd4b8; --rg-gold-300:#ffb08a; --rg-gold-400:#ff9468;
+  --rg-gold-500:#e8704a; --rg-gold-600:#c8502e; --rg-gold-700:#a0321a; --rg-gold-800:#6a1a0c; --rg-gold-900:#380a04;
+  --rg-ember-100:#ffe4d4; --rg-ember-300:#ff8a5a; --rg-ember-500:#ff6a2b; --rg-ember-600:#e8521f; --rg-ember-700:#b83214; --rg-ember-900:#560f04;
+  --rg-text:#ffe1cc; --rg-text-gold:#ff9468; --rg-text-dim:#e09f86; --rg-text-muted:#c07a62;
+  --rg-gold-text:var(--fn-metal);
+}
+html[data-fenrir] body { background:var(--fn-void); }
+
+/* grunnurinn: hreint svart, engar skannlínur né glóðarblettir */
+.rgk[data-fenrir] { --rg-ground:none; background:var(--fn-void); overflow-x:clip; }
+.rgk[data-fenrir]::after { display:none; }
+.rgk[data-fenrir] :focus-visible { outline-color:var(--fn-primary); }
+
+/* hetjan: Fenrir-landslag undir svörtum halla, út að brúnum skjásins */
+.rgk[data-fenrir] .rgk-hero { position:relative; isolation:isolate; }
+.rgk[data-fenrir] .rgk-hero::before {
+  content:""; position:absolute; z-index:-1; pointer-events:none;
+  top:-28px; bottom:-28px; left:calc(50% - 50vw); right:calc(50% - 50vw);
+  background:
+    radial-gradient(ellipse 60% 38% at 72% 100%,rgba(255,60,10,.28),transparent 70%),
+    linear-gradient(90deg,rgba(0,0,0,.94) 0%,rgba(0,0,0,.74) 45%,rgba(0,0,0,.3) 78%,rgba(0,0,0,.6) 100%),
+    linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,0) 40%,#000 100%),
+    url("/kjarni/fenrir/bg-molten-peaks.webp") center 30%/cover no-repeat;
+}
+/* hraunsprunga eftir neðri brún hetjunnar: glóandi rák sem rennur hægt og andar */
+.rgk[data-fenrir] .rgk-hero::after {
+  content:""; position:absolute; z-index:-1; pointer-events:none; height:3px; bottom:-28px;
+  left:calc(50% - 50vw); right:calc(50% - 50vw);
+  background:var(--fn-lava); background-size:200% 100%;
+  box-shadow:0 0 10px rgba(255,80,20,.8),0 0 28px rgba(255,40,0,.45),0 -6px 30px rgba(255,60,10,.25);
+  animation:fnk-hraun 14s linear infinite, fnk-glod 5s ease-in-out infinite;
+}
+@keyframes fnk-hraun { to { background-position:-200% 0; } }
+@keyframes fnk-glod { 50% { opacity:.7; filter:brightness(1.25); } }
+.rgk[data-fenrir] .rgk-proto { color:var(--fn-text-gold); font-weight:400; }
+.rgk[data-fenrir] .rgk-proto-tags span { color:var(--fn-text-hi); }
+/* strikið undir titlinum = rennandi hraunrák */
+.rgk[data-fenrir] .rg-bar.rgk-bar {
+  height:6px; border-radius:3px; background:var(--fn-lava); background-size:200% 100%;
+  box-shadow:0 0 8px rgba(255,80,20,.85),0 0 22px rgba(255,40,0,.45);
+  animation:fnk-hraun 10s linear infinite;
+}
+.rgk[data-fenrir] .rgk-lead { color:var(--fn-text-lead); }
+.rgk[data-fenrir] .rgk-hud { color:var(--fn-text-dim); }
+
+/* hnappar og flipar (SegmentTabs): stálhalli, hárlína, skáskorin horn; valinn = primary-kantur */
+.rgk[data-fenrir] .rg-btn {
+  padding:0; background:linear-gradient(180deg,var(--fn-card),var(--fn-void)); border:1px solid var(--fn-border);
+  box-shadow:none; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+}
+.rgk[data-fenrir] .rg-btn > span { background:transparent; clip-path:none; color:var(--fn-text); }
+.rgk[data-fenrir] .rg-btn:hover > span { color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rg-btn.on { border-color:var(--fn-primary); background:linear-gradient(180deg,var(--fn-primary-tint),var(--fn-void)); box-shadow:inset 0 -2px 0 var(--fn-primary); }
+.rgk[data-fenrir] .rg-btn.on > span { background:transparent; color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rg-btn.dim > span { color:var(--fn-text); }
+.rgk[data-fenrir] .rg-btn.gold { background:var(--fn-primary-tint); border-color:var(--fn-primary); box-shadow:var(--fn-glow-primary); }
+.rgk[data-fenrir] .rg-btn.gold > span { color:var(--fn-text-hi); font-weight:600; }
+.rgk[data-fenrir] .rg-btn.danger { background:rgba(239,68,68,.16); border-color:var(--fn-danger); }
+.rgk[data-fenrir] a.rg-btn { color:var(--fn-text); }
+
+/* spjöld (Card): stálblátt spjald, ávöl horn, hárlína + djúpur skuggi í stað gullramma og nagla */
+.rgk[data-fenrir] .rg-panel { padding:0; background:var(--fn-card); clip-path:none; border-radius:12px; box-shadow:var(--fn-rest); }
+.rgk[data-fenrir] .rg-panel::before { display:none; }
+.rgk[data-fenrir] .rg-panel > .rg-face { background:transparent; clip-path:none; border-radius:12px; }
+.rgk[data-fenrir] .rg-panel.hot { box-shadow:var(--fn-glow-primary); }
+.rgk[data-fenrir] .rg-h2 { color:var(--fn-text-hi); text-shadow:none; font-size:22px; letter-spacing:.06em; }
+.rgk[data-fenrir] .rgk-sub { color:var(--fn-text); }
+.rgk[data-fenrir] .rg-rule { background:var(--fn-border); }
+.rgk[data-fenrir] .rgk-link { color:var(--fn-signal); }
+
+/* tólaspjöldin (ToolCard): primary-rammi, hallandi stál, neðra hægra horn skáskorið með primary-línu */
+.rgk[data-fenrir] .rgk-sys {
+  border-radius:0; background:linear-gradient(180deg,var(--fn-card),var(--fn-void)); box-shadow:none;
+  border:1px solid var(--fn-primary); clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+}
+.rgk[data-fenrir] .rgk-sys::after {
+  content:""; position:absolute; right:0; bottom:0; width:14px; height:14px; pointer-events:none;
+  background:linear-gradient(to top left,transparent calc(50% - 1px),var(--fn-primary) calc(50% - 1px),var(--fn-primary) calc(50% + .5px),transparent calc(50% + .5px));
+}
+.rgk[data-fenrir] .rgk-sys > .rg-face { background:transparent; border-radius:0; }
+.rgk[data-fenrir] .rgk-sys { transition:box-shadow .2s, background .2s; }
+.rgk[data-fenrir] .rgk-sys:hover {
+  box-shadow:inset 0 0 22px rgba(255,60,20,.22), inset 0 -2px 0 rgba(255,106,43,.9);
+  background:linear-gradient(180deg,#1c1310,#000);
+}
+.rgk[data-fenrir] .rgk-sys-top { color:var(--fn-text-gold); font-weight:400; }
+.rgk[data-fenrir] .rgk-sys-name { color:var(--fn-text-hi); text-shadow:none; }
+.rgk[data-fenrir] .rgk-sys-desc { color:var(--fn-text); }
+.rgk[data-fenrir] .rgk-sys-foot { color:var(--fn-text-dim); }
+.rgk[data-fenrir] .rgk-go { color:var(--fn-signal); }
+
+/* ArtCraft/OfficeCraft- og einingaspjöld: lítil Card */
+.rgk[data-fenrir] .rgk-mod { padding:0; background:var(--fn-card); clip-path:none; border-radius:12px; box-shadow:var(--fn-rest); }
+.rgk[data-fenrir] a.rgk-mod:hover { background:var(--fn-card); box-shadow:var(--fn-glow-primary); filter:none; }
+.rgk[data-fenrir] .rgk-mod.wip { background:var(--fn-surface); }
+.rgk[data-fenrir] .rgk-mod-face,
+.rgk[data-fenrir] .rgk-mod.wip .rgk-mod-face { background:transparent; clip-path:none; border-radius:12px; }
+.rgk[data-fenrir] .rgk-mod-top b { color:var(--fn-text-hi); }
+.rgk[data-fenrir] .rgk-mod-kind { color:var(--fn-text-gold); }
+.rgk[data-fenrir] .rgk-mod-desc { color:var(--fn-text); }
+
+/* (aftast svo það vinni lita-reglurnar að ofan) */
+/* málmletrið á fyrirsögnum, tólaheitum, stórum tölum og KJARNI-merkinu í stikunni */
+.rgk[data-fenrir] .rg-h1.rg-gold-text,
+.rgk[data-fenrir] .rg-h2,
+.rgk[data-fenrir] .rgk-sys-name,
+.rgk[data-fenrir] .rgk-stat-v b,
+html[data-fenrir] .stn[data-skin="ragnarok"] .stn-home {
+  background:var(--fn-metal); -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:none; filter:var(--fn-metal-shadow);
+}
+html[data-fenrir] .stn[data-skin="ragnarok"] .stn-tools a.on { text-shadow:0 0 8px rgba(255,60,20,.7); }

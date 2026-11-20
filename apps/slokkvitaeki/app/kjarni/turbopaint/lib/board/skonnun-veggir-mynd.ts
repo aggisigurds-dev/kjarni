@@ -6,13 +6,16 @@ import {
   butarIBord,
   graTonar,
   greiningarSvaedi,
+  langirVeggir,
   skonnunarVeggir,
+  teygjaFolva,
   type SkonnunarVeggir,
   type Talning,
 } from "./skonnun-veggir";
-import { bakgrunnsTonn, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
+import { bakgrunnsTonn, finnaHarlinuPor, finnaThunnaVeggi, maelaHallaMyndar } from "./thunnir-veggir";
 import { SJALFGEFIN_VIKMORK } from "./veggja-hreinsun";
 import type { VeggTegund } from "./teikning-veggir";
+import { malsetningaLinur, textaLinur } from "./veggja-linur";
 import type { ImageObject } from "./types";
 import { anda } from "./anda";
 
@@ -131,6 +134,69 @@ export async function greinaThunnaVeggi(plan: ImageObject, dpmBord: number): Pro
   const th = finnaThunnaVeggi(gra, g.W, g.H, { dpm: dpmFrum * k });
   const frum = th.map((v) => [v[0] / k, v[1] / k, v[2] / k, v[3] / k, v[4] / k] as number[]);
   return butarIBord(frum, g, plan);
+}
+
+/** Svæði hæðarinnar í FULLRI upplausn myndarinnar (lota 5, 17.11.2026) — fyrir hárlínupör og textasíu, sem sjá hvorugt í
+ * vinnuupplausn greiningarinnar (hárlína er 1–3 dílar; stafir renna saman í borða). Upp að 20 MP: toppurinn er ~4 × W·H bæti
+ * (grátónn, gríma, skekkt gríma, umsnúin gríma) = 80 MB á þakinu — helmingur af þaki þunnu veggjanna því þetta keyrir í síma. */
+export interface FullMynd {
+  gra: Uint8Array;
+  W: number;
+  H: number;
+  /** vinnudílar á díl frummyndar */
+  k: number;
+  /** vinnudílar á metra */
+  dpm: number;
+  g: ReturnType<typeof greiningarSvaedi>;
+}
+
+export async function fullMyndSvaedis(plan: ImageObject, dpmBord: number): Promise<FullMynd | null> {
+  const blob = getAssetBlob(plan.assetId);
+  if (!blob || !(dpmBord > 0) || !(plan.width > 0)) return null;
+  const bmp = await createImageBitmap(blob);
+  const g0 = greiningarSvaedi(plan, { w: bmp.width, h: bmp.height });
+  const dpmFrum = dpmBord * (g0.myndSvaedi.w / plan.width);
+  let k = g0.uppspretta.w / g0.sk.w; // full upplausn MYNDARINNAR
+  const mp = g0.sk.w * g0.sk.h * k * k;
+  if (mp > 20e6) k *= Math.sqrt(20e6 / mp);
+  const g = { ...g0, kvardi: k, W: Math.max(1, Math.round(g0.sk.w * k)), H: Math.max(1, Math.round(g0.sk.h * k)) };
+  let gra: Uint8Array;
+  try {
+    gra = await vinnumynd(bmp, g);
+  } finally {
+    bmp.close();
+  }
+  await andaUI();
+  return { gra, W: g.W, H: g.H, k, dpm: dpmFrum * k, g };
+}
+
+/** Hárlínupör (skilveggir / glerveggir teiknaðir sem tvær hárfínar línur með ~0,1 m bili) — borðhnit. */
+export function harlinuPorUrMynd(fm: FullMynd, plan: ImageObject): { p: number[]; t: number; tegund?: VeggTegund }[] {
+  const hp = finnaHarlinuPor(fm.gra, fm.W, fm.H, { dpm: fm.dpm });
+  return butarIBord(hp.map((v) => [v[0] / fm.k, v[1] / fm.k, v[2] / fm.k, v[3] / fm.k, v[4] / fm.k] as number[]), fm.g, plan);
+}
+
+/** Borðhnit → dílar fullupplausnarmyndarinnar. */
+function iFullMynd<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject) {
+  const kx = plan.width / fm.g.myndSvaedi.w, ky = plan.height / fm.g.myndSvaedi.h;
+  const ox = fm.g.sk.x - fm.g.myndSvaedi.x, oy = fm.g.sk.y - fm.g.myndSvaedi.y;
+  return linur.map((l) => ({
+    p: l.p.map((n, i) => (i % 2 ? ((n - plan.y) / ky - oy) * fm.k : ((n - plan.x) / kx - ox) * fm.k)),
+    t: (l.t / kx) * fm.k,
+    tegund: l.tegund,
+  }));
+}
+
+/** Línur myndgreiningarinnar (borðhnit) án þeirra sem eru texti í fullri upplausn (veggja-linur.ts textaLinur). */
+export function fellaTexta<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject, gT = teygjaFolva(fm.gra)): T[] {
+  const burt = textaLinur(iFullMynd(linur, fm, plan), gT, fm.W, fm.H, fm.dpm);
+  return linur.filter((_, i) => !burt.has(i));
+}
+
+/** Línur (borðhnit) án málsetningarkeðja — tölur og strik á línunni í fullri upplausn (veggja-linur.ts malsetningaLinur). */
+export function fellaMalsetningar<T extends { p: number[]; t: number; tegund?: string }>(linur: T[], fm: FullMynd, plan: ImageObject, gT = teygjaFolva(fm.gra)): T[] {
+  const burt = malsetningaLinur(iFullMynd(linur, fm, plan), gT, fm.W, fm.H, fm.dpm);
+  return linur.filter((_, i) => !burt.has(i));
 }
 
 /** SVIGRÚM Á HALLANUM (Agnar 05.11.2026: „geturðu ekki sett smá buffer á lesinguna, 1% halli leyfður eða álíka").
@@ -297,6 +363,14 @@ export async function greinaVeggiSkonnunar(plan: ImageObject, onProgress?: (perc
   // borðdílar á metra → dílar frummyndar á metra (myndin á borðinu sýnir myndSvaedi af frummyndinni)
   const dpmFrum = dpmBord && dpmBord > 0 && plan.width > 0 ? dpmBord * (g.myndSvaedi.w / plan.width) : null;
   const r = await keyra(gra, g.W, g.H, g.kvardi, g.frum.b, g.frum.h, dpmFrum);
+  // Föl skönnun (lota 5): teygð mynd greind líka — aðeins langir veggir þaðan bætast við (langirVeggir).
+  const gT = teygjaFolva(gra);
+  if (gT !== gra) {
+    const t = await keyra(gT, g.W, g.H, g.kvardi, g.frum.b, g.frum.h, dpmFrum);
+    const l = langirVeggir(t.veggir, g.frum.b, g.frum.h, dpmFrum);
+    r.veggir.push(...l);
+    r.talning.folvi = l.length;
+  }
   onProgress?.(95);
   const veggir = [
     ...butarIBord(r.veggir, g, plan),

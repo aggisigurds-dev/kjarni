@@ -52,6 +52,25 @@ const LOG = [
   { skra: 'lag-6h-vatnsudi-M396.png',    haed: '6H', fag: 'sprinkler', heiti: 'Vatnsúðakerfi 6H (M396-00)',                 blad: 'M396-00', rod: 10, synilegt: true,  q: 1.1, dx: -153, dy: -53 },
   { skra: 'lag-6h-vatnslagnir-M196.png', haed: '6H', fag: 'vatn',      heiti: 'Þrifa-, hita- og kælikerfi 6H (M196-00)',    blad: 'M196-00', rod: 20, synilegt: false, q: 1.0, dx: -30.5, dy: 57.5 },
   { skra: 'lag-6h-lyfjaloft-M796.png',   haed: '6H', fag: 'gas',       heiti: 'Lyfjaloft 6H (M796-00)',                     blad: 'M796-00', rod: 30, synilegt: false, q: 1.0, dx: -14, dy: 12 },
+  // 15.11.2026 (Agnar: „sérðu fleiri layers úr teikningunum á Procore“): rafkerfi í 1:50, ENGIN ásamerki → fylgni við R1150/R1160 sama
+  // hlutanúmers (as_<blað>.json; frávik > 12 pt frá miðgildi systurblaðanna leiðrétt í miðgildið), skeytt með -skeyta-lit.py dokkt <tint>.
+  // Sýna aðallega TÆKI (tengla, ljós, nema), fáar lagnaleiðir — lög til stuðnings, engin sjálfvirk áætluð göt úr þeim.
+  { skra: 'lag-5h-lagspenna-R3150.png',      haed: '5H', fag: 'rafmagn', heiti: 'Lágspenna 5H (R3150-01…20)',      blad: 'R3150', rod: 41, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-6h-lagspenna-R3160.png',      haed: '6H', fag: 'rafmagn', heiti: 'Lágspenna 6H (R3160-01…20)',      blad: 'R3160', rod: 41, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-5h-smaspenna-R5150.png',      haed: '5H', fag: 'rafmagn', heiti: 'Smáspenna 5H (R5150-01…20)',      blad: 'R5150', rod: 42, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-6h-smaspenna-R5160.png',      haed: '6H', fag: 'rafmagn', heiti: 'Smáspenna 6H (R5160-01…20)',      blad: 'R5160', rod: 42, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-5h-brunavidvorun-R6150.png',  haed: '5H', fag: 'rafmagn', heiti: 'Brunaviðvörun 5H (R6150-01…20)',  blad: 'R6150', rod: 43, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  { skra: 'lag-6h-brunavidvorun-R6160.png',  haed: '6H', fag: 'rafmagn', heiti: 'Brunaviðvörun 6H (R6160-01…20)',  blad: 'R6160', rod: 43, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'fylgni', dy: 'fylgni', sott: '15.11.2026' },
+  // 15.11.2026 (síðari lota): hlutablöð úðakerfis og lyfjalofts (1:50, ÁSAMERKI → stillt við M115-NN/M116-NN, frávik ≤ 0,1 pt; M315-06/16/18
+  // án ása → fylgni). Gataplön burðarvirkis M814/M815/M816 (rev 0, 06.01.2025): göt LESIN úr texta („ø160“, „150 x 300“) og teiknuð sem
+  // hringir (blátt = Ø160–200 liður 1.2, bleikt = Ø210–300 liður 1.3 með stærð, grátt = annað). Plata yfir 4H á 4H, yfir 5H á 5H, yfir 6H á 6H.
+  { skra: 'lag-5h-udi-hluta-M315.png',         haed: '5H', fag: 'sprinkler', heiti: 'Vatnsúðakerfi hlutablöð 5H (M315-01…20)', blad: 'M315', rod: 11, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-6h-udi-hluta-M316.png',         haed: '6H', fag: 'sprinkler', heiti: 'Vatnsúðakerfi hlutablöð 6H (M316-01…20)', blad: 'M316', rod: 11, synilegt: false, gegnsaei: 0.9, q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-5h-lyfjaloft-hluta-M715.png',   haed: '5H', fag: 'gas',       heiti: 'Lyfjaloft hlutablöð 5H (M715-01…20)',     blad: 'M715', rod: 31, synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-6h-lyfjaloft-hluta-M716.png',   haed: '6H', fag: 'gas',       heiti: 'Lyfjaloft hlutablöð 6H (M716-01…20)',     blad: 'M716', rod: 31, synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-4h-gataplan-M814.png',          haed: '4H', fag: 'annad',     heiti: 'Gataplan: plata yfir 4H (M814, rev 0)',   blad: 'M814', rod: 2,  synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-5h-gataplan-M815.png',          haed: '5H', fag: 'annad',     heiti: 'Gataplan: plata yfir 5H (M815, rev 0)',   blad: 'M815', rod: 2,  synilegt: false, gegnsaei: 1,   q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
+  { skra: 'lag-6h-gataplan-M816.png',          haed: '6H', fag: 'annad',     heiti: 'Gataplan: plata yfir 6H / þak (M816, rev 0)', blad: 'M816', rod: 2, synilegt: false, gegnsaei: 1, q: 0.2, dx: 'ásar', dy: 'ásar', sott: '15.11.2026' },
 ];
 (async () => {
   const [verk] = await rest('GET', `skr_verk?heiti=eq.${encodeURIComponent(VERK)}&select=id`);
@@ -63,7 +82,7 @@ const LOG = [
     if (!t) throw new Error('ekkert yfirlitsblað fyrir ' + l.haed);
     const f = path.join(DIR, l.skra); if (!fs.existsSync(f)) { console.log('VANTAR', l.skra); continue; }
     const buf = fs.readFileSync(f), d = pngDims(buf);
-    const uppruni = `Procore ${l.blad} ${/-00$/.test(l.blad) ? 'rev 0' : 'gildandi útgáfur'} · sótt 11.11.2026 · q=${l.q} dx=${l.dx} dy=${l.dy} pt`;
+    const uppruni = `Procore ${l.blad} ${/-00$/.test(l.blad) ? 'rev 0' : 'gildandi útgáfur'} · sótt ${l.sott || '11.11.2026'} · q=${l.q} dx=${l.dx} dy=${l.dy} pt`;
     if (til.some((x) => x.teikning_id === t.id && (x.uppruni || '').startsWith(`Procore ${l.blad} `))) { console.log('til   ', l.blad, '→ teikning', t.id); continue; }
     const sp = `verk/${verk.id}/${l.skra.replace(/\.png$/, '')}-${crypto.randomBytes(6).toString('hex')}.png`;
     console.log(WRITE ? 'skrifa' : 'DRY   ', l.blad, '→ teikning', t.id, `${d.w}×${d.h}`, (buf.length / 1024).toFixed(0) + ' kB', l.fag, l.synilegt ? 'sýnilegt' : 'falið');

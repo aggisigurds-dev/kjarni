@@ -6,7 +6,7 @@ import { ARTCRAFT_INTERFACES, OFFICECRAFT_INTERFACES } from "../artcraft/apps";
 import { CONNS, GALLERY, MOD_COUNT, QUICK_GROUPS, kr } from "../data";
 import { SKINS, type SkinId } from "../skins";
 import { useStationSkin } from "../StationChrome";
-import { RagnarokRing } from "./Ring";
+import { ApocalypseRing } from "./ApocalypseRing";
 import { SYSTEMS, FILTERS, ext, dags, type Filter } from "../stod-gogn";
 
 /* Stjórnstöðin í Ragnarök-útliti (bráðið gull á svörtu stáli).
@@ -75,9 +75,12 @@ export function RagnarokView(d: RagnarokData) {
   const [sub, setSub] = useState<string>("rg-yfirlit");
   const [filter, setFilter] = useState<Filter>("allt");
   const current = SKINS.find((s) => s.id === skin);
+  /* Fenrir (17.11.2026) = þessi sama Stjórnstöð með Fenrir-hönnunarkerfinu: landslag bak við hetjuna
+   * og engin emoji (tölureitirnir undir hetjunni fjarlægðir 18.11. — Agnar; tölustikan er á sínum stað) (stílar í kjarni-fenrir.css undir .rgk[data-fenrir]). */
+  const fenrir = skin === "fenrir";
 
   return (
-    <div className="rg rgk">
+    <div className="rg rgk" data-fenrir={fenrir ? "" : undefined}>
       <div className="rgk-in">
         {/* einingar-röðin = útlitin; Ragnarök er þetta, hin fara í klassíska útlitið */}
         <div className="rgk-row" role="tablist" aria-label="Útlit">
@@ -113,7 +116,7 @@ export function RagnarokView(d: RagnarokData) {
             </p>
           </div>
           <div className="rgk-core">
-            <RagnarokRing size={340} label="KJARNI" bearings />
+            <ApocalypseRing label="KJARNI" emblem="/kjarni/apocalypse/kjarni-merki.webp" />
           </div>
         </header>
 
@@ -199,7 +202,7 @@ export function RagnarokView(d: RagnarokData) {
                   <a key={item.id} href={item.href} className="rgk-mod">
                     <span className="rgk-mod-face">
                       <span className="rgk-mod-top">
-                        <b>{item.icon} {item.name}</b>
+                        <b>{fenrir ? null : <>{item.icon} </>}{item.name}</b>
                         <span className="rgk-mod-kind">{item.role}</span>
                       </span>
                       <span className="rgk-mod-desc">{item.desc}</span>

@@ -17,24 +17,27 @@ import { Efni, Verkferli, type EfniGogn } from "./Efni";
 
 type Verk = { id: number; heiti: string };
 type Flokkur = { id: number; heiti: string };
-type Skr = { id: number; ajour_serial: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null; handvirkt: { flokkur_id?: unknown; stada?: unknown } | null };
+type Skr = { id: number; ajour_serial: number | null; starfsmadur_id?: number | null; flokkur_id: number | null; teikning_id: number | null; stada: string; framkvaemt_til: string | null; haed: string | null; deild: string | null; handvirkt: { flokkur_id?: unknown; stada?: unknown } | null };
 /** Staða skráningar á yfirlitsblaði hæðarinnar (sýnin skr_haedarhnit). */
 type Hnit = { skraning_id: number; haed: string | null; deild: string | null; hluti: string | null; x_px: number; y_px: number; faerdur?: boolean };
 /** parad á stútum viðbótarverksins (tools/skraning-gatakort-vidbot-stutar.cjs) ber auk stöðunnar: númer stúts, flokkun, úttekt skjalsins og skráninguna sem parast. */
-type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string; stutur?: number; flokkun?: string; uttekt?: { texti?: string | null } | null; skr?: { nr: number; stada: string } | null; ids?: number[]; naest?: { nr: number; d_m: number; stada: string } | null } | null };
+type Aaetlad = { teikning_id: number; x_px: number; y_px: number; fag: string; flokkur_id: number | null; fjoldi: number | null; parad: { stada?: string; stutur?: number; vidbot?: string; flokkun?: string; uttekt?: { texti?: string | null } | null; skr?: { nr: number; stada: string } | null; ids?: number[]; naest?: { nr: number; d_m: number; stada: string } | null } | null };
 const HLUTAR = ["N", "C", "S"];
 const thridj = (m: number, i: number) => [Math.ceil(m / 3), Math.round(m / 3), Math.floor(m / 3)][i];   // fast deildarmarkmið skipt á hlutana þrjá
 const FAG_HOP: Record<string, string | null> = { loftraesting: "Loft", rafmagn: "Rafmagn", golf: "Gólf", annad: null };
 type StadaBr = { markmid?: number; klarad?: number; ath?: string };
 type UtbodBr = { magn?: number; per?: number; lokid?: number; ath?: string };
-type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
+type Gogn = EfniGogn & { an_staerda?: boolean; aukaverk_med?: boolean; kaflar?: Record<string, boolean>; heiti?: string; dags?: string; inngangur?: string; lok?: string; thjalfun?: string; gaedi?: string; starfsmenn_nofn?: Record<string, string>; starfsmenn_fela?: string[]; itarlegt?: boolean; alag?: number; starfsmenn_ok?: boolean; gaedi_ok?: boolean; stada?: Record<string, StadaBr>; utbod?: Record<string, UtbodBr> };
 
 /** Kaflar skýrslunnar sem má fela í stillingunum (gogn.kaflar[lykill] === false = falinn). */
-const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"]];
+const KAFLAR: [string, string][] = [["texti", "Inngangur og lokaorð"], ["spjold", "Lykiltölur hæða"], ["forsendur", "Forsendur og fyrirvarar"], ["kort", "Staðan á hæðunum"], ["framvinda", "Framvinda eftir mánuðum"], ["flokkar", "Heild eftir flokkum"], ["tafla", "Tölur eftir hæð og deild"], ["aukaverk", "Aukaverk"], ["anstadar", "Skráningar án teikningar (verður eytt)"], ["utbod", "Samanburður við útboð"], ["efni", "Efni og kerfi"], ["verkferli", "Verkferli"], ["starfsmenn", "Starfsmenn og þjálfun"], ["gaedi", "Gæði og eftirlit"]];
 /** Efnisyfirlit: akkeri kaflanna (sýnd aðeins ef kaflinn er sýnilegur). */
-const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"]];
+const AKKERI: [string, string, string][] = [["k-yfirlit", "Yfirlit", "spjold"], ["k-haedir", "Hæðir", "kort"], ["k-flokkar", "Flokkar", "flokkar"], ["k-tolur", "Tölur", "tafla"], ["k-utbod", "Útboð", "utbod"], ["k-efni", "Efni", "efni"], ["k-verkferli", "Verkferli", "verkferli"], ["k-starfsmenn", "Starfsmenn", "starfsmenn"], ["k-gaedi", "Gæði", "gaedi"]];
 /** Kaflar sem eru faldir nema kveikt sé á þeim (gogn.kaflar[lykill] === true). */
 const SJALFG_FALDIR = new Set(["anstadar"]);
+/** Sjálfgefið álag á áætlaðan fjölda (%), gogn.alag yfirskrifar. Áætlunin var of lág og prósentan því of há (Agnar 19.11.2026).
+ *  Viðmið: á 6. hæð sker loftstokkur brunaskil á um 10 % fleiri stöðum á teikningu en skráðir eru (548 á móti 491). */
+const SJ_ALAG = 10;
 const MAN = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
 const HAEDIR = ["6H", "5H", "4H"], DEILDIR = ["S1", "S2", "S4", "S5", "—"];   // „—" = skráningar á hæðinni sem skiptast ekki á deild (rafmagn á sérteikningum)
 const HOPAR: [string, string, RegExp][] = [["Loft", "Loftræsting", /^Loft/i], ["Stál", "Stálrör", /^Stál/i], ["Plast", "Plaströr", /^Plast/i], ["Gólf", "Milliloft", /^Gólf/i], ["Raufar", "Raufar við kantaða stokka", /^Raufar/i], ["Rafmagn", "Rafmagn", /^Raf/i]];
@@ -47,7 +50,7 @@ const AUKA_RE = /vi[ðd]b[óo]tarverk|aukaverk/i;
  *  gólf 160 sem teljast ekki með“, „þessar mátti setja í hide“). Fundnar af ljósmyndum (rör niður í gólfið); Ajour-númer. Aðeins þessi skýrsla sleppir
  *  þeim: skráningarnar sjálfar, Ajour og uppgjör eru óbreytt. Sjá .claude/agents/skraning.md. */
 const OFAN_FRA = new Set([145, 1060, 1061, 1063, 1064, 1065, 1066, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1089, 1090, 1092, 1094, 1095, 1097, 1098, 1099, 1363, 1364, 1365, 1366, 1367, 1368, 1369, 1370]);
-const GOLF_MARK = 110;                                  // rúmlega 100 gólfgöt á deild á 4H og 5H (eitt verk á gat)
+const GOLF_MARK = 100;                                  // um 100 milliloftaþéttingar á deild á 4H og 5H, um 800 alls (Agnar 19.11.2026; var 110 með viðbótum)
 const MIRO_LOFT: Record<string, number> = { vidmid: 272, S1: 230, S2: 244 };   // Miro-talning lofts: 6H S2 viðmið; 5H S1 og S2 í stökum verkum
 /** Upprunalega útboðsblaðið (mynd frá Agnari 11.11.2026). per = stök verk í Ajour per einingu tilboðs. */
 const UTBOD: { nr: string; heiti: string; ein: string; magn: number; per: number | null; re: RegExp | null; kafli?: string }[] = [
@@ -55,7 +58,7 @@ const UTBOD: { nr: string; heiti: string; ein: string; magn: number; per: number
   { nr: "1.2", heiti: "Ø160-200", ein: "stk", magn: 100, per: 1, re: /^Gólf/i },
   { nr: "1.3", heiti: "Ø210-300", ein: "stk", magn: 25, per: 1, re: null },
   { nr: "2.1", heiti: "Ø20-34 plaströr", ein: "stk", magn: 600, per: 2, re: /^Plast Ø20-34/i, kafli: "2 Frágangur lagnagata í gegnum létta veggi" },
-  { nr: "2.2", heiti: "Ø35-50 plaströr með eldv. kraga", ein: "stk", magn: 600, per: 2, re: /^Plast Ø35-50/i },
+  { nr: "2.2", heiti: "Ø35-50 plaströr með eldv. kraga", ein: "stk", magn: 600, per: 1, re: /^Plast Ø35-50/i },   // ein kragaskráning = heil lokun gatsins (Agnar 16.11.2026)
   { nr: "2.3", heiti: "Ø75-100 plaströr", ein: "stk", magn: 100, per: 2, re: /^Plast Ø75-100/i },
   { nr: "2.4", heiti: "Ø15-35 stálrör", ein: "stk", magn: 800, per: 2, re: /^Stál Ø15-35/i },
   { nr: "2.5", heiti: "Ø40-50 stálrör", ein: "stk", magn: 1100, per: 2, re: /^Stál Ø40-50/i },
@@ -107,6 +110,7 @@ export default function SkyrslaClient() {
   const [stadaTexti, setStadaTexti] = useState("Sæki skráningar…");
   const [villa, setVilla] = useState("");
   const [starfsmenn, setStarfsmenn] = useState<Map<number, string>>(new Map());
+  const [myndaTal, setMyndaTal] = useState<Map<number, number> | null>(null);   // skráning → fjöldi ljósmynda (kaflinn „Gæði og eftirlit“)
   /** Lagnakerfi stálröraþéttinga (skr_kerfi): lesið af lagnateikningum, áætlun. */
   const [kerfi, setKerfi] = useState<Map<number, { k: string; v: boolean; m: boolean }>>(new Map());
   /** Lagnateikningar gatakortsins (skr_log) per hæð og fag — sýndar ofan á hæðinni þegar síað er á kerfi. */
@@ -133,7 +137,7 @@ export default function SkyrslaClient() {
         if (f.error) throw new Error(f.error.message);
         const allt: Skr[] = []; const sleppt = { n: 0, done: 0 };
         for (let i = 0; ; i += 1000) {
-          const r = await s.from("skr_skraningar").select("id,ajour_serial,flokkur_id,teikning_id,stada,framkvaemt_til,handvirkt,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
+          const r = await s.from("skr_skraningar").select("id,ajour_serial,starfsmadur_id,flokkur_id,teikning_id,stada,framkvaemt_til,handvirkt,haed:ajour_gogn->>haed,deild:ajour_gogn->>deild").eq("verk_id", vk.id).eq("eytt", false).order("id").range(i, i + 999);
           if (r.error) throw new Error(r.error.message);
           for (const q of r.data as unknown as Skr[]) { if (q.ajour_serial != null && OFAN_FRA.has(q.ajour_serial)) { sleppt.n++; if (q.stada === "done") sleppt.done++; } else allt.push(q); }
           if (lifir) setStadaTexti(`Sæki skráningar… ${num(allt.length)}`);
@@ -186,6 +190,16 @@ export default function SkyrslaClient() {
         setAukaTeikn(new Map(((tk.data || []) as { id: number; heiti: string }[]).filter((t) => AUKA_RE.test(t.heiti)).map((t) => [t.id, t.heiti] as [number, string])));
         const row = sk.data?.[0] as { id: number; gogn: Gogn } | undefined;
         if (row) { setSkyrslaId(row.id); setGogn(row.gogn || {}); }
+        void (async () => {   // ljósmyndir: aðeins talning, sótt eftir að skýrslan er komin upp
+          const tal = new Map<number, number>();
+          for (let i = 0; ; i += 1000) {
+            const r = await s.from("skr_myndir").select("skraning_id").order("id").range(i, i + 999);
+            if (r.error || !r.data) return;
+            for (const q of r.data as { skraning_id: number }[]) tal.set(q.skraning_id, (tal.get(q.skraning_id) || 0) + 1);
+            if (r.data.length < 1000) break;
+          }
+          if (lifir) setMyndaTal(tal);
+        })();
         setStadaTexti("");
       } catch (e) { if (lifir) { setVilla(e instanceof Error ? e.message : String(e)); setStadaTexti(""); } }
     })();
@@ -229,10 +243,26 @@ export default function SkyrslaClient() {
     }
     return m;
   }, [aaetlud, yfirlit]);
+  /** Óskráð áætluð göt gatakortsins (rauðir punktar, ekki tillögur) í STÖKUM VERKUM (fjoldi) per hæð|deild|hópur og hæð|deild|hluti|hópur
+   *  (Agnar 16.11.2026: „uppfæra“ skýrsluna eftir fyrirmyndaraðferðina). Hópur af flokki gatsins, annars af fagi. Markmið hóps á deild verður
+   *  minnst klárað + opið + þetta, svo óbyrjaðir húshlutar (t.d. rafmagn 6H S4/S5) teljast ekki „búnir“. */
+  const eftirHop = useMemo(() => {
+    const m = new Map<string, number>();
+    const FAG_HOP: Record<string, string> = { rafmagn: "Rafmagn", loftraesting: "Loft", golf: "Gólf", fravatn: "Plast", vatn: "Stál", hiti: "Stál", sprinkler: "Stál", gas: "Stál", annad: "Stál" };
+    for (const a of aaetlud) {
+      if (a.parad && a.parad.stada !== "vantar") continue;
+      const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y) continue;
+      const fh = a.flokkur_id != null ? heitiAf.get(a.flokkur_id) || "" : "", hop = (fh && HOPAR.find((x) => x[2].test(fh))?.[0]) || FAG_HOP[a.fag]; if (!hop) continue;
+      const fx = Number(a.x_px) / y.w, fy = Number(a.y_px) / y.h, d = fx < 0.179 ? "S1" : fx < 0.5 ? "S2" : fx < 0.812 ? "S4" : "S5", hl = fy < 0.288 ? "N" : fy < 0.7116 ? "C" : "S", fj = a.fjoldi || 1;
+      m.set(`${y.haed}|${d}|${hop}`, (m.get(`${y.haed}|${d}|${hop}`) || 0) + fj); m.set(`${y.haed}|${d}|${hl}|${hop}`, (m.get(`${y.haed}|${d}|${hl}|${hop}`) || 0) + fj);
+    }
+    return m;
+  }, [aaetlud, yfirlit, heitiAf]);
   /** Áætluð milliloft á deild: 110 á 5H; á 4H (gólf 5. hæðar) það sem er skráð á sömu deild á 5H ef það er meira (Agnar 12.11.2026),
    *  að viðbættu óskráðu viðbótarverki á 4H (vidbot4). */
-  const golfMark = useCallback((haed: string, deild: string) => { if (haed === "6H") return 0; if (haed !== "4H") return GOLF_MARK; const t5 = taln.hd.get(`5H|${deild}|Gólf`) || { done: 0, open: 0 }; return Math.max(GOLF_MARK, t5.done + t5.open) + (vidbot4.get(deild) || 0); }, [taln, vidbot4]);
+  const golfMark = useCallback((haed: string, deild: string) => { if (haed === "6H") return 0; return GOLF_MARK; }, []);   // föst tala á deild; hvorki viðmið af 5. hæð né óskráðir stútar bætast við (Agnar 19.11.2026)
   /** Sjálfgefið markmið hóps (sama aðferð og Landspítalasíða hubsins). */
+  const alagF = 1 + Math.max(0, Math.min(50, gogn.alag ?? SJ_ALAG)) / 100;
   const markmidReiknad = useCallback((haed: string, deild: string, hop: string): number | null => {
     if (deild === "—" || AN_MARKMIDS.has(hop)) return null;
     const t = (h: string, d: string, k: string) => taln.hd.get(`${h}|${d}|${k}`) || { done: 0, open: 0 };
@@ -251,8 +281,9 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
-    return Math.max(mark, x.done + x.open);
-  }, [taln, golfMark]);
+    if (hop === "Gólf") return Math.max(mark, x.done + x.open);   // milliloft: föst tala á deild, ekkert álag og engin áætluð göt ofan á
+    return Math.round(Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${hop}`) || 0)) * alagF);
+  }, [taln, golfMark, eftirHop, alagF]);
 
   /** Markmið hóps á HLUTA deildar (Norður/Center/Suður): sama regla og deildin, reiknuð á hlutann; föstu deildarmarkmiðin (milliloft,
    *  rafmagn) skiptast jafnt á hlutana þrjá. Summa hluta getur því vikið lítillega frá markmiði deildar. */
@@ -274,8 +305,9 @@ export default function SkyrslaClient() {
       }
       mark = Math.round((ref.done + ref.open) * studull);
     }
-    return Math.max(mark, x.done + x.open);
-  }, [taln, golfMark, vidbot4]);
+    if (hop === "Gólf") return Math.max(mark, x.done + x.open);
+    return Math.round(Math.max(mark, x.done + x.open + (eftirHop.get(`${haed}|${deild}|${HLUTAR[i]}|${hop}`) || 0)) * alagF);
+  }, [taln, golfMark, vidbot4, eftirHop, alagF]);
   /** Punktar hæðakortsins: skráningar með hæðarhnit (aukaverk eru sér). */
   const hkPunktar = useMemo<HkPunktur[]>(() => {
     const ut: HkPunktur[] = [];
@@ -316,13 +348,18 @@ export default function SkyrslaClient() {
   const stutaspjald = useMemo(() => {
     const stadaAf = new Map(skr.map((s) => [s.id, s.stada] as [number, string]));
     let alls = 0, klar = 0, opid = 0, an = 0, ekkiKominn = 0;
+    const nytt = { alls: 0, klar: 0, opid: 0, an: 0 };   // annað viðbótarverk á 4H en stútarnir (parad.vidbot, enginn stutur-lykill; Agnar 17.11.2026: „Já, bæta við“)
     for (const a of aaetlud) {
-      if (!a.parad || a.parad.stutur == null) continue; alls++;
-      if (a.parad.stada !== "vantar") { const ids = a.parad.ids || [], d = ids.length ? ids.some((i) => stadaAf.get(i) === "done") : a.parad.skr?.stada === "done"; if (d) klar++; else opid++; }
-      else { an++; if (a.parad.flokkun === "stutur_vantar") ekkiKominn++; }
+      if (!a.parad) continue;
+      const erStutur = a.parad.stutur != null;
+      if (!erStutur) { if (!a.parad.vidbot) continue; const y = yfirlit.find((q) => q.id === a.teikning_id); if (!y || y.haed !== "4H") continue; }
+      const kl = a.parad.stada === "vantar" ? null : (() => { const ids = a.parad!.ids || []; return ids.length ? ids.some((i) => stadaAf.get(i) === "done") : a.parad!.skr?.stada === "done"; })();
+      if (erStutur) { alls++; if (kl === null) { an++; if (a.parad.flokkun === "stutur_vantar") ekkiKominn++; } else if (kl) klar++; else opid++; }
+      else { nytt.alls++; if (kl === null) nytt.an++; else if (kl) nytt.klar++; else nytt.opid++; }
     }
-    return alls ? { alls, klar, opid, an, ekkiKominn, p: pros(klar, alls) } : null;
-  }, [aaetlud, skr]);
+    const heildAlls = alls + nytt.alls, heildKlar = klar + nytt.klar;
+    return heildAlls ? { alls, klar, opid, an, ekkiKominn, nytt, heildAlls, heildKlar, p: pros(heildKlar, heildAlls) } : null;
+  }, [aaetlud, skr, yfirlit]);
 
   const radir = useMemo(() => HAEDIR.map((haed) => ({
     haed,
@@ -374,6 +411,8 @@ export default function SkyrslaClient() {
     setOvistad(false);
   };
   const nBr = Object.keys(gogn.stada || {}).length + Object.keys(gogn.utbod || {}).length;
+  const sjInngangur = () => `Skýrslan sýnir stöðu brunaþéttinga Brunahólfs á 5. og 6. hæð samkvæmt skráningum í Ajour${nyjast ? ` til og með ${dmy(nyjast)}` : ""}. Lokið er ${num(alls.klar)} stökum verkum af áætluðum ${num(alls.mark)}, eða ${pros(alls.klar, alls.mark)} %. Verkið er í vinnslu.\n\nSkýrslan er tekin saman vegna óskar verkeftirlits um gögn: efni og kerfi, staða verks eftir hæðum og deildum, starfsmenn og þjálfun, og gæðagögn. Hún er samantektarskýrsla úr Ajour, dregin beint úr skráningunum.`;
+  const SJ_LOK = "Verkið er í vinnslu og skýrslan er uppfærð eftir því sem því miðar.";
   const synaKafla = (k: string) => (SJALFG_FALDIR.has(k) ? gogn.kaflar?.[k] === true : gogn.kaflar?.[k] !== false);
   /** Fyrir kaflann „Forsendur og fyrirvarar“: hve margir punktar eru færðir á teikningunni og dagsetning nýjustu kláruðu skráningar. */
   const faerdirN = [...hnit.values()].filter((h) => h.faerdur).length;
@@ -381,6 +420,24 @@ export default function SkyrslaClient() {
   const nyjast = skr.reduce((m, s) => (s.framkvaemt_til && s.framkvaemt_til.slice(0, 10) > m ? s.framkvaemt_til.slice(0, 10) : m), "");
   const skiptaKafla = (k: string) => breyta({ kaflar: { ...(gogn.kaflar || {}), [k]: !synaKafla(k) } });
   const dags = gogn.dags ?? new Date().toISOString().slice(0, 10);
+  /** Starfsmenn sem eiga skráningar í verkinu: fjöldi kláraðra stakra verka og tímabil (beiðni verkeftirlits, liður 4). */
+  const starfsTafla = useMemo(() => {
+    const m = new Map<number, { n: number; fra: string; til: string }>();
+    for (const q of skr) {
+      if (q.stada !== "done") continue;
+      const k = q.starfsmadur_id ?? 0, e = m.get(k) || { n: 0, fra: "", til: "" }, d = (q.framkvaemt_til || "").slice(0, 10);
+      e.n++; if (d) { if (!e.fra || d < e.fra) e.fra = d; if (d > e.til) e.til = d; } m.set(k, e);
+    }
+    // Nöfn eins og á skírteinum (gogn.starfsmenn_nofn: nafn í kerfinu → birt nafn) og starfsmenn sem eru ranglega skráðir á
+    // verkið (gogn.starfsmenn_fela, nafn í kerfinu). Athugasemdir Anna í máli #1686, 19.11.2026. Skráningunum sjálfum er ekki breytt.
+    const nofn = gogn.starfsmenn_nofn || {}, fela = new Set(gogn.starfsmenn_fela || []);
+    return [...m.entries()].map(([id, e]) => { const kerfi = id ? starfsmenn.get(id) || `Starfsmaður ${id}` : "Aðrir"; return { id, kerfi, nafn: nofn[kerfi] || kerfi, ...e }; })
+      .filter((r) => !fela.has(r.kerfi)).sort((a, b) => (a.id === 0 ? 1 : b.id === 0 ? -1 : b.n - a.n));
+  }, [skr, starfsmenn, gogn.starfsmenn_nofn, gogn.starfsmenn_fela]);
+  const myndir = useMemo(() => { if (!myndaTal) return null; let n = 0, med = 0; for (const q of skr) { const k = myndaTal.get(q.id) || 0; n += k; if (k) med++; } return { n, med }; }, [myndaTal, skr]);
+  const manAr = (d: string) => (d ? `${MAN[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "");
+  const SJ_THJALFUN = "Allir starfsmenn sem hafa unnið við brunaþéttingarnar hafa lokið tveimur námskeiðum sem ÞG Verk lagði fyrir. Auk þess hafa starfsmenn lokið Protecta Fire Stop Training & Installation Programme hjá Redder (11.11.2025 og 23.03.2026) og námskeiði FSi í brunaþéttingum. Staðfestingar á þátttöku eru hjá ÞG Verki og Redder.";
+  const SJ_GAEDI = "Hver þétting er skráð í Ajour um leið og hún er unnin, með staðsetningu á teikningu, flokki, starfsmanni, dagsetningu og ljósmyndum. Þéttingin er merkt á staðnum með miða Brunahólfs með dagsetningu og upphafsstöfum starfsmanns. Lagfæringar og athugasemdir eftirlits eru skráðar sem nýjar skráningar, svo saga hvers gats haldist.";
   const dagsTexti = `${Number(dags.slice(8, 10))}. ${MAN[Number(dags.slice(5, 7)) - 1] || ""} ${dags.slice(0, 4)}`;
   /** Lykiltölur hverrar hæðar (sömu tölur og í töflunum). */
   const haedaspjold = radir.map((r) => { const hs = summa(r.deildir.flatMap((d) => d.hopar)); return { haed: r.haed, klar: hs.klar, mark: hs.mark, p: pros(hs.klar, hs.mark) }; }).filter((h) => h.mark > 0);
@@ -396,7 +453,7 @@ export default function SkyrslaClient() {
   if (stadaTexti) return <p className="sk-hl">{stadaTexti}</p>;
   if (villa && !verk) return <p className="sk-hl">Villa: {villa}</p>;
   return (
-    <div className={`sk sk-v2${les ? " sk-les" : ""}`}>
+    <div className={`sk sk-v2${les ? " sk-les" : ""}${gogn.itarlegt ? "" : " sk-stutt"}`}>
       {les && <div className="sk-lesstika"><b>Brunahólf ehf</b><span>{verk?.heiti}</span><button type="button" onClick={() => window.print()}>Prenta / PDF</button></div>}
       <div className="sk-stika">
         <span>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</span>
@@ -416,12 +473,14 @@ export default function SkyrslaClient() {
             <div className="sk-merki">Kaflar</div>
             {KAFLAR.map(([k, nafn]) => <label key={k} className="sk-rofi"><input type="checkbox" checked={synaKafla(k)} onChange={() => skiptaKafla(k)} /><i /><span>{nafn}</span></label>)}
             <label className="sk-rofi"><input type="checkbox" checked={!gogn.an_staerda} onChange={(e) => breyta({ an_staerda: !e.target.checked })} /><i /><span>Stærðir undir hverjum flokki</span></label>
+            <label className="sk-rofi"><input type="checkbox" checked={!!gogn.itarlegt} onChange={(e) => breyta({ itarlegt: e.target.checked })} /><i /><span>Ítarlegar skýringar og forsendur</span></label>
+            <label className="sk-alag"><span>Álag á áætlun</span><input type="number" min={0} max={50} step={1} value={gogn.alag ?? SJ_ALAG} onChange={(e) => breyta({ alag: Math.max(0, Math.min(50, Number(e.target.value) || 0)) })} aria-label="Álag á áætlaðan fjölda í prósentum" /><i>%</i></label>
             <div className="sk-merki">Dagsetning skýrslu</div>
             <input type="date" value={dags} onChange={(e) => breyta({ dags: e.target.value })} aria-label="Dagsetning" />
             <div className="sk-merki">Einingar</div>
             <p>Tölur eru stök verk eins og Ajour telur þau. Tvö stök verk eru ein lokun; gólfgöt: eitt verk er ein þétting. Samanburður við útboð er í einingum tilboðsins.</p>
             <div className="sk-merki">Áætlað</div>
-            <p>6. hæð: það sem er klárað. 5. hæð: sami flokkur á sömu deild á 6. hæð. Milliloft {GOLF_MARK} á deild (gólf 5. hæðar: minnst jafnmörg og á sömu deild á 5. hæð, auk óskráðra stúta úr viðbótarverki) og rafmagn {RAF_MARK} á deild. Áætlað og klárað má leiðrétta í töflunni „Tölur eftir hæð og deild“.</p>
+            <p>6. hæð: það sem er klárað. 5. hæð: sami flokkur á sömu deild á 6. hæð. Milliloft {GOLF_MARK} á deild (gólf 5. hæðar: minnst jafnmörg og á sömu deild á 5. hæð, auk óskráðra stúta úr viðbótarverki) og rafmagn {RAF_MARK} á deild. Áætlað er þó aldrei minna en klárað + opið + óskráð áætluð göt gatakortsins á deildinni (rauðir punktar: fagteikningar, gataplön og fullskráður húshluti 6H sem fyrirmynd). Áætlað og klárað má leiðrétta í töflunni „Tölur eftir hæð og deild“.</p>
           </div>
         </div>
         <div className="sk-spjald">
@@ -445,8 +504,8 @@ export default function SkyrslaClient() {
       <nav className="sk-yfirlit sk-skjar sk-gagnv" aria-label="Efnisyfirlit">{AKKERI.filter((a) => synaKafla(a[2])).map(([id, nafn]) => <a key={id} href={`#${id}`}>{nafn}</a>)}</nav>
       <div className="sk-efni">
       {synaKafla("texti") && <div className="sk-inngangur">
-        <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? ""} onChange={(e) => breyta({ inngangur: e.target.value })} />
-        <p className="sk-prent sk-malsgr">{gogn.inngangur}</p>
+        <textarea className="sk-texti" rows={3} placeholder="Inngangur / samantekt (valfrjálst) …" value={gogn.inngangur ?? sjInngangur()} onChange={(e) => breyta({ inngangur: e.target.value })} />
+        <p className="sk-prent sk-malsgr">{gogn.inngangur ?? sjInngangur()}</p>
       </div>}
       {synaKafla("spjold") && <div className="sk-haedaspjold" id="k-yfirlit">
         {haedaspjold.map((h) => <div key={h.haed}>
@@ -456,15 +515,15 @@ export default function SkyrslaClient() {
           <small>{num(h.klar)} af {num(h.mark)} stökum verkum{haedUndir(h.haed) ? ` · ${haedUndir(h.haed)}` : ""}</small>
         </div>)}
         {stutaspjald && <div className="sk-vidbot">
-          <div><span>Viðbótarverk 4. hæðar</span><em className={stutaspjald.p >= 95 ? "ok" : stutaspjald.klar ? "vinna" : "eftir"}>{stutaspjald.klar >= stutaspjald.alls ? "Lokið" : stutaspjald.klar ? "Hafið" : "Ekki hafið"}</em></div>
+          <div><span>Viðbótarverk 4. hæðar</span><em className={stutaspjald.p >= 95 ? "ok" : stutaspjald.heildKlar ? "vinna" : "eftir"}>{stutaspjald.heildKlar >= stutaspjald.heildAlls ? "Lokið" : stutaspjald.heildKlar ? "Hafið" : "Ekki hafið"}</em></div>
           <b>{stutaspjald.p} %</b>
           <i><u style={{ width: `${Math.min(100, stutaspjald.p)}%` }} className={stutaspjald.p >= 95 ? "ok" : ""} /></i>
-          <small>Stútar af 5. hæð niður í inntaksrými 4. hæðar: {num(stutaspjald.klar)} af {num(stutaspjald.alls)} þéttir · {num(stutaspjald.opid)} skráðir, ekki kláraðir · {num(stutaspjald.an)} án skráningar{stutaspjald.ekkiKominn ? ` (þar af ${num(stutaspjald.ekkiKominn)} stútar ekki komnir)` : ""}. Innifalið í gólfi 5. hæðar.</small>
+          <small>{num(stutaspjald.heildKlar)} af {num(stutaspjald.heildAlls)} stökum verkum.<br />{gogn.itarlegt && stutaspjald.alls ? <>Stútar af 5. hæð niður í inntaksrými 4. hæðar: {num(stutaspjald.klar)} af {num(stutaspjald.alls)} þéttir · {num(stutaspjald.opid)} skráðir, ekki kláraðir · {num(stutaspjald.an)} án skráningar{stutaspjald.ekkiKominn ? ` (þar af ${num(stutaspjald.ekkiKominn)} stútar ekki komnir)` : ""}.<br /></> : null}{gogn.itarlegt && stutaspjald.nytt.alls ? <>Nýtt viðbótarverk: {num(stutaspjald.nytt.klar)} af {num(stutaspjald.nytt.alls)} gólfgötum þétt · {num(stutaspjald.nytt.opid)} skráð, ekki kláruð{stutaspjald.nytt.an ? ` · ${num(stutaspjald.nytt.an)} án skráningar` : ""}.<br /></> : null}Innifalið í gólfi 5. hæðar.</small>
         </div>}
       </div>}
 
       {synaKafla("forsendur") && <div className="sk-forsendur">
-        <h2>Forsendur og fyrirvarar</h2>
+        <h2>{gogn.itarlegt ? "Forsendur og fyrirvarar" : "Um tölurnar"}</h2>
         <ul>
           <li><b>Gögnin:</b> skráningar Brunahólfs í Ajour. Hver þétting er skráð með staðsetningu á teikningu, flokki, starfsmanni, dagsetningu og að jafnaði myndum.{nyjast ? ` Nýjasta kláraða skráning í þessari skýrslu er frá ${dmy(nyjast)}.` : ""}</li>
           <li><b>Einingar:</b> tölur eru stök verk, þ.e. þétting öðrum megin við vegg. Tvö stök verk eru ein lokun; í gólfi er eitt verk ein þétting.</li>
@@ -480,7 +539,7 @@ export default function SkyrslaClient() {
       {synaKafla("kort") && yfirlit.length > 0 && (
         <section id="k-haedir">
           <h2>Staðan á hæðunum <small>Hver punktur er ein skráning á sínum stað · deildir skiptar í Norðurhlið, Center og Suðurhlið</small></h2>
-          <Haedir yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} stutar={hkStutar} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone + faldarAnT.n - faldarAnT.done} markDeild={markDeild} markHluta={markmidHluta} />
+          <Haedir synaFramvindu={synaKafla("framvinda")} yfirlit={yfirlit} punktar={hkPunktar} eftir={hkEftir} stutar={hkStutar} hopar={hkHopar} starfsmenn={starfsmenn} log={log} opidAnStadar={taln.utan - taln.utanDone + faldarAnT.n - faldarAnT.done} markDeild={markDeild} markHluta={markmidHluta} />
         </section>
       )}
 
@@ -490,8 +549,14 @@ export default function SkyrslaClient() {
           <table className="sk-tafla sk-flokkar">
             <thead><tr><th>Flokkur</th><th>Klárað</th><th>Opið</th><th>Áætlað</th><th>%</th><th className="sk-stikud">Staða</th></tr></thead>
             <tbody>
-              {flokkaheild.map((x) => { const p = x.mark ? pros(x.klar, x.mark) : null; return (
-                <tr key={x.k}><td className="sk-v"><b>{x.nafn}</b></td><td>{num(x.done)}</td><td>{x.open ? num(x.open) : ""}</td><td>{x.mark ? num(x.mark) : "—"}</td><td><b>{p == null ? "—" : `${p} %`}</b></td><td className="sk-stikud">{p == null ? null : <i style={{ width: `${p}%` }} className={p < 75 ? "lagt" : ""} />}</td></tr>
+              {flokkaheild.map((x) => {
+                // 19.11.2026 (Agnar): raufar eru metraverk (útboðsliður 2.11) — sýndar í metrum úr „Lokið“ liðarins (gogn.utbod["2.11"].lokid,
+                // sama tala og NLSH-uppgjör hubsins) á móti útboðsmagni. Utan heildarinnar í stökum, eins og áður.
+                const um = x.k === "Raufar" ? utbod.find((u) => u.nr === "2.11") : null, mLok = um && um.lokid != null ? Number(um.lokid) : null;
+                const p = mLok != null && um ? Math.min(100, pros(Math.min(mLok, um.magn), um.magn)) : x.mark ? pros(x.klar, x.mark) : null;
+                const metrar = (v: number) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+                return (
+                <tr key={x.k}><td className="sk-v"><b>{x.nafn}</b></td><td>{num(x.done)}{mLok != null ? ` · ${metrar(mLok)} m` : ""}</td><td>{x.open ? num(x.open) : ""}</td><td>{mLok != null && um ? `${num(um.magn)} m` : x.mark ? num(x.mark) : "—"}</td><td><b>{p == null ? "—" : `${p} %`}</b></td><td className="sk-stikud">{p == null ? null : <i style={{ width: `${p}%` }} className={p < 75 ? "lagt" : ""} />}</td></tr>
               ); })}
               <tr className="sk-sum"><td className="sk-v">Heild með áætlun</td><td>{num(alls.klar)}</td><td></td><td>{num(alls.mark)}</td><td>{pros(alls.klar, alls.mark)} %</td><td className="sk-stikud"><i style={{ width: `${pros(alls.klar, alls.mark)}%` }} /></td></tr>
             </tbody>
@@ -615,9 +680,45 @@ export default function SkyrslaClient() {
         </section>
       )}
 
+      {synaKafla("starfsmenn") && (
+        <section id="k-starfsmenn">
+          <h2>Starfsmenn og þjálfun <small>Þeir sem hafa unnið við brunaþéttingarnar samkvæmt skráningum</small></h2>
+          {!gogn.starfsmenn_ok && <p className="sk-vf-drog sk-skjar"><b>Drög.</b> Textinn um þjálfun er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ starfsmenn_ok: true })} /> Yfirfarið</label></span>}</p>}
+          {!les && <textarea className="sk-texti" rows={3} value={gogn.thjalfun ?? SJ_THJALFUN} onChange={(e) => breyta({ thjalfun: e.target.value })} aria-label="Texti um námskeið og þjálfun" />}
+          <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.thjalfun ?? SJ_THJALFUN}</p>
+          <table className="sk-tafla sk-starfs">
+            <thead><tr><th>Starfsmaður</th><th>Kláruð stök verk</th><th>Fyrsta skráning</th><th>Síðasta skráning</th></tr></thead>
+            <tbody>
+              {starfsTafla.map((r) => <tr key={r.id}><td className="sk-v">{r.nafn}</td><td>{num(r.n)}</td><td>{manAr(r.fra)}</td><td>{manAr(r.til)}</td></tr>)}
+              <tr className="sk-sum"><td className="sk-v">Alls {starfsTafla.filter((r) => r.id).length} starfsmenn</td><td>{num(starfsTafla.reduce((a, r) => a + r.n, 0))}</td><td /><td /></tr>
+              {/* Sundurliðun svo summan stemmi við forsíðuna: innan áætlunar = sama tala og þar (Anni #1686, nr. 2). */}
+              <tr><td className="sk-v">þar af innan áætlunar</td><td>{num(alls.klar)}</td><td /><td /></tr>
+              <tr><td className="sk-v">þar af utan áætlunar (raufar við kantaða stokka o.fl.)</td><td>{num(Math.max(0, starfsTafla.reduce((a, r) => a + r.n, 0) - alls.klar))}</td><td /><td /></tr>
+            </tbody>
+          </table>
+          <p className="sk-smatt sk-halda">Taflan er dregin úr skráningunum: sá sem skráir þéttinguna í Ajour er sá sem vann hana. Fjöldinn er kláruð stök verk, ekki vinnustundir.</p>
+          {gogn.starfsmenn_ok && !les && <p className="sk-smatt sk-skjar">Kaflinn er merktur yfirfarinn. <label className="sk-val"><input type="checkbox" checked onChange={() => breyta({ starfsmenn_ok: false })} /> Yfirfarið</label></p>}
+        </section>
+      )}
+
+      {synaKafla("gaedi") && (
+        <section id="k-gaedi">
+          <h2>Gæði og eftirlit <small>Hvernig hver þétting er skjalfest</small></h2>
+          {!gogn.gaedi_ok && <p className="sk-vf-drog sk-skjar"><b>Drög.</b> Textinn hér að neðan er tillaga sem á eftir að yfirfara.{!les && <span className="sk-skjar"> Leiðréttu hann og hakaðu við þegar hann er réttur. <label className="sk-val"><input type="checkbox" checked={false} onChange={() => breyta({ gaedi_ok: true })} /> Yfirfarið</label></span>}</p>}
+          {!les && <textarea className="sk-texti" rows={4} value={gogn.gaedi ?? SJ_GAEDI} onChange={(e) => breyta({ gaedi: e.target.value })} aria-label="Texti um gæði og eftirlit" />}
+          <p className={`sk-malsgr${les ? "" : " sk-prent"}`}>{gogn.gaedi ?? SJ_GAEDI}</p>
+          <ul className="sk-gaedi">
+            <li><b>Skráningar:</b> {num(skr.length)} í þessari skýrslu, þar af {num(alls.klar)} kláraðar innan áætlunar og {num(Math.max(0, starfsTafla.reduce((a, r) => a + r.n, 0) - alls.klar))} utan hennar (raufar við kantaða stokka o.fl.).{nyjast ? ` Nýjasta kláraða skráning er frá ${dmy(nyjast)}.` : ""}</li>
+            {myndir && <li><b>Ljósmyndir:</b> {num(myndir.n)} myndir fylgja {num(myndir.med)} af {num(skr.length)} skráningum ({num(Math.floor((1000 * myndir.med) / Math.max(1, skr.length)) / 10, 1)} %).</li>}
+            <li><b>Rekjanleiki:</b> hver skráning ber raðnúmer, starfsmann og dagsetningu, og sést á sínum stað á teikningu hæðarinnar í kaflanum „Staðan á hæðunum“.</li>
+          </ul>
+          {gogn.gaedi_ok && !les && <p className="sk-smatt sk-skjar">Kaflinn er merktur yfirfarinn. <label className="sk-val"><input type="checkbox" checked onChange={() => breyta({ gaedi_ok: false })} /> Yfirfarið</label></p>}
+        </section>
+      )}
+
       <section className={synaKafla("texti") ? "" : "sk-falinn"}>
-        <textarea className="sk-texti" rows={3} placeholder="Lokaorð / næstu skref (valfrjálst) …" value={gogn.lok ?? ""} onChange={(e) => breyta({ lok: e.target.value })} />
-        <p className="sk-prent sk-malsgr">{gogn.lok}</p>
+        <textarea className="sk-texti" rows={3} placeholder="Lokaorð / næstu skref (valfrjálst) …" value={gogn.lok ?? SJ_LOK} onChange={(e) => breyta({ lok: e.target.value })} />
+        <p className="sk-prent sk-malsgr">{gogn.lok ?? SJ_LOK}</p>
       </section>
       </div>
       </div>

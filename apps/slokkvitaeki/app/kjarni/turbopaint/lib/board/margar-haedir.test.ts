@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   aetlaHluta,
+  afleidingStadar,
   afleidingTengingar,
   beitaFjolcrop,
   bladMyndar,
@@ -9,19 +10,24 @@ import {
   finnaGrunnmyndir,
   haedirTilTengingar,
   merkiMyndar,
+  myndirTilTengingar,
   rodAnSkorunar,
   skurdurEftirCrop,
   tengjaVidHaed,
+  tengjaVidStad,
 } from "./margar-haedir";
 import { golfHaedar } from "./hus3d";
 import type { BoardObject, ImageObject, LineObject, SymbolObject } from "./types";
 import {
   bladIBordi,
   byggjaStodur,
+  einfalda,
   haedNumer,
+  leitarMynstur,
   merkiIBord,
   myndSlodBlads,
   nyttHaedId,
+  radaStodum,
   samaBlad,
   skurdurIBord,
   stillaBladHaedar,
@@ -257,6 +263,17 @@ test("enginn erfingi án vísbendingar (engin merki, enginn skurður)", () => {
   // skurður hæðarinnar sem fellur á 2. hluta ræður
   const m = { ...SHEET, uttekt: { ...SHEET.uttekt!, skurdur: { x: 2300, y: 1600, w: 2300, h: 1000 } } };
   assert.equal(erfingiTengingar(m, [m], hlutar), 1);
+});
+
+test("einn hluti erfir tenginguna alltaf — líka án merkja og skurðar (Barónsstígur 18 B, Kjallari)", () => {
+  const blad = bladMyndar(SHEET, IMAGE_URL);
+  const hlutar = aetlaHluta(SHEET, blad, [iBord(H2)], 100);
+  assert.equal(erfingiTengingar(SHEET, [SHEET], hlutar), 0);
+  const r = beitaFjolcrop([SHEET], SHEET, blad, hlutar, ["e1"]);
+  assert.deepEqual(r.myndir[0].uttekt, { ...SHEET.uttekt, skurdur: H2, myndSkurdur: H2 });
+  // ótengt blað: ekkert að erfa
+  const otengt = { ...SHEET, uttekt: undefined };
+  assert.equal(erfingiTengingar(otengt, [otengt], hlutar), null);
 });
 
 // ── Tengja við hæð ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -512,4 +529,70 @@ test("Finna sjálfkrafa: þrjár grunnmyndir (veggjalínur) finnast, textablokk 
   assert.ok(Math.abs(k[0].x * w - 30) < 8 && Math.abs(k[0].y * h - 30) < 8);
   assert.ok(Math.abs(k[1].x * w - 160) < 8);
   assert.ok(Math.abs(k[2].y * h - 170) < 8);
+});
+
+// ── Staður og hæð (Agnar 17.11.2026) ────────────────────────────────────────────────────────────────────────────
+
+test("Staður og hæð: heil ótengd teikning fær stað + nýja hæð og vistast sem fyrsta hæð staðar án úttektar", () => {
+  const otengt: ImageObject = { ...SHEET, uttekt: undefined };
+  assert.deepEqual(myndirTilTengingar([otengt]).map((m) => m.id), ["blad"]);
+  const r = tengjaVidStad([otengt], "blad", 1941, { haedId: "hKJ", nyttNafn: "Kjallari" }, []);
+  const m = r.objects.find((o) => o.id === "blad") as ImageObject;
+  assert.deepEqual(m.bladhluti, { nr: 1, svaedi: { x: 0, y: 0, w: 6006, h: 4373 }, frumB: 6006, frumH: 4373, imageUrl: IMAGE_URL, companyId: 1941 });
+  assert.equal(m.uttekt?.companyId, 1941);
+  assert.deepEqual(m.uttekt?.nyHaed, { nafn: "Kjallari" });
+  // staður án teikning_bord: engar hæðir fyrir — vistunin býr til hæðina á blaðinu
+  const u = utbuaVistun(r.objects, [], "kl", naestaId());
+  assert.equal(u.haedir.length, 1);
+  assert.equal(u.haedir[0].nafn, "Kjallari");
+  assert.equal(u.haedir[0].image_url, IMAGE_URL);
+  assert.deepEqual(u.nyjarHaedir, ["hKJ"]);
+});
+
+test("Staður og hæð: skipti um stað losa tæki gamla staðarins og aftengja myndir annars staðar", () => {
+  const c = eftirCrop();
+  const [m1, m2] = c.myndir;
+  // tæki staðar 194 á 1. hluta (fyrir utan ÚT-merkið sem fylgdi úr blaðinu)
+  const p = { x: m1.x + m1.width / 2, y: m1.y + m1.height / 2 };
+  const objects: BoardObject[] = [...c.objects, takn("t194", p.x, p.y, { uttektUnitId: 21942, label: "1942", parentId: m1.id })];
+  const af = afleidingStadar(objects, m1.id, 555);
+  assert.equal(af.gamall, 194);
+  assert.equal(af.skipti, true);
+  assert.equal(af.losud, 2);
+  const r = tengjaVidStad(objects, m1.id, 555, { haedId: "h555", nyttNafn: "1. hæð" }, []);
+  assert.equal(r.losud, 2);
+  const n1 = r.objects.find((o) => o.id === m1.id) as ImageObject;
+  assert.equal(n1.uttekt?.companyId, 555);
+  assert.equal(n1.bladhluti?.companyId, 555);
+  const s = (id: string) => r.objects.find((o) => o.id === id) as SymbolObject;
+  assert.equal(s("t194").uttektUnitId, undefined);
+  assert.equal(s("t194").label, "ótengt");
+  assert.equal(s("ut").uttektUnitId, undefined, "merkið verður nýtt merki á nýja staðnum");
+  assert.equal(s("ut").uttektKind, "sign");
+  // 2. hluti á stað 194 aftur: 1. hluti (staður 555) aftengist svo vistunin skrifi einn stað
+  const af2 = afleidingStadar(r.objects, m2.id, 194);
+  assert.deepEqual(af2.adrar.map((m) => m.id), [m1.id]);
+  const r2 = tengjaVidStad(r.objects, m2.id, 194, { haedId: "h194a" }, fersk());
+  assert.equal(r2.aftengdar, 1);
+  assert.equal((r2.objects.find((o) => o.id === m1.id) as ImageObject).uttekt, undefined);
+  assert.equal((r2.objects.find((o) => o.id === m2.id) as ImageObject).uttekt?.haedId, "h194a");
+});
+
+test("Staður og hæð: heil mynd opnuð úr úttekt er ekki færð (croppa fyrst); slóðarlaus mynd fær skýra villu", () => {
+  assert.deepEqual(myndirTilTengingar([SHEET]), []);
+  assert.throws(() => tengjaVidStad([SHEET], "blad", 194, { haedId: "h194a" }, fersk()), /croppaðu/);
+  const upphlad: ImageObject = { ...SHEET, uttekt: undefined, heimild: undefined };
+  assert.throws(() => tengjaVidStad([upphlad], "blad", 194, { haedId: "h194a" }, fersk()), /Slóð teikningarinnar/);
+});
+
+test("leit að stað: mynstur, einföldun og röðun", () => {
+  assert.equal(leitarMynstur("Barónsstígur 18, (b)"), "B_r_nsst_g_r 18 b");
+  assert.equal(einfalda("Þórðargata Æ ÖLDU"), "thordargata ae oldu");
+  const s = (id: number, nafn: string, heimilisfang: string | null, haedir = 0, ovirkur = false) => ({ id, nafn, heimilisfang, haedir, ovirkur });
+  const rod = radaStodum("baronsstigur 18", [
+    s(1, "Heimaleiga ehf", "Barónsstígur 18 B, 101 Reykjavík", 0),
+    s(2, "Barónsstígur 18 - Heimaleiga", "Barónsstígur 18 B, 101 Reykjavík", 2),
+    s(3, "Barónsstígur 18 - gamalt", null, 0, true),
+  ]);
+  assert.deepEqual(rod.map((x) => x.id), [2, 3, 1]);
 });

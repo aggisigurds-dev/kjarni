@@ -264,12 +264,17 @@ async function teikningar(landnr: string) {
       previews
         .filter((p) => p.href && (p.width || 0) >= 200)
         .sort((p, q2) => (p.width || 0) - (q2.width || 0))[0]?.href || null;
+    // Stór forskoðun (Agnar 17.11.2026: „skoðað teikningar án þess að þurfa að búa til borð"): stærsta ≤ 2400 px, annars
+    // stærsta sem til er — nógu skörp til að lesa grunnmynd í Verkefni-glugganum án þess að sækja frumritið.
+    const raðað = previews.filter((p) => p.href && (p.width || 0) > 0).sort((p, q2) => (p.width || 0) - (q2.width || 0));
+    const stor = ([...raðað].reverse().find((p) => (p.width || 0) <= 2400) ?? raðað[raðað.length - 1])?.href || null;
 
     return {
       filename: String(a.filename || ""),
       // `.info`-permalinkurinn — nákvæmlega það sem fetch-plan tekur við.
       infoUrl: a.href ? FOTOWEB + String(a.href) : null,
       thumb: thumb ? FOTOWEB + thumb : null,
+      stor: stor ? FOTOWEB + stor : null,
       stada: gildi("7"),        // t.d. "Samþykkt"
       dags: gildi("30"),        // skráningardagur
       tegund: gildi("205"),     // t.d. "Aðaluppdrættir"

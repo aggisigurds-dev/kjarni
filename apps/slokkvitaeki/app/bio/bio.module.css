@@ -1,0 +1,135 @@
+.sida {
+  --b-bg: #0d0f14;
+  --b-flotur: #161a22;
+  --b-flotur2: #1d222c;
+  --b-lina: #2a303c;
+  --b-texti: #eef1f6;
+  --b-daufur: #9aa3b2;
+  --b-gull: #e5a00d;
+  --b-graent: #3ecf8e;
+  --b-gult: #f2b84b;
+  --b-rautt: #ff6b6b;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--b-bg);
+  color: var(--b-texti);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  padding: 16px 16px 48px;
+  max-width: 1180px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.sida :global(*) { box-sizing: border-box; }
+.sida code { font-family: var(--font-mono), monospace; font-size: 0.86em; background: var(--b-flotur2); padding: 1px 5px; border-radius: 4px; }
+
+.haus { position: sticky; top: 0; z-index: 5; background: var(--b-bg); padding-top: 4px; margin: -4px -16px 12px; padding-inline: 16px; border-bottom: 1px solid var(--b-lina); }
+.hausEfst { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hausTakkar { display: flex; gap: 8px; }
+.logo { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--b-gull); }
+.stada { margin: 6px 0 10px; color: var(--b-daufur); font-size: 13.5px; line-height: 1.45; }
+.stada b { color: var(--b-texti); font-weight: 600; }
+
+.flipar { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.flipi, .flipiVal {
+  appearance: none; border: 0; background: none; color: var(--b-daufur); font: inherit; font-size: 15px; font-weight: 600;
+  padding: 12px 14px; min-height: 44px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+}
+.flipiVal { color: var(--b-texti); border-bottom-color: var(--b-gull); }
+.flipi:hover { color: var(--b-texti); }
+
+.takki, .smatakki {
+  appearance: none; border: 1px solid var(--b-gull); background: var(--b-gull); color: #16120a; font: inherit; font-weight: 700;
+  border-radius: 8px; cursor: pointer;
+}
+.takki { padding: 12px 18px; min-height: 44px; }
+.smatakki { padding: 8px 12px; min-height: 40px; font-size: 13.5px; background: transparent; color: var(--b-gull); }
+.smatakki:hover { background: rgba(229, 160, 13, 0.12); }
+.smatakki:disabled { opacity: 0.6; cursor: default; }
+.textatakki {
+  appearance: none; border: 0; background: none; color: var(--b-daufur); font: inherit; font-size: 13.5px; padding: 10px 0; min-height: 40px;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center;
+}
+.textatakki:hover { color: var(--b-texti); }
+
+.inntak {
+  width: 100%; font: inherit; font-size: 16px; color: var(--b-texti); background: var(--b-flotur); border: 1px solid var(--b-lina);
+  border-radius: 10px; padding: 12px 14px; min-height: 48px;
+}
+.inntak:focus { outline: 2px solid var(--b-gull); outline-offset: 1px; }
+
+.daufur { color: var(--b-daufur); font-size: 13.5px; margin: 0; }
+.villa { color: var(--b-rautt); margin: 8px 0; }
+
+.tengja { max-width: 520px; margin: 12vh auto 0; display: grid; gap: 14px; }
+.tengja p { margin: 0; line-height: 1.5; }
+.tengja form { display: grid; gap: 10px; }
+.kodi { display: block; padding: 10px 12px !important; word-break: break-all; }
+
+.advorun { background: rgba(242, 184, 75, 0.1); border: 1px solid rgba(242, 184, 75, 0.45); border-radius: 12px; padding: 12px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.5; }
+.advorun p { margin: 6px 0 0; }
+
+.leit { position: relative; margin-bottom: 16px; }
+.nidurstodur { list-style: none; margin: 6px 0 0; padding: 6px; background: var(--b-flotur); border: 1px solid var(--b-lina); border-radius: 12px; display: grid; gap: 2px; }
+.nidurstodur li { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 8px; }
+.nidurstodur li:hover { background: var(--b-flotur2); }
+.nidurstodur img, .engin { width: 34px; height: 50px; object-fit: cover; border-radius: 4px; background: var(--b-flotur2); flex: none; }
+.nidurNafn { flex: 1; display: grid; font-size: 14.5px; min-width: 0; }
+
+.bidur { display: grid; gap: 6px; margin-bottom: 14px; }
+.bidurRod { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--b-flotur); border: 1px dashed var(--b-lina); border-radius: 10px; padding: 4px 12px; font-size: 14px; color: var(--b-daufur); }
+
+.listi { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); }
+.kort { display: flex; gap: 14px; background: var(--b-flotur); border: 1px solid var(--b-lina); border-radius: 14px; padding: 12px; }
+.plakat { width: 92px; height: 136px; object-fit: cover; border-radius: 8px; background: var(--b-flotur2); flex: none; }
+.kortMid { flex: 1; min-width: 0; display: grid; gap: 6px; align-content: start; }
+.titill { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+
+.merkiNytt, .merkiPlex, .merkiPlexA {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 999px; padding: 3px 8px; line-height: 1.2;
+}
+.merkiNytt { background: var(--b-gull); color: #16120a; }
+.merkiPlex { background: rgba(62, 207, 142, 0.15); color: var(--b-graent); flex: none; }
+.merkiPlexA { position: absolute; left: 6px; top: 6px; background: rgba(13, 15, 20, 0.85); color: var(--b-graent); border: 1px solid rgba(62, 207, 142, 0.5); }
+
+.seria { background: var(--b-flotur2); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; }
+.seriaHaus { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; }
+.stika { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--b-lina); gap: 2px; }
+.stikaPlex { background: var(--b-graent); }
+.stikaDiskur { background: var(--b-gult); }
+.stikaVantar { background: var(--b-rautt); }
+.stikaEftir { background: var(--b-lina); }
+.seriaTolur { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+.tPlex { color: var(--b-graent); }
+.tDiskur { color: var(--b-gult); }
+.tVantar { color: var(--b-rautt); }
+
+.thaettirNy { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13.5px; }
+.thaettirNy dt { color: var(--b-daufur); }
+.thaettirNy dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.thaettirNy dd .daufur { font-size: 12.5px; }
+
+.kortTakkar { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.allt { border-top: 1px solid var(--b-lina); padding-top: 8px; font-size: 13.5px; line-height: 1.5; }
+.allt p { margin: 0 0 4px; }
+
+.sia { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
+.rofi { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; min-height: 44px; cursor: pointer; }
+.rofi input { width: 18px; height: 18px; accent-color: var(--b-gull); }
+
+.grind { display: grid; gap: 18px 14px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.plakatKort { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.plakatRammi { position: relative; aspect-ratio: 2 / 3; border-radius: 10px; overflow: hidden; background: var(--b-flotur2); display: grid; place-items: center; text-align: center; padding: 0; color: var(--b-daufur); font-size: 13px; }
+.plakatRammi img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.saeti { position: absolute; right: 6px; top: 6px; background: rgba(13, 15, 20, 0.85); color: var(--b-texti); font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+.plakatTitill { margin: 4px 0 0; font-size: 15px; font-weight: 700; line-height: 1.25; }
+.tegund { margin: 0; font-size: 12.5px; color: var(--b-gull); }
+.lysing { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--b-daufur); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+.fotur { margin-top: 32px; color: var(--b-daufur); font-size: 12.5px; line-height: 1.5; }
+
+@media (max-width: 560px) {
+  .plakat { width: 72px; height: 106px; }
+  .kort { gap: 10px; padding: 10px; }
+  .grind { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .hausTakkar .smatakki { padding: 8px 10px; }
+}

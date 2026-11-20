@@ -57,9 +57,11 @@ export function frumEignarId(skraHash: string): string {
   return "f" + skraHash.slice(0, 32);
 }
 
-/** Lykill skjámyndar úr frumskrá: hash skrárinnar + gæðastig + síða + útgáfa. */
-export function skjamyndarLykill(skraHash: string, gaedi: string, sida: number): string {
-  return `skjamynd|v${EIGNA_UTGAFA}|${gaedi}|${sida}|${skraHash}`;
+/** Lykill skjámyndar úr frumskrá: hash skrárinnar + gæðastig + síða + útgáfa. `afbrigdi` (t.d. „anskerpu": birtuskerpu
+ * sleppt — litmynd eða stillingin Aldrei, 17.11.2026) bætist aftast; án þess er lykillinn óbreyttur, svo teikningar sem
+ * fá skerpu eins og áður halda sínu auðkenni og hlaðast ekki upp aftur. */
+export function skjamyndarLykill(skraHash: string, gaedi: string, sida: number, afbrigdi?: string): string {
+  return `skjamynd|v${EIGNA_UTGAFA}|${gaedi}|${sida}|${skraHash}` + (afbrigdi ? `|${afbrigdi}` : "");
 }
 
 /** Lykill skarprar skönnunar (TIF-frumrit stillt við JPEG skjalasafnsins): myndin er reiknuð úr slóðinni, gæðastiginu,
@@ -68,10 +70,11 @@ export function skonnunarLykill(
   slod: string,
   gaedi: string,
   fokus: { x: number; y: number; w: number; h: number } | null | undefined,
-  frum: { b: number; h: number }
+  frum: { b: number; h: number },
+  afbrigdi?: string
 ): string {
   const f = fokus ? [fokus.x, fokus.y, fokus.w, fokus.h].map((n) => Math.round(Number(n) || 0)).join(",") : "-";
-  return `skonnun|v${EIGNA_UTGAFA}|${gaedi}|${f}|${frum.b}x${frum.h}|${slod.trim()}`;
+  return `skonnun|v${EIGNA_UTGAFA}|${gaedi}|${f}|${frum.b}x${frum.h}|${slod.trim()}` + (afbrigdi ? `|${afbrigdi}` : "");
 }
 
 /** Auðkenni skjámyndar úr lykli (skjamyndarLykill / skonnunarLykill); null ef hash næst ekki. */

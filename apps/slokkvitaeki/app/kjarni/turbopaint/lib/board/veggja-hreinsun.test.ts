@@ -37,12 +37,14 @@ import {
   husKassi,
   HAND_SPASSIA_M,
   husUtlina,
+  kassaButar,
   lesaHandUtlinu,
   lesaVikmork,
   punktIFjolhyrningi,
   retta,
   sameinaSamlinur,
   SJALFGEFIN_VIKMORK,
+  skeraUtstaedaEnda,
   stakirButar,
   strikPunktLinur,
   utanHuss,
@@ -216,13 +218,31 @@ test("hillur: langar frístandandi línur (rekkar) fara, veggir sem tengjast sta
   assert.equal(lag.talning.hillur, 0);
 });
 
+test("hillur (lota 5): útveggur og brunaveggur sem greiningin tengdi ekki í hornum standa — aðeins rekkaröð fer", () => {
+  const dpm = 49.4;
+  // 60 × 40 m lager: hornin opin (~1 m bil) eins og þegar þverveggurinn greinist ekki alla leið
+  const veggir = [L(50, 0, 2950, 0, 12), L(0, 50, 0, 1950, 12), L(3000, 50, 3000, 1950, 12), L(50, 2000, 2950, 2000, 12), L(1500, 50, 1500, 1950, 12)];
+  const rekkar = [600, 800, 1000, 1200].map((x) => L(x, 300, x, 1700, 4));
+  const r = hreinsaVeggi([...veggir, ...rekkar], [], dpm);
+  assert.equal(r.talning.hillur, 4, "rekkaröðin fer");
+  for (const v of veggir)
+    assert.ok(r.linur.some((l) => Math.abs(l.p[0] - v.p[0]) < 30 && Math.abs(l.p[1] - v.p[1]) < 30), `veggur ${v.p.join(",")} stendur`);
+  // gamla reglan (hillurSystkini 0) felldi útveggina og brunavegginn líka
+  const gamla = hreinsaVeggi([...veggir, ...rekkar], [], dpm, { ...SJALFGEFIN_VIKMORK, hillurSystkini: 0, hillurEinarUndirM: 0 });
+  assert.ok(gamla.talning.hillur > 4);
+});
+
 test("hillur: raungögn Breiðhöfða 13 (2018-skönnun) — engin frístandandi lína ≥ 6 m eftir hreinsun, ytri veggur hússins stendur", () => {
   const raun = JSON.parse(readFileSync(new URL("./fixtures/veggjavel-breidhofdi-13-2018.json", import.meta.url), "utf8")) as { linur: HLina[] };
   const dpm = 49.4;
   const vik = { ...SJALFGEFIN_VIKMORK, stakurM: Math.max(SJALFGEFIN_VIKMORK.stakurM, SJALFGEFIN_VIKMORK.stakurSkonnunM) };
   const r = hreinsaVeggi(raun.linur, [], dpm, vik);
   assert.ok(r.talning.hillur >= 6, "hillur fjarlægðar: " + r.talning.hillur);
-  assert.equal(hillurButar(r.linur, [], 6 * dpm, 0.15 * dpm).size, 0);
+  // Engin rekkaröð eftir. Stakur frístandandi langur bútur (≥ 12 m) má standa — hann gæti verið útveggur sem greiningin
+  // tengdi ekki í hornum (lota 5, 17.11.2026: gamla reglan felldi útveggi og brunaveggi iðnaðarhúsa).
+  const v = SJALFGEFIN_VIKMORK;
+  assert.equal(hillurButar(r.linur, [], v.hillurM * dpm, v.hillurTengingM * dpm, v.hillurSystkini, v.hillurRodM * dpm, v.hillurEinarUndirM * dpm).size, 0);
+  assert.ok(hillurButar(r.linur, [], 6 * dpm, 0.15 * dpm).size <= 1, "fleiri en einn stakur langur bútur eftir");
   assert.ok(r.linur.length >= 80, "of fáar línur eftir: " + r.linur.length);
 });
 
@@ -442,4 +462,43 @@ test("handteiknuð útlína: 2. hæðar-tilfellið — útlína vélarinnar loka
   assert.ok(hand.lokud && hand.handvirk, "handteiknuð: lokuð");
   assert.ok(hand.inni(500, 300));
   assert.ok(!hand.inni(1500, 300), "og það sem er utan hennar er utan húss");
+});
+
+test("kassar (lota 5, umferð 3): einangruð smurgryfja (lokaður mjór kassi) og bíll (smár opinn hópur) fara — kassi við vegg og stakur veggur standa", () => {
+  const dpm = 50, t = 8;
+  const L = (x0: number, y0: number, x1: number, y1: number): HLina => ({ p: [x0, y0, x1, y1], t });
+  const hus = [L(0, 0, 3000, 0), L(3000, 0, 3000, 1500), L(3000, 1500, 0, 1500), L(0, 1500, 0, 0)];
+  const gryfja = [L(500, 300, 500, 1500 - 300), L(570, 300, 570, 1200), L(500, 300, 570, 300), L(500, 1200, 570, 1200)]; // 18 × 1,4 m
+  const bill = [L(1500, 400, 1720, 400), L(1500, 480, 1720, 480), L(1500, 400, 1500, 470), L(1730, 410, 1730, 480)]; // 4,4 × 1,6 m, opinn
+  const vidVegg = [L(2600, 0, 2600, 400), L(2680, 0, 2680, 400), L(2600, 400, 2680, 400)]; // skápur upp við útvegg
+  const stakur = [L(1000, 1000, 1400, 1000)];
+  const k = kassaButar([...hus, ...gryfja, ...bill, ...vidVegg, ...stakur], [], 0.15 * dpm, 0.5 * dpm, 2.5 * dpm, 6 * dpm, 4);
+  const vis = (fyrsti: number, n: number) => Array.from({ length: n }, (_, i) => fyrsti + i);
+  for (const i of vis(4, 4)) assert.ok(k.has(i), "gryfjan fer (" + i + ")");
+  for (const i of vis(8, 4)) assert.ok(k.has(i), "bíllinn fer (" + i + ")");
+  for (const i of [...vis(0, 4), ...vis(12, 3), 15]) assert.ok(!k.has(i), "stendur (" + i + ")");
+  // og í heildarhreinsuninni
+  const h = hreinsaVeggi([...hus, ...gryfja, ...vidVegg], [], dpm);
+  assert.ok((h.talning.kassar ?? 0) >= 4, JSON.stringify(h.talning));
+  assert.ok(!h.linur.some((l) => l.p[0] > 450 && l.p[0] < 620 && l.p[1] > 250), "engin lína gryfjunnar eftir");
+});
+
+test("útstæðar línur (lota 5, umferð 3): áslína sem stendur út úr útvegg fer; veggur sem rann saman við hana er skorinn við útlínuna", () => {
+  const dpm = 50, t = 8;
+  const L = (x0: number, y0: number, x1: number, y1: number): HLina => ({ p: [x0, y0, x1, y1], t });
+  const hus = [L(0, 0, 1000, 0), L(1000, 0, 1000, 600), L(1000, 600, 0, 600), L(0, 600, 0, 0), L(500, 0, 500, 300)];
+  const as = L(200, 600, 200, 850); // 5 m út úr neðri útveggnum
+  const eldveggur = L(700, 0, 700, 800); // innveggur sem rann saman við áslínu 4 m niður fyrir húsið
+  const allar = [...hus, as, eldveggur];
+  const u = husUtlina(allar, dpm);
+  assert.ok(u.lokud);
+  const D = 0.95 * dpm;
+  const burt = utanHuss(allar, u, D);
+  assert.ok(burt.has(5), "áslínan fer");
+  for (const i of [0, 1, 2, 3, 4, 6]) assert.ok(!burt.has(i), "stendur (" + i + ")");
+  assert.equal(utanHuss(allar, u).size, 0, "án útstæðuprófsins fer ekkert (útlínan nær utan um línurnar)");
+  const sk = skeraUtstaedaEnda(allar, u, D, 0.25 * dpm, 0.5 * dpm);
+  const e = sk.linur[6].p;
+  assert.ok(e[3] <= 600 + 0.5 * dpm && e[3] >= 600 - 0.5 * dpm, "eldveggurinn endar við útvegginn: " + e.join(","));
+  assert.deepEqual(sk.linur[1].p, allar[1].p, "útveggur óbreyttur");
 });

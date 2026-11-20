@@ -50,7 +50,7 @@ html[data-kjarni-skin="ragnarok"] body { background:#020202; }
 .rgk-row .rg-btn > span { padding:0 20px; }
 
 /* hetjan + kjarnahringurinn */
-.rgk-hero { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:28px; align-items:center; }
+.rgk-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:28px; align-items:center; }
 .rgk-hero-txt { display:flex; flex-direction:column; gap:14px; min-width:0; }
 .rgk-proto { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
 .rgk-proto-tags { display:flex; gap:6px; }
@@ -59,7 +59,28 @@ html[data-kjarni-skin="ragnarok"] body { background:#020202; }
 .rgk-bar { max-width:520px; }
 .rgk-lead { font:500 15px/1.5 var(--rg-font); color:#d3ac66; max-width:560px; }
 .rgk-hud { font:400 12px/1.6 var(--rg-mono); letter-spacing:.08em; color:var(--rg-text-muted); }
-.rgk-core { width:340px; height:340px; justify-self:center; }
+.rgk-core { width:clamp(340px,27vw,490px); aspect-ratio:1; justify-self:center; margin-block:-40px; }
+
+/* Ragnarök-hringurinn (ApocalypseRing úr Fenrir-hönnunarkerfinu, 17.11.2026) */
+.rg-apoc { position:relative; width:100%; height:100%; isolation:isolate; --rg-apoc-motion:1; --rg-apoc-glow:1; }
+.rg-apoc-l { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; transform-origin:50% 50%; }
+.rg-apoc-base { filter:drop-shadow(0 0 16px #ed6b2140); }
+.rg-apoc-outer { animation:rg-apoc-cw calc(80s / var(--rg-apoc-motion)) linear infinite; }
+.rg-apoc-runes { animation:rg-apoc-ccw calc(115s / var(--rg-apoc-motion)) linear infinite; }
+.rg-apoc-inner { animation:rg-apoc-cw calc(55s / var(--rg-apoc-motion)) linear infinite; }
+.rg-apoc-light { position:absolute; inset:20%; border-radius:50%; pointer-events:none;
+  box-shadow:0 0 calc(22px * var(--rg-apoc-glow)) #ff851c44, inset 0 0 calc(18px * var(--rg-apoc-glow)) #ffba5b22;
+  animation:rg-apoc-breathe 7s ease-in-out infinite; }
+.rg-apoc-txt { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  font:600 clamp(14px,1.2vw,20px)/1 var(--rg-font); letter-spacing:.3em; padding-left:.3em; color:#ffcf6a; pointer-events:none;
+  text-shadow:0 0 3px #000,0 0 8px #000,0 0 14px rgba(255,140,40,.9); }
+.rg-apoc-txt small { font-size:.6em; letter-spacing:.2em; }
+.rg-apoc-emblem { position:absolute; inset:28%; width:44%; height:44%; object-fit:contain; pointer-events:none; filter:drop-shadow(0 0 10px #ff851c55); }
+@keyframes rg-apoc-cw { to { transform:rotate(360deg); } }
+@keyframes rg-apoc-ccw { to { transform:rotate(-360deg); } }
+@keyframes rg-apoc-breathe { 50% { opacity:.5; filter:brightness(1.18); } }
+/* Draga úr hreyfingu (t.d. Android „Fjarlægja hreyfimyndir“): hringurinn snýst áfram, hægar (0,6×); aðeins ljósið hættir að anda. Agnar 17.11.2026 vill hægu hreyfinguna alltaf. */
+@media (prefers-reduced-motion:reduce) { .rg-apoc { --rg-apoc-motion:.6; } .rg-apoc-light { animation:none; } }
 
 /* fyrirsagnir kafla */
 .rgk-h2row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -306,8 +327,7 @@ a.rgk-mod:hover { background:var(--rg-frame-thin); filter:brightness(1.15); }
 
 @media (max-width:900px) {
   html:not([data-desk-lock]) .rgk-hero { grid-template-columns:1fr; }
-  html:not([data-desk-lock]) .rgk-core { width:280px; height:280px; }
-  html:not([data-desk-lock]) .rgk-core ragnarok-ring { transform:scale(.8235); transform-origin:top left; }
+  html:not([data-desk-lock]) .rgk-core { width:min(300px,78vw); margin-block:0; }
 }
 @media (max-width:620px) {
   html:not([data-desk-lock]) .rgk-in { padding:20px 16px 0; gap:20px; }
