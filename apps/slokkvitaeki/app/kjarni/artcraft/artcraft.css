@@ -2406,3 +2406,60 @@
   }
 }
 
+.ac-native {
+  flex: none;
+  padding: 0 14px 14px;
+  background: #161616;
+  color: #d8d8d8;
+  border-top: 1px solid #2a2a2a;
+}
+
+.ac-native summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+.ac-native summary::before {
+  content: "▸ ";
+  margin-right: 6px;
+}
+.ac-native[open] summary::before {
+  content: "▾ ";
+}
+
+.ac-native summary::-webkit-details-marker { display: none; }
+
+.ac-native p {
+  margin: 0 0 12px;
+  color: #bdbdbd;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ac-native a {
+  color: #fff;
+  font-weight: 700;
+}
+
+.ac-missing .ac-native {
+  margin-top: 18px;
+  text-align: left;
+}
+
+.stn[data-skin="ragnarok"] .ac-native {
+  background: #070707;
+  border-top-color: rgba(201, 152, 47, 0.35);
+  color: var(--rg-text, #f3e4bf);
+}
+
+.stn[data-skin="ragnarok"] .ac-native p {
+  color: var(--rg-text-dim, #8a7350);
+}
+
+.stn[data-skin="ragnarok"] .ac-native a {
+  color: var(--rg-text-gold, #ffd98a);
+}
+

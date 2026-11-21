@@ -11,6 +11,7 @@ import {
   OFFICECRAFT_APP_IDS,
   type ArtcraftApp,
 } from "./apps";
+import { ARTCRAFT_LAUNCHER, artcraftNativeUrl } from "./natives";
 import "./artcraft.css";
 
 function AppCard({ app }: { app: ArtcraftApp }) {
@@ -40,8 +41,8 @@ export default function ArtCraftHub() {
           <h1>Myndir og myndbönd. Eitt handverk.</h1>
           <p className="ac-lead">
             Opin uppspretta sköpunartól frá ArtCraft, hýst í Kjarnanum: myndvinnsla,
-            myndbönd, RAW, hreyfimyndir, síðuhönnun og Craft Anything (vefskoðari
-            og sækja heila borðtölvu-appið) — allt í vafranum, á þínum skrám.
+            myndbönd, RAW, hreyfimyndir, síðuhönnun og Craft Anything — WASM í
+            vafranum, heila borðtölvu-útgáfan (stærri) á Sækja-stikunni í hverju forriti.
             Skrifstofuforritin (ritvinnsla, töflur, kynningar, PDF, CAD …) eru nú í{" "}
             <a href={officecraftHubHref()}>OfficeCraft</a>.
           </p>
@@ -95,13 +96,33 @@ export default function ArtCraftHub() {
               <span className="ac-meta">WordCraft · GridCraft · DeckCraft · PdfCraft · …</span>
             </a>
           </div>
+          <h2 className="ac-section-title">ArtCraft Launcher — öll forritin á vélinni</h2>
+          <p className="ac-lead">
+            {ARTCRAFT_LAUNCHER.desc} Útgáfa {ARTCRAFT_LAUNCHER.version}. Sæktu það, ekki WASM-zip-ið,
+            þegar þú vilt heila forritið.
+          </p>
+          <div className="ac-featured">
+            {ARTCRAFT_LAUNCHER.packs.map((pack) => (
+              <a
+                key={pack.id}
+                className="ac-card"
+                href={artcraftNativeUrl(ARTCRAFT_LAUNCHER.repo, ARTCRAFT_LAUNCHER.tag, pack.file)}
+                rel="noreferrer"
+              >
+                <b>{pack.label}</b>
+                <span className="ac-role">{pack.hint}</span>
+                <p>{pack.file}</p>
+                <span className="ac-meta">{ARTCRAFT_LAUNCHER.version}</span>
+              </a>
+            ))}
+          </div>
           <p className="ac-legal">
             Opin uppspretta frá{" "}
             <a href="https://getartcraft.com/apps" target="_blank" rel="noreferrer">
               getartcraft.com/apps
             </a>
             . Leyfi: MIT eða Apache-2.0. WASM-útgáfur eru sóttar úr GitHub-útgáfum við
-            build.
+            build. Heilu borðtölvu-pakkarnir eru á GitHub, ekki hýstir hér.
           </p>
         </div>
       </div>

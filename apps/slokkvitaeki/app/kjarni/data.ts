@@ -54,6 +54,7 @@ export const GALLERY: { group: string; sub: string; items: GItem[] }[] = [
       { icon: "⚡", nafn: "Autogenerator", desc: "Fjarlægja bakgrunn og önnur sjálfvirk tól", tag: "Tól", ready: true, href: "/kjarni/artcraft/tol" },
       { icon: "🗂️", nafn: "OfficeCraft", desc: "Ritvinnsla, töflur, kynningar, PDF, CAD, viðmót, vektorar og hljóð", tag: "Tól", ready: true, href: "/kjarni/officecraft" },
       { icon: "📍", nafn: "Apex Ajour", desc: "Brunaþéttingar á verkstöðum — skráning, yfirsýn og skýrslur (í stað Ajour)", tag: "Tól", ready: true, href: "/kjarni/skraning" },
+      { icon: "📱", nafn: "Sími → tölva", desc: "Claude + Desktop Commander, RustDesk-skjár", tag: "Tól", ready: true, href: "/kjarni/simi" },
       { icon: "💳", nafn: "Payday", desc: "Reikningar", tag: "Verkfæri", ready: false },
       { icon: "📘", nafn: "Facebook", desc: "Tenging", tag: "Verkfæri", ready: false },
     ],
@@ -109,6 +110,7 @@ export const QUICK_GROUPS: { title: string; items: { icon: string; label: string
       { icon: "✂️", label: "Bakgrunnur", href: "/kjarni/artcraft/bakgrunnur" },
       { icon: "🗂️", label: "OfficeCraft", href: "/kjarni/officecraft" },
       { icon: "📍", label: "Apex Ajour", href: "/kjarni/skraning" },
+      { icon: "📱", label: "Sími → tölva", href: "/kjarni/simi" },
     ],
   },
   /* 05.11.2026 (Agnar): Skráning + Yfirsýn þéttinga færð úr ArtCraft-hópnum undir Apex Ajour. */

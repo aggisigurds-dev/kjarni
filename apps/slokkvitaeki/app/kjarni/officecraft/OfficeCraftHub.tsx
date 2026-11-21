@@ -18,7 +18,8 @@ export default function OfficeCraftHub() {
           <h1>{apps.length} forrit. Ein skrifstofa.</h1>
           <p className="ac-lead">
             Ritvinnsla, töflureiknir, kynningar, PDF, CAD, viðmótshönnun, vektorar og hljóð —
-            opin uppspretta, keyrir í vafranum á þínum skrám. Ekkert að setja upp, engin áskrift.
+            opin uppspretta. WASM keyrir í vafranum; heila borðtölvu-útgáfan (stærri) er á
+            Sækja-stikunni inni í hverju forriti.
           </p>
           <div className="ac-grid">
             {apps.map((app) => (

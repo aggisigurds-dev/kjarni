@@ -50,7 +50,7 @@ export function StationChrome({
 
   return (
     <SkinCtx.Provider value={{ skin, setSkin }}>
-      <DesktopView enabled={tool !== "turbopaint" && tool !== "artcraft" && tool !== "officecraft" && tool !== "bord" && tool !== "kjarni" && tool !== "borgarferdir"}>
+      <DesktopView enabled={tool !== "turbopaint" && tool !== "artcraft" && tool !== "officecraft" && tool !== "simi" && tool !== "bord" && tool !== "kjarni" && tool !== "borgarferdir"}>
         <div className={`stn ${rgFont.variable} ${rgMono.variable} ${plexSans.variable} ${plexMono.variable} ${playfair.variable} ${poppins.variable}`} data-skin={skin === "fenrir" ? "ragnarok" : skin} data-tool={tool}>
           <header className="stn-bar">
             <a className="stn-home" href="/kjarni">

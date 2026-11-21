@@ -21,6 +21,7 @@ export const DEFAULT_SKIN: SkinId = "fenrir";
 
 export const TOOLS = [
   { id: "kjarni", label: "Stjórnstöð", href: "/kjarni" },
+  { id: "simi", label: "Sími", href: "/kjarni/simi" },
   { id: "turbopaint", label: "TurboPaint", href: "/kjarni/turbopaint" },
   { id: "artcraft", label: "ArtCraft", href: "/kjarni/artcraft" },
   { id: "officecraft", label: "OfficeCraft", href: "/kjarni/officecraft" },

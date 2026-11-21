@@ -8,7 +8,7 @@ export type StodKerfi = {
   href: string;
   state: "VIRKT" | "DRÖG" | "YTRA";
   /** tákn þemasýnarinnar (stroke-SVG í StodView) */
-  ico: "pensill" | "litir" | "grind" | "maelabord" | "lykill" | "skjal" | "flug" | "tilraun" | "teningur" | "merki" | "skrifstofa" | "thetting" | "skaeri";
+  ico: "pensill" | "litir" | "grind" | "maelabord" | "lykill" | "skjal" | "flug" | "tilraun" | "teningur" | "merki" | "skrifstofa" | "thetting" | "skaeri" | "simi";
 };
 
 export const SYSTEMS: StodKerfi[] = [
@@ -27,6 +27,7 @@ export const SYSTEMS: StodKerfi[] = [
   { name: "Apex Ajour", kind: "TÓL", desc: "Brunaþéttingar á verkstöðum — skráning, yfirsýn þéttinga og greining, í stað Ajour.", href: "/kjarni/skraning", state: "VIRKT", ico: "thetting" },
   { name: "Bakgrunnur", kind: "TÓL", desc: "Fjarlægðu vegg, borð og skugga af vörumynd — tilbúin mynd á sekúndum, í vafranum eða skýinu.", href: "/kjarni/artcraft/bakgrunnur", state: "VIRKT", ico: "skaeri" },
   { name: "Craft Anything", kind: "TÓL", desc: "Skoða skrár í vafranum og sækja heila borðtölvu-appið — Study → Build → Check.", href: "/kjarni/artcraft/craft-anything", state: "VIRKT", ico: "litir" },
+  { name: "Sími → tölva", kind: "TÓL", desc: "Stjórnaðu tölvunni úr símanum: Claude + Desktop Commander fyrir skipanir, RustDesk fyrir skjáinn.", href: "/kjarni/simi", state: "VIRKT", ico: "simi" },
 ];
 
 export const FILTERS = ["allt", "Kerfi", "Vefur", "Tól", "Verkfæri"] as const;
