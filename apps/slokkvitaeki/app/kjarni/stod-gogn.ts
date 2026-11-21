@@ -26,6 +26,7 @@ export const SYSTEMS: StodKerfi[] = [
   { name: "OfficeCraft", kind: "TÓL", desc: "Ritvinnsla, töflur, kynningar, PDF, CAD, viðmót, vektorar og hljóð — skrifstofuforritin á einum stað.", href: "/kjarni/officecraft", state: "VIRKT", ico: "skrifstofa" },
   { name: "Apex Ajour", kind: "TÓL", desc: "Brunaþéttingar á verkstöðum — skráning, yfirsýn þéttinga og greining, í stað Ajour.", href: "/kjarni/skraning", state: "VIRKT", ico: "thetting" },
   { name: "Bakgrunnur", kind: "TÓL", desc: "Fjarlægðu vegg, borð og skugga af vörumynd — tilbúin mynd á sekúndum, í vafranum eða skýinu.", href: "/kjarni/artcraft/bakgrunnur", state: "VIRKT", ico: "skaeri" },
+  { name: "Craft Anything", kind: "TÓL", desc: "Skoða skrár í vafranum og sækja heila borðtölvu-appið — Study → Build → Check.", href: "/kjarni/artcraft/craft-anything", state: "VIRKT", ico: "litir" },
 ];
 
 export const FILTERS = ["allt", "Kerfi", "Vefur", "Tól", "Verkfæri"] as const;

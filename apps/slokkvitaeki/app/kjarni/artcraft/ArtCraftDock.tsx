@@ -15,6 +15,7 @@ const PRIMARY_IDS: ReadonlyArray<ArtcraftInterfaceId> = [
   "hub",
   "vinnslur",
   "tol",
+  "craft-anything",
   "vidgerd",
   "mota",
   "skyjahreyfimynd",

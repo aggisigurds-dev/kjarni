@@ -172,6 +172,9 @@ test("Stjórnstöð menu: OfficeCraft and Apex Ajour groups, no office apps unde
   assert.ok(names.indexOf("OfficeCraft") === names.indexOf("Marks") + 1, "OfficeCraft right after Marks");
   assert.ok(names.includes("Apex Ajour"));
   assert.ok(names.includes("Bakgrunnur"));
+  assert.ok(names.includes("Craft Anything"));
   assert.ok(group("Kjarni")?.items.some((i) => i.label === "Bakgrunnur"));
+  assert.ok(group("Kjarni")?.items.some((i) => i.label === "Craft Anything"));
+  assert.ok(group("ArtCraft")?.items.some((i) => i.label === "Craft Anything"));
   assert.equal(artLabels.includes("Bakgrunnur"), false);
 });

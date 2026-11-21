@@ -104,6 +104,7 @@ export const QUICK_GROUPS: { title: string; items: { icon: string; label: string
       { icon: "🎬", label: "Bíó", href: "/bio" },
       { icon: "🖌️", label: "TurboPaint", href: "/kjarni/turbopaint" },
       { icon: "🎨", label: "ArtCraft", href: "/kjarni/artcraft" },
+      { icon: "🔍", label: "Craft Anything", href: "/kjarni/artcraft/craft-anything" },
       { icon: "⚡", label: "Autogenerator", href: "/kjarni/artcraft/tol" },
       { icon: "✂️", label: "Bakgrunnur", href: "/kjarni/artcraft/bakgrunnur" },
       { icon: "🗂️", label: "OfficeCraft", href: "/kjarni/officecraft" },

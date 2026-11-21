@@ -6,6 +6,7 @@ import {
   artcraftAppsByCategory,
   artcraftStudioHref,
   artcraftToolsHref,
+  getArtcraftApp,
   officecraftHubHref,
   OFFICECRAFT_APP_IDS,
   type ArtcraftApp,
@@ -29,7 +30,8 @@ function AppCard({ app }: { app: ArtcraftApp }) {
 }
 
 export default function ArtCraftHub() {
-  const artcraftApps = artcraftAppsByCategory("artcraft");
+  const craftAnything = getArtcraftApp("craft-anything");
+  const artcraftApps = artcraftAppsByCategory("artcraft").filter((app) => app.id !== "craft-anything");
   return (
     <StationChrome tool="artcraft">
       <div className="ac-hub">
@@ -44,6 +46,15 @@ export default function ArtCraftHub() {
             <a href={officecraftHubHref()}>OfficeCraft</a>.
           </p>
           <div className="ac-featured">
+            {craftAnything ? (
+              <a className="ac-card ac-card-studio" href={artcraftAppHref(craftAnything.id)}>
+                <span className="ac-ico" aria-hidden="true">{craftAnything.icon}</span>
+                <b>{craftAnything.name}</b>
+                <span className="ac-role">{craftAnything.role}</span>
+                <p>{craftAnything.desc}</p>
+                <span className="ac-meta">{craftAnything.version} · {craftAnything.status}</span>
+              </a>
+            ) : null}
             <a className="ac-card ac-card-studio" href={artcraftToolsHref()}>
               <span className="ac-ico" aria-hidden="true">⚡</span>
               <b>Autogenerator</b>
