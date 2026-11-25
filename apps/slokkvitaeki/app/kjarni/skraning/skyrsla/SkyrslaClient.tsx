@@ -454,6 +454,7 @@ export default function SkyrslaClient() {
   if (villa && !verk) return <p className="sk-hl">Villa: {villa}</p>;
   return (
     <div className={`sk sk-v2${les ? " sk-les" : ""}${gogn.itarlegt ? "" : " sk-stutt"}`}>
+      {verk && !/NLSH/i.test(verk.heiti) && <div role="note" style={{ margin: "0 0 10px", padding: "10px 14px", background: "#fff4e0", border: "1px solid #e0b060", borderRadius: 4, color: "#4a3200", fontSize: 14 }}>Stöðuskýrslan er enn aðeins gerð fyrir Landspítalann (NLSH): hæðirnar 6H, 5H og 4H og deildirnar S1–S5 eru fastar í henni og engin áætlun er skráð fyrir „{verk.heiti}“. Tölurnar hér segja því ekkert um það verk. Gatakortið og Vinna sýna það.</div>}
       {les && <div className="sk-lesstika"><b>Brunahólf ehf</b><span>{verk?.heiti}</span><button type="button" onClick={() => window.print()}>Prenta / PDF</button></div>}
       <div className="sk-stika">
         <span>{ovistad ? "Óvistaðar breytingar" : skyrslaId ? "Vistað" : "Ekkert vistað enn"} · {nBr} {nBr === 1 ? "leiðrétt lína" : "leiðréttar línur"}</span>

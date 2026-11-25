@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import SkyrslaClient from "./SkyrslaClient";
+import VerkTengill from "../VerkTengill";
 import "../skraning.css";
 import "./skyrsla.css";
 
@@ -31,7 +32,7 @@ export default function SkyrslaPage() {
           <a href="/kjarni/skraning/verk">Byggingar</a>
           <a href="/kjarni/skraning/flokkar">Categories/schema</a>
         </nav>
-        <div className="aj-right"><span className="aj-felag">Brunahólf ehf</span><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
+        <div className="aj-right"><VerkTengill /><span className="aj-felag">Brunahólf ehf</span><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
       </header>
       <SkyrslaClient />
     </div>

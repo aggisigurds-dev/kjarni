@@ -22,6 +22,9 @@
 .aj-nav a.on { background: var(--aj-teal); }
 .aj-right { margin-left: auto; display: flex; align-items: center; gap: 14px; padding-right: 14px; }
 .aj-felag { font-size: 13px; }
+/* verkaval fremst í flipastikunni (VerkTengill.tsx): dökkt, fast breidd (stikan hoppar ekki þegar listinn berst), þrengra á síma */
+.aj-nav .aj-verkval { order: -1; align-self: center; flex: none; width: 190px; height: 30px; margin: 0 10px 0 12px; padding: 0 6px; background: #1e1e1e; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 13px; }
+.aj-nav .aj-verkval:focus-visible { outline: 2px solid var(--aj-teal); outline-offset: 1px; }
 .aj-merki { background: #fff; color: #1b2a4a; font-weight: 800; padding: 4px 8px; border-radius: 3px; font-size: 13px; }
 .aj-merki i { font-style: normal; color: #ff8a1f; }
 
@@ -217,6 +220,7 @@
   .aj-pager { margin-left: 0; }
   .aj-nav a { padding: 0 10px; font-size: 13px; }
   .aj-felag { display: none; }
+  .aj-nav .aj-verkval { width: 116px; margin: 0 6px 0 8px; padding: 0 3px; font-size: 12px; }
 }
 
 .aj-vinnuhlekkur.aj-yfirsyn { background: #1e1e1e; }

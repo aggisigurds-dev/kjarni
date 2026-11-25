@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import VinnaClient from "./VinnaClient";
+import VerkTengill from "../VerkTengill";
 import "../skraning.css";
 import "./vinna.css";
 
@@ -27,7 +28,7 @@ export default function VinnaPage() {
           <a href="/kjarni/skraning">Yfirlit</a>
           <a className="on" href="/kjarni/skraning/vinna">Vinna</a>
         </nav>
-        <div className="aj-right"><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
+        <div className="aj-right"><VerkTengill /><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
       </header>
       <VinnaClient />
     </div>

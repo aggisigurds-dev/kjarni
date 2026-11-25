@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import KortClient from "./KortClient";
+import VerkTengill from "../VerkTengill";
 import "../skraning.css";
 import "./kort.css";
 
@@ -32,7 +33,7 @@ export default function KortPage() {
           <a href="/kjarni/skraning/verk">Byggingar</a>
           <a href="/kjarni/skraning/flokkar">Categories/schema</a>
         </nav>
-        <div className="aj-right"><span className="aj-felag">Brunahólf ehf</span><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
+        <div className="aj-right"><VerkTengill /><span className="aj-felag">Brunahólf ehf</span><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
       </header>
       <KortClient />
     </div>
