@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SkraningClient from "./SkraningClient";
+import VerkTengill from "./VerkTengill";
 import "./skraning.css";
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default function SkraningPage() {
           <a href="/kjarni/turbopaint">TurboPaint</a>
         </nav>
         <div className="aj-right">
+          <VerkTengill />
           <span className="aj-felag">Brunahólf ehf</span>
           <span className="aj-merki">Brunah<i>ó</i>lf</span>
         </div>

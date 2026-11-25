@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import VerkClient from "./VerkClient";
+import VerkTengill from "../VerkTengill";
 import "../skraning.css";
 import "../vinna/vinna.css";
 import "./verk.css";
@@ -24,7 +25,7 @@ export default function VerkPage() {
           <a href="/kjarni/skraning/vinna">Vinna</a>
           <a className="on" href="/kjarni/skraning/verk">Byggingar &amp; teikningar</a>
         </nav>
-        <div className="aj-right"><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
+        <div className="aj-right"><VerkTengill /><span className="aj-merki">Brunah<i>ó</i>lf</span></div>
       </header>
       <VerkClient />
     </div>
