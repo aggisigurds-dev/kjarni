@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { sb } from "./lib/sb";
 
-const MED_VERK = new Set(["/kjarni/skraning", "/kjarni/skraning/kort", "/kjarni/skraning/skyrsla", "/kjarni/skraning/vinna", "/kjarni/skraning/verk"]);
+const MED_VERK = new Set(["/kjarni/skraning", "/kjarni/skraning/kort", "/kjarni/skraning/skyrsla", "/kjarni/skraning/vinna", "/kjarni/skraning/verk", "/kjarni/skraning/starfsmadur"]);
 const VERKAVAL = new Set(["/kjarni/skraning/kort", "/kjarni/skraning/skyrsla", "/kjarni/skraning/vinna"]);
 type V = { id: number; heiti: string };
 

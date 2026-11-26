@@ -10,21 +10,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { sb, publicUrl, minnkaMynd, hladaUpp } from "../lib/sb";
+import { sb, publicUrl } from "../lib/sb";
 import { lesaSkurd, skurdarBakgrunnur } from "../lib/skurdur";
 import { bidrod, erNetvilla, type BidPunktur } from "../lib/bidrod";
+import { LS_STARFSM, starfsmId, vistaNyjanPunkt, sendaBidrod, naestaRadnrUrGrunni, vistaMyndir, type Verk, type Teikning, type Flokkur, type Atridi, type Skraning, type Mynd, type Svar, type Starfsm, type Atburdur } from "../lib/vinna-gogn";
 
-type Verk = { id: number; heiti: string; heimilisfang: string | null; virkt: boolean };
-type Teikning = { id: number; verk_id: number; heiti: string; haed: string | null; mynd_path: string | null; breidd_px: number | null; haed_px: number | null; rod: number; skurdur: unknown };
-type Flokkur = { id: number; verk_id: number | null; heiti: string; tegund: string; rod: number };
-type Atridi = { id: number; verk_id: number | null; atridi: string; hopur: string | null; rod: number };
-type Skraning = { id: number; verk_id: number; radnr: number; teikning_id: number | null; x_px: number | null; y_px: number | null; flokkur_id: number | null; starfsmadur_id: number | null; stofnad_af: number | null; stada: string; lysing: string | null; framkvaemt_fra: string | null; lokid_at: string | null; created_at: string; eytt: boolean };
-type Mynd = { id: number; skraning_id: number; path: string; stig: string; rod: number; created_at: string };
-type Svar = { skraning_id: number; atridi_id: number; hakad: boolean };
-type Starfsm = { id: number; numer: number | null; nafn: string | null; virkur: boolean };
-type Atburdur = { id: number; hvad: string; gogn: Record<string, unknown> | null; hver: number | null; hvenaer: string };
 
-const LS_STARFSM = "skr_starfsmadur";
 const LOG_HEITI: Record<string, string> = { stofnad: "Stofnað", stada: "Staða breytt", mynd: "Mynd bætt við", eytt: "Falið", flokkur: "Flokkur breyttur", teikning: "Fært", texti: "Breytt", athugasemd: "Athugasemd", afrit: "Afritað" };
 function lysaGogn(g: Record<string, unknown>): string {
   const b: string[] = [];
@@ -37,7 +28,6 @@ function lysaGogn(g: Record<string, unknown>): string {
   if (Array.isArray(g.efni) && g.efni.length) b.push(`${g.efni.length} gátlistaatriði`);
   return b.join(" · ");
 }
-const isoDay = () => new Date().toISOString().slice(0, 10);
 
 function qs(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -164,7 +154,7 @@ export default function VinnaClient() {
     const tv = teikningar.filter((t) => t.verk_id === verkid.id);
     return (
       <div className="vn">
-        <div className="vn-haus"><button type="button" className="vn-til-baka" onClick={() => veljaVerk(null)}>‹ Byggingar</button><h1>{verkid.heiti}</h1><span className="vn-undir">Veldu hæð / teikningu</span>{egEr}</div>
+        <div className="vn-haus"><button type="button" className="vn-til-baka" onClick={() => veljaVerk(null)}>‹ Byggingar</button><h1>{verkid.heiti}</h1><span className="vn-undir">Veldu hæð / teikningu · <a href={`/kjarni/skraning/starfsmadur?verk=${verkid.id}`}>📱 Starfsmannahamur</a></span>{egEr}</div>
         <div className="vn-listi">
           {tv.map((t) => {
             const a = skr.filter((s) => s.teikning_id === t.id);
@@ -389,74 +379,6 @@ function Kort({ verk, teikning, skr, myndir, svor, flokkar, atridi, starfsm, men
 }
 
 /* ===================== nýr punktur ===================== */
-async function starfsmId(numer: string): Promise<number | null> {
-  const n = Number(numer); if (!n) return null;
-  const s = sb();
-  const r = await s.from("skr_starfsmenn").select("id").eq("numer", n).maybeSingle();
-  if (r.data) return r.data.id as number;
-  const ins = await s.from("skr_starfsmenn").insert({ numer: n, nafn: `Starfsmaður ${n}` }).select("id").single();
-  return ins.data ? (ins.data.id as number) : null;
-}
-
-/** Vistar nýjan punkt (skráning + gátlisti + myndir + logg). Kastar við villu — kallandi ákveður hvort hann fer í biðröð. */
-async function vistaNyjanPunkt(p: { verk_id: number; teikning_id: number; x_px: number; y_px: number; flokkur_id: number; efni: number[]; lysing: string | null; starfsm: string; myndir: File[]; radnr: number }) {
-  const s = sb();
-  const af = await starfsmId(p.starfsm);
-  const setja = (radnr: number) => s.from("skr_skraningar").insert({
-    verk_id: p.verk_id, radnr, teikning_id: p.teikning_id, x_px: p.x_px, y_px: p.y_px, flokkur_id: p.flokkur_id, starfsmadur_id: af, stofnad_af: af,
-    stada: "created", lysing: p.lysing, framkvaemt_fra: isoDay(), abyrgd_id: 1,
-  }).select("id").single();
-  let ins = await setja(p.radnr);
-  for (let reynt = 0; ins.error && /duplicate|23505|unique/i.test(ins.error.message) && reynt < 3; reynt++) {
-    // annar starfsmaður tók númerið á sömu stundu — næsta laust úr grunni
-    ins = await setja(await naestaRadnrUrGrunni(p.verk_id));
-  }
-  if (ins.error) throw new Error(ins.error.message);
-  const id = ins.data.id as number;
-  if (p.efni.length) {
-    const r = await s.from("skr_gatlisti_svor").insert(p.efni.map((atridi_id) => ({ skraning_id: id, atridi_id, hakad: true, hakad_af: af, hakad_at: new Date().toISOString() })));
-    if (r.error) throw new Error(r.error.message);
-  }
-  await vistaMyndir(p.verk_id, id, p.myndir, "fyrir", af);
-  await s.from("skr_atburdir").insert({ skraning_id: id, hvad: "stofnad", hver: af, gogn: { flokkur: p.flokkur_id, efni: p.efni, myndir: p.myndir.length } });
-  return id;
-}
-
-/** Sendir biðröðina (punkta sem urðu til án nets). Raðnúmer er úthlutað við sendingu. Skilar fjölda sem tókst. */
-export async function sendaBidrod(naestaRadnr: (verkId: number) => Promise<number>): Promise<{ sent: number; eftir: number }> {
-  const oll = await bidrod.oll();
-  let sent = 0;
-  for (const b of oll) {
-    try {
-      const radnr = await naestaRadnr(b.verk_id);
-      await vistaNyjanPunkt({ verk_id: b.verk_id, teikning_id: b.teikning_id, x_px: b.x_px, y_px: b.y_px, flokkur_id: b.flokkur_id, efni: b.efni, lysing: b.lysing, starfsm: b.starfsm,
-        myndir: b.myndir.map((m) => new File([m.blob], m.name, { type: m.blob.type || "image/jpeg", lastModified: m.lastModified })), radnr });
-      await bidrod.eyda(b.id); sent++;
-    } catch (e) {
-      if (!erNetvilla(e)) { await bidrod.setja({ ...b, villa: String((e as Error).message || e) }); }
-      else break; // enn sambandslaust — reyna seinna
-    }
-  }
-  return { sent, eftir: await bidrod.fjoldi() };
-}
-
-async function naestaRadnrUrGrunni(verkId: number): Promise<number> {
-  const r = await sb().from("skr_skraningar").select("radnr").eq("verk_id", verkId).order("radnr", { ascending: false }).limit(1);
-  if (r.error) throw new Error(r.error.message);
-  return ((r.data?.[0]?.radnr as number) || 0) + 1;
-}
-
-async function vistaMyndir(verkId: number, skraningId: number, files: File[], stig: "fyrir" | "eftir", af: number | null) {
-  const s = sb();
-  let rod = 0;
-  for (const f of files) {
-    const { blob, w, h } = await minnkaMynd(f);
-    const path = `verk/${verkId}/skr/${skraningId}/${stig}-${Date.now()}-${rod}.jpg`;
-    await hladaUpp(path, blob, "image/jpeg");
-    const r = await s.from("skr_myndir").insert({ skraning_id: skraningId, path, stig, breidd: w, haed: h, af, rod: rod++, tekin_at: new Date(f.lastModified || Date.now()).toISOString() });
-    if (r.error) throw new Error(r.error.message);
-  }
-}
 
 type Upphaf = { id: number; radnr: number; flokkur_id: number | null; efni: number[]; lysing: string };
 type Forskrift = { flokkur_id: number | null; efni: number[]; lysing: string; fra: number };

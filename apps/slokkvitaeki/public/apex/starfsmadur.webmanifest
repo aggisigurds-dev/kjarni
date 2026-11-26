@@ -1,0 +1,33 @@
+{
+  "name": "Apex Ajour — starfsmenn",
+  "short_name": "Apex",
+  "description": "Skráningar á teikningu í síma: punktar, myndir, gátlisti og staða",
+  "id": "/kjarni/skraning/starfsmadur",
+  "start_url": "/kjarni/skraning/starfsmadur",
+  "scope": "/kjarni/skraning/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#3b6176",
+  "lang": "is",
+  "icons": [
+    {
+      "src": "/apex/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apex/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apex/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
