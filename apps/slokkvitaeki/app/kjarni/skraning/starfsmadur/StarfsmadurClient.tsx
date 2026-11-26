@@ -20,6 +20,8 @@ import {
 const COLS = "id,verk_id,radnr,teikning_id,x_px,y_px,flokkur_id,starfsmadur_id,stofnad_af,stada,lysing,framkvaemt_fra,lokid_at,created_at,eytt";
 type Nyr = { teikning_id: number; x: number; y: number; fra?: { radnr: number; flokkur_id: number | null; efni: number[]; lysing: string } };
 type Sia = "" | "created" | "done";
+/** Síðasta verk í þessum síma (tímabundin staða eins og opinn flipi): appið í Firestarters opnast beint á því. */
+const LS_VERK = "skr_sm_verk";
 
 const STADA: Record<string, string> = { created: "Created", done: "Done", completed: "Completed", rejected: "Rejected", not_approved: "Not approved" };
 const LOG: Record<string, string> = { stofnad: "Stofnað", stada: "Staða breytt", mynd: "Mynd bætt við", eytt: "Falið", flokkur: "Flokkur breyttur", teikning: "Fært á teikningu", texti: "Breytt", athugasemd: "Athugasemd", afrit: "Afritað" };
@@ -94,8 +96,10 @@ export default function StarfsmadurClient() {
       if (v.error) { setVilla(v.error.message); return; }
       const vl = (v.data || []) as Verk[];
       setVerkListi(vl); setFlokkarAllir((f.data || []) as Flokkur[]); setAtridiOll((a.data || []) as Atridi[]); setMenn((m.data || []) as Starfsm[]);
-      setVerkId(p.verk && vl.some((x) => x.id === p.verk) ? p.verk : null);
-      if (!p.verk) setSkuffa(true);   // ekkert verk valið: valmyndin opnast með verkalistanum
+      let sidast = 0; try { sidast = Number(window.localStorage.getItem(LS_VERK)) || 0; } catch { /* einkagluggi */ }
+      const upphaf = [p.verk, sidast].find((v) => v && vl.some((x) => x.id === v)) || null;
+      setVerkId(upphaf);
+      if (!upphaf) setSkuffa(true);   // ekkert verk: valmyndin opnast með verkalistanum
       setHladid(true);
     })();
     bidrod.fjoldi().then(setBid);
@@ -169,6 +173,7 @@ export default function StarfsmadurClient() {
 
   const veljaVerk = (id: number) => {
     setSkuffa(false);
+    try { window.localStorage.setItem(LS_VERK, String(id)); } catch { /* */ }
     if (id === verkId) return;
     setTeikningId(null); setOpinId(null); setNyr(null); setListi(null); setMidja(null);
     setVerkId(id);
