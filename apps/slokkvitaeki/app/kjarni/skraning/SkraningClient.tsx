@@ -202,6 +202,7 @@ export default function SkraningClient() {
         <div className="aj-tool-r">
           <a className="aj-vinnuhlekkur aj-yfirsyn" href="/kjarni/skraning/yfirsyn">📊 Yfirsýn</a>
           <a className="aj-vinnuhlekkur" href={vinnuSlod}>📍 Vinna — punktar á teikningu</a>
+          <a className="aj-vinnuhlekkur" href={verkid?.verk_id ? `/kjarni/skraning/starfsmadur?verk=${verkid.verk_id}` : "/kjarni/skraning/starfsmadur"}>📱 Starfsmannahamur (eins og Ajour-appið)</a>
           <a className="aj-vinnuhlekkur grar" href={verkid?.verk_id ? `/kjarni/skraning/verk?verk=${verkid.verk_id}` : "/kjarni/skraning/verk"}>🏢 Byggingar &amp; teikningar</a>
           <button type="button" onClick={() => window.print()}>Print</button>
           <a className="aj-takkahlekkur" href="/kjarni/skraning/flokkar">Categories/schema</a>
