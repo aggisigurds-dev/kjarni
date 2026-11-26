@@ -119,6 +119,16 @@ export default function VinnaClient() {
   const verkid = verk.find((v) => v.id === verkId) || null;
   const teikning = teikningar.find((t) => t.id === teikId) || null;
   const flokkarVerks = useMemo(() => flokkar.filter((f) => f.verk_id === null || f.verk_id === verkId), [flokkar, verkId]);
+  /* „Ég er" er bæði á bygginga- og hæðalistanum: skjárinn „Veldu byggingu" er sleppt þegar ?verk= er í slóðinni (flipar og hlekkir bera það),
+   * og punktur vistaður án valins starfsmanns fær engan starfsmann (starfsmId("") → null). Valið geymist í símanum (hver er við vélina). */
+  const egEr = (
+    <label className="vn-starfsm">Ég er
+      <select value={starfsm} onChange={(e) => vistaStarfsm(e.target.value)}>
+        <option value="">— veldu þig —</option>
+        {menn.map((m) => <option key={m.id} value={String(m.numer ?? "")}>{m.numer}. {m.nafn || `Starfsmaður ${m.numer}`}</option>)}
+      </select>
+    </label>
+  );
   const atridiVerks = useMemo(() => atridi.filter((a) => a.verk_id === null || a.verk_id === verkId), [atridi, verkId]);
 
   if (villa) return <div className="vn"><p className="skr-villa">Villa: {villa}</p></div>;
@@ -129,12 +139,7 @@ export default function VinnaClient() {
     return (
       <div className="vn">
         <div className="vn-haus"><h1>Veldu byggingu</h1>
-          <label className="vn-starfsm">Ég er
-            <select value={starfsm} onChange={(e) => vistaStarfsm(e.target.value)}>
-              <option value="">— veldu þig —</option>
-              {menn.map((m) => <option key={m.id} value={String(m.numer ?? "")}>{m.numer}. {m.nafn || `Starfsmaður ${m.numer}`}</option>)}
-            </select>
-          </label>
+          {egEr}
         </div>
         <div className="vn-listi">
           {verk.map((v) => {
@@ -159,7 +164,7 @@ export default function VinnaClient() {
     const tv = teikningar.filter((t) => t.verk_id === verkid.id);
     return (
       <div className="vn">
-        <div className="vn-haus"><button type="button" className="vn-til-baka" onClick={() => veljaVerk(null)}>‹ Byggingar</button><h1>{verkid.heiti}</h1><span className="vn-undir">Veldu hæð / teikningu</span></div>
+        <div className="vn-haus"><button type="button" className="vn-til-baka" onClick={() => veljaVerk(null)}>‹ Byggingar</button><h1>{verkid.heiti}</h1><span className="vn-undir">Veldu hæð / teikningu</span>{egEr}</div>
         <div className="vn-listi">
           {tv.map((t) => {
             const a = skr.filter((s) => s.teikning_id === t.id);
